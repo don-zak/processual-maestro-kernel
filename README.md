@@ -51,6 +51,23 @@ A trilingual pilot message for external technical contacts is available here:
 
 * [`docs/EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md`](docs/EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md)
 
+### Client demo and limited pilot guide
+
+A bilingual guide for running a controlled client-facing demo or a limited local pilot is available here:
+
+* [`docs/CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md`](docs/CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md)
+
+This guide explains how to present the public runtime to an external technical contact without exposing the private repository, real API keys, internal tests, or private runtime data.
+
+### دليل عرض العميل والتجربة المحدودة
+
+يتوفر دليل ثنائي اللغة لتنفيذ عرض مضبوط أمام عميل أو تجربة محلية محدودة هنا:
+
+* [`docs/CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md`](docs/CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md)
+
+يشرح هذا الدليل كيفية عرض النسخة العامة لجهة تقنية خارجية دون كشف الريبو الخاص أو مفاتيح API الحقيقية أو الاختبارات الداخلية أو بيانات التشغيل الخاصة.
+
+
 ### Quick local runtime check
 
 From the public repository root:
