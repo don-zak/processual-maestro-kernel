@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: processual-config
+  namespace: processual
+data:
+  API_LOG_LEVEL: "info"
+  SENTRY_ENVIRONMENT: "production"
+  DISCORD_ALERTS_ENABLED: "true"
+  DISCORD_MIN_SEVERITY: "warning"
+  DISCORD_RATE_LIMIT_SECONDS: "30"

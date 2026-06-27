@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Processual Maestro — Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="css/console.css">
+<link rel="stylesheet" href="css/tour.css">
+</head>
+<body>
+<div id="bg-grid"></div>
+<div id="layout">
+
+<!-- ===== SIDEBAR ===== -->
+<div id="sidebar">
+<div id="logo-area">
+  <div id="logo-row">
+    <div id="logo-mark"><svg viewBox="0 0 32 32" fill="none"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" stroke="var(--amber)" stroke-width="1.5" fill="var(--amber-glow)"/><polygon points="16,8 22,11.5 22,20.5 16,24 10,20.5 10,11.5" stroke="var(--amber)" stroke-width="1" fill="none" opacity="0.6"/><circle cx="16" cy="16" r="2.5" fill="var(--amber)"/></svg></div>
+    <div id="logo-text"><div class="m">MAESTRO</div><div class="s">PROCESSUAL KERNEL</div></div>
+  </div>
+  <div id="status-row"><span class="status-dot"><span class="dot ok"></span><span id="demo-badge">Demo Mode</span></span></div>
+</div>
+<div id="nav-wrap">
+  <div id="nav-label">Console</div>
+  <button class="nav-btn active" data-page="overview"><span class="nav-ind"></span><span class="nav-ico">◈</span><span>Overview</span></button>
+  <button class="nav-btn" data-page="cgt"><span class="nav-ind"></span><span class="nav-ico">⬡</span><span>CGT Evaluator</span></button>
+  <button class="nav-btn" data-page="workflows"><span class="nav-ind"></span><span class="nav-ico">⟁</span><span>Workflows</span></button>
+  <button class="nav-btn" data-page="governance"><span class="nav-ind"></span><span class="nav-ico">⊛</span><span>Governance</span></button>
+  <button class="nav-btn" data-page="telemetry"><span class="nav-ind"></span><span class="nav-ico">⌇</span><span>Telemetry</span></button>
+  <button class="nav-btn" data-page="reports"><span class="nav-ind"></span><span class="nav-ico">⧉</span><span>Reports</span></button>
+  <button class="nav-btn" data-page="governor"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Governor</span></button>
+  <button class="nav-btn" data-page="gateway"><span class="nav-ind"></span><span class="nav-ico">⬡</span><span>Gateway</span></button>
+  <button class="nav-btn" data-page="simulation"><span class="nav-ind"></span><span class="nav-ico">⟐</span><span>Simulation</span></button>
+  <button class="nav-btn" data-page="adapters"><span class="nav-ind"></span><span class="nav-ico">⇆</span><span>Adapters</span></button>
+  <button class="nav-btn" data-page="settings"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Settings</span></button>
+</div>
+<div id="sidebar-footer">
+  <div class="v">v2.0.0 — production</div>
+  <div class="c">CGT v2 · adaptive-evidence-pack-1.8.0</div>
+</div>
+</div>
+
+<!-- ===== MAIN ===== -->
+<div id="main">
+<div id="sub-banner" style="display:none;padding:8px 16px;font-size:11px;font-family:'Space Mono',monospace;text-align:center;border-bottom:1px solid;transition:all .3s"></div>
+<div id="topbar">
+  <div><div id="topbar-title">System Overview</div><div id="topbar-sub">Kernel health, agents, and PSI trajectory</div></div>
+  <div id="topbar-right">
+    <div id="clock"><div id="clock-t"></div><div id="clock-d"></div></div>
+    <button id="lang-toggle" class="btn ghost sm" style="min-width:36px">EN</button>
+  </div>
+</div>
+<div id="content">
+
+<!-- ===== PAGE: Overview ===== -->
+<div class="page active" id="page-overview">
+<div>
+  <div class="grid-4">
+    <div class="card flat"><div class="metric"><span class="ml">Kernel PSI</span><div class="mv" id="kpsi">—</div><span class="md up" id="dkpsi">—</span></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Delta PSI / step</span><div class="mv" id="dpsi" style="color:var(--ok)">—</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Active Agents</span><div class="mv"><span id="ov-active-agents">0</span> <span class="mu">/ <span id="ov-total-agents">0</span></span></div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Gateway Avg Reward</span><div class="mv" id="ov-avg-reward" style="color:var(--amber);font-size:22px">—</div></div></div>
+  </div>
+  <div class="grid-4" style="margin-top:var(--s-4)">
+    <div class="card flat"><div class="metric"><span class="ml">Total Evaluations</span><div class="mv" style="font-size:22px" id="ov-total-evals">0</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Avg Reward</span><div class="mv" style="font-size:22px" id="ov-avg-reward-all">—</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Agent Avg Reward</span><div class="mv" style="font-size:22px" id="ov-agent-avg-reward">—</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Policy Actions</span><div class="mv" style="font-size:22px" id="ov-policy-actions">0</div></div></div>
+  </div>
+  <div style="margin-top:var(--s-4)"><span class="font-data text-ghost" style="font-size:11px">Rank Distribution</span><div class="flex-wrap" style="margin-top:var(--s-1)" id="ov-rank-dist">—</div></div>
+
+  <div class="grid-2-wide">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">PSI Trajectory</div><div class="sh-sub">24-hour kernel health</div></div>
+      <div class="chart-wrap"><canvas id="ov-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Governance Status</div><div class="sh-sub">System oversight</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="flex-between"><span class="font-data text-ghost" style="font-size:11px">Mode</span><span class="tag" id="gov-mode" style="background:rgba(245,166,35,0.094);color:var(--amber);border:1px solid rgba(245,166,35,0.188)">—</span></div>
+        <div><span class="font-data text-ghost" style="font-size:11px;display:block;margin-bottom:6px">Active Policies</span><div class="flex-wrap" id="gov-policies"></div></div>
+        <div class="flex-between"><span class="font-data text-ghost" style="font-size:11px">Cert Level</span><span class="font-data" id="gov-cert" style="font-size:11px;font-weight:600;color:var(--stable)">—</span></div>
+        <div><span class="font-data text-ghost" style="font-size:11px;display:block;margin-bottom:6px">Dependencies</span><div class="flex-wrap" id="gov-deps"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="sec-hdr"><div><div class="sh-title">Gateway Agents</div><div class="sh-sub" id="ov-agent-count">Loading...</div></div></div>
+      <div id="ov-gw-table"></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">State Transitions</div><div class="sh-sub">Agent lifecycle diagram</div></div>
+      <canvas id="state-diagram" style="width:100%;height:150px"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-hdr"><div class="sh-title">Certification Ladder</div><div class="sh-sub">System maturity path</div></div>
+    <div class="cert-strip" id="cert-strip"></div>
+    <div class="grid-4" style="margin-top:var(--s-4)">
+      <div class="card flat"><div class="metric"><span class="ml">Runtime Mode</span><div class="mv" style="color:var(--amber);font-size:20px" id="gov-mode2">—</div></div></div>
+      <div class="card flat"><div class="metric"><span class="ml">Drift Monitor</span><div class="mv" style="font-size:20px" id="gov-drift">—</div></div></div>
+      <div class="card flat"><div class="metric"><span class="ml">Active Policies</span><div class="mv" id="gov-pol-count" style="font-size:20px">—</div></div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: CGT Evaluator ===== -->
+<div class="page" id="page-cgt">
+<div>
+  <div class="sec-hdr"><div class="sh-title">CGT Fate Evaluator</div><div class="sh-sub">Compute existence rank from 12 parameters</div></div>
+  <div class="grid-2-wide">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Parameters</div><div class="sh-sub">Adjust sliders and evaluate</div></div>
+      <div id="cgt-params"></div>
+      <button id="cgt-eval-btn" class="btn accent" style="margin-top:var(--s-3);width:100%">Evaluate Fate</button>
+      <div id="cgt-empty" class="text-muted font-data" style="font-size:11px;margin-top:var(--s-2)">Adjust parameters and click evaluate</div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="sec-hdr"><div class="sh-title">Fate Vector</div><div class="sh-sub">Radar chart of 7 dimensions</div></div>
+        <div class="chart-wrap-radar"><canvas id="cgt-radar"></canvas></div>
+      </div>
+      <div class="card" style="margin-top:var(--s-4)">
+        <div class="sec-hdr"><div class="sh-title">Fate Bars</div><div class="sh-sub">Dimension breakdown</div></div>
+        <div id="cgt-bars"></div>
+      </div>
+      <div class="card" style="margin-top:var(--s-4)">
+        <div class="sec-hdr"><div class="sh-title">Result</div><div class="sh-sub">Existence rank</div></div>
+        <div id="cgt-results"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Workflows ===== -->
+<div class="page" id="page-workflows">
+<div>
+  <div class="sec-hdr"><div><div class="sh-title">Workflow Registry</div><div class="sh-sub" id="wf-count">—</div></div><button id="wf-create-btn" class="btn ghost sm">+ New Workflow</button></div>
+  <div id="wf-create-form" style="display:none;margin-bottom:var(--s-4)">
+    <div class="card">
+      <div class="inp-group"><label class="inp-label">Workflow ID</label><input id="wf-new-id" class="inp" placeholder="Auto-generated if empty"></div>
+      <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Goal</label><input id="wf-new-goal" class="inp" placeholder="Workflow objective"></div>
+      <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Steps</label><input id="wf-new-steps" class="inp" type="number" value="3" min="1" max="10"></div>
+      <div class="flex-gap" style="margin-top:var(--s-3)"><button id="wf-do-create" class="btn accent sm">Create</button><button id="wf-cancel-create" class="btn ghost sm">Cancel</button></div>
+    </div>
+  </div>
+  <div class="grid-2-wide">
+    <div class="card"><div class="sec-hdr"><div class="sh-title">All Workflows</div><div class="sh-sub">Registered flows</div></div><div id="wf-list"></div></div>
+    <div class="card"><div class="sec-hdr"><div class="sh-title">Detail</div><div class="sh-sub">Select a workflow</div></div><div id="wf-detail"><div class="text-muted font-data" style="font-size:11px">Select a workflow to view details</div></div></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Governance ===== -->
+<div class="page" id="page-governance">
+<div>
+  <div class="sec-hdr"><div class="sh-title">Governance Panel</div><div class="sh-sub">System oversight &amp; safety</div></div>
+  <div class="cert-strip" id="cert-strip-gov"></div>
+  <div class="grid-2-wide">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Policies</div><div class="sh-sub">Active governance policies</div></div>
+      <div id="pol-list"></div>
+      <div id="pol-detail" style="margin-top:var(--s-3);display:none"></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Decision Log</div><div class="sh-sub">Recent governance decisions</div></div>
+      <div id="dec-log"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="sec-hdr"><div class="sh-title">Safety Monitor</div><div class="sh-sub">Boundary compliance</div></div>
+    <div id="safety-grid" class="grid-4"></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Telemetry ===== -->
+<div class="page" id="page-telemetry">
+<div>
+  <div class="sec-hdr"><div class="sh-title">Telemetry</div><div class="sh-sub">Live metric streams &amp; ingest</div></div>
+  <div class="flex-gap" style="margin-bottom:var(--s-3)">
+    <button id="tel-toggle" class="btn ghost sm">Pause</button>
+    <span class="font-data text-ghost" style="font-size:11px">Status: <span id="tel-status" style="color:var(--ok)">Streaming</span> · <span id="tel-ticks">0</span> observations</span>
+  </div>
+  <div class="grid-2-wide">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Metrics</div><div class="sh-sub">Select a metric to view</div></div>
+      <div class="flex-wrap" id="tel-metrics" style="margin-bottom:var(--s-3)"></div>
+      <div class="chart-wrap-tall"><canvas id="tel-chart"></canvas></div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="sec-hdr"><div class="sh-title">Current Value</div><div class="sh-sub" id="tel-metric-sub">—</div></div>
+        <div class="metric"><span class="ml" id="tel-metric-title">—</span><div class="mv" id="tel-current">—</div></div>
+      </div>
+      <div class="card" style="margin-top:var(--s-4)">
+        <div class="sec-hdr"><div class="sh-title">Ingest</div><div class="sh-sub">Submit data points</div></div>
+        <div class="flex-gap">
+          <select id="ingest-metric" class="inp-sel"><option>psi</option><option>drift</option><option>latency</option><option>throughput</option></select>
+          <input id="ingest-value" class="inp" type="number" step="0.01" placeholder="0.00" style="width:100px">
+          <button id="ingest-btn" class="btn accent sm">Ingest</button>
+        </div>
+        <div id="ingest-log" class="text-muted font-data" style="font-size:11px;margin-top:var(--s-2)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Reports ===== -->
+<div class="page" id="page-reports">
+<div>
+  <div class="sec-hdr"><div><div class="sh-title">Reports &amp; Evidence</div><div class="sh-sub" id="rpt-count">—</div></div></div>
+  <div class="grid-2-wide">
+    <div class="card"><div class="sec-hdr"><div class="sh-title">Available Reports</div><div class="flex-gap"><select id="rpt-filter-rank" class="inp-sel" style="font-size:10px;padding:2px 6px"><option value="">All Ranks</option><option>flourishing</option><option>stable</option><option>hybrid</option><option>distorted</option><option>transient</option><option>extinct</option></select><button id="rpt-refresh-btn" class="btn ghost sm" style="font-size:10px">Refresh</button></div></div><div id="rpt-list"></div></div>
+    <div class="card"><div class="sec-hdr"><div class="sh-title">Detail</div></div><div id="rpt-detail"><div class="text-muted font-data" style="font-size:11px">Select a report to view</div></div></div>
+  </div>
+  <div class="card" style="margin-top:var(--s-4)">
+    <div class="sec-hdr"><div class="sh-title">Submit Fate Report</div><div class="sh-sub">Record a workflow fate report</div></div>
+    <div class="flex-gap">
+      <input id="fat-wf" class="inp" placeholder="Workflow ID" style="width:200px">
+      <select id="fat-rank" class="inp-sel"><option>Thriving</option><option>Stable</option><option>Vulnerable</option><option>Critical</option><option>Extinct</option></select>
+      <button id="fat-submit" class="btn accent sm">Submit</button>
+    </div>
+    <div id="fat-result" class="text-muted font-data" style="font-size:11px;margin-top:var(--s-2)"></div>
+  </div>
+
+  <div class="card" style="margin-top:var(--s-4)">
+    <div class="sec-hdr">
+      <div><div class="sh-title">AI Report</div><div class="sh-sub">Generate natural-language analysis from CGT results</div></div>
+      <button id="llm-report-btn" class="btn accent">Generate AI Report</button>
+    </div>
+    <div class="grid-2-eq" style="margin-top:var(--s-3)">
+      <div id="llm-report-inputs">
+        <div class="inp-group"><label class="inp-label">Existence Rank</label><select id="llm-rank" class="inp-sel"><option>flourishing</option><option>stable</option><option>hybrid</option><option>distorted</option><option>transient</option><option>extinct</option></select></div>
+        <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Report Style</label><select id="llm-style" class="inp-sel"><option value="executive_summary">Executive Summary</option><option value="detailed">Detailed Analysis</option><option value="technical">Technical Report</option></select></div>
+        <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Provider</label><select id="llm-provider" class="inp-sel"><option value="">Settings Default</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option><option value="deepseek">DeepSeek</option><option value="opencode">OpenCode</option></select></div>
+        <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Fate Vector (JSON)</label><textarea id="llm-fate" class="inp" rows="4" placeholder='{"stability": 0.75, "hybridity": 0.12, ...}'>{"stability": 0.75, "hybridity": 0.12, "distortion": 0.08, "extinction": 0.02, "collapse": 0.01, "flourishing": 0.02}</textarea></div>
+      </div>
+      <div>
+        <div id="llm-report-status" class="font-data text-muted" style="font-size:11px;margin-bottom:var(--s-2)">Configure an LLM provider in Settings, then generate reports here.</div>
+        <div id="llm-report-output" class="mono-block" style="font-size:11px;min-height:120px;white-space:pre-wrap;word-break:break-word"></div>
+        <div id="llm-report-meta" class="font-data text-ghost" style="font-size:9px;margin-top:var(--s-2)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Governor ===== -->
+<div class="page" id="page-governor">
+<div>
+  <div class="sec-hdr"><div class="sh-title">CGT Governor</div><div class="sh-sub">LLM output governance — rank, reward, policy, repair</div></div>
+  <div class="grid-2-wide">
+    <div class="card">
+      <div class="sec-hdr">
+        <div class="sh-title">Parameters</div>
+        <div class="flex-gap">
+          <label class="toggle-label" style="font-size:11px;display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="gov-auto-toggle" checked>
+            <span>Auto Analyze</span>
+          </label>
+        </div>
+      </div>
+      <div id="gov-auto-section">
+        <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Client Query / Original Prompt</label><textarea id="gov-client-query" class="inp" rows="2" placeholder="Enter the original question or task..."></textarea></div>
+        <div class="text-warn font-data" id="gov-no-query-warn" style="font-size:10px;display:none;margin-top:4px">Warning: client_query is required for real CGT analysis</div>
+      </div>
+      <div id="gov-manual-section" style="display:none">
+        <div id="gov-params"></div>
+      </div>
+      <div class="inp-group" style="margin-top:var(--s-2)"><label class="inp-label">Agent Answer</label><textarea id="gov-answer" class="inp" rows="3" placeholder="Paste the agent's response here..."></textarea></div>
+      <button id="gov-evaluate-btn" class="btn accent" style="margin-top:var(--s-3);width:100%">Evaluate via Governor</button>
+    </div>
+    <div>
+      <div class="card">
+        <div class="sec-hdr"><div class="sh-title">Fate Vector</div></div>
+        <div style="position:relative"><canvas id="gov-radar"></canvas></div>
+      </div>
+      <div class="card" style="margin-top:var(--s-4)">
+        <div class="sec-hdr"><div class="sh-title">Reward</div></div>
+        <div class="progress"><div class="pl"><span>Score</span><span id="gov-reward-label" class="rank-badge" style="font-size:11px">—</span></div><div class="pb"><div class="pf" id="gov-reward-bar" style="width:0%;background:var(--ghost)"></div></div></div>
+      </div>
+      <div class="card" style="margin-top:var(--s-4)">
+        <div class="sec-hdr"><div class="sh-title">Results</div></div>
+        <div id="gov-results"></div>
+        <button id="gov-copy-repair" class="btn ghost sm" style="margin-top:var(--s-2);display:none">Copy Repair Prompt</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Gateway ===== -->
+<div class="page" id="page-gateway">
+<div>
+  <div id="gw-summary" class="grid-4">
+    <div class="card flat"><div class="metric"><span class="ml">Total Agents</span><div class="mv" id="gw-total" style="font-size:22px">0</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Active</span><div class="mv" id="gw-active" style="font-size:22px;color:var(--ok)">0</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">At Risk</span><div class="mv" id="gw-at-risk" style="font-size:22px;color:var(--error)">0</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Avg Reward</span><div class="mv" id="gw-avg-reward" style="font-size:22px;color:var(--amber)">0.00</div></div></div>
+  </div>
+
+  <div class="grid-2-wide">
+    <div class="card">
+      <div class="sec-hdr"><div><div class="sh-title">Agent Registry</div><div class="sh-sub" id="gw-agent-count">0 agents registered</div></div>
+        <div class="flex-gap">
+          <input id="gw-search" class="inp" placeholder="Search agents..." style="width:140px;font-size:11px;padding:4px 8px">
+          <select id="gw-filter-state" class="inp-sel" style="font-size:11px;padding:4px 6px"><option value="">All States</option><option>active</option><option>pending</option><option>frozen</option><option>escalated</option><option>rehabilitating</option><option>deactivated</option></select>
+          <select id="gw-filter-rank" class="inp-sel" style="font-size:11px;padding:4px 6px"><option value="">All Ranks</option><option>flourishing</option><option>stable</option><option>hybrid</option><option>distorted</option><option>transient</option><option>extinct</option></select>
+        </div>
+      </div>
+      <div id="gw-table"></div>
+      <div class="flex-gap" style="margin-top:var(--s-2)">
+        <button id="gw-pdf-btn" class="btn ghost sm">PDF Report</button>
+        <button id="gw-export-csv" class="btn ghost sm">Export CSV</button>
+        <button id="gw-export-json" class="btn ghost sm">Export JSON</button>
+        <span class="font-data text-muted" style="font-size:9px;margin-left:auto">Click agent row for details</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="sec-hdr"><div class="sh-title">Register Agent</div></div>
+        <div class="flex-gap" style="flex-wrap:wrap;gap:6px">
+          <input id="gw-reg-id" class="inp" placeholder="Agent ID" style="width:100px;font-size:11px;padding:4px 8px">
+          <input id="gw-reg-name" class="inp" placeholder="Name" style="width:100px;font-size:11px;padding:4px 8px">
+          <select id="gw-reg-role" class="inp-sel" style="font-size:11px;padding:4px 6px"><option>worker</option><option>supervisor</option><option>critic</option><option>planner</option></select>
+          <select id="gw-reg-adapter" class="inp-sel" style="font-size:11px;padding:4px 6px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
+          <button id="gw-reg-btn" class="btn accent sm">Register</button>
+        </div>
+        <div id="gw-reg-result"></div>
+      </div>
+      <div class="card" style="margin-top:var(--s-3)">
+        <div class="sec-hdr"><div class="sh-title">Gateway Evaluate</div></div>
+        <div class="flex-gap" style="flex-wrap:wrap;gap:6px">
+          <select id="gw-eval-agent" class="inp-sel" style="font-size:11px;padding:4px 6px;width:140px"></select>
+          <input id="gw-eval-query" class="inp" placeholder="Client query" style="width:120px;font-size:11px;padding:4px 8px">
+          <input id="gw-eval-response" class="inp" placeholder="Agent response" style="width:150px;font-size:11px;padding:4px 8px">
+          <button id="gw-eval-btn" class="btn accent sm">Evaluate</button>
+        </div>
+        <div id="gw-eval-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div class="card" style="grid-column:span 2">
+      <div class="sec-hdr"><div><div class="sh-title">Reward Trend</div><div class="sh-sub">Per-agent evaluation history</div></div></div>
+      <div class="chart-wrap"><canvas id="gw-trend-canvas"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">State Distribution</div></div>
+      <div class="chart-wrap-sm"><canvas id="gw-donut"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">CGT Reward Gauge</div></div>
+      <div class="chart-wrap-sm"><canvas id="gw-gauge"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">State Transitions</div></div>
+      <canvas id="gw-state-diagram" style="width:100%;height:150px"></canvas>
+    </div>
+  </div>
+
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="sec-hdr"><div><div class="sh-title">Decision Feed</div><div class="sh-sub" id="gw-feed-count">Latest decisions — 0</div></div></div>
+      <div id="gw-decision-feed"></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">State Transition Diagram</div></div>
+      <div><pre class="mono-block" style="font-size:10px;padding:var(--s-3)">
+pending ──→ active ──→ frozen ──→ rehab ──→ active
+                │                       │
+                └──→ escalated ─────────┘
+                │
+                └──→ deactivated
+pending ───────────────────→ deactivated
+      </pre></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Simulation ===== -->
+<div class="page" id="page-simulation">
+<div>
+  <div class="sec-hdr"><div><div class="sh-title">Supervision Simulation</div><div class="sh-sub">Virtual agent governance pipeline</div></div><button id="sim-run-btn" class="btn accent">Run Simulation</button></div>
+
+  <div id="sim-before">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">6 Virtual Personas</div><div class="sh-sub">Historical Islamic scholars as LLM agents</div></div>
+      <div class="grid-3" id="sim-persona-cards"></div>
+    </div>
+  </div>
+
+  <div id="sim-after" style="display:none">
+    <div class="grid-2-wide">
+      <div class="card">
+        <div class="sec-hdr"><div class="sh-title">Rank Distribution</div></div>
+        <div class="chart-wrap"><canvas id="sim-chart"></canvas></div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="sec-hdr"><div class="sh-title">Summary</div></div>
+          <div id="sim-summary"></div>
+        </div>
+        <div class="card" style="margin-top:var(--s-3)">
+          <div class="sec-hdr"><div class="sh-title">Signature</div></div>
+          <div class="mono-block" style="font-size:10px;word-break:break-all" id="sim-sig">—</div>
+          <div class="flex-gap" style="margin-top:var(--s-2)">
+            <button id="sim-copy-sig" class="btn ghost sm">Copy Signature</button>
+            <button id="sim-pdf-btn" class="btn ghost sm">Download PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:var(--s-3)">
+      <div class="sec-hdr"><div class="sh-title">Per-Agent Report Cards</div></div>
+      <div id="sim-agent-cards" class="grid-3"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Settings ===== -->
+<div class="page" id="page-settings">
+<div>
+  <div class="sec-hdr"><div class="sh-title">Settings</div><div class="sh-sub">System configuration</div></div>
+
+  <div class="settings-sections">
+
+    <!-- General -->
+    <div class="card settings-section">
+      <div class="sec-hdr"><div class="sh-title">General</div></div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Language</label>
+          <select id="set-lang" class="inp-sel">
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Dashboard Refresh</label>
+          <select id="set-refresh" class="inp-sel">
+            <option value="10">10s</option>
+            <option value="30" selected>30s</option>
+            <option value="60">60s</option>
+            <option value="0">Off</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Timezone</label>
+          <select id="set-tz" class="inp-sel">
+            <option value="UTC">UTC</option>
+            <option value="US/Eastern">US/Eastern</option>
+            <option value="US/Pacific">US/Pacific</option>
+            <option value="Europe/London">Europe/London</option>
+            <option value="Europe/Paris">Europe/Paris</option>
+            <option value="Asia/Dubai">Asia/Dubai</option>
+            <option value="Asia/Riyadh">Asia/Riyadh</option>
+            <option value="Asia/Tokyo">Asia/Tokyo</option>
+          </select>
+        </div>
+      </div>
+      <button id="set-general-save" class="btn accent sm" style="margin-top:var(--s-3)">Save General</button>
+      <span id="set-general-status" class="font-data text-muted" style="font-size:10px;margin-left:8px"></span>
+    </div>
+
+    <!-- LLM Provider -->
+    <div class="card settings-section">
+      <div class="sec-hdr">
+        <div class="sh-title">LLM Provider for Reports</div>
+        <div class="sh-sub">Optional — used for AI-generated report explanations</div>
+      </div>
+      <div id="set-llm-status" class="status-badge" style="margin-bottom:var(--s-3)">Not configured</div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Provider</label>
+          <select id="set-llm-provider" class="inp-sel">
+            <option value="opencode">OpenCode (local)</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">API Key</label>
+          <input id="set-llm-key" class="inp" type="password" placeholder="sk-...">
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Model</label>
+          <input id="set-llm-model" class="inp" placeholder="e.g. gpt-4o">
+        </div>
+      </div>
+      <div class="flex-gap" style="margin-top:var(--s-3)">
+        <button id="set-llm-save" class="btn accent sm">Save &amp; Test</button>
+        <button id="set-llm-test" class="btn ghost sm">Test Connection</button>
+        <button id="set-llm-clear" class="btn ghost sm" style="color:var(--error)">Clear Key</button>
+      </div>
+      <div id="set-llm-result" class="font-data" style="font-size:10px;margin-top:var(--s-2)"></div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="card settings-section">
+      <div class="sec-hdr"><div class="sh-title">Notifications</div></div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Discord Webhook URL</label>
+          <input id="set-webhook" class="inp" placeholder="https://discord.com/api/webhooks/..." type="url">
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Alert Level</label>
+          <select id="set-alert-level" class="inp-sel">
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warning" selected>Warning</option>
+            <option value="error">Error</option>
+            <option value="critical">Critical only</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex-gap" style="margin-top:var(--s-3)">
+        <button id="set-notif-save" class="btn accent sm">Save</button>
+        <button id="set-notif-test" class="btn ghost sm">Test Webhook</button>
+      </div>
+      <span id="set-notif-status" class="font-data text-muted" style="font-size:10px;margin-left:8px"></span>
+    </div>
+
+    <!-- Subscription -->
+    <div class="card settings-section">
+      <div class="sec-hdr"><div class="sh-title">Subscription</div></div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Plan</label>
+          <span id="set-sub-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Status</label>
+          <span id="set-sub-status" class="font-data" style="font-weight:600">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Renews</label>
+          <span id="set-sub-renews" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Seats</label>
+          <span id="set-sub-seats" class="font-data">—</span>
+        </div>
+      </div>
+      <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)">Manage Subscription →</button>
+    </div>
+
+    <!-- Security -->
+    <div class="card settings-section">
+      <div class="sec-hdr"><div class="sh-title">Security</div></div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">API Keys</label>
+          <div id="set-apikeys-list" class="font-data text-muted" style="font-size:11px">No API keys configured</div>
+          <button id="set-apikey-generate" class="btn ghost sm" style="margin-top:var(--s-2)">+ Generate New Key</button>
+          <div id="set-apikey-result" class="font-data" style="font-size:10px;margin-top:var(--s-1)"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ===== PAGE: Adapters ===== -->
+<div class="page" id="page-adapters">
+<div>
+  <div class="sec-hdr"><div class="sh-title">Adapter Manager</div><div class="sh-sub">Provider configuration and testing</div></div>
+  <div id="adp-grid" class="grid-3" style="margin-bottom:var(--s-5)"></div>
+
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Configure Provider</div></div>
+      <div class="flex-gap" style="flex-wrap:wrap;gap:6px">
+        <select id="adp-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
+        <input id="adp-api-key" class="inp" type="password" placeholder="API Key" style="width:160px;font-size:11px">
+        <input id="adp-model" class="inp" placeholder="Model (optional)" style="width:120px;font-size:11px">
+        <input id="adp-base-url" class="inp" placeholder="Base URL (optional)" style="width:140px;font-size:11px">
+        <button id="adp-configure-btn" class="btn accent sm">Configure</button>
+      </div>
+      <div id="adp-config-result"></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Test Connection</div></div>
+      <div class="flex-gap">
+        <select id="adp-test-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
+        <button id="adp-test-btn" class="btn accent sm">Test</button>
+      </div>
+      <div id="adp-test-result"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<div class="gw-detail-overlay" id="gw-detail-overlay"></div>
+<div class="gw-agent-detail" id="gw-agent-detail"></div>
+
+<div id="toast-container"></div>
+
+<script src="js/client.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/adapters/health.js"></script>
+<script src="js/adapters/gateway.js"></script>
+<script src="js/adapters/governor.js"></script>
+<script src="js/adapters/simulation.js"></script>
+<script src="js/adapters/cgt.js"></script>
+<script src="js/adapters/workflows.js"></script>
+<script src="js/adapters/governance.js"></script>
+<script src="js/adapters/telemetry.js"></script>
+<script src="js/adapters/reports.js"></script>
+<script src="js/adapters/adapters.js"></script>
+
+<script>var PAGES = {};</script>
+
+<script src="js/pages/overview.js"></script>
+<script src="js/pages/gateway.js"></script>
+<script src="js/pages/governor.js"></script>
+<script src="js/pages/simulation.js"></script>
+<script src="js/pages/adapters.js"></script>
+<script src="js/pages/cgt.js"></script>
+<script src="js/pages/workflows.js"></script>
+<script src="js/pages/governance.js"></script>
+<script src="js/pages/telemetry.js"></script>
+<script src="js/pages/reports.js"></script>
+<script src="js/pages/settings.js"></script>
+
+<script src="js/tour/tour-steps.js"></script>
+<script src="js/tour/tour-engine.js"></script>
+<script src="js/app.js"></script>
+<script>
+APP.init();
+TOUR.init();
+</script>
+</body>
+</html>

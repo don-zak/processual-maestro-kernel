@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: processual-maestro
+  namespace: processual
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: processual-maestro

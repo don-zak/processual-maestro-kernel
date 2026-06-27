@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cgtlib"
+version = "2.0.0"
+description = "CGT v2 formal core library — proprietary mathematical engine for Processual Maestro Kernel"
+readme = "README.md"
+requires-python = ">=3.14"
+license = {text = "MIT"}
+authors = [{name = "Zakaria Essamit"}]
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["cgtlib*", "cgtlib.private*"]

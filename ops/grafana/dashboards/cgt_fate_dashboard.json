@@ -1,0 +1,23 @@
+{
+  "title": "CGT Fate Dashboard",
+  "uid": "cgt-fate",
+  "panels": [
+    {
+      "title": "Stability Over Time",
+      "type": "graph",
+      "targets": [{"expr": "processual_fate_rank_total{rank=\"stable\"}"}]
+    },
+    {
+      "title": "Extinction Risk",
+      "type": "graph",
+      "targets": [{"expr": "processual_fate_rank_total{rank=\"extinct\"}"}]
+    },
+    {
+      "title": "Distortion Trends",
+      "type": "graph",
+      "targets": [{"expr": "processual_fate_rank_total{rank=\"distorted\"}"}]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

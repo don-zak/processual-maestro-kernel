@@ -1,0 +1,63 @@
+name: CI (Public)
+
+on:
+  push:
+    branches: [main, develop, "release/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Strip private modules (public build)
+        run: |
+          rm -rf cgtlib/private/
+          rm -f cgtlib/pyproject.toml
+
+      - name: Install public package
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Verify private modules not accessible
+        run: |
+          python -c "
+          try:
+              import cgtlib.private
+              print('FAIL: private modules should not be importable')
+              exit(1)
+          except ModuleNotFoundError:
+              print('OK: private modules correctly excluded')
+          "
+
+      - name: Ruff check
+        run: ruff check . --output-format=github
+
+      - name: Lint (flake8)
+        run: flake8 . --count --max-complexity=15 --statistics
+
+      - name: Type check (mypy)
+        run: mypy processual_kernel processual_api --ignore-missing-imports
+
+      - name: Unit tests
+        run: |
+          pytest --cov=processual_kernel --cov=processual_api \
+            --cov-report=xml --cov-report=term-missing -q
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package metadata
+        run: python -m twine check dist/*

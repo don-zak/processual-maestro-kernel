@@ -1,0 +1,22 @@
+{
+  "title": "Security Dashboard",
+  "uid": "security-overview",
+  "panels": [
+    {
+      "title": "Crypto Operations by Algorithm",
+      "type": "piechart",
+      "targets": [
+        {"expr": "processual_crypto_operations_total", "legendFormat": "{{algorithm}}"}
+      ]
+    },
+    {
+      "title": "Crypto Failure Rate",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(processual_crypto_failures_total[5m])", "legendFormat": "failures"}
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

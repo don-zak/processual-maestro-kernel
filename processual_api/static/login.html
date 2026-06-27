@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Maestro Kernel — Sign In</title>
+<link rel="icon" type="image/svg+xml" href="/console/favicon.svg">
+<link rel="apple-touch-icon" href="/console/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--void:#080b0f;--surface-0:#111620;--surface-1:#161d2a;--amber:#f5a623;--amber-dim:#c47f10;--amber-glow:rgba(245,166,35,0.2);--text:#c8d8f0;--bright:#e8f0fc;--muted:#3d5070;--ghost:#5a7299;--soft:#8aa3c8;--ok:#22d3a0;--error:#f87171;--rim:#2a3650;--font-display:'Syne',sans-serif;--font-mono:'Space Mono',monospace;--font-data:'DM Mono',monospace}
+body{background:var(--void);color:var(--text);font-family:var(--font-display);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased}
+#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+#bg-gradient{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 60% 50% at 50% 40%,rgba(245,166,35,0.04) 0%,transparent 70%)}
+.login-wrap{position:relative;z-index:2;width:100%;max-width:400px;padding:20px;animation:fadeIn 0.8s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.card{background:rgba(22,29,42,0.65);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(42,54,80,0.5);border-radius:16px;padding:36px 32px 28px;box-shadow:0 8px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(245,166,35,0.06)}
+.logo-area{text-align:center;margin-bottom:24px}
+.logo-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px}
+.logo-icon svg{width:44px;height:44px;filter:drop-shadow(0 0 12px rgba(245,166,35,0.12))}
+.logo-icon .hex-outer{stroke:#f5a623;stroke-width:1.5;fill:rgba(245,166,35,0.06);animation:glowPulse 3s ease-in-out infinite}
+.logo-icon .hex-inner{stroke:#f5a623;stroke-width:1;fill:none;opacity:0.6;animation:spinSlow 10s linear infinite;transform-origin:16px 16px}
+.logo-icon .hex-dot{fill:#f5a623;animation:dotPulse 2s ease-in-out infinite}
+@keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(245,166,35,0.15))}50%{filter:drop-shadow(0 0 10px rgba(245,166,35,0.3))}}
+@keyframes spinSlow{to{transform:rotate(360deg)}}
+@keyframes dotPulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.logo-text .m{font-size:20px;font-weight:800;color:var(--bright);letter-spacing:2.5px;margin-top:6px}
+.logo-text .s{font-size:9px;color:var(--ghost);letter-spacing:3px;text-transform:uppercase;font-family:var(--font-data);margin-top:2px}
+.lang-bar{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px}
+.lang-btn{background:transparent;border:1px solid transparent;color:var(--muted);font-family:var(--font-data);font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;transition:all 0.2s;letter-spacing:0.08em;text-transform:uppercase}
+.lang-btn.active{color:var(--amber);border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.06)}
+.lang-btn:hover:not(.active){color:var(--soft);border-color:var(--rim)}
+h1{font-size:13px;font-weight:600;text-align:center;margin-bottom:18px;color:var(--soft);letter-spacing:0.04em}
+.tab-row{display:flex;gap:8px;margin-bottom:18px}
+.tab-btn{flex:1;padding:8px;background:transparent;border:1px solid var(--rim);border-radius:8px;color:var(--muted);font-family:var(--font-display);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:1px}
+.tab-btn.active{background:var(--amber);color:var(--void);border-color:var(--amber)}
+.tab-btn:hover:not(.active){border-color:var(--amber);color:var(--text)}
+.inp-group{margin-bottom:16px}
+.inp-label{display:block;font-size:10px;color:var(--muted);margin-bottom:5px;letter-spacing:0.5px;text-transform:uppercase;font-family:var(--font-data)}
+.inp{width:100%;padding:10px 14px;background:rgba(17,22,32,0.7);border:1px solid var(--rim);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;outline:none;transition:border-color .2s}
+.inp:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,166,35,0.06)}
+.inp-hint{font-size:9px;color:var(--muted);margin-top:3px;font-family:var(--font-data)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 20px;border-radius:8px;font-family:var(--font-display);font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .2s;width:100%}
+.btn.primary{background:linear-gradient(135deg,var(--amber),#e0a020);color:var(--void)}
+.btn.primary:hover{box-shadow:0 4px 20px rgba(245,166,35,0.3);transform:translateY(-1px)}
+.btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+.btn-text{display:block;text-align:center;margin-top:14px;font-size:11px;color:var(--muted);font-family:var(--font-data)}
+.btn-text a{color:var(--amber);text-decoration:none}
+.btn-text a:hover{text-decoration:underline}
+.error-msg{font-size:11px;color:var(--error);text-align:center;margin-top:12px;display:none;font-family:var(--font-data)}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(10,12,15,0.2);border-top-color:var(--void);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.footer{text-align:center;margin-top:16px;font-size:9px;color:var(--muted);letter-spacing:1px;font-family:var(--font-data)}
+.back-link{display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:16px;font-family:var(--font-data);font-size:10px;color:var(--muted);text-decoration:none;transition:color 0.2s}
+.back-link:hover{color:var(--amber)}
+[dir="rtl"] .back-link .arrow{transform:rotate(180deg)}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="bg-gradient"></div>
+<div class="login-wrap">
+  <div class="card">
+    <div class="lang-bar">
+      <button class="lang-btn active" data-lang="en" id="lang-en">EN</button>
+      <span style="color:var(--rim);font-size:10px">|</span>
+      <button class="lang-btn" data-lang="ar" id="lang-ar">AR</button>
+    </div>
+
+    <a href="/" class="back-link"><span class="arrow">←</span> <span data-en="Back to splash" data-ar="العودة للصفحة الرئيسية">Back to splash</span></a>
+
+    <div class="logo-area">
+      <div class="logo-icon"><svg viewBox="0 0 32 32" fill="none"><polygon class="hex-outer" points="16,2 28,9 28,23 16,30 4,23 4,9"/><polygon class="hex-inner" points="16,8 22,11.5 22,20.5 16,24 10,20.5 10,11.5"/><circle class="hex-dot" cx="16" cy="16" r="2.5" fill="#f5a623"/></svg></div>
+      <div class="logo-text"><div class="m">MAESTRO</div><div class="s">PROCESSUAL KERNEL</div></div>
+    </div>
+
+    <div class="tab-row">
+      <button id="tab-admin" class="tab-btn active" data-en="Admin" data-ar="مدير">Admin</button>
+      <button id="tab-user" class="tab-btn" data-en="User" data-ar="مستخدم">User</button>
+    </div>
+
+    <div id="login-fields">
+      <div class="inp-group">
+        <label class="inp-label" data-en="Username" data-ar="اسم المستخدم">Username</label>
+        <input id="login-username" class="inp" placeholder="admin" autocomplete="username">
+      </div>
+      <div class="inp-group">
+        <label class="inp-label" data-en="Password" data-ar="كلمة المرور">Password</label>
+        <input id="login-password" class="inp" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+    </div>
+
+    <button id="login-btn" class="btn primary"><span data-en="Sign In" data-ar="تسجيل الدخول">Sign In</span></button>
+    <div id="login-error" class="error-msg"></div>
+    <div class="btn-text" data-en='New user? <a href="/apply">Request access</a>' data-ar='مستخدم جديد؟ <a href="/apply">طلب وصول</a>'>New user? <a href="/apply">Request access</a></div>
+  </div>
+  <div class="footer">v2.0.0 &nbsp;·&nbsp; B2B · Invite-only</div>
+</div>
+
+<script>
+// --- Particle Canvas ---
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, particles = [];
+
+function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+resize(); addEventListener('resize', resize);
+
+const COUNT = 50;
+const COLORS = ['rgba(245,166,35,', 'rgba(232,240,252,'];
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * W; this.y = Math.random() * H;
+    this.vx = (Math.random() - 0.5) * 0.2; this.vy = (Math.random() - 0.5) * 0.2;
+    this.r = Math.random() * 1.5 + 0.3;
+    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    this.alpha = Math.random() * 0.25 + 0.03;
+  }
+  update() { this.x += this.vx; this.y += this.vy; if (this.x < -10 || this.x > W + 10 || this.y < -10 || this.y > H + 10) this.reset(); }
+  draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.color + this.alpha + ')'; ctx.fill(); }
+}
+for (let i = 0; i < COUNT; i++) particles.push(new Particle());
+function animate() {
+  ctx.clearRect(0, 0, W, H);
+  for (const p of particles) { p.update(); p.draw(); }
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y, dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 100) { ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y); ctx.lineTo(particles[j].x, particles[j].y); ctx.strokeStyle = 'rgba(245,166,35,' + (0.03 * (1 - dist / 100)) + ')'; ctx.lineWidth = 0.5; ctx.stroke(); }
+    }
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+// --- Language ---
+let lang = 'en';
+function setLanguage(l) {
+  lang = l; document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr'; document.documentElement.lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === l));
+  document.querySelectorAll('[data-en]').forEach(el => { if (el.hasAttribute('data-' + l)) el.innerHTML = el.getAttribute('data-' + l); });
+}
+document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
+document.getElementById('lang-ar').addEventListener('click', () => setLanguage('ar'));
+
+// --- Login Logic ---
+let currentRole = 'admin';
+document.getElementById('tab-admin').addEventListener('click', () => {
+  currentRole = 'admin';
+  document.getElementById('tab-admin').classList.add('active');
+  document.getElementById('tab-user').classList.remove('active');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-username').placeholder = 'admin';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+});
+document.getElementById('tab-user').addEventListener('click', () => {
+  currentRole = 'user';
+  document.getElementById('tab-user').classList.add('active');
+  document.getElementById('tab-admin').classList.remove('active');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-username').placeholder = 'username';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+});
+
+async function doLogin() {
+  const user = document.getElementById('login-username').value;
+  const pass = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+  if (!user || !pass) { errEl.textContent = lang === 'en' ? 'Enter credentials' : 'أدخل بيانات الدخول'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ' + (lang === 'en' ? 'Signing in...' : 'جاري تسجيل الدخول...');
+  try {
+    const res = await fetch('/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }),
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.detail || (lang === 'en' ? 'Invalid credentials' : 'بيانات غير صحيحة')); }
+    const data = await res.json();
+    localStorage.setItem('maestro_token', data.access_token);
+    localStorage.setItem('maestro_role', currentRole);
+    window.location.href = '/console';
+  } catch (e) {
+    errEl.textContent = e.message || (lang === 'en' ? 'Login failed' : 'فشل تسجيل الدخول');
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.innerHTML = lang === 'en' ? 'Sign In' : 'تسجيل الدخول';
+  }
+}
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Processual Maestro Kernel v2.0.0</title>
+<link rel="icon" type="image/svg+xml" href="/console/favicon.svg">
+<link rel="apple-touch-icon" href="/console/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--void:#080b0f;--surface-0:#111620;--amber:#f5a623;--amber-dim:#c47f10;--amber-glow:rgba(245,166,35,0.2);--text:#c8d8f0;--bright:#e8f0fc;--muted:#3d5070;--ghost:#5a7299;--soft:#8aa3c8;--ok:#22d3a0;--error:#f87171;--warn:#fbbf24;--rim:#2a3650;--font-display:'Syne',sans-serif;--font-mono:'Space Mono',monospace;--font-data:'DM Mono',monospace}
+body{background:var(--void);color:var(--text);font-family:var(--font-display);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased}
+#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+#bg-gradient{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 60% 50% at 50% 40%,rgba(245,166,35,0.04) 0%,transparent 70%)}
+.splash-wrap{position:relative;z-index:2;width:100%;max-width:520px;padding:20px;animation:fadeIn 1s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.card{background:rgba(22,29,42,0.65);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(42,54,80,0.6);border-radius:20px;padding:48px 40px 36px;box-shadow:0 8px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(245,166,35,0.06)}
+.logo-area{text-align:center;margin-bottom:28px}
+#logo-svg{width:80px;height:80px;margin:0 auto;animation:logoFloat 4s ease-in-out infinite}
+@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+#logo-svg svg{width:80px;height:80px;filter:drop-shadow(0 0 20px rgba(245,166,35,0.15))}
+#logo-svg .hex-outer{stroke:#f5a623;stroke-width:1.5;fill:rgba(245,166,35,0.06);animation:glowPulse 3s ease-in-out infinite}
+#logo-svg .hex-inner{stroke:#f5a623;stroke-width:1;fill:none;opacity:0.6;animation:spinSlow 12s linear infinite;transform-origin:16px 16px}
+#logo-svg .hex-dot{fill:#f5a623;animation:dotPulse 2s ease-in-out infinite}
+@keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 4px rgba(245,166,35,0.2))}50%{filter:drop-shadow(0 0 16px rgba(245,166,35,0.45))}}
+@keyframes spinSlow{to{transform:rotate(360deg)}}
+@keyframes dotPulse{0%,100%{r:2.5;opacity:1}50%{r:3.5;opacity:0.7}}
+.logo-text{margin-top:14px}
+.logo-text .m{font-size:26px;font-weight:800;color:var(--bright);letter-spacing:3px;font-family:var(--font-display)}
+.logo-text .m span{color:var(--amber)}
+.logo-text .s{font-size:10px;color:var(--ghost);letter-spacing:4px;text-transform:uppercase;font-family:var(--font-data);margin-top:3px}
+#tagline-wrap{height:40px;display:flex;align-items:center;justify-content:center;margin-bottom:24px}
+#tagline{font-family:var(--font-data);font-size:13px;color:var(--soft);text-align:center;letter-spacing:0.04em;min-height:1.4em}
+#tagline .cursor{display:inline-block;width:2px;height:15px;background:var(--amber);margin-left:2px;animation:cursorBlink 0.7s step-end infinite;vertical-align:text-bottom}
+@keyframes cursorBlink{0%,100%{opacity:1}50%{opacity:0}}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:28px}
+.status-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(17,22,32,0.6);border:1px solid var(--rim);border-radius:10px;transition:all 0.3s}
+.status-item .si-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:all 0.5s}
+.status-item .si-dot.loading{background:var(--muted);animation:pulseLoad 1s ease infinite}
+.status-item .si-dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.status-item .si-dot.off{background:var(--error);box-shadow:0 0 8px var(--error)}
+@keyframes pulseLoad{0%,100%{opacity:0.3}50%{opacity:1}}
+.status-item .si-label{font-family:var(--font-data);font-size:11px;color:var(--ghost);letter-spacing:0.06em}
+.status-item .si-status{font-family:var(--font-mono);font-size:9px;margin-left:auto;text-transform:uppercase;letter-spacing:0.08em}
+.status-item .si-status.loading{color:var(--muted)}
+.status-item .si-status.on{color:var(--ok)}
+.status-item .si-status.off{color:var(--error)}
+#progress-wrap{margin-bottom:28px}
+#progress-bar{width:100%;height:3px;background:var(--surface-0);border-radius:99px;overflow:hidden;position:relative}
+#progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--amber-dim),var(--amber),var(--amber-dim));border-radius:99px;transition:width 0.4s ease;position:relative}
+#progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);animation:shimmer 2s infinite}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+#progress-text{font-family:var(--font-data);font-size:10px;color:var(--muted);text-align:center;margin-top:6px;letter-spacing:0.08em;transition:opacity 0.3s}
+.btn-area{text-align:center}
+#launch-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 36px;background:linear-gradient(135deg,var(--amber),#e0a020);border:none;border-radius:12px;color:var(--void);font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all 0.3s;text-transform:uppercase;opacity:0;transform:translateY(10px);pointer-events:none}
+#launch-btn.visible{opacity:1;transform:translateY(0);pointer-events:auto}
+#launch-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(245,166,35,0.35)}
+#launch-btn:active{transform:translateY(0)}
+#launch-btn .btn-arrow{font-size:18px;transition:transform 0.3s}
+#launch-btn:hover .btn-arrow{transform:translateX(4px)}
+.lang-bar{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:24px}
+.lang-btn{background:transparent;border:1px solid transparent;color:var(--muted);font-family:var(--font-data);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;transition:all 0.2s;letter-spacing:0.08em;text-transform:uppercase}
+.lang-btn.active{color:var(--amber);border-color:var(--amber-line,rgba(245,166,35,0.3));background:rgba(245,166,35,0.06)}
+.lang-btn:hover:not(.active){color:var(--soft);border-color:var(--rim)}
+.footer{text-align:center;margin-top:20px;font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:1.5px}
+.footer .v{color:var(--ghost)}
+[dir="rtl"] .status-item .si-status{margin-left:0;margin-right:auto}
+[dir="rtl"] #launch-btn .btn-arrow{transform:rotate(180deg)}
+[dir="rtl"] #launch-btn:hover .btn-arrow{transform:rotate(180deg) translateX(4px)}
+@media(max-width:480px){.card{padding:32px 24px 28px}.logo-text .m{font-size:20px;letter-spacing:2px}#logo-svg{width:64px;height:64px}#logo-svg svg{width:64px;height:64px}.status-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="bg-gradient"></div>
+<div class="splash-wrap">
+  <div class="card">
+    <div class="lang-bar">
+      <button class="lang-btn active" data-lang="en" id="lang-en">EN</button>
+      <span style="color:var(--rim);font-size:10px">|</span>
+      <button class="lang-btn" data-lang="ar" id="lang-ar">AR</button>
+    </div>
+
+    <div class="logo-area">
+      <div id="logo-svg">
+        <svg viewBox="0 0 32 32" fill="none">
+          <polygon class="hex-outer" points="16,1.5 28.5,9 28.5,23 16,30.5 3.5,23 3.5,9"/>
+          <polygon class="hex-inner" points="16,8 22,11.5 22,20.5 16,24 10,20.5 10,11.5"/>
+          <circle class="hex-dot" cx="16" cy="16" r="2.5" fill="#f5a623"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="m">MAESTRO<span>.</span></div>
+        <div class="s">PROCESSUAL KERNEL</div>
+      </div>
+    </div>
+
+    <div id="tagline-wrap">
+      <div id="tagline"></div>
+    </div>
+
+    <div class="status-grid">
+      <div class="status-item"><div class="si-dot loading" id="sd-api"></div><span class="si-label" data-en="API Server" data-ar="خادم API">API Server</span><span class="si-status loading" id="ss-api">loading</span></div>
+      <div class="status-item"><div class="si-dot loading" id="sd-db"></div><span class="si-label" data-en="Database" data-ar="قاعدة البيانات">Database</span><span class="si-status loading" id="ss-db">loading</span></div>
+      <div class="status-item"><div class="si-dot loading" id="sd-redis"></div><span class="si-label" data-en="Cache" data-ar="الذاكرة المؤقتة">Cache</span><span class="si-status loading" id="ss-redis">loading</span></div>
+      <div class="status-item"><div class="si-dot loading" id="sd-kernel"></div><span class="si-label" data-en="Kernel" data-ar="النواة">Kernel</span><span class="si-status loading" id="ss-kernel">loading</span></div>
+    </div>
+
+    <div id="progress-wrap">
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="progress-text" data-en="Initializing services..." data-ar="جاري تهيئة الخدمات...">Initializing services...</div>
+    </div>
+
+    <div class="btn-area">
+      <button id="launch-btn"><span data-en="Enter Maestro" data-ar="الدخول إلى مايسترو">Enter Maestro</span><span class="btn-arrow">→</span></button>
+    </div>
+
+    <div class="footer"><span class="v">v2.0.0</span> &nbsp;·&nbsp; <span data-en="Production Ready" data-ar="جاهز للإنتاج">Production Ready</span> &nbsp;·&nbsp; CGT v2</div>
+  </div>
+</div>
+
+<script>
+// --- Particle Canvas ---
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, particles = [];
+
+function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+resize(); addEventListener('resize', resize);
+
+const COUNT = 80;
+const COLORS = ['rgba(245,166,35,', 'rgba(196,127,16,', 'rgba(232,240,252,'];
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * W; this.y = Math.random() * H;
+    this.vx = (Math.random() - 0.5) * 0.3; this.vy = (Math.random() - 0.5) * 0.3;
+    this.r = Math.random() * 2 + 0.5;
+    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    this.alpha = Math.random() * 0.3 + 0.05;
+    this.life = 0; this.maxLife = Math.random() * 300 + 200;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.life++;
+    if (this.x < -10 || this.x > W + 10 || this.y < -10 || this.y > H + 10 || this.life > this.maxLife) this.reset();
+    if (this.x < 0) this.x = 0; if (this.x > W) this.x = W;
+    if (this.y < 0) this.y = 0; if (this.y > H) this.y = H;
+  }
+  draw() {
+    const fade = Math.min(1, (this.life / 60), ((this.maxLife - this.life) / 60));
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = this.color + (this.alpha * fade) + ')'; ctx.fill();
+  }
+}
+
+for (let i = 0; i < COUNT; i++) particles.push(new Particle());
+
+function drawParticles() {
+  ctx.clearRect(0, 0, W, H);
+  for (const p of particles) { p.update(); p.draw(); }
+  // connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 120) {
+        ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y); ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = 'rgba(245,166,35,' + (0.04 * (1 - dist / 120)) + ')';
+        ctx.lineWidth = 0.5; ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// --- Boot Sequence ---
+const taglines = {
+  en: ['Initializing Processual Maestro Kernel...','Loading Adaptive Governance Toolkit...','Calibrating CGT v2 Fate Vectors...','Establishing Secure Channels...','System Ready — Orchestration Online'],
+  ar: ['جاري تشغيل نواة المايسترو...','تحميل أدوات الحوكمة التكيفية...','معايرة متجهات CGT v2...','تأسيس القنوات الآمنة...','النظام جاهز — الأوركسترا عبر الإنترنت']
+};
+const statusOrder = ['sd-api','sd-db','sd-redis','sd-kernel'];
+const statusLabels = {en:['API Server','Database','Cache','Kernel'],ar:['خادم API','قاعدة البيانات','الذاكرة المؤقتة','النواة']};
+
+let step = 0, lang = 'en', isComplete = false;
+
+const taglineEl = document.getElementById('tagline');
+const launchBtn = document.getElementById('launch-btn');
+const progressFill = document.getElementById('progress-fill');
+const progressText = document.getElementById('progress-text');
+
+function getText(key) {
+  const el = document.querySelector(`[data-${key}]`);
+  return el ? el.getAttribute('data-' + key) : '';
+}
+
+function typewriter(text, el, speed, cb) {
+  let i = 0; el.textContent = '';
+  const cursor = document.createElement('span'); cursor.className = 'cursor';
+  function type() {
+    if (i < text.length) { el.textContent = text.slice(0, i + 1); el.appendChild(cursor); i++; setTimeout(type, speed); }
+    else { if (cb) cb(); }
+  }
+  type();
+}
+
+function setStatusItem(id, state, label) {
+  const dot = document.getElementById(id);
+  const statusEl = document.getElementById(id.replace('sd-','ss-'));
+  if (!dot || !statusEl) return;
+  dot.className = 'si-dot ' + state;
+  statusEl.className = 'si-status ' + state;
+  statusEl.textContent = state === 'on' ? 'online' : state === 'off' ? 'offline' : 'loading';
+}
+
+function bootStep() {
+  if (step < 5) {
+    const idx = step;
+    const pct = ((idx + 1) / 5) * 100;
+    progressFill.style.width = pct + '%';
+    progressText.textContent = lang === 'en' ? taglines.en[idx] : taglines.ar[idx];
+    progressText.style.opacity = '1';
+
+    typewriter(lang === 'en' ? taglines.en[idx] : taglines.ar[idx], taglineEl, 20, () => {
+      if (idx < 4) {
+        setTimeout(() => { step++; bootStep(); }, 400);
+      } else {
+        // Mark all status online after final step
+        setTimeout(() => {
+          statusOrder.forEach(id => setStatusItem(id, 'on'));
+          progressFill.style.width = '100%';
+          progressText.textContent = lang === 'en' ? 'All systems operational.' : 'جميع الأنظمة جاهزة.';
+          isComplete = true;
+          launchBtn.classList.add('visible');
+        }, 500);
+      }
+    });
+
+    // Activate status items progressively
+    if (idx > 0 && idx <= 4) {
+      setStatusItem(statusOrder[idx - 1], 'on');
+    }
+  }
+}
+
+// --- Language ---
+function setLanguage(l) {
+  lang = l;
+  document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === l));
+  document.querySelectorAll('[data-en]').forEach(el => {
+    if (el.hasAttribute('data-' + l)) el.textContent = el.getAttribute('data-' + l);
+  });
+  document.querySelectorAll('.status-item .si-label').forEach(el => {
+    if (el.hasAttribute('data-' + l)) el.textContent = el.getAttribute('data-' + l);
+  });
+  // Re-run current step if not complete
+  if (!isComplete) {
+    const idx = step;
+    if (idx < 5) {
+      progressText.textContent = l === 'en' ? taglines.en[idx] : taglines.ar[idx];
+    }
+  }
+}
+
+document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
+document.getElementById('lang-ar').addEventListener('click', () => setLanguage('ar'));
+
+launchBtn.addEventListener('click', () => { window.location.href = '/login'; });
+
+// --- Start ---
+setTimeout(() => { step = 0; bootStep(); }, 600);
+</script>
+</body>
+</html>

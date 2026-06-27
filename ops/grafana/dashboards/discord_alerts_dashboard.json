@@ -1,0 +1,29 @@
+{
+  "title": "Discord Alerts",
+  "uid": "discord-alerts",
+  "panels": [
+    {
+      "title": "Alert Volume",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(processual_discord_alerts_total[5m])", "legendFormat": "alerts"}
+      ]
+    },
+    {
+      "title": "Workflow Checkpoints",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(processual_workflow_checkpoints_total[5m])", "legendFormat": "checkpoints"}
+      ]
+    },
+    {
+      "title": "Governance Actions",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(processual_governance_actions_total[5m])", "legendFormat": "{{action}}"}
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}
