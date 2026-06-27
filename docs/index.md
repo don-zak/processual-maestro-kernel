@@ -32,6 +32,7 @@ The public runtime has been verified locally with:
 * [Public Runtime Readiness Proof AR/EN](./PUBLIC_RUNTIME_PROOF_AR_EN.md)
 * [External Pilot Message AR/EN/FR](./EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md)
 * [Repository Scope AR](./REPOSITORY_SCOPE_AR.md)
+* [دليل عرض العميل والتجربة المحدودة بالعربية والإنجليزية](./CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md)
 
 ### Quick local test
 
