@@ -1,5 +1,5 @@
 
-2026-06-26 — Provider readiness after response_text_full repair: PASS.
+2026-06-26 ï¿½ Provider readiness after response_text_full repair: PASS.
 Run ID: provider_readiness_20260626_182545.
 Provider: opencode via Ollama OpenAI-compatible endpoint.
 Model: qwen2.5-coder:7b.
@@ -9,7 +9,7 @@ Reports:
 - docs/reports/provider_experiments/provider_readiness_20260626_182545.md
 Fix: cgt_governor compare results now expose response_preview and response_text_full to avoid confusing preview truncation with model truncation.
 
-2026-06-27 — Gemini model repaired but generation is quota-blocked.
+2026-06-27 ï¿½ Gemini model repaired but generation is quota-blocked.
 
 Gemini was tested with:
 - gemini-2.0-flash
@@ -34,7 +34,7 @@ Current provider status:
 - DeepSeek: BLOCKED_BY_BALANCE.
 - Anthropic: INVALID_API_KEY.
 
-2026-06-27 — OpenCode/Ollama restored as valid Maestro governance baseline.
+2026-06-27 ï¿½ OpenCode/Ollama restored as valid Maestro governance baseline.
 
 OpenCode was retested through:
 - /cgt/govern/compare
@@ -55,7 +55,7 @@ Result:
 Conclusion:
 OpenCode/Ollama is restored as the local working baseline with real generation and CGT governance proof.
 
-2026-06-27 — Provider readiness baseline restored after OpenCode/Ollama repair.
+2026-06-27 ï¿½ Provider readiness baseline restored after OpenCode/Ollama repair.
 
 Latest readiness report:
 - Run ID: provider_readiness_20260627_085419
@@ -76,7 +76,7 @@ Conclusion:
 OpenCode/Ollama is the current official working baseline.
 External providers are visible but blocked by account, balance, quota, or key issues, not by the core Maestro governance path.
 
-2026-06-27 — Real multi-task governance runner completed.
+2026-06-27 ï¿½ Real multi-task governance runner completed.
 
 New script:
 - scripts\provider_experiments\run_real_multi_task_governance.py
@@ -106,7 +106,7 @@ The first real multi-task governance experiment is complete.
 OpenCode/Ollama is confirmed as the working baseline for Processual Maestro Kernel v2.0.0.
 Next work should improve reporting, add Arabic calibration tasks, and later re-enable external providers only after quota/balance/key problems are resolved.
 
-2026-06-27 — OpenRouter/free added as first working external free provider.
+2026-06-27 ï¿½ OpenRouter/free added as first working external free provider.
 
 New provider:
 - OpenRouter
@@ -132,7 +132,7 @@ Summary:
 - OpenRouter/free is the first working external free provider and is much faster.
 - OpenRouter/free quality is variable, so the next step is to test a specific free model instead of the openrouter/free router.
 
-2026-06-27 — OpenRouter fixed free model validated through Maestro.
+2026-06-27 ï¿½ OpenRouter fixed free model validated through Maestro.
 
 OpenRouter was tested through /cgt/govern/compare using:
 - provider: openrouter
@@ -152,7 +152,7 @@ Conclusion:
 OpenRouter is now validated as a working external free provider through Maestro and CGT Governance.
 Using a fixed free model is better than openrouter/free for reproducible comparisons.
 
-2026-06-27 — Fixed OpenRouter free model comparison completed.
+2026-06-27 ï¿½ Fixed OpenRouter free model comparison completed.
 
 Run:
 - real_multi_task_governance_20260627_115458

@@ -1,4 +1,4 @@
-﻿# Provider Experiments Index
+# Provider Experiments Index
 
 Root:
 C:\Users\zaksam\Desktop\المايسترو  كرنل\processual_maestro_kernel_v2.0.0_production_ready\processual_maestro_kernel_CLEAN_LOCAL_REFERENCE_READY_FOR_DOCKER_AGENT_TESTS
