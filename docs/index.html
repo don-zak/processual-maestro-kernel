@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Processual Maestro Kernel v2.0.0</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+      max-width: 980px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+      color: #1f2937;
+      background: #ffffff;
+    }
+    h1, h2, h3 { color: #111827; }
+    code, pre {
+      background: #f3f4f6;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    pre {
+      padding: 14px;
+      overflow-x: auto;
+    }
+    .box {
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 18px;
+      margin: 20px 0;
+      background: #f9fafb;
+    }
+    .ok {
+      color: #047857;
+      font-weight: 700;
+    }
+    a { color: #2563eb; }
+    .ar {
+      direction: rtl;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <h1>Processual Maestro Kernel v2.0.0</h1>
+  <h2>Public Technical Page</h2>
+  <h2 class="ar">الصفحة التقنية العامة</h2>
+
+  <div class="box">
+    <p class="ok">PUBLIC RUNTIME READINESS: PASS</p>
+    <p>
+      This public repository is a sanitized, runnable edition prepared for external technical review,
+      local runtime testing, and limited pilot evaluation without exposing the private development repository.
+    </p>
+    <p class="ar">
+      هذا الريبو العام هو نسخة منقّحة وقابلة للتشغيل، مخصصة للمراجعة التقنية الخارجية
+      والاختبار المحلي والتقييم التجريبي المحدود دون كشف الريبو الخاص.
+    </p>
+  </div>
+
+  <h2>English</h2>
+
+  <h3>Verified public runtime</h3>
+  <ul>
+    <li>FastAPI import from the public repository.</li>
+    <li>Local server startup with Uvicorn.</li>
+    <li>OpenAPI / Swagger documentation.</li>
+    <li><code>X-API-Key</code> protected endpoints.</li>
+    <li><code>/health/live</code> and <code>/health/ready</code>.</li>
+    <li><code>/adapters/status</code>.</li>
+    <li><code>/cgt/govern/status</code>.</li>
+    <li>OpenCode configured as the default local provider.</li>
+  </ul>
+
+  <h3>Main documents</h3>
+  <ul>
+    <li><a href="./PUBLIC_RUNTIME_PROOF_AR_EN.md">Public Runtime Readiness Proof AR/EN</a></li>
+    <li><a href="./CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md">Client Demo and Limited Pilot Guide AR/EN</a></li>
+    <li><a href="./EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md">External Pilot Message AR/EN/FR</a></li>
+    <li><a href="./REPOSITORY_SCOPE_AR.md">Repository Scope AR</a></li>
+  </ul>
+
+  <h3>Quick local runtime check</h3>
+  <pre><code>$env:API_KEYS="dev-public-test-key"
+python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000</code></pre>
+
+  <p>In a second PowerShell window:</p>
+
+  <pre><code>curl.exe http://127.0.0.1:8000/health/live
+curl.exe http://127.0.0.1:8000/health/ready
+curl.exe -H "X-API-Key: dev-public-test-key" http://127.0.0.1:8000/adapters/status
+curl.exe -H "X-API-Key: dev-public-test-key" http://127.0.0.1:8000/cgt/govern/status</code></pre>
+
+  <p>Swagger UI:</p>
+  <pre><code>http://127.0.0.1:8000/docs</code></pre>
+
+  <h2 class="ar">العربية</h2>
+
+  <h3 class="ar">حالة تشغيل النسخة العامة</h3>
+  <p class="ar">
+    تم التحقق من جاهزية تشغيل النسخة العامة من Processual Maestro Kernel v2.0.0.
+    هذه الصفحة لا تشغّل backend، بل تعرض وثائق GitHub Pages العامة. أما FastAPI فيُشغّل محليًا أو عبر منصة نشر لاحقًا.
+  </p>
+
+  <h3 class="ar">ما الذي تم التحقق منه</h3>
+  <ul class="ar">
+    <li>نجاح استيراد تطبيق FastAPI من الريبو العام.</li>
+    <li>تشغيل السيرفر محليًا عبر Uvicorn.</li>
+    <li>ظهور OpenAPI / Swagger.</li>
+    <li>عمل الحماية عبر <code>X-API-Key</code>.</li>
+    <li>عمل <code>/health/live</code> و <code>/health/ready</code>.</li>
+    <li>عمل <code>/adapters/status</code>.</li>
+    <li>عمل <code>/cgt/govern/status</code>.</li>
+    <li>تفعيل OpenCode كمزود محلي افتراضي.</li>
+  </ul>
+
+  <h3 class="ar">الوثائق الرئيسية</h3>
+  <ul class="ar">
+    <li><a href="./PUBLIC_RUNTIME_PROOF_AR_EN.md">إثبات جاهزية التشغيل بالعربية والإنجليزية</a></li>
+    <li><a href="./CLIENT_DEMO_AND_PILOT_GUIDE_AR_EN.md">دليل عرض العميل والتجربة المحدودة بالعربية والإنجليزية</a></li>
+    <li><a href="./EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md">رسالة pilot خارجية بالعربية والإنجليزية والفرنسية</a></li>
+    <li><a href="./REPOSITORY_SCOPE_AR.md">نطاق الريبو العام والخاص</a></li>
+  </ul>
+
+  <h3 class="ar">ملاحظة إنتاجية</h3>
+  <p class="ar">
+    مفتاح الاختبار المحلي مخصص للتطوير فقط. قبل أي نشر إنتاجي يجب ضبط متغيرات قوية مثل
+    <code>JWT_SECRET</code> و <code>API_KEYS</code> و <code>DATABASE_URL</code> و <code>REDIS_URL</code>.
+    لا ترفع أبدًا ملفات <code>.env</code> أو مفاتيح API حقيقية إلى GitHub.
+  </p>
+</body>
+</html>
