@@ -1,5 +1,100 @@
 # Processual Maestro Kernel
 
+## Public Runtime Status / حالة تشغيل النسخة العامة
+
+**Status:** Public runtime readiness verified.
+**الحالة:** تم التحقق من جاهزية تشغيل النسخة العامة.
+
+The public repository is a sanitized, runnable edition of **Processual Maestro Kernel v2.0.0**. It is designed for external technical review, local runtime testing, and limited pilot evaluation without exposing the private development repository.
+
+الريبو العام هو نسخة منقّحة وقابلة للتشغيل من **Processual Maestro Kernel v2.0.0**، مخصّصة للمراجعة التقنية الخارجية، والاختبار المحلي، والتقييم التجريبي المحدود دون كشف الريبو الخاص.
+
+### Verified public runtime proof
+
+A bilingual readiness proof is available here:
+
+* [`docs/PUBLIC_RUNTIME_PROOF_AR_EN.md`](docs/PUBLIC_RUNTIME_PROOF_AR_EN.md)
+
+This proof documents:
+
+* successful FastAPI import from the public repository;
+* local server startup with Uvicorn;
+* working OpenAPI/Swagger documentation;
+* working `X-API-Key` protection;
+* working `/adapters/status`;
+* working `/cgt/govern/status`;
+* OpenCode configured as the default local provider;
+* external providers intentionally left unconfigured until real keys are provided.
+
+يوثق إثبات الجاهزية:
+
+* نجاح استيراد تطبيق FastAPI من الريبو العام؛
+* تشغيل السيرفر محليًا عبر Uvicorn؛
+* ظهور OpenAPI/Swagger؛
+* عمل الحماية عبر `X-API-Key`؛
+* عمل `/adapters/status`؛
+* عمل `/cgt/govern/status`؛
+* تفعيل OpenCode كمزود محلي افتراضي؛
+* بقاء المزودين الخارجيين غير مفعّلين إلى حين ضبط مفاتيح حقيقية.
+
+### Public repository scope
+
+The public/private separation is documented here:
+
+* [`docs/REPOSITORY_SCOPE_AR.md`](docs/REPOSITORY_SCOPE_AR.md)
+
+The public repository intentionally excludes private development material such as internal tests, private CGT modules, local runtime data, private handoff reports, `.env` files, and real API keys.
+
+### External pilot message
+
+A trilingual pilot message for external technical contacts is available here:
+
+* [`docs/EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md`](docs/EXTERNAL_PILOT_MESSAGE_AR_EN_FR.md)
+
+### Quick local runtime check
+
+From the public repository root:
+
+```powershell
+$env:API_KEYS="dev-public-test-key"
+python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000
+```
+
+In a second PowerShell window:
+
+```powershell
+curl.exe http://127.0.0.1:8000/health/live
+curl.exe http://127.0.0.1:8000/health/ready
+curl.exe -H "X-API-Key: dev-public-test-key" http://127.0.0.1:8000/adapters/status
+curl.exe -H "X-API-Key: dev-public-test-key" http://127.0.0.1:8000/cgt/govern/status
+```
+
+Swagger/OpenAPI UI:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### Production note
+
+The local test key above is only for development. Before any production deployment, configure strong environment variables such as:
+
+```text
+JWT_SECRET
+API_KEYS
+DATABASE_URL
+REDIS_URL
+POSTGRES_PASSWORD
+REDIS_PASSWORD
+GRAFANA_ADMIN_PASSWORD
+```
+
+Never commit `.env` files or real provider API keys to GitHub.
+
+---
+
+
+
 **Processual Maestro** is an adaptive governance middleware for AI agent workflows. It sits above any agent runtime (LangGraph, CrewAI, AutoGen, OpenAI Agents SDK) and provides CGT v2 evaluation, safety guardrails, audit trails, and certifiable orchestration.
 
 ```text
