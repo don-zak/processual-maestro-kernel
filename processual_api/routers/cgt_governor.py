@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from ..auth.security import get_current_user, require_scope, require_quota
 from ..cgt_governor.adapters.registry import adapter_registry
-from ..cgt_governor.adapters.provider_metadata import provider_env_map
+from ..cgt_governor.adapters.provider_metadata import provider_env_map, provider_public_metadata
 from ..cgt_governor.data.storage import eval_store
 from ..cgt_governor.policy import PolicyContext, policy_engine as runtime_policy_engine
 from ..cgt_governor.security import decrypt_log_entry, encrypt_log_entry, get_crypto_key, sign_response
@@ -1416,8 +1416,10 @@ async def gateway_report_pdf(current_user: dict = Depends(get_current_user)):
 async def adapters_status(current_user: dict = Depends(require_scope("read:adapters"))):
     providers = []
     for name, adapter in adapter_registry.all().items():
+        metadata = provider_public_metadata(name)
         providers.append(
             {
+                **metadata,
                 "name": adapter.provider_name,
                 "configured": adapter.is_configured(),
                 "default_model": adapter.default_model,
