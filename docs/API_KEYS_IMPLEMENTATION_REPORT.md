@@ -1622,3 +1622,31 @@ KEY-04 Quota Enforcement
 KEY-05 Plan / Subscription Binding
 KEY-06 Admin Plan and Quota Controls
 ```
+
+## KEY-07 — Admin Scope Hardening
+
+### الهدف
+
+تهدف KEY-07 إلى تأمين مسارات الإدارة الخاصة بطبقة مفاتيح API، ومنع مفاتيح العملاء العادية من الوصول إلى عمليات الإدارة الحساسة.
+
+قبل KEY-07 كانت بعض مسارات الإعدادات تعتمد فقط على:
+
+```python
+Depends(get_current_user)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

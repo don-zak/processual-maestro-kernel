@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 
-from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key
+from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..dependencies import file_lock
 from ..schemas.settings import (
     GeneralSettings,
@@ -45,6 +45,7 @@ DEFAULT_API_KEY_SCOPES = [
     "read:reports",
     "create:reports",
 ]
+ADMIN_SETTINGS_SCOPE = "admin:settings"
 
 class ApiKeyPlanUpdate(BaseModel):
     plan_id: str
@@ -414,11 +415,11 @@ def _api_key_quota_summary(key: dict) -> dict:
     }
 
 @router.get("/plans", response_model=list[dict])
-async def list_plans(current_user: dict = Depends(get_current_user)):
+async def list_plans(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     return [get_plan_policy(plan_id) for plan_id in PLAN_POLICIES.keys()]
 
 @router.get("/api-keys", response_model=list[dict])
-async def list_api_keys(current_user: dict = Depends(get_current_user)):
+async def list_api_keys(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
@@ -458,7 +459,7 @@ def _resolve_current_plan_id(user_id: str, raw: dict) -> str:
 
 
 @router.post("/api-keys", response_model=dict)
-async def create_api_key(current_user: dict = Depends(get_current_user)):
+async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     user_id = current_user.get("sub", "default")
     client_id = current_user.get("client_id") or user_id
 
@@ -522,7 +523,7 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
 async def update_api_key_plan(
     key_id: str,
     body: ApiKeyPlanUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
 ):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
@@ -609,7 +610,7 @@ async def update_api_key_quota(
     }
 
 @router.delete("/api-keys/{key_id}", response_model=dict)
-async def delete_api_key(key_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_api_key(key_id: str, current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
