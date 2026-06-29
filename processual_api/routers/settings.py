@@ -32,6 +32,16 @@ except ImportError:
     _crypto_available = False
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+DEFAULT_API_KEY_SCOPES = [
+    "read:health",
+    "read:adapters",
+    "read:governor",
+    "run:analyze",
+    "run:govern",
+    "run:compare",
+    "read:reports",
+    "create:reports",
+]
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CRYPTO_KEY = os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
@@ -360,12 +370,31 @@ async def list_api_keys(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
-    return [{"prefix": k.get("prefix", ""), "created_at": k.get("created_at", ""), "id": k.get("id", "")} for k in keys]
+
+    visible_keys = []
+    for key in keys:
+        if key.get("status") == "revoked" or key.get("revoked_at"):
+            continue
+
+        visible_keys.append({
+            "id": key.get("id", ""),
+            "prefix": key.get("prefix", ""),
+            "status": key.get("status", "enabled"),
+            "scopes": key.get("scopes", []),
+            "created_at": key.get("created_at", ""),
+            "last_used_at": key.get("last_used_at"),
+            "usage_count": key.get("usage_count", 0),
+            "expires_at": key.get("expires_at"),
+        })
+
+    return visible_keys
 
 
 @router.post("/api-keys", response_model=dict)
 async def create_api_key(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("sub", "default")
+    client_id = current_user.get("client_id") or user_id
+
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
 
@@ -376,15 +405,37 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
         if "bcrypt" not in str(exc).lower():
             raise
         hashed = _pbkdf2_hash_api_key(raw_key)
-    key_id = secrets.token_hex(4)
-    prefix = raw_key[:12] + "..."
 
-    keys.append({"id": key_id, "prefix": prefix, "hashed": hashed,
-                 "created_at": datetime.now(UTC).isoformat()})
+    key_id = secrets.token_hex(8)
+    prefix = raw_key[:12] + "..."
+    created_at = datetime.now(UTC).isoformat()
+
+    keys.append({
+        "id": key_id,
+        "user_id": user_id,
+        "client_id": client_id,
+        "prefix": prefix,
+        "hashed": hashed,
+        "scopes": DEFAULT_API_KEY_SCOPES,
+        "status": "enabled",
+        "created_at": created_at,
+        "last_used_at": None,
+        "usage_count": 0,
+        "expires_at": None,
+        "revoked_at": None,
+    })
+
     raw["api_keys"] = keys
     _save_raw(user_id, raw)
 
-    return {"api_key": raw_key, "id": key_id, "prefix": prefix}
+    return {
+        "api_key": raw_key,
+        "id": key_id,
+        "prefix": prefix,
+        "status": "enabled",
+        "scopes": DEFAULT_API_KEY_SCOPES,
+        "created_at": created_at,
+    }
 
 
 @router.delete("/api-keys/{key_id}", response_model=dict)
@@ -392,7 +443,21 @@ async def delete_api_key(key_id: str, current_user: dict = Depends(get_current_u
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
-    raw["api_keys"] = [k for k in keys if k.get("id") != key_id]
-    _save_raw(user_id, raw)
-    return {"status": "deleted", "id": key_id}
 
+    revoked = False
+    now = datetime.now(UTC).isoformat()
+
+    for key in keys:
+        if key.get("id") == key_id:
+            key["status"] = "revoked"
+            key["revoked_at"] = now
+            revoked = True
+            break
+
+    raw["api_keys"] = keys
+    _save_raw(user_id, raw)
+
+    if not revoked:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    return {"status": "revoked", "id": key_id, "revoked_at": now}

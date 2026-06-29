@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -11,6 +12,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from ..settings import settings
+from ..services.api_key_store import verify_dynamic_api_key
 
 try:
     from jose import JWTError, jwt
@@ -129,13 +131,60 @@ async def get_current_user(
 ) -> dict:
     if bearer:
         payload = verify_access_token(bearer.credentials)
-        return {"sub": payload.get("sub", "unknown"), "auth_method": "jwt"}
+        subject = payload.get("sub", "unknown")
+        return {
+            "sub": subject,
+            "user_id": subject,
+            "client_id": payload.get("client_id", subject),
+            "role": payload.get("role", "client"),
+            "auth_method": "jwt",
+            "session_type": payload.get("session_type", "jwt"),
+            "scopes": payload.get("scopes", []),
+        }
+
     if api_key:
-        for stored_key in settings.api_keys:
-            if secrets.compare_digest(api_key, stored_key):
-                return {"sub": "api_key_user", "auth_method": "api_key"}
+        dynamic_user = verify_dynamic_api_key(api_key)
+        if dynamic_user:
+            return dynamic_user
+
+        app_env = os.environ.get("APP_ENV", "development").lower()
+        allow_env_fallback = app_env in {"dev", "development", "local", "test"}
+
+        if allow_env_fallback:
+            for stored_key in settings.api_keys:
+                if secrets.compare_digest(api_key, stored_key):
+                    return {
+                        "sub": "api_key_user",
+                        "user_id": "api_key_user",
+                        "client_id": "dev",
+                        "role": "dev",
+                        "auth_method": "api_key",
+                        "session_type": "api_key_env_fallback",
+                        "api_key_id": "env",
+                        "api_key_prefix": "env",
+                        "scopes": ["*"],
+                    }
+
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
+
+def require_scope(required_scope: str):
+    async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
+        scopes = current_user.get("scopes", [])
+
+        if "*" in scopes:
+            return current_user
+
+        if required_scope in scopes:
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing required scope: {required_scope}",
+        )
+
+    return _scope_dependency

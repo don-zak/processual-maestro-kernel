@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ..auth.security import get_current_user
+from ..auth.security import get_current_user, require_scope
 from ..cgt_governor.adapters.registry import adapter_registry
 from ..cgt_governor.data.storage import eval_store
 from ..cgt_governor.policy import PolicyContext, policy_engine as runtime_policy_engine
@@ -1412,7 +1412,7 @@ async def gateway_report_pdf(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/adapters/status")
-async def adapters_status(current_user: dict = Depends(get_current_user)):
+async def adapters_status(current_user: dict = Depends(require_scope("read:adapters"))):
     providers = []
     for name, adapter in adapter_registry.all().items():
         providers.append(
