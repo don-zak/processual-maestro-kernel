@@ -1636,6 +1636,132 @@ Depends(get_current_user)
 
 
 
+## KEY-08 — Customer Key Profiles
+
+### الهدف
+
+تهدف KEY-08 إلى تثبيت الفصل العملي بين مفاتيح العملاء ومفاتيح الإدارة داخل طبقة API Keys التجارية.
+
+بعد KEY-07 أصبحت مسارات الإدارة محمية بصلاحية:
+
+```text
+admin:settings
+```
+
+وفي KEY-08 تم جعل مسار إنشاء مفاتيح API الحالي ينتج مفاتيح عميل صريحة تحمل profile واضحًا:
+
+```text
+client
+```
+
+---
+
+### التعديل المنجز
+
+في الملف:
+
+```text
+processual_api/routers/settings.py
+```
+
+تمت إضافة الثابت:
+
+```python
+CLIENT_KEY_PROFILE = "client"
+```
+
+ثم تم تعديل سجل المفتاح الجديد بحيث يخزّن:
+
+```python
+"profile": CLIENT_KEY_PROFILE
+```
+
+كما تم تعديل الاستجابة الراجعة من:
+
+```text
+POST /settings/api-keys
+```
+
+حتى تُظهر أن المفتاح المنشأ هو مفتاح عميل:
+
+```json
+"profile": "client"
+```
+
+---
+
+### تصحيح أمني مرفق
+
+أثناء تنفيذ KEY-08 تم اكتشاف أن مسار تعديل الحصة:
+
+```text
+PATCH /settings/api-keys/{key_id}/quota
+```
+
+كان لا يزال يعتمد على:
+
+```python
+Depends(get_current_user)
+```
+
+لذلك تم تصحيحه ليصبح محميًا بـ:
+
+```python
+Depends(require_scope(ADMIN_SETTINGS_SCOPE))
+```
+
+بهذا أصبح تعديل الحصص محميًا بنفس مستوى حماية بقية مسارات الإدارة.
+
+---
+
+### الإثبات العملي
+
+تم إنشاء مفتاح جديد عبر مفتاح أدمين، وكانت الاستجابة تحتوي:
+
+```text
+profile = client
+plan_id = pilot_starter
+quota_limit = 50
+status = enabled
+```
+
+ثم تم اختبار تعديل quota بنفس المفتاح العميل، وكانت النتيجة:
+
+```text
+403
+{"detail":"Missing required scope: admin:settings"}
+```
+
+ثم تم اختبار تعديل quota بمفتاح الأدمين، وكانت النتيجة:
+
+```text
+status = updated
+change = quota_override_set
+quota_limit = 100
+quota_policy_source = manual
+```
+
+بعد ذلك تم حذف مفتاح الاختبار بنجاح:
+
+```text
+status = revoked
+```
+
+---
+
+### الحكم النهائي
+
+```text
+KEY-08 Customer Key Profiles: PASS
+```
+
+أصبحت المفاتيح الجديدة التي ينشئها مسار:
+
+```text
+POST /settings/api-keys
+```
+
+مفاتيح عميل صريحة، وتم تعزيز الفصل بين مفاتيح العميل ومفاتيح الإدارة.
 
 
 

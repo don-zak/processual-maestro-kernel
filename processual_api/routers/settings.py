@@ -46,6 +46,7 @@ DEFAULT_API_KEY_SCOPES = [
     "create:reports",
 ]
 ADMIN_SETTINGS_SCOPE = "admin:settings"
+CLIENT_KEY_PROFILE = "client"
 
 class ApiKeyPlanUpdate(BaseModel):
     plan_id: str
@@ -488,6 +489,7 @@ async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTIN
         "prefix": prefix,
         "hashed": hashed,
         "scopes": DEFAULT_API_KEY_SCOPES,
+        "profile": CLIENT_KEY_PROFILE,
         "plan_id": plan_id,
         "quota_policy": quota_policy,
         "quota_scope": "evaluation",
@@ -516,6 +518,7 @@ async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTIN
         "prefix": prefix,
         "status": "enabled",
         "scopes": DEFAULT_API_KEY_SCOPES,
+        "profile": CLIENT_KEY_PROFILE,
         "created_at": created_at,
     }
 
@@ -555,7 +558,7 @@ async def update_api_key_plan(
 async def update_api_key_quota(
     key_id: str,
     body: ApiKeyQuotaUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
 ):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
