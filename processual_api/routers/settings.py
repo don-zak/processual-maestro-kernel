@@ -9,9 +9,11 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from ..services.plan_store import get_plan_policy, quota_limit_for_plan, resolve_plan_id
+from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key
 from ..dependencies import file_lock
@@ -43,6 +45,13 @@ DEFAULT_API_KEY_SCOPES = [
     "read:reports",
     "create:reports",
 ]
+
+class ApiKeyPlanUpdate(BaseModel):
+    plan_id: str
+
+
+class ApiKeyQuotaUpdate(BaseModel):
+    quota_limit_override: int | None = Field(default=None, ge=-1)
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CRYPTO_KEY = os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
@@ -365,6 +374,48 @@ async def get_subscription(current_user: dict = Depends(get_current_user)):
         suspended_at=sub.get("suspended_at"),
     )
 
+def _find_active_api_key_or_404(raw: dict, key_id: str) -> dict:
+    for key in raw.get("api_keys", []):
+        if key.get("id") != key_id:
+            continue
+        if key.get("status") == "revoked" or key.get("revoked_at"):
+            break
+        return key
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="API key not found",
+    )
+
+
+def _api_key_quota_summary(key: dict) -> dict:
+    quota_policy = key.get("quota_policy", {})
+    quota_policy_source = (
+        quota_policy.get("source")
+        if isinstance(quota_policy, dict)
+        else None
+    )
+    quota_limit = key.get("quota_limit")
+
+    return {
+        "id": key.get("id", ""),
+        "plan_id": key.get("plan_id"),
+        "quota_scope": key.get("quota_scope") or "evaluation",
+        "quota_limit": quota_limit,
+        "quota_used": key.get("quota_used", 0),
+        "quota_remaining": (
+            max(int(quota_limit) - int(key.get("quota_used", 0)), 0)
+            if isinstance(quota_limit, int) and quota_limit >= 0
+            else None
+        ),
+        "quota_policy_source": quota_policy_source,
+        "quota_limit_override": key.get("quota_limit_override"),
+        "quota_rejected_count": key.get("quota_rejected_count", 0),
+    }
+
+@router.get("/plans", response_model=list[dict])
+async def list_plans(current_user: dict = Depends(get_current_user)):
+    return [get_plan_policy(plan_id) for plan_id in PLAN_POLICIES.keys()]
 
 @router.get("/api-keys", response_model=list[dict])
 async def list_api_keys(current_user: dict = Depends(get_current_user)):
@@ -467,6 +518,95 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
         "created_at": created_at,
     }
 
+@router.patch("/api-keys/{key_id}/plan", response_model=dict)
+async def update_api_key_plan(
+    key_id: str,
+    body: ApiKeyPlanUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user.get("sub", "default")
+    raw = _load_raw(user_id)
+
+    key = _find_active_api_key_or_404(raw, key_id)
+
+    plan_id = resolve_plan_id(body.plan_id)
+    quota_scope = key.get("quota_scope") or "evaluation"
+    quota_policy = get_plan_policy(plan_id)
+    quota_limit = quota_limit_for_plan(plan_id, quota_scope)
+
+    key["plan_id"] = plan_id
+    key["quota_policy"] = quota_policy
+    key["quota_scope"] = quota_scope
+    key["quota_limit"] = quota_limit
+    key.pop("quota_limit_override", None)
+
+    raw["api_keys"] = raw.get("api_keys", [])
+    _save_raw(user_id, raw)
+
+    return {
+        "status": "updated",
+        "change": "plan",
+        **_api_key_quota_summary(key),
+    }
+
+
+@router.patch("/api-keys/{key_id}/quota", response_model=dict)
+async def update_api_key_quota(
+    key_id: str,
+    body: ApiKeyQuotaUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user.get("sub", "default")
+    raw = _load_raw(user_id)
+
+    key = _find_active_api_key_or_404(raw, key_id)
+
+    quota_scope = key.get("quota_scope") or "evaluation"
+    plan_id = resolve_plan_id(
+        key.get("plan_id")
+        or key.get("plan")
+        or raw.get("subscription", {}).get("plan_id")
+        or raw.get("subscription", {}).get("plan")
+        or "Starter"
+    )
+
+    if body.quota_limit_override is None:
+        quota_policy = get_plan_policy(plan_id)
+        quota_limit = quota_limit_for_plan(plan_id, quota_scope)
+
+        key.pop("quota_limit_override", None)
+        key["plan_id"] = plan_id
+        key["quota_policy"] = quota_policy
+        key["quota_limit"] = quota_limit
+        key["quota_scope"] = quota_scope
+
+        change = "quota_override_cleared"
+    else:
+        quota_limit = int(body.quota_limit_override)
+
+        key["plan_id"] = plan_id
+        key["quota_limit_override"] = quota_limit
+        key["quota_policy"] = {
+            "id": "manual_override",
+            "name": "Manual Quota Override",
+            "source": "manual",
+            "quotas": {
+                quota_scope: quota_limit,
+            },
+        }
+        key["quota_limit"] = quota_limit
+        key["quota_scope"] = quota_scope
+
+        change = "quota_override_set"
+
+    raw["api_keys"] = raw.get("api_keys", [])
+    _save_raw(user_id, raw)
+
+    return {
+        "status": "updated",
+        "change": change,
+        **_api_key_quota_summary(key),
+    }
 
 @router.delete("/api-keys/{key_id}", response_model=dict)
 async def delete_api_key(key_id: str, current_user: dict = Depends(get_current_user)):

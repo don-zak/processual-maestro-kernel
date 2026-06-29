@@ -1398,3 +1398,227 @@ git status --short
 git show --stat --oneline -1
 ```
 
+
+# KEY-06 — Admin Plan and Quota Controls
+
+## الهدف
+
+بعد KEY-05 أصبح نظام الحصص مرتبطًا بالخطط، لكن تغيير خطة مفتاح API أو تعيين حصة يدوية كان لا يزال يتطلب تعديل JSON محليًا.
+
+هدف KEY-06 هو إضافة endpoints إدارية آمنة تسمح بإدارة الخطط والحصص من داخل API نفسه، دون Billing، ودون Stripe، ودون Cloud، ودون PostgreSQL.
+
+## الملفات المعدلة
+
+```text
+processual_api/routers/settings.py
+```
+
+## ما تم تنفيذه
+
+تمت إضافة نماذج طلبات إدارية:
+
+```text
+ApiKeyPlanUpdate
+ApiKeyQuotaUpdate
+```
+
+وتمت إضافة helper functions:
+
+```text
+_find_active_api_key_or_404
+_api_key_quota_summary
+```
+
+وتمت إضافة endpoints جديدة:
+
+```text
+GET /settings/plans
+PATCH /settings/api-keys/{key_id}/plan
+PATCH /settings/api-keys/{key_id}/quota
+```
+
+## GET /settings/plans
+
+يعرض الخطط المحلية المتاحة:
+
+```text
+pilot_starter        evaluation quota = 50
+pilot_pro            evaluation quota = 500
+institution_trial    evaluation quota = 2000
+enterprise_private   evaluation quota = -1
+```
+
+حيث:
+
+```text
+-1 = unlimited
+```
+
+## PATCH /settings/api-keys/{key_id}/plan
+
+يسمح بتغيير خطة مفتاح API باستعمال `key_id` الداخلي، وليس المفتاح الكامل الذي يبدأ بـ `pmk_`.
+
+تم إثبات تغيير المفتاح:
+
+```text
+key_id = 9b377b0fc4270102
+plan_id = pilot_pro
+quota_limit = 500
+quota_policy_source = plan
+quota_used = 2
+quota_remaining = 498
+```
+
+الحكم:
+
+```text
+PATCH plan: PASS
+pilot_pro quota resolution: PASS
+```
+
+## PATCH /settings/api-keys/{key_id}/quota
+
+يسمح بتعيين override يدوي للحصة:
+
+```json
+{
+  "quota_limit_override": 100
+}
+```
+
+وكانت النتيجة:
+
+```text
+quota_limit = 100
+quota_limit_override = 100
+quota_policy_source = manual
+quota_remaining = 98
+```
+
+ثم تم حذف override بإرسال:
+
+```json
+{
+  "quota_limit_override": null
+}
+```
+
+وكانت النتيجة:
+
+```text
+quota_limit = 500
+quota_policy_source = plan
+quota_limit_override = null
+quota_remaining = 498
+```
+
+الحكم:
+
+```text
+manual override: PASS
+clear override back to plan: PASS
+```
+
+## إثبات استمرار quota enforcement
+
+تم تنفيذ:
+
+```text
+POST /cgt/govern
+```
+
+بعد تعديلات KEY-06، وكانت النتيجة ناجحة وأرجعت تقييمًا يحتوي:
+
+```text
+eval_id
+governance_action
+scores
+policy
+```
+
+ثم تم عرض المفاتيح، وظهر أن:
+
+```text
+quota_used before = 2
+quota_used after  = 3
+```
+
+الحكم:
+
+```text
+/cgt/govern still consumes evaluation quota: PASS
+```
+
+## إثبات usage logs
+
+أظهر `usage_logs.jsonl` تسجيل الطلبات التالية عبر API key:
+
+```text
+PATCH /settings/api-keys/9b377b0fc4270102/plan -> 200
+PATCH /settings/api-keys/9b377b0fc4270102/quota -> 200
+GET /settings/plans -> 200
+POST /cgt/govern -> 200
+GET /settings/api-keys -> 200
+```
+
+كل السجلات احتوت:
+
+```text
+auth_method = api_key
+session_type = api_key
+api_key_id
+api_key_prefix
+request_id
+status_code
+latency_ms
+```
+
+الحكم:
+
+```text
+usage logs remain compatible with KEY-06: PASS
+```
+
+## الفحوصات
+
+تم تنفيذ:
+
+```powershell
+python -m py_compile .\processual_api\routers\settings.py
+git diff --check
+```
+
+والنتيجة:
+
+```text
+PASS
+```
+
+كما تم حذف الملف المؤقت:
+
+```text
+tmp-key06-plan.json
+```
+
+وحالة Git قبل تحديث التقرير:
+
+```text
+M processual_api/routers/settings.py
+```
+
+## الحكم النهائي
+
+```text
+KEY-06 Admin Plan and Quota Controls: PASS
+```
+
+أصبحت طبقة API Keys التجارية المحلية تشمل الآن:
+
+```text
+KEY-01 Dynamic API Key Verification
+KEY-02 Scope Enforcement
+KEY-03 Usage Logs
+KEY-04 Quota Enforcement
+KEY-05 Plan / Subscription Binding
+KEY-06 Admin Plan and Quota Controls
+```
