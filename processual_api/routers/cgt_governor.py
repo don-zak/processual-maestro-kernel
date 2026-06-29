@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ..auth.security import get_current_user, require_scope
+from ..auth.security import get_current_user, require_scope, require_quota
 from ..cgt_governor.adapters.registry import adapter_registry
 from ..cgt_governor.data.storage import eval_store
 from ..cgt_governor.policy import PolicyContext, policy_engine as runtime_policy_engine
@@ -391,7 +391,7 @@ def _evaluate_and_record(
 
 
 @router.post("/cgt/govern")
-async def govern(req: GovernRequest, current_user: dict = Depends(get_current_user)):
+async def govern(req: GovernRequest, current_user: dict = Depends(require_quota("evaluation"))):
     scores = _resolve_scores(req)
     ev = _evaluate_and_record(
         answer=req.answer,

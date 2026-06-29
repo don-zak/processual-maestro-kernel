@@ -193,3 +193,21 @@ def require_scope(required_scope: str):
         )
 
     return _scope_dependency
+
+def require_quota(quota_scope: str = "evaluation"):
+    async def _quota_dependency(
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        from ..services.quota_store import consume_quota
+
+        checked_user = consume_quota(
+            current_user,
+            method=request.method,
+            endpoint=request.url.path,
+            quota_scope=quota_scope,
+        )
+        request.state.current_user = checked_user
+        return checked_user
+
+    return _quota_dependency

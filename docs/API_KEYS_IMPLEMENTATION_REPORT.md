@@ -546,3 +546,439 @@ git status --short
 git show --stat --oneline -1
 ```
 
+## KEY-04 Addendum — API Key Quota Enforcement
+
+### Objective
+
+KEY-04 introduces the first quota enforcement layer for dynamic API keys.
+
+After KEY-01, KEY-02, and KEY-03, the API key system already supported:
+
+```text
+Dynamic API key verification
+Hashed key storage
+Soft revoke
+Scope enforcement
+API key usage logs
+```
+
+KEY-04 adds the next required commercial control:
+
+```text
+Quota enforcement
+```
+
+The purpose is to prevent API-key clients from exceeding their allowed usage limit.
+
+This first implementation is intentionally transitional and JSON-backed. It is designed to validate the quota logic locally before moving to PostgreSQL, subscription plans, billing-aware access, or cloud deployment.
+
+---
+
+### Files Added
+
+KEY-04 adds:
+
+```text
+processual_api/services/quota_store.py
+```
+
+---
+
+### Files Modified
+
+KEY-04 modifies:
+
+```text
+processual_api/auth/security.py
+processual_api/routers/cgt_governor.py
+```
+
+---
+
+### Design Decision
+
+Quota enforcement was implemented as a dependency, not as a global middleware.
+
+This is intentional because the authenticated identity is resolved through FastAPI dependencies. A middleware running before endpoint dependencies would not reliably have access to:
+
+```text
+request.state.current_user
+```
+
+Therefore KEY-04 adds a dependency-based quota gate:
+
+```text
+require_quota("evaluation")
+```
+
+This allows quota enforcement to be applied only to selected commercial endpoints.
+
+---
+
+### Initial Counted Endpoint
+
+KEY-04 does not count every endpoint.
+
+The first counted commercial endpoint is:
+
+```text
+POST /cgt/govern
+```
+
+The following endpoint was explicitly tested and remains non-counted:
+
+```text
+GET /adapters/status
+```
+
+This preserves the ability to inspect adapter status without consuming commercial quota.
+
+---
+
+### Quota Store
+
+The new quota service is:
+
+```text
+processual_api/services/quota_store.py
+```
+
+It provides a small JSON-backed quota layer that:
+
+```text
+Reads local settings_*.json files
+Finds the current api_key_id
+Initializes quota_limit when missing
+Initializes quota_scope when missing
+Increments quota_used for counted endpoints
+Stores quota_last_used_at
+Rejects exceeded quota with HTTP 429
+Stores quota_last_rejected_at
+Increments quota_rejected_count
+```
+
+The default quota limit is:
+
+```text
+50
+```
+
+It can be overridden by environment variable:
+
+```text
+PMK_DEFAULT_API_KEY_QUOTA_LIMIT
+```
+
+---
+
+### Security Dependency
+
+`processual_api/auth/security.py` now exposes:
+
+```text
+require_quota(quota_scope: str = "evaluation")
+```
+
+This dependency:
+
+```text
+Uses get_current_user
+Reads the current request method and path
+Calls consume_quota
+Updates request.state.current_user
+Returns the quota-checked user identity
+```
+
+This keeps KEY-01 authentication and KEY-02 scope enforcement intact.
+
+---
+
+### Router Binding
+
+`processual_api/routers/cgt_governor.py` was updated so that:
+
+```text
+POST /cgt/govern
+```
+
+uses:
+
+```text
+Depends(require_quota("evaluation"))
+```
+
+instead of only:
+
+```text
+Depends(get_current_user)
+```
+
+No other CGT endpoints were quota-bound in this phase.
+
+---
+
+### Runtime Proof — Non-counted Endpoint
+
+A valid dynamic `pmk_` API key was used against:
+
+```text
+GET /adapters/status
+```
+
+Observed result:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Then the local API key settings file was checked for quota fields.
+
+Observed result:
+
+```text
+No quota_used / quota_limit / quota_scope was created by /adapters/status
+```
+
+Conclusion:
+
+```text
+/adapters/status remains non-counted: PASS
+```
+
+---
+
+### Runtime Proof — Quota Consumption
+
+A valid dynamic `pmk_` API key was used against:
+
+```text
+POST /cgt/govern
+```
+
+with a valid JSON request body.
+
+After the first successful request, the local API key record showed:
+
+```text
+quota_limit = 50
+quota_scope = evaluation
+quota_used = 1
+quota_last_used_at = 2026-06-29T10:23:22.859266+00:00
+```
+
+After a second successful request, the local API key record showed:
+
+```text
+quota_limit = 50
+quota_scope = evaluation
+quota_used = 2
+quota_last_used_at = 2026-06-29T10:24:43.627150+00:00
+```
+
+Conclusion:
+
+```text
+/cgt/govern consumes quota correctly: PASS
+```
+
+---
+
+### Runtime Proof — Quota Rejection
+
+For rejection testing, the local test key quota limit was temporarily reduced to:
+
+```text
+quota_limit = 2
+```
+
+while:
+
+```text
+quota_used = 2
+```
+
+A third request to:
+
+```text
+POST /cgt/govern
+```
+
+returned:
+
+```text
+HTTP/1.1 429 Too Many Requests
+```
+
+Observed response:
+
+```json
+{
+  "detail": {
+    "error": "quota_exceeded",
+    "quota_scope": "evaluation",
+    "quota_limit": 2,
+    "quota_used": 2
+  }
+}
+```
+
+Observed request id:
+
+```text
+6d1c7454-faa4-411d-878f-7de8aca6ecd4
+```
+
+The local API key record then showed:
+
+```text
+quota_last_rejected_at = 2026-06-29T10:26:58.222776+00:00
+quota_rejected_count = 1
+quota_used = 2
+```
+
+Conclusion:
+
+```text
+Quota rejection works correctly: PASS
+```
+
+---
+
+### Usage Log Proof
+
+The existing KEY-03 usage log system also recorded the quota tests.
+
+Observed successful quota-counted entries:
+
+```text
+POST /cgt/govern
+status_code = 200
+quota_used increased to 1 and then 2
+```
+
+Observed rejected quota entry:
+
+```text
+request_id = 6d1c7454-faa4-411d-878f-7de8aca6ecd4
+method = POST
+endpoint = /cgt/govern
+status_code = 429
+auth_method = api_key
+```
+
+Conclusion:
+
+```text
+KEY-03 usage logs correctly capture KEY-04 quota rejection: PASS
+```
+
+---
+
+### Static Validation
+
+The following commands were executed successfully:
+
+```powershell
+python -m py_compile .\processual_api\services\quota_store.py
+python -m py_compile .\processual_api\auth\security.py
+python -m py_compile .\processual_api\routers\cgt_governor.py
+git diff --check
+```
+
+Result:
+
+```text
+PASS
+```
+
+---
+
+### Local Test Data
+
+The following file was modified during local runtime testing:
+
+```text
+processual_api/data/settings_api_key_user.json
+```
+
+It contains local quota counters and test key metadata.
+
+This file must not be committed.
+
+The temporary request body file was removed:
+
+```text
+tmp-govern-body.json
+```
+
+The following runtime usage log was also used for proof:
+
+```text
+processual_api/data/usage_logs.jsonl
+```
+
+This file must not be committed.
+
+---
+
+### KEY-04 Acceptance Criteria
+
+KEY-04 is accepted when all of the following are true:
+
+```text
+1. A valid API key can still access /adapters/status.
+2. /adapters/status does not consume quota.
+3. A valid API key can call POST /cgt/govern when quota is available.
+4. POST /cgt/govern increments quota_used.
+5. Exceeding quota returns HTTP 429.
+6. The 429 response includes quota_exceeded details.
+7. The key record stores quota_last_rejected_at.
+8. The key record increments quota_rejected_count.
+9. usage_logs.jsonl records both successful and rejected API-key requests.
+10. Local runtime data files are not committed.
+```
+
+---
+
+### KEY-04 Result
+
+```text
+KEY-04 Quota Enforcement: PASS
+```
+
+The API key layer now has four foundations:
+
+```text
+Verification
+Authorization scopes
+Usage logging
+Quota enforcement
+```
+
+This prepares the project for:
+
+```text
+KEY-05 — Plan / Subscription Binding
+```
+
+---
+
+### Recommended Commit
+
+After confirming that only source/report files are staged, commit KEY-04 with:
+
+```powershell
+git add .\processual_api\auth\security.py
+git add .\processual_api\routers\cgt_governor.py
+git add .\processual_api\services\quota_store.py
+git add .\docs\API_KEYS_IMPLEMENTATION_REPORT.md
+git commit -m "KEY-04 add API key quota enforcement"
+```
+
+Then verify:
+
+```powershell
+git status --short
+git show --stat --oneline -1
+```
+
