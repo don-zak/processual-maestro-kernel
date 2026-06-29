@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..dependencies import file_lock
+from ..cgt_governor.adapters.provider_metadata import provider_ids
 from ..schemas.settings import (
     GeneralSettings,
     LLMProviderConfig,
@@ -253,7 +254,7 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
     if not api_key and provider not in {"opencode", "generic_openai_compatible"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key is required")
 
-    known_providers = {"openai", "anthropic", "gemini", "deepseek", "opencode", "openrouter", "generic_openai_compatible"}
+    known_providers = provider_ids()
     if provider not in known_providers:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 

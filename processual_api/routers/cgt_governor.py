@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from ..auth.security import get_current_user, require_scope, require_quota
 from ..cgt_governor.adapters.registry import adapter_registry
+from ..cgt_governor.adapters.provider_metadata import provider_env_map
 from ..cgt_governor.data.storage import eval_store
 from ..cgt_governor.policy import PolicyContext, policy_engine as runtime_policy_engine
 from ..cgt_governor.security import decrypt_log_entry, encrypt_log_entry, get_crypto_key, sign_response
@@ -1431,15 +1432,7 @@ async def adapters_status(current_user: dict = Depends(require_scope("read:adapt
 
 @router.post("/adapters/configure")
 async def configure_adapter(req: ConfigureAdapterRequest, _current_user: dict = Depends(require_scope("admin:settings"))):
-    env_map = {
-        "openai": ("OPENAI_API_KEY", "OPENAI_DEFAULT_MODEL", ""),
-        "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_DEFAULT_MODEL", ""),
-        "gemini": ("GEMINI_API_KEY", "GEMINI_DEFAULT_MODEL", ""),
-        "deepseek": ("DEEPSEEK_API_KEY", "DEEPSEEK_DEFAULT_MODEL", ""),
-        "opencode": ("OPENCODE_API_KEY", "OPENCODE_DEFAULT_MODEL", "OPENCODE_API_URL"),
-        "openrouter": ("OPENROUTER_API_KEY", "OPENROUTER_DEFAULT_MODEL", "OPENROUTER_API_URL"),
-        "generic_openai_compatible": ("GENERIC_OPENAI_API_KEY", "GENERIC_OPENAI_DEFAULT_MODEL", "GENERIC_OPENAI_API_URL"),
-    }
+    env_map = provider_env_map()
 
     key = req.provider.lower()
     if key not in env_map:
