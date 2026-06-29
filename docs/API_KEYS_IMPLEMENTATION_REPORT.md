@@ -1765,6 +1765,157 @@ POST /settings/api-keys
 
 
 
+## KEY-09 — Local Customer Onboarding Flow
+
+### الهدف
+
+تهدف KEY-09 إلى إضافة مسار محلي عملي لإعداد عميل جديد داخل طبقة API Keys التجارية.
+
+بعد KEY-08 أصبح مسار إنشاء مفاتيح API ينتج مفاتيح عميل صريحة تحمل:
+
+```text
+profile = client
+```
+
+وفي KEY-09 تم توسيع نفس المسار حتى يستطيع الأدمين إنشاء مفتاح عميل مرتبط ببيانات تعريف واضحة:
+
+```text
+client_id
+user_id
+plan_id
+label
+```
+
+مع إرجاع معلومات استعمال أولية للعميل، دون إنشاء Billing أو Stripe أو نشر سحابي في هذه المرحلة.
+
+---
+
+### التعديل المنجز
+
+في الملف:
+
+```text
+processual_api/routers/settings.py
+```
+
+تمت إضافة نموذج طلب جديد:
+
+```python
+class ApiKeyCreateRequest(BaseModel):
+    client_id: str | None = Field(default=None, min_length=1)
+    user_id: str | None = Field(default=None, min_length=1)
+    plan_id: str | None = Field(default=None, min_length=1)
+    label: str | None = Field(default=None, min_length=1)
+```
+
+ثم تم تعديل مسار:
+
+```text
+POST /settings/api-keys
+```
+
+حتى يقبل body اختياريًا من نوع:
+
+```python
+ApiKeyCreateRequest | None
+```
+
+وبذلك أصبح الأدمين قادرًا على إنشاء مفتاح عميل موجّه لعميل محدد محليًا.
+
+---
+
+### منطق إنشاء العميل
+
+عند إرسال body يحتوي:
+
+```text
+client_id
+user_id
+plan_id
+label
+```
+
+يقوم النظام بإنشاء مفتاح API جديد مع:
+
+```text
+client_id = القيمة المطلوبة للعميل
+user_id = القيمة المطلوبة للمستخدم أو العميل
+plan_id = الخطة المطلوبة بعد تمريرها عبر resolve_plan_id
+profile = client
+label = وصف محلي للمفتاح
+```
+
+وفي حال عدم إرسال body، يبقى المسار محافظًا على السلوك السابق، مع الاعتماد على بيانات المستخدم الحالي والخطة الحالية.
+
+---
+
+### معلومات الاستجابة
+
+تم توسيع الاستجابة الراجعة من:
+
+```text
+POST /settings/api-keys
+```
+
+حتى تشمل:
+
+```text
+client_id
+user_id
+label
+profile
+plan_id
+quota_limit
+quota_remaining
+onboarding_usage
+```
+
+وتحتوي `onboarding_usage` على معلومات استعمال أولية:
+
+```json
+{
+  "header": "X-API-Key",
+  "base_url": "http://127.0.0.1:8000",
+  "example_endpoint": "/adapters/status"
+}
+```
+
+المفتاح الكامل `api_key` يظهر مرة واحدة فقط في لحظة الإنشاء، ولا يجب حفظه في Git أو طباعته في التقارير العامة.
+
+---
+
+### الإثبات العملي
+
+تم إنشاء مفتاح عميل محلي عبر مفتاح أدمين باستعمال بيانات onboarding.
+
+ثم تم إثبات أن مفتاح العميل الجديد يستطيع الوصول إلى endpoint عميل عادي:
+
+```text
+GET /adapters/status -> 200
+```
+
+كما تم إثبات أنه لا يستطيع الوصول إلى مسارات الإدارة:
+
+```text
+GET /settings/plans -> 403
+{"detail":"Missing required scope: admin:settings"}
+```
+
+ثم تم حذف مفتاح الاختبار بنجاح:
+
+```text
+status = revoked
+```
+
+---
+
+### الحكم النهائي
+
+```text
+KEY-09 Local Customer Onboarding Flow: PASS
+```
+
+أصبح النظام قادرًا محليًا على إنشاء مفتاح عميل موجّه ببيانات تعريف وخطة واستجابة onboarding واضحة، مع استمرار حماية مسارات الإدارة عن مفاتيح العملاء.
 
 
 

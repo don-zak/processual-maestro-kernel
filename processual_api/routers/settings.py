@@ -55,6 +55,14 @@ class ApiKeyPlanUpdate(BaseModel):
 class ApiKeyQuotaUpdate(BaseModel):
     quota_limit_override: int | None = Field(default=None, ge=-1)
 
+
+class ApiKeyCreateRequest(BaseModel):
+    client_id: str | None = Field(default=None, min_length=1)
+    user_id: str | None = Field(default=None, min_length=1)
+    plan_id: str | None = Field(default=None, min_length=1)
+    label: str | None = Field(default=None, min_length=1)
+
+
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CRYPTO_KEY = os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
 
@@ -460,11 +468,19 @@ def _resolve_current_plan_id(user_id: str, raw: dict) -> str:
 
 
 @router.post("/api-keys", response_model=dict)
-async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
-    user_id = current_user.get("sub", "default")
-    client_id = current_user.get("client_id") or user_id
+async def create_api_key(
+    body: ApiKeyCreateRequest | None = None,
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
 
-    raw = _load_raw(user_id)
+    owner_user_id = current_user.get("sub", "default")
+    requested_client_id = body.client_id if body else None
+    requested_user_id = body.user_id if body else None
+
+    user_id = requested_user_id or requested_client_id or owner_user_id
+    client_id = requested_client_id or current_user.get("client_id") or user_id
+
+    raw = _load_raw(owner_user_id)
     keys = raw.get("api_keys", [])
 
     raw_key = generate_api_key()
@@ -478,7 +494,8 @@ async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTIN
     key_id = secrets.token_hex(8)
     prefix = raw_key[:12] + "..."
     created_at = datetime.now(UTC).isoformat()
-    plan_id = _resolve_current_plan_id(user_id, raw)
+    requested_plan_id = body.plan_id if body and body.plan_id else None
+    plan_id = resolve_plan_id(requested_plan_id) if requested_plan_id else _resolve_current_plan_id(owner_user_id, raw)
     quota_policy = get_plan_policy(plan_id)
     quota_limit = quota_limit_for_plan(plan_id, "evaluation")
 
@@ -490,6 +507,7 @@ async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTIN
         "hashed": hashed,
         "scopes": DEFAULT_API_KEY_SCOPES,
         "profile": CLIENT_KEY_PROFILE,
+        "label": body.label if body and body.label else None,
         "plan_id": plan_id,
         "quota_policy": quota_policy,
         "quota_scope": "evaluation",
@@ -505,7 +523,7 @@ async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTIN
     })
 
     raw["api_keys"] = keys
-    _save_raw(user_id, raw)
+    _save_raw(owner_user_id, raw)
 
     return {
         "api_key": raw_key,
@@ -519,6 +537,14 @@ async def create_api_key(current_user: dict = Depends(require_scope(ADMIN_SETTIN
         "status": "enabled",
         "scopes": DEFAULT_API_KEY_SCOPES,
         "profile": CLIENT_KEY_PROFILE,
+        "client_id": client_id,
+        "user_id": user_id,
+        "label": body.label if body and body.label else None,
+        "onboarding_usage": {
+            "header": "X-API-Key",
+            "base_url": "http://127.0.0.1:8000",
+            "example_endpoint": "/adapters/status",
+        },
         "created_at": created_at,
     }
 
