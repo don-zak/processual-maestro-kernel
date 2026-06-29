@@ -1430,16 +1430,14 @@ async def adapters_status(current_user: dict = Depends(require_scope("read:adapt
 
 
 @router.post("/adapters/configure")
-async def configure_adapter(req: ConfigureAdapterRequest, current_user: dict = Depends(get_current_user)):
-    if current_user.get("sub") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-
+async def configure_adapter(req: ConfigureAdapterRequest, _current_user: dict = Depends(require_scope("admin:settings"))):
     env_map = {
         "openai": ("OPENAI_API_KEY", "OPENAI_DEFAULT_MODEL", ""),
         "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_DEFAULT_MODEL", ""),
         "gemini": ("GEMINI_API_KEY", "GEMINI_DEFAULT_MODEL", ""),
         "deepseek": ("DEEPSEEK_API_KEY", "DEEPSEEK_DEFAULT_MODEL", ""),
         "opencode": ("OPENCODE_API_KEY", "OPENCODE_DEFAULT_MODEL", "OPENCODE_API_URL"),
+        "openrouter": ("OPENROUTER_API_KEY", "OPENROUTER_DEFAULT_MODEL", "OPENROUTER_API_URL"),
     }
 
     key = req.provider.lower()

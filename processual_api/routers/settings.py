@@ -253,7 +253,7 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
     if not api_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key is required")
 
-    known_providers = {"openai", "anthropic", "gemini", "deepseek", "opencode"}
+    known_providers = {"openai", "anthropic", "gemini", "deepseek", "opencode", "openrouter"}
     if provider not in known_providers:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
@@ -285,6 +285,12 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
                 res = await client.get(
                     f"{base_url}/models",
                     headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+                )
+            elif provider == "openrouter":
+                base_url = os.environ.get("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
+                res = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": f"Bearer {api_key}"},
                 )
 
             latency = (time.time() - start) * 1000

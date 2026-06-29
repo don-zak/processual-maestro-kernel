@@ -80,9 +80,8 @@ class LLMAdapterRegistry:
         from .openai_adapter import OpenAIAdapter
         from .opencode_adapter import OpenCodeAdapter
         from .openrouter_adapter import OpenRouterAdapter
-        from .openrouter_adapter import OpenRouterAdapter
 
-        for adapter_cls in [OpenAIAdapter, AnthropicAdapter, GeminiAdapter, DeepSeekAdapter, OpenCodeAdapter, OpenRouterAdapter, OpenRouterAdapter]:
+        for adapter_cls in [OpenAIAdapter, AnthropicAdapter, GeminiAdapter, DeepSeekAdapter, OpenCodeAdapter, OpenRouterAdapter]:
             try:
                 self.register(adapter_cls())  # type: ignore[abstract]
             except Exception as exc:
