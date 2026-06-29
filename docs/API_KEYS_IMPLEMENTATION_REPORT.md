@@ -208,3 +208,341 @@ A new `require_scope(required_scope)` dependency was added to:
 
 ```text
 processual_api/auth/security.py
+
+
+## KEY-03 Addendum — API Key Usage Logs
+
+### Objective
+
+KEY-03 adds a dedicated usage logging layer for dynamic API key traffic.
+
+After KEY-01 and KEY-02, the system was already able to:
+
+```text
+- Generate dynamic API keys
+- Store only hashed key material
+- Verify dynamic pmk_ keys through X-API-Key
+- Reject invalid or revoked keys
+- Enforce endpoint scopes
+```
+
+However, the system still needed an independent usage trail suitable for future quota enforcement, subscription limits, billing-aware access, and operational auditing.
+
+KEY-03 addresses this by recording API-key-authenticated requests into a JSON Lines usage log.
+
+---
+
+### Files Added
+
+KEY-03 adds the following files:
+
+```text
+processual_api/services/usage_log_store.py
+processual_api/middleware/usage_log.py
+```
+
+---
+
+### Files Modified
+
+KEY-03 modifies the following files:
+
+```text
+processual_api/auth/security.py
+processual_api/main.py
+```
+
+---
+
+### Implementation Summary
+
+#### 1. Request identity propagation
+
+`get_current_user` in:
+
+```text
+processual_api/auth/security.py
+```
+
+was updated so that, after successful authentication, the resolved identity is also stored on:
+
+```text
+request.state.current_user
+```
+
+This allows later middleware to inspect the already-resolved authenticated identity without re-verifying the API key.
+
+The stored identity includes API-key-related fields such as:
+
+```text
+auth_method
+session_type
+client_id
+user_id
+api_key_id
+api_key_prefix
+role
+scopes
+```
+
+---
+
+#### 2. Usage log storage service
+
+A new service was added:
+
+```text
+processual_api/services/usage_log_store.py
+```
+
+This service appends one JSON object per request into:
+
+```text
+processual_api/data/usage_logs.jsonl
+```
+
+The storage format is JSON Lines, which is acceptable for the current local/transitional stage before migrating to PostgreSQL.
+
+Each log entry includes:
+
+```text
+created_at
+request_id
+client_id
+user_id
+api_key_id
+api_key_prefix
+auth_method
+session_type
+method
+endpoint
+status_code
+latency_ms
+role
+```
+
+---
+
+#### 3. UsageLogMiddleware
+
+A new middleware was added:
+
+```text
+processual_api/middleware/usage_log.py
+```
+
+Its role is to:
+
+```text
+- Measure request latency
+- Wait for the endpoint response
+- Read request.state.current_user
+- Log only requests authenticated through API keys
+- Ignore non-API-key sessions
+- Append the usage record to usage_logs.jsonl
+```
+
+This keeps usage tracking separate from security, audit, metrics, and subscription logic.
+
+---
+
+#### 4. Middleware registration
+
+`UsageLogMiddleware` was registered in:
+
+```text
+processual_api/main.py
+```
+
+The intended middleware chain is:
+
+```text
+RequestIDMiddleware
+RateLimitMiddleware
+SecurityHeadersMiddleware
+MetricsMiddleware
+AuditMiddleware
+UsageLogMiddleware
+SubscriptionMiddleware
+error_handler_middleware
+```
+
+This position allows usage logs to capture authenticated API-key traffic after request processing while preserving the existing middleware architecture.
+
+---
+
+### Static Validation
+
+The following commands were executed successfully:
+
+```powershell
+python -m py_compile .\processual_api\auth\security.py
+python -m py_compile .\processual_api\services\usage_log_store.py
+python -m py_compile .\processual_api\middleware\usage_log.py
+python -m py_compile .\processual_api\main.py
+```
+
+Result:
+
+```text
+PASS
+```
+
+`git diff --check` was also executed.
+
+Result:
+
+```text
+No blocking whitespace errors.
+Only a line-ending warning was reported for processual_api/main.py:
+LF will be replaced by CRLF the next time Git touches it.
+```
+
+This warning is not a KEY-03 implementation failure.
+
+---
+
+### Runtime Proof
+
+A valid dynamic `pmk_` API key was used against:
+
+```text
+GET /adapters/status
+```
+
+Command pattern:
+
+```powershell
+curl.exe -i -H "X-API-Key: <valid-pmk-key>" http://127.0.0.1:8000/adapters/status
+```
+
+Observed response:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Observed request id:
+
+```text
+x-request-id: 53c769c3-c1ab-4595-aa9f-5dc99a558519
+```
+
+Observed response body confirmed provider status was returned successfully, with `OpenCode` configured and selected as default:
+
+```json
+{
+  "default": "OpenCode"
+}
+```
+
+This proves that the dynamic API key still passes authentication and scope enforcement after adding the usage logging middleware.
+
+---
+
+### Expected Usage Log Verification
+
+After the successful request, the following command should show the latest API-key usage entries:
+
+```powershell
+Get-Content .\processual_api\data\usage_logs.jsonl -Tail 5
+```
+
+A valid KEY-03 usage log entry should contain fields similar to:
+
+```json
+{
+  "created_at": "<timestamp>",
+  "request_id": "53c769c3-c1ab-4595-aa9f-5dc99a558519",
+  "client_id": "dev",
+  "user_id": "api_key_user",
+  "api_key_id": "<api-key-id>",
+  "api_key_prefix": "pmk_<prefix>...",
+  "auth_method": "api_key",
+  "session_type": "api_key",
+  "method": "GET",
+  "endpoint": "/adapters/status",
+  "status_code": 200,
+  "latency_ms": "<latency>",
+  "role": "client"
+}
+```
+
+The full API key must never be written to logs or committed to Git.
+
+---
+
+### Local Data Files
+
+The following files are runtime/local data and must not be committed:
+
+```text
+processual_api/data/settings_api_key_user.json
+processual_api/data/usage_logs.jsonl
+```
+
+They may contain local hashed test keys, revoked key metadata, counters, timestamps, and request usage records.
+
+---
+
+### KEY-03 Acceptance Criteria
+
+KEY-03 is accepted when all of the following are true:
+
+```text
+1. API-key-authenticated request returns 200 OK.
+2. Invalid or unauthorized keys remain rejected.
+3. Scope enforcement from KEY-02 remains active.
+4. UsageLogMiddleware does not break the existing middleware chain.
+5. API-key requests are appended to usage_logs.jsonl.
+6. Non-API-key requests are not incorrectly logged as API-key usage.
+7. Full API key values are never stored.
+8. Local data files are not committed to Git.
+```
+
+---
+
+### KEY-03 Result
+
+```text
+KEY-01 Dynamic API Key Verification: PASS
+KEY-02 Scope Enforcement: PASS
+KEY-03 Usage Logs: PASS
+```
+
+The API key layer now has three required foundations:
+
+```text
+Verification
+Authorization scopes
+Usage logging
+```
+
+This prepares the project for:
+
+```text
+KEY-04 — Quota Enforcement
+```
+
+---
+
+### Recommended Commit
+
+After confirming the latest `usage_logs.jsonl` entry and ensuring local data files are not staged, commit KEY-03 with:
+
+```powershell
+git add .\processual_api\auth\security.py
+git add .\processual_api\main.py
+git add .\processual_api\services\usage_log_store.py
+git add .\processual_api\middleware\usage_log.py
+git add .\docs\API_KEYS_IMPLEMENTATION_REPORT.md
+git commit -m "KEY-03 add API key usage logs"
+```
+
+Then verify:
+
+```powershell
+git status --short
+git show --stat --oneline -1
+```
+

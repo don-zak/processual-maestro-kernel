@@ -7,8 +7,7 @@ import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
-
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from ..settings import settings
@@ -126,6 +125,7 @@ def generate_api_key() -> str:
 
 
 async def get_current_user(
+    request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(_bearer),
     api_key: str | None = Depends(_api_key_header),
 ) -> dict:
@@ -141,10 +141,13 @@ async def get_current_user(
             "session_type": payload.get("session_type", "jwt"),
             "scopes": payload.get("scopes", []),
         }
+        request.state.current_user = user
+        return user
 
     if api_key:
         dynamic_user = verify_dynamic_api_key(api_key)
         if dynamic_user:
+            request.state.current_user = dynamic_user
             return dynamic_user
 
         app_env = os.environ.get("APP_ENV", "development").lower()
@@ -164,6 +167,8 @@ async def get_current_user(
                         "api_key_prefix": "env",
                         "scopes": ["*"],
                     }
+                    request.state.current_user = user
+                    return user
 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
