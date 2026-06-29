@@ -1457,7 +1457,7 @@ async def configure_adapter(req: ConfigureAdapterRequest, _current_user: dict = 
 
 
 @router.post("/adapters/test")
-async def test_adapter(req: TestAdapterRequest, current_user: dict = Depends(get_current_user)):
+async def test_adapter(req: TestAdapterRequest, _current_user: dict = Depends(require_scope("admin:settings"))):
     adapter = adapter_registry.get(req.provider)
     if not adapter:
         raise HTTPException(status_code=404, detail=f"Adapter not found: {req.provider}")
@@ -1468,8 +1468,11 @@ async def test_adapter(req: TestAdapterRequest, current_user: dict = Depends(get
     try:
         available = await adapter.is_available()
         latency = round((time.monotonic() - start) * 1000)
+        metadata = provider_public_metadata(req.provider)
         return {
+            **metadata,
             "provider": req.provider,
+            "name": adapter.provider_name,
             "ok": available,
             "latency_ms": latency,
             "model": adapter.default_model,
@@ -1477,8 +1480,11 @@ async def test_adapter(req: TestAdapterRequest, current_user: dict = Depends(get
         }
     except Exception as exc:
         latency = round((time.monotonic() - start) * 1000)
+        metadata = provider_public_metadata(req.provider)
         return {
+            **metadata,
             "provider": req.provider,
+            "name": adapter.provider_name,
             "ok": False,
             "latency_ms": latency,
             "model": adapter.default_model,
