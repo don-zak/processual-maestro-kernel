@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -85,9 +86,23 @@ def _load_raw(user_id: str) -> dict[str, Any]:
 
 def _save_raw(user_id: str, data: dict[str, Any]):
     path = _settings_path(user_id)
-    with file_lock(path):
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    backup_path = path.with_suffix(path.suffix + ".bak")
 
+    with file_lock(path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            tmp_path.write_text(payload, encoding="utf-8")
+            if path.exists():
+                shutil.copy2(path, backup_path)
+            tmp_path.replace(path)
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
 def _merge_defaults(data: dict[str, Any]) -> dict[str, Any]:
     general = data.get("general", {})
