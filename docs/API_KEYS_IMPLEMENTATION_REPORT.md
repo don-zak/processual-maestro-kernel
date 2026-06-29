@@ -982,3 +982,419 @@ git status --short
 git show --stat --oneline -1
 ```
 
+## KEY-05 Addendum — Plan / Subscription Binding
+
+### Objective
+
+KEY-05 introduces the first local plan/subscription binding layer for API key quotas.
+
+After KEY-04, quota enforcement was already working on:
+
+```text
+POST /cgt/govern
+```
+
+However, the quota limit was still effectively local/default-driven.
+
+KEY-05 changes this by binding API key quota limits to a local plan policy. This keeps the system simple and JSON-backed before PostgreSQL, payment providers, external billing, or cloud deployment.
+
+---
+
+### Files Added
+
+KEY-05 adds:
+
+```text
+processual_api/services/plan_store.py
+```
+
+---
+
+### Files Modified
+
+KEY-05 modifies:
+
+```text
+processual_api/routers/settings.py
+processual_api/services/quota_store.py
+```
+
+---
+
+### Plan Store
+
+A new local plan policy store was added:
+
+```text
+processual_api/services/plan_store.py
+```
+
+It defines local plan policies and quota limits.
+
+Initial plans:
+
+```text
+pilot_starter        evaluation quota = 50
+pilot_pro            evaluation quota = 500
+institution_trial    evaluation quota = 2000
+enterprise_private   evaluation quota = -1
+```
+
+In the current quota logic:
+
+```text
+-1 means unlimited
+```
+
+The plan store provides:
+
+```text
+resolve_plan_id
+get_plan_policy
+quota_limit_for_plan
+```
+
+It also supports aliases such as:
+
+```text
+Starter -> pilot_starter
+Pro -> pilot_pro
+Institution -> institution_trial
+Enterprise -> enterprise_private
+```
+
+---
+
+### Settings Router Binding
+
+`processual_api/routers/settings.py` was updated so that newly created API keys now receive plan and quota metadata at creation time.
+
+New API key records include:
+
+```text
+plan_id
+quota_policy
+quota_scope
+quota_limit
+quota_used
+quota_reset_at
+```
+
+The API key creation response now also returns:
+
+```text
+plan_id
+quota_policy
+quota_scope
+quota_limit
+quota_used
+```
+
+This allows the client console and future commercial UI to display the quota state immediately after creating a key.
+
+---
+
+### API Key Listing
+
+`GET /settings/api-keys` now exposes quota-related metadata for visible non-revoked API keys:
+
+```text
+plan_id
+quota_scope
+quota_limit
+quota_used
+quota_rejected_count
+```
+
+This makes the local API key management view plan-aware and quota-aware.
+
+---
+
+### Quota Store Binding
+
+`processual_api/services/quota_store.py` was updated so that quota enforcement can resolve the effective quota limit from the key plan.
+
+Resolution order:
+
+```text
+1. Manual override if quota_limit_override exists or quota_policy.source = manual
+2. Key-level plan_id / plan
+3. Local subscription plan_id / plan
+4. Starter fallback
+```
+
+When plan-driven quota is used, the key record is updated with:
+
+```text
+plan_id
+quota_policy
+quota_limit
+quota_scope
+```
+
+This keeps older keys compatible while allowing new and updated keys to become plan-bound.
+
+---
+
+### Runtime Proof — API Key Creation
+
+A valid dynamic API key was used to create a new API key through:
+
+```text
+POST /settings/api-keys
+```
+
+Observed response:
+
+```text
+HTTP/1.1 200 OK
+```
+
+The response included:
+
+```text
+id = 987d23e9b6146a6a
+plan_id = pilot_starter
+quota_policy.source = plan
+quota_policy.quotas.evaluation = 50
+quota_scope = evaluation
+quota_limit = 50
+quota_used = 0
+```
+
+Conclusion:
+
+```text
+New API keys are created with plan-bound quota metadata: PASS
+```
+
+---
+
+### Runtime Proof — Local Key Record
+
+The local API key settings file showed the newly created key with:
+
+```text
+plan_id = pilot_starter
+quota_policy present
+quota_scope = evaluation
+quota_limit = 50
+quota_used = 0
+```
+
+Conclusion:
+
+```text
+Plan metadata is persisted in the local key record: PASS
+```
+
+---
+
+### Runtime Proof — Plan Upgrade to pilot_pro
+
+For local proof, the new key was updated from:
+
+```text
+pilot_starter
+```
+
+to:
+
+```text
+pilot_pro
+```
+
+Then a request was sent to:
+
+```text
+POST /cgt/govern
+```
+
+Observed result:
+
+```text
+HTTP/1.1 200 OK
+```
+
+The local key record then showed:
+
+```text
+plan_id = pilot_pro
+quota_limit = 500
+quota_used = 1
+```
+
+Conclusion:
+
+```text
+quota_store resolves pilot_pro to quota_limit 500: PASS
+```
+
+---
+
+### Runtime Proof — API Key Listing
+
+A request was sent to:
+
+```text
+GET /settings/api-keys
+```
+
+Observed result:
+
+```text
+HTTP/1.1 200 OK
+```
+
+The response included plan/quota fields for visible keys, including the new key:
+
+```text
+id = 987d23e9b6146a6a
+plan_id = pilot_pro
+quota_scope = evaluation
+quota_limit = 500
+quota_used = 1
+quota_rejected_count = 0
+```
+
+Conclusion:
+
+```text
+/settings/api-keys is now plan-aware and quota-aware: PASS
+```
+
+---
+
+### Usage Log Proof
+
+The existing KEY-03 usage log recorded KEY-05 activity.
+
+Observed entries included:
+
+```text
+POST /settings/api-keys     status_code = 200
+POST /cgt/govern            status_code = 200
+GET /settings/api-keys      status_code = 200
+```
+
+For the newly created key:
+
+```text
+api_key_id = 987d23e9b6146a6a
+api_key_prefix = pmk_yNcXwwmo...
+endpoint = /cgt/govern
+status_code = 200
+```
+
+Conclusion:
+
+```text
+KEY-03 usage logging remains compatible with KEY-05 plan binding: PASS
+```
+
+---
+
+### Static Validation
+
+The following commands were executed successfully:
+
+```powershell
+python -m py_compile .\processual_api\services\plan_store.py
+python -m py_compile .\processual_api\services\quota_store.py
+python -m py_compile .\processual_api\routers\settings.py
+git diff --check
+```
+
+Result:
+
+```text
+PASS
+```
+
+---
+
+### Local Test Data
+
+The following local runtime files were used for proof only and must not be committed:
+
+```text
+processual_api/data/settings_api_key_user.json
+processual_api/data/usage_logs.jsonl
+```
+
+A temporary request body file was removed:
+
+```text
+tmp-govern-body.json
+```
+
+---
+
+### KEY-05 Acceptance Criteria
+
+KEY-05 is accepted when all of the following are true:
+
+```text
+1. plan_store.py defines local plan policies.
+2. New API keys receive plan_id and quota_policy.
+3. New API keys receive quota_scope, quota_limit, and quota_used.
+4. pilot_starter resolves to quota_limit 50.
+5. pilot_pro resolves to quota_limit 500.
+6. quota_store consumes quota using plan-derived limits.
+7. /settings/api-keys exposes plan/quota metadata.
+8. Existing KEY-03 usage logging continues to work.
+9. Existing KEY-04 quota enforcement continues to work.
+10. Runtime data files are not committed.
+```
+
+---
+
+### KEY-05 Result
+
+```text
+KEY-05 Plan / Subscription Binding: PASS
+```
+
+The API key layer now has five foundations:
+
+```text
+Verification
+Authorization scopes
+Usage logging
+Quota enforcement
+Plan / subscription binding
+```
+
+This prepares the project for:
+
+```text
+KEY-06 — Admin quota controls and plan management
+```
+
+or, if commercial deployment is prioritized:
+
+```text
+Cloud Run readiness + managed persistence
+```
+
+---
+
+### Recommended Commit
+
+After confirming that only source/report files are staged, commit KEY-05 with:
+
+```powershell
+git add .\processual_api\routers\settings.py
+git add .\processual_api\services\quota_store.py
+git add .\processual_api\services\plan_store.py
+git add .\docs\API_KEYS_IMPLEMENTATION_REPORT.md
+git commit -m "KEY-05 bind API key quotas to plans"
+```
+
+Then verify:
+
+```powershell
+git status --short
+git show --stat --oneline -1
+```
+

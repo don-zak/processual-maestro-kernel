@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
+from .plan_store import get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
@@ -121,15 +122,41 @@ def consume_quota(
             if key.get("id") != api_key_id:
                 continue
 
-            quota_limit = _as_int(
-                key.get("quota_limit"),
-                DEFAULT_API_KEY_QUOTA_LIMIT,
+            subscription = raw.get("subscription", {})
+            plan_id = resolve_plan_id(
+                key.get("plan_id")
+                or key.get("plan")
+                or subscription.get("plan_id")
+                or subscription.get("plan")
+                or "Starter"
             )
+
+            existing_policy = key.get("quota_policy", {})
+            policy_source = (
+                existing_policy.get("source")
+                if isinstance(existing_policy, dict)
+                else None
+            )
+            manual_limit = key.get("quota_limit_override")
+
+            if policy_source == "manual" or manual_limit is not None:
+                quota_limit = _as_int(
+                    manual_limit if manual_limit is not None else key.get("quota_limit"),
+                    DEFAULT_API_KEY_QUOTA_LIMIT,
+                )
+            else:
+                quota_limit = quota_limit_for_plan(
+                    plan_id,
+                    quota_scope,
+                    DEFAULT_API_KEY_QUOTA_LIMIT,
+                )
+                key["plan_id"] = plan_id
+                key["quota_policy"] = get_plan_policy(plan_id)
+
             quota_used = _as_int(key.get("quota_used"), 0)
 
             key["quota_limit"] = quota_limit
             key["quota_scope"] = key.get("quota_scope") or quota_scope
-
             if quota_limit >= 0 and quota_used + amount > quota_limit:
                 key["quota_last_rejected_at"] = now
                 key["quota_rejected_count"] = (
@@ -159,6 +186,7 @@ def consume_quota(
             updated_user = dict(current_user)
             updated_user["quota"] = {
                 "scope": quota_scope,
+                "plan_id": key.get("plan_id"),
                 "limit": quota_limit,
                 "used": quota_used,
                 "remaining": max(quota_limit - quota_used, 0)

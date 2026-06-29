@@ -9,6 +9,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from ..services.plan_store import get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -384,10 +385,25 @@ async def list_api_keys(current_user: dict = Depends(get_current_user)):
             "created_at": key.get("created_at", ""),
             "last_used_at": key.get("last_used_at"),
             "usage_count": key.get("usage_count", 0),
+            "plan_id": key.get("plan_id"),
+            "quota_scope": key.get("quota_scope"),
+            "quota_limit": key.get("quota_limit"),
+            "quota_used": key.get("quota_used", 0),
+            "quota_rejected_count": key.get("quota_rejected_count", 0),
             "expires_at": key.get("expires_at"),
         })
 
     return visible_keys
+
+def _resolve_current_plan_id(user_id: str, raw: dict) -> str:
+    billing_subs = _load_billing_subscriptions()
+    user_subs = [s for s in billing_subs if s.get("user_id") == user_id]
+    if user_subs:
+        latest = max(user_subs, key=lambda s: s.get("created_at", ""))
+        return resolve_plan_id(latest.get("plan_id") or latest.get("plan"))
+
+    subscription = raw.get("subscription", {})
+    return resolve_plan_id(subscription.get("plan_id") or subscription.get("plan", "Starter"))
 
 
 @router.post("/api-keys", response_model=dict)
@@ -409,6 +425,9 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
     key_id = secrets.token_hex(8)
     prefix = raw_key[:12] + "..."
     created_at = datetime.now(UTC).isoformat()
+    plan_id = _resolve_current_plan_id(user_id, raw)
+    quota_policy = get_plan_policy(plan_id)
+    quota_limit = quota_limit_for_plan(plan_id, "evaluation")
 
     keys.append({
         "id": key_id,
@@ -417,6 +436,12 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
         "prefix": prefix,
         "hashed": hashed,
         "scopes": DEFAULT_API_KEY_SCOPES,
+        "plan_id": plan_id,
+        "quota_policy": quota_policy,
+        "quota_scope": "evaluation",
+        "quota_limit": quota_limit,
+        "quota_used": 0,
+        "quota_reset_at": None,
         "status": "enabled",
         "created_at": created_at,
         "last_used_at": None,
@@ -431,6 +456,11 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
     return {
         "api_key": raw_key,
         "id": key_id,
+        "plan_id": plan_id,
+        "quota_policy": quota_policy,
+        "quota_scope": "evaluation",
+        "quota_limit": quota_limit,
+        "quota_used": 0,
         "prefix": prefix,
         "status": "enabled",
         "scopes": DEFAULT_API_KEY_SCOPES,
