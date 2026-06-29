@@ -250,10 +250,10 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
             if decrypted:
                 api_key = decrypted
 
-    if not api_key:
+    if not api_key and provider not in {"opencode", "generic_openai_compatible"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key is required")
 
-    known_providers = {"openai", "anthropic", "gemini", "deepseek", "opencode", "openrouter"}
+    known_providers = {"openai", "anthropic", "gemini", "deepseek", "opencode", "openrouter", "generic_openai_compatible"}
     if provider not in known_providers:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
@@ -291,6 +291,14 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
                 res = await client.get(
                     f"{base_url}/models",
                     headers={"Authorization": f"Bearer {api_key}"},
+                )
+            elif provider == "generic_openai_compatible":
+                base_url = os.environ.get("GENERIC_OPENAI_API_URL", "").rstrip("/")
+                if not base_url:
+                    return TestConnectionResult(success=False, error="GENERIC_OPENAI_API_URL is required")
+                res = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
                 )
 
             latency = (time.time() - start) * 1000

@@ -1438,6 +1438,7 @@ async def configure_adapter(req: ConfigureAdapterRequest, _current_user: dict = 
         "deepseek": ("DEEPSEEK_API_KEY", "DEEPSEEK_DEFAULT_MODEL", ""),
         "opencode": ("OPENCODE_API_KEY", "OPENCODE_DEFAULT_MODEL", "OPENCODE_API_URL"),
         "openrouter": ("OPENROUTER_API_KEY", "OPENROUTER_DEFAULT_MODEL", "OPENROUTER_API_URL"),
+        "generic_openai_compatible": ("GENERIC_OPENAI_API_KEY", "GENERIC_OPENAI_DEFAULT_MODEL", "GENERIC_OPENAI_API_URL"),
     }
 
     key = req.provider.lower()
