@@ -1083,6 +1083,43 @@ Importance:
 This test strengthens the customer onboarding layer before production readiness and release preparation. It verifies that application intake, manual review, demo provisioning, and demo limits remain stable without relying on external services, databases, Redis, payment providers, or real provider API keys.
 
 
+---
+
+## TEST-15A — Governance Gateway Behavior Regression
+
+Commit:
+
+Pending grouped commit.
+
+Purpose:
+
+TEST-15A adds regression coverage for the heavier CGT Governor behavior surface, including batch governance, repair, auto-repair, adapter comparison, simulation routes, and governance gateway routes.
+
+Coverage added:
+
+- Heavy CGT Governor route declarations are guarded.
+- Heavy request model declarations are guarded.
+- Shared evaluation pipeline markers are guarded, including score resolution, policy decision recording, signing, encrypted logging, and evaluation store append.
+- Repair endpoint policy mapping is guarded.
+- Auto-repair loop markers are guarded, including round limits, repair policies, adapter generation, signature, and recording reason.
+- Adapter comparison route markers are guarded.
+- Simulation route markers are guarded, including simulation run, report listing, PDF retrieval, and in-memory simulation log.
+- Gateway route markers are guarded, including evaluate, register, list, get, action, trend, dashboard, and PDF report paths.
+- Gateway module files are guarded for engine, models, policies, lifecycle, registry, and storage.
+- Governor status is verified without external services.
+- Repair prompt generation is verified for known repair policies.
+- Unknown repair policy rejection is verified.
+
+Validation:
+
+- `tests/test_governance_gateway_behavior_regression.py`: `12 passed, 6 warnings`.
+- Full baseline after TEST-15A: `117 passed, 6 warnings`.
+- `compileall`: PASS.
+- `git diff --check`: clean.
+
+Importance:
+
+This test strengthens the CGT Governor heavy behavior surface before UI smoke, live provider smoke, and production readiness work. It keeps pytest independent from external LLM providers, payment providers, Redis, PostgreSQL, and production secrets while still guarding the structure and safe local behavior of governance gateway features.
 
 
 ## Recommended Next Phase
