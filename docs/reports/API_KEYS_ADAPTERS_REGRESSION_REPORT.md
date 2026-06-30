@@ -1122,6 +1122,47 @@ Importance:
 This test strengthens the CGT Governor heavy behavior surface before UI smoke, live provider smoke, and production readiness work. It keeps pytest independent from external LLM providers, payment providers, Redis, PostgreSQL, and production secrets while still guarding the structure and safe local behavior of governance gateway features.
 
 
+---
+
+## TEST-16A — Static Console Smoke Tests
+
+Commit:
+
+Pending grouped commit.
+
+Purpose:
+
+TEST-16A adds static smoke coverage for the Maestro Console frontend without launching a browser, starting uvicorn, or requiring external services.
+
+Coverage added:
+
+- Static console root exists.
+- Core HTML files are present: `index.html`, `login.html`, and `splash.html`.
+- Core CSS files are present: `console.css` and `tour.css`.
+- Core JS files are present: `app.js`, `auth.js`, `charts.js`, `client.js`, and `i18n.js`.
+- Page modules are present for overview, CGT, workflows, governance, telemetry, reports, governor, gateway, simulation, adapters, and settings.
+- API adapter modules are present for adapters, CGT, gateway, governance, governor, health, reports, simulation, telemetry, and workflows.
+- Tour files are present.
+- `main.py` is guarded to ensure `/console`, `/login`, and splash HTML serving remain wired.
+- App shell navigation and subscription banner markers are guarded.
+- Client fetch wrapper and auth/login markers are guarded.
+- Settings and adapter page markers are guarded.
+- Local HTML asset references are checked for missing static files.
+
+Validation:
+
+- `tests/test_static_console_smoke.py`: expected `9 passed, 6 warnings`.
+- Full baseline after TEST-16A: expected `126 passed, 6 warnings`.
+- `compileall`: PASS.
+- `git diff --check`: clean.
+
+Importance:
+
+This test provides static frontend protection before browser-based UI smoke validation. It catches accidental deletion or relocation of console assets, page modules, API adapter modules, login/splash files, or static serving hooks while keeping the main pytest suite independent from a live browser or running server.
+
+
+
+
 ## Recommended Next Phase
 
 The safest next phase is not to add new product features immediately, but to complete production readiness:
