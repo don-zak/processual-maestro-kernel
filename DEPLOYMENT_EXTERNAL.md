@@ -57,6 +57,51 @@ curl http://localhost:8000/health/ready
 
 ---
 
+### Extended production environment variables
+
+The deployment must be aligned with `.env.production.example`.
+
+The production template must include:
+
+```text id="do0gih"
+ENVIRONMENT=production
+APP_ENV=production
+API_DEBUG=false
+PROCESSUAL_CRYPTO_KEY_B64
+```
+
+In addition to the core values, production deployments must review the following variables:
+
+| Variable                            |           Required | Purpose                                                                               |
+| ----------------------------------- | -----------------: | ------------------------------------------------------------------------------------- |
+| `ENVIRONMENT`                       |                Yes | Must be `production` for production startup validation.                               |
+| `APP_ENV`                           |                Yes | Must be `production` to disable development-only API key fallback behavior.           |
+| `API_DEBUG`                         |                Yes | Must be `false` in production.                                                        |
+| `PROCESSUAL_CRYPTO_KEY_B64`         |                Yes | Base64-encoded 32-byte encryption key for stored sensitive provider/API-key material. |
+| `SENTRY_DSN`                        |                 No | Enables Sentry error reporting.                                                       |
+| `SENTRY_ENVIRONMENT`                |                 No | Should be `production` for production Sentry events.                                  |
+| `SENTRY_TRACES_SAMPLE_RATE`         |                 No | Controls Sentry tracing sample rate.                                                  |
+| `DISCORD_WEBHOOK_URL`               |                 No | Optional client-facing Discord notification webhook.                                  |
+| `DISCORD_ADMIN_WEBHOOK_URL`         |                 No | Optional admin/operations Discord notification webhook.                               |
+| `DISCORD_RATE_LIMIT_SECONDS`        |                 No | Minimum interval between Discord notifications.                                       |
+| `LEMONSQUEEZY_API_KEY`              | If billing enabled | Lemon Squeezy API key.                                                                |
+| `LEMONSQUEEZY_STORE_ID`             | If billing enabled | Lemon Squeezy store ID.                                                               |
+| `LEMONSQUEEZY_WEBHOOK_SECRET`       | If billing enabled | Webhook signing secret.                                                               |
+| `LEMONSQUEEZY_CHECKOUT_SUCCESS_URL` | If billing enabled | Production checkout success URL.                                                      |
+| `LEMONSQUEEZY_CHECKOUT_CANCEL_URL`  | If billing enabled | Production checkout cancel URL.                                                       |
+| `OPENROUTER_API_KEY`                |            If used | Customer-owned OpenRouter API key.                                                    |
+| `OPENROUTER_API_URL`                |            If used | OpenRouter-compatible API base URL.                                                   |
+| `OPENCODE_API_URL`                  |            If used | Local or private OpenCode/Ollama-compatible endpoint.                                 |
+| `OPENCODE_API_KEY`                  |            If used | Customer-owned OpenCode-compatible API key or local placeholder where appropriate.    |
+| `GENERIC_OPENAI_API_KEY`            |            If used | Customer-owned key for a generic OpenAI-compatible provider.                          |
+| `GENERIC_OPENAI_API_URL`            |            If used | Generic OpenAI-compatible endpoint.                                                   |
+
+Provider credentials are not bundled with Processual Maestro. The deploying customer or organization is responsible for its own provider keys, endpoints, billing, usage limits, and third-party provider availability.
+
+Do not use documentation sample values in production. Replace every placeholder in `.env.production.example` and store real secrets through `.env`, Docker secrets, Kubernetes secrets, Google Secret Manager, or an equivalent secret-management system.
+
+
+
 ## API Authentication
 
 All protected endpoints require a Bearer JWT token:

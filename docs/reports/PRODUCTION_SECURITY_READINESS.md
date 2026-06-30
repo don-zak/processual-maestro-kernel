@@ -587,7 +587,7 @@ The template must continue to include:
 - Sentry observability keys.
 - Discord webhook keys.
 - Lemon Squeezy billing keys.
-- OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, OpenCode, and generic OpenAI-compatible provider keys.
+- OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, OpenCode, and generic OpenAI-compatible provider keys and endpoints, including `GENERIC_OPENAI_API_KEY`, `GENERIC_OPENAI_API_URL`, and `GENERIC_OPENAI_DEFAULT_MODEL`.
 - CGT Governor runtime keys.
 - API key quota keys.
 
