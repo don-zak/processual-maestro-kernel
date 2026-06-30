@@ -218,3 +218,34 @@ def test_full_app_cgt_govern_controlled_smoke_with_overridden_quota(
     assert payload["action_label"] == "Keep - Accept Response"
     assert payload["eval_id"] == "eval_smoke_10a"
     assert payload["analysis_mode"] == "fallback"
+
+def test_full_app_console_static_mount_is_reachable(client):
+    response = client.get("/console/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+
+
+def test_full_app_docs_are_available_in_non_production_smoke(client):
+    docs = client.get("/docs")
+    redoc = client.get("/redoc")
+
+    assert docs.status_code == 200
+    assert redoc.status_code == 200
+    assert "text/html" in docs.headers.get("content-type", "")
+    assert "text/html" in redoc.headers.get("content-type", "")
+
+
+def test_main_keeps_docs_disabled_in_production_boundary():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "processual_api" / "main.py").read_text(encoding="utf-8")
+
+    required_markers = [
+        'docs_url="/docs" if not settings.is_production else None',
+        'redoc_url="/redoc" if not settings.is_production else None',
+    ]
+
+    missing = [marker for marker in required_markers if marker not in source]
+    assert not missing, f"Missing production docs boundary markers: {missing}"
