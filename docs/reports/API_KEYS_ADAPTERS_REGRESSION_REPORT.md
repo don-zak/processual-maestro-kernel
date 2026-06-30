@@ -988,11 +988,3 @@ DOCS-PROD-01 — Production Security Readiness
 ```
 
 This should document and verify the replacement of weak local defaults with production-grade environment variables before any public deployment.
-
-
-
-
-
-
-
-
