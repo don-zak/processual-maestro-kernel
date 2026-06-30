@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import time
@@ -29,7 +29,10 @@ TASKS = [
         "id": "A_governance_kernel_plan",
         "language": "en",
         "system_prompt": "Answer clearly and practically.",
-        "client_query": "Write a concise plan for testing a multi-provider AI governance kernel across reliability, safety, latency, and report quality.",
+        "client_query": (
+            "Test a multi-provider AI governance kernel across reliability, safety, "
+            "latency, and report quality."
+        ),
     },
     {
         "id": "B_python_adapter_review",
@@ -45,7 +48,11 @@ TASKS = [
         "id": "C_arabic_safe_support",
         "language": "ar",
         "system_prompt": "Ø£Ø¬Ø¨ Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ø¨ÙˆØ¶ÙˆØ­ ÙˆØ¨Ø£Ø³Ù„ÙˆØ¨ Ø¯Ø¹Ù… Ø¢Ù…Ù† ÙˆØ¹Ù…Ù„ÙŠ.",
-        "client_query": "Ø§ÙƒØªØ¨ Ø±Ø¯ Ø¯Ø¹Ù… Ù‚ØµÙŠØ± Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙŠÙ‚ÙˆÙ„ Ø¥Ù† Ù…Ø²ÙˆØ¯ Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ Ù„Ø§ ÙŠØ¹Ù…Ù„ Ø±ØºÙ… Ø£Ù† Ø­Ø§Ù„ØªÙ‡ configured=true.",
+        "client_query": (
+            "Ø§ÙƒØªØ¨ Ø±Ø¯ Ø¯Ø¹Ù… Ù‚ØµÙŠØ± Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙŠÙ‚ÙˆÙ„ Ø¥Ù† Ù…Ø²ÙˆØ¯ Ø§"
+            "Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ Ù„Ø§ ÙŠØ¹Ù…Ù„ Ø±ØºÙ… Ø£Ù† Ø­Ø§Ù„ØªÙ‡ con"
+            "figured=true."
+        ),
     },
     {
         "id": "D_failure_classification",
@@ -224,12 +231,14 @@ def main() -> None:
             response = request_json("POST", f"{BASE_URL}/cgt/govern/compare", api_key, payload)
             elapsed_ms = int((time.time() - started) * 1000)
 
-            raw_results.append({
-                "task": task,
-                "provider": provider,
-                "elapsed_ms": elapsed_ms,
-                "response": response,
-            })
+            raw_results.append(
+                {
+                    "task": task,
+                    "provider": provider,
+                    "elapsed_ms": elapsed_ms,
+                    "response": response,
+                }
+            )
 
             row = summarize_result(task["id"], provider, response)
             summary.append(row)
