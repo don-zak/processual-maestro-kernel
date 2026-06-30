@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 
@@ -11,21 +11,21 @@ def _new_decision_id() -> str:
     return f"dec_{uuid.uuid4().hex}"
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     ACTIVE = "active"
     TRANSITIONAL = "transitional"
     ARCHIVED = "archived"
     QUARANTINED = "quarantined"
 
 
-class AgentCriticality(str, Enum):
+class AgentCriticality(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class WorkflowState(str, Enum):
+class WorkflowState(StrEnum):
     DRAFT = "draft"
     RUNNING = "running"
     PAUSED = "paused"
@@ -35,7 +35,7 @@ class WorkflowState(str, Enum):
     ESCALATED = "escalated"
 
 
-class StepState(str, Enum):
+class StepState(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -43,7 +43,7 @@ class StepState(str, Enum):
     SKIPPED = "skipped"
 
 
-class MaestroAction(str, Enum):
+class MaestroAction(StrEnum):
     DELEGATE = "delegate"
     HANDOFF = "handoff"
     PARALLELIZE = "parallelize"

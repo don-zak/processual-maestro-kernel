@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      target: public
     container_name: processual-maestro-api
     ports:
       - "8000:8000"

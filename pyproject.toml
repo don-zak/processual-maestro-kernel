@@ -112,6 +112,11 @@ show_missing = true
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+extend-exclude = [
+    "build",
+    "dist",
+    "*.egg-info",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

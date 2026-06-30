@@ -5,14 +5,17 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
-from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key
+from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
+from ..cgt_governor.adapters.provider_metadata import provider_ids
 from ..dependencies import file_lock
 from ..schemas.settings import (
     GeneralSettings,
@@ -22,6 +25,7 @@ from ..schemas.settings import (
     SubscriptionInfo,
     TestConnectionResult,
 )
+from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 try:
     from processual_kernel.security.crypto import decrypt_aes256_gcm, encrypt_aes256_gcm
@@ -32,6 +36,33 @@ except ImportError:
     _crypto_available = False
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+DEFAULT_API_KEY_SCOPES = [
+    "read:health",
+    "read:adapters",
+    "read:governor",
+    "run:analyze",
+    "run:govern",
+    "run:compare",
+    "read:reports",
+    "create:reports",
+]
+ADMIN_SETTINGS_SCOPE = "admin:settings"
+CLIENT_KEY_PROFILE = "client"
+
+class ApiKeyPlanUpdate(BaseModel):
+    plan_id: str
+
+
+class ApiKeyQuotaUpdate(BaseModel):
+    quota_limit_override: int | None = Field(default=None, ge=-1)
+
+
+class ApiKeyCreateRequest(BaseModel):
+    client_id: str | None = Field(default=None, min_length=1)
+    user_id: str | None = Field(default=None, min_length=1)
+    plan_id: str | None = Field(default=None, min_length=1)
+    label: str | None = Field(default=None, min_length=1)
+
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CRYPTO_KEY = os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
@@ -55,9 +86,23 @@ def _load_raw(user_id: str) -> dict[str, Any]:
 
 def _save_raw(user_id: str, data: dict[str, Any]):
     path = _settings_path(user_id)
-    with file_lock(path):
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    backup_path = path.with_suffix(path.suffix + ".bak")
 
+    with file_lock(path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            tmp_path.write_text(payload, encoding="utf-8")
+            if path.exists():
+                shutil.copy2(path, backup_path)
+            tmp_path.replace(path)
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
 def _merge_defaults(data: dict[str, Any]) -> dict[str, Any]:
     general = data.get("general", {})
@@ -205,10 +250,10 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
             if decrypted:
                 api_key = decrypted
 
-    if not api_key:
+    if not api_key and provider not in {"opencode", "generic_openai_compatible"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key is required")
 
-    known_providers = {"openai", "anthropic", "gemini", "deepseek", "opencode"}
+    known_providers = provider_ids()
     if provider not in known_providers:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
@@ -237,6 +282,20 @@ async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
                 )
             elif provider == "opencode":
                 base_url = os.environ.get("OPENCODE_API_URL", "http://localhost:11434/v1")
+                res = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+                )
+            elif provider == "openrouter":
+                base_url = os.environ.get("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
+                res = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+            elif provider == "generic_openai_compatible":
+                base_url = os.environ.get("GENERIC_OPENAI_API_URL", "").rstrip("/")
+                if not base_url:
+                    return TestConnectionResult(success=False, error="GENERIC_OPENAI_API_URL is required")
                 res = await client.get(
                     f"{base_url}/models",
                     headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
@@ -354,19 +413,103 @@ async def get_subscription(current_user: dict = Depends(get_current_user)):
         suspended_at=sub.get("suspended_at"),
     )
 
+def _find_active_api_key_or_404(raw: dict, key_id: str) -> dict:
+    for key in raw.get("api_keys", []):
+        if key.get("id") != key_id:
+            continue
+        if key.get("status") == "revoked" or key.get("revoked_at"):
+            break
+        return key
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="API key not found",
+    )
+
+
+def _api_key_quota_summary(key: dict) -> dict:
+    quota_policy = key.get("quota_policy", {})
+    quota_policy_source = (
+        quota_policy.get("source")
+        if isinstance(quota_policy, dict)
+        else None
+    )
+    quota_limit = key.get("quota_limit")
+
+    return {
+        "id": key.get("id", ""),
+        "plan_id": key.get("plan_id"),
+        "quota_scope": key.get("quota_scope") or "evaluation",
+        "quota_limit": quota_limit,
+        "quota_used": key.get("quota_used", 0),
+        "quota_remaining": (
+            max(int(quota_limit) - int(key.get("quota_used", 0)), 0)
+            if isinstance(quota_limit, int) and quota_limit >= 0
+            else None
+        ),
+        "quota_policy_source": quota_policy_source,
+        "quota_limit_override": key.get("quota_limit_override"),
+        "quota_rejected_count": key.get("quota_rejected_count", 0),
+    }
+
+@router.get("/plans", response_model=list[dict])
+async def list_plans(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
+    return [get_plan_policy(plan_id) for plan_id in PLAN_POLICIES.keys()]
 
 @router.get("/api-keys", response_model=list[dict])
-async def list_api_keys(current_user: dict = Depends(get_current_user)):
+async def list_api_keys(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
-    return [{"prefix": k.get("prefix", ""), "created_at": k.get("created_at", ""), "id": k.get("id", "")} for k in keys]
+
+    visible_keys = []
+    for key in keys:
+        if key.get("status") == "revoked" or key.get("revoked_at"):
+            continue
+
+        visible_keys.append({
+            "id": key.get("id", ""),
+            "prefix": key.get("prefix", ""),
+            "status": key.get("status", "enabled"),
+            "scopes": key.get("scopes", []),
+            "created_at": key.get("created_at", ""),
+            "last_used_at": key.get("last_used_at"),
+            "usage_count": key.get("usage_count", 0),
+            "plan_id": key.get("plan_id"),
+            "quota_scope": key.get("quota_scope"),
+            "quota_limit": key.get("quota_limit"),
+            "quota_used": key.get("quota_used", 0),
+            "quota_rejected_count": key.get("quota_rejected_count", 0),
+            "expires_at": key.get("expires_at"),
+        })
+
+    return visible_keys
+
+def _resolve_current_plan_id(user_id: str, raw: dict) -> str:
+    billing_subs = _load_billing_subscriptions()
+    user_subs = [s for s in billing_subs if s.get("user_id") == user_id]
+    if user_subs:
+        latest = max(user_subs, key=lambda s: s.get("created_at", ""))
+        return resolve_plan_id(latest.get("plan_id") or latest.get("plan"))
+
+    subscription = raw.get("subscription", {})
+    return resolve_plan_id(subscription.get("plan_id") or subscription.get("plan", "Starter"))
 
 
 @router.post("/api-keys", response_model=dict)
-async def create_api_key(current_user: dict = Depends(get_current_user)):
-    user_id = current_user.get("sub", "default")
-    raw = _load_raw(user_id)
+async def create_api_key(
+    body: ApiKeyCreateRequest | None = None,
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
+
+    owner_user_id = current_user.get("sub", "default")
+    requested_client_id = body.client_id if body else None
+    requested_user_id = body.user_id if body else None
+
+    user_id = requested_user_id or requested_client_id or owner_user_id
+    client_id = requested_client_id or current_user.get("client_id") or user_id
+
+    raw = _load_raw(owner_user_id)
     keys = raw.get("api_keys", [])
 
     raw_key = generate_api_key()
@@ -376,23 +519,174 @@ async def create_api_key(current_user: dict = Depends(get_current_user)):
         if "bcrypt" not in str(exc).lower():
             raise
         hashed = _pbkdf2_hash_api_key(raw_key)
-    key_id = secrets.token_hex(4)
-    prefix = raw_key[:12] + "..."
 
-    keys.append({"id": key_id, "prefix": prefix, "hashed": hashed,
-                 "created_at": datetime.now(UTC).isoformat()})
+    key_id = secrets.token_hex(8)
+    prefix = raw_key[:12] + "..."
+    created_at = datetime.now(UTC).isoformat()
+    requested_plan_id = body.plan_id if body and body.plan_id else None
+    plan_id = resolve_plan_id(requested_plan_id) if requested_plan_id else _resolve_current_plan_id(owner_user_id, raw)
+    quota_policy = get_plan_policy(plan_id)
+    quota_limit = quota_limit_for_plan(plan_id, "evaluation")
+
+    keys.append({
+        "id": key_id,
+        "user_id": user_id,
+        "client_id": client_id,
+        "prefix": prefix,
+        "hashed": hashed,
+        "scopes": DEFAULT_API_KEY_SCOPES,
+        "profile": CLIENT_KEY_PROFILE,
+        "label": body.label if body and body.label else None,
+        "plan_id": plan_id,
+        "quota_policy": quota_policy,
+        "quota_scope": "evaluation",
+        "quota_limit": quota_limit,
+        "quota_used": 0,
+        "quota_reset_at": None,
+        "status": "enabled",
+        "created_at": created_at,
+        "last_used_at": None,
+        "usage_count": 0,
+        "expires_at": None,
+        "revoked_at": None,
+    })
+
     raw["api_keys"] = keys
+    _save_raw(owner_user_id, raw)
+
+    return {
+        "api_key": raw_key,
+        "id": key_id,
+        "plan_id": plan_id,
+        "quota_policy": quota_policy,
+        "quota_scope": "evaluation",
+        "quota_limit": quota_limit,
+        "quota_used": 0,
+        "prefix": prefix,
+        "status": "enabled",
+        "scopes": DEFAULT_API_KEY_SCOPES,
+        "profile": CLIENT_KEY_PROFILE,
+        "client_id": client_id,
+        "user_id": user_id,
+        "label": body.label if body and body.label else None,
+        "onboarding_usage": {
+            "header": "X-API-Key",
+            "base_url": "http://127.0.0.1:8000",
+            "example_endpoint": "/adapters/status",
+        },
+        "created_at": created_at,
+    }
+
+@router.patch("/api-keys/{key_id}/plan", response_model=dict)
+async def update_api_key_plan(
+    key_id: str,
+    body: ApiKeyPlanUpdate,
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
+    user_id = current_user.get("sub", "default")
+    raw = _load_raw(user_id)
+
+    key = _find_active_api_key_or_404(raw, key_id)
+
+    plan_id = resolve_plan_id(body.plan_id)
+    quota_scope = key.get("quota_scope") or "evaluation"
+    quota_policy = get_plan_policy(plan_id)
+    quota_limit = quota_limit_for_plan(plan_id, quota_scope)
+
+    key["plan_id"] = plan_id
+    key["quota_policy"] = quota_policy
+    key["quota_scope"] = quota_scope
+    key["quota_limit"] = quota_limit
+    key.pop("quota_limit_override", None)
+
+    raw["api_keys"] = raw.get("api_keys", [])
     _save_raw(user_id, raw)
 
-    return {"api_key": raw_key, "id": key_id, "prefix": prefix}
+    return {
+        "status": "updated",
+        "change": "plan",
+        **_api_key_quota_summary(key),
+    }
 
+
+@router.patch("/api-keys/{key_id}/quota", response_model=dict)
+async def update_api_key_quota(
+    key_id: str,
+    body: ApiKeyQuotaUpdate,
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
+    user_id = current_user.get("sub", "default")
+    raw = _load_raw(user_id)
+
+    key = _find_active_api_key_or_404(raw, key_id)
+
+    quota_scope = key.get("quota_scope") or "evaluation"
+    plan_id = resolve_plan_id(
+        key.get("plan_id")
+        or key.get("plan")
+        or raw.get("subscription", {}).get("plan_id")
+        or raw.get("subscription", {}).get("plan")
+        or "Starter"
+    )
+
+    if body.quota_limit_override is None:
+        quota_policy = get_plan_policy(plan_id)
+        quota_limit = quota_limit_for_plan(plan_id, quota_scope)
+
+        key.pop("quota_limit_override", None)
+        key["plan_id"] = plan_id
+        key["quota_policy"] = quota_policy
+        key["quota_limit"] = quota_limit
+        key["quota_scope"] = quota_scope
+
+        change = "quota_override_cleared"
+    else:
+        quota_limit = int(body.quota_limit_override)
+
+        key["plan_id"] = plan_id
+        key["quota_limit_override"] = quota_limit
+        key["quota_policy"] = {
+            "id": "manual_override",
+            "name": "Manual Quota Override",
+            "source": "manual",
+            "quotas": {
+                quota_scope: quota_limit,
+            },
+        }
+        key["quota_limit"] = quota_limit
+        key["quota_scope"] = quota_scope
+
+        change = "quota_override_set"
+
+    raw["api_keys"] = raw.get("api_keys", [])
+    _save_raw(user_id, raw)
+
+    return {
+        "status": "updated",
+        "change": change,
+        **_api_key_quota_summary(key),
+    }
 
 @router.delete("/api-keys/{key_id}", response_model=dict)
-async def delete_api_key(key_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_api_key(key_id: str, current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
     keys = raw.get("api_keys", [])
-    raw["api_keys"] = [k for k in keys if k.get("id") != key_id]
-    _save_raw(user_id, raw)
-    return {"status": "deleted", "id": key_id}
 
+    revoked = False
+    now = datetime.now(UTC).isoformat()
+
+    for key in keys:
+        if key.get("id") == key_id:
+            key["status"] = "revoked"
+            key["revoked_at"] = now
+            revoked = True
+            break
+
+    raw["api_keys"] = keys
+    _save_raw(user_id, raw)
+
+    if not revoked:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    return {"status": "revoked", "id": key_id, "revoked_at": now}

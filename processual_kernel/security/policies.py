@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class EncryptionPolicy(str, Enum):
+class EncryptionPolicy(StrEnum):
     ALWAYS_ENCRYPT = "always_encrypt"
     ENCRYPT_SENSITIVE = "encrypt_sensitive"
     PLAINTEXT_ALLOWED = "plaintext_allowed"

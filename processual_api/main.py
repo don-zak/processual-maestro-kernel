@@ -20,6 +20,7 @@ from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.request_id import RequestIDMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.subscription import SubscriptionMiddleware
+from .middleware.usage_log import UsageLogMiddleware
 from .routers import applications, cgt, cgt_governor, discord, governance, health, reports, telemetry, workflows
 from .routers import settings as settings_router
 from .settings import settings
@@ -56,6 +57,7 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(AuditMiddleware)
+app.add_middleware(UsageLogMiddleware)
 app.add_middleware(SubscriptionMiddleware)
 app.middleware("http")(error_handler_middleware)
 

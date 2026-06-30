@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from .crypto import (
@@ -12,7 +12,7 @@ from .crypto import (
 )
 
 
-class CryptoEnvelopeSchema(str, Enum):
+class CryptoEnvelopeSchema(StrEnum):
     V1 = "processual-crypto-envelope-2.0.0"
 
 

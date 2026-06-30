@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 from dataclasses import asdict, dataclass, field, is_dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,7 @@ def _json_default(obj: Any):
     return str(obj)
 
 
-class AuditEventType(str, Enum):
+class AuditEventType(StrEnum):
     GOVERNANCE_DECISION = "governance_decision"
     EDGE_DECISION = "edge_decision"
     WORKFLOW_DECISION = "workflow_decision"

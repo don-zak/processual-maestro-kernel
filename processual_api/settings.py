@@ -23,7 +23,9 @@ class APISettings:
     )
 
     # --- CORS ---
-    cors_origins: list[str] = field(default_factory=lambda: os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","))
+    cors_origins: list[str] = field(
+        default_factory=lambda: os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+    )
 
     # --- JWT Authentication ---
     jwt_secret: str = field(default_factory=lambda: os.environ.get("JWT_SECRET", "CHANGE_ME_IN_PRODUCTION"))
@@ -59,11 +61,27 @@ class APISettings:
     # --- Environment ---
     environment: str = field(default_factory=lambda: os.environ.get("ENVIRONMENT", "development"))
 
-    _WEAK_SECRETS = {"", "change_me", "admin", "password", "processual", "test", "dev", "changeme", "default", "secret", "123456"}
+    _WEAK_SECRETS = {
+        "",
+        "change_me",
+        "admin",
+        "password",
+        "processual",
+        "test",
+        "dev",
+        "changeme",
+        "default",
+        "secret",
+        "123456",
+    }
 
     def _reject_weak(self, field_name: str, value: str | None, label: str) -> None:
         if not value or value.strip().lower() in self._WEAK_SECRETS:
-            detail = f"{label} is missing or set to a weak value. Set a strong, unique {field_name} environment variable before deploying to production."
+            detail = (
+                f"{label} is missing or set to a weak value. "
+                f"Set a strong, unique {field_name} environment variable "
+                "before deploying to production."
+            )
             if self.is_production:
                 raise RuntimeError(detail)
             warnings.warn(detail, stacklevel=2)

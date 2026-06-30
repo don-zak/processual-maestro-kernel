@@ -8,7 +8,9 @@ from .anthropic_adapter import AnthropicAdapter
 from .deepseek_adapter import DeepSeekAdapter
 from .gemini_adapter import GeminiAdapter
 from .openai_adapter import OpenAIAdapter
+from .openai_compatible_adapter import GenericOpenAICompatibleAdapter
 from .opencode_adapter import OpenCodeAdapter
+from .openrouter_adapter import OpenRouterAdapter
 from .registry import adapter_registry
 
 __all__ = [
@@ -16,6 +18,8 @@ __all__ = [
     "DeepSeekAdapter",
     "GeminiAdapter",
     "OpenAIAdapter",
+    "GenericOpenAICompatibleAdapter",
     "OpenCodeAdapter",
+    "OpenRouterAdapter",
     "adapter_registry",
 ]

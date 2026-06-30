@@ -65,4 +65,6 @@ def evaluate_aftermath(
     target_self_potential: float,
     flourishing_factor: float,
 ) -> AftermathState:
-    return _compute.evaluate_aftermath(target_harmony, collapse_pressure, shock, target_self_potential, flourishing_factor)
+    return _compute.evaluate_aftermath(
+        target_harmony, collapse_pressure, shock, target_self_potential, flourishing_factor
+    )

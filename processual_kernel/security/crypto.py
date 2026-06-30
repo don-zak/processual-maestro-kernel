@@ -4,8 +4,8 @@ import base64
 import json
 import os
 from dataclasses import asdict, dataclass, field, is_dataclass
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import Enum, StrEnum
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
@@ -14,7 +14,7 @@ from .exceptions import DecryptionError, EncryptionError
 from .hashes import sha3_256_hex_bytes
 
 
-class AEADAlgorithm(str, Enum):
+class AEADAlgorithm(StrEnum):
     AES_256_GCM = "AES-256-GCM"
     CHACHA20_POLY1305 = "ChaCha20-Poly1305"
 
@@ -34,7 +34,7 @@ class CryptoEnvelope:
     plaintext_sha3_256: str
     ciphertext_sha3_256: str
     schema_version: str = ENVELOPE_SCHEMA_VERSION
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 def _safe_dict(value: Any) -> Any:

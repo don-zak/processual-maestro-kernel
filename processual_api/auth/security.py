@@ -3,13 +3,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from ..services.api_key_store import verify_dynamic_api_key
 from ..settings import settings
 
 try:
@@ -124,18 +126,95 @@ def generate_api_key() -> str:
 
 
 async def get_current_user(
+    request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(_bearer),
     api_key: str | None = Depends(_api_key_header),
 ) -> dict:
     if bearer:
         payload = verify_access_token(bearer.credentials)
-        return {"sub": payload.get("sub", "unknown"), "auth_method": "jwt"}
+        subject = payload.get("sub", "unknown")
+        user = {
+            "sub": subject,
+            "user_id": subject,
+            "client_id": payload.get("client_id", subject),
+            "role": payload.get("role", "client"),
+            "auth_method": "jwt",
+            "session_type": payload.get("session_type", "jwt"),
+            "scopes": payload.get("scopes", []),
+        }
+        request.state.current_user = user
+        return user
+
     if api_key:
-        for stored_key in settings.api_keys:
-            if secrets.compare_digest(api_key, stored_key):
-                return {"sub": "api_key_user", "auth_method": "api_key"}
+        dynamic_user = verify_dynamic_api_key(api_key)
+        if dynamic_user:
+            request.state.current_user = dynamic_user
+            return dynamic_user
+
+        app_env = os.environ.get("APP_ENV", settings.environment).lower()
+        runtime_env = os.environ.get("ENVIRONMENT", settings.environment).lower()
+        allow_env_fallback = (
+            app_env in {"dev", "development", "local", "test"}
+            and runtime_env not in {"production", "prod"}
+            and not settings.is_production
+        )
+
+
+        if allow_env_fallback:
+            for stored_key in settings.api_keys:
+                if secrets.compare_digest(api_key, stored_key):
+                    user = {
+                        "sub": "api_key_user",
+                        "user_id": "api_key_user",
+                        "client_id": "dev",
+                        "role": "dev",
+                        "auth_method": "api_key",
+                        "session_type": "api_key_env_fallback",
+                        "api_key_id": "env",
+                        "api_key_prefix": "env",
+                        "scopes": ["*"],
+                    }
+                    request.state.current_user = user
+                    return user
+
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
+
+def require_scope(required_scope: str):
+    async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
+        scopes = current_user.get("scopes", [])
+
+        if "*" in scopes:
+            return current_user
+
+        if required_scope in scopes:
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing required scope: {required_scope}",
+        )
+
+    return _scope_dependency
+
+def require_quota(quota_scope: str = "evaluation"):
+    async def _quota_dependency(
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        from ..services.quota_store import consume_quota
+
+        checked_user = consume_quota(
+            current_user,
+            method=request.method,
+            endpoint=request.url.path,
+            quota_scope=quota_scope,
+        )
+        request.state.current_user = checked_user
+        return checked_user
+
+    return _quota_dependency

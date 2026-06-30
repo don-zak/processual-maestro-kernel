@@ -11,5 +11,7 @@ def compute_delay_gate(tau: float, tau_star: float, k: float) -> float:
     return _compute.compute_delay_gate(tau, tau_star, k)
 
 
-def compute_transition_channel(continuation_channel: float, delay_gate: float, trigger: float, mu: float, compatibility: float) -> float:
+def compute_transition_channel(
+    continuation_channel: float, delay_gate: float, trigger: float, mu: float, compatibility: float
+) -> float:
     return _compute.compute_transition_channel(continuation_channel, delay_gate, trigger, mu, compatibility)

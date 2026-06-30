@@ -9,7 +9,6 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-
 # Make Windows console friendlier with UTF-8 output.
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -45,8 +44,7 @@ TASKS = [
         "task_id": "B_python_code_review",
         "language": "en",
         "client_query": (
-            "Review this Python function for bugs and suggest a safer version: "
-            "def divide(a, b): return a / b"
+            "Review this Python function for bugs and suggest a safer version: def divide(a, b): return a / b"
         ),
         "system_prompt": "",
     },
@@ -189,7 +187,11 @@ def main() -> int:
         adapter_ok = bool(ok and response.get("ok"))
         msg = response.get("message") if isinstance(response, dict) else ""
         model = response.get("model") if isinstance(response, dict) else ""
-        print(f"- {key:10} ok={adapter_ok!s:5} latency={response.get('latency_ms', elapsed)}ms model={model} message={msg}")
+        print(
+            f"- {key:10} ok={adapter_ok!s:5} "
+            f"latency={response.get('latency_ms', elapsed)}ms "
+            f"model={model} message={msg}"
+        )
     print()
 
     print("GOVERNANCE TESTS:")
@@ -285,13 +287,15 @@ def main() -> int:
             f"{resp.get('latency_ms', item.get('elapsed_ms'))} | {resp.get('message')} |"
         )
 
-    md_lines.extend([
-        "",
-        "## Governance Tests",
-        "",
-        "| Task | Provider | Model | Rank | Reward | Policy | Length | Latency | Error |",
-        "|---|---|---|---|---:|---|---:|---:|---|",
-    ])
+    md_lines.extend(
+        [
+            "",
+            "## Governance Tests",
+            "",
+            "| Task | Provider | Model | Rank | Reward | Policy | Length | Latency | Error |",
+            "|---|---|---|---|---:|---|---:|---:|---|",
+        ]
+    )
 
     for item in report["governance_tests"]:
         s = item.get("result_summary", {})
@@ -301,17 +305,20 @@ def main() -> int:
             f"{s.get('response_length')} | {s.get('latency_ms')} | {s.get('error')} |"
         )
 
-    md_lines.extend([
-        "",
-        "## Summary",
-        "",
-        f"- Governance tests total: `{report['summary']['governance_tests_total']}`",
-        f"- Tests with rank: `{report['summary']['governance_tests_with_rank']}`",
-        f"- Failed tests: `{report['summary']['governance_tests_failed']}`",
-        "",
-        "Note: `/adapters/test` is a readiness signal only. The stronger proof is `/cgt/govern/compare`, because it confirms generation plus CGT governance.",
-        "",
-    ])
+    md_lines.extend(
+        [
+            "",
+            "## Summary",
+            "",
+            f"- Governance tests total: `{report['summary']['governance_tests_total']}`",
+            f"- Tests with rank: `{report['summary']['governance_tests_with_rank']}`",
+            f"- Failed tests: `{report['summary']['governance_tests_failed']}`",
+            "",
+            "Strongest end-to-end provider proof is `/cgt/govern/compare`, "
+            "because it confirms generation plus CGT governance.",
+            "",
+        ]
+    )
 
     MD_PATH.write_text("\n".join(md_lines), encoding="utf-8")
 

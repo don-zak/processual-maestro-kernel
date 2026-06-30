@@ -1,9 +1,28 @@
 """cgtlib v2.0 - formal core library for CGT."""
 
+from __future__ import annotations
+
+from .types import (
+    AftermathState,
+    CGTParameters,
+    CompatibilityState,
+    DynamicLiftState,
+    ExistenceRank,
+    ExistenceState,
+    FateVector,
+    GateState,
+    LockState,
+    NodeState,
+    PhaseState,
+    PossibilityState,
+    StructuralTransitionReport,
+)
+
 _MISSING_PRIVATE_MSG = (
     "cgtlib private modules are required but not installed. "
     "Install the cgtlib-private package or clone the full monorepo."
 )
+
 
 try:
     from .aftermath import (
@@ -25,7 +44,11 @@ try:
         evaluate_benchmark_surfaces,
         summarize_benchmark_surface,
     )
-    from .catalogs import build_all_canonical_scenario_packs, build_canonical_scenario_pack, list_canonical_scenario_catalog
+    from .catalogs import (
+        build_all_canonical_scenario_packs,
+        build_canonical_scenario_pack,
+        list_canonical_scenario_catalog,
+    )
     from .comparative_envelopes import (
         ComparativeEnvelope,
         ComparativeEnvelopeReport,
@@ -112,7 +135,12 @@ try:
         list_canonical_stress_regimes,
         load_canonical_stress_regime,
     )
-    from .trajectory_maps import TrajectoryMap, TrajectoryMapPoint, evaluate_regime_trajectory_map, summarize_trajectory_map
+    from .trajectory_maps import (
+        TrajectoryMap,
+        TrajectoryMapPoint,
+        evaluate_regime_trajectory_map,
+        summarize_trajectory_map,
+    )
     from .transition_archetypes import (
         TransitionArchetype,
         evaluate_all_canonical_transition_archetypes,
@@ -200,9 +228,6 @@ except ModuleNotFoundError:
         summarize_all_transition_archetypes,
         summarize_benchmark_surface,
         summarize_comparative_envelopes,
-        evaluate_multi_axis_robustness as summarize_multi_axis_robustness,
-        evaluate_parameter_sensitivity as summarize_parameter_sensitivity,
-        evaluate_regime_trajectory_map as summarize_regime_trajectory_map,
         summarize_robustness_report,
         summarize_scenario_packs,
         summarize_sensitivity_report,
@@ -214,22 +239,17 @@ except ModuleNotFoundError:
         validate_structural_transition_report,
         validate_transition_batch_inputs,
     )
+    from ._fallback import (
+        evaluate_multi_axis_robustness as summarize_multi_axis_robustness,
+    )
+    from ._fallback import (
+        evaluate_parameter_sensitivity as summarize_parameter_sensitivity,
+    )
+    from ._fallback import (
+        evaluate_regime_trajectory_map as summarize_regime_trajectory_map,
+    )
 
-from .types import (
-    AftermathState,
-    CGTParameters,
-    CompatibilityState,
-    DynamicLiftState,
-    ExistenceRank,
-    ExistenceState,
-    FateVector,
-    GateState,
-    LockState,
-    NodeState,
-    PhaseState,
-    PossibilityState,
-    StructuralTransitionReport,
-)
+
 
 __all__ = [
     "AftermathState",
@@ -348,8 +368,13 @@ __all__ = [
     "evaluate_lock_state",
     "evaluate_locking",
     "evaluate_structural_transition",
+    "evaluate_transition_archetype",
+    "summarize_multi_axis_robustness",
+    "summarize_parameter_sensitivity",
+    "summarize_regime_trajectory_map",
     "summarize_transition_batch",
     "validate_transition_batch_inputs",
     "simulate_delay_progression",
     "simulate_transition_series",
+
 ]

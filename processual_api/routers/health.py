@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from cgtlib import _HAS_PRIVATE as _CGT_PRIVATE
+
 from ..settings import settings
 
 router = APIRouter(prefix="/health", tags=["health"])

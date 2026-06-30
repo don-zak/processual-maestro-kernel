@@ -10,9 +10,9 @@ comparison table, and selects the best agent.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
-import os
 from dataclasses import dataclass
 from typing import Any
 
