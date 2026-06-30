@@ -9,7 +9,7 @@ This guide covers production deployment of the **Processual Maestro Kernel v2.0.
 | Target | Includes CGT Engine | Use Case |
 |--------|---------------------|----------|
 | `public` | No (stubs) | External partners, evaluation, front-end integration |
-| `full` | Yes | Internal deployments with proprietary math |
+| `private` | Yes | Internal deployments with proprietary math |
 
 When the CGT engine (`cgtlib/private/`) is absent, all CGT endpoints return a `503` with `{"error": "private_cgt_engine_unavailable"}`. Non-CGT endpoints (auth, health, reports, workflows, billing) function normally.
 
@@ -27,7 +27,7 @@ cp .env.production.example .env
 # Edit .env — set strong secrets for every value
 
 # 3. Build and start (public profile — no CGT)
-docker compose build --build-arg BUILD_TARGET=public
+docker compose build api
 docker compose up -d
 
 # 4. Verify
@@ -148,7 +148,7 @@ The readiness check verifies database connectivity, Redis connectivity, and CGT 
 - [ ] `JWT_SECRET` is a strong, unique random string
 - [ ] `CORS_ORIGINS` lists only your frontend domain(s)
 - [ ] `API_DEBUG=false`
-- [ ] Docker compose uses `--build-arg BUILD_TARGET=public` (or `full` with CGT)
+- [ ] Docker compose uses the public build target for external deployments, or the private target for internal deployments with proprietary CGT.
 - [ ] Health checks configured in orchestrator
 - [ ] Database migrations run on first deploy
 - [ ] Redis password set and matches `REDIS_URL`
@@ -163,7 +163,7 @@ The readiness check verifies database connectivity, Redis connectivity, and CGT 
 |---------|-------------|-----|
 | Startup crash: `RuntimeError: JWT_SECRET is empty` | Missing JWT_SECRET | Set in `.env` |
 | `{"detail":"Not authenticated"}` | Missing/invalid token | Add `Authorization: Bearer <token>` header |
-| `CGT endpoints return 503` | Public build (no private engine) | Switch to `full` build or accept limitation |
+| `CGT endpoints return 503` | Public build (no private engine) | Switch to `private` build or accept limitation |
 | `{"detail":"CORS origin not allowed"}` | Origin not in CORS_ORIGINS | Add origin to `CORS_ORIGINS` |
 | Database connection refused | Wrong DATABASE_URL or DB not started | Check `docker compose logs db` |
 | Redis connection refused | Wrong REDIS_URL or Redis not started | Check `docker compose logs redis` |
