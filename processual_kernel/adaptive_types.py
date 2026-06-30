@@ -2,44 +2,44 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from .types import KernelPolicy, MaestroAction
 
 
-class TaskSize(str, Enum):
+class TaskSize(StrEnum):
     SMALL = "small"
     MEDIUM = "medium"
     LARGE = "large"
 
 
-class TaskDuration(str, Enum):
+class TaskDuration(StrEnum):
     SHORT = "short"
     MEDIUM = "medium"
     LONG = "long"
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class AmbiguityLevel(str, Enum):
+class AmbiguityLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
 
-class AgentCountBand(str, Enum):
+class AgentCountBand(StrEnum):
     SINGLE = "single-agent"
     FEW = "few-agents"
     MANY = "many-agents"
 
 
-class PolicyName(str, Enum):
+class PolicyName(StrEnum):
     FAST = "FastPolicy"
     BALANCED = "BalancedPolicy"
     CONSERVATIVE = "ConservativePolicy"
@@ -50,14 +50,14 @@ class PolicyName(str, Enum):
     CRITICAL_SAFETY = "CriticalSafetyPolicy"
 
 
-class RuntimeMode(str, Enum):
+class RuntimeMode(StrEnum):
     OBSERVE = "observe"
     RECOMMEND = "recommend"
     CONTROLLED_ADAPTIVE = "controlled_adaptive"
     RESTRICTED_CRITICAL = "restricted_critical"
 
 
-class CertificationLevel(str, Enum):
+class CertificationLevel(StrEnum):
     BLOCKED = "blocked"
     OBSERVE_ONLY = "observe_only"
     RECOMMEND_READY = "recommend_ready"
@@ -65,14 +65,14 @@ class CertificationLevel(str, Enum):
     RESTRICTED_CRITICAL_READY = "restricted_critical_ready"
 
 
-class CheckpointKind(str, Enum):
+class CheckpointKind(StrEnum):
     HOURLY = "hourly"
     EVENT_BASED = "event_based"
     MILESTONE = "milestone"
     FINAL = "final"
 
 
-class ExecutionTempo(str, Enum):
+class ExecutionTempo(StrEnum):
     FAST = "fast"
     BALANCED = "balanced"
     CAUTIOUS = "cautious"

@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class KeySource(str, Enum):
+class KeySource(StrEnum):
     ENV = "env"
     FILE = "file"
     KUBERNETES = "kubernetes"

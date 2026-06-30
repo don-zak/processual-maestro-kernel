@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
 
 
-class AlertType(str, Enum):
+class AlertType(StrEnum):
     FATE_EXTINCTION_RISK = "FATE_EXTINCTION_RISK"
     FATE_DISTORTION_SPIKE = "FATE_DISTORTION_SPIKE"
     WORKFLOW_FAILURE = "WORKFLOW_FAILURE"

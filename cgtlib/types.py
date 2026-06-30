@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +56,7 @@ class CompatibilityState:
     score: float
 
 
-class ExistenceRank(str, Enum):
+class ExistenceRank(StrEnum):
     """Ordered CGT existence ranks, from generative flourishing down to extinction."""
 
     FLOURISHING = "flourishing"

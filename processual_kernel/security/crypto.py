@@ -5,7 +5,7 @@ import json
 import os
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
@@ -14,7 +14,7 @@ from .exceptions import DecryptionError, EncryptionError
 from .hashes import sha3_256_hex_bytes
 
 
-class AEADAlgorithm(str, Enum):
+class AEADAlgorithm(StrEnum):
     AES_256_GCM = "AES-256-GCM"
     CHACHA20_POLY1305 = "ChaCha20-Poly1305"
 
