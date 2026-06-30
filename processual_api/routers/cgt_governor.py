@@ -1456,6 +1456,45 @@ async def configure_adapter(req: ConfigureAdapterRequest, _current_user: dict = 
     return {"provider": req.provider, "configured": True}
 
 
+@router.get("/adapters/readiness")
+async def adapters_readiness(_current_user: dict = Depends(require_scope("admin:settings"))):
+    import time
+
+    providers = []
+    for name, adapter in adapter_registry.all().items():
+        metadata = provider_public_metadata(name)
+        start = time.monotonic()
+        try:
+            ok = await adapter.is_available()
+            latency = round((time.monotonic() - start) * 1000)
+            message = "Connected" if ok else "Unreachable"
+        except Exception as exc:
+            ok = False
+            latency = round((time.monotonic() - start) * 1000)
+            message = f"Adapter error: {type(exc).__name__}"
+
+        providers.append(
+            {
+                **metadata,
+                "provider": name,
+                "name": adapter.provider_name,
+                "configured": adapter.is_configured(),
+                "ok": ok,
+                "latency_ms": latency,
+                "model": adapter.default_model,
+                "message": message,
+            }
+        )
+
+    default_adapter = adapter_registry.default()
+    return {
+        "providers": providers,
+        "total": len(providers),
+        "configured_count": sum(1 for item in providers if item["configured"]),
+        "ok_count": sum(1 for item in providers if item["ok"]),
+        "default": default_adapter.provider_name if default_adapter else None,
+    }
+
 @router.post("/adapters/test")
 async def test_adapter(req: TestAdapterRequest, _current_user: dict = Depends(require_scope("admin:settings"))):
     adapter = adapter_registry.get(req.provider)
