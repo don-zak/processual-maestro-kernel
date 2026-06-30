@@ -569,6 +569,35 @@ deployment rollback plan exists
 
 ---
 
+## PROD-ENV-01 — Production Environment Template Review
+
+The production environment template is guarded by:
+
+`tests/test_production_env_template_regression.py`
+
+The template must continue to include:
+
+- Explicit production mode through `ENVIRONMENT=production`.
+- Explicit application mode through `APP_ENV=production`.
+- Production debug shutdown through `API_DEBUG=false`.
+- Required core security values: `JWT_SECRET`, `API_KEYS`, `PROCESSUAL_CRYPTO_KEY_B64`, and `CORS_ORIGINS`.
+- Required PostgreSQL values: `DATABASE_URL`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, and `POSTGRES_DB`.
+- Required Redis values: `REDIS_URL` and `REDIS_PASSWORD`.
+- Required Grafana value: `GRAFANA_ADMIN_PASSWORD`.
+- Sentry observability keys.
+- Discord webhook keys.
+- Lemon Squeezy billing keys.
+- OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, OpenCode, and generic OpenAI-compatible provider keys.
+- CGT Governor runtime keys.
+- API key quota keys.
+
+The template must also preserve the customer-owned provider key model. Processual Maestro must not ship real provider keys or absorb third-party provider usage costs on behalf of customers.
+
+The environment template is not a real `.env` file. It must contain placeholders only and must never include real credentials.
+
+
+
+
 ## 23. Conclusion
 
 Processual Maestro already has important production-safety hooks in its settings layer. The next step is disciplined operational configuration.
