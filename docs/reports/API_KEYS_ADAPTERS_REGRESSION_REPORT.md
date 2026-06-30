@@ -1005,6 +1005,41 @@ Importance:
 This test does not replace feature-level regression tests. It acts as a release-structure guard to catch accidental removal of key files, documentation, static console directories, or importable public modules before moving toward production readiness and public release preparation.
 
 
+---
+
+## TEST-13B — Billing and Subscription Regression
+
+Commit:
+
+`e1eb655 TEST-13B add billing and subscription regression tests`
+
+Purpose:
+
+TEST-13B adds focused regression coverage for billing and subscription behavior without relying on Lemon Squeezy network calls, real databases, Redis, or production secrets.
+
+Coverage added:
+
+- Billing router public route and event markers are guarded.
+- Subscription JSON store roundtrip is verified through a temporary data directory.
+- Billing subscription endpoint returns a safe demo state when no subscription exists.
+- Subscription middleware read-only methods are guarded.
+- Suspended-stage billing-only access prefix is guarded.
+- Subscription stage boundaries are verified for active, grace, suspended, and expired states.
+- Settings subscription route is guarded to ensure billing subscriptions are checked before local settings fallback.
+- Billing package export alias is verified.
+
+Validation:
+
+- `tests/test_billing_subscription_regression.py`: `7 passed, 6 warnings`.
+- Full baseline after TEST-13B: expected `97 passed, 6 warnings`.
+- `compileall`: PASS.
+- `git diff --check`: clean.
+- `git show --check HEAD`: clean.
+
+Importance:
+
+This test strengthens the billing/subscription layer before production-readiness work. It protects the subscription state model, middleware enforcement boundaries, and billing router structure while keeping the core pytest suite independent from external payment provider calls.
+
 
 
 ## Recommended Next Phase
