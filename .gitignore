@@ -27,3 +27,4 @@ docs/PRIVATE_REPO_HANDOFF_AR.md
 !processual_api/cgt_governor/data/**
 processual_api/cgt_governor/data/__pycache__/
 processual_api/cgt_governor/data/**/*.pyc
+build/
