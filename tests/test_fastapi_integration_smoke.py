@@ -1,3 +1,4 @@
+import json
 import warnings
 
 import pytest
@@ -11,7 +12,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import processual_api.middleware.rate_limit as rate_module  # noqa: E402
 import processual_api.routers.cgt_governor as cgt_router  # noqa: E402
+from processual_api.auth.security import _pbkdf2_hash_api_key  # noqa: E402
 from processual_api.main import app  # noqa: E402
+from processual_api.services import api_key_store, quota_store  # noqa: E402
 
 
 @pytest.fixture
@@ -217,6 +220,87 @@ def test_full_app_cgt_govern_controlled_smoke_with_overridden_quota(
     assert payload["action_label"] == "Keep - Accept Response"
     assert payload["eval_id"] == "eval_smoke_10a"
     assert payload["analysis_mode"] == "fallback"
+
+
+
+def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    raw_key = "pmk_exhausted_quota_endpoint_test_key"
+
+    settings_path = tmp_path / "settings_quota_endpoint_user.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "subscription": {"plan_id": "starter"},
+                "api_keys": [
+                    {
+                        "id": "key_exhausted_10b",
+                        "user_id": "quota-endpoint-user",
+                        "client_id": "quota-endpoint-client",
+                        "prefix": "pmk_exhausted...",
+                        "hashed": _pbkdf2_hash_api_key(raw_key),
+                        "scopes": ["run:govern"],
+                        "profile": "client",
+                        "plan_id": "starter",
+                        "quota_policy": {
+                            "id": "manual_override",
+                            "source": "manual",
+                            "quotas": {"evaluation": 1},
+                        },
+                        "quota_scope": "evaluation",
+                        "quota_limit": 1,
+                        "quota_used": 1,
+                        "quota_rejected_count": 0,
+                        "status": "enabled",
+                        "created_at": "2026-06-30T00:00:00+00:00",
+                        "last_used_at": None,
+                        "usage_count": 0,
+                        "expires_at": None,
+                        "revoked_at": None,
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(api_key_store, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(quota_store, "DATA_DIR", tmp_path)
+
+    def fail_if_governor_executes(*_args, **_kwargs):
+        raise AssertionError("quota must reject before governor execution")
+
+    monkeypatch.setattr(cgt_router, "_resolve_scores", fail_if_governor_executes)
+
+    response = client.post(
+        "/cgt/govern",
+        headers={"X-API-Key": raw_key},
+        json={
+            "answer": "This request should be rejected before evaluation.",
+            "language": "en",
+        },
+    )
+
+    assert response.status_code == 429
+
+    payload = response.json()
+    assert payload["detail"]["error"] == "quota_exceeded"
+    assert payload["detail"]["quota_scope"] == "evaluation"
+    assert payload["detail"]["quota_limit"] == 1
+    assert payload["detail"]["quota_used"] == 1
+
+    stored = json.loads(settings_path.read_text(encoding="utf-8"))
+    stored_key = stored["api_keys"][0]
+
+    assert stored_key["quota_used"] == 1
+    assert stored_key["quota_rejected_count"] == 1
+    assert stored_key["quota_last_rejected_at"]
+    assert stored_key["usage_count"] == 1
+    assert stored_key["last_used_at"]
 
 def test_full_app_console_static_mount_is_reachable(client):
     response = client.get("/console/")
