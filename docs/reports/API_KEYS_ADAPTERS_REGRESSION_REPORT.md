@@ -516,3 +516,62 @@ temporary file cleanup
 Purpose:
 
 This test protects the KEY-10 persistence hardening work. It ensures that settings and API key storage remain safe against corrupt JSON, interrupted writes, unsafe direct replacement, and accidental loss of the previous settings state. The settings router already uses `settings_<user_id>.json`, temporary write files, `.bak` backup creation, and `replace`-based persistence, and this regression test now locks that behavior in place.
+
+
+## TEST-06A — CGT Governor Route Boundary Regression
+
+Commit:
+
+```text
+af7666c TEST-06A add CGT governor route boundary regression tests
+```
+
+Latest verified baseline after this commit:
+
+```text
+41 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+```
+
+Coverage:
+
+* `/cgt/govern` remains protected by `require_quota("evaluation")`.
+* Core governor routes remain authenticated.
+* Report and PDF routes remain authenticated.
+* Simulation routes remain authenticated.
+* Governance gateway routes remain authenticated.
+* The main governor router remains wired to `eval_store`.
+* The main governor router remains wired to `PolicyContext` and `runtime_policy_engine`.
+* The main governor router remains wired to `sign_response`.
+* The main governor router remains wired to `encrypt_log_entry` and `decrypt_log_entry`.
+* `_evaluate_and_record` keeps the policy decision, policy recording, signature generation, encrypted log entry, and evaluation storage hooks.
+
+Protected behavior:
+
+```text
+/cgt/govern
+/cgt/govern/batch
+/cgt/govern/status
+/cgt/govern/toggle
+/cgt/govern/metrics
+/cgt/govern/reports
+/cgt/govern/reports/export
+/cgt/govern/repair
+/cgt/govern/auto-repair
+/cgt/govern/compare
+/cgt/govern/report
+/cgt/analyze
+/cgt/govern/gateway/*
+require_quota("evaluation")
+get_current_user authentication boundary
+eval_store
+runtime_policy_engine
+sign_response
+encrypt_log_entry
+decrypt_log_entry
+```
+
+Purpose:
+
+This test begins regression coverage for the broader CGT Governor surface beyond API Keys and Adapters. It does not yet change authorization rules or business logic; instead, it freezes the current route boundary map so future hardening can be deliberate and visible. In particular, it documents that `/cgt/govern` is quota-protected, while many other compute-heavy or report-producing routes currently rely on authenticated-user access. This creates a clear baseline for a later hardening phase such as `AUTH-HARDEN-01`.
