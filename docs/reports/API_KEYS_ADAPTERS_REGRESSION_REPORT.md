@@ -1041,6 +1041,49 @@ Importance:
 This test strengthens the billing/subscription layer before production-readiness work. It protects the subscription state model, middleware enforcement boundaries, and billing router structure while keeping the core pytest suite independent from external payment provider calls.
 
 
+---
+
+## TEST-14A — Applications and Tenant Onboarding Regression
+
+Commit:
+
+`dabc5b2 TEST-14A add applications onboarding regression tests`
+
+Purpose:
+
+TEST-14A adds regression coverage for the application and demo onboarding flow. It protects the path used by professionals or organizations to request access, be reviewed manually, receive a demo activation, and consume limited evaluation capacity.
+
+Coverage added:
+
+- Applications JSON storage roundtrip is verified with a temporary data directory.
+- Application submission validates required full name and email fields.
+- Invalid email addresses are rejected.
+- Too-short use cases are rejected.
+- Organization application requests preserve organization name, applicant type, and preferred plan.
+- Submitted applications are stored as pending.
+- Application submission sends a submission alert through a patched Discord service.
+- Approved applications are updated with review metadata.
+- Approval creates an active demo record.
+- Second review of an already reviewed application is blocked.
+- Rejected applications do not create demo records.
+- Demo validity is checked for active, expired, usage-exceeded, converted, and missing demo states.
+- Demo usage increment updates the evaluation counter and remaining count.
+- Expected onboarding routes and demo route markers are guarded.
+
+Validation:
+
+- `tests/test_applications_onboarding_regression.py`: expected `8 passed, 6 warnings`.
+- Full baseline after TEST-14A: expected `105 passed, 6 warnings`.
+- `compileall`: PASS.
+- `git diff --check`: clean.
+- `git show --check HEAD`: clean.
+
+Importance:
+
+This test strengthens the customer onboarding layer before production readiness and release preparation. It verifies that application intake, manual review, demo provisioning, and demo limits remain stable without relying on external services, databases, Redis, payment providers, or real provider API keys.
+
+
+
 
 ## Recommended Next Phase
 
