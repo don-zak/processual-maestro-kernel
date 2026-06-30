@@ -60,19 +60,19 @@ def _set_strong_production_env(monkeypatch) -> None:
     ],
 )
 def test_production_rejects_weak_startup_settings(monkeypatch, env_name, env_value, message):
-    APISettings = _api_settings_class(monkeypatch)
+    api_settings_cls = _api_settings_class(monkeypatch)
     _set_strong_production_env(monkeypatch)
     monkeypatch.setenv(env_name, env_value)
 
     with pytest.raises(RuntimeError, match=message):
-        APISettings()
+        api_settings_cls()
 
 
 def test_production_accepts_strong_settings_and_forces_debug_false(monkeypatch):
-    APISettings = _api_settings_class(monkeypatch)
+    api_settings_cls = _api_settings_class(monkeypatch)
     _set_strong_production_env(monkeypatch)
 
-    settings = APISettings()
+    settings = api_settings_cls()
 
     assert settings.is_production is True
     assert settings.debug is False
@@ -80,13 +80,13 @@ def test_production_accepts_strong_settings_and_forces_debug_false(monkeypatch):
 
 
 def test_non_production_can_enable_debug_with_strong_local_settings(monkeypatch):
-    APISettings = _api_settings_class(monkeypatch)
+    api_settings_cls = _api_settings_class(monkeypatch)
 
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("API_DEBUG", "true")
     monkeypatch.setenv("CORS_ORIGINS", "*")
 
-    settings = APISettings()
+    settings = api_settings_cls()
 
     assert settings.is_production is False
     assert settings.debug is True

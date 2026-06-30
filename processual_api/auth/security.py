@@ -7,11 +7,12 @@ import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
-from ..settings import settings
 from ..services.api_key_store import verify_dynamic_api_key
+from ..settings import settings
 
 try:
     from jose import JWTError, jwt
@@ -132,7 +133,7 @@ async def get_current_user(
     if bearer:
         payload = verify_access_token(bearer.credentials)
         subject = payload.get("sub", "unknown")
-        return {
+        user = {
             "sub": subject,
             "user_id": subject,
             "client_id": payload.get("client_id", subject),
@@ -162,7 +163,7 @@ async def get_current_user(
         if allow_env_fallback:
             for stored_key in settings.api_keys:
                 if secrets.compare_digest(api_key, stored_key):
-                    return {
+                    user = {
                         "sub": "api_key_user",
                         "user_id": "api_key_user",
                         "client_id": "dev",
