@@ -968,6 +968,45 @@ These must remain separate as operational smoke tests, manual readiness proofs, 
 
 ---
 
+---
+
+## TEST-13A — Project Release Regression Guard
+
+Commit:
+
+`42a9634 TEST-13A add project release regression guard`
+
+Purpose:
+
+TEST-13A adds a lightweight release regression guard that verifies the project still contains the minimum expected public-ready structure before moving into deeper production, billing, onboarding, and UI smoke coverage.
+
+Coverage added:
+
+- `docs/reports/API_KEYS_ADAPTERS_REGRESSION_REPORT.md` exists.
+- The regression report documents `TEST-05A` through `TEST-12A`.
+- The regression report still records the verified `85 passed / 6 warnings` baseline.
+- Critical project paths exist.
+- A README exists.
+- A Python dependency manifest exists.
+- `processual_api.main` is importable.
+- `processual_kernel` is importable.
+- `cgtlib` is importable.
+- Static console directories exist.
+
+Validation:
+
+- `tests/test_project_release_regression.py`: `5 passed, 6 warnings`.
+- Full baseline after TEST-13A: `90 passed, 6 warnings`.
+- `compileall`: PASS.
+- `git diff --check`: clean.
+
+Importance:
+
+This test does not replace feature-level regression tests. It acts as a release-structure guard to catch accidental removal of key files, documentation, static console directories, or importable public modules before moving toward production readiness and public release preparation.
+
+
+
+
 ## Recommended Next Phase
 
 The safest next phase is not to add new product features immediately, but to complete production readiness:
