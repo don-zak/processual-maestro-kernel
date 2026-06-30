@@ -29,7 +29,7 @@ This phase intentionally avoids live external provider dependencies in the core 
 Latest verified baseline:
 
 ```text
-30 passed, 6 warnings
+85 passed, 6 warnings
 compileall: PASS
 git diff --check: PASS
 git status --short: clean
@@ -575,3 +575,424 @@ decrypt_log_entry
 Purpose:
 
 This test begins regression coverage for the broader CGT Governor surface beyond API Keys and Adapters. It does not yet change authorization rules or business logic; instead, it freezes the current route boundary map so future hardening can be deliberate and visible. In particular, it documents that `/cgt/govern` is quota-protected, while many other compute-heavy or report-producing routes currently rely on authenticated-user access. This creates a clear baseline for a later hardening phase such as `AUTH-HARDEN-01`.
+
+
+## TEST-06B — CGT Governor Behavior Regression
+
+Commit:
+
+```text
+a733430 TEST-06B add CGT governor behavior regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+44 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+Coverage:
+
+* `_evaluate_and_record`
+* `runtime_policy_engine.decide`
+* `runtime_policy_engine.record`
+* `sign_response`
+* `encrypt_log_entry`
+* `eval_store.append`
+* `governor_status`
+* `governor_toggle`
+* `/cgt/analyze`
+
+Purpose:
+
+This test protects the behavior path where CGT Governor answers are evaluated, signed, recorded, encrypted, and stored. It uses controlled fake score inputs and fake stores so that no external provider or private engine is required.
+
+---
+
+## TEST-07A — Evaluation Store Regression
+
+Commit:
+
+```text
+6b634ea TEST-07A add evaluation store regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+47 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+```
+
+Coverage:
+
+* Append dictionary entries.
+* Append JSON string entries.
+* Preserve existing `eval_id`.
+* Generate missing `eval_id`.
+* Persist UTF-8 content.
+* Load existing JSONL entries.
+* Skip malformed JSONL lines.
+* Enforce `maxlen` behavior.
+* Extend multiple entries.
+* Clear store.
+* Preserve `path` property behavior.
+
+Purpose:
+
+This protects the JSONL evaluation store used by CGT Governor reports and audit history.
+
+---
+
+## TEST-07B — Governor Reports Regression
+
+Commit:
+
+```text
+4f4a649 TEST-07B add governor reports regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+52 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+Coverage:
+
+* `/cgt/govern/reports`
+* `/cgt/govern/reports/export`
+* `/cgt/govern/reports/pdf`
+* `/cgt/govern/reports/{eval_id}/pdf`
+* `/cgt/govern/report`
+* JSON export headers
+* PDF response path
+* Base64 PDF report path
+* Missing `eval_id` 404 behavior
+
+Purpose:
+
+This protects the reporting layer without requiring real PDF generation during tests. The PDF function is monkeypatched so that the route behavior remains covered while avoiding heavy external dependencies.
+
+---
+
+## TEST-08A — Security and Crypto Regression
+
+Commit:
+
+```text
+d0e829d TEST-08A add security and crypto regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+61 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+```
+
+Coverage:
+
+* `sign_response`
+* `sign_bytes`
+* Canonical JSON behavior
+* SHA-256 and SHA3-256 hash helpers
+* AES-GCM encryption/decryption
+* ChaCha20Poly1305 encryption/decryption
+* Envelope building and verification
+* Encrypted report rotation
+* Guard fallback behavior
+* Guard encrypted round trip
+* KeyRing environment key loading
+* SecurityPolicy defaults
+
+Purpose:
+
+This protects the cryptographic and signing layer used by governance reports, logs, and secure report envelopes.
+
+---
+
+## TEST-09A — Middleware Regression
+
+Commit:
+
+```text
+fbca56f TEST-09A add middleware regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+68 passed, 7 warnings
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+Coverage:
+
+* `RequestIDMiddleware`
+* `SecurityHeadersMiddleware`
+* `RateLimitMiddleware`
+* `AuditMiddleware`
+* `UsageLogMiddleware`
+* `SubscriptionMiddleware`
+* `error_handler_middleware`
+
+Protected behavior:
+
+* `X-Request-ID` propagation
+* Security headers
+* Redis-backed rate limit behavior with fake Redis
+* 429 rate-limit response
+* Audit log emission
+* API-key usage log append
+* Subscription stage computation
+* Grace/suspended/expired handling boundaries
+* Generic 500 error response
+
+Note:
+
+This step introduced one additional warning:
+
+```text
+StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead.
+```
+
+This warning is test-client related and does not indicate a runtime failure. It can be handled later during dependency modernization.
+
+---
+
+## TEST-10A — FastAPI Integration Smoke Tests
+
+Commit:
+
+```text
+e2a5e9e TEST-10A add FastAPI integration smoke tests
+```
+
+Verified baseline after this commit:
+
+```text
+73 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+Coverage:
+
+* Full FastAPI app import from `processual_api.main`.
+* Health endpoint smoke behavior.
+* Global middleware headers.
+* Public `/`, `/login`, and `/metrics` routes.
+* Protected route anonymous rejection.
+* Adapter status smoke path with controlled dependency override.
+* `/cgt/govern` controlled smoke path with fake scoring and fake evaluation record.
+
+Purpose:
+
+This confirms the assembled FastAPI application can be exercised as an integrated app without starting `uvicorn`, without Redis, without database access, and without external providers.
+
+---
+
+## TEST-11A — Workflow and Kernel Regression
+
+Commit:
+
+```text
+257dc78 TEST-11A add workflow and kernel regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+79 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+```
+
+Coverage:
+
+* `ContinuityEngine`
+* `MetricCoefficientMapper`
+* `ProcessualCGTKernel`
+* `ProcessualMaestroKernel`
+* Agent registration
+* Duplicate agent rejection
+* Agent lookup failure
+* Candidate routing by capability and psi
+* Agent observation and audit write
+* `run_task`
+* Workflow creation
+* Ready-step calculation
+* Manual intervention
+* Maestro snapshot
+* Workflow execution
+* Handoff observation
+* Audit normalization
+* JSONL audit sink
+
+Purpose:
+
+This protects the orchestration kernel and workflow layer independently from real LLM providers and independently from the real CGT private engine. The test uses fake CGT, fake governor, and fake runtime components to lock the workflow behavior itself.
+
+---
+
+## TEST-12A — CGTLib Public Core Regression
+
+Commit:
+
+```text
+579904a TEST-12A add cgtlib public core regression tests
+```
+
+Verified baseline after this commit:
+
+```text
+85 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+Coverage:
+
+* Top-level `cgtlib` public exports.
+* Clear fallback behavior for wrappers requiring the private CGT engine.
+* Public validation primitives.
+* Public dataclasses and invariants.
+* `CGTParameters`
+* `PhaseState`
+* `StructuralTransitionReport`
+* `FateVector`
+* `LockState`
+* `AftermathState`
+* Structural report invariant checks.
+* Dataclass serialization through `to_dict`.
+* Public manifest generation.
+
+Purpose:
+
+This test documents and protects the public-ready behavior of `cgtlib`. The public package exposes the stable API surface, but private-equation wrappers raise `_FeatureUnavailable` when the private CGT engine is not included. This is expected behavior for the public distribution and should remain explicit.
+
+---
+
+## Final Verified Regression Baseline
+
+Latest verified baseline at the end of TEST-12A:
+
+```text
+85 passed, 6 warnings in 2.96s
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+The remaining 6 warnings are development/security configuration warnings related to weak or missing deployment values:
+
+```text
+JWT_SECRET
+DATABASE_URL
+REDIS_URL
+POSTGRES_PASSWORD
+REDIS_PASSWORD
+GRAFANA_ADMIN_PASSWORD
+```
+
+These warnings are acceptable during local regression testing, but they must be resolved before production deployment.
+
+---
+
+## Final Regression Coverage Summary
+
+The regression suite now protects:
+
+```text
+Provider metadata
+Adapter registry
+Adapter configuration
+Adapter status
+Adapter readiness
+Unified readiness scanner
+Dynamic API key verification
+API key settings routes
+API key revocation
+API key usage tracking
+API key scopes
+API key plans
+API key quotas
+Settings persistence safety
+CGT Governor route boundaries
+CGT Governor behavior
+Evaluation JSONL store
+Governor reports
+Security and crypto helpers
+Middleware behavior
+FastAPI app integration smoke path
+Workflow and kernel orchestration
+Audit JSONL behavior
+CGTLib public package behavior
+```
+
+---
+
+## Boundaries Still Outside Core Pytest
+
+The core pytest suite intentionally does not cover:
+
+```text
+Real OpenAI calls
+Real OpenRouter calls
+Real Ollama calls
+Real Gemini calls
+Real Anthropic calls
+Real DeepSeek calls
+Live provider latency
+Live provider readiness against external services
+Production database connectivity
+Production Redis connectivity
+Browser UI interaction
+Google Cloud deployment behavior
+```
+
+These must remain separate as operational smoke tests, manual readiness proofs, or deployment-stage checks.
+
+---
+
+## Recommended Next Phase
+
+The safest next phase is not to add new product features immediately, but to complete production readiness:
+
+```text
+DOCS-PROD-01 — Production Security Readiness
+PROD-ENV-01 — Strong environment configuration
+PROVIDER-SMOKE-01 — Manual/live provider smoke scripts outside pytest
+DEPLOY-READY-01 — Google Cloud / deployment checklist
+UI-SMOKE-01 — Console browser smoke validation
+RELEASE-REPORT-01 — Final public-ready release report
+```
+
+Recommended first task:
+
+```text
+DOCS-PROD-01 — Production Security Readiness
+```
+
+This should document and verify the replacement of weak local defaults with production-grade environment variables before any public deployment.
+
+
+
+
+
+
+
+
