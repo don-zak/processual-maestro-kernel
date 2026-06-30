@@ -150,8 +150,14 @@ async def get_current_user(
             request.state.current_user = dynamic_user
             return dynamic_user
 
-        app_env = os.environ.get("APP_ENV", "development").lower()
-        allow_env_fallback = app_env in {"dev", "development", "local", "test"}
+        app_env = os.environ.get("APP_ENV", settings.environment).lower()
+        runtime_env = os.environ.get("ENVIRONMENT", settings.environment).lower()
+        allow_env_fallback = (
+            app_env in {"dev", "development", "local", "test"}
+            and runtime_env not in {"production", "prod"}
+            and not settings.is_production
+        )
+
 
         if allow_env_fallback:
             for stored_key in settings.api_keys:
