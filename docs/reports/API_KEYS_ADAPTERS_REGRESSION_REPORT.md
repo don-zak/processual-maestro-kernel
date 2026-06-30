@@ -469,3 +469,50 @@ The API Keys and Adapters phases have moved from feature completion into regress
 The current branch is no longer only a feature branch for provider registration. It now contains a meaningful regression suite that protects the customer-facing access layer, provider configuration layer, adapter readiness layer, and quota/plan binding logic.
 
 The next safest direction is to continue increasing regression coverage before adding new product features.
+
+
+## TEST-05A — Settings Persistence Safety Regression
+
+Commit:
+
+```text
+3243b7f TEST-05A add settings persistence safety regression tests
+```
+
+Latest verified baseline after this commit:
+
+```text
+35 passed, 6 warnings
+compileall: PASS
+git diff --check: PASS
+git status --short: clean
+```
+
+Coverage:
+
+* `_load_raw` returns a safe empty dictionary when the settings file is missing.
+* `_load_raw` returns a safe empty dictionary when the settings JSON is corrupt.
+* `_save_raw` writes through a temporary `.tmp` file before replacing the main settings file.
+* `_save_raw` creates a `.bak` backup when replacing an existing settings file.
+* `_save_raw` cleans the temporary file after saving.
+* `api_key_store._safe_load_json` safely handles corrupt JSON.
+* `api_key_store._safe_save_json` writes JSON safely through temporary-file replacement.
+* User settings persistence remains isolated through `settings_<user_id>.json`.
+
+Protected behavior:
+
+```text
+_settings_path
+_load_raw
+_save_raw
+_safe_load_json
+_safe_save_json
+.tmp replacement
+.bak backup creation
+corrupt JSON recovery
+temporary file cleanup
+```
+
+Purpose:
+
+This test protects the KEY-10 persistence hardening work. It ensures that settings and API key storage remain safe against corrupt JSON, interrupted writes, unsafe direct replacement, and accidental loss of the previous settings state. The settings router already uses `settings_<user_id>.json`, temporary write files, `.bak` backup creation, and `replace`-based persistence, and this regression test now locks that behavior in place.
