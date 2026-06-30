@@ -27,7 +27,7 @@ from cgtlib.validation import (
 
 
 def _assert_private_engine_unavailable(exc: BaseException) -> None:
-    assert exc.__class__.__name__ == "_FeatureUnavailable"
+    assert exc.__class__.__name__ == "_FeatureUnavailableError"
     assert "private CGT engine" in str(exc)
 
 

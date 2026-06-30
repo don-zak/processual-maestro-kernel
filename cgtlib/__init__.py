@@ -1,9 +1,28 @@
 """cgtlib v2.0 - formal core library for CGT."""
 
+from __future__ import annotations
+
+from .types import (
+    AftermathState,
+    CGTParameters,
+    CompatibilityState,
+    DynamicLiftState,
+    ExistenceRank,
+    ExistenceState,
+    FateVector,
+    GateState,
+    LockState,
+    NodeState,
+    PhaseState,
+    PossibilityState,
+    StructuralTransitionReport,
+)
+
 _MISSING_PRIVATE_MSG = (
     "cgtlib private modules are required but not installed. "
     "Install the cgtlib-private package or clone the full monorepo."
 )
+
 
 try:
     from .aftermath import (
@@ -230,21 +249,7 @@ except ModuleNotFoundError:
         evaluate_regime_trajectory_map as summarize_regime_trajectory_map,
     )
 
-from .types import (
-    AftermathState,
-    CGTParameters,
-    CompatibilityState,
-    DynamicLiftState,
-    ExistenceRank,
-    ExistenceState,
-    FateVector,
-    GateState,
-    LockState,
-    NodeState,
-    PhaseState,
-    PossibilityState,
-    StructuralTransitionReport,
-)
+
 
 __all__ = [
     "AftermathState",
@@ -363,8 +368,13 @@ __all__ = [
     "evaluate_lock_state",
     "evaluate_locking",
     "evaluate_structural_transition",
+    "evaluate_transition_archetype",
+    "summarize_multi_axis_robustness",
+    "summarize_parameter_sensitivity",
+    "summarize_regime_trajectory_map",
     "summarize_transition_batch",
     "validate_transition_batch_inputs",
     "simulate_delay_progression",
     "simulate_transition_series",
+
 ]
