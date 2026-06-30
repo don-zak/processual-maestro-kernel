@@ -9,9 +9,9 @@ warnings.filterwarnings(
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import processual_api.middleware.rate_limit as rate_module
-import processual_api.routers.cgt_governor as cgt_router
-from processual_api.main import app
+import processual_api.middleware.rate_limit as rate_module  # noqa: E402
+import processual_api.routers.cgt_governor as cgt_router  # noqa: E402
+from processual_api.main import app  # noqa: E402
 
 
 @pytest.fixture
