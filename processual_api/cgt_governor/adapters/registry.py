@@ -1,4 +1,4 @@
-﻿"""LLM Adapter Registry â€” discovers and manages all configured providers.
+"""LLM Adapter Registry â€” discovers and manages all configured providers.
 
 Usage:
     from processual_api.cgt_governor.adapters.registry import adapter_registry
@@ -82,7 +82,15 @@ class LLMAdapterRegistry:
         from .opencode_adapter import OpenCodeAdapter
         from .openrouter_adapter import OpenRouterAdapter
 
-        for adapter_cls in [OpenAIAdapter, GenericOpenAICompatibleAdapter, AnthropicAdapter, GeminiAdapter, DeepSeekAdapter, OpenCodeAdapter, OpenRouterAdapter]:
+        for adapter_cls in [
+            OpenAIAdapter,
+            GenericOpenAICompatibleAdapter,
+            AnthropicAdapter,
+            GeminiAdapter,
+            DeepSeekAdapter,
+            OpenCodeAdapter,
+            OpenRouterAdapter,
+        ]:
             try:
                 self.register(adapter_cls())  # type: ignore[abstract]
             except Exception as exc:

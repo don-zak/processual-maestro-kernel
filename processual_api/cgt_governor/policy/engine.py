@@ -128,7 +128,10 @@ class PolicyEngine:
         if rank == "extinct":
             action = GovernanceAction.reject
 
-        if ctx.consecutive_failures >= 3 and action not in (GovernanceAction.escalate_to_human, GovernanceAction.freeze_agent):
+        if ctx.consecutive_failures >= 3 and action not in (
+            GovernanceAction.escalate_to_human,
+            GovernanceAction.freeze_agent,
+        ):
             action = GovernanceAction.escalate_to_human
 
         if ctx.consecutive_failures >= 5 and action != GovernanceAction.freeze_agent:

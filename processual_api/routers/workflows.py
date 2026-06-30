@@ -45,7 +45,11 @@ class GovernanceReport(BaseModel):
 
 
 @router.post("", response_model=WorkflowResponse)
-async def create_workflow(req: CreateWorkflowRequest, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)):
+async def create_workflow(
+    req: CreateWorkflowRequest,
+    _user: str = Depends(get_current_user),
+    kernel: ProcessualMaestroKernel = Depends(get_kernel),
+):
     try:
         kernel.register_agent(AgentSpec("default-agent", "work", capabilities=("work",)))
     except ValueError as exc:
@@ -89,7 +93,9 @@ async def create_workflow(req: CreateWorkflowRequest, _user: str = Depends(get_c
 
 
 @router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
-async def get_workflow(workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)):
+async def get_workflow(
+    workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)
+):
     try:
         record = kernel.get_workflow(workflow_id)
     except KeyError:
@@ -103,7 +109,9 @@ async def get_workflow(workflow_id: str, _user: str = Depends(get_current_user),
 
 
 @router.post("/{workflow_id}/checkpoint", response_model=CheckpointResponse)
-async def create_checkpoint(workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)):
+async def create_checkpoint(
+    workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)
+):
     try:
         kernel.get_workflow(workflow_id)
     except KeyError:
@@ -116,7 +124,9 @@ async def create_checkpoint(workflow_id: str, _user: str = Depends(get_current_u
 
 
 @router.get("/{workflow_id}/governance", response_model=GovernanceReport)
-async def get_governance(workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)):
+async def get_governance(
+    workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)
+):
     try:
         kernel.get_workflow(workflow_id)
     except KeyError:
