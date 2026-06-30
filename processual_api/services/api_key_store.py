@@ -4,7 +4,6 @@ import base64
 import hashlib
 import hmac
 import json
-import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any

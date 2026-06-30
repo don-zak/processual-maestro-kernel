@@ -5,8 +5,6 @@ from pathlib import Path
 
 import processual_api.billing.router as billing_router
 import processual_api.middleware.subscription as subscription_module
-import processual_api.routers.settings as settings_router
-
 
 ROOT = Path(__file__).resolve().parents[1]
 

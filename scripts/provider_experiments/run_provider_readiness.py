@@ -9,7 +9,6 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-
 # Make Windows console friendlier with UTF-8 output.
 try:
     sys.stdout.reconfigure(encoding="utf-8")

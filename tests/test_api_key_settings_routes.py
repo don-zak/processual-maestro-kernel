@@ -5,7 +5,6 @@ from pathlib import Path
 
 from processual_api.routers import settings as settings_router
 
-
 SETTINGS_PATH = (
     Path(__file__).resolve().parents[1]
     / "processual_api"

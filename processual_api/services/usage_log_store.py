@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _USAGE_LOG_PATH = _DATA_DIR / "usage_logs.jsonl"
 

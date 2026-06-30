@@ -5,7 +5,6 @@ import logging
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger("processual_api.cgt_governor.data.telemetry")
 

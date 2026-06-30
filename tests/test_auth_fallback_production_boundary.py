@@ -9,7 +9,6 @@ from starlette.requests import Request
 
 from processual_api.auth import security
 
-
 STATIC_TEST_KEY = "pmk_static_env_fallback_test_key"
 
 

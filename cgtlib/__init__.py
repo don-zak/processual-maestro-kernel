@@ -25,7 +25,11 @@ try:
         evaluate_benchmark_surfaces,
         summarize_benchmark_surface,
     )
-    from .catalogs import build_all_canonical_scenario_packs, build_canonical_scenario_pack, list_canonical_scenario_catalog
+    from .catalogs import (
+        build_all_canonical_scenario_packs,
+        build_canonical_scenario_pack,
+        list_canonical_scenario_catalog,
+    )
     from .comparative_envelopes import (
         ComparativeEnvelope,
         ComparativeEnvelopeReport,
@@ -112,7 +116,12 @@ try:
         list_canonical_stress_regimes,
         load_canonical_stress_regime,
     )
-    from .trajectory_maps import TrajectoryMap, TrajectoryMapPoint, evaluate_regime_trajectory_map, summarize_trajectory_map
+    from .trajectory_maps import (
+        TrajectoryMap,
+        TrajectoryMapPoint,
+        evaluate_regime_trajectory_map,
+        summarize_trajectory_map,
+    )
     from .transition_archetypes import (
         TransitionArchetype,
         evaluate_all_canonical_transition_archetypes,
@@ -200,9 +209,6 @@ except ModuleNotFoundError:
         summarize_all_transition_archetypes,
         summarize_benchmark_surface,
         summarize_comparative_envelopes,
-        evaluate_multi_axis_robustness as summarize_multi_axis_robustness,
-        evaluate_parameter_sensitivity as summarize_parameter_sensitivity,
-        evaluate_regime_trajectory_map as summarize_regime_trajectory_map,
         summarize_robustness_report,
         summarize_scenario_packs,
         summarize_sensitivity_report,
@@ -213,6 +219,15 @@ except ModuleNotFoundError:
         validate_scenario_pack,
         validate_structural_transition_report,
         validate_transition_batch_inputs,
+    )
+    from ._fallback import (
+        evaluate_multi_axis_robustness as summarize_multi_axis_robustness,
+    )
+    from ._fallback import (
+        evaluate_parameter_sensitivity as summarize_parameter_sensitivity,
+    )
+    from ._fallback import (
+        evaluate_regime_trajectory_map as summarize_regime_trajectory_map,
     )
 
 from .types import (

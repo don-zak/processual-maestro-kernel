@@ -10,15 +10,13 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
-from ..dependencies import file_lock
 from ..cgt_governor.adapters.provider_metadata import provider_ids
+from ..dependencies import file_lock
 from ..schemas.settings import (
     GeneralSettings,
     LLMProviderConfig,
@@ -27,6 +25,7 @@ from ..schemas.settings import (
     SubscriptionInfo,
     TestConnectionResult,
 )
+from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 try:
     from processual_kernel.security.crypto import decrypt_aes256_gcm, encrypt_aes256_gcm

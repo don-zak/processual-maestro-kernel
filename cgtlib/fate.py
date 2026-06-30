@@ -26,7 +26,7 @@ def compute_stability_indicator(repeatability: float, fatigue: float, lift: floa
 
 def compute_extinction_indicator(compatibility: float, dwell_time: float, carrier: float, **kwargs) -> float:
     from cgtlib.private.equations import extinction_indicator
-    from cgtlib.private.thresholds import K_ZERO, TAU_MIN, CARRIER_THRESHOLD
+    from cgtlib.private.thresholds import CARRIER_THRESHOLD, K_ZERO, TAU_MIN
     return extinction_indicator(compatibility, dwell_time, carrier, k_zero=K_ZERO, tau_min=TAU_MIN, carrier_threshold=CARRIER_THRESHOLD)
 
 

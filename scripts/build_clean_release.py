@@ -181,10 +181,10 @@ def main() -> None:
     if not args.skip_clean:
         clean_script = REPO_ROOT / "scripts" / "clean_dev_artifacts.py"
         if clean_script.is_file():
-            print(f"\n>>> Cleaning development artifacts ...")
+            print("\n>>> Cleaning development artifacts ...")
             subprocess.run([sys.executable, str(clean_script)], cwd=REPO_ROOT, timeout=120)
         else:
-            print(f"  WARN  clean_dev_artifacts.py not found, skipping")
+            print("  WARN  clean_dev_artifacts.py not found, skipping")
 
     if BUILD_DIR.exists():
         print(f"\n>>> Removing existing build directory: {BUILD_DIR}")
@@ -194,7 +194,7 @@ def main() -> None:
     copied = _copy_tree(REPO_ROOT, BUILD_DIR)
     print(f"  Copied {len(copied)} files")
 
-    print(f">>> Cleaning runtime artifacts from processual_api/data/ ...")
+    print(">>> Cleaning runtime artifacts from processual_api/data/ ...")
     _clean_data_artifacts(BUILD_DIR)
 
     print(f"\n>>> Running release_check on {BUILD_DIR} ...")
@@ -205,7 +205,7 @@ def main() -> None:
         print(f"  Inspect {BUILD_DIR} for issues, fix, and re-run")
         sys.exit(rc)
 
-    print(f"\n>>> Creating ZIP archive ...")
+    print("\n>>> Creating ZIP archive ...")
     zip_path = _create_zip(BUILD_DIR)
     zip_size_mb = zip_path.stat().st_size / (1024 * 1024)
     print(f"  Created: {zip_path}")
@@ -214,11 +214,11 @@ def main() -> None:
     manifest_path = _save_manifest(BUILD_DIR, copied, zip_path, rc)
     print(f"  Manifest: {manifest_path}")
 
-    print(f"\n>>> Cleaning up build directory ...")
+    print("\n>>> Cleaning up build directory ...")
     shutil.rmtree(BUILD_DIR)
 
     print(f"\n{'=' * 60}")
-    print(f"  RESULT: Release package ready")
+    print("  RESULT: Release package ready")
     print(f"  Path:   {zip_path}")
     print(f"  Files:  {len(copied)}")
     print(f"  Size:   {zip_size_mb:.2f} MB")

@@ -5,7 +5,7 @@ engine is not available.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from typing import Any
 
 _UNAVAILABLE_MSG = "requires private CGT engine which is not available in this build"
@@ -364,7 +364,13 @@ def build_public_api_snapshot(*args, **kwargs):
 
 
 def build_cgtlib_manifest():
-    from .metadata import CGTLIB_PRIVATE_MODULES, CGTLIB_PUBLIC_MODULES, CGTLIB_VERSION, CGTLIB_API_STAGE, CGTLIB_BOUNDARY_STATUS
+    from .metadata import (
+        CGTLIB_API_STAGE,
+        CGTLIB_BOUNDARY_STATUS,
+        CGTLIB_PRIVATE_MODULES,
+        CGTLIB_PUBLIC_MODULES,
+        CGTLIB_VERSION,
+    )
 
     return {
         "library": "cgtlib",

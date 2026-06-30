@@ -9,7 +9,6 @@ from processual_api.routers import cgt_governor
 from processual_api.routers import settings as settings_router
 from processual_kernel.security import crypto
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

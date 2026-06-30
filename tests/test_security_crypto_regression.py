@@ -6,10 +6,9 @@ import processual_api.cgt_governor.security.guard as guard
 from processual_kernel.security import crypto
 from processual_kernel.security.envelopes import build_envelope, verify_envelope
 from processual_kernel.security.exceptions import DecryptionError
-from processual_kernel.security.hashes import sha256_hex_bytes, sha3_256_hex_bytes
+from processual_kernel.security.hashes import sha3_256_hex_bytes, sha256_hex_bytes
 from processual_kernel.security.keyring import CryptoKey, KeyRing, KeySource, load_key_from_env
 from processual_kernel.security.policies import EncryptionPolicy, SecurityPolicy
-
 
 KEY_A = b"a" * crypto.KEY_LENGTH_BYTES
 KEY_B = b"b" * crypto.KEY_LENGTH_BYTES

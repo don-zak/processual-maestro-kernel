@@ -4,9 +4,8 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-
+from urllib.request import Request, urlopen
 
 BASE_URL = "http://127.0.0.1:8000"
 

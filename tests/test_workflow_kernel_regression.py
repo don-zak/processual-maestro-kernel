@@ -14,7 +14,7 @@ from processual_kernel.continuity import (
     MetricCoefficientMapper,
     clamp,
 )
-from processual_kernel.kernel import ProcessualCGTKernel, ProcessualMaestroKernel
+from processual_kernel.kernel import ProcessualMaestroKernel
 from processual_kernel.types import (
     AgentCriticality,
     AgentSpec,
@@ -23,8 +23,6 @@ from processual_kernel.types import (
     Coefficients,
     EdgeDecision,
     GovernanceDecision,
-    HandoffTelemetry,
-    KernelPolicy,
     MaestroAction,
     TaskEnvelope,
     TaskResult,
@@ -32,7 +30,6 @@ from processual_kernel.types import (
     WorkflowPlan,
     WorkflowState,
     WorkflowStep,
-    WorkflowTelemetry,
 )
 
 

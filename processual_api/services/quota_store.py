@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
-from .plan_store import get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
+from .plan_store import get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
@@ -28,7 +28,7 @@ COUNTED_ENDPOINTS: set[tuple[str, str]] = {
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _normalize_endpoint(endpoint: str) -> str:

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CGT_GOVERNOR_PATH = ROOT / "processual_api" / "routers" / "cgt_governor.py"
 

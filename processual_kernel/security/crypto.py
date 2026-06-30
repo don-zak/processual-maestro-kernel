@@ -4,7 +4,7 @@ import base64
 import json
 import os
 from dataclasses import asdict, dataclass, field, is_dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -34,7 +34,7 @@ class CryptoEnvelope:
     plaintext_sha3_256: str
     ciphertext_sha3_256: str
     schema_version: str = ENVELOPE_SCHEMA_VERSION
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 def _safe_dict(value: Any) -> Any:

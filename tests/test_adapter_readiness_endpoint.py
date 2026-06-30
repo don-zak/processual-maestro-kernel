@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROUTER_PATH = (
     Path(__file__).resolve().parents[1]
     / "processual_api"

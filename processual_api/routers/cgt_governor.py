@@ -9,17 +9,17 @@ import time
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ..auth.security import get_current_user, require_scope, require_quota
-from ..cgt_governor.adapters.registry import adapter_registry
+from ..auth.security import get_current_user, require_quota, require_scope
 from ..cgt_governor.adapters.provider_metadata import provider_env_map, provider_public_metadata
+from ..cgt_governor.adapters.registry import adapter_registry
 from ..cgt_governor.data.storage import eval_store
-from ..cgt_governor.policy import PolicyContext, policy_engine as runtime_policy_engine
+from ..cgt_governor.policy import PolicyContext
+from ..cgt_governor.policy import policy_engine as runtime_policy_engine
 from ..cgt_governor.security import decrypt_log_entry, encrypt_log_entry, get_crypto_key, sign_response
 
 logger = logging.getLogger("processual_api.routers.cgt_governor")

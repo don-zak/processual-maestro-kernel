@@ -6,7 +6,6 @@ from fastapi import HTTPException
 
 import processual_api.routers.cgt_governor as cgt_router
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER_SOURCE = ROOT / "processual_api" / "routers" / "cgt_governor.py"
 GATEWAY_ROOT = ROOT / "processual_api" / "cgt_governor" / "gateway"
