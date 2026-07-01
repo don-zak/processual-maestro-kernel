@@ -58,14 +58,33 @@ def _get_jwt_algorithm() -> str:
     return settings.jwt_algorithm
 
 
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    subject: str,
+    expires_delta: timedelta | None = None,
+    *,
+    role: str = "client",
+    client_id: str | None = None,
+    session_type: str = "jwt",
+    scopes: list[str] | None = None,
+) -> str:
     if jwt is None:
         raise RuntimeError("python-jose is not installed. Install with: pip install python-jose[cryptography]")
-    expire = datetime.now(UTC) + (
+    now = datetime.now(UTC)
+    expire = now + (
         expires_delta if expires_delta is not None else timedelta(minutes=settings.jwt_expire_minutes)
     )
-    payload = {"sub": subject, "exp": expire, "iat": datetime.now(UTC)}
+    payload = {
+        "sub": subject,
+        "exp": expire,
+        "iat": now,
+        "role": role,
+        "client_id": client_id or subject,
+        "session_type": session_type,
+        "scopes": scopes or [],
+    }
     return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
+
+
 
 
 def verify_access_token(token: str) -> dict:

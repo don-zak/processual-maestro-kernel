@@ -44,7 +44,14 @@ async def login_for_access_token(body: LoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
-    token = create_access_token(subject=body.username)
+    token = create_access_token(
+        subject=body.username,
+        role="admin",
+        client_id="admin",
+        session_type="ui_admin",
+        scopes=["*"],
+    )
+
     return TokenResponse(access_token=token)
 
 
