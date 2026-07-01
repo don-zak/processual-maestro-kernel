@@ -138,6 +138,48 @@ def test_static_login_and_splash_preserve_descent_gate_markers():
     assert not missing_login, f"Missing login entry mode markers: {missing_login}"
 
 
+def test_static_console_auth_uses_session_storage_for_ui_session():
+    login_source = read_text(STATIC_ROOT / "login.html")
+    auth_source = read_text(STATIC_ROOT / "js" / "auth.js")
+
+    login_markers = [
+        "sessionStorage.setItem('maestro_token', data.access_token)",
+        "sessionStorage.setItem('maestro_role', currentRole)",
+        "localStorage.removeItem('maestro_token')",
+        "localStorage.removeItem('maestro_role')",
+    ]
+
+    auth_markers = [
+        "sessionStorage.getItem(STORAGE_KEY)",
+        "sessionStorage.setItem(STORAGE_KEY, token)",
+        "sessionStorage.removeItem(STORAGE_KEY)",
+        "sessionStorage.removeItem('maestro_role')",
+        "localStorage.removeItem(STORAGE_KEY)",
+        "localStorage.removeItem('maestro_role')",
+    ]
+
+    forbidden_auth_markers = [
+        "localStorage.getItem(STORAGE_KEY)",
+        "localStorage.setItem(STORAGE_KEY, token)",
+    ]
+
+    missing_login = [
+        marker for marker in login_markers
+        if marker not in login_source
+    ]
+    missing_auth = [
+        marker for marker in auth_markers
+        if marker not in auth_source
+    ]
+    forbidden_auth = [
+        marker for marker in forbidden_auth_markers
+        if marker in auth_source
+    ]
+
+    assert not missing_login, f"Missing login session storage markers: {missing_login}"
+    assert not missing_auth, f"Missing auth session storage markers: {missing_auth}"
+    assert not forbidden_auth, f"Forbidden auth localStorage markers found: {forbidden_auth}"
+
 
 def test_static_console_app_shell_keeps_navigation_and_subscription_markers():
     source = read_text(STATIC_ROOT / "js" / "app.js")

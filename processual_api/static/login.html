@@ -198,10 +198,11 @@ async function doLogin() {
     });
     if (!res.ok) { const d = await res.json(); throw new Error(d.detail || (lang === 'en' ? 'Invalid credentials' : 'بيانات غير صحيحة')); }
     const data = await res.json();
-    localStorage.setItem('maestro_token', data.access_token);
-    localStorage.setItem('maestro_role', currentRole);
+    sessionStorage.setItem('maestro_token', data.access_token);
     sessionStorage.setItem('maestro_role', currentRole);
     sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
+    localStorage.removeItem('maestro_token');
+    localStorage.removeItem('maestro_role');
     window.location.href = '/console';
   } catch (e) {
     errEl.textContent = e.message || (lang === 'en' ? 'Login failed' : 'فشل تسجيل الدخول');
