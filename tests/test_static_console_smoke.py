@@ -180,6 +180,25 @@ def test_static_console_auth_uses_session_storage_for_ui_session():
     assert not missing_auth, f"Missing auth session storage markers: {missing_auth}"
     assert not forbidden_auth, f"Forbidden auth localStorage markers found: {forbidden_auth}"
 
+def test_static_console_app_guards_direct_console_entry():
+    app_source = read_text(STATIC_ROOT / "js" / "app.js")
+
+    required_markers = [
+        "function hasDescentGateSession()",
+        "sessionStorage.getItem('maestro_descent_gate_seen') === '1'",
+        "if (!hasDescentGateSession())",
+        "window.location.replace('/')",
+        "window.location.replace('/login')",
+        "AUTH.init()",
+    ]
+
+    missing = [
+        marker for marker in required_markers
+        if marker not in app_source
+    ]
+
+    assert not missing, f"Missing console direct entry guard markers: {missing}"
+
 
 def test_static_console_app_shell_keeps_navigation_and_subscription_markers():
     source = read_text(STATIC_ROOT / "js" / "app.js")

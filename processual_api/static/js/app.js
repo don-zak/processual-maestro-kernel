@@ -176,7 +176,16 @@ const APP = (() => {
   }
 
   /* ─── Init ─── */
+  function hasDescentGateSession() {
+    return sessionStorage.getItem('maestro_descent_gate_seen') === '1';
+  }
+
   function init() {
+    if (!hasDescentGateSession()) {
+      window.location.replace('/');
+      return;
+    }
+
     AUTH.init();
     tickClock(); setInterval(tickClock, 1000);
     initNav();
@@ -187,7 +196,7 @@ const APP = (() => {
     if (lt) lt.textContent = I18N.lang() === 'ar' ? 'EN' : 'AR';
 
     if (!AUTH.isLoggedIn()) {
-      window.location.href = '/login';
+      window.location.replace('/login');
       return;
     }
     checkSubscription();
