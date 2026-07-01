@@ -104,6 +104,40 @@ def test_main_serves_static_console_login_and_splash_pages():
     missing = [marker for marker in required_markers if marker not in source]
     assert not missing, f"Missing main.py static serving markers: {missing}"
 
+def test_static_login_and_splash_preserve_descent_gate_markers():
+    splash_source = read_text(STATIC_ROOT / "splash.html")
+    login_source = read_text(STATIC_ROOT / "login.html")
+
+    splash_markers = [
+        "maestro_descent_gate_seen",
+        "maestro_descent_gate_seen_at",
+        "sessionStorage.setItem",
+        "window.location.href = '/login'",
+    ]
+
+    login_markers = [
+        "DESCENT_GATE_KEY",
+        "ENTRY_MODE_KEY",
+        "maestro_descent_gate_seen",
+        "maestro_entry_mode",
+        "window.location.replace('/')",
+        "setEntryMode(currentRole)",
+        "maestro_ui_session_started_at",
+    ]
+
+    missing_splash = [
+        marker for marker in splash_markers
+        if marker not in splash_source
+    ]
+    missing_login = [
+        marker for marker in login_markers
+        if marker not in login_source
+    ]
+
+    assert not missing_splash, f"Missing splash descent gate markers: {missing_splash}"
+    assert not missing_login, f"Missing login entry mode markers: {missing_login}"
+
+
 
 def test_static_console_app_shell_keeps_navigation_and_subscription_markers():
     source = read_text(STATIC_ROOT / "js" / "app.js")
