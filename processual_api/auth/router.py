@@ -33,7 +33,13 @@ class APIKeyResponse(BaseModel):
 
 @router.post("/token", response_model=TokenResponse)
 async def login_for_access_token(body: LoginRequest):
-    if settings.is_production:
+    admin_email = settings.maestro_admin_email.strip()
+    admin_password = settings.maestro_admin_password
+
+    if admin_email and admin_password:
+        expected_user = admin_email
+        expected_pass = admin_password
+    elif settings.is_production:
         expected_user = settings.jwt_secret[:8]
         expected_pass = settings.jwt_secret[-8:]
     else:

@@ -4,8 +4,14 @@ from fastapi.testclient import TestClient
 
 from processual_api.auth import security
 from processual_api.main import app
+from processual_api.settings import settings
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def use_default_dev_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "maestro_admin_email", "")
+    monkeypatch.setattr(settings, "maestro_admin_password", "")
 
 
 class FakeJWT:
@@ -20,6 +26,7 @@ class FakeJWT:
 
 
 def test_auth_token_runtime_issues_client_ui_claims_for_user_role(monkeypatch):
+    use_default_dev_credentials(monkeypatch)
     FakeJWT.captured_payload = None
     monkeypatch.setattr(security, "jwt", FakeJWT)
 
@@ -46,7 +53,8 @@ def test_auth_token_runtime_issues_client_ui_claims_for_user_role(monkeypatch):
     assert payload["scopes"] == ["evaluation"]
 
 
-def test_auth_token_rejects_unknown_login_role():
+def test_auth_token_rejects_unknown_login_role(monkeypatch):
+    use_default_dev_credentials(monkeypatch)
     client = TestClient(app)
     response = client.post(
         "/auth/token",

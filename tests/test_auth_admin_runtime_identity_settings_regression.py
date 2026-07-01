@@ -2,6 +2,12 @@ from fastapi.testclient import TestClient
 
 from processual_api.auth import security
 from processual_api.main import app
+from processual_api.settings import settings
+
+
+def use_default_dev_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "maestro_admin_email", "")
+    monkeypatch.setattr(settings, "maestro_admin_password", "")
 
 
 class FakeJWT:
@@ -26,6 +32,7 @@ class FakeJWT:
 
 
 def test_admin_runtime_login_preserves_identity_and_settings_access(monkeypatch):
+    use_default_dev_credentials(monkeypatch)
     FakeJWT.captured_payload = None
     FakeJWT.captured_algorithm = None
     FakeJWT.decoded_tokens = []

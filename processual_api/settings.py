@@ -32,6 +32,18 @@ class APISettings:
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = field(default_factory=lambda: int(os.environ.get("JWT_EXPIRE_MINUTES", "60")))
 
+    # --- Maestro Admin Login ---
+    maestro_admin_email: str = field(
+        default_factory=lambda: os.environ.get(
+            "MAESTRO_ADMIN_EMAIL", ""
+        ).strip()
+    )
+    maestro_admin_password: str = field(
+        default_factory=lambda: os.environ.get(
+            "MAESTRO_ADMIN_PASSWORD", ""
+        )
+    )
+
     # --- API Key Authentication ---
     api_keys: list[str] = field(
         default_factory=lambda: os.environ.get("API_KEYS", "").split(",") if os.environ.get("API_KEYS") else []
