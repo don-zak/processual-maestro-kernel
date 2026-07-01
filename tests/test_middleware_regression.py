@@ -198,6 +198,41 @@ def test_usage_log_middleware_records_api_key_user(monkeypatch):
     assert isinstance(record["latency_ms"], float)
 
 
+def test_usage_log_store_sanitizes_raw_api_key_in_endpoint(tmp_path, monkeypatch):
+    import json
+
+    import processual_api.services.usage_log_store as usage_log_store
+
+    data_dir = tmp_path / "data"
+    log_path = data_dir / "usage_logs.jsonl"
+
+    monkeypatch.setattr(usage_log_store, "_DATA_DIR", data_dir)
+    monkeypatch.setattr(usage_log_store, "_USAGE_LOG_PATH", log_path)
+
+    raw_api_key = "pmk_secretRawKeyShouldNotLeak123"
+    usage_log_store.append_usage_log({
+        "request_id": "usage-sanitize-01",
+        "client_id": "client_1",
+        "user_id": "user_1",
+        "api_key_id": "key_1",
+        "api_key_prefix": "pmk_secret...",
+        "auth_method": "api_key",
+        "session_type": "api_key",
+        "method": "PATCH",
+        "endpoint": f"/settings/api-keys/{raw_api_key}/plan",
+        "status_code": 404,
+        "latency_ms": 1.25,
+        "role": "client",
+    })
+
+    record = json.loads(log_path.read_text(encoding="utf-8").strip())
+
+    assert record["endpoint"] == "/settings/api-keys/pmk_[redacted]/plan"
+    assert raw_api_key not in json.dumps(record)
+    assert record["api_key_id"] == "key_1"
+    assert record["api_key_prefix"] == "pmk_secret..."
+
+
 def test_subscription_stage_computation_for_billing_states():
     now = datetime.now(UTC)
 

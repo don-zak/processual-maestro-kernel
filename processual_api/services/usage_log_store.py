@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _USAGE_LOG_PATH = _DATA_DIR / "usage_logs.jsonl"
+_RAW_API_KEY_PATTERN = re.compile(r"pmk_[A-Za-z0-9_-]+")
+
+
+def sanitize_usage_endpoint(endpoint: str) -> str:
+    return _RAW_API_KEY_PATTERN.sub("pmk_[redacted]", endpoint)
 
 
 def append_usage_log(record: dict[str, Any]) -> None:
@@ -22,7 +28,7 @@ def append_usage_log(record: dict[str, Any]) -> None:
         "auth_method": record.get("auth_method", ""),
         "session_type": record.get("session_type", ""),
         "method": record.get("method", ""),
-        "endpoint": record.get("endpoint", ""),
+        "endpoint": sanitize_usage_endpoint(str(record.get("endpoint", ""))),
         "status_code": record.get("status_code", 0),
         "latency_ms": record.get("latency_ms", 0),
         "role": record.get("role", ""),
