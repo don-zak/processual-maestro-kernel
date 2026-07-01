@@ -40,8 +40,10 @@ async def login_for_access_token(body: LoginRequest):
         expected_user = admin_email
         expected_pass = admin_password
     elif settings.is_production:
-        expected_user = settings.jwt_secret[:8]
-        expected_pass = settings.jwt_secret[-8:]
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin credentials are not configured",
+        )
     else:
         expected_user = "admin"  # nosec
         expected_pass = "admin"  # nosec

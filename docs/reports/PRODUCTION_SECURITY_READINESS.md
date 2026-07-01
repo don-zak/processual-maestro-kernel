@@ -64,6 +64,8 @@ The following variables must be set to strong, unique, non-default values before
 
 ```text
 JWT_SECRET
+MAESTRO_ADMIN_EMAIL
+MAESTRO_ADMIN_PASSWORD
 API_KEYS
 DATABASE_URL
 REDIS_URL
@@ -502,6 +504,8 @@ Then verify production-style configuration in a safe staging environment:
 ```text
 ENVIRONMENT=production
 strong JWT_SECRET
+strong MAESTRO_ADMIN_EMAIL
+strong MAESTRO_ADMIN_PASSWORD
 strong API_KEYS or dynamic API key bootstrap
 strong DATABASE_URL
 strong REDIS_URL
@@ -534,6 +538,8 @@ The current local pytest baseline may still show warnings for weak development d
 
 ```text
 JWT_SECRET
+MAESTRO_ADMIN_EMAIL
+MAESTRO_ADMIN_PASSWORD
 DATABASE_URL
 REDIS_URL
 POSTGRES_PASSWORD
@@ -581,6 +587,7 @@ The template must continue to include:
 - Explicit application mode through `APP_ENV=production`.
 - Production debug shutdown through `API_DEBUG=false`.
 - Required core security values: `JWT_SECRET`, `API_KEYS`, `PROCESSUAL_CRYPTO_KEY_B64`, and `CORS_ORIGINS`.
+- Required admin login values: `MAESTRO_ADMIN_EMAIL` and `MAESTRO_ADMIN_PASSWORD`.
 - Required PostgreSQL values: `DATABASE_URL`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, and `POSTGRES_DB`.
 - Required Redis values: `REDIS_URL` and `REDIS_PASSWORD`.
 - Required Grafana value: `GRAFANA_ADMIN_PASSWORD`.
@@ -645,3 +652,19 @@ tests/test_fastapi_integration_smoke.py
 tests/test_docker_compose_production_regression.py
 
 tests/test_final_release_checklist_regression.py
+
+
+---
+
+## AUTH-CREDS-02 — Admin Credential Production Hardening
+
+Production admin login must be configured explicitly with:
+
+```text
+MAESTRO_ADMIN_EMAIL
+MAESTRO_ADMIN_PASSWORD
+```
+
+Production must never derive admin credentials from `JWT_SECRET`.
+
+The development-only `admin/admin` fallback is allowed only outside production and must remain forbidden for production deployments.

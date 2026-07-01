@@ -105,6 +105,31 @@ class APISettings:
                 "Set explicit allowed origins for production deployments."
             )
 
+    def _reject_missing_admin_credentials(self) -> None:
+        has_admin_email = bool(self.maestro_admin_email.strip())
+        has_admin_password = bool(self.maestro_admin_password)
+
+        if has_admin_email and has_admin_password:
+            self._reject_weak(
+                "MAESTRO_ADMIN_PASSWORD",
+                self.maestro_admin_password,
+                "MAESTRO_ADMIN_PASSWORD",
+            )
+            return
+
+        detail = (
+            "MAESTRO_ADMIN_EMAIL and MAESTRO_ADMIN_PASSWORD must be set "
+            "before deploying to production."
+        )
+        if self.is_production:
+            raise RuntimeError(detail)
+
+        warnings.warn(
+            "MAESTRO_ADMIN_EMAIL or MAESTRO_ADMIN_PASSWORD is missing. "
+            "Using development-only admin/admin fallback.",
+            stacklevel=2,
+        )
+
     def __post_init__(self) -> None:
         if self.is_production:
             self.debug = False
@@ -124,6 +149,7 @@ class APISettings:
 
         self._reject_weak("JWT_SECRET", self.jwt_secret, "JWT_SECRET")
         self._reject_wildcard_cors()
+        self._reject_missing_admin_credentials()
 
         api_keys_str = ",".join(self.api_keys) if self.api_keys else ""
         self._reject_weak("API_KEYS", api_keys_str if api_keys_str else None, "API_KEYS")
