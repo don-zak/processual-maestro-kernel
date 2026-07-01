@@ -194,7 +194,7 @@ async function doLogin() {
     const res = await fetch('/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass }),
+      body: JSON.stringify({ username, password, role: currentRole }),
     });
     if (!res.ok) { const d = await res.json(); throw new Error(d.detail || (lang === 'en' ? 'Invalid credentials' : 'بيانات غير صحيحة')); }
     const data = await res.json();

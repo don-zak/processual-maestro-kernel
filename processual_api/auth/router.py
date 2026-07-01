@@ -18,6 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str
     password: str
+    role: str = "admin"
 
 
 class TokenResponse(BaseModel):
@@ -44,13 +45,30 @@ async def login_for_access_token(body: LoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
-    token = create_access_token(
-        subject=body.username,
-        role="admin",
-        client_id="admin",
-        session_type="ui_admin",
-        scopes=["*"],
-    )
+
+    login_role = body.role.strip().lower()
+
+    if login_role == "admin":
+        token = create_access_token(
+            subject=body.username,
+            role="admin",
+            client_id="admin",
+            session_type="ui_admin",
+            scopes=["*"],
+        )
+    elif login_role in {"user", "client"}:
+        token = create_access_token(
+            subject=body.username,
+            role="client",
+            client_id=body.username,
+            session_type="ui_client",
+            scopes=["evaluation"],
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid login role",
+        )
 
     return TokenResponse(access_token=token)
 
