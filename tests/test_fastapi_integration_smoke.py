@@ -228,7 +228,10 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
     monkeypatch,
     tmp_path,
 ):
+    import processual_api.services.usage_log_store as usage_log_store
+
     raw_key = "pmk_exhausted_quota_endpoint_test_key"
+    usage_log_path = tmp_path / "usage_logs.jsonl"
 
     settings_path = tmp_path / "settings_quota_endpoint_user.json"
     settings_path.write_text(
@@ -271,6 +274,10 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
     monkeypatch.setattr(api_key_store, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(quota_store, "DATA_DIR", tmp_path)
 
+    monkeypatch.setattr(usage_log_store, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(usage_log_store, "_USAGE_LOG_PATH", usage_log_path)
+
+
     def fail_if_governor_executes(*_args, **_kwargs):
         raise AssertionError("quota must reject before governor execution")
 
@@ -278,7 +285,11 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
 
     response = client.post(
         "/cgt/govern",
-        headers={"X-API-Key": raw_key},
+        headers={
+            "X-API-Key": raw_key,
+            "X-Request-ID": "usage-quota-exhausted-03",
+        },
+
         json={
             "answer": "This request should be rejected before evaluation.",
             "language": "en",
@@ -301,6 +312,29 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
     assert stored_key["quota_last_rejected_at"]
     assert stored_key["usage_count"] == 1
     assert stored_key["last_used_at"]
+
+    usage_records = [
+        json.loads(line)
+        for line in usage_log_path.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert len(usage_records) == 1
+
+    usage_record = usage_records[0]
+
+    assert usage_record["request_id"] == "usage-quota-exhausted-03"
+    assert usage_record["client_id"] == "quota-endpoint-client"
+    assert usage_record["user_id"] == "quota_endpoint_user"
+    assert usage_record["api_key_id"] == "key_exhausted_10b"
+    assert usage_record["api_key_prefix"] == "pmk_exhausted..."
+    assert usage_record["auth_method"] == "api_key"
+    assert usage_record["session_type"] == "api_key"
+    assert usage_record["method"] == "POST"
+    assert usage_record["endpoint"] == "/cgt/govern"
+    assert usage_record["status_code"] == 429
+    assert isinstance(usage_record["latency_ms"], float)
+    assert raw_key not in json.dumps(usage_record)
+
 
 def test_full_app_console_static_mount_is_reachable(client):
     response = client.get("/console/")
