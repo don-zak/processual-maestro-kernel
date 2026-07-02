@@ -158,29 +158,27 @@ function setEntryMode(mode) {
   sessionStorage.setItem(ENTRY_MODE_KEY, mode);
 }
 
-let currentRole = 'admin';
-setEntryMode(currentRole);
-document.getElementById('tab-admin').addEventListener('click', () => {
-  currentRole = 'admin';
-  setEntryMode(currentRole);
-  document.getElementById('tab-admin').classList.add('active');
-  document.getElementById('tab-user').classList.remove('active');
-  document.getElementById('login-username').value = '';
-  document.getElementById('login-username').placeholder = 'admin';
-  document.getElementById('login-password').value = '';
-  document.getElementById('login-error').style.display = 'none';
-});
-document.getElementById('tab-user').addEventListener('click', () => {
-  currentRole = 'user';
-  setEntryMode(currentRole);
-  document.getElementById('tab-user').classList.add('active');
-  document.getElementById('tab-admin').classList.remove('active');
-  document.getElementById('login-username').value = '';
-  document.getElementById('login-username').placeholder = 'username';
-  document.getElementById('login-password').value = '';
-  document.getElementById('login-error').style.display = 'none';
-});
+function requestedEntryMode() {
+  const mode = new URLSearchParams(window.location.search).get('mode');
+  return mode === 'user' ? 'user' : 'admin';
+}
 
+let currentRole = requestedEntryMode();
+
+function activateRole(role) {
+  currentRole = role === 'user' ? 'user' : 'admin';
+  setEntryMode(currentRole);
+  document.getElementById('tab-admin').classList.toggle('active', currentRole === 'admin');
+  document.getElementById('tab-user').classList.toggle('active', currentRole === 'user');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-username').placeholder = currentRole === 'admin' ? 'admin' : 'username';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+activateRole(currentRole);
+document.getElementById('tab-admin').addEventListener('click', () => activateRole('admin'));
+document.getElementById('tab-user').addEventListener('click', () => activateRole('user'));
 async function doLogin() {
   const user = document.getElementById('login-username').value;
   const pass = document.getElementById('login-password').value;
