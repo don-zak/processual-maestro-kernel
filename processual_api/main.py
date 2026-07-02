@@ -85,6 +85,8 @@ _splash_html = _splash_path.read_text("utf-8") if _splash_path.exists() else "<h
 
 _login_path = Path(__file__).resolve().parent / "static" / "login.html"
 _login_html = _login_path.read_text("utf-8") if _login_path.exists() else "<h1>Login page not found</h1>"
+_admin_path = Path(__file__).resolve().parent / "static" / "admin.html"
+_admin_html = _admin_path.read_text("utf-8") if _admin_path.exists() else "<h1>Admin page not found</h1>"
 
 
 @app.get("/", include_in_schema=False)
@@ -97,6 +99,10 @@ async def login_page():
     return HTMLResponse(content=_login_html)
 
 
+
+@app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+async def admin_page():
+    return HTMLResponse(content=_admin_html)
 @app.get("/metrics")
 async def metrics_endpoint():
     try:

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Maestro Kernel - Admin Area</title>
+<link rel="icon" type="image/svg+xml" href="/console/favicon.svg">
+<link rel="stylesheet" href="/console/css/console.css">
+</head>
+<body>
+<div id="bg-grid"></div>
+<div id="layout">
+  <aside id="sidebar">
+    <div id="brand">
+      <div id="brand-mark">M</div>
+      <div>
+        <div id="brand-title">MAESTRO ADMIN</div>
+        <div id="brand-sub">Kernel Control Area</div>
+      </div>
+    </div>
+    <div id="nav">
+      <button class="nav-btn active"><span class="nav-ind"></span><span class="nav-ico">A</span><span>Admin Home</span></button>
+      <button class="nav-btn"><span class="nav-ind"></span><span class="nav-ico">P</span><span>Adapters</span></button>
+      <button class="nav-btn"><span class="nav-ind"></span><span class="nav-ico">K</span><span>API Keys</span></button>
+      <button class="nav-btn"><span class="nav-ind"></span><span class="nav-ico">S</span><span>System Settings</span></button>
+    </div>
+    <div id="sidebar-footer">
+      <div class="v">v2.0.0 - admin</div>
+      <div class="c">Admin-only shell</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div>
+        <div id="page-title">Admin Area</div>
+        <div id="page-sub">Administrative controls will move here from the client console</div>
+      </div>
+      <div class="flex-gap">
+        <button id="admin-console-link" class="btn ghost sm">Client Console</button>
+        <button id="admin-logout" class="btn ghost sm">Logout</button>
+      </div>
+    </header>
+
+    <section class="page active">
+      <div class="grid-2-eq">
+        <div class="card">
+          <div class="sec-hdr">
+            <div class="sh-title">Admin Routing Active</div>
+            <div class="sh-sub">Admin sessions now land outside the client console</div>
+          </div>
+          <div class="mono-block" style="font-size:11px;white-space:pre-wrap">This is the first admin shell. Adapter Manager, API Keys, provider configuration, and system settings will be moved here in the next admin phase.</div>
+        </div>
+
+        <div class="card">
+          <div class="sec-hdr">
+            <div class="sh-title">Protected Area</div>
+            <div class="sh-sub">Backend scopes remain the authority</div>
+          </div>
+          <div id="admin-session-status" class="mono-block" style="font-size:11px;white-space:pre-wrap">Checking admin session...</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/console/js/client.js"></script>
+<script src="/console/js/auth.js"></script>
+<script>
+AUTH.init();
+
+async function verifyAdmin() {
+  const status = document.getElementById('admin-session-status');
+  try {
+    const me = await CLIENT.get('/auth/me');
+    const role = me.role || sessionStorage.getItem('maestro_role') || '';
+    if (role !== 'admin') {
+      status.textContent = 'This area requires an admin session. Redirecting...';
+      window.location.replace('/login?mode=admin');
+      return;
+    }
+    status.textContent = 'Admin session confirmed: ' + (me.user_id || me.sub || 'admin');
+  } catch (e) {
+    status.textContent = 'Admin session check failed. Redirecting...';
+    window.location.replace('/login?mode=admin');
+  }
+}
+
+document.getElementById('admin-console-link').addEventListener('click', () => {
+  window.location.href = '/console';
+});
+
+document.getElementById('admin-logout').addEventListener('click', () => {
+  AUTH.logout();
+  window.location.href = '/login?mode=admin';
+});
+
+verifyAdmin();
+</script>
+</body>
+</html>
