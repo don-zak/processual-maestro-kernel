@@ -136,7 +136,7 @@ def _clean_api_key_scopes(
 
 
 def _resolve_api_key_profile(
-    body: "ApiKeyCreateRequest | None",
+    body: ApiKeyCreateRequest | None,
 ) -> tuple[str, str, list[str]]:
     category = DEFAULT_API_KEY_CATEGORY
     if body and body.category:
@@ -168,6 +168,7 @@ def _current_admin_role(current_user: dict) -> str:
 
 
 class ApiKeyPlanUpdate(BaseModel):
+    plan_id: str
 
 
 class ApiKeyQuotaUpdate(BaseModel):
@@ -583,41 +584,53 @@ async def list_plans(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_S
 async def list_api_keys(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
-    keys = raw.get("api_keys", [])
+    raw_keys = raw.get("api_keys", [])
+
+    if isinstance(raw_keys, dict):
+        keys = list(raw_keys.values())
+    elif isinstance(raw_keys, list):
+        keys = raw_keys
+    else:
+        keys = []
 
     visible_keys = []
     for key in keys:
+        if not isinstance(key, dict):
+            continue
+
         if key.get("status") == "revoked" or key.get("revoked_at"):
             continue
 
-    visible_keys.append({
-        "id": key.get("id", ""),
-        "key_id": key.get("id", ""),
-        "prefix": key.get("prefix", ""),
-        "status": key.get("status", "enabled"),
-        "category": key.get("category", DEFAULT_API_KEY_CATEGORY),
-        "role": key.get("role", CLIENT_KEY_PROFILE),
-        "profile": key.get("profile", CLIENT_KEY_PROFILE),
-        "label": key.get("label"),
-        "purpose": key.get("purpose"),
-        "issued_to": key.get("issued_to"),
-        "created_by_admin_role": key.get("created_by_admin_role"),
-        "client_id": key.get("client_id"),
-        "user_id": key.get("user_id"),
-        "scopes": key.get("scopes", []),
-        "created_at": key.get("created_at", ""),
-        "last_used_at": key.get("last_used_at"),
-        "usage_count": key.get("usage_count", 0),
-        "plan_id": key.get("plan_id"),
-        "quota_scope": key.get("quota_scope"),
-        "quota_limit": key.get("quota_limit"),
-        "quota_limit_override": key.get("quota_limit_override"),
-        "quota_used": key.get("quota_used", 0),
-        "quota_rejected_count": key.get("quota_rejected_count", 0),
-        "expires_at": key.get("expires_at"),
-    })
+        visible_keys.append({
+            "id": key.get("id", ""),
+            "key_id": key.get("id", ""),
+            "prefix": key.get("prefix", ""),
+            "status": key.get("status", "enabled"),
+            "category": key.get("category", DEFAULT_API_KEY_CATEGORY),
+            "role": key.get("role", CLIENT_KEY_PROFILE),
+            "profile": key.get("profile", CLIENT_KEY_PROFILE),
+            "label": key.get("label"),
+            "purpose": key.get("purpose"),
+            "issued_to": key.get("issued_to"),
+            "created_by_admin_role": key.get("created_by_admin_role"),
+            "client_id": key.get("client_id"),
+            "user_id": key.get("user_id"),
+            "scopes": key.get("scopes", []),
+            "created_at": key.get("created_at", ""),
+            "last_used_at": key.get("last_used_at"),
+            "usage_count": key.get("usage_count", 0),
+            "plan_id": key.get("plan_id"),
+            "quota_scope": key.get("quota_scope"),
+            "quota_limit": key.get("quota_limit"),
+            "quota_limit_override": key.get("quota_limit_override"),
+            "quota_used": key.get("quota_used", 0),
+            "quota_rejected_count": key.get("quota_rejected_count", 0),
+            "expires_at": key.get("expires_at"),
+            "revoked_at": key.get("revoked_at"),
+        })
 
     return visible_keys
+
 
 def _resolve_current_plan_id(user_id: str, raw: dict) -> str:
     billing_subs = _load_billing_subscriptions()
@@ -665,7 +678,7 @@ async def create_api_key(
     created_at = datetime.now(UTC).isoformat()
     requested_plan_id = body.plan_id if body and body.plan_id else None
     plan_id = resolve_plan_id(requested_plan_id) if requested_plan_id else _resolve_current_plan_id(owner_user_id, raw)
-    keys.append({
+
     if quota_limit_override is None:
         quota_policy = get_plan_policy(plan_id)
         quota_limit = quota_limit_for_plan(plan_id, "evaluation")
@@ -680,22 +693,22 @@ async def create_api_key(
             },
         }
 
+    profile = CLIENT_KEY_PROFILE if role == CLIENT_KEY_PROFILE else category
 
+    keys.append({
         "id": key_id,
         "user_id": user_id,
         "client_id": client_id,
         "prefix": prefix,
         "hashed": hashed,
         "scopes": scopes,
-        "profile": CLIENT_KEY_PROFILE if role == CLIENT_KEY_PROFILE else category,
+        "profile": profile,
         "category": category,
         "role": role,
         "label": body.label if body and body.label else None,
         "purpose": purpose,
         "issued_to": issued_to,
         "created_by_admin_role": created_by_admin_role,
-
-
         "plan_id": plan_id,
         "quota_policy": quota_policy,
         "quota_scope": "evaluation",
@@ -717,6 +730,7 @@ async def create_api_key(
     return {
         "api_key": raw_key,
         "id": key_id,
+        "key_id": key_id,
         "plan_id": plan_id,
         "quota_policy": quota_policy,
         "quota_scope": "evaluation",
@@ -726,7 +740,7 @@ async def create_api_key(
         "prefix": prefix,
         "status": "enabled",
         "scopes": scopes,
-        "profile": CLIENT_KEY_PROFILE if role == CLIENT_KEY_PROFILE else category,
+        "profile": profile,
         "category": category,
         "role": role,
         "client_id": client_id,
@@ -743,6 +757,7 @@ async def create_api_key(
         },
         "created_at": created_at,
     }
+
 
 @router.patch("/api-keys/{key_id}/plan", response_model=dict)
 async def update_api_key_plan(
