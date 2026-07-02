@@ -48,9 +48,126 @@ DEFAULT_API_KEY_SCOPES = [
 ]
 ADMIN_SETTINGS_SCOPE = "admin:settings"
 CLIENT_KEY_PROFILE = "client"
+DEFAULT_API_KEY_CATEGORY = "client_api"
+API_KEY_PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "client_api": {
+        "role": "client",
+        "scopes": DEFAULT_API_KEY_SCOPES,
+    },
+    "pilot_client": {
+        "role": "client",
+        "scopes": [
+            "read:health",
+            "read:governor",
+            "run:analyze",
+            "run:govern",
+            "read:reports",
+        ],
+    },
+    "external_partner": {
+        "role": "partner",
+        "scopes": ["read:health"],
+    },
+    "service_integration": {
+        "role": "service",
+        "scopes": ["read:health"],
+    },
+    "billing_service": {
+        "role": "service",
+        "scopes": ["admin:billing:read", "admin:billing:write"],
+    },
+    "support_viewer": {
+        "role": "support_admin",
+        "scopes": ["admin:read", "admin:clients:read", "admin:usage:read"],
+    },
+    "ops_admin": {
+        "role": "ops_admin",
+        "scopes": [
+            "admin:read",
+            "admin:adapters:read",
+            "admin:adapters:write",
+            "admin:usage:read",
+            "admin:health:read",
+        ],
+    },
+    "billing_admin": {
+        "role": "billing_admin",
+        "scopes": [
+            "admin:read",
+            "admin:clients:read",
+            "admin:clients:write",
+            "admin:billing:read",
+            "admin:billing:write",
+            "admin:usage:read",
+        ],
+    },
+    "security_admin": {
+        "role": "security_admin",
+        "scopes": [
+            "admin:read",
+            "admin:settings",
+            "admin:api_keys:read",
+            "admin:api_keys:write",
+            "admin:api_keys:revoke",
+            "admin:audit:read",
+        ],
+    },
+    "owner_admin": {
+        "role": "owner_admin",
+        "scopes": ["admin:*", "admin:dangerous"],
+    },
+    "emergency_bootstrap": {
+        "role": "owner_admin",
+        "scopes": ["admin:read"],
+    },
+}
+
+
+def _clean_api_key_scopes(
+    requested_scopes: list[str] | None,
+    default_scopes: list[str],
+) -> list[str]:
+    scopes = [
+        str(scope).strip()
+        for scope in requested_scopes or []
+        if str(scope).strip()
+    ]
+    return scopes or list(default_scopes)
+
+
+def _resolve_api_key_profile(
+    body: "ApiKeyCreateRequest | None",
+) -> tuple[str, str, list[str]]:
+    category = DEFAULT_API_KEY_CATEGORY
+    if body and body.category:
+        category = body.category.strip()
+
+    profile = API_KEY_PROFILE_DEFAULTS.get(category)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown API key category: {category}",
+        )
+
+    default_role = str(profile["role"])
+    default_scopes = list(profile["scopes"])
+
+    role = body.role.strip() if body and body.role else default_role
+    scopes = _clean_api_key_scopes(body.scopes if body else None, default_scopes)
+
+    return category, role, scopes
+
+
+def _current_admin_role(current_user: dict) -> str:
+    return str(
+        current_user.get("admin_role")
+        or current_user.get("role")
+        or current_user.get("token_role")
+        or "admin"
+    )
+
 
 class ApiKeyPlanUpdate(BaseModel):
-    plan_id: str
 
 
 class ApiKeyQuotaUpdate(BaseModel):
@@ -62,7 +179,13 @@ class ApiKeyCreateRequest(BaseModel):
     user_id: str | None = Field(default=None, min_length=1)
     plan_id: str | None = Field(default=None, min_length=1)
     label: str | None = Field(default=None, min_length=1)
-
+    category: str | None = Field(default=None, min_length=1)
+    role: str | None = Field(default=None, min_length=1)
+    scopes: list[str] | None = None
+    quota_limit_override: int | None = Field(default=None, ge=-1)
+    expires_at: str | None = Field(default=None, min_length=1)
+    purpose: str | None = Field(default=None, min_length=1)
+    issued_to: str | None = Field(default=None, min_length=1)
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CRYPTO_KEY = os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
@@ -467,21 +590,32 @@ async def list_api_keys(current_user: dict = Depends(require_scope(ADMIN_SETTING
         if key.get("status") == "revoked" or key.get("revoked_at"):
             continue
 
-        visible_keys.append({
-            "id": key.get("id", ""),
-            "prefix": key.get("prefix", ""),
-            "status": key.get("status", "enabled"),
-            "scopes": key.get("scopes", []),
-            "created_at": key.get("created_at", ""),
-            "last_used_at": key.get("last_used_at"),
-            "usage_count": key.get("usage_count", 0),
-            "plan_id": key.get("plan_id"),
-            "quota_scope": key.get("quota_scope"),
-            "quota_limit": key.get("quota_limit"),
-            "quota_used": key.get("quota_used", 0),
-            "quota_rejected_count": key.get("quota_rejected_count", 0),
-            "expires_at": key.get("expires_at"),
-        })
+    visible_keys.append({
+        "id": key.get("id", ""),
+        "key_id": key.get("id", ""),
+        "prefix": key.get("prefix", ""),
+        "status": key.get("status", "enabled"),
+        "category": key.get("category", DEFAULT_API_KEY_CATEGORY),
+        "role": key.get("role", CLIENT_KEY_PROFILE),
+        "profile": key.get("profile", CLIENT_KEY_PROFILE),
+        "label": key.get("label"),
+        "purpose": key.get("purpose"),
+        "issued_to": key.get("issued_to"),
+        "created_by_admin_role": key.get("created_by_admin_role"),
+        "client_id": key.get("client_id"),
+        "user_id": key.get("user_id"),
+        "scopes": key.get("scopes", []),
+        "created_at": key.get("created_at", ""),
+        "last_used_at": key.get("last_used_at"),
+        "usage_count": key.get("usage_count", 0),
+        "plan_id": key.get("plan_id"),
+        "quota_scope": key.get("quota_scope"),
+        "quota_limit": key.get("quota_limit"),
+        "quota_limit_override": key.get("quota_limit_override"),
+        "quota_used": key.get("quota_used", 0),
+        "quota_rejected_count": key.get("quota_rejected_count", 0),
+        "expires_at": key.get("expires_at"),
+    })
 
     return visible_keys
 
@@ -505,6 +639,12 @@ async def create_api_key(
     owner_user_id = current_user.get("sub", "default")
     requested_client_id = body.client_id if body else None
     requested_user_id = body.user_id if body else None
+    category, role, scopes = _resolve_api_key_profile(body)
+    created_by_admin_role = _current_admin_role(current_user)
+    quota_limit_override = body.quota_limit_override if body else None
+    expires_at = body.expires_at if body else None
+    purpose = body.purpose if body else None
+    issued_to = body.issued_to if body else None
 
     user_id = requested_user_id or requested_client_id or owner_user_id
     client_id = requested_client_id or current_user.get("client_id") or user_id
@@ -525,29 +665,49 @@ async def create_api_key(
     created_at = datetime.now(UTC).isoformat()
     requested_plan_id = body.plan_id if body and body.plan_id else None
     plan_id = resolve_plan_id(requested_plan_id) if requested_plan_id else _resolve_current_plan_id(owner_user_id, raw)
-    quota_policy = get_plan_policy(plan_id)
-    quota_limit = quota_limit_for_plan(plan_id, "evaluation")
-
     keys.append({
+    if quota_limit_override is None:
+        quota_policy = get_plan_policy(plan_id)
+        quota_limit = quota_limit_for_plan(plan_id, "evaluation")
+    else:
+        quota_limit = int(quota_limit_override)
+        quota_policy = {
+            "id": "manual_override",
+            "name": "Manual Quota Override",
+            "source": "manual",
+            "quotas": {
+                "evaluation": quota_limit,
+            },
+        }
+
+
         "id": key_id,
         "user_id": user_id,
         "client_id": client_id,
         "prefix": prefix,
         "hashed": hashed,
-        "scopes": DEFAULT_API_KEY_SCOPES,
-        "profile": CLIENT_KEY_PROFILE,
+        "scopes": scopes,
+        "profile": CLIENT_KEY_PROFILE if role == CLIENT_KEY_PROFILE else category,
+        "category": category,
+        "role": role,
         "label": body.label if body and body.label else None,
+        "purpose": purpose,
+        "issued_to": issued_to,
+        "created_by_admin_role": created_by_admin_role,
+
+
         "plan_id": plan_id,
         "quota_policy": quota_policy,
         "quota_scope": "evaluation",
         "quota_limit": quota_limit,
+        "quota_limit_override": quota_limit_override,
         "quota_used": 0,
         "quota_reset_at": None,
         "status": "enabled",
         "created_at": created_at,
         "last_used_at": None,
         "usage_count": 0,
-        "expires_at": None,
+        "expires_at": expires_at,
         "revoked_at": None,
     })
 
@@ -561,14 +721,21 @@ async def create_api_key(
         "quota_policy": quota_policy,
         "quota_scope": "evaluation",
         "quota_limit": quota_limit,
+        "quota_limit_override": quota_limit_override,
         "quota_used": 0,
         "prefix": prefix,
         "status": "enabled",
-        "scopes": DEFAULT_API_KEY_SCOPES,
-        "profile": CLIENT_KEY_PROFILE,
+        "scopes": scopes,
+        "profile": CLIENT_KEY_PROFILE if role == CLIENT_KEY_PROFILE else category,
+        "category": category,
+        "role": role,
         "client_id": client_id,
         "user_id": user_id,
         "label": body.label if body and body.label else None,
+        "purpose": purpose,
+        "issued_to": issued_to,
+        "created_by_admin_role": created_by_admin_role,
+        "expires_at": expires_at,
         "onboarding_usage": {
             "header": "X-API-Key",
             "base_url": "http://127.0.0.1:8000",
