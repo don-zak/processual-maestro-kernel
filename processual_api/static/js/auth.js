@@ -20,20 +20,22 @@ const AUTH = (() => {
     const token = res.access_token;
     CLIENT.setToken(token);
     sessionStorage.setItem(STORAGE_KEY, token);
+    sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('maestro_role');
+
+    _currentUser = { token };
+    return token;
+  }
+
+  function logout() {
+    CLIENT.clearToken();
     sessionStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem('maestro_role');
     sessionStorage.removeItem('maestro_entry_mode');
     sessionStorage.removeItem('maestro_ui_session_started_at');
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('maestro_role');
-
-    _currentUser = { token, username };
-    return token;
-  }
-
-  function logout() {
-    CLIENT.clearToken();
-    localStorage.removeItem(STORAGE_KEY);
     _currentUser = null;
   }
 

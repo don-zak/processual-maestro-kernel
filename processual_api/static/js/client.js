@@ -5,13 +5,17 @@ const CLIENT = (() => {
   let _onUnauthorized = null;
 
   function setToken(t) { _token = t; }
-  function getToken() { return _token; }
+  function getToken() { return _token || sessionStorage.getItem('maestro_token'); }
   function clearToken() { _token = null; }
   function onUnauthorized(fn) { _onUnauthorized = fn; }
 
   async function fetchJSON(method, path, body) {
     const headers = { 'Content-Type': 'application/json' };
-    if (_token) headers['Authorization'] = 'Bearer ' + _token;
+    const activeToken = _token || sessionStorage.getItem('maestro_token');
+    if (activeToken) {
+      _token = activeToken;
+      headers['Authorization'] = 'Bearer ' + activeToken;
+    }
 
     const opts = { method, headers };
     if (body !== undefined) opts.body = JSON.stringify(body);
@@ -20,11 +24,13 @@ const CLIENT = (() => {
     try {
       res = await fetch(BASE + path, opts);
     } catch (err) {
-      throw { status: 0, message: 'Network error — is the backend running?', detail: err.message };
+      throw { status: 0, message: 'Network error - is the backend running?', detail: err.message };
     }
 
     if (!res.ok) {
-      if (res.status === 401 && _onUnauthorized) _onUnauthorized();
+      if (res.status === 401 && _onUnauthorized && path === '/auth/me') {
+        _onUnauthorized();
+      }
       let detail = '';
       try { const j = await res.json(); detail = j.detail || j.message || ''; } catch (_) {}
       throw { status: res.status, message: res.statusText, detail };
