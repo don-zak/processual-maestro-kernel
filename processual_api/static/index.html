@@ -34,7 +34,6 @@
   <button class="nav-btn" data-page="governor"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Governor</span></button>
   <button class="nav-btn" data-page="gateway"><span class="nav-ind"></span><span class="nav-ico">⬡</span><span>Gateway</span></button>
   <button class="nav-btn" data-page="simulation"><span class="nav-ind"></span><span class="nav-ico">⟐</span><span>Simulation</span></button>
-  <button class="nav-btn" data-page="adapters"><span class="nav-ind"></span><span class="nav-ico">⇆</span><span>Adapters</span></button>
   <button class="nav-btn" data-page="settings"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Settings</span></button>
 </div>
 <div id="sidebar-footer">
@@ -541,35 +540,6 @@ pending ───────────────────→ deactivated
   </div>
 </div>
 </div>
-<!-- ===== PAGE: Adapters ===== -->
-<div class="page" id="page-adapters">
-<div>
-  <div class="sec-hdr"><div class="sh-title">Adapter Manager</div><div class="sh-sub">Provider configuration and testing</div></div>
-  <div id="adp-grid" class="grid-3" style="margin-bottom:var(--s-5)"></div>
-
-  <div class="grid-2-eq">
-    <div class="card">
-      <div class="sec-hdr"><div class="sh-title">Configure Provider</div></div>
-      <div class="flex-gap" style="flex-wrap:wrap;gap:6px">
-        <select id="adp-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
-        <input id="adp-api-key" class="inp" type="password" placeholder="API Key" style="width:160px;font-size:11px">
-        <input id="adp-model" class="inp" placeholder="Model (optional)" style="width:120px;font-size:11px">
-        <input id="adp-base-url" class="inp" placeholder="Base URL (optional)" style="width:140px;font-size:11px">
-        <button id="adp-configure-btn" class="btn accent sm">Configure</button>
-      </div>
-      <div id="adp-config-result"></div>
-    </div>
-    <div class="card">
-      <div class="sec-hdr"><div class="sh-title">Test Connection</div></div>
-      <div class="flex-gap">
-        <select id="adp-test-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
-        <button id="adp-test-btn" class="btn accent sm">Test</button>
-      </div>
-      <div id="adp-test-result"></div>
-    </div>
-  </div>
-</div>
-</div>
 
 </div><!-- /content -->
 </div><!-- /main -->
@@ -593,15 +563,12 @@ pending ───────────────────→ deactivated
 <script src="js/adapters/governance.js"></script>
 <script src="js/adapters/telemetry.js"></script>
 <script src="js/adapters/reports.js"></script>
-<script src="js/adapters/adapters.js"></script>
-
 <script>var PAGES = {};</script>
 
 <script src="js/pages/overview.js"></script>
 <script src="js/pages/gateway.js"></script>
 <script src="js/pages/governor.js"></script>
 <script src="js/pages/simulation.js"></script>
-<script src="js/pages/adapters.js"></script>
 <script src="js/pages/cgt.js"></script>
 <script src="js/pages/workflows.js"></script>
 <script src="js/pages/governance.js"></script>

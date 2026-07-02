@@ -8,7 +8,7 @@ SETTINGS_JS = Path("processual_api/static/js/pages/settings.js")
 def _settings_page_html() -> str:
     text = INDEX_HTML.read_text(encoding="utf-8")
     start = text.index("<!-- ===== PAGE: Settings ===== -->")
-    end = text.index("<!-- ===== PAGE: Adapters ===== -->")
+    end = text.index("</div><!-- /content -->", start)
     return text[start:end]
 
 
