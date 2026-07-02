@@ -1,6 +1,5 @@
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 LOGIN_HTML = Path("processual_api/static/login.html")
 

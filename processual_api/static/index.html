@@ -438,112 +438,67 @@ pending ───────────────────→ deactivated
 <!-- ===== PAGE: Settings ===== -->
 <div class="page" id="page-settings">
 <div>
-  <div class="sec-hdr"><div class="sh-title">Settings</div><div class="sh-sub">System configuration</div></div>
+  <div class="sec-hdr"><div class="sh-title">Client Settings</div><div class="sh-sub">Account, preferences, plan, and support</div></div>
 
   <div class="settings-sections">
 
-    <!-- General -->
+    <!-- Account -->
     <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">General</div></div>
+      <div class="sec-hdr">
+        <div class="sh-title">Account</div>
+        <div class="sh-sub">Current client session identity</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Signed in as</label>
+          <span id="set-account-user" class="font-data" style="font-weight:600">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Role</label>
+          <span id="set-account-role" class="font-data" style="font-weight:600;color:var(--amber)">client</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Session</label>
+          <span id="set-account-session" class="font-data text-muted">UI client session</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preferences -->
+    <div class="card settings-section">
+      <div class="sec-hdr"><div class="sh-title">Preferences</div></div>
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Language</label>
           <select id="set-lang" class="inp-sel">
             <option value="en">English</option>
-            <option value="ar">العربية</option>
+            <option value="ar">Arabic</option>
           </select>
         </div>
         <div class="inp-group">
-          <label class="inp-label">Dashboard Refresh</label>
+          <label class="inp-label">Refresh Interval</label>
           <select id="set-refresh" class="inp-sel">
-            <option value="10">10s</option>
-            <option value="30" selected>30s</option>
-            <option value="60">60s</option>
-            <option value="0">Off</option>
+            <option value="10">10 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+            <option value="300">5 minutes</option>
           </select>
         </div>
         <div class="inp-group">
           <label class="inp-label">Timezone</label>
-          <select id="set-tz" class="inp-sel">
-            <option value="UTC">UTC</option>
-            <option value="US/Eastern">US/Eastern</option>
-            <option value="US/Pacific">US/Pacific</option>
-            <option value="Europe/London">Europe/London</option>
-            <option value="Europe/Paris">Europe/Paris</option>
-            <option value="Asia/Dubai">Asia/Dubai</option>
-            <option value="Asia/Riyadh">Asia/Riyadh</option>
-            <option value="Asia/Tokyo">Asia/Tokyo</option>
-          </select>
+          <input id="set-tz" class="inp" placeholder="UTC">
         </div>
       </div>
-      <button id="set-general-save" class="btn accent sm" style="margin-top:var(--s-3)">Save General</button>
-      <span id="set-general-status" class="font-data text-muted" style="font-size:10px;margin-left:8px"></span>
+      <button id="set-general-save" class="btn accent sm" style="margin-top:var(--s-3)">Save Preferences</button>
+      <span id="set-general-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)"></span>
     </div>
 
-    <!-- LLM Provider -->
+    <!-- Plan and Usage -->
     <div class="card settings-section">
       <div class="sec-hdr">
-        <div class="sh-title">LLM Provider for Reports</div>
-        <div class="sh-sub">Optional — used for AI-generated report explanations</div>
+        <div class="sh-title">Plan and Usage</div>
+        <div class="sh-sub">Read-only account status for this phase</div>
       </div>
-      <div id="set-llm-status" class="status-badge" style="margin-bottom:var(--s-3)">Not configured</div>
-      <div class="settings-grid">
-        <div class="inp-group">
-          <label class="inp-label">Provider</label>
-          <select id="set-llm-provider" class="inp-sel">
-            <option value="opencode">OpenCode (local)</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Google Gemini</option>
-            <option value="deepseek">DeepSeek</option>
-          </select>
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">API Key</label>
-          <input id="set-llm-key" class="inp" type="password" placeholder="sk-...">
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">Model</label>
-          <input id="set-llm-model" class="inp" placeholder="e.g. gpt-4o">
-        </div>
-      </div>
-      <div class="flex-gap" style="margin-top:var(--s-3)">
-        <button id="set-llm-save" class="btn accent sm">Save &amp; Test</button>
-        <button id="set-llm-test" class="btn ghost sm">Test Connection</button>
-        <button id="set-llm-clear" class="btn ghost sm" style="color:var(--error)">Clear Key</button>
-      </div>
-      <div id="set-llm-result" class="font-data" style="font-size:10px;margin-top:var(--s-2)"></div>
-    </div>
-
-    <!-- Notifications -->
-    <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">Notifications</div></div>
-      <div class="settings-grid">
-        <div class="inp-group">
-          <label class="inp-label">Discord Webhook URL</label>
-          <input id="set-webhook" class="inp" placeholder="https://discord.com/api/webhooks/..." type="url">
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">Alert Level</label>
-          <select id="set-alert-level" class="inp-sel">
-            <option value="debug">Debug</option>
-            <option value="info">Info</option>
-            <option value="warning" selected>Warning</option>
-            <option value="error">Error</option>
-            <option value="critical">Critical only</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex-gap" style="margin-top:var(--s-3)">
-        <button id="set-notif-save" class="btn accent sm">Save</button>
-        <button id="set-notif-test" class="btn ghost sm">Test Webhook</button>
-      </div>
-      <span id="set-notif-status" class="font-data text-muted" style="font-size:10px;margin-left:8px"></span>
-    </div>
-
-    <!-- Subscription -->
-    <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">Subscription</div></div>
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Plan</label>
@@ -554,34 +509,38 @@ pending ───────────────────→ deactivated
           <span id="set-sub-status" class="font-data" style="font-weight:600">—</span>
         </div>
         <div class="inp-group">
-          <label class="inp-label">Renews</label>
-          <span id="set-sub-renews" class="font-data">—</span>
+          <label class="inp-label">Renews At</label>
+          <span id="set-sub-renews" class="font-data text-muted">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Seats</label>
-          <span id="set-sub-seats" class="font-data">—</span>
+          <span id="set-sub-seats" class="font-data text-muted">—</span>
         </div>
       </div>
-      <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)">Manage Subscription →</button>
+      <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)" disabled>Manage Subscription - coming soon</button>
     </div>
 
-    <!-- Security -->
+    <!-- Provider Connections -->
     <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">Security</div></div>
-      <div class="settings-grid">
-        <div class="inp-group">
-          <label class="inp-label">API Keys</label>
-          <div id="set-apikeys-list" class="font-data text-muted" style="font-size:11px">No API keys configured</div>
-          <button id="set-apikey-generate" class="btn ghost sm" style="margin-top:var(--s-2)">+ Generate New Key</button>
-          <div id="set-apikey-result" class="font-data" style="font-size:10px;margin-top:var(--s-1)"></div>
-        </div>
+      <div class="sec-hdr">
+        <div class="sh-title">Provider Connections</div>
+        <div class="sh-sub">Bring your own provider credentials</div>
       </div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Client provider connection controls will be added in a later client-safe phase. This area will not use Maestro-owned provider accounts.</div>
+    </div>
+
+    <!-- Support -->
+    <div class="card settings-section">
+      <div class="sec-hdr">
+        <div class="sh-title">Support</div>
+        <div class="sh-sub">Help, onboarding, and account assistance</div>
+      </div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">For onboarding, provider setup, billing questions, or operational help, contact the Maestro support/admin team.</div>
     </div>
 
   </div>
 </div>
 </div>
-
 <!-- ===== PAGE: Adapters ===== -->
 <div class="page" id="page-adapters">
 <div>

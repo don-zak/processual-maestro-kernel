@@ -260,8 +260,8 @@ def test_static_console_settings_and_adapter_pages_keep_api_markers():
 
     settings_markers = [
         "settings",
-        "api",
-        "key",
+        "client",
+        "preferences",
         "subscription",
     ]
 

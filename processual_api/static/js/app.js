@@ -9,7 +9,7 @@ const pageMeta = {
   gateway:    { title: 'Gateway Dashboard', sub: 'Agent registry, evaluation, lifecycle management' },
   simulation: { title: 'Supervision Simulation', sub: 'Virtual agent governance pipeline' },
   adapters:   { title: 'Adapter Manager', sub: 'Provider configuration and testing' },
-  settings:   { title: 'Settings', sub: 'System configuration' },
+  settings:   { title: 'Client Settings', sub: 'Account, preferences, plan, and support' },
 };
 
 const APP = (() => {
