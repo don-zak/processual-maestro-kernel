@@ -82,6 +82,7 @@ const APP = (() => {
     if (tt && pageMeta[pg]) tt.textContent = pageMeta[pg].title;
     if (ts && pageMeta[pg]) ts.textContent = pageMeta[pg].sub;
     window.location.hash = 'page-' + pg;
+    if (pg === 'settings') { PAGES.settings?.init?.(); }
     if (pg === 'gateway') {
       PAGES.gateway?.refresh();
       setTimeout(() => {

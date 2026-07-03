@@ -8,6 +8,8 @@ PAGES.settings = (() => {
     requests: null,
   };
 
+  let settingsInitDone = false;
+
   function setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value || '-';
@@ -271,54 +273,75 @@ PAGES.settings = (() => {
     }
   }
 
+  function focusSupervisorMessagesCard() {
+    const card = document.getElementById('set-client-support-card');
+    if (card && typeof card.scrollIntoView === 'function') {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   function prepareClientSupportRequest(requestType, requestedPlan, message) {
     const typeEl = document.getElementById('set-client-request-type');
     const planEl = document.getElementById('set-client-request-plan');
     const messageEl = document.getElementById('set-client-request-message');
+    const supervisorTypeEl = document.getElementById('set-supervisor-message-type');
+    const supervisorPlanEl = document.getElementById('set-supervisor-message-plan');
+    const supervisorMessageEl = document.getElementById('set-supervisor-message-body');
 
     if (typeEl) typeEl.value = requestType || 'general_support';
     if (planEl) planEl.value = requestedPlan || '';
     if (messageEl) messageEl.value = message || '';
 
+    if (supervisorTypeEl) supervisorTypeEl.value = requestType || 'general_support';
+    if (supervisorPlanEl) supervisorPlanEl.value = requestedPlan || '';
+    if (supervisorMessageEl) supervisorMessageEl.value = message || '';
+
     setText('set-client-request-status', 'Prepared support request. Review and submit.');
-    setText('set-client-support-status', 'Support request prepared in Requests & Billing.');
-    focusClientRequestsCard();
+    setText('set-supervisor-message-status', 'Prepared supervisor message. Review and send.');
+    focusSupervisorMessagesCard();
+  }
+
+  async function sendSupervisorMessage() {
+    const sendBtn = document.getElementById('set-supervisor-message-send');
+    const bodyEl = document.getElementById('set-supervisor-message-body');
+    const body = {
+      request_type: document.getElementById('set-supervisor-message-type')?.value || 'general_support',
+      requested_plan: document.getElementById('set-supervisor-message-plan')?.value || null,
+      message: bodyEl?.value || '',
+    };
+
+    if (body.message.trim().length < 10) {
+      setText('set-supervisor-message-status', 'Message must be at least 10 characters');
+      return;
+    }
+
+    if (sendBtn) sendBtn.disabled = true;
+    try {
+      const result = await CLIENT.post('/settings/client-request', body);
+      setText('set-supervisor-message-status', result.message || 'Supervisor message sent');
+      setText('set-client-request-status', result.message || 'Supervisor message sent');
+      if (bodyEl) bodyEl.value = '';
+      APP.showToast('Supervisor message sent', 'success');
+      await loadClientRequests();
+    } catch (e) {
+      setText('set-supervisor-message-status', 'Error: ' + (e.detail || e.message));
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
+  function prefillSupervisorReadinessReview() {
+    prepareClientSupportRequest(
+      'general_support',
+      '',
+      'Please review this client account readiness checklist and advise on the next setup step.'
+    );
   }
 
   function initClientSupportActions() {
-    document.getElementById('set-support-onboarding')?.addEventListener('click', () => {
-      prepareClientSupportRequest(
-        'general_support',
-        '',
-        'Please help us with onboarding next steps for this Maestro client account.'
-      );
-    });
-
-    document.getElementById('set-support-provider')?.addEventListener('click', () => {
-      prepareClientSupportRequest(
-        'provider_setup_help',
-        '',
-        'Please help us set up or verify our BYOK provider connection. No provider secrets are included in this message.'
-      );
-    });
-
-    document.getElementById('set-support-billing')?.addEventListener('click', () => {
-      prepareClientSupportRequest(
-        'billing_usage_review',
-        '',
-        'Please review our billing and usage status and advise on the next operational step.'
-      );
-    });
-
-    document.getElementById('set-support-enterprise')?.addEventListener('click', () => {
-      prepareClientSupportRequest(
-        'enterprise_integration_upgrade',
-        'enterprise_integration',
-        'Please evaluate this client account for Enterprise Integration upgrade and integration key provisioning.'
-      );
-    });
+    document.getElementById('set-supervisor-message-send')?.addEventListener('click', sendSupervisorMessage);
+    document.getElementById('set-supervisor-message-prefill')?.addEventListener('click', prefillSupervisorReadinessReview);
   }
-
 
   function readinessLine(ok, label, status) {
     return (ok ? '✓ ' : '! ') + label + ': ' + status;
@@ -427,13 +450,8 @@ PAGES.settings = (() => {
   }
 
   function prepareReadinessSupportRequest() {
-    prepareClientSupportRequest(
-      'general_support',
-      '',
-      'Please review this client account readiness checklist and advise on the next setup step.'
-    );
+    prefillSupervisorReadinessReview();
   }
-
 
   function clientIntegrationGuideText(kind) {
     const baseUrl = window.location.origin || '<maestro-base-url>';
@@ -500,6 +518,15 @@ PAGES.settings = (() => {
   }
 
 
+  function settingsPageRoot() {
+    return (
+      document.querySelector('#page-settings .settings-sections') ||
+      document.querySelector('.settings-sections') ||
+      document.getElementById('page-settings') ||
+      document
+    );
+  }
+
   function settingsSectionBodyNodes(card) {
     return Array.from(card.children).filter((child) => !child.classList.contains('sec-hdr'));
   }
@@ -519,8 +546,12 @@ PAGES.settings = (() => {
     }
   }
 
+  function settingsSectionCards() {
+    return Array.from(settingsPageRoot().querySelectorAll('.settings-section'));
+  }
+
   function collapseSettingsSections(collapseAll) {
-    document.querySelectorAll('[data-page="settings"] .settings-section').forEach((card) => {
+    settingsSectionCards().forEach((card) => {
       const keepOpen = card.id === 'set-client-readiness-card';
       setSettingsSectionCollapsed(card, collapseAll && !keepOpen);
     });
@@ -531,37 +562,42 @@ PAGES.settings = (() => {
   }
 
   function initCollapsibleSettingsSections() {
-    document.querySelectorAll('[data-page="settings"] .settings-section').forEach((card) => {
+    settingsSectionCards().forEach((card) => {
       const header = card.querySelector('.sec-hdr');
-      if (!header || header.querySelector('[data-settings-section-toggle="true"]')) return;
+      if (!header) return;
 
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'btn sm';
-      toggle.dataset.settingsSectionToggle = 'true';
-      toggle.textContent = 'Hide';
-      toggle.setAttribute('aria-expanded', 'true');
-      toggle.style.marginLeft = 'auto';
+      let toggle = header.querySelector('[data-settings-section-toggle="true"]');
+      if (!toggle) {
+        toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'btn sm';
+        toggle.dataset.settingsSectionToggle = 'true';
+        toggle.style.marginLeft = 'auto';
+        header.appendChild(toggle);
+      }
 
-      toggle.addEventListener('click', () => {
+      toggle.textContent = card.dataset.collapsed === 'true' ? 'Show' : 'Hide';
+      toggle.setAttribute('aria-expanded', card.dataset.collapsed === 'true' ? 'false' : 'true');
+      toggle.onclick = () => {
         const collapsed = card.dataset.collapsed !== 'true';
         setSettingsSectionCollapsed(card, collapsed);
-      });
-
-      header.appendChild(toggle);
+      };
     });
 
-    document.getElementById('set-sections-expand')?.addEventListener('click', () => {
-      collapseSettingsSections(false);
-    });
+    const expandButton = document.getElementById('set-sections-expand');
+    if (expandButton) {
+      expandButton.type = 'button';
+      expandButton.onclick = () => collapseSettingsSections(false);
+    }
 
-    document.getElementById('set-sections-collapse')?.addEventListener('click', () => {
-      collapseSettingsSections(true);
-    });
+    const collapseButton = document.getElementById('set-sections-collapse');
+    if (collapseButton) {
+      collapseButton.type = 'button';
+      collapseButton.onclick = () => collapseSettingsSections(true);
+    }
 
-    collapseSettingsSections(true);
+    setText('set-sections-collapse-status', 'Sections are ready');
   }
-
 
   async function loadClientSettings() {
     await loadAccount();
@@ -586,6 +622,13 @@ PAGES.settings = (() => {
   }
 
   function init() {
+    if (settingsInitDone) {
+      initCollapsibleSettingsSections();
+      refresh();
+      return;
+    }
+    settingsInitDone = true;
+
     document.getElementById('set-general-save')?.addEventListener('click', async () => {
       const body = {
         language: document.getElementById('set-lang')?.value || 'en',

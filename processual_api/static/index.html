@@ -725,32 +725,42 @@ pending ───────────────────→ deactivated
       <div id="set-client-request-history" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No client requests submitted yet.</div>
       <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Requests are saved for admin follow-up. Payment checkout and provider secret changes are not performed from this panel.</div>
     </div>
-    <!-- Support -->
+    <!-- Supervisor Messages -->
     <div class="card settings-section" id="set-client-support-card">
       <div class="sec-hdr">
-        <div class="sh-title">Support</div>
-        <div class="sh-sub">Quick support paths for onboarding, provider setup, billing, and integration</div>
+        <div class="sh-title">Supervisor Messages &amp; Support</div>
+        <div class="sh-sub">Message the Maestro supervisor/admin team without exposing provider secrets or raw keys</div>
       </div>
       <div class="settings-grid">
         <div class="inp-group">
-          <label class="inp-label">Onboarding</label>
-          <button id="set-support-onboarding" class="btn sm">Prepare onboarding request</button>
+          <label class="inp-label">Message Type</label>
+          <select id="set-supervisor-message-type" class="inp-sel">
+            <option value="general_support">General support</option>
+            <option value="provider_setup_help">Provider setup help</option>
+            <option value="billing_usage_review">Billing and usage review</option>
+            <option value="integration_key_provisioning">Integration key provisioning</option>
+            <option value="enterprise_integration_upgrade">Enterprise integration upgrade</option>
+          </select>
         </div>
         <div class="inp-group">
-          <label class="inp-label">Provider Setup</label>
-          <button id="set-support-provider" class="btn sm">Prepare provider setup request</button>
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">Billing Review</label>
-          <button id="set-support-billing" class="btn sm">Prepare billing review request</button>
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">Enterprise Integration</label>
-          <button id="set-support-enterprise" class="btn sm">Prepare enterprise request</button>
+          <label class="inp-label">Requested Plan</label>
+          <select id="set-supervisor-message-plan" class="inp-sel">
+            <option value="">No plan change</option>
+            <option value="enterprise_integration">Enterprise Integration</option>
+            <option value="enterprise_integration_starter">Enterprise Integration Starter</option>
+            <option value="business">Business</option>
+            <option value="starter">Starter</option>
+          </select>
         </div>
       </div>
-      <div id="set-client-support-status" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Choose a support path to prefill the Requests &amp; Billing form above. Review the message before submitting.</div>
-      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Support actions only prepare client requests. They do not open payment checkout, change provider secrets, or call admin-only routes.</div>
+      <div class="inp-group" style="margin-top:var(--s-3)">
+        <label class="inp-label">Message to Supervisor</label>
+        <textarea id="set-supervisor-message-body" class="inp" rows="4" placeholder="Write a message for the Maestro supervisor. Use placeholders only; do not paste raw provider secrets or raw integration keys."></textarea>
+      </div>
+      <button id="set-supervisor-message-send" class="btn accent sm" style="margin-top:var(--s-3)">Send supervisor message</button>
+      <button id="set-supervisor-message-prefill" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Prefill readiness review</button>
+      <span id="set-supervisor-message-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Supervisor messages are saved through the existing client request workflow for admin follow-up. They do not open payment checkout, change provider secrets, or call admin-only routes.</div>
     </div>
 
   </div>

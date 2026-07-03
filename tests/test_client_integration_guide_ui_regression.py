@@ -83,6 +83,6 @@ def test_client_integration_guide_is_initialized_before_collapsible_sections() -
 
     assert "initClientIntegrationGuide();" in js
     assert "initCollapsibleSettingsSections();" in js
-    assert js.index("initClientIntegrationGuide();") < js.index(
+    assert js.rindex("initClientIntegrationGuide();") < js.rindex(
         "initCollapsibleSettingsSections();"
     )
