@@ -333,6 +333,137 @@ async def update_general(body: GeneralSettings, current_user: dict = Depends(get
     return body
 
 
+CLIENT_REQUEST_TYPE_LABELS: dict[str, str] = {
+    "enterprise_integration_upgrade": "Upgrade to Enterprise Integration",
+    "integration_key_provisioning": "Request integration key provisioning",
+    "provider_setup_help": "Provider setup help",
+    "billing_usage_review": "Billing and usage review",
+    "general_support": "General support",
+}
+
+
+class ClientRequestPayload(BaseModel):
+    request_type: str = Field(default="general_support", min_length=1)
+    requested_plan: str | None = Field(default=None, min_length=1)
+    message: str = Field(min_length=10, max_length=2000)
+
+
+def _client_request_type_options() -> list[dict[str, str]]:
+    return [
+        {"id": request_type, "label": label}
+        for request_type, label in CLIENT_REQUEST_TYPE_LABELS.items()
+    ]
+
+
+def _normalize_client_request_type(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    normalized = normalized.replace("-", "_").replace(" ", "_")
+    if normalized in CLIENT_REQUEST_TYPE_LABELS:
+        return normalized
+    return "general_support"
+
+
+def _client_request_summary(entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": entry.get("id", ""),
+        "request_type": entry.get("request_type", "general_support"),
+        "request_label": CLIENT_REQUEST_TYPE_LABELS.get(
+            entry.get("request_type", "general_support"),
+            CLIENT_REQUEST_TYPE_LABELS["general_support"],
+        ),
+        "requested_plan": entry.get("requested_plan") or "",
+        "status": entry.get("status", "pending"),
+        "created_at": entry.get("created_at", ""),
+        "source": entry.get("source", "client_settings"),
+    }
+
+
+def _client_requests(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    requests = raw.get("client_requests", [])
+    return requests if isinstance(requests, list) else []
+
+
+@router.get("/client-requests", response_model=dict)
+async def list_client_requests(current_user: dict = Depends(get_current_user)):
+    user_id = str(
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or "default"
+    )
+    raw = _load_raw(user_id)
+    requests = _client_requests(raw)
+
+    latest = [
+        _client_request_summary(entry)
+        for entry in requests
+        if isinstance(entry, dict)
+    ][-5:]
+    latest.reverse()
+
+    return {
+        "status": "ready",
+        "request_count": len(requests),
+        "request_types": _client_request_type_options(),
+        "latest_requests": latest,
+        "message": "Client requests are ready for admin follow-up.",
+    }
+
+
+@router.post("/client-request", response_model=dict)
+async def submit_client_request(
+    body: ClientRequestPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = str(
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or "default"
+    )
+    client_id = str(current_user.get("client_id") or user_id)
+    message = body.message.strip()
+    if len(message) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request message must be at least 10 characters.",
+        )
+
+    request_type = _normalize_client_request_type(body.request_type)
+    requested_plan = (
+        body.requested_plan.strip()
+        if body.requested_plan
+        else ""
+    )
+    now = datetime.now(UTC).isoformat()
+
+    raw = _load_raw(user_id)
+    requests = _client_requests(raw)
+    entry = {
+        "id": f"creq_{secrets.token_hex(8)}",
+        "status": "pending",
+        "source": "client_settings",
+        "created_at": now,
+        "updated_at": now,
+        "user_id": user_id,
+        "client_id": client_id,
+        "role": current_user.get("role", "client"),
+        "request_type": request_type,
+        "request_label": CLIENT_REQUEST_TYPE_LABELS[request_type],
+        "requested_plan": requested_plan,
+        "message": message,
+    }
+
+    requests.append(entry)
+    raw["client_requests"] = requests[-100:]
+    _save_raw(user_id, raw)
+
+    return {
+        "status": "submitted",
+        "request": _client_request_summary(entry),
+        "request_count": len(raw["client_requests"]),
+        "message": "Client request submitted for admin follow-up.",
+    }
+
+
 def _client_provider_connection_payload(raw: dict[str, Any]) -> dict[str, Any]:
     merged = _merge_defaults(raw)
     provider_status = merged.get("llm_provider", {})

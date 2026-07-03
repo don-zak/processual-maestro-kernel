@@ -178,6 +178,69 @@ PAGES.settings = (() => {
   }
 
 
+  function renderClientRequests(requests) {
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return 'No client requests submitted yet.';
+    }
+
+    return requests.map((request) => [
+      'id=' + (request.id || '-'),
+      'type=' + (request.request_label || request.request_type || '-'),
+      'status=' + (request.status || '-'),
+      'requested_plan=' + (request.requested_plan || '-'),
+      'created_at=' + (request.created_at || '-'),
+    ].join(' | ')).join('\n');
+  }
+
+  function applyClientRequests(info) {
+    if (!info) {
+      setText('set-client-request-status', 'Request status unavailable');
+      return;
+    }
+
+    const latest = Array.isArray(info.latest_requests) ? info.latest_requests : [];
+    setText('set-client-request-status', 'Ready / ' + formatNumber(info.request_count || 0));
+    setText('set-client-request-history', renderClientRequests(latest));
+  }
+
+  async function loadClientRequests() {
+    try {
+      const info = await CLIENT.get('/settings/client-requests');
+      applyClientRequests(info);
+    } catch (e) {
+      applyClientRequests(null);
+    }
+  }
+
+  async function submitClientRequest() {
+    const submitBtn = document.getElementById('set-client-request-submit');
+    const messageEl = document.getElementById('set-client-request-message');
+    const body = {
+      request_type: document.getElementById('set-client-request-type')?.value || 'general_support',
+      requested_plan: document.getElementById('set-client-request-plan')?.value || null,
+      message: messageEl?.value || '',
+    };
+
+    if (body.message.trim().length < 10) {
+      setText('set-client-request-status', 'Message must be at least 10 characters');
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const result = await CLIENT.post('/settings/client-request', body);
+      setText('set-client-request-status', result.message || 'Request submitted');
+      if (messageEl) messageEl.value = '';
+      APP.showToast('Client request submitted', 'success');
+      await loadClientRequests();
+    } catch (e) {
+      setText('set-client-request-status', 'Error: ' + (e.detail || e.message));
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  }
+
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -215,6 +278,8 @@ PAGES.settings = (() => {
         setText('set-general-status', 'Error: ' + (e.detail || e.message));
       }
     });
+
+    document.getElementById('set-client-request-submit')?.addEventListener('click', submitClientRequest);
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');

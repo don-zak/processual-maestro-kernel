@@ -610,6 +610,44 @@ pending ───────────────────→ deactivated
       <div id="set-provider-connection-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Client provider status is read-only in this phase. Raw provider secrets are never displayed in the client console.</div>
     </div>
 
+
+    <!-- Requests & Billing -->
+    <div class="card settings-section" id="set-client-requests-card">
+      <div class="sec-hdr">
+        <div class="sh-title">Requests &amp; Billing</div>
+        <div class="sh-sub">Client requests for billing, upgrades, integration, and support</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Request Type</label>
+          <select id="set-client-request-type" class="inp-sel">
+            <option value="enterprise_integration_upgrade">Upgrade to Enterprise Integration</option>
+            <option value="integration_key_provisioning">Request integration key provisioning</option>
+            <option value="provider_setup_help">Provider setup help</option>
+            <option value="billing_usage_review">Billing and usage review</option>
+            <option value="general_support">General support</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Requested Plan</label>
+          <select id="set-client-request-plan" class="inp-sel">
+            <option value="">No plan change</option>
+            <option value="enterprise_integration">Enterprise Integration</option>
+            <option value="enterprise_integration_starter">Enterprise Integration Starter</option>
+            <option value="business">Business</option>
+            <option value="starter">Starter</option>
+          </select>
+        </div>
+      </div>
+      <div class="inp-group" style="margin-top:var(--s-3)">
+        <label class="inp-label">Request Message</label>
+        <textarea id="set-client-request-message" class="inp" rows="4" placeholder="Describe what you need from the Maestro admin/support team. Do not paste provider secrets or raw keys."></textarea>
+      </div>
+      <button id="set-client-request-submit" class="btn accent sm" style="margin-top:var(--s-3)">Submit Request</button>
+      <span id="set-client-request-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">—</span>
+      <div id="set-client-request-history" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No client requests submitted yet.</div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Requests are saved for admin follow-up. Payment checkout and provider secret changes are not performed from this panel.</div>
+    </div>
     <!-- Support -->
     <div class="card settings-section">
       <div class="sec-hdr">
