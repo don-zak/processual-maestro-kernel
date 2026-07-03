@@ -493,10 +493,10 @@ pending ───────────────────→ deactivated
     </div>
 
     <!-- Plan and Usage -->
-    <div class="card settings-section">
+    <div class="card settings-section" id="set-usage-summary-card">
       <div class="sec-hdr">
         <div class="sh-title">Plan and Usage</div>
-        <div class="sh-sub">Read-only account status for this phase</div>
+        <div class="sh-sub">Read-only account status and Maestro usage units</div>
       </div>
       <div class="settings-grid">
         <div class="inp-group">
@@ -516,8 +516,43 @@ pending ───────────────────→ deactivated
           <span id="set-sub-seats" class="font-data text-muted">—</span>
         </div>
       </div>
+
+      <div class="sec-hdr" style="margin-top:var(--s-3)">
+        <div class="sh-title">Usage &amp; Quotas</div>
+        <div class="sh-sub">Client ledger summary from Maestro usage units</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Usage Plan</label>
+          <span id="set-usage-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
+        </div>
+
+        <div class="inp-group">
+          <label class="inp-label">Quota Used</label>
+          <span id="set-usage-quota-used" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Quota Remaining</label>
+          <span id="set-usage-quota-remaining" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Total Units</label>
+          <span id="set-usage-total-units" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Rejected Requests</label>
+          <span id="set-usage-rejected-requests" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Latest Status</label>
+          <span id="set-usage-latest-status" class="font-data text-muted">—</span>
+        </div>
+      </div>
+      <div id="set-usage-byok-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">BYOK: provider_cost_included=false. Provider costs are not included in Maestro usage units. Rejected requests are tracked separately from successful usage.</div>
+
       <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)" disabled>Manage Subscription - coming soon</button>
     </div>
+
 
     <!-- Provider Connections -->
     <div class="card settings-section">

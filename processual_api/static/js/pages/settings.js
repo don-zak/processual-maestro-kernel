@@ -50,6 +50,48 @@ PAGES.settings = (() => {
     const maxSeats = sub.max_seats || 1;
     setText('set-sub-seats', seats + ' / ' + maxSeats);
   }
+  function formatNumber(value) {
+    if (value === null || value === undefined || value === '') return '-';
+    const num = Number(value);
+    if (Number.isFinite(num)) return num.toLocaleString();
+    return String(value);
+  }
+
+  function latestUsageStatus(summary) {
+    const latest = Array.isArray(summary.latest_events) ? summary.latest_events[0] : null;
+    if (!latest) return 'No recent usage';
+
+    const status = latest.status_code || latest.status || '-';
+    const endpoint = latest.endpoint || latest.path || 'latest event';
+    const rejected = latest.quota_rejected === true || Number(status) === 429;
+    const prefix = rejected ? 'Rejected' : 'Latest';
+    return prefix + ' ' + status + ' / ' + endpoint;
+  }
+
+  function applyUsageSummary(summary) {
+    if (!summary) return;
+
+    setText('set-usage-plan', summary.plan_id || summary.plan || '-');
+    setText('set-usage-quota-used', formatNumber(summary.quota_used));
+    setText('set-usage-quota-remaining', formatNumber(summary.quota_remaining));
+    setText('set-usage-total-units', formatNumber(summary.total_units));
+    setText('set-usage-rejected-requests', formatNumber(summary.rejected_requests));
+    setText('set-usage-latest-status', latestUsageStatus(summary));
+
+    const rejectedEl = document.getElementById('set-usage-rejected-requests');
+    if (rejectedEl) {
+      rejectedEl.style.color = Number(summary.rejected_requests || 0) > 0 ? 'var(--warn)' : '';
+    }
+  }
+
+  async function loadUsageSummary() {
+    try {
+      const summary = await CLIENT.get('/settings/usage-summary');
+      applyUsageSummary(summary);
+    } catch (e) {
+      setText('set-usage-latest-status', 'Usage summary unavailable');
+    }
+  }
 
   async function loadClientSettings() {
     await loadAccount();
@@ -68,6 +110,7 @@ PAGES.settings = (() => {
     } catch (e) {
       if (settings && settings.subscription) applySubscription(settings.subscription);
     }
+    await loadUsageSummary();
   }
 
   function init() {
