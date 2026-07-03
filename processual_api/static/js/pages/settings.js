@@ -1,4 +1,13 @@
 PAGES.settings = (() => {
+  const readinessState = {
+    account: null,
+    subscription: null,
+    usage: null,
+    integration: null,
+    provider: null,
+    requests: null,
+  };
+
   function setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value || '-';
@@ -15,6 +24,8 @@ PAGES.settings = (() => {
   async function loadAccount() {
     try {
       const me = await CLIENT.get('/auth/me');
+      readinessState.account = me;
+      updateClientReadiness();
       setText('set-account-user', me.user_id || me.client_id || me.sub || 'current client');
       setText('set-account-role', me.role || sessionRole());
       const scopes = Array.isArray(me.scopes) ? me.scopes.join(', ') : (me.scopes || '');
@@ -23,6 +34,8 @@ PAGES.settings = (() => {
       setText('set-account-user', 'current client');
       setText('set-account-role', sessionRole());
       setText('set-account-session', 'UI client session');
+      readinessState.account = { role: sessionRole(), fallback: true };
+      updateClientReadiness();
     }
   }
 
@@ -38,6 +51,8 @@ PAGES.settings = (() => {
 
   function applySubscription(sub) {
     if (!sub) return;
+    readinessState.subscription = sub;
+    updateClientReadiness();
     setText('set-sub-plan', sub.plan || '-');
     const statusEl = document.getElementById('set-sub-status');
     if (statusEl) {
@@ -70,6 +85,8 @@ PAGES.settings = (() => {
 
   function applyUsageSummary(summary) {
     if (!summary) return;
+    readinessState.usage = summary;
+    updateClientReadiness();
 
     setText('set-usage-plan', summary.plan_id || summary.plan || '-');
     setText('set-usage-quota-used', formatNumber(summary.quota_used));
@@ -117,6 +134,8 @@ PAGES.settings = (() => {
   }
 
   function applyApiKeyIntegration(info) {
+    readinessState.integration = info || null;
+    updateClientReadiness();
     const card = document.getElementById('set-api-key-integration-card');
     if (!card) return;
 
@@ -146,6 +165,8 @@ PAGES.settings = (() => {
 
 
   function applyProviderConnection(info) {
+    readinessState.provider = info || null;
+    updateClientReadiness();
     if (!info) {
       setText('set-provider-connection-status', 'Provider status unavailable');
       return;
@@ -193,6 +214,8 @@ PAGES.settings = (() => {
   }
 
   function applyClientRequests(info) {
+    readinessState.requests = info || null;
+    updateClientReadiness();
     if (!info) {
       setText('set-client-request-status', 'Request status unavailable');
       return;
@@ -297,6 +320,121 @@ PAGES.settings = (() => {
   }
 
 
+  function readinessLine(ok, label, status) {
+    return (ok ? '✓ ' : '! ') + label + ': ' + status;
+  }
+
+  function integrationReadiness() {
+    const integration = readinessState.integration;
+    if (!integration) return { ok: false, status: 'loading' };
+    if (integration.enabled !== true) {
+      return { ok: true, status: 'not included in current plan' };
+    }
+    const keyCount = Number(integration.key_count || 0);
+    if (keyCount > 0) {
+      return { ok: true, status: 'ready / ' + formatNumber(keyCount) + ' key(s)' };
+    }
+    return { ok: false, status: 'enabled / key provisioning pending' };
+  }
+
+  function providerReadiness() {
+    const provider = readinessState.provider;
+    if (!provider) return { ok: false, status: 'loading' };
+    if (provider.configured === true) {
+      return { ok: true, status: provider.provider || 'configured' };
+    }
+    return { ok: false, status: 'BYOK provider not configured' };
+  }
+
+  function requestsReadiness() {
+    const requests = readinessState.requests;
+    if (!requests) return { ok: false, status: 'loading' };
+    return {
+      ok: true,
+      status: 'ready / ' + formatNumber(requests.request_count || 0) + ' request(s)',
+    };
+  }
+
+  function nextReadinessStep(integration, provider, requests) {
+    if (!readinessState.account) return 'Reload account session';
+    if (!readinessState.subscription) return 'Confirm active plan';
+    if (!readinessState.usage) return 'Wait for usage summary';
+    if (!provider.ok) return 'Prepare provider setup request';
+    if (!integration.ok) return 'Request integration key provisioning';
+    if (requests.status.indexOf('0 request') === -1) return 'Wait for admin follow-up';
+    return 'Client console is ready; monitor usage and requests';
+  }
+
+  function updateClientReadiness() {
+    const integration = integrationReadiness();
+    const provider = providerReadiness();
+    const requests = requestsReadiness();
+    const accountOk = Boolean(readinessState.account);
+    const planOk = Boolean(readinessState.subscription);
+    const usageOk = Boolean(readinessState.usage);
+
+    const checks = [
+      {
+        ok: accountOk,
+        label: 'Account session',
+        status: accountOk ? 'loaded' : 'loading',
+      },
+      {
+        ok: planOk,
+        label: 'Plan status',
+        status: planOk ? (readinessState.subscription.status || 'loaded') : 'loading',
+      },
+      {
+        ok: usageOk,
+        label: 'Usage summary',
+        status: usageOk ? 'available' : 'loading',
+      },
+      {
+        ok: integration.ok,
+        label: 'Integration key',
+        status: integration.status,
+      },
+      {
+        ok: provider.ok,
+        label: 'BYOK provider',
+        status: provider.status,
+      },
+      {
+        ok: requests.ok,
+        label: 'Requests workflow',
+        status: requests.status,
+      },
+    ];
+
+    const readyCount = checks.filter((check) => check.ok).length;
+    const score = Math.round((readyCount / checks.length) * 100);
+
+    setText('set-readiness-score', score + '% ready');
+    setText('set-readiness-next-step', nextReadinessStep(integration, provider, requests));
+    setText('set-readiness-account', accountOk ? 'Ready' : 'Loading');
+    setText(
+      'set-readiness-plan',
+      planOk
+        ? ((readinessState.subscription.plan || readinessState.subscription.plan_id || '-') + ' / ' + (readinessState.subscription.status || '-'))
+        : 'Loading'
+    );
+    setText('set-readiness-integration', integration.status);
+    setText('set-readiness-provider', provider.status);
+    setText(
+      'set-readiness-checklist',
+      checks.map((check) => readinessLine(check.ok, check.label, check.status)).join('\n')
+    );
+  }
+
+  function prepareReadinessSupportRequest() {
+    prepareClientSupportRequest(
+      'general_support',
+      '',
+      'Please review this client account readiness checklist and advise on the next setup step.'
+    );
+  }
+
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -337,6 +475,7 @@ PAGES.settings = (() => {
 
     document.getElementById('set-client-request-submit')?.addEventListener('click', submitClientRequest);
     initClientSupportActions();
+    document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');

@@ -441,6 +441,42 @@ pending ───────────────────→ deactivated
 
   <div class="settings-sections">
 
+    <!-- Operational Readiness -->
+    <div class="card settings-section" id="set-client-readiness-card">
+      <div class="sec-hdr">
+        <div class="sh-title">Operational Readiness</div>
+        <div class="sh-sub">Client launch checklist across account, plan, usage, integration, provider, and support</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Readiness Score</label>
+          <span id="set-readiness-score" class="font-data" style="font-weight:600;color:var(--amber)">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Next Step</label>
+          <span id="set-readiness-next-step" class="font-data text-muted">Loading client readiness</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Account</label>
+          <span id="set-readiness-account" class="font-data text-muted">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Plan &amp; Usage</label>
+          <span id="set-readiness-plan" class="font-data text-muted">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Integration Key</label>
+          <span id="set-readiness-integration" class="font-data text-muted">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">BYOK Provider</label>
+          <span id="set-readiness-provider" class="font-data text-muted">Loading</span>
+        </div>
+      </div>
+      <div id="set-readiness-checklist" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Readiness checklist will update after client settings load.</div>
+      <button id="set-readiness-support" class="btn sm" style="margin-top:var(--s-3)">Prepare readiness support request</button>
+    </div>
+
     <!-- Account -->
     <div class="card settings-section">
       <div class="sec-hdr">
