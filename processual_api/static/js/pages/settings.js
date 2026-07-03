@@ -435,6 +435,71 @@ PAGES.settings = (() => {
   }
 
 
+  function clientIntegrationGuideText(kind) {
+    const baseUrl = window.location.origin || '<maestro-base-url>';
+    if (kind === 'checklist') {
+      return [
+        'Maestro client readiness checklist',
+        '1. Confirm account session is loaded.',
+        '2. Confirm active plan and usage summary.',
+        '3. Confirm integration key provisioning status.',
+        '4. Confirm BYOK provider status.',
+        '5. Submit a support request for missing setup steps.',
+        '6. Never paste raw provider secrets or raw integration keys in support notes.',
+      ].join('\n');
+    }
+
+    return [
+      'Maestro client integration quickstart',
+      'Base URL: ' + baseUrl,
+      'Auth header: Authorization: Bearer <client-integration-key>',
+      'Provider policy: BYOK; provider costs are not included.',
+      'Usage: monitor Usage & Quotas before production rollout.',
+      'Support: use Requests & Billing for setup or upgrade help.',
+      'Safety: use placeholders only; never paste raw secrets.',
+    ].join('\n');
+  }
+
+  async function copyClientIntegrationGuide(kind) {
+    const text = clientIntegrationGuideText(kind);
+    setText('set-guide-base-url', window.location.origin || '<maestro-base-url>');
+    setText('set-guide-output', text);
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        APP.showToast('Integration guide copied', 'success');
+      } else {
+        APP.showToast('Integration guide prepared', 'info');
+      }
+    } catch (e) {
+      APP.showToast('Integration guide prepared', 'info');
+    }
+  }
+
+  function prepareIntegrationGuideSupportRequest() {
+    prepareClientSupportRequest(
+      'provider_setup_help',
+      '',
+      'Please help us complete the client integration setup using the copy-safe integration guide. No raw secrets are included in this message.'
+    );
+  }
+
+  function initClientIntegrationGuide() {
+    setText('set-guide-base-url', window.location.origin || '<maestro-base-url>');
+
+    document.getElementById('set-guide-copy-quickstart')?.addEventListener('click', () => {
+      copyClientIntegrationGuide('quickstart');
+    });
+
+    document.getElementById('set-guide-copy-checklist')?.addEventListener('click', () => {
+      copyClientIntegrationGuide('checklist');
+    });
+
+    document.getElementById('set-guide-support')?.addEventListener('click', prepareIntegrationGuideSupportRequest);
+  }
+
+
   function settingsSectionBodyNodes(card) {
     return Array.from(card.children).filter((child) => !child.classList.contains('sec-hdr'));
   }
@@ -538,6 +603,7 @@ PAGES.settings = (() => {
 
     document.getElementById('set-client-request-submit')?.addEventListener('click', submitClientRequest);
     initClientSupportActions();
+    initClientIntegrationGuide();
     document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
     initCollapsibleSettingsSections();
 

@@ -629,6 +629,36 @@ pending ───────────────────→ deactivated
       <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Only prefixes, scopes, quotas, and usage metadata are shown here. Raw secret keys are never displayed after creation.</div>
     </div>
 
+
+    <!-- Client Integration Guide -->
+    <div class="card settings-section" id="set-client-integration-guide-card">
+      <div class="sec-hdr">
+        <div class="sh-title">Client Integration Guide</div>
+        <div class="sh-sub">Copy-safe setup notes for client integration, BYOK provider setup, and support handoff</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Base URL</label>
+          <span id="set-guide-base-url" class="font-data text-muted">&lt;maestro-base-url&gt;</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Auth Header</label>
+          <span class="font-data text-muted">Authorization: Bearer &lt;client-integration-key&gt;</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider Policy</label>
+          <span class="font-data text-muted">BYOK / provider costs are not included</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Secret Safety</label>
+          <span class="font-data text-muted">Use placeholders in support messages</span>
+        </div>
+      </div>
+      <div id="set-guide-output" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Integration notes use placeholders only. Do not paste raw provider secrets or raw integration keys into support requests.</div>
+      <button id="set-guide-copy-quickstart" class="btn sm" style="margin-top:var(--s-3)">Copy quickstart notes</button>
+      <button id="set-guide-copy-checklist" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Copy readiness checklist</button>
+      <button id="set-guide-support" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Prepare integration support request</button>
+    </div>
     <!-- Provider Connections -->
     <div class="card settings-section" id="set-provider-connection-card">
       <div class="sec-hdr">
