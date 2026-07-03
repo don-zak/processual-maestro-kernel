@@ -554,6 +554,34 @@ pending ───────────────────→ deactivated
     </div>
 
 
+    <!-- Enterprise Integration -->
+    <div class="card settings-section" id="set-api-key-integration-card" style="display:none">
+      <div class="sec-hdr">
+        <div class="sh-title">API Key Integration</div>
+        <div class="sh-sub">Enterprise-only client integration status</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Integration Plan</label>
+          <span id="set-api-key-integration-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Integration Status</label>
+          <span id="set-api-key-integration-status" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Active Integration Keys</label>
+          <span id="set-api-key-integration-count" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Default Scopes</label>
+          <span id="set-api-key-integration-scopes" class="font-data text-muted">—</span>
+        </div>
+      </div>
+      <div id="set-api-key-integration-keys" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No integration keys issued yet. Contact the Maestro admin team to create one.</div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Only prefixes, scopes, quotas, and usage metadata are shown here. Raw secret keys are never displayed after creation.</div>
+    </div>
+
     <!-- Provider Connections -->
     <div class="card settings-section">
       <div class="sec-hdr">

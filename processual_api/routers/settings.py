@@ -15,6 +15,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
+from ..billing.usage_pricing import (
+    ENTERPRISE_INTEGRATION_PLANS,
+    allows_enterprise_integration,
+    normalize_plan_id,
+)
 from ..cgt_governor.adapters.provider_metadata import provider_ids
 from ..dependencies import file_lock
 from ..schemas.settings import (
@@ -575,6 +580,158 @@ def _api_key_quota_summary(key: dict) -> dict:
         "quota_policy_source": quota_policy_source,
         "quota_limit_override": key.get("quota_limit_override"),
         "quota_rejected_count": key.get("quota_rejected_count", 0),
+    }
+
+
+def _client_api_key_integration_eligible_plans() -> list[str]:
+    return sorted({
+        *ENTERPRISE_INTEGRATION_PLANS,
+        "enterprise_private",
+    })
+
+
+def _allows_client_api_key_integration(plan_id: str | None) -> bool:
+    normalized = normalize_plan_id(plan_id)
+    return allows_enterprise_integration(normalized) or normalized == "enterprise_private"
+
+
+def _resolve_client_api_key_integration_plan_id(
+    user_id: str,
+    raw: dict[str, Any],
+    current_user: dict[str, Any],
+) -> str:
+    candidates: list[Any] = [
+        current_user.get("plan_id"),
+        current_user.get("plan"),
+    ]
+
+    billing_subs = _load_billing_subscriptions()
+    user_subs = [sub for sub in billing_subs if sub.get("user_id") == user_id]
+    if user_subs:
+        latest = max(user_subs, key=lambda sub: sub.get("created_at", ""))
+        candidates.extend([
+            latest.get("plan_id"),
+            latest.get("plan"),
+        ])
+
+    subscription = raw.get("subscription", {})
+    if isinstance(subscription, dict):
+        candidates.extend([
+            subscription.get("plan_id"),
+            subscription.get("plan"),
+        ])
+
+    for candidate in candidates:
+        normalized = normalize_plan_id(str(candidate) if candidate is not None else None)
+        if normalized:
+            return normalized
+
+    return "starter"
+
+
+def _active_client_integration_keys(
+    raw: dict[str, Any],
+    client_id: str,
+) -> list[dict[str, Any]]:
+    raw_keys = raw.get("api_keys", [])
+    if isinstance(raw_keys, dict):
+        keys = list(raw_keys.values())
+    elif isinstance(raw_keys, list):
+        keys = raw_keys
+    else:
+        keys = []
+
+    visible_keys: list[dict[str, Any]] = []
+    for key in keys:
+        if not isinstance(key, dict):
+            continue
+
+        if key.get("status") in {"revoked", "disabled", "expired"}:
+            continue
+        if key.get("revoked_at"):
+            continue
+
+        key_client_id = str(key.get("client_id") or key.get("user_id") or "")
+        if client_id and key_client_id and key_client_id != client_id:
+            continue
+
+        quota_limit = key.get("quota_limit")
+        quota_used = int(key.get("quota_used", 0) or 0)
+        quota_remaining = (
+            max(int(quota_limit) - quota_used, 0)
+            if isinstance(quota_limit, int) and quota_limit >= 0
+            else None
+        )
+
+        visible_keys.append({
+            "id": key.get("id", ""),
+            "key_id": key.get("id", ""),
+            "prefix": key.get("prefix", ""),
+            "status": key.get("status", "enabled"),
+            "category": key.get("category", DEFAULT_API_KEY_CATEGORY),
+            "role": key.get("role", CLIENT_KEY_PROFILE),
+            "profile": key.get("profile", CLIENT_KEY_PROFILE),
+            "label": key.get("label"),
+            "purpose": key.get("purpose"),
+            "client_id": key.get("client_id"),
+            "scopes": key.get("scopes", []),
+            "created_at": key.get("created_at", ""),
+            "last_used_at": key.get("last_used_at"),
+            "usage_count": key.get("usage_count", 0),
+            "plan_id": key.get("plan_id"),
+            "quota_scope": key.get("quota_scope"),
+            "quota_limit": quota_limit,
+            "quota_used": quota_used,
+            "quota_remaining": quota_remaining,
+            "quota_rejected_count": key.get("quota_rejected_count", 0),
+            "expires_at": key.get("expires_at"),
+        })
+
+    return visible_keys
+
+
+@router.get("/api-key-integration", response_model=dict)
+async def get_api_key_integration(current_user: dict = Depends(get_current_user)):
+    user_id = str(
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or "default"
+    )
+    client_id = str(current_user.get("client_id") or user_id)
+    raw = _load_raw(user_id)
+
+    plan_id = _resolve_client_api_key_integration_plan_id(
+        user_id,
+        raw,
+        current_user,
+    )
+    eligible_plans = _client_api_key_integration_eligible_plans()
+    enabled = _allows_client_api_key_integration(plan_id)
+
+    if not enabled:
+        return {
+            "enabled": False,
+            "status": "locked",
+            "plan_id": plan_id,
+            "eligible_plans": eligible_plans,
+            "message": (
+                "API Key Integration is available for Enterprise "
+                "Integration plans."
+            ),
+            "keys": [],
+            "key_count": 0,
+        }
+
+    keys = _active_client_integration_keys(raw, client_id)
+
+    return {
+        "enabled": True,
+        "status": "available",
+        "plan_id": plan_id,
+        "eligible_plans": eligible_plans,
+        "message": "API Key Integration is available for this client.",
+        "keys": keys,
+        "key_count": len(keys),
     }
 
 @router.get("/plans", response_model=list[dict])

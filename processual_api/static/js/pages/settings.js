@@ -93,6 +93,58 @@ PAGES.settings = (() => {
     }
   }
 
+  function renderIntegrationKeys(keys) {
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return 'No integration keys issued yet. Contact the Maestro admin team to create one.';
+    }
+
+    return keys.map((key) => {
+      const scopes = Array.isArray(key.scopes) ? key.scopes.join(', ') : '-';
+      const quota = key.quota_limit === -1 ? 'unlimited' : formatNumber(key.quota_limit);
+      const used = formatNumber(key.quota_used);
+      const lastUsed = key.last_used_at || 'never';
+
+      return [
+        'key_id=' + (key.key_id || key.id || '-'),
+        'prefix=' + (key.prefix || '-'),
+        'status=' + (key.status || '-'),
+        'scopes=' + scopes,
+        'quota_used=' + used,
+        'quota_limit=' + quota,
+        'last_used_at=' + lastUsed,
+      ].join(' | ');
+    }).join('\n');
+  }
+
+  function applyApiKeyIntegration(info) {
+    const card = document.getElementById('set-api-key-integration-card');
+    if (!card) return;
+
+    const enabled = info && info.enabled === true;
+    card.style.display = enabled ? '' : 'none';
+    if (!enabled) return;
+
+    const keys = Array.isArray(info.keys) ? info.keys : [];
+    const firstKey = keys[0] || {};
+    const scopes = Array.isArray(firstKey.scopes) ? firstKey.scopes.join(', ') : '-';
+
+    setText('set-api-key-integration-plan', info.plan_id || '-');
+    setText('set-api-key-integration-status', info.status || 'available');
+    setText('set-api-key-integration-count', formatNumber(info.key_count || keys.length));
+    setText('set-api-key-integration-scopes', scopes);
+    setText('set-api-key-integration-keys', renderIntegrationKeys(keys));
+  }
+
+  async function loadApiKeyIntegration() {
+    try {
+      const info = await CLIENT.get('/settings/api-key-integration');
+      applyApiKeyIntegration(info);
+    } catch (e) {
+      applyApiKeyIntegration(null);
+    }
+  }
+
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -111,6 +163,7 @@ PAGES.settings = (() => {
       if (settings && settings.subscription) applySubscription(settings.subscription);
     }
     await loadUsageSummary();
+    await loadApiKeyIntegration();
   }
 
   function init() {
