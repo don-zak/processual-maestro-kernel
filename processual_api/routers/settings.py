@@ -26,6 +26,7 @@ from ..schemas.settings import (
     TestConnectionResult,
 )
 from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
+from ..services.usage_log_store import summarize_usage_logs
 
 try:
     from processual_kernel.security.crypto import decrypt_aes256_gcm, encrypt_aes256_gcm
@@ -872,3 +873,27 @@ async def delete_api_key(key_id: str, current_user: dict = Depends(require_scope
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
 
     return {"status": "revoked", "id": key_id, "revoked_at": now}
+
+
+@router.get("/usage-summary", response_model=dict)
+async def get_usage_summary(current_user: dict = Depends(get_current_user)):
+    """Return the current client usage summary from the Maestro ledger.
+
+    Backend/API only. This endpoint intentionally does not alter console UI,
+    layout, CSS, JavaScript, or navigation.
+    """
+
+    client_id = str(
+        current_user.get("client_id")
+        or current_user.get("user_id")
+        or current_user.get("sub")
+        or ""
+    )
+    api_key_id = str(current_user.get("api_key_id") or "")
+    api_key_filter = api_key_id if api_key_id and api_key_id != "env" else None
+
+    return summarize_usage_logs(
+        client_id=client_id,
+        api_key_id=api_key_filter,
+        latest_limit=10,
+    )
