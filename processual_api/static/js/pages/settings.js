@@ -435,6 +435,69 @@ PAGES.settings = (() => {
   }
 
 
+  function settingsSectionBodyNodes(card) {
+    return Array.from(card.children).filter((child) => !child.classList.contains('sec-hdr'));
+  }
+
+  function setSettingsSectionCollapsed(card, collapsed) {
+    const bodyNodes = settingsSectionBodyNodes(card);
+    bodyNodes.forEach((node) => {
+      node.hidden = collapsed;
+    });
+
+    card.dataset.collapsed = collapsed ? 'true' : 'false';
+
+    const toggle = card.querySelector('[data-settings-section-toggle="true"]');
+    if (toggle) {
+      toggle.textContent = collapsed ? 'Show' : 'Hide';
+      toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+  }
+
+  function collapseSettingsSections(collapseAll) {
+    document.querySelectorAll('[data-page="settings"] .settings-section').forEach((card) => {
+      const keepOpen = card.id === 'set-client-readiness-card';
+      setSettingsSectionCollapsed(card, collapseAll && !keepOpen);
+    });
+    setText(
+      'set-sections-collapse-status',
+      collapseAll ? 'Collapsed non-readiness sections' : 'Expanded all sections'
+    );
+  }
+
+  function initCollapsibleSettingsSections() {
+    document.querySelectorAll('[data-page="settings"] .settings-section').forEach((card) => {
+      const header = card.querySelector('.sec-hdr');
+      if (!header || header.querySelector('[data-settings-section-toggle="true"]')) return;
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'btn sm';
+      toggle.dataset.settingsSectionToggle = 'true';
+      toggle.textContent = 'Hide';
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.style.marginLeft = 'auto';
+
+      toggle.addEventListener('click', () => {
+        const collapsed = card.dataset.collapsed !== 'true';
+        setSettingsSectionCollapsed(card, collapsed);
+      });
+
+      header.appendChild(toggle);
+    });
+
+    document.getElementById('set-sections-expand')?.addEventListener('click', () => {
+      collapseSettingsSections(false);
+    });
+
+    document.getElementById('set-sections-collapse')?.addEventListener('click', () => {
+      collapseSettingsSections(true);
+    });
+
+    collapseSettingsSections(true);
+  }
+
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -476,6 +539,7 @@ PAGES.settings = (() => {
     document.getElementById('set-client-request-submit')?.addEventListener('click', submitClientRequest);
     initClientSupportActions();
     document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
+    initCollapsibleSettingsSections();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');

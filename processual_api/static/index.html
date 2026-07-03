@@ -441,6 +441,17 @@ pending ───────────────────→ deactivated
 
   <div class="settings-sections">
 
+    <!-- Settings Section Controls -->
+    <div class="card" id="set-section-collapse-controls">
+      <div class="sec-hdr">
+        <div class="sh-title">Settings Sections</div>
+        <div class="sh-sub">Collapse sections to keep the client settings page compact</div>
+      </div>
+      <button id="set-sections-expand" class="btn sm">Expand all</button>
+      <button id="set-sections-collapse" class="btn sm" style="margin-left:var(--s-2)">Collapse all except readiness</button>
+      <span id="set-sections-collapse-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Sections are ready</span>
+    </div>
+
     <!-- Operational Readiness -->
     <div class="card settings-section" id="set-client-readiness-card">
       <div class="sec-hdr">
