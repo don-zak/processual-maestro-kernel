@@ -172,6 +172,8 @@ def consume_quota(
                         "quota_scope": quota_scope,
                         "quota_limit": quota_limit,
                         "quota_used": quota_used,
+                        "quota_requested": amount,
+                        "quota_remaining": max(quota_limit - quota_used, 0),
                     },
                 )
 
@@ -189,6 +191,7 @@ def consume_quota(
                 "plan_id": key.get("plan_id"),
                 "limit": quota_limit,
                 "used": quota_used,
+                "requested": amount,
                 "remaining": max(quota_limit - quota_used, 0)
                 if quota_limit >= 0
                 else None,

@@ -225,13 +225,26 @@ def require_quota(quota_scope: str = "evaluation"):
         request: Request,
         current_user: dict = Depends(get_current_user),
     ) -> dict:
+        from ..billing.usage_pricing import pricing_decision
         from ..services.quota_store import consume_quota
+
+        pricing_item_count = getattr(request.state, "pricing_item_count", None)
+        if not isinstance(pricing_item_count, int):
+            pricing_item_count = None
+
+        pricing = pricing_decision(
+            request.url.path,
+            item_count=pricing_item_count,
+        )
+        request.state.pricing_decision = pricing
+        request.state.pricing_units_charged = pricing.units_charged
 
         checked_user = consume_quota(
             current_user,
             method=request.method,
             endpoint=request.url.path,
             quota_scope=quota_scope,
+            amount=pricing.units_charged,
         )
         request.state.current_user = checked_user
         return checked_user

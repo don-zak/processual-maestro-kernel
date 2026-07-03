@@ -118,6 +118,7 @@ def test_counted_endpoint_increments_quota_used(
         "plan_id": "starter",
         "limit": 3,
         "used": 2,
+        "requested": 1,
         "remaining": 1,
     }
 
