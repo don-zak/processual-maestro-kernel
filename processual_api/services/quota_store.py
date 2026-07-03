@@ -170,6 +170,7 @@ def consume_quota(
                     detail={
                         "error": "quota_exceeded",
                         "quota_scope": quota_scope,
+                        "plan_id": plan_id,
                         "quota_limit": quota_limit,
                         "quota_used": quota_used,
                         "quota_requested": amount,

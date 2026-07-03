@@ -91,6 +91,7 @@ def append_usage_log(record: dict[str, Any]) -> None:
         "quota_before": quota_before,
         "quota_after": quota_after,
         "plan_id": record.get("plan_id", ""),
+        "quota_rejected": bool(record.get("quota_rejected", False)),
     }
 
     with _USAGE_LOG_PATH.open("a", encoding="utf-8") as handle:

@@ -48,6 +48,10 @@ def _quota_usage_record(
         "quota_before": quota_before,
         "quota_after": quota_after,
         "plan_id": quota.get("plan_id") or current_user.get("plan_id", ""),
+        "quota_rejected": bool(
+            current_user.get("quota_rejected", False)
+            or quota.get("rejected", False)
+        ),
     }
 
 

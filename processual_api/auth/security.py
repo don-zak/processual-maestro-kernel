@@ -239,13 +239,34 @@ def require_quota(quota_scope: str = "evaluation"):
         request.state.pricing_decision = pricing
         request.state.pricing_units_charged = pricing.units_charged
 
-        checked_user = consume_quota(
-            current_user,
-            method=request.method,
-            endpoint=request.url.path,
-            quota_scope=quota_scope,
-            amount=pricing.units_charged,
-        )
+        try:
+            checked_user = consume_quota(
+                current_user,
+                method=request.method,
+                endpoint=request.url.path,
+                quota_scope=quota_scope,
+                amount=pricing.units_charged,
+            )
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            if detail.get("error") == "quota_exceeded":
+                rejected_user = dict(current_user)
+                rejected_user["quota_rejected"] = True
+                rejected_user["quota"] = {
+                    "scope": detail.get("quota_scope", quota_scope),
+                    "plan_id": detail.get("plan_id", current_user.get("plan_id", "")),
+                    "limit": detail.get("quota_limit"),
+                    "used": detail.get("quota_used"),
+                    "requested": detail.get(
+                        "quota_requested",
+                        pricing.units_charged,
+                    ),
+                    "remaining": detail.get("quota_remaining"),
+                    "rejected": True,
+                }
+                request.state.current_user = rejected_user
+            raise
+
         request.state.current_user = checked_user
         return checked_user
 
