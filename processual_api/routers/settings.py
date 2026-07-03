@@ -70,7 +70,7 @@ API_KEY_PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "service_integration": {
         "role": "service",
-        "scopes": ["read:health"],
+        "scopes": ["read:health", "read:adapters", "read:governor", "run:govern"],
     },
     "billing_service": {
         "role": "service",

@@ -177,6 +177,17 @@
         plan: 'internal',
         scopes: ['reports:read'],
       },
+      service_integration: {
+        label: 'Service Integration',
+        role: 'service',
+        category: 'service_integration',
+        plan: 'pilot_starter',
+        scopes: ['read:health', 'read:adapters', 'read:governor', 'run:govern'],
+        purpose: 'Server-to-server integration access',
+        issuedTo: 'integration-client',
+        clientId: 'integration-client',
+        userId: 'integration-user',
+      },
       ops_admin: {
         label: 'Ops Admin',
         role: 'ops_admin',
@@ -200,7 +211,7 @@
       },
     };
 
-    return profiles[profile] || profiles.client_api;
+    return profiles[profile] || profiles.service_integration;
   }
 
   function ensureApiKeyProfileControls() {
@@ -220,6 +231,7 @@
       '<div>',
       '<label for="admin-api-key-profile">Key category / team role</label>',
       '<select id="admin-api-key-profile" class="inp-sel">',
+      '<option value="service_integration" selected>Service Integration - server-to-server access</option>',
       '<option value="client_api">Client API — client console access</option>',
       '<option value="pilot_client">Pilot Client — trial/onboarding</option>',
       '<option value="support_viewer">Support Viewer — read reports</option>',
@@ -267,7 +279,7 @@
   }
 
   async function generateProfiledApiKey() {
-    const profileName = document.getElementById('admin-api-key-profile')?.value || 'client_api';
+    const profileName = document.getElementById('admin-api-key-profile')?.value || 'service_integration';
     const profile = keyProfile(profileName);
     const labelInput = document.getElementById('admin-api-key-label')?.value || '';
     const label =
@@ -287,7 +299,12 @@
         category: profile.category,
         role: profile.role,
         plan: profile.plan,
+        plan_id: profile.plan,
         scopes: profile.scopes,
+        purpose: profile.purpose,
+        issued_to: profile.issuedTo,
+        client_id: profile.clientId,
+        user_id: profile.userId,
       },
       {
         name: label,

@@ -21,6 +21,18 @@ def test_admin_fixups_cleanup_home_and_auth_card():
         "refreshAuthCard",
         "authHeaders.has('Authorization')",
         "PMK_ADMIN_RUNTIME_FIXUPS",
+        "service_integration",
+        "Service Integration",
+        "Server-to-server integration access",
+        "profiles.service_integration",
+        "read:adapters",
+        "read:governor",
+        "run:govern",
+        "purpose",
+        "issued_to",
+        "client_id",
+        "user_id",
+        "plan_id",
     ]
 
     for token in required:

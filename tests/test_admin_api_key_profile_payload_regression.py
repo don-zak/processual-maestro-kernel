@@ -201,3 +201,14 @@ def test_default_create_api_key_keeps_backward_compatible_client_profile(
     assert result["role"] == "client"
     assert result["profile"] == "client"
     assert result["scopes"] == settings_router.DEFAULT_API_KEY_SCOPES
+
+def test_service_integration_profile_defaults_support_runtime_integration():
+    from processual_api.routers import settings as settings_router
+
+    defaults = settings_router.API_KEY_PROFILE_DEFAULTS["service_integration"]
+
+    assert defaults["role"] == "service"
+    assert "read:health" in defaults["scopes"]
+    assert "read:adapters" in defaults["scopes"]
+    assert "read:governor" in defaults["scopes"]
+    assert "run:govern" in defaults["scopes"]

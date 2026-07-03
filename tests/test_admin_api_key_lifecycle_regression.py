@@ -193,3 +193,24 @@ def test_admin_api_key_ui_includes_external_usage_examples():
 
     for phrase in required_phrases:
         assert phrase in source
+
+def test_admin_api_key_ui_has_integration_key_preset():
+    source = _combined_admin_api_key_sources()
+
+    required_phrases = [
+        "API Key for integration",
+        "service_integration",
+        "Server-to-server integration access",
+        "Integration API key",
+        "integration-client",
+        "integration-user",
+        "issuedTo",
+        "categorySelect.value = 'service_integration'",
+        "role: 'service'",
+        "read:adapters",
+        "read:governor",
+        "run:govern",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in source

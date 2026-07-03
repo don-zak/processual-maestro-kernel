@@ -34,8 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     service_integration: {
       role: 'service',
-      scopes: ['read:health'],
-      purpose: 'Service-to-service integration',
+      scopes: ['read:health', 'read:adapters', 'read:governor', 'run:govern'],
+      purpose: 'Server-to-server integration access',
+      label: 'Integration API key',
+      clientId: 'integration-client',
+      userId: 'integration-user',
+      issuedTo: 'integration-client',
     },
     billing_service: {
       role: 'service',
@@ -179,10 +183,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = document.getElementById('admin-api-key-role');
     const scopes = document.getElementById('admin-api-key-scopes');
     const purpose = document.getElementById('admin-api-key-purpose');
+    const label = document.getElementById('admin-api-key-label');
+    const clientId = document.getElementById('admin-api-key-client-id');
+    const userId = document.getElementById('admin-api-key-user-id');
+    const issuedTo = document.getElementById('admin-api-key-issued-to');
 
     if (role) role.value = defaults.role;
     if (scopes) scopes.value = defaults.scopes.join('\n');
-    if (purpose && !purpose.value.trim()) purpose.value = defaults.purpose;
+    if (purpose) purpose.value = defaults.purpose || '';
+    if (label) label.value = defaults.label || '';
+    if (clientId) clientId.value = defaults.clientId || '';
+    if (userId) userId.value = defaults.userId || '';
+    if (issuedTo) issuedTo.value = defaults.issuedTo || '';
   }
 
   function parseScopes() {
@@ -234,11 +246,16 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="mono-block" style="white-space:pre-wrap">X-API-Key: ${escapeHtml(raw)}</div>
       <button id="admin-api-key-copy-created" class="btn secondary" type="button">Copy</button>
       <div class="admin-note">
-        This is governed programmatic access outside the browser login.
-        It is not an authentication bypass. It is scoped, quota-bound, revocable access and auditable.
+        Permission behavior: <strong>owner_admin</strong> and <strong>security_admin</strong>
+        can create and revoke. <strong>viewer_admin</strong> is read-only. Backend scopes remain authoritative.
       </div>
-    `;
+      <div class="admin-note">
+        Integration preset: choose <strong>Service Integration / server-to-server access</strong>
+        to create an <strong>API Key for integration</strong> with service role, limited runtime scopes,
+        issued_to metadata, revocable access, and X-API-Key usage examples.
+      </div>
 
+      <div class="admin-grid">
     document.getElementById('admin-api-key-copy-created')?.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(raw);
@@ -418,6 +435,8 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
       <div id="admin-api-key-table"></div>
     `;
 
+    const categorySelect = document.getElementById('admin-api-key-category');
+    if (categorySelect) categorySelect.value = 'service_integration';
     applyCategoryDefaults();
 
     document.getElementById('admin-api-key-category')?.addEventListener('change', applyCategoryDefaults);
