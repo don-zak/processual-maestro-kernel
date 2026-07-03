@@ -8,12 +8,21 @@ BILLING_POLICY: Final = "byok"
 BILLING_SCOPE: Final = "maestro_usage_units"
 PROVIDER_COST_INCLUDED: Final = False
 
-ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE: Final = 50_000
+DEVELOPER_UNIT_ALLOWANCE: Final = 2_000
+STARTER_UNIT_ALLOWANCE: Final = 10_000
+BUSINESS_UNIT_ALLOWANCE: Final = 100_000
+ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE: Final = 50_000
+ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE: Final = 500_000
 
 PLAN_MONTHLY_UNIT_ALLOWANCES: Final[dict[str, int]] = {
-    "starter": 50,
-    "pilot_starter": 50,
-    "business": 10_000,
+    "developer": DEVELOPER_UNIT_ALLOWANCE,
+    "internal": DEVELOPER_UNIT_ALLOWANCE,
+    "starter": STARTER_UNIT_ALLOWANCE,
+    "pilot_starter": STARTER_UNIT_ALLOWANCE,
+    "business": BUSINESS_UNIT_ALLOWANCE,
+    "enterprise_integration_starter": (
+        ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE
+    ),
     "enterprise": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
     "enterprise_integration": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
 }
@@ -22,6 +31,8 @@ ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
     {
         "enterprise",
         "enterprise_integration",
+        "enterprise_integration_starter",
+        "enterprise_custom",
     }
 )
 

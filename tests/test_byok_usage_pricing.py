@@ -48,17 +48,17 @@ def test_report_and_auto_repair_endpoints_have_higher_unit_costs():
     assert pricing_decision("/cgt/govern/auto-repair").units_charged == 5
 
 
-def test_enterprise_integration_plan_allows_50000_monthly_units():
-    assert ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE == 50_000
-    assert monthly_unit_allowance("enterprise") == 50_000
-    assert monthly_unit_allowance("enterprise_integration") == 50_000
+def test_enterprise_integration_plan_allows_500000_monthly_units():
+    assert ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE == 500_000
+    assert monthly_unit_allowance("enterprise") == 500_000
+    assert monthly_unit_allowance("enterprise_integration") == 500_000
     assert allows_enterprise_integration("enterprise")
     assert allows_enterprise_integration("enterprise_integration")
 
 
 def test_non_enterprise_plans_do_not_allow_enterprise_integration():
-    assert monthly_unit_allowance("pilot_starter") == 50
-    assert monthly_unit_allowance("starter") == 50
+    assert monthly_unit_allowance("pilot_starter") == 10_000
+    assert monthly_unit_allowance("starter") == 10_000
     assert not allows_enterprise_integration("pilot_starter")
     assert not allows_enterprise_integration("starter")
 
