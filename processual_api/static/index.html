@@ -583,12 +583,31 @@ pending ───────────────────→ deactivated
     </div>
 
     <!-- Provider Connections -->
-    <div class="card settings-section">
+    <div class="card settings-section" id="set-provider-connection-card">
       <div class="sec-hdr">
         <div class="sh-title">Provider Connections</div>
-        <div class="sh-sub">Bring your own provider credentials</div>
+        <div class="sh-sub">Client BYOK provider status</div>
       </div>
-      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Client provider connection controls will be added in a later client-safe phase. This area will not use Maestro-owned provider accounts.</div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Connection Status</label>
+          <span id="set-provider-connection-status" class="font-data" style="font-weight:600">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider</label>
+          <span id="set-provider-connection-provider" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Model</label>
+          <span id="set-provider-connection-model" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider Cost Included</label>
+          <span id="set-provider-connection-cost" class="font-data text-muted">false</span>
+        </div>
+      </div>
+      <div id="set-provider-connection-providers" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Available providers will appear after client settings load.</div>
+      <div id="set-provider-connection-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Client provider status is read-only in this phase. Raw provider secrets are never displayed in the client console.</div>
     </div>
 
     <!-- Support -->

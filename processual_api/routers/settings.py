@@ -16,7 +16,9 @@ from pydantic import BaseModel, Field
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..billing.usage_pricing import (
+    BILLING_POLICY,
     ENTERPRISE_INTEGRATION_PLANS,
+    PROVIDER_COST_INCLUDED,
     allows_enterprise_integration,
     normalize_plan_id,
 )
@@ -329,6 +331,35 @@ async def update_general(body: GeneralSettings, current_user: dict = Depends(get
     raw["general"] = body.model_dump()
     _save_raw(user_id, raw)
     return body
+
+
+def _client_provider_connection_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    merged = _merge_defaults(raw)
+    provider_status = merged.get("llm_provider", {})
+    configured = bool(provider_status.get("configured"))
+
+    return {
+        "configured": configured,
+        "status": "configured" if configured else "not_configured",
+        "provider": provider_status.get("provider") or "",
+        "model": provider_status.get("model") or "",
+        "last_tested": provider_status.get("last_tested"),
+        "available_providers": sorted(provider_ids()),
+        "billing_policy": BILLING_POLICY,
+        "provider_cost_included": PROVIDER_COST_INCLUDED,
+        "message": (
+            "Client BYOK provider connection is configured."
+            if configured
+            else "Client BYOK provider connection is not configured yet."
+        ),
+    }
+
+
+@router.get("/provider-connection", response_model=dict)
+async def get_provider_connection(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("sub", "default")
+    raw = _load_raw(user_id)
+    return _client_provider_connection_payload(raw)
 
 
 @router.put("/llm-provider", response_model=dict)

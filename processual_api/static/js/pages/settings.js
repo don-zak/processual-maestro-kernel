@@ -145,6 +145,39 @@ PAGES.settings = (() => {
   }
 
 
+  function applyProviderConnection(info) {
+    if (!info) {
+      setText('set-provider-connection-status', 'Provider status unavailable');
+      return;
+    }
+
+    const statusEl = document.getElementById('set-provider-connection-status');
+    if (statusEl) {
+      statusEl.textContent = info.status || 'not_configured';
+      statusEl.style.color = info.configured ? 'var(--ok)' : 'var(--warn)';
+    }
+
+    setText('set-provider-connection-provider', info.provider || '-');
+    setText('set-provider-connection-model', info.model || '-');
+    setText('set-provider-connection-cost', String(info.provider_cost_included === true));
+
+    const providers = Array.isArray(info.available_providers)
+      ? info.available_providers.join(', ')
+      : '-';
+    setText('set-provider-connection-providers', 'Available providers: ' + providers);
+    setText('set-provider-connection-note', info.message || 'Client BYOK provider status loaded.');
+  }
+
+  async function loadProviderConnection() {
+    try {
+      const info = await CLIENT.get('/settings/provider-connection');
+      applyProviderConnection(info);
+    } catch (e) {
+      applyProviderConnection(null);
+    }
+  }
+
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -164,6 +197,7 @@ PAGES.settings = (() => {
     }
     await loadUsageSummary();
     await loadApiKeyIntegration();
+    await loadProviderConnection();
   }
 
   function init() {
