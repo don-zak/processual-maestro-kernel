@@ -13,6 +13,17 @@ _USAGE_LOG_PATH = _DATA_DIR / "usage_logs.jsonl"
 _RAW_API_KEY_PATTERN = re.compile(r"pmk_[A-Za-z0-9_-]+")
 
 
+
+
+def _as_int_or_none(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def sanitize_usage_endpoint(endpoint: str) -> str:
     return _RAW_API_KEY_PATTERN.sub("pmk_[redacted]", endpoint)
 
@@ -22,6 +33,20 @@ def append_usage_log(record: dict[str, Any]) -> None:
 
     endpoint = sanitize_usage_endpoint(str(record.get("endpoint", "")))
     pricing_record = pricing_decision(endpoint).to_usage_record()
+
+    quota_after = _as_int_or_none(
+        record.get("quota_after", record.get("quota_used"))
+    )
+    quota_requested = _as_int_or_none(record.get("quota_requested"))
+    if quota_requested is None:
+        quota_requested = (
+            _as_int_or_none(record.get("units_charged"))
+            or int(pricing_record["units_charged"])
+        )
+
+    quota_before = _as_int_or_none(record.get("quota_before"))
+    if quota_before is None and quota_after is not None:
+        quota_before = max(quota_after - quota_requested, 0)
 
     clean_record = {
         "created_at": record.get("created_at") or datetime.now(UTC).isoformat(),
@@ -58,6 +83,14 @@ def append_usage_log(record: dict[str, Any]) -> None:
         "units_charged": int(
             record.get("units_charged", pricing_record["units_charged"]) or 0
         ),
+        "quota_scope": record.get("quota_scope", ""),
+        "quota_limit": _as_int_or_none(record.get("quota_limit")),
+        "quota_used": quota_after,
+        "quota_requested": quota_requested,
+        "quota_remaining": _as_int_or_none(record.get("quota_remaining")),
+        "quota_before": quota_before,
+        "quota_after": quota_after,
+        "plan_id": record.get("plan_id", ""),
     }
 
     with _USAGE_LOG_PATH.open("a", encoding="utf-8") as handle:
