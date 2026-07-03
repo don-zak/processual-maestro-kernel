@@ -241,6 +241,62 @@ PAGES.settings = (() => {
   }
 
 
+  function focusClientRequestsCard() {
+    const card = document.getElementById('set-client-requests-card');
+    if (card && typeof card.scrollIntoView === 'function') {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function prepareClientSupportRequest(requestType, requestedPlan, message) {
+    const typeEl = document.getElementById('set-client-request-type');
+    const planEl = document.getElementById('set-client-request-plan');
+    const messageEl = document.getElementById('set-client-request-message');
+
+    if (typeEl) typeEl.value = requestType || 'general_support';
+    if (planEl) planEl.value = requestedPlan || '';
+    if (messageEl) messageEl.value = message || '';
+
+    setText('set-client-request-status', 'Prepared support request. Review and submit.');
+    setText('set-client-support-status', 'Support request prepared in Requests & Billing.');
+    focusClientRequestsCard();
+  }
+
+  function initClientSupportActions() {
+    document.getElementById('set-support-onboarding')?.addEventListener('click', () => {
+      prepareClientSupportRequest(
+        'general_support',
+        '',
+        'Please help us with onboarding next steps for this Maestro client account.'
+      );
+    });
+
+    document.getElementById('set-support-provider')?.addEventListener('click', () => {
+      prepareClientSupportRequest(
+        'provider_setup_help',
+        '',
+        'Please help us set up or verify our BYOK provider connection. No provider secrets are included in this message.'
+      );
+    });
+
+    document.getElementById('set-support-billing')?.addEventListener('click', () => {
+      prepareClientSupportRequest(
+        'billing_usage_review',
+        '',
+        'Please review our billing and usage status and advise on the next operational step.'
+      );
+    });
+
+    document.getElementById('set-support-enterprise')?.addEventListener('click', () => {
+      prepareClientSupportRequest(
+        'enterprise_integration_upgrade',
+        'enterprise_integration',
+        'Please evaluate this client account for Enterprise Integration upgrade and integration key provisioning.'
+      );
+    });
+  }
+
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -280,6 +336,7 @@ PAGES.settings = (() => {
     });
 
     document.getElementById('set-client-request-submit')?.addEventListener('click', submitClientRequest);
+    initClientSupportActions();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');
