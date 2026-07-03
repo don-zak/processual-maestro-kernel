@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from ..billing.usage_pricing import pricing_decision
 from ..services.usage_log_store import append_usage_log
 
 
@@ -24,6 +25,16 @@ class UsageLogMiddleware(BaseHTTPMiddleware):
         if current_user.get("auth_method") != "api_key":
             return response
 
+        pricing_item_count = getattr(request.state, "pricing_item_count", None)
+        if not isinstance(pricing_item_count, int):
+            pricing_item_count = None
+
+        pricing_record = pricing_decision(
+            request.url.path,
+            item_count=pricing_item_count,
+        ).to_usage_record()
+        pricing_record.pop("endpoint", None)
+
         append_usage_log({
             "created_at": datetime.now(UTC).isoformat(),
             "request_id": response.headers.get("X-Request-ID", request.headers.get("X-Request-ID", "")),
@@ -38,6 +49,7 @@ class UsageLogMiddleware(BaseHTTPMiddleware):
             "status_code": response.status_code,
             "latency_ms": latency_ms,
             "role": current_user.get("role", ""),
+            **pricing_record,
         })
 
         return response
