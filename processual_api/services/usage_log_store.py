@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -96,3 +97,155 @@ def append_usage_log(record: dict[str, Any]) -> None:
 
     with _USAGE_LOG_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(clean_record, ensure_ascii=False) + "\n")
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    parsed = _as_int_or_none(value)
+    if parsed is None:
+        return default
+    return parsed
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _iter_usage_log_records() -> list[dict[str, Any]]:
+    try:
+        lines = _USAGE_LOG_PATH.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+
+    records: list[dict[str, Any]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(record, dict):
+            records.append(record)
+
+    return records
+
+
+def summarize_usage_logs(
+    *,
+    client_id: str | None = None,
+    api_key_id: str | None = None,
+    latest_limit: int = 10,
+) -> dict[str, Any]:
+    """Summarize Maestro usage ledger records for client/support display.
+
+    This is backend-only summary logic. It intentionally does not define UI,
+    layout, labels, cards, or console rendering.
+    """
+
+    records = _iter_usage_log_records()
+
+    if client_id:
+        records = [
+            record for record in records
+            if str(record.get("client_id", "")) == client_id
+        ]
+
+    if api_key_id:
+        records = [
+            record for record in records
+            if str(record.get("api_key_id", "")) == api_key_id
+        ]
+
+    endpoint_class_counts: Counter[str] = Counter()
+    status_code_counts: Counter[str] = Counter()
+    endpoint_counts: Counter[str] = Counter()
+
+    total_units = 0
+    successful_units = 0
+    rejected_units = 0
+    rejected_requests = 0
+    successful_requests = 0
+    latest_quota_limit: int | None = None
+    latest_quota_used: int | None = None
+    latest_quota_remaining: int | None = None
+    latest_plan_id = ""
+
+    for record in records:
+        units = _safe_int(record.get("units_charged"), 0)
+        total_units += units
+
+        status_code = _safe_int(record.get("status_code"), 0)
+        quota_rejected = bool(record.get("quota_rejected", False))
+        is_success = 200 <= status_code < 400 and not quota_rejected
+
+        if is_success:
+            successful_requests += 1
+            successful_units += units
+
+        if quota_rejected or status_code == 429:
+            rejected_requests += 1
+            rejected_units += units
+
+        endpoint_class = str(record.get("endpoint_class", "") or "unknown")
+        endpoint_class_counts[endpoint_class] += 1
+
+        endpoint = str(record.get("endpoint", "") or "unknown")
+        endpoint_counts[endpoint] += 1
+
+        status_code_counts[str(status_code)] += 1
+
+        quota_limit = _as_int_or_none(record.get("quota_limit"))
+        quota_used = _as_int_or_none(
+            record.get("quota_after", record.get("quota_used"))
+        )
+        quota_remaining = _as_int_or_none(record.get("quota_remaining"))
+
+        if quota_limit is not None:
+            latest_quota_limit = quota_limit
+        if quota_used is not None:
+            latest_quota_used = quota_used
+        if quota_remaining is not None:
+            latest_quota_remaining = quota_remaining
+
+        plan_id = str(record.get("plan_id", "") or "")
+        if plan_id:
+            latest_plan_id = plan_id
+
+    bounded_limit = max(min(int(latest_limit or 10), 50), 0)
+    latest_events = records[-bounded_limit:] if bounded_limit else []
+    latest_events = list(reversed(latest_events))
+
+    avg_latency_ms = 0.0
+    if records:
+        avg_latency_ms = round(
+            sum(_safe_float(record.get("latency_ms"), 0.0) for record in records)
+            / len(records),
+            3,
+        )
+
+    return {
+        "client_id": client_id or "",
+        "api_key_id": api_key_id or "",
+        "total_events": len(records),
+        "successful_requests": successful_requests,
+        "rejected_requests": rejected_requests,
+        "total_units": total_units,
+        "successful_units": successful_units,
+        "rejected_units": rejected_units,
+        "quota_limit": latest_quota_limit,
+        "quota_used": latest_quota_used,
+        "quota_remaining": latest_quota_remaining,
+        "plan_id": latest_plan_id,
+        "by_endpoint_class": dict(sorted(endpoint_class_counts.items())),
+        "by_status_code": dict(sorted(status_code_counts.items())),
+        "top_endpoints": dict(endpoint_counts.most_common(10)),
+        "avg_latency_ms": avg_latency_ms,
+        "latest_events": latest_events,
+    }
