@@ -709,8 +709,37 @@ pending ───────────────────→ deactivated
           <label class="inp-label">Provider Cost Included</label>
           <span id="set-provider-connection-cost" class="font-data text-muted">false</span>
         </div>
+        <div class="inp-group">
+          <label class="inp-label">Last Tested</label>
+          <span id="set-provider-connection-last-tested" class="font-data text-muted">never</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Secret Status</label>
+          <span id="set-provider-connection-secret-status" class="font-data text-muted">hidden / not displayed</span>
+        </div>
       </div>
       <div id="set-provider-connection-providers" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Available providers will appear after client settings load.</div>
+      <div class="settings-grid" id="set-provider-setup-request" style="margin-top:var(--s-3)">
+        <div class="inp-group">
+          <label class="inp-label">Requested Provider</label>
+          <select id="set-provider-setup-provider" class="inp">
+            <option value="">Select provider for setup request</option>
+            <option value="openai">openai</option>
+            <option value="anthropic">anthropic</option>
+            <option value="gemini">gemini</option>
+            <option value="deepseek">deepseek</option>
+            <option value="openrouter">openrouter</option>
+            <option value="opencode">opencode</option>
+            <option value="generic_openai_compatible">generic_openai_compatible</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Requested Model</label>
+          <input id="set-provider-setup-model" class="inp" type="text" placeholder="model name only; no secrets" autocomplete="off">
+        </div>
+      </div>
+      <button id="set-provider-setup-request-prepare" class="btn sm" type="button" style="margin-top:var(--s-3)">Prepare provider setup request</button>
+      <div id="set-provider-setup-request-status" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Provider setup requests use Requests &amp; Billing for admin follow-up. Do not paste provider secrets here.</div>
       <div id="set-provider-connection-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Client provider status is read-only in this phase. Raw provider secrets are never displayed in the client console.</div>
     </div>
 

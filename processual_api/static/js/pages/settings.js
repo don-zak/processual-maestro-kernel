@@ -204,6 +204,8 @@ PAGES.settings = (() => {
     setText('set-provider-connection-provider', info.provider || '-');
     setText('set-provider-connection-model', info.model || '-');
     setText('set-provider-connection-cost', String(info.provider_cost_included === true));
+    setText('set-provider-connection-last-tested', info.last_tested || 'never');
+    setText('set-provider-connection-secret-status', info.configured ? 'stored encrypted / hidden' : 'not stored');
 
     const providers = Array.isArray(info.available_providers)
       ? info.available_providers.join(', ')
@@ -212,6 +214,36 @@ PAGES.settings = (() => {
     setText('set-provider-connection-note', info.message || 'Client BYOK provider status loaded.');
   }
 
+  function providerSetupRequestPayload() {
+    return {
+      provider: document.getElementById('set-provider-setup-provider')?.value.trim() || '',
+      model: document.getElementById('set-provider-setup-model')?.value.trim() || '',
+    };
+  }
+
+  function providerSetupRequestMessage() {
+    const body = providerSetupRequestPayload();
+    return [
+      'Please help configure the client BYOK provider connection.',
+      'Requested provider: ' + (body.provider || 'not selected'),
+      'Requested model: ' + (body.model || 'not specified'),
+      'Provider policy: BYOK; provider costs are not included.',
+      'Safety: no raw provider secrets are included in this request.'
+    ].join('\n');
+  }
+
+  function prepareProviderSetupRequest() {
+    prepareClientSupportRequest(
+      'provider_setup_help',
+      '',
+      providerSetupRequestMessage()
+    );
+    setText('set-provider-setup-request-status', 'Prepared provider setup request. Review it in Requests & Billing before submitting.');
+  }
+
+  function initProviderSetupRequestControls() {
+    document.getElementById('set-provider-setup-request-prepare')?.addEventListener('click', prepareProviderSetupRequest);
+  }
   async function loadProviderConnection() {
     try {
       const info = await CLIENT.get('/settings/provider-connection');
@@ -702,6 +734,7 @@ function initCollapsibleSettingsSections() {
     document.getElementById('set-client-request-submit')?.addEventListener('click', submitClientRequest);
     initClientSupportActions();
     initClientIntegrationGuide();
+    initProviderSetupRequestControls();
     document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
     initCollapsibleSettingsSections();
   initSettingsSectionNavigation();
