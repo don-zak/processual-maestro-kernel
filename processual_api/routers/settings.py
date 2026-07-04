@@ -589,6 +589,139 @@ async def list_admin_client_requests(
         "latest_requests": latest,
         "message": "Admin client requests inbox is ready.",
     }
+
+
+_ADMIN_REQUEST_DETAIL_FORBIDDEN_MARKERS = (
+    "api_key",
+    "encrypted_key",
+    "provider_secret",
+    "raw key",
+    "/settings/llm-provider",
+    "/settings/api-keys",
+)
+
+
+def _admin_safe_request_text(value) -> str:
+    text = str(value or "")
+    lowered = text.lower()
+    for marker in _ADMIN_REQUEST_DETAIL_FORBIDDEN_MARKERS:
+        if marker in lowered:
+            return "[redacted]"
+    return text[:2000]
+
+
+def _admin_client_request_next_action(request_status: str) -> str:
+    normalized = str(request_status or "pending").strip().lower()
+    if normalized == "pending":
+        return "Review request context and decide the next safe admin action."
+    if normalized == "reviewed":
+        return "Decide whether to approve, reject, or draft a supervisor response."
+    if normalized == "approved":
+        return "Execute the approved admin-controlled operation, then complete it."
+    if normalized == "rejected":
+        return "Wait for client clarification or reopen the review if needed."
+    if normalized == "completed":
+        return "No immediate admin action is required."
+    return "Review request state before taking admin action."
+
+
+def _admin_client_request_timeline(entry: dict) -> list[dict]:
+    history = entry.get("status_history") or entry.get("timeline") or entry.get("history") or []
+    timeline: list[dict] = []
+
+    if isinstance(history, list):
+        for item in history:
+            if not isinstance(item, dict):
+                continue
+            timeline.append(
+                {
+                    "status": _admin_safe_request_text(item.get("status") or entry.get("status") or "pending"),
+                    "at": _admin_safe_request_text(
+                        item.get("at")
+                        or item.get("created_at")
+                        or item.get("timestamp")
+                        or entry.get("created_at")
+                        or ""
+                    ),
+                    "source": _admin_safe_request_text(item.get("source") or entry.get("source") or "client_settings"),
+                }
+            )
+
+    if timeline:
+        return timeline
+
+    return [
+        {
+            "status": _admin_safe_request_text(entry.get("status") or "pending"),
+            "at": _admin_safe_request_text(entry.get("created_at") or ""),
+            "source": _admin_safe_request_text(entry.get("source") or "client_settings"),
+        }
+    ]
+
+
+def _admin_client_request_detail(entry: dict, fallback_user_id: str) -> dict:
+    summary = _admin_client_request_summary(entry, fallback_user_id)
+    request_status = str(summary.get("status") or "pending")
+
+    return {
+        "request_id": summary["request_id"],
+        "short_id": summary["short_id"],
+        "client_id": summary["client_id"],
+        "user_id": _admin_safe_request_text(entry.get("user_id") or summary["client_id"] or fallback_user_id),
+        "role": _admin_safe_request_text(entry.get("role") or "client"),
+        "request_type": summary["request_type"],
+        "request_label": _admin_safe_request_text(entry.get("request_label") or summary["request_type"]),
+        "requested_plan": summary["requested_plan"],
+        "status": request_status,
+        "source": summary["source"],
+        "created_at": summary["created_at"],
+        "updated_at": _admin_safe_request_text(entry.get("updated_at") or summary["created_at"]),
+        "message": _admin_safe_request_text(entry.get("message") or ""),
+        "timeline": _admin_client_request_timeline(entry),
+        "next_admin_action": _admin_client_request_next_action(request_status),
+    }
+
+
+@router.get("/admin/client-requests/{request_id}", response_model=dict)
+async def get_admin_client_request_detail(
+    request_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_read(current_user)
+
+    requested = str(request_id or "").strip()
+    if not requested:
+        raise HTTPException(status_code=404, detail="Client request not found.")
+
+    for path in _admin_client_request_raw_files():
+        if not path.is_file():
+            continue
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+
+        entries = raw.get("client_requests") or []
+        if not isinstance(entries, list):
+            continue
+
+        fallback_user_id = _admin_client_request_user_id_from_path(path)
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+
+            summary = _admin_client_request_summary(entry, fallback_user_id)
+            if requested in {summary["request_id"], summary["short_id"]}:
+                return {
+                    "status": "ready",
+                    "request": _admin_client_request_detail(entry, fallback_user_id),
+                }
+
+    raise HTTPException(status_code=404, detail="Client request not found.")
 @router.post("/client-request", response_model=dict)
 async def submit_client_request(
     body: ClientRequestPayload,

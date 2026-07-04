@@ -149,7 +149,7 @@ def test_admin_client_requests_ui_hooks_are_registered() -> None:
         "Clients",
         "/console/js/admin_client_requests.js",
         "admin-client-requests-host",
-        "adminrequests01c",
+        "adminrequests01d",
     ]
     for token in required:
         assert token in html

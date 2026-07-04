@@ -1,5 +1,6 @@
 (function () {
   const ENDPOINT = '/settings/admin/client-requests';
+  const DETAIL_ENDPOINT_PREFIX = '/settings/admin/client-requests/';
   const PAGE_ID = 'page-admin-clients';
   const HOST_ID = 'admin-client-requests-host';
   const CARD_ID = 'admin-client-requests-card';
@@ -232,6 +233,11 @@
       '<div id="admin-client-requests-counts" class="mono-block" style="font-size:11px;white-space:pre-wrap"></div>',
       '</div>',
       '<div id="admin-client-requests-list"></div>',
+      '<div id="admin-client-request-detail">',
+      '<div class="admin-client-request-detail-title">Request Detail</div>',
+      '<div id="admin-client-request-detail-status" class="mono-block" style="font-size:11px;white-space:pre-wrap">Select a request to view details.</div>',
+      '<div id="admin-client-request-detail-body" style="margin-top:var(--s-3)"></div>',
+      '</div>',
     ].join('');
 
     host.appendChild(card);
@@ -324,6 +330,99 @@
     target.appendChild(grid);
   }
 
+
+  function detailPath(requestId) {
+    return DETAIL_ENDPOINT_PREFIX + encodeURIComponent(text(requestId));
+  }
+
+  function renderTimeline(detail, parent) {
+    const timeline = Array.isArray(detail?.timeline) ? detail.timeline : [];
+    appendText(parent, 'div', 'timeline', 'admin-client-request-detail-title');
+
+    const list = document.createElement('div');
+    list.className = 'admin-client-request-timeline';
+
+    if (timeline.length === 0) {
+      appendText(list, 'div', 'No timeline entries returned.', 'admin-note');
+    }
+
+    timeline.forEach((item) => {
+      const node = document.createElement('div');
+      node.className = 'admin-client-request-timeline-item';
+      node.textContent = [
+        text(item?.status || 'pending'),
+        text(item?.at || ''),
+        text(item?.source || ''),
+      ]
+        .filter(Boolean)
+        .join(' | ');
+      list.appendChild(node);
+    });
+
+    parent.appendChild(list);
+  }
+
+  function renderAdminClientRequestDetail(detail) {
+    ensureCard();
+
+    const statusTarget = byId('admin-client-request-detail-status');
+    const body = byId('admin-client-request-detail-body');
+
+    if (statusTarget) {
+      statusTarget.textContent =
+        'Loaded detail for ' + text(detail?.request_id || detail?.short_id || '');
+    }
+
+    clear(body);
+    if (!body) return;
+
+    const grid = document.createElement('div');
+    grid.className = 'admin-client-request-detail-grid';
+
+    appendMeta(grid, 'request_id', detail?.request_id || '');
+    appendMeta(grid, 'short_id', detail?.short_id || '');
+    appendMeta(grid, 'client_id', detail?.client_id || '');
+    appendMeta(grid, 'user_id', detail?.user_id || '');
+    appendMeta(grid, 'role', detail?.role || '');
+    appendMeta(grid, 'request_type', detail?.request_type || '');
+    appendMeta(grid, 'request_label', detail?.request_label || '');
+    appendMeta(grid, 'requested_plan', detail?.requested_plan || '');
+    appendMeta(grid, 'status', detail?.status || '');
+    appendMeta(grid, 'source', detail?.source || '');
+    appendMeta(grid, 'created_at', detail?.created_at || '');
+    appendMeta(grid, 'updated_at', detail?.updated_at || '');
+    appendMeta(grid, 'message', detail?.message || '');
+    appendMeta(grid, 'next_admin_action', detail?.next_admin_action || '');
+
+    body.appendChild(grid);
+    renderTimeline(detail, body);
+  }
+
+  async function loadAdminClientRequestDetail(requestId) {
+    ensureCard();
+
+    const statusTarget = byId('admin-client-request-detail-status');
+    const body = byId('admin-client-request-detail-body');
+    clear(body);
+
+    if (statusTarget) {
+      statusTarget.textContent =
+        'Loading detail for request ' + text(requestId) + ' ...';
+    }
+
+    try {
+      const data = await request(detailPath(requestId));
+      renderAdminClientRequestDetail(data?.request || {});
+      return data;
+    } catch (error) {
+      if (statusTarget) {
+        statusTarget.textContent =
+          'Failed to load request detail: ' +
+          (error && error.message ? error.message : String(error));
+      }
+      return null;
+    }
+  }
   function renderAdminClientRequests(data) {
     ensureCard();
 
@@ -396,6 +495,16 @@
     document.addEventListener(
       'click',
       (event) => {
+        const selectButton = event.target.closest('.admin-client-request-select');
+        if (!selectButton) return;
+        event.preventDefault();
+        loadAdminClientRequestDetail(selectButton.dataset.requestId || '');
+      },
+      true
+    );
+    document.addEventListener(
+      'click',
+      (event) => {
         const button = event.target.closest('[data-admin-page], .nav-btn');
         if (!button) return;
 
@@ -447,7 +556,9 @@
   window.PMK_ADMIN_CLIENT_REQUESTS = {
     bindAdminClientRequests,
     loadAdminClientRequests,
+    loadAdminClientRequestDetail,
     renderAdminClientRequests,
+    renderAdminClientRequestDetail,
     refreshAdminClientRequestsSoon,
   };
 
