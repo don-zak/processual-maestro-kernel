@@ -476,6 +476,103 @@ PAGES.settings = (() => {
     return labels[value] || labels.general_support;
   }
 
+  function clientRequestStatusLabel(status) {
+    const labels = {
+      pending: "Pending admin review",
+      reviewed: "Admin review started",
+      approved: "Approved for follow-up",
+      rejected: "Rejected or needs revision",
+      completed: "Completed",
+    };
+    return labels[status] || labels.pending;
+  }
+
+  function clientRequestStatusRank(status) {
+    const ranks = {
+      pending: 0,
+      reviewed: 1,
+      approved: 2,
+      rejected: 2,
+      completed: 3,
+    };
+    return ranks[status] === undefined ? 0 : ranks[status];
+  }
+
+  function clientRequestStatusStages(status) {
+    if (status === "rejected") {
+      return ["pending", "reviewed", "rejected"];
+    }
+    return ["pending", "reviewed", "approved", "completed"];
+  }
+
+  function latestClientRequest(requests) {
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return null;
+    }
+    return requests[0];
+  }
+
+  function clientRequestSummaryLine(request) {
+    if (!request) {
+      return "No client requests yet";
+    }
+
+    const requestId = String(request.request_id || request.id || "");
+    const shortId = request.short_id || (requestId ? requestId.slice(0, 8) : "-");
+    const requestType = request.request_type || "general_support";
+    const requestTypeLabel = request.request_type_label || clientRequestTypeLabel(requestType);
+    const requestedPlan = request.requested_plan || "none";
+    const status = request.status || "pending";
+    const createdAt = request.created_at || "-";
+
+    return [
+      "Latest request",
+      "short_id=" + shortId,
+      "type=" + requestTypeLabel,
+      "status=" + clientRequestStatusLabel(status),
+      "requested_plan=" + requestedPlan,
+      "created_at=" + createdAt,
+    ].join(" | ");
+  }
+
+  function renderClientRequestStatusTimeline(requests) {
+    const request = latestClientRequest(requests);
+    if (!request) {
+      return "No client request timeline yet. Submit a request to create one.";
+    }
+
+    const status = request.status || "pending";
+    const rank = clientRequestStatusRank(status);
+    const stages = clientRequestStatusStages(status);
+    const lines = stages.map((stage) => {
+      const prefix = stage === status ? "> " : (clientRequestStatusRank(stage) < rank ? "✓ " : "- ");
+      return prefix + stage + ": " + clientRequestStatusLabel(stage);
+    });
+
+    return ["Latest request status timeline"].concat(lines).join("\n");
+  }
+
+  function clientRequestNextSafeAction(requests) {
+    const request = latestClientRequest(requests);
+    if (!request) {
+      return "Submit a request through Requests & Billing when support, billing, provider, or integration help is needed.";
+    }
+
+    const status = request.status || "pending";
+    if (status === "completed") {
+      return "No action required. Monitor usage, provider status, and integration access.";
+    }
+    if (status === "rejected") {
+      return "Review admin follow-up, then submit a revised client-safe request if needed.";
+    }
+    if (status === "approved") {
+      return "Wait for admin execution or supervisor follow-up. Do not paste provider secrets or raw integration keys.";
+    }
+    if (status === "reviewed") {
+      return "Wait for admin follow-up or send a supervisor message with client-safe context.";
+    }
+    return "Wait for admin review. You can send a supervisor message if the request is urgent.";
+  }
   function renderClientRequests(requests) {
     if (!Array.isArray(requests) || requests.length === 0) {
       return 'No client requests submitted yet. Submitted requests will appear here newest first.';
@@ -509,6 +606,9 @@ PAGES.settings = (() => {
     updateClientReadiness();
     if (!info) {
       setText('set-client-request-status', 'Request status unavailable');
+      setText('set-client-request-latest-summary', 'Request summary unavailable');
+      setText('set-client-request-timeline', 'Request timeline unavailable');
+      setText('set-client-request-next-action', 'Reload requests or contact support if this persists.');
       return;
     }
 
@@ -518,6 +618,9 @@ PAGES.settings = (() => {
       'set-client-request-status',
       'Ready / ' + formatNumber(info.request_count || 0) + ' requests / latest ' + formatNumber(latestCount)
     );
+    setText('set-client-request-latest-summary', clientRequestSummaryLine(latestClientRequest(latest)));
+    setText('set-client-request-timeline', renderClientRequestStatusTimeline(latest));
+    setText('set-client-request-next-action', clientRequestNextSafeAction(latest));
     setText('set-client-request-history', renderClientRequests(latest));
   }
 
