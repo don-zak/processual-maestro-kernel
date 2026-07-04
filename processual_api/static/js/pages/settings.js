@@ -755,13 +755,14 @@ PAGES.settings = (() => {
     setText("set-launch-action-status", "Requests & Billing opened for follow-up.");
   }
 
-  function initClientLaunchActions() {
-    document.getElementById("set-launch-primary-action")?.addEventListener("click", handleClientLaunchPrimaryAction);
-    document.getElementById("set-launch-secondary-action")?.addEventListener("click", () => {
-      focusClientRequestsCard();
-      setText("set-launch-action-status", "Requests & Billing opened for follow-up.");
-    });
+  function openClientLaunchRequests() {
+    focusClientRequestsCard();
+    setText("set-launch-action-status", "Requests & Billing opened for follow-up.");
+  }
 
+  function initClientLaunchActions() {
+    bindClientWorkspaceActionButton("set-launch-primary-action", handleClientLaunchPrimaryAction);
+    bindClientWorkspaceActionButton("set-launch-secondary-action", openClientLaunchRequests);
     bindClientWorkspaceActionButton("set-action-center-provider-action", prepareActionCenterProviderSetup);
     bindClientWorkspaceActionButton("set-action-center-usage-action", prepareActionCenterUsageReview);
     bindClientWorkspaceActionButton("set-action-center-integration-action", prepareActionCenterIntegrationKey);
