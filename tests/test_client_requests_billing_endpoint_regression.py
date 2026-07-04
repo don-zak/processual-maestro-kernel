@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 
@@ -182,3 +182,28 @@ def test_client_requests_latest_history_is_newest_first(monkeypatch):
     assert result["latest_requests"][0]["requested_plan"] == "enterprise_integration"
     assert result["latest_requests"][0]["source"] == "supervisor"
     assert result["latest_requests"][1]["request_id"] == "old_request"
+
+
+
+
+def test_client_request_types_include_key_rotation_and_deactivation() -> None:
+    assert (
+        settings_router._normalize_client_request_type(
+            "integration-key-rotation",
+        )
+        == "integration_key_rotation"
+    )
+    assert (
+        settings_router._normalize_client_request_type(
+            "integration key deactivation",
+        )
+        == "integration_key_deactivation"
+    )
+    assert (
+        settings_router.CLIENT_REQUEST_TYPE_LABELS["integration_key_rotation"]
+        == "Request integration key rotation"
+    )
+    assert (
+        settings_router.CLIENT_REQUEST_TYPE_LABELS["integration_key_deactivation"]
+        == "Request integration key deactivation"
+    )

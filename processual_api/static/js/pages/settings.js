@@ -1,4 +1,4 @@
-PAGES.settings = (() => {
+﻿PAGES.settings = (() => {
   const readinessState = {
     account: null,
     subscription: null,
@@ -223,7 +223,9 @@ PAGES.settings = (() => {
       const scopes = Array.isArray(key.scopes) ? key.scopes.join(', ') : '-';
       const quota = key.quota_limit === -1 ? 'unlimited' : formatNumber(key.quota_limit);
       const used = formatNumber(key.quota_used);
+      const remaining = key.quota_remaining === undefined ? '-' : formatNumber(key.quota_remaining);
       const lastUsed = key.last_used_at || 'never';
+      const createdAt = key.created_at || '-';
 
       return [
         'key_id=' + (key.key_id || key.id || '-'),
@@ -231,8 +233,10 @@ PAGES.settings = (() => {
         'status=' + (key.status || '-'),
         'scopes=' + scopes,
         'quota_used=' + used,
+        'quota_remaining=' + remaining,
         'quota_limit=' + quota,
         'last_used_at=' + lastUsed,
+        'created_at=' + createdAt,
       ].join(' | ');
     }).join('\n');
   }
@@ -267,6 +271,53 @@ PAGES.settings = (() => {
     }
   }
 
+
+  function integrationKeyRequestMessage(action) {
+    const info = readinessState.integration || {};
+    const keys = Array.isArray(info.keys) ? info.keys : [];
+    const key = keys[0] || {};
+    const actionLabels = {
+      provisioning: "provisioning",
+      rotation: "rotation",
+      deactivation: "deactivation",
+    };
+    const actionLabel = actionLabels[action] || "provisioning";
+    const scopes = Array.isArray(key.scopes) ? key.scopes.join(", ") : "-";
+
+    return [
+      "Please process an integration key " + actionLabel + " request.",
+      "plan=" + (info.plan_id || "-"),
+      "integration_status=" + (info.status || "-"),
+      "active_key_count=" + formatNumber(info.key_count || keys.length),
+      "target_key_id=" + (key.key_id || key.id || "-"),
+      "target_prefix=" + (key.prefix || "-"),
+      "target_status=" + (key.status || "-"),
+      "target_scopes=" + scopes,
+      "quota_limit=" + formatNumber(key.quota_limit),
+      "quota_used=" + formatNumber(key.quota_used),
+      "quota_remaining=" + formatNumber(key.quota_remaining),
+      "last_used_at=" + (key.last_used_at || "never"),
+      "created_at=" + (key.created_at || "-"),
+      "No raw integration secret is included.",
+    ].join("\n");
+  }
+
+  function prepareIntegrationKeyRequest(action) {
+    const requestTypes = {
+      provisioning: "integration_key_provisioning",
+      rotation: "integration_key_rotation",
+      deactivation: "integration_key_deactivation",
+    };
+    const requestLabels = {
+      provisioning: "Integration key provisioning request prepared.",
+      rotation: "Integration key rotation request prepared.",
+      deactivation: "Integration key deactivation request prepared.",
+    };
+    const requestType = requestTypes[action] || requestTypes.provisioning;
+    prepareClientSupportRequest(requestType, "", integrationKeyRequestMessage(action));
+    setText("set-api-key-request-status", requestLabels[action] || requestLabels.provisioning);
+    focusClientRequestsCard();
+  }
 
   function applyProviderConnection(info) {
     readinessState.provider = info || null;
@@ -584,7 +635,7 @@ PAGES.settings = (() => {
   }
 
   function readinessLine(ok, label, status) {
-    return (ok ? '✓ ' : '! ') + label + ': ' + status;
+    return (ok ? 'âœ“ ' : '! ') + label + ': ' + status;
   }
 
   function integrationReadiness() {
@@ -880,6 +931,18 @@ function initCollapsibleSettingsSections() {
     }
   }
 
+  function initIntegrationKeyRequestWorkflow() {
+    document.getElementById("set-api-key-request-provisioning")?.addEventListener("click", () => {
+      prepareIntegrationKeyRequest("provisioning");
+    });
+    document.getElementById("set-api-key-request-rotation")?.addEventListener("click", () => {
+      prepareIntegrationKeyRequest("rotation");
+    });
+    document.getElementById("set-api-key-request-deactivation")?.addEventListener("click", () => {
+      prepareIntegrationKeyRequest("deactivation");
+    });
+  }
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -907,6 +970,7 @@ function initCollapsibleSettingsSections() {
       initCollapsibleSettingsSections();
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
+      initIntegrationKeyRequestWorkflow();
       refresh();
       return;
     }
@@ -936,6 +1000,7 @@ function initCollapsibleSettingsSections() {
     initCollapsibleSettingsSections();
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
+      initIntegrationKeyRequestWorkflow();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');

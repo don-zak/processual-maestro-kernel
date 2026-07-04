@@ -35,6 +35,8 @@ def test_client_requests_billing_card_has_safe_request_fields() -> None:
         "set-client-request-submit",
         "set-client-request-status",
         "set-client-request-history",
+        "integration_key_rotation",
+        "integration_key_deactivation",
         "Latest request status history",
         "short id, type, requested plan, status, created_at, and source",
         "Do not paste provider secrets or raw keys",

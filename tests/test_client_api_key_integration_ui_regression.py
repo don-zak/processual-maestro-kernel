@@ -67,3 +67,52 @@ def test_enterprise_api_key_integration_script_uses_client_safe_endpoint() -> No
     )
     for marker in forbidden:
         assert marker not in js
+
+
+def test_client_api_key_integration_card_exposes_request_workflow_controls() -> None:
+    html = _settings_page_html()
+
+    markers = (
+        "set-api-key-request-provisioning",
+        "set-api-key-request-rotation",
+        "set-api-key-request-deactivation",
+        "set-api-key-request-status",
+        "Request integration key provisioning",
+        "Request key rotation",
+        "Request key deactivation",
+        "No raw integration secret is included",
+        "integration_key_rotation",
+        "integration_key_deactivation",
+    )
+    for marker in markers:
+        assert marker in html
+
+
+def test_client_api_key_integration_script_prefills_safe_key_requests() -> None:
+    js = SETTINGS_JS.read_text(encoding="utf-8")
+
+    markers = (
+        "integrationKeyRequestMessage",
+        "prepareIntegrationKeyRequest",
+        "initIntegrationKeyRequestWorkflow",
+        "integration_key_provisioning",
+        "integration_key_rotation",
+        "integration_key_deactivation",
+        "quota_remaining",
+        "created_at",
+        "last_used_at",
+        "No raw integration secret is included",
+    )
+    for marker in markers:
+        assert marker in js
+
+    forbidden = (
+        "/settings/api-keys",
+        "/settings/llm-provider",
+        "/admin",
+        "admin_",
+        "encrypted_key",
+        "api_key",
+    )
+    for marker in forbidden:
+        assert marker not in js

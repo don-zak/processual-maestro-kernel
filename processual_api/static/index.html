@@ -681,6 +681,11 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
       </div>
       <div id="set-api-key-integration-keys" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No integration keys issued yet. Contact the Maestro admin team to create one.</div>
       <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Only prefixes, scopes, quotas, and usage metadata are shown here. Raw secret keys are never displayed after creation.</div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Use Requests &amp; Billing to request integration key provisioning, rotation, or deactivation. No raw integration secret is included.</div>
+      <button id="set-api-key-request-provisioning" class="btn sm" style="margin-top:var(--s-3)">Request integration key provisioning</button>
+      <button id="set-api-key-request-rotation" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Request key rotation</button>
+      <button id="set-api-key-request-deactivation" class="btn ghost sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Request key deactivation</button>
+      <span id="set-api-key-request-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
     </div>
 
 
@@ -792,6 +797,8 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
           <select id="set-client-request-type" class="inp-sel">
             <option value="enterprise_integration_upgrade">Upgrade to Enterprise Integration</option>
             <option value="integration_key_provisioning">Request integration key provisioning</option>
+            <option value="integration_key_rotation">Request integration key rotation</option>
+            <option value="integration_key_deactivation">Request integration key deactivation</option>
             <option value="provider_setup_help">Provider setup help</option>
             <option value="billing_usage_review">Billing and usage review</option>
             <option value="general_support">General support</option>
@@ -832,6 +839,8 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
             <option value="provider_setup_help">Provider setup help</option>
             <option value="billing_usage_review">Billing and usage review</option>
             <option value="integration_key_provisioning">Integration key provisioning</option>
+            <option value="integration_key_rotation">Integration key rotation</option>
+            <option value="integration_key_deactivation">Integration key deactivation</option>
             <option value="enterprise_integration_upgrade">Enterprise integration upgrade</option>
           </select>
         </div>

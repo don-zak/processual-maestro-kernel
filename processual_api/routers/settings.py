@@ -333,9 +333,12 @@ async def update_general(body: GeneralSettings, current_user: dict = Depends(get
     return body
 
 
+
 CLIENT_REQUEST_TYPE_LABELS: dict[str, str] = {
     "enterprise_integration_upgrade": "Upgrade to Enterprise Integration",
     "integration_key_provisioning": "Request integration key provisioning",
+    "integration_key_rotation": "Request integration key rotation",
+    "integration_key_deactivation": "Request integration key deactivation",
     "provider_setup_help": "Provider setup help",
     "billing_usage_review": "Billing and usage review",
     "general_support": "General support",
@@ -364,6 +367,7 @@ def _normalize_client_provider(value: str) -> str:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
     return provider
 
+
 def _client_request_type_options() -> list[dict[str, str]]:
     return [
         {"id": request_type, "label": label}
@@ -377,16 +381,6 @@ def _normalize_client_request_type(value: str | None) -> str:
     if normalized in CLIENT_REQUEST_TYPE_LABELS:
         return normalized
     return "general_support"
-
-
-CLIENT_REQUEST_TYPE_LABELS: dict[str, str] = {
-    "enterprise_integration_upgrade": "Enterprise integration upgrade",
-    "integration_key_provisioning": "Integration key provisioning",
-    "provider_setup_help": "Provider setup help",
-    "billing_usage_review": "Billing and usage review",
-    "general_support": "General support",
-}
-
 
 def _client_request_type_label(request_type: str | None) -> str:
     return CLIENT_REQUEST_TYPE_LABELS.get(
