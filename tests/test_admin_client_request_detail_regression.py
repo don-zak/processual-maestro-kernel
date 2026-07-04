@@ -194,4 +194,4 @@ def test_admin_client_request_detail_cache_version_is_updated() -> None:
     html = (STATIC_DIR / "admin.html").read_text(encoding="utf-8")
 
     assert "/console/js/admin_client_requests.js" in html
-    assert "adminrequests01d" in html
+    assert "adminrequests01e" in html

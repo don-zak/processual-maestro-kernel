@@ -722,6 +722,175 @@ async def get_admin_client_request_detail(
                 }
 
     raise HTTPException(status_code=404, detail="Client request not found.")
+
+
+_ADMIN_REQUEST_STATUS_ACTIONS = (
+    "pending",
+    "reviewed",
+    "approved",
+    "rejected",
+    "completed",
+)
+
+
+def _require_admin_client_requests_write(current_user: dict) -> None:
+    _require_admin_client_requests_read(current_user)
+
+    role = str(current_user.get("role") or "").strip().lower()
+    session_type = str(current_user.get("session_type") or "").strip().lower()
+    scopes = {
+        str(scope).strip().lower()
+        for scope in current_user.get("scopes") or []
+        if scope
+    }
+
+    allowed_roles = {
+        "admin",
+        "owner_admin",
+        "security_admin",
+        "billing_admin",
+        "ops_admin",
+    }
+    allowed_scopes = {
+        "admin:*",
+        "admin:clients:write",
+        "admin:requests:write",
+    }
+
+    if role in allowed_roles or scopes.intersection(allowed_scopes):
+        return
+
+    if session_type == "ui_admin":
+        return
+
+    raise HTTPException(
+        status_code=403,
+        detail="Admin client request write access is required.",
+    )
+
+
+def _admin_request_status_now_iso() -> str:
+    datetime_module = __import__("datetime")
+    return datetime_module.datetime.now(datetime_module.timezone.utc).isoformat()
+
+
+def _normalize_admin_request_status(value) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in _ADMIN_REQUEST_STATUS_ACTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported client request status action.",
+        )
+    return normalized
+
+
+def _admin_request_status_note(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+
+    note = payload.get("note") or payload.get("admin_note") or ""
+    return _admin_safe_request_text(note)[:500]
+
+
+def _admin_request_status_actor(current_user: dict) -> str:
+    return _admin_safe_request_text(
+        current_user.get("sub")
+        or current_user.get("user_id")
+        or current_user.get("client_id")
+        or current_user.get("role")
+        or "admin"
+    )
+
+
+def _append_admin_request_status_history(
+    entry: dict,
+    *,
+    next_status: str,
+    at: str,
+    actor: str,
+    note: str,
+) -> None:
+    history = entry.get("status_history")
+    if not isinstance(history, list):
+        history = []
+
+    event = {
+        "status": next_status,
+        "at": at,
+        "source": "admin_clients_panel",
+        "actor": actor,
+    }
+    if note:
+        event["note"] = note
+
+    history.append(event)
+    entry["status_history"] = history
+
+
+@router.post("/admin/client-requests/{request_id}/status", response_model=dict)
+async def update_admin_client_request_status(
+    request_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_write(current_user)
+
+    requested = str(request_id or "").strip()
+    if not requested:
+        raise HTTPException(status_code=404, detail="Client request not found.")
+
+    next_status = _normalize_admin_request_status(payload.get("status"))
+    now = _admin_request_status_now_iso()
+    note = _admin_request_status_note(payload)
+    actor = _admin_request_status_actor(current_user)
+
+    for path in _admin_client_request_raw_files():
+        if not path.is_file():
+            continue
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+
+        entries = raw.get("client_requests") or []
+        if not isinstance(entries, list):
+            continue
+
+        fallback_user_id = _admin_client_request_user_id_from_path(path)
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+
+            summary = _admin_client_request_summary(entry, fallback_user_id)
+            if requested not in {summary["request_id"], summary["short_id"]}:
+                continue
+
+            entry["status"] = next_status
+            entry["updated_at"] = now
+            _append_admin_request_status_history(
+                entry,
+                next_status=next_status,
+                at=now,
+                actor=actor,
+                note=note,
+            )
+
+            path.write_text(
+                json.dumps(raw, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            return {
+                "status": "updated",
+                "request": _admin_client_request_detail(entry, fallback_user_id),
+            }
+
+    raise HTTPException(status_code=404, detail="Client request not found.")
 @router.post("/client-request", response_model=dict)
 async def submit_client_request(
     body: ClientRequestPayload,

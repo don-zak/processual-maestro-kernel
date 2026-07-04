@@ -331,10 +331,78 @@
   }
 
 
+
+  async function postJson(path, payload) {
+    const response = await fetch(path, {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders({
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      }),
+      body: JSON.stringify(payload || {}),
+    });
+
+    const rawText = await response.text();
+    let data = {};
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { message: rawText };
+      }
+    }
+
+    if (!response.ok) {
+      const detail =
+        data && typeof data === 'object'
+          ? data.detail || data.message || `HTTP ${response.status}`
+          : `HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+
+    return data;
+  }
   function detailPath(requestId) {
     return DETAIL_ENDPOINT_PREFIX + encodeURIComponent(text(requestId));
   }
 
+  function statusPath(requestId) {
+    return detailPath(requestId) + '/status';
+  }
+
+
+  function renderAdminClientRequestStatusActions(detail, parent) {
+    const requestId = text(detail?.request_id || '');
+    if (!requestId) return;
+
+    const actions = document.createElement('div');
+    actions.id = 'admin-client-request-status-actions';
+    actions.className = 'admin-client-request-status-actions';
+    actions.style.marginTop = 'var(--s-3)';
+    actions.style.display = 'flex';
+    actions.style.gap = 'var(--s-2)';
+    actions.style.flexWrap = 'wrap';
+
+    const options = [
+      ['reviewed', 'Mark Reviewed'],
+      ['approved', 'Approve'],
+      ['rejected', 'Reject'],
+      ['completed', 'Complete'],
+    ];
+
+    options.forEach(([nextStatus, label]) => {
+      const button = document.createElement('button');
+      button.className = 'btn secondary sm admin-client-request-status-action';
+      button.type = 'button';
+      button.dataset.requestId = requestId;
+      button.dataset.nextStatus = nextStatus;
+      button.textContent = label;
+      actions.appendChild(button);
+    });
+
+    parent.appendChild(actions);
+  }
   function renderTimeline(detail, parent) {
     const timeline = Array.isArray(detail?.timeline) ? detail.timeline : [];
     appendText(parent, 'div', 'timeline', 'admin-client-request-detail-title');
@@ -395,6 +463,7 @@
     appendMeta(grid, 'next_admin_action', detail?.next_admin_action || '');
 
     body.appendChild(grid);
+    renderAdminClientRequestStatusActions(detail, body);
     renderTimeline(detail, body);
   }
 
@@ -418,6 +487,33 @@
       if (statusTarget) {
         statusTarget.textContent =
           'Failed to load request detail: ' +
+          (error && error.message ? error.message : String(error));
+      }
+      return null;
+    }
+  }
+
+  async function updateAdminClientRequestStatus(requestId, nextStatus) {
+    ensureCard();
+
+    const statusTarget = byId('admin-client-request-detail-status');
+    if (statusTarget) {
+      statusTarget.textContent =
+        'Updating request ' + text(requestId) + ' to ' + text(nextStatus) + ' ...';
+    }
+
+    try {
+      const data = await postJson(statusPath(requestId), {
+        status: nextStatus,
+        note: 'Updated from Admin request detail panel.',
+      });
+      renderAdminClientRequestDetail(data?.request || {});
+      await loadAdminClientRequests(true);
+      return data;
+    } catch (error) {
+      if (statusTarget) {
+        statusTarget.textContent =
+          'Failed to update request status: ' +
           (error && error.message ? error.message : String(error));
       }
       return null;
@@ -495,6 +591,20 @@
     document.addEventListener(
       'click',
       (event) => {
+        const statusButton = event.target.closest('.admin-client-request-status-action');
+        if (!statusButton) return;
+
+        event.preventDefault();
+        updateAdminClientRequestStatus(
+          statusButton.dataset.requestId || '',
+          statusButton.dataset.nextStatus || ''
+        );
+      },
+      true
+    );
+    document.addEventListener(
+      'click',
+      (event) => {
         const selectButton = event.target.closest('.admin-client-request-select');
         if (!selectButton) return;
         event.preventDefault();
@@ -557,6 +667,7 @@
     bindAdminClientRequests,
     loadAdminClientRequests,
     loadAdminClientRequestDetail,
+    updateAdminClientRequestStatus,
     renderAdminClientRequests,
     renderAdminClientRequestDetail,
     refreshAdminClientRequestsSoon,
