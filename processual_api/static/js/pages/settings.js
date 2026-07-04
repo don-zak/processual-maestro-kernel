@@ -467,6 +467,8 @@ PAGES.settings = (() => {
     const labels = {
       enterprise_integration_upgrade: 'Enterprise integration upgrade',
       integration_key_provisioning: 'Integration key provisioning',
+      integration_key_rotation: 'Integration key rotation',
+      integration_key_deactivation: 'Integration key deactivation',
       provider_setup_help: 'Provider setup help',
       billing_usage_review: 'Billing and usage review',
       general_support: 'General support',
@@ -699,6 +701,7 @@ PAGES.settings = (() => {
     setText("set-launch-owner", clientLaunchOwner(current.action));
     setText("set-launch-action-status", "Next action: " + clientLaunchActionLabel(current.action));
     setText("set-launch-checklist", steps.map(clientLaunchStepLine).join("\n"));
+    renderClientWorkspaceActionCenter(integration, provider, requests, current);
 
     const primary = document.getElementById("set-launch-primary-action");
     if (primary) {
@@ -758,7 +761,84 @@ PAGES.settings = (() => {
       focusClientRequestsCard();
       setText("set-launch-action-status", "Requests & Billing opened for follow-up.");
     });
+
+    bindClientWorkspaceActionButton("set-action-center-provider-action", prepareActionCenterProviderSetup);
+    bindClientWorkspaceActionButton("set-action-center-usage-action", prepareActionCenterUsageReview);
+    bindClientWorkspaceActionButton("set-action-center-integration-action", prepareActionCenterIntegrationKey);
+    bindClientWorkspaceActionButton("set-action-center-requests-action", openActionCenterRequests);
   }
+  function clientWorkspacePendingFollowUpCount(requests) {
+    const info = requests || {};
+    const counts = info.status_counts || {};
+    if (counts.pending !== undefined) {
+      return Number(counts.pending || 0);
+    }
+
+    const latest = Array.isArray(info.latest_requests) ? info.latest_requests : [];
+    return latest.filter((request) => (request.status || "pending") !== "completed").length;
+  }
+
+  function clientWorkspaceLatestRequestSummary(requests) {
+    const info = requests || {};
+    const latest = Array.isArray(info.latest_requests) ? info.latest_requests : [];
+    const request = latest[0];
+    if (!request) {
+      return "No client requests yet";
+    }
+
+    const requestType = request.request_type || "general_support";
+    const requestLabel = request.request_type_label || clientRequestTypeLabel(requestType);
+    const status = request.status || "pending";
+    const shortId = request.short_id || String(request.request_id || request.id || "-").slice(0, 8);
+    return requestLabel + " / " + status + " / " + shortId;
+  }
+
+  function renderClientWorkspaceActionCenter(integration, provider, requests, current) {
+    const activeStep = current || { action: "requests", label: "Client workspace", status: "ready" };
+    const pending = clientWorkspacePendingFollowUpCount(requests);
+    const latestSummary = clientWorkspaceLatestRequestSummary(requests);
+
+    setText("set-action-center-next", clientLaunchActionLabel(activeStep.action));
+    setText("set-action-center-owner", clientLaunchOwner(activeStep.action));
+    setText("set-action-center-pending", formatNumber(pending));
+    setText("set-action-center-last-request", latestSummary);
+    setText("set-action-center-provider", provider.status);
+    setText("set-action-center-integration", integration.status);
+    setText("set-action-center-status", "Ready / " + clientLaunchActionLabel(activeStep.action));
+  }
+
+  function bindClientWorkspaceActionButton(id, handler) {
+    const button = document.getElementById(id);
+    if (!button || button.dataset.workspaceActionBound === "1") {
+      return;
+    }
+    button.dataset.workspaceActionBound = "1";
+    button.addEventListener("click", handler);
+  }
+
+  function prepareActionCenterProviderSetup() {
+    prepareProviderSetupRequest();
+    setText("set-action-center-status", "Provider setup request prepared in Requests & Billing.");
+    focusClientRequestsCard();
+  }
+
+  function prepareActionCenterUsageReview() {
+    prepareUsageReviewRequest();
+    setText("set-action-center-status", "Usage review request prepared in Requests & Billing.");
+    focusClientRequestsCard();
+  }
+
+  function prepareActionCenterIntegrationKey() {
+    prepareIntegrationKeyRequest("provisioning");
+    setText("set-action-center-status", "Integration key provisioning request prepared.");
+    focusClientRequestsCard();
+  }
+
+  function openActionCenterRequests() {
+    focusClientRequestsCard();
+    setText("set-action-center-status", "Requests & Billing opened for follow-up.");
+  }
+
   function integrationReadiness() {
     const integration = readinessState.integration;
     if (!integration) return { ok: false, status: 'loading' };
