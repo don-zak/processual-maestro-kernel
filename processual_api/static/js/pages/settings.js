@@ -23,19 +23,40 @@ PAGES.settings = (() => {
     loadClientSettings();
   }
 
+  function accountIdentityValue(account) {
+    return account.user_id || account.client_id || account.sub || "current client";
+  }
+
+  function accountClientId(account) {
+    return account.client_id || account.user_id || account.sub || "-";
+  }
+
+  function accountScopes(account) {
+    const scopes = account.scopes;
+    if (Array.isArray(scopes)) return scopes.join(", ");
+    return scopes || "evaluation";
+  }
   async function loadAccount() {
     try {
       const me = await CLIENT.get('/auth/me');
+      const scopes = accountScopes(me);
       readinessState.account = me;
       updateClientReadiness();
-      setText('set-account-user', me.user_id || me.client_id || me.sub || 'current client');
+      setText('set-account-user', accountIdentityValue(me));
       setText('set-account-role', me.role || sessionRole());
-      const scopes = Array.isArray(me.scopes) ? me.scopes.join(', ') : (me.scopes || '');
       setText('set-account-session', (me.session_type || 'ui_client') + (scopes ? ' / ' + scopes : ''));
+      setText('set-account-client-id', accountClientId(me));
+      setText('set-account-session-type', me.session_type || 'ui_client');
+      setText('set-account-scopes', scopes);
+      setText('set-account-status', 'Verified via /auth/me');
     } catch (e) {
       setText('set-account-user', 'current client');
       setText('set-account-role', sessionRole());
       setText('set-account-session', 'UI client session');
+      setText('set-account-client-id', '-');
+      setText('set-account-session-type', 'ui_client');
+      setText('set-account-scopes', 'evaluation');
+      setText('set-account-status', 'Fallback session identity');
       readinessState.account = { role: sessionRole(), fallback: true };
       updateClientReadiness();
     }
