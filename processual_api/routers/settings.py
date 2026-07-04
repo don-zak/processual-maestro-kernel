@@ -461,6 +461,134 @@ async def list_client_requests(current_user: dict = Depends(get_current_user)):
     }
 
 
+
+
+def _admin_client_requests_scopes(current_user: dict) -> set[str]:
+    raw_scopes = current_user.get("scopes") or current_user.get("permissions") or []
+    if isinstance(raw_scopes, str):
+        raw_scopes = [raw_scopes]
+    return {str(scope).strip() for scope in raw_scopes if str(scope).strip()}
+
+
+def _require_admin_client_requests_read(current_user: dict) -> None:
+    role = str(
+        current_user.get("role")
+        or current_user.get("user_role")
+        or current_user.get("account_role")
+        or ""
+    ).strip()
+    scopes = _admin_client_requests_scopes(current_user)
+    allowed_roles = {
+        "admin",
+        "administrator",
+        "owner_admin",
+        "ops_admin",
+        "billing_admin",
+        "support_admin",
+        "security_admin",
+    }
+    allowed_scopes = {
+        "*",
+        "admin",
+        "admin:*",
+        "admin:read",
+        "admin:clients:read",
+        "admin:settings",
+    }
+
+    if role in allowed_roles or scopes.intersection(allowed_scopes):
+        return
+
+    raise HTTPException(
+        status_code=403,
+        detail="Admin client request inbox requires admin client read access.",
+    )
+
+
+def _admin_client_request_summary(entry: dict, fallback_user_id: str) -> dict:
+    request_id = str(entry.get("request_id") or entry.get("id") or "")
+    short_id = str(entry.get("short_id") or request_id[-8:] or "")
+    client_id = str(entry.get("client_id") or fallback_user_id)
+    request_type = str(entry.get("request_type") or "")
+    requested_plan = str(entry.get("requested_plan") or "")
+    request_status = str(entry.get("status") or "pending")
+    created_at = str(entry.get("created_at") or "")
+    source = str(entry.get("source") or "client_settings")
+
+    return {
+        "request_id": request_id,
+        "short_id": short_id,
+        "client_id": client_id,
+        "request_type": request_type,
+        "requested_plan": requested_plan,
+        "status": request_status,
+        "created_at": created_at,
+        "source": source,
+    }
+
+
+def _admin_client_request_user_id_from_path(path) -> str:
+    stem = str(path.stem)
+    if stem.startswith("settings_"):
+        return stem.replace("settings_", "", 1)
+    return stem
+
+
+def _admin_client_request_raw_files() -> list:
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return sorted(_DATA_DIR.glob("*.json"))
+
+
+@router.get("/admin/client-requests", response_model=dict)
+async def list_admin_client_requests(
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_read(current_user)
+
+    summaries: list[dict] = []
+
+    for path in _admin_client_request_raw_files():
+        if not path.is_file():
+            continue
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+
+        entries = raw.get("client_requests") or []
+        if not isinstance(entries, list):
+            continue
+
+        fallback_user_id = _admin_client_request_user_id_from_path(path)
+        for entry in entries:
+            if isinstance(entry, dict):
+                summaries.append(
+                    _admin_client_request_summary(entry, fallback_user_id)
+                )
+
+    summaries.sort(
+        key=lambda item: str(item.get("created_at") or ""),
+        reverse=True,
+    )
+    latest = summaries[:50]
+
+    status_counts: dict[str, int] = {}
+    for item in summaries:
+        request_status = str(item.get("status") or "pending")
+        status_counts[request_status] = status_counts.get(request_status, 0) + 1
+
+    return {
+        "status": "ready",
+        "request_count": len(summaries),
+        "latest_count": len(latest),
+        "status_counts": status_counts,
+        "latest_requests": latest,
+        "message": "Admin client requests inbox is ready.",
+    }
 @router.post("/client-request", response_model=dict)
 async def submit_client_request(
     body: ClientRequestPayload,
