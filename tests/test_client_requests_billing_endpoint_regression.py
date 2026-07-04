@@ -122,3 +122,63 @@ def test_client_request_payload_requires_meaningful_message() -> None:
             request_type="general_support",
             message="short",
         )
+
+
+def test_client_request_summary_exposes_status_history_fields():
+    summary = settings_router._client_request_summary({
+        "id": "req_abcdef123456",
+        "request_type": "billing_usage_review",
+        "requested_plan": "business",
+        "status": "reviewed",
+        "created_at": "2026-07-04T10:30:00+00:00",
+        "source": "client",
+        "message": "Please review our account usage and quota status.",
+    })
+
+    assert summary["request_id"] == "req_abcdef123456"
+    assert summary["short_id"] == "req_abcd"
+    assert summary["request_type"] == "billing_usage_review"
+    assert summary["request_type_label"] == "Billing and usage review"
+    assert summary["requested_plan"] == "business"
+    assert summary["status"] == "reviewed"
+    assert summary["created_at"] == "2026-07-04T10:30:00+00:00"
+    assert summary["source"] == "client"
+
+
+def test_client_requests_latest_history_is_newest_first(monkeypatch):
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda _user_id: {
+            "client_requests": [
+                {
+                    "id": "old_request",
+                    "request_type": "general_support",
+                    "status": "pending",
+                    "created_at": "2026-07-04T09:00:00+00:00",
+                    "source": "client",
+                    "message": "Older support request message.",
+                },
+                {
+                    "id": "new_request",
+                    "request_type": "provider_setup_help",
+                    "requested_plan": "enterprise_integration",
+                    "status": "completed",
+                    "created_at": "2026-07-04T10:00:00+00:00",
+                    "source": "supervisor",
+                    "message": "Newer provider setup request message.",
+                },
+            ]
+        },
+    )
+
+    result = asyncio.run(settings_router.list_client_requests({"user_id": "client-a"}))
+
+    assert result["request_count"] == 2
+    assert result["latest_count"] == 2
+    assert result["status_counts"] == {"completed": 1, "pending": 1}
+    assert result["latest_requests"][0]["request_id"] == "new_request"
+    assert result["latest_requests"][0]["request_type_label"] == "Provider setup help"
+    assert result["latest_requests"][0]["requested_plan"] == "enterprise_integration"
+    assert result["latest_requests"][0]["source"] == "supervisor"
+    assert result["latest_requests"][1]["request_id"] == "old_request"

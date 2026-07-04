@@ -379,18 +379,50 @@ def _normalize_client_request_type(value: str | None) -> str:
     return "general_support"
 
 
+CLIENT_REQUEST_TYPE_LABELS: dict[str, str] = {
+    "enterprise_integration_upgrade": "Enterprise integration upgrade",
+    "integration_key_provisioning": "Integration key provisioning",
+    "provider_setup_help": "Provider setup help",
+    "billing_usage_review": "Billing and usage review",
+    "general_support": "General support",
+}
+
+
+def _client_request_type_label(request_type: str | None) -> str:
+    return CLIENT_REQUEST_TYPE_LABELS.get(
+        str(request_type or "general_support"),
+        "General support",
+    )
+
+
+def _client_request_short_id(request_id: str | None) -> str:
+    value = str(request_id or "").strip()
+    return value[:8] if value else "-"
+
+
 def _client_request_summary(entry: dict[str, Any]) -> dict[str, Any]:
+    request_id = str(entry.get("request_id") or entry.get("id") or "")
+    request_type = str(entry.get("request_type") or "general_support")
+    requested_plan = str(entry.get("requested_plan") or "")
+    status_value = str(entry.get("status") or "pending")
+    created_at = str(entry.get("created_at") or "")
+    source = str(entry.get("source") or "client")
+    message = str(entry.get("message") or "")
+    message_preview = message[:120]
+    if len(message) > 120:
+        message_preview += "..."
+
     return {
-        "id": entry.get("id", ""),
-        "request_type": entry.get("request_type", "general_support"),
-        "request_label": CLIENT_REQUEST_TYPE_LABELS.get(
-            entry.get("request_type", "general_support"),
-            CLIENT_REQUEST_TYPE_LABELS["general_support"],
-        ),
-        "requested_plan": entry.get("requested_plan") or "",
-        "status": entry.get("status", "pending"),
-        "created_at": entry.get("created_at", ""),
-        "source": entry.get("source", "client_settings"),
+        "id": request_id,
+        "request_id": request_id,
+        "short_id": _client_request_short_id(request_id),
+        "request_type": request_type,
+        "request_type_label": _client_request_type_label(request_type),
+        "requested_plan": requested_plan,
+        "status": status_value,
+        "created_at": created_at,
+        "source": source,
+        "message_preview": message_preview,
     }
 
 
@@ -409,16 +441,26 @@ async def list_client_requests(current_user: dict = Depends(get_current_user)):
     raw = _load_raw(user_id)
     requests = _client_requests(raw)
 
-    latest = [
+    summaries = [
         _client_request_summary(entry)
         for entry in requests
         if isinstance(entry, dict)
-    ][-5:]
-    latest.reverse()
+    ]
+    summaries.sort(
+        key=lambda item: str(item.get("created_at") or ""),
+        reverse=True,
+    )
+    latest = summaries[:10]
+    status_counts: dict[str, int] = {}
+    for item in summaries:
+        item_status = str(item.get("status") or "pending")
+        status_counts[item_status] = status_counts.get(item_status, 0) + 1
 
     return {
         "status": "ready",
-        "request_count": len(requests),
+        "request_count": len(summaries),
+        "latest_count": len(latest),
+        "status_counts": status_counts,
         "request_types": _client_request_type_options(),
         "latest_requests": latest,
         "message": "Client requests are ready for admin follow-up.",

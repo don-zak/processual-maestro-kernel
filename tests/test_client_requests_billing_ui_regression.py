@@ -35,6 +35,8 @@ def test_client_requests_billing_card_has_safe_request_fields() -> None:
         "set-client-request-submit",
         "set-client-request-status",
         "set-client-request-history",
+        "Latest request status history",
+        "short id, type, requested plan, status, created_at, and source",
         "Do not paste provider secrets or raw keys",
         "Payment checkout and provider secret changes are not performed",
     )
@@ -50,6 +52,13 @@ def test_client_requests_billing_script_uses_client_safe_settings_endpoints() ->
     assert "loadClientRequests" in js
     assert "submitClientRequest" in js
     assert "renderClientRequests" in js
+    assert "clientRequestTypeLabel" in js
+    assert "short_id" in js
+    assert "request_type_label" in js
+    assert "requested_plan" in js
+    assert "created_at" in js
+    assert "source" in js
+    assert "Submitted requests will appear here newest first" in js
 
     forbidden = (
         "/applications",

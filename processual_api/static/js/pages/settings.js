@@ -412,18 +412,43 @@ PAGES.settings = (() => {
   }
 
 
+  function clientRequestTypeLabel(value) {
+    const labels = {
+      enterprise_integration_upgrade: 'Enterprise integration upgrade',
+      integration_key_provisioning: 'Integration key provisioning',
+      provider_setup_help: 'Provider setup help',
+      billing_usage_review: 'Billing and usage review',
+      general_support: 'General support',
+    };
+    return labels[value] || labels.general_support;
+  }
+
   function renderClientRequests(requests) {
     if (!Array.isArray(requests) || requests.length === 0) {
-      return 'No client requests submitted yet.';
+      return 'No client requests submitted yet. Submitted requests will appear here newest first.';
     }
 
-    return requests.map((request) => [
-      'id=' + (request.id || '-'),
-      'type=' + (request.request_label || request.request_type || '-'),
-      'status=' + (request.status || '-'),
-      'requested_plan=' + (request.requested_plan || '-'),
-      'created_at=' + (request.created_at || '-'),
-    ].join(' | ')).join('\n');
+    return requests.map((request, index) => {
+      const requestId = String(request.request_id || request.id || '');
+      const shortId = request.short_id || (requestId ? requestId.slice(0, 8) : '-');
+      const requestType = request.request_type || 'general_support';
+      const requestTypeLabel = request.request_type_label || clientRequestTypeLabel(requestType);
+      const requestedPlan = request.requested_plan || 'none';
+      const status = request.status || 'pending';
+      const createdAt = request.created_at || '-';
+      const source = request.source || 'client';
+
+      return [
+        '#' + (index + 1),
+        'short_id=' + shortId,
+        'type=' + requestTypeLabel,
+        'request_type=' + requestType,
+        'requested_plan=' + requestedPlan,
+        'status=' + status,
+        'created_at=' + createdAt,
+        'source=' + source,
+      ].join(' | ');
+    }).join('\n');
   }
 
   function applyClientRequests(info) {
@@ -435,7 +460,11 @@ PAGES.settings = (() => {
     }
 
     const latest = Array.isArray(info.latest_requests) ? info.latest_requests : [];
-    setText('set-client-request-status', 'Ready / ' + formatNumber(info.request_count || 0));
+    const latestCount = Array.isArray(info.latest_requests) ? info.latest_requests.length : 0;
+    setText(
+      'set-client-request-status',
+      'Ready / ' + formatNumber(info.request_count || 0) + ' requests / latest ' + formatNumber(latestCount)
+    );
     setText('set-client-request-history', renderClientRequests(latest));
   }
 
