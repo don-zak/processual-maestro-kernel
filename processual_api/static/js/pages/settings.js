@@ -638,6 +638,127 @@ PAGES.settings = (() => {
     return (ok ? '✓ ' : '! ') + label + ': ' + status;
   }
 
+  function clientLaunchOwner(action) {
+    const owners = {
+      reload: "Client",
+      plan: "Client and admin",
+      usage: "Client",
+      provider: "Client",
+      integration: "Admin",
+      requests: "Admin",
+      complete: "Client",
+    };
+    return owners[action] || "Client";
+  }
+
+  function clientLaunchActionLabel(action) {
+    const labels = {
+      reload: "Reload client settings",
+      plan: "Prepare plan review request",
+      usage: "Open usage review request",
+      provider: "Prepare provider setup request",
+      integration: "Request integration key provisioning",
+      requests: "Open Requests & Billing",
+      complete: "Open Requests & Billing",
+    };
+    return labels[action] || labels.requests;
+  }
+
+  function buildClientLaunchSteps(integration, provider, requests) {
+    const accountOk = Boolean(readinessState.account);
+    const planOk = Boolean(readinessState.subscription);
+    const usageOk = Boolean(readinessState.usage);
+    const planStatus = planOk
+      ? ((readinessState.subscription.plan || readinessState.subscription.plan_id || "-") + " / " + (readinessState.subscription.status || "-"))
+      : "loading";
+
+    return [
+      { ok: accountOk, label: "1. Confirm client account session", status: accountOk ? "verified" : "reload account session", action: "reload" },
+      { ok: planOk, label: "2. Confirm active plan", status: planStatus, action: "plan" },
+      { ok: usageOk, label: "3. Review usage and quota summary", status: usageOk ? "available" : "loading", action: "usage" },
+      { ok: provider.ok, label: "4. Connect BYOK provider", status: provider.status, action: "provider" },
+      { ok: integration.ok, label: "5. Prepare integration access", status: integration.status, action: "integration" },
+      { ok: requests.ok, label: "6. Track requests and admin follow-up", status: requests.status, action: "requests" },
+    ];
+  }
+
+  function clientLaunchStepLine(step) {
+    return (step.ok ? "✓ " : "! ") + step.label + ": " + step.status;
+  }
+
+  function renderClientLaunchPath(integration, provider, requests) {
+    const steps = buildClientLaunchSteps(integration, provider, requests);
+    const current = steps.find((step) => !step.ok) || {
+      ok: true,
+      label: "Client workspace is ready",
+      status: "monitor usage and requests",
+      action: "complete",
+    };
+
+    setText("set-launch-current-step", current.label + " / " + current.status);
+    setText("set-launch-owner", clientLaunchOwner(current.action));
+    setText("set-launch-action-status", "Next action: " + clientLaunchActionLabel(current.action));
+    setText("set-launch-checklist", steps.map(clientLaunchStepLine).join("\n"));
+
+    const primary = document.getElementById("set-launch-primary-action");
+    if (primary) {
+      primary.dataset.launchAction = current.action;
+      primary.textContent = clientLaunchActionLabel(current.action);
+    }
+  }
+
+  function handleClientLaunchPrimaryAction() {
+    const action = document.getElementById("set-launch-primary-action")?.dataset.launchAction || "requests";
+
+    if (action === "reload") {
+      setText("set-launch-action-status", "Reloading client settings...");
+      loadClientSettings();
+      return;
+    }
+
+    if (action === "plan") {
+      prepareClientSupportRequest(
+        "enterprise_integration_upgrade",
+        "enterprise_integration",
+        "Please review this client workspace plan and confirm the next launch step. No provider secrets or raw integration keys are included."
+      );
+      setText("set-launch-action-status", "Plan review request prepared in Requests & Billing.");
+      focusClientRequestsCard();
+      return;
+    }
+
+    if (action === "usage") {
+      prepareUsageReviewRequest();
+      setText("set-launch-action-status", "Usage review request prepared in Requests & Billing.");
+      focusClientRequestsCard();
+      return;
+    }
+
+    if (action === "provider") {
+      prepareProviderSetupRequest();
+      setText("set-launch-action-status", "Provider setup request prepared in Requests & Billing.");
+      focusClientRequestsCard();
+      return;
+    }
+
+    if (action === "integration") {
+      prepareIntegrationKeyRequest("provisioning");
+      setText("set-launch-action-status", "Integration key provisioning request prepared.");
+      focusClientRequestsCard();
+      return;
+    }
+
+    focusClientRequestsCard();
+    setText("set-launch-action-status", "Requests & Billing opened for follow-up.");
+  }
+
+  function initClientLaunchActions() {
+    document.getElementById("set-launch-primary-action")?.addEventListener("click", handleClientLaunchPrimaryAction);
+    document.getElementById("set-launch-secondary-action")?.addEventListener("click", () => {
+      focusClientRequestsCard();
+      setText("set-launch-action-status", "Requests & Billing opened for follow-up.");
+    });
+  }
   function integrationReadiness() {
     const integration = readinessState.integration;
     if (!integration) return { ok: false, status: 'loading' };
@@ -738,6 +859,7 @@ PAGES.settings = (() => {
       'set-readiness-checklist',
       checks.map((check) => readinessLine(check.ok, check.label, check.status)).join('\n')
     );
+    renderClientLaunchPath(integration, provider, requests);
   }
 
   function prepareReadinessSupportRequest() {
@@ -971,6 +1093,7 @@ function initCollapsibleSettingsSections() {
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
       initIntegrationKeyRequestWorkflow();
+    initClientLaunchActions();
       refresh();
       return;
     }
@@ -1001,6 +1124,7 @@ function initCollapsibleSettingsSections() {
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
       initIntegrationKeyRequestWorkflow();
+    initClientLaunchActions();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');
