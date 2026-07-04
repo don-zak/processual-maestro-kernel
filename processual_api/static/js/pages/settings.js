@@ -142,15 +142,33 @@ PAGES.settings = (() => {
     updateClientReadiness();
 
     setText('set-usage-plan', summary.plan_id || summary.plan || '-');
+    setText(
+      'set-usage-monthly-included-units',
+      formatNumber(summary.monthly_included_units || summary.allowance_units)
+    );
     setText('set-usage-quota-used', formatNumber(summary.quota_used));
     setText('set-usage-quota-remaining', formatNumber(summary.quota_remaining));
+    setText('set-usage-quota-status', summary.quota_status || '-');
     setText('set-usage-total-units', formatNumber(summary.total_units));
     setText('set-usage-rejected-requests', formatNumber(summary.rejected_requests));
     setText('set-usage-latest-status', latestUsageStatus(summary));
+    setText('set-usage-current-period', summary.current_period || '-');
+    setText('set-usage-latest-usage-at', summary.latest_usage_at || '-');
 
     const rejectedEl = document.getElementById('set-usage-rejected-requests');
     if (rejectedEl) {
       rejectedEl.style.color = Number(summary.rejected_requests || 0) > 0 ? 'var(--warn)' : '';
+    }
+
+    const quotaStatusEl = document.getElementById('set-usage-quota-status');
+    if (quotaStatusEl) {
+      const quotaStatus = String(summary.quota_status || '').toLowerCase();
+      const colors = {
+        ok: 'var(--ok)',
+        warning: 'var(--warn)',
+        exhausted: 'var(--error)',
+      };
+      quotaStatusEl.style.color = colors[quotaStatus] || '';
     }
   }
 
@@ -160,6 +178,39 @@ PAGES.settings = (() => {
       applyUsageSummary(summary);
     } catch (e) {
       setText('set-usage-latest-status', 'Usage summary unavailable');
+    }
+  }
+
+  function prepareUsageReviewRequest() {
+    const summary = readinessState.usage || {};
+    const requestType = document.getElementById('set-client-request-type');
+    const requestedPlan = document.getElementById('set-client-request-plan');
+    const message = document.getElementById('set-client-request-message');
+
+    if (requestType) requestType.value = 'billing_usage_review';
+    if (requestedPlan) requestedPlan.value = '';
+
+    if (message) {
+      message.value = [
+        'Please review our Maestro usage and quota status.',
+        'plan=' + (summary.plan_id || summary.plan || '-'),
+        'monthly_included_units=' + formatNumber(summary.monthly_included_units || summary.allowance_units),
+        'quota_used=' + formatNumber(summary.quota_used),
+        'quota_remaining=' + formatNumber(summary.quota_remaining),
+        'quota_status=' + (summary.quota_status || '-'),
+        'total_units=' + formatNumber(summary.total_units),
+        'rejected_requests=' + formatNumber(summary.rejected_requests),
+        'current_period=' + (summary.current_period || '-'),
+        'latest_usage_at=' + (summary.latest_usage_at || '-'),
+        'provider_cost_included=false',
+        'No provider secrets or raw keys included.',
+      ].join('\n');
+    }
+
+    setText('set-usage-review-status', 'Prepared in Requests & Billing');
+    const requestsCard = document.querySelector('[data-settings-section-key="requests"]');
+    if (requestsCard) {
+      requestsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
@@ -792,6 +843,14 @@ function initCollapsibleSettingsSections() {
     setText('set-sections-collapse-status', 'Sections are ready');
   }
 
+  function initUsageReviewRequestWorkflow() {
+    const button = document.getElementById('set-usage-review-request');
+    if (button) {
+      button.type = 'button';
+      button.onclick = prepareUsageReviewRequest;
+    }
+  }
+
   async function loadClientSettings() {
     await loadAccount();
     let settings = null;
@@ -818,6 +877,7 @@ function initCollapsibleSettingsSections() {
     if (settingsInitDone) {
       initCollapsibleSettingsSections();
   initSettingsSectionNavigation();
+      initUsageReviewRequestWorkflow();
       refresh();
       return;
     }
@@ -846,6 +906,7 @@ function initCollapsibleSettingsSections() {
     document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
     initCollapsibleSettingsSections();
   initSettingsSectionNavigation();
+      initUsageReviewRequestWorkflow();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');

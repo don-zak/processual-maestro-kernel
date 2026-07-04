@@ -32,6 +32,12 @@ def test_client_usage_summary_card_exposes_client_safe_fields() -> None:
         "set-usage-total-units",
         "set-usage-rejected-requests",
         "set-usage-latest-status",
+        "set-usage-monthly-included-units",
+        "set-usage-quota-status",
+        "set-usage-current-period",
+        "set-usage-latest-usage-at",
+        "set-usage-review-request",
+        "Prepare usage review request",
         "BYOK: provider_cost_included=false",
         "Rejected requests are tracked separately",
     )
@@ -52,6 +58,9 @@ def test_client_usage_summary_script_uses_client_endpoint_only() -> None:
         "/settings/notifications",
         "/admin",
         "admin_",
+        "api_key",
+        "encrypted_key",
+        "set-llm",
     )
     for marker in forbidden:
         assert marker not in js
@@ -65,3 +74,9 @@ def test_client_usage_summary_script_handles_empty_and_rejected_usage() -> None:
     assert "Usage summary unavailable" in js
     assert "quota_rejected" in js
     assert "Rejected" in js
+    assert "prepareUsageReviewRequest" in js
+    assert "billing_usage_review" in js
+    assert "monthly_included_units" in js
+    assert "quota_status" in js
+    assert "latest_usage_at" in js
+    assert "provider_cost_included=false" in js

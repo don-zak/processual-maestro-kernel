@@ -28,6 +28,12 @@ def test_summarize_usage_logs_returns_empty_summary_for_missing_ledger(
     assert summary["successful_requests"] == 0
     assert summary["rejected_requests"] == 0
     assert summary["latest_events"] == []
+    assert summary["quota_status"] == "ok"
+    assert summary["monthly_included_units"] == 0
+    assert summary["allowance_units"] == 0
+    assert summary["current_period"] == ""
+    assert summary["latest_usage_at"] == ""
+    assert summary["provider_cost_included"] is False
 
 
 def test_summarize_usage_logs_filters_by_client_and_counts_units(
@@ -112,6 +118,13 @@ def test_summarize_usage_logs_filters_by_client_and_counts_units(
         "/cgt/govern/auto-repair": 1,
     }
     assert summary["avg_latency_ms"] == 3.0
+    assert summary["monthly_included_units"] == 100_000
+    assert summary["allowance_units"] == 100_000
+    assert summary["quota_status"] == "warning"
+    assert summary["current_period"] == "2026-07"
+    assert summary["latest_usage_at"] == "2026-07-03T10:01:00+00:00"
+    assert summary["billing_policy"] == "byok"
+    assert summary["provider_cost_included"] is False
 
 
 def test_summarize_usage_logs_filters_by_api_key_and_limits_latest_events(

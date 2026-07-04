@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from processual_api.billing.usage_pricing import monthly_unit_allowance
+
 from ..billing.usage_pricing import pricing_decision
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -137,6 +139,28 @@ def _iter_usage_log_records() -> list[dict[str, Any]]:
     return records
 
 
+def _quota_status(
+    *,
+    quota_limit: int | None,
+    quota_remaining: int | None,
+    rejected_requests: int,
+) -> str:
+    if quota_remaining is not None:
+        if quota_remaining <= 0:
+            return "exhausted"
+        if rejected_requests > 0:
+            return "warning"
+        if quota_limit and quota_limit > 0:
+            warning_threshold = max(1, int(quota_limit * 0.2))
+            if quota_remaining <= warning_threshold:
+                return "warning"
+
+    if rejected_requests > 0:
+        return "warning"
+
+    return "ok"
+
+
 def summarize_usage_logs(
     *,
     client_id: str | None = None,
@@ -222,6 +246,19 @@ def summarize_usage_logs(
     latest_events = records[-bounded_limit:] if bounded_limit else []
     latest_events = list(reversed(latest_events))
 
+    latest_usage_at = ""
+    if latest_events:
+        latest_usage_at = str(latest_events[0].get("created_at", "") or "")
+
+    current_period = latest_usage_at[:7] if latest_usage_at else ""
+    monthly_included_units = monthly_unit_allowance(latest_plan_id)
+    allowance_units = monthly_included_units
+    usage_quota_status = _quota_status(
+        quota_limit=latest_quota_limit,
+        quota_remaining=latest_quota_remaining,
+        rejected_requests=rejected_requests,
+    )
+
     avg_latency_ms = 0.0
     if records:
         avg_latency_ms = round(
@@ -243,6 +280,13 @@ def summarize_usage_logs(
         "quota_used": latest_quota_used,
         "quota_remaining": latest_quota_remaining,
         "plan_id": latest_plan_id,
+        "monthly_included_units": monthly_included_units,
+        "allowance_units": allowance_units,
+        "current_period": current_period,
+        "latest_usage_at": latest_usage_at,
+        "quota_status": usage_quota_status,
+        "billing_policy": "byok",
+        "provider_cost_included": False,
         "by_endpoint_class": dict(sorted(endpoint_class_counts.items())),
         "by_status_code": dict(sorted(status_code_counts.items())),
         "top_endpoints": dict(endpoint_counts.most_common(10)),
