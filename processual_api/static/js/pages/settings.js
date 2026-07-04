@@ -561,7 +561,40 @@ PAGES.settings = (() => {
     );
   }
 
-  function initCollapsibleSettingsSections() {
+  function initSettingsSectionNavigation() {
+  const root = settingsPageRoot();
+  const navButtons = Array.from(
+    root.querySelectorAll("[data-settings-nav-target]")
+  );
+
+  if (!navButtons.length) {
+    return;
+  }
+
+  navButtons.forEach((button) => {
+    button.onclick = () => {
+      const targetKey = button.getAttribute("data-settings-nav-target");
+      const target = root.querySelector(
+        `[data-settings-section-key="${targetKey}"]`
+      );
+
+      if (!target) {
+        return;
+      }
+
+      navButtons.forEach((item) => {
+        item.classList.remove("settings-section-nav__button--active");
+        item.classList.remove("accent");
+      });
+      button.classList.add("settings-section-nav__button--active");
+      button.classList.add("accent");
+
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  });
+}
+
+function initCollapsibleSettingsSections() {
     settingsSectionCards().forEach((card) => {
       const header = card.querySelector('.sec-hdr');
       if (!header) return;
@@ -624,6 +657,7 @@ PAGES.settings = (() => {
   function init() {
     if (settingsInitDone) {
       initCollapsibleSettingsSections();
+  initSettingsSectionNavigation();
       refresh();
       return;
     }
@@ -649,6 +683,7 @@ PAGES.settings = (() => {
     initClientIntegrationGuide();
     document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
     initCollapsibleSettingsSections();
+  initSettingsSectionNavigation();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {
       APP.showToast('Subscription management coming soon', 'info');

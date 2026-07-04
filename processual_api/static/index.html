@@ -441,6 +441,17 @@ pending ───────────────────→ deactivated
 
   <div class="settings-sections">
 
+  <div class="settings-section-nav" aria-label="Client settings sections">
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="readiness">Readiness</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="account">Account</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="plan-usage">Plan &amp; Usage</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="integration-guide">Integration Guide</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="provider">Provider</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="requests">Requests</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="supervisor">Supervisor</button>
+  </div>
+
+
     <!-- Settings Section Controls -->
     <div class="card" id="set-section-collapse-controls">
       <div class="sec-hdr">
@@ -453,7 +464,7 @@ pending ───────────────────→ deactivated
     </div>
 
     <!-- Operational Readiness -->
-    <div class="card settings-section" id="set-client-readiness-card">
+    <div class="card settings-section" id="set-client-readiness-card" data-settings-section-key="readiness">
       <div class="sec-hdr">
         <div class="sh-title">Operational Readiness</div>
         <div class="sh-sub">Client launch checklist across account, plan, usage, integration, provider, and support</div>
@@ -489,7 +500,7 @@ pending ───────────────────→ deactivated
     </div>
 
     <!-- Account -->
-    <div class="card settings-section">
+    <div class="card settings-section" data-settings-section-key="account">
       <div class="sec-hdr">
         <div class="sh-title">Account</div>
         <div class="sh-sub">Current client session identity</div>
@@ -540,7 +551,7 @@ pending ───────────────────→ deactivated
     </div>
 
     <!-- Plan and Usage -->
-    <div class="card settings-section" id="set-usage-summary-card">
+    <div class="card settings-section" id="set-usage-summary-card" data-settings-section-key="plan-usage">
       <div class="sec-hdr">
         <div class="sh-title">Plan and Usage</div>
         <div class="sh-sub">Read-only account status and Maestro usage units</div>
@@ -631,7 +642,7 @@ pending ───────────────────→ deactivated
 
 
     <!-- Client Integration Guide -->
-    <div class="card settings-section" id="set-client-integration-guide-card">
+    <div class="card settings-section" id="set-client-integration-guide-card" data-settings-section-key="integration-guide">
       <div class="sec-hdr">
         <div class="sh-title">Client Integration Guide</div>
         <div class="sh-sub">Copy-safe setup notes for client integration, BYOK provider setup, and support handoff</div>
@@ -660,7 +671,7 @@ pending ───────────────────→ deactivated
       <button id="set-guide-support" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Prepare integration support request</button>
     </div>
     <!-- Provider Connections -->
-    <div class="card settings-section" id="set-provider-connection-card">
+    <div class="card settings-section" id="set-provider-connection-card" data-settings-section-key="provider">
       <div class="sec-hdr">
         <div class="sh-title">Provider Connections</div>
         <div class="sh-sub">Client BYOK provider status</div>
@@ -689,7 +700,7 @@ pending ───────────────────→ deactivated
 
 
     <!-- Requests & Billing -->
-    <div class="card settings-section" id="set-client-requests-card">
+    <div class="card settings-section" id="set-client-requests-card" data-settings-section-key="requests">
       <div class="sec-hdr">
         <div class="sh-title">Requests &amp; Billing</div>
         <div class="sh-sub">Client requests for billing, upgrades, integration, and support</div>
@@ -726,7 +737,7 @@ pending ───────────────────→ deactivated
       <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Requests are saved for admin follow-up. Payment checkout and provider secret changes are not performed from this panel.</div>
     </div>
     <!-- Supervisor Messages -->
-    <div class="card settings-section" id="set-client-support-card">
+    <div class="card settings-section" id="set-client-support-card" data-settings-section-key="supervisor">
       <div class="sec-hdr">
         <div class="sh-title">Supervisor Messages &amp; Support</div>
         <div class="sh-sub">Message the Maestro supervisor/admin team without exposing provider secrets or raw keys</div>
