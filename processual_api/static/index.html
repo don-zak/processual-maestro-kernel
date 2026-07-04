@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Processual Maestro â€” Console</title>
+<title>Processual Maestro — Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -25,20 +25,20 @@
 </div>
 <div id="nav-wrap">
   <div id="nav-label">Console</div>
-  <button class="nav-btn active" data-page="overview"><span class="nav-ind"></span><span class="nav-ico">â—ˆ</span><span>Overview</span></button>
-  <button class="nav-btn" data-page="cgt"><span class="nav-ind"></span><span class="nav-ico">â¬¡</span><span>CGT Evaluator</span></button>
-  <button class="nav-btn" data-page="workflows"><span class="nav-ind"></span><span class="nav-ico">âŸ</span><span>Workflows</span></button>
-  <button class="nav-btn" data-page="governance"><span class="nav-ind"></span><span class="nav-ico">âŠ›</span><span>Governance</span></button>
-  <button class="nav-btn" data-page="telemetry"><span class="nav-ind"></span><span class="nav-ico">âŒ‡</span><span>Telemetry</span></button>
-  <button class="nav-btn" data-page="reports"><span class="nav-ind"></span><span class="nav-ico">â§‰</span><span>Reports</span></button>
-  <button class="nav-btn" data-page="governor"><span class="nav-ind"></span><span class="nav-ico">âš™</span><span>Governor</span></button>
-  <button class="nav-btn" data-page="gateway"><span class="nav-ind"></span><span class="nav-ico">â¬¡</span><span>Gateway</span></button>
-  <button class="nav-btn" data-page="simulation"><span class="nav-ind"></span><span class="nav-ico">âŸ</span><span>Simulation</span></button>
-  <button class="nav-btn" data-page="settings"><span class="nav-ind"></span><span class="nav-ico">âš™</span><span>Settings</span></button>
+  <button class="nav-btn active" data-page="overview"><span class="nav-ind"></span><span class="nav-ico">◈</span><span>Overview</span></button>
+  <button class="nav-btn" data-page="cgt"><span class="nav-ind"></span><span class="nav-ico">⬡</span><span>CGT Evaluator</span></button>
+  <button class="nav-btn" data-page="workflows"><span class="nav-ind"></span><span class="nav-ico">⟁</span><span>Workflows</span></button>
+  <button class="nav-btn" data-page="governance"><span class="nav-ind"></span><span class="nav-ico">⊛</span><span>Governance</span></button>
+  <button class="nav-btn" data-page="telemetry"><span class="nav-ind"></span><span class="nav-ico">⌇</span><span>Telemetry</span></button>
+  <button class="nav-btn" data-page="reports"><span class="nav-ind"></span><span class="nav-ico">⧉</span><span>Reports</span></button>
+  <button class="nav-btn" data-page="governor"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Governor</span></button>
+  <button class="nav-btn" data-page="gateway"><span class="nav-ind"></span><span class="nav-ico">⬡</span><span>Gateway</span></button>
+  <button class="nav-btn" data-page="simulation"><span class="nav-ind"></span><span class="nav-ico">⟐</span><span>Simulation</span></button>
+  <button class="nav-btn" data-page="settings"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Settings</span></button>
 </div>
 <div id="sidebar-footer">
-  <div class="v">v2.0.0 â€” production</div>
-  <div class="c">CGT v2 Â· adaptive-evidence-pack-1.8.0</div>
+  <div class="v">v2.0.0 — production</div>
+  <div class="c">CGT v2 · adaptive-evidence-pack-1.8.0</div>
 </div>
 </div>
 
@@ -58,18 +58,18 @@
 <div class="page active" id="page-overview">
 <div>
   <div class="grid-4">
-    <div class="card flat"><div class="metric"><span class="ml">Kernel PSI</span><div class="mv" id="kpsi">â€”</div><span class="md up" id="dkpsi">â€”</span></div></div>
-    <div class="card flat"><div class="metric"><span class="ml">Delta PSI / step</span><div class="mv" id="dpsi" style="color:var(--ok)">â€”</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Kernel PSI</span><div class="mv" id="kpsi">—</div><span class="md up" id="dkpsi">—</span></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Delta PSI / step</span><div class="mv" id="dpsi" style="color:var(--ok)">—</div></div></div>
     <div class="card flat"><div class="metric"><span class="ml">Active Agents</span><div class="mv"><span id="ov-active-agents">0</span> <span class="mu">/ <span id="ov-total-agents">0</span></span></div></div></div>
-    <div class="card flat"><div class="metric"><span class="ml">Gateway Avg Reward</span><div class="mv" id="ov-avg-reward" style="color:var(--amber);font-size:22px">â€”</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Gateway Avg Reward</span><div class="mv" id="ov-avg-reward" style="color:var(--amber);font-size:22px">—</div></div></div>
   </div>
   <div class="grid-4" style="margin-top:var(--s-4)">
     <div class="card flat"><div class="metric"><span class="ml">Total Evaluations</span><div class="mv" style="font-size:22px" id="ov-total-evals">0</div></div></div>
-    <div class="card flat"><div class="metric"><span class="ml">Avg Reward</span><div class="mv" style="font-size:22px" id="ov-avg-reward-all">â€”</div></div></div>
-    <div class="card flat"><div class="metric"><span class="ml">Agent Avg Reward</span><div class="mv" style="font-size:22px" id="ov-agent-avg-reward">â€”</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Avg Reward</span><div class="mv" style="font-size:22px" id="ov-avg-reward-all">—</div></div></div>
+    <div class="card flat"><div class="metric"><span class="ml">Agent Avg Reward</span><div class="mv" style="font-size:22px" id="ov-agent-avg-reward">—</div></div></div>
     <div class="card flat"><div class="metric"><span class="ml">Policy Actions</span><div class="mv" style="font-size:22px" id="ov-policy-actions">0</div></div></div>
   </div>
-  <div style="margin-top:var(--s-4)"><span class="font-data text-ghost" style="font-size:11px">Rank Distribution</span><div class="flex-wrap" style="margin-top:var(--s-1)" id="ov-rank-dist">â€”</div></div>
+  <div style="margin-top:var(--s-4)"><span class="font-data text-ghost" style="font-size:11px">Rank Distribution</span><div class="flex-wrap" style="margin-top:var(--s-1)" id="ov-rank-dist">—</div></div>
 
   <div class="grid-2-wide">
     <div class="card">
@@ -79,9 +79,9 @@
     <div class="card">
       <div class="sec-hdr"><div class="sh-title">Governance Status</div><div class="sh-sub">System oversight</div></div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <div class="flex-between"><span class="font-data text-ghost" style="font-size:11px">Mode</span><span class="tag" id="gov-mode" style="background:rgba(245,166,35,0.094);color:var(--amber);border:1px solid rgba(245,166,35,0.188)">â€”</span></div>
+        <div class="flex-between"><span class="font-data text-ghost" style="font-size:11px">Mode</span><span class="tag" id="gov-mode" style="background:rgba(245,166,35,0.094);color:var(--amber);border:1px solid rgba(245,166,35,0.188)">—</span></div>
         <div><span class="font-data text-ghost" style="font-size:11px;display:block;margin-bottom:6px">Active Policies</span><div class="flex-wrap" id="gov-policies"></div></div>
-        <div class="flex-between"><span class="font-data text-ghost" style="font-size:11px">Cert Level</span><span class="font-data" id="gov-cert" style="font-size:11px;font-weight:600;color:var(--stable)">â€”</span></div>
+        <div class="flex-between"><span class="font-data text-ghost" style="font-size:11px">Cert Level</span><span class="font-data" id="gov-cert" style="font-size:11px;font-weight:600;color:var(--stable)">—</span></div>
         <div><span class="font-data text-ghost" style="font-size:11px;display:block;margin-bottom:6px">Dependencies</span><div class="flex-wrap" id="gov-deps"></div></div>
       </div>
     </div>
@@ -102,9 +102,9 @@
     <div class="sec-hdr"><div class="sh-title">Certification Ladder</div><div class="sh-sub">System maturity path</div></div>
     <div class="cert-strip" id="cert-strip"></div>
     <div class="grid-4" style="margin-top:var(--s-4)">
-      <div class="card flat"><div class="metric"><span class="ml">Runtime Mode</span><div class="mv" style="color:var(--amber);font-size:20px" id="gov-mode2">â€”</div></div></div>
-      <div class="card flat"><div class="metric"><span class="ml">Drift Monitor</span><div class="mv" style="font-size:20px" id="gov-drift">â€”</div></div></div>
-      <div class="card flat"><div class="metric"><span class="ml">Active Policies</span><div class="mv" id="gov-pol-count" style="font-size:20px">â€”</div></div></div>
+      <div class="card flat"><div class="metric"><span class="ml">Runtime Mode</span><div class="mv" style="color:var(--amber);font-size:20px" id="gov-mode2">—</div></div></div>
+      <div class="card flat"><div class="metric"><span class="ml">Drift Monitor</span><div class="mv" style="font-size:20px" id="gov-drift">—</div></div></div>
+      <div class="card flat"><div class="metric"><span class="ml">Active Policies</span><div class="mv" id="gov-pol-count" style="font-size:20px">—</div></div></div>
     </div>
   </div>
 </div>
@@ -142,7 +142,7 @@
 <!-- ===== PAGE: Workflows ===== -->
 <div class="page" id="page-workflows">
 <div>
-  <div class="sec-hdr"><div><div class="sh-title">Workflow Registry</div><div class="sh-sub" id="wf-count">â€”</div></div><button id="wf-create-btn" class="btn ghost sm">+ New Workflow</button></div>
+  <div class="sec-hdr"><div><div class="sh-title">Workflow Registry</div><div class="sh-sub" id="wf-count">—</div></div><button id="wf-create-btn" class="btn ghost sm">+ New Workflow</button></div>
   <div id="wf-create-form" style="display:none;margin-bottom:var(--s-4)">
     <div class="card">
       <div class="inp-group"><label class="inp-label">Workflow ID</label><input id="wf-new-id" class="inp" placeholder="Auto-generated if empty"></div>
@@ -187,7 +187,7 @@
   <div class="sec-hdr"><div class="sh-title">Telemetry</div><div class="sh-sub">Live metric streams &amp; ingest</div></div>
   <div class="flex-gap" style="margin-bottom:var(--s-3)">
     <button id="tel-toggle" class="btn ghost sm">Pause</button>
-    <span class="font-data text-ghost" style="font-size:11px">Status: <span id="tel-status" style="color:var(--ok)">Streaming</span> Â· <span id="tel-ticks">0</span> observations</span>
+    <span class="font-data text-ghost" style="font-size:11px">Status: <span id="tel-status" style="color:var(--ok)">Streaming</span> · <span id="tel-ticks">0</span> observations</span>
   </div>
   <div class="grid-2-wide">
     <div class="card">
@@ -197,8 +197,8 @@
     </div>
     <div>
       <div class="card">
-        <div class="sec-hdr"><div class="sh-title">Current Value</div><div class="sh-sub" id="tel-metric-sub">â€”</div></div>
-        <div class="metric"><span class="ml" id="tel-metric-title">â€”</span><div class="mv" id="tel-current">â€”</div></div>
+        <div class="sec-hdr"><div class="sh-title">Current Value</div><div class="sh-sub" id="tel-metric-sub">—</div></div>
+        <div class="metric"><span class="ml" id="tel-metric-title">—</span><div class="mv" id="tel-current">—</div></div>
       </div>
       <div class="card" style="margin-top:var(--s-4)">
         <div class="sec-hdr"><div class="sh-title">Ingest</div><div class="sh-sub">Submit data points</div></div>
@@ -217,7 +217,7 @@
 <!-- ===== PAGE: Reports ===== -->
 <div class="page" id="page-reports">
 <div>
-  <div class="sec-hdr"><div><div class="sh-title">Reports &amp; Evidence</div><div class="sh-sub" id="rpt-count">â€”</div></div></div>
+  <div class="sec-hdr"><div><div class="sh-title">Reports &amp; Evidence</div><div class="sh-sub" id="rpt-count">—</div></div></div>
   <div class="grid-2-wide">
     <div class="card"><div class="sec-hdr"><div class="sh-title">Available Reports</div><div class="flex-gap"><select id="rpt-filter-rank" class="inp-sel" style="font-size:10px;padding:2px 6px"><option value="">All Ranks</option><option>flourishing</option><option>stable</option><option>hybrid</option><option>distorted</option><option>transient</option><option>extinct</option></select><button id="rpt-refresh-btn" class="btn ghost sm" style="font-size:10px">Refresh</button></div></div><div id="rpt-list"></div></div>
     <div class="card"><div class="sec-hdr"><div class="sh-title">Detail</div></div><div id="rpt-detail"><div class="text-muted font-data" style="font-size:11px">Select a report to view</div></div></div>
@@ -257,7 +257,7 @@
 <!-- ===== PAGE: Governor ===== -->
 <div class="page" id="page-governor">
 <div>
-  <div class="sec-hdr"><div class="sh-title">CGT Governor</div><div class="sh-sub">LLM output governance â€” rank, reward, policy, repair</div></div>
+  <div class="sec-hdr"><div class="sh-title">CGT Governor</div><div class="sh-sub">LLM output governance — rank, reward, policy, repair</div></div>
   <div class="grid-2-wide">
     <div class="card">
       <div class="sec-hdr">
@@ -286,7 +286,7 @@
       </div>
       <div class="card" style="margin-top:var(--s-4)">
         <div class="sec-hdr"><div class="sh-title">Reward</div></div>
-        <div class="progress"><div class="pl"><span>Score</span><span id="gov-reward-label" class="rank-badge" style="font-size:11px">â€”</span></div><div class="pb"><div class="pf" id="gov-reward-bar" style="width:0%;background:var(--ghost)"></div></div></div>
+        <div class="progress"><div class="pl"><span>Score</span><span id="gov-reward-label" class="rank-badge" style="font-size:11px">—</span></div><div class="pb"><div class="pf" id="gov-reward-bar" style="width:0%;background:var(--ghost)"></div></div></div>
       </div>
       <div class="card" style="margin-top:var(--s-4)">
         <div class="sec-hdr"><div class="sh-title">Results</div></div>
@@ -375,18 +375,18 @@
 
   <div class="grid-2-eq">
     <div class="card">
-      <div class="sec-hdr"><div><div class="sh-title">Decision Feed</div><div class="sh-sub" id="gw-feed-count">Latest decisions â€” 0</div></div></div>
+      <div class="sec-hdr"><div><div class="sh-title">Decision Feed</div><div class="sh-sub" id="gw-feed-count">Latest decisions — 0</div></div></div>
       <div id="gw-decision-feed"></div>
     </div>
     <div class="card">
       <div class="sec-hdr"><div class="sh-title">State Transition Diagram</div></div>
       <div><pre class="mono-block" style="font-size:10px;padding:var(--s-3)">
-pending â”€â”€â†’ active â”€â”€â†’ frozen â”€â”€â†’ rehab â”€â”€â†’ active
-                â”‚                       â”‚
-                â””â”€â”€â†’ escalated â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                â”‚
-                â””â”€â”€â†’ deactivated
-pending â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â†’ deactivated
+pending ──→ active ──→ frozen ──→ rehab ──→ active
+                │                       │
+                └──→ escalated ─────────┘
+                │
+                └──→ deactivated
+pending ───────────────────→ deactivated
       </pre></div>
     </div>
   </div>
@@ -418,7 +418,7 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
         </div>
         <div class="card" style="margin-top:var(--s-3)">
           <div class="sec-hdr"><div class="sh-title">Signature</div></div>
-          <div class="mono-block" style="font-size:10px;word-break:break-all" id="sim-sig">â€”</div>
+          <div class="mono-block" style="font-size:10px;word-break:break-all" id="sim-sig">—</div>
           <div class="flex-gap" style="margin-top:var(--s-2)">
             <button id="sim-copy-sig" class="btn ghost sm">Copy Signature</button>
             <button id="sim-pdf-btn" class="btn ghost sm">Download PDF</button>
@@ -508,7 +508,7 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Signed in as</label>
-          <span id="set-account-user" class="font-data" style="font-weight:600">â€”</span>
+          <span id="set-account-user" class="font-data" style="font-weight:600">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Role</label>
@@ -520,7 +520,7 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
         </div>
         <div class="inp-group">
           <label class="inp-label">Client ID</label>
-          <span id="set-account-client-id" class="font-data text-muted">â€”</span>
+          <span id="set-account-client-id" class="font-data text-muted">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Session Type</label>
@@ -575,19 +575,19 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Plan</label>
-          <span id="set-sub-plan" class="font-data" style="font-weight:600;color:var(--amber)">â€”</span>
+          <span id="set-sub-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Status</label>
-          <span id="set-sub-status" class="font-data" style="font-weight:600">â€”</span>
+          <span id="set-sub-status" class="font-data" style="font-weight:600">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Renews At</label>
-          <span id="set-sub-renews" class="font-data text-muted">â€”</span>
+          <span id="set-sub-renews" class="font-data text-muted">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Seats</label>
-          <span id="set-sub-seats" class="font-data text-muted">â€”</span>
+          <span id="set-sub-seats" class="font-data text-muted">—</span>
         </div>
       </div>
 
@@ -598,57 +598,57 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Usage Plan</label>
-          <span id="set-usage-plan" class="font-data" style="font-weight:600;color:var(--amber)">â€”</span>
+          <span id="set-usage-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
         </div>
 
 
         <div class="inp-group">
           <label class="inp-label">Monthly Included Units</label>
-          <span id="set-usage-monthly-included-units" class="font-data">â€”</span>
+          <span id="set-usage-monthly-included-units" class="font-data">—</span>
         </div>
 <div class="inp-group">
           <label class="inp-label">Quota Used</label>
-          <span id="set-usage-quota-used" class="font-data">â€”</span>
+          <span id="set-usage-quota-used" class="font-data">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Quota Remaining</label>
-          <span id="set-usage-quota-remaining" class="font-data">â€”</span>
+          <span id="set-usage-quota-remaining" class="font-data">—</span>
         </div>
 
         <div class="inp-group">
           <label class="inp-label">Quota Status</label>
-          <span id="set-usage-quota-status" class="font-data">â€”</span>
+          <span id="set-usage-quota-status" class="font-data">—</span>
         </div>
 <div class="inp-group">
           <label class="inp-label">Total Units</label>
-          <span id="set-usage-total-units" class="font-data">â€”</span>
+          <span id="set-usage-total-units" class="font-data">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Rejected Requests</label>
-          <span id="set-usage-rejected-requests" class="font-data">â€”</span>
+          <span id="set-usage-rejected-requests" class="font-data">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Latest Status</label>
-          <span id="set-usage-latest-status" class="font-data text-muted">â€”</span>
+          <span id="set-usage-latest-status" class="font-data text-muted">—</span>
         </div>
 
         <div class="inp-group">
           <label class="inp-label">Current Period</label>
-          <span id="set-usage-current-period" class="font-data">â€”</span>
+          <span id="set-usage-current-period" class="font-data">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Latest Usage At</label>
-          <span id="set-usage-latest-usage-at" class="font-data text-muted">â€”</span>
+          <span id="set-usage-latest-usage-at" class="font-data text-muted">—</span>
         </div>
 </div>
       <div id="set-usage-byok-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">BYOK: provider_cost_included=false. Provider costs are not included in Maestro usage units. Rejected requests are tracked separately from successful usage.</div>
       <button id="set-usage-review-request" class="btn ghost sm" style="margin-top:var(--s-3)">Prepare usage review request</button>
-      <span id="set-usage-review-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">â€”</span>
+      <span id="set-usage-review-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">—</span>
 
       <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)" disabled>Manage Subscription - coming soon</button>
       <div id="set-enterprise-integration-eligibility-card" class="mono-block" style="display:none;font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">
         <strong>Enterprise Integration Eligibility</strong>
-        <div>Plan: <span id="set-enterprise-integration-eligibility-plan">â€”</span></div>
+        <div>Plan: <span id="set-enterprise-integration-eligibility-plan">—</span></div>
         <div>Status: <span id="set-enterprise-integration-eligibility-status">Hidden for non-enterprise plans</span></div>
         <div>Enterprise integration controls are shown only for enterprise plans. Starter and Business clients should request an upgrade first.</div>
       </div>
@@ -664,19 +664,19 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Integration Plan</label>
-          <span id="set-api-key-integration-plan" class="font-data" style="font-weight:600;color:var(--amber)">â€”</span>
+          <span id="set-api-key-integration-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Integration Status</label>
-          <span id="set-api-key-integration-status" class="font-data">â€”</span>
+          <span id="set-api-key-integration-status" class="font-data">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Active Integration Keys</label>
-          <span id="set-api-key-integration-count" class="font-data">â€”</span>
+          <span id="set-api-key-integration-count" class="font-data">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Default Scopes</label>
-          <span id="set-api-key-integration-scopes" class="font-data text-muted">â€”</span>
+          <span id="set-api-key-integration-scopes" class="font-data text-muted">—</span>
         </div>
       </div>
       <div id="set-api-key-integration-keys" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No integration keys issued yet. Contact the Maestro admin team to create one.</div>
@@ -727,15 +727,15 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Connection Status</label>
-          <span id="set-provider-connection-status" class="font-data" style="font-weight:600">â€”</span>
+          <span id="set-provider-connection-status" class="font-data" style="font-weight:600">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Provider</label>
-          <span id="set-provider-connection-provider" class="font-data text-muted">â€”</span>
+          <span id="set-provider-connection-provider" class="font-data text-muted">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Model</label>
-          <span id="set-provider-connection-model" class="font-data text-muted">â€”</span>
+          <span id="set-provider-connection-model" class="font-data text-muted">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Provider Cost Included</label>
@@ -820,7 +820,7 @@ pending â”€â”€â”€â”€â”€â”€â”€â”€â”€
         <textarea id="set-client-request-message" class="inp" rows="4" placeholder="Describe what you need from the Maestro admin/support team. Do not paste provider secrets or raw keys."></textarea>
       </div>
       <button id="set-client-request-submit" class="btn accent sm" style="margin-top:var(--s-3)">Submit Request</button>
-      <span id="set-client-request-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">â€”</span>
+      <span id="set-client-request-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">—</span>
       <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Latest request status history is shown newest first with short id, type, requested plan, status, created_at, and source.</div>
       <div id="set-client-request-history" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No client requests submitted yet. Submitted requests will appear here newest first.</div>
       <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Requests are saved for admin follow-up. Payment checkout and provider secret changes are not performed from this panel.</div>

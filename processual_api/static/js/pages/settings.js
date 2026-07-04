@@ -1,4 +1,4 @@
-﻿PAGES.settings = (() => {
+PAGES.settings = (() => {
   const readinessState = {
     account: null,
     subscription: null,
@@ -635,7 +635,7 @@
   }
 
   function readinessLine(ok, label, status) {
-    return (ok ? 'âœ“ ' : '! ') + label + ': ' + status;
+    return (ok ? '✓ ' : '! ') + label + ': ' + status;
   }
 
   function integrationReadiness() {

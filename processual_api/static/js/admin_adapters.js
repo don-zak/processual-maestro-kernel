@@ -1,4 +1,4 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
   const providers = [
     { name: 'opencode', label: 'Opencode' },
     { name: 'openai', label: 'OpenAI' },
