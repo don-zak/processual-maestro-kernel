@@ -372,6 +372,11 @@
   }
 
 
+
+  function responseDraftPath(requestId) {
+    return detailPath(requestId) + '/response-draft';
+  }
+
   function renderAdminClientRequestStatusActions(detail, parent) {
     const requestId = text(detail?.request_id || '');
     if (!requestId) return;
@@ -430,6 +435,177 @@
     parent.appendChild(list);
   }
 
+
+  function latestSupervisorResponseDraft(detail) {
+    const drafts = Array.isArray(detail?.supervisor_response_drafts)
+      ? detail.supervisor_response_drafts
+      : [];
+    return drafts.length ? drafts[drafts.length - 1] : null;
+  }
+
+  function setAdminClientRequestResponseDraftStatus(message) {
+    const target = byId('admin-client-request-response-draft-status');
+    if (target) {
+      target.textContent = message;
+    }
+  }
+
+  function renderAdminClientRequestResponseDraftPanel(detail, parent) {
+    const requestId = detail?.request_id || detail?.short_id || '';
+    if (!parent || !requestId) return;
+
+    const latestDraft = latestSupervisorResponseDraft(detail);
+    const section = document.createElement('section');
+    section.id = 'admin-client-request-response-draft';
+    section.className = 'admin-client-request-response-draft';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Supervisor Response Draft';
+    section.appendChild(title);
+
+    const help = document.createElement('p');
+    help.className = 'muted';
+    help.textContent =
+      'Draft only. Review and save here; sending is reserved for a later workflow.';
+    section.appendChild(help);
+
+    const textarea = document.createElement('textarea');
+    textarea.id = 'admin-client-request-response-draft-body';
+    textarea.className = 'admin-client-request-response-draft-body';
+    textarea.rows = 6;
+    textarea.value = text(latestDraft?.body || '');
+    textarea.placeholder = 'Generate or write a safe supervisor response draft.';
+    section.appendChild(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-client-request-response-draft-actions';
+
+    const generate = document.createElement('button');
+    generate.id = 'admin-client-request-response-draft-generate';
+    generate.className =
+      'secondary-btn admin-client-request-response-draft-action admin-client-request-response-draft-generate';
+    generate.type = 'button';
+    generate.textContent = 'Generate Draft';
+    generate.addEventListener('click', () => {
+      generateAdminClientRequestResponseDraft(requestId);
+    });
+    actions.appendChild(generate);
+
+    const save = document.createElement('button');
+    save.id = 'admin-client-request-response-draft-save';
+    save.className =
+      'primary-btn admin-client-request-response-draft-action admin-client-request-response-draft-save';
+    save.type = 'button';
+    save.textContent = 'Save Draft';
+    save.addEventListener('click', () => {
+      saveAdminClientRequestResponseDraft(requestId);
+    });
+    actions.appendChild(save);
+
+    const copy = document.createElement('button');
+    copy.id = 'admin-client-request-response-draft-copy';
+    copy.className =
+      'secondary-btn admin-client-request-response-draft-action admin-client-request-response-draft-copy';
+    copy.type = 'button';
+    copy.textContent = 'Copy Draft';
+    copy.addEventListener('click', () => {
+      copyAdminClientRequestResponseDraft();
+    });
+    actions.appendChild(copy);
+
+    section.appendChild(actions);
+
+    const status = document.createElement('pre');
+    status.id = 'admin-client-request-response-draft-status';
+    status.className = 'admin-client-request-response-draft-status';
+    status.textContent = latestDraft
+      ? 'Draft saved: ' + text(latestDraft.updated_at || latestDraft.created_at || '')
+      : 'No saved draft yet.';
+    section.appendChild(status);
+
+    parent.appendChild(section);
+  }
+
+  async function generateAdminClientRequestResponseDraft(requestId) {
+    setAdminClientRequestResponseDraftStatus(
+      'Generating draft for request ' + text(requestId) + ' ...'
+    );
+
+    try {
+      const data = await postJson(responseDraftPath(requestId), {
+        mode: 'generate',
+      });
+      renderAdminClientRequestDetail(data?.request || {});
+      setAdminClientRequestResponseDraftStatus(
+        'Generated draft for request ' + text(requestId) + '.'
+      );
+      return data;
+    } catch (error) {
+      setAdminClientRequestResponseDraftStatus(
+        'Failed to generate draft: ' +
+          (error && error.message ? error.message : String(error))
+      );
+      return null;
+    }
+  }
+
+  async function saveAdminClientRequestResponseDraft(requestId, body) {
+    const textarea = byId('admin-client-request-response-draft-body');
+    const draftBody =
+      typeof body === 'string' ? body : textarea && textarea.value ? textarea.value : '';
+
+    setAdminClientRequestResponseDraftStatus(
+      'Saving draft for request ' + text(requestId) + ' ...'
+    );
+
+    try {
+      const data = await postJson(responseDraftPath(requestId), {
+        mode: 'manual',
+        draft: draftBody,
+        note: 'Saved from Admin request detail panel.',
+      });
+      renderAdminClientRequestDetail(data?.request || {});
+      setAdminClientRequestResponseDraftStatus(
+        'Draft saved for request ' + text(requestId) + '.'
+      );
+      return data;
+    } catch (error) {
+      setAdminClientRequestResponseDraftStatus(
+        'Failed to save draft: ' +
+          (error && error.message ? error.message : String(error))
+      );
+      return null;
+    }
+  }
+
+  async function copyAdminClientRequestResponseDraft() {
+    const textarea = byId('admin-client-request-response-draft-body');
+    const value = textarea && textarea.value ? textarea.value : '';
+    if (!value) {
+      setAdminClientRequestResponseDraftStatus('No draft text to copy.');
+      return false;
+    }
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+      }
+      setAdminClientRequestResponseDraftStatus('Draft copied.');
+      return true;
+    } catch (error) {
+      setAdminClientRequestResponseDraftStatus(
+        'Failed to copy draft: ' +
+          (error && error.message ? error.message : String(error))
+      );
+      return false;
+    }
+  }
+
+
   function renderAdminClientRequestDetail(detail) {
     ensureCard();
 
@@ -464,6 +640,7 @@
 
     body.appendChild(grid);
     renderAdminClientRequestStatusActions(detail, body);
+    renderAdminClientRequestResponseDraftPanel(detail, body);
     renderTimeline(detail, body);
   }
 
@@ -668,6 +845,9 @@
     loadAdminClientRequests,
     loadAdminClientRequestDetail,
     updateAdminClientRequestStatus,
+    generateAdminClientRequestResponseDraft,
+    saveAdminClientRequestResponseDraft,
+    copyAdminClientRequestResponseDraft,
     renderAdminClientRequests,
     renderAdminClientRequestDetail,
     refreshAdminClientRequestsSoon,

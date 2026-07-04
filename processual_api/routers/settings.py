@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import shutil
 import time
@@ -679,6 +680,7 @@ def _admin_client_request_detail(entry: dict, fallback_user_id: str) -> dict:
         "message": _admin_safe_request_text(entry.get("message") or ""),
         "timeline": _admin_client_request_timeline(entry),
         "next_admin_action": _admin_client_request_next_action(request_status),
+            "supervisor_response_drafts": _admin_safe_response_drafts(entry),
     }
 
 
@@ -722,6 +724,127 @@ async def get_admin_client_request_detail(
                 }
 
     raise HTTPException(status_code=404, detail="Client request not found.")
+
+
+
+_ADMIN_RESPONSE_DRAFT_FORBIDDEN_MARKERS = (
+    "api_key",
+    "encrypted_key",
+    "provider_secret",
+    "raw key",
+    "/settings/llm-provider",
+    "/settings/api-keys",
+)
+
+
+def _admin_response_draft_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _admin_response_draft_actor(current_user: dict) -> str:
+    actor = str(
+        current_user.get("email")
+        or current_user.get("user_id")
+        or current_user.get("sub")
+        or current_user.get("role")
+        or "admin"
+    ).strip()
+    return actor or "admin"
+
+
+def _admin_safe_response_draft_text(value) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    for marker in _ADMIN_RESPONSE_DRAFT_FORBIDDEN_MARKERS:
+        text = re.sub(re.escape(marker), "[redacted]", text, flags=re.IGNORECASE)
+    return text[:4000]
+
+
+def _admin_generate_supervisor_response_draft(entry: dict) -> str:
+    request_type = str(entry.get("request_type") or "").strip().lower()
+    requested_plan = str(entry.get("requested_plan") or "").strip()
+
+    if request_type == "enterprise_integration_upgrade":
+        plan_text = f" for {requested_plan}" if requested_plan else ""
+        return (
+            "Thanks for your request. We have reviewed your Enterprise "
+            f"Integration upgrade request{plan_text}. The admin team will verify "
+            "eligibility and prepare the next safe action. We will not ask you "
+            "to paste secrets or credentials in messages."
+        )
+
+    if request_type == "provider_setup_help":
+        return (
+            "Thanks for your provider setup request. Please keep provider "
+            "credentials local and use the secure provider setup flow. Do not "
+            "paste secrets into support messages. The admin team can help verify "
+            "connection status safely."
+        )
+
+    if request_type == "billing_usage_review":
+        return (
+            "Thanks for your billing and usage review request. The admin team "
+            "can review usage metadata and quota state without exposing private "
+            "credentials."
+        )
+
+    return (
+        "Thanks for contacting support. We reviewed your request and will "
+        "follow up with the next safe action. Please avoid sending secrets or "
+        "credentials in messages."
+    )
+
+
+def _admin_safe_response_drafts(entry: dict) -> list[dict]:
+    drafts = entry.get("supervisor_response_drafts") or []
+    if not isinstance(drafts, list):
+        return []
+
+    safe_drafts = []
+    for draft in drafts:
+        if not isinstance(draft, dict):
+            continue
+        safe_drafts.append(
+            {
+                "draft_id": str(draft.get("draft_id") or ""),
+                "request_id": str(draft.get("request_id") or ""),
+                "body": _admin_safe_response_draft_text(draft.get("body")),
+                "created_at": str(draft.get("created_at") or ""),
+                "updated_at": str(draft.get("updated_at") or ""),
+                "source": str(draft.get("source") or "admin_clients_panel"),
+                "state": str(draft.get("state") or "draft"),
+                "mode": str(draft.get("mode") or "manual"),
+                "actor": str(draft.get("actor") or ""),
+                "template_id": _admin_safe_response_draft_text(
+                    draft.get("template_id")
+                ),
+                "note": _admin_safe_response_draft_text(draft.get("note")),
+            }
+        )
+    return safe_drafts[-5:]
+
+
+def _append_admin_response_draft_history(
+    entry: dict,
+    *,
+    at: str,
+    actor: str,
+    note: str,
+) -> None:
+    history = entry.get("status_history")
+    if not isinstance(history, list):
+        history = []
+
+    history.append(
+        {
+            "status": str(entry.get("status") or "pending"),
+            "event": "response_draft_saved",
+            "at": at,
+            "actor": actor,
+            "source": "admin_clients_panel",
+            "note": note,
+        }
+    )
+    entry["status_history"] = history
 
 
 _ADMIN_REQUEST_STATUS_ACTIONS = (
@@ -891,6 +1014,111 @@ async def update_admin_client_request_status(
             }
 
     raise HTTPException(status_code=404, detail="Client request not found.")
+
+@router.post("/admin/client-requests/{request_id}/response-draft", response_model=dict)
+async def save_admin_client_request_response_draft(
+    request_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_write(current_user)
+
+    requested = str(request_id or "").strip()
+    if not requested:
+        raise HTTPException(status_code=404, detail="Client request not found.")
+
+    mode = str(payload.get("mode") or "manual").strip().lower()
+    if mode not in {"generate", "manual"}:
+        mode = "manual"
+
+    now = _admin_response_draft_now_iso()
+    actor = _admin_response_draft_actor(current_user)
+
+    for path in _admin_client_request_raw_files():
+        if not path.is_file():
+            continue
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+
+        entries = raw.get("client_requests") or []
+        if not isinstance(entries, list):
+            continue
+
+        fallback_user_id = _admin_client_request_user_id_from_path(path)
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+
+            summary = _admin_client_request_summary(entry, fallback_user_id)
+            if requested not in {summary["request_id"], summary["short_id"]}:
+                continue
+
+            if mode == "generate":
+                body = _admin_generate_supervisor_response_draft(entry)
+            else:
+                body = _admin_safe_response_draft_text(
+                    payload.get("draft") or payload.get("body") or ""
+                )
+
+            body = _admin_safe_response_draft_text(body)
+            if not body:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Draft body is required.",
+                )
+
+            drafts = entry.get("supervisor_response_drafts")
+            if not isinstance(drafts, list):
+                drafts = []
+
+            draft = {
+                "draft_id": f"rdraft_{secrets.token_hex(8)}",
+                "request_id": summary["request_id"],
+                "body": body,
+                "created_at": now,
+                "updated_at": now,
+                "source": "admin_clients_panel",
+                "state": "draft",
+                "mode": mode,
+                "actor": actor,
+                "template_id": _admin_safe_response_draft_text(
+                    payload.get("template_id")
+                ),
+                "note": _admin_safe_response_draft_text(payload.get("note")),
+            }
+
+            drafts.append(draft)
+            entry["supervisor_response_drafts"] = drafts
+            entry["updated_at"] = now
+            _append_admin_response_draft_history(
+                entry,
+                at=now,
+                actor=actor,
+                note="Supervisor response draft saved.",
+            )
+
+            path.write_text(
+                json.dumps(raw, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            safe_draft = _admin_safe_response_drafts(entry)[-1]
+            return {
+                "status": "draft_saved",
+                "request": _admin_client_request_detail(entry, fallback_user_id),
+                "draft": safe_draft,
+            }
+
+    raise HTTPException(status_code=404, detail="Client request not found.")
+
+
 @router.post("/client-request", response_model=dict)
 async def submit_client_request(
     body: ClientRequestPayload,
