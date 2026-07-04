@@ -271,6 +271,83 @@ PAGES.settings = (() => {
     setText('set-provider-setup-request-status', 'Prepared provider setup request. Review it in Requests & Billing before submitting.');
   }
 
+  function providerSecretSetupPayload() {
+    return {
+      provider: document.getElementById('set-provider-setup-provider')?.value.trim() || '',
+      model: document.getElementById('set-provider-setup-model')?.value.trim() || '',
+      provider_secret: document.getElementById('set-provider-secret-input')?.value.trim() || '',
+    };
+  }
+
+  function clearProviderSecretInput() {
+    const secretInput = document.getElementById('set-provider-secret-input');
+    if (secretInput) secretInput.value = '';
+  }
+
+  function setProviderSecretStatus(message) {
+    setText('set-provider-setup-request-status', message);
+  }
+
+  async function testProviderSecretConnection() {
+    const body = providerSecretSetupPayload();
+    if (!body.provider) {
+      setProviderSecretStatus('Choose a provider before testing.');
+      return;
+    }
+
+    try {
+      const result = await CLIENT.post('/settings/provider-connection/test', body);
+      const message = result.success
+        ? 'Provider connection test passed' + (result.latency_ms ? ' in ' + result.latency_ms + 'ms' : '')
+        : 'Provider connection test failed: ' + (result.error || 'unknown error');
+      setProviderSecretStatus(message);
+      APP.showToast(message, result.success ? 'success' : 'error');
+    } catch (e) {
+      setProviderSecretStatus('Error testing provider: ' + (e.detail || e.message));
+    } finally {
+      clearProviderSecretInput();
+    }
+  }
+
+  async function saveProviderSecretConnection() {
+    const body = providerSecretSetupPayload();
+    if (!body.provider) {
+      setProviderSecretStatus('Choose a provider before saving.');
+      return;
+    }
+    if (!body.provider_secret) {
+      setProviderSecretStatus('Paste the provider key before saving. It will not be displayed after submission.');
+      return;
+    }
+
+    try {
+      const result = await CLIENT.put('/settings/provider-connection/setup', body);
+      setProviderSecretStatus(result.message || 'Provider connection saved.');
+      APP.showToast('Provider connection saved', 'success');
+      clearProviderSecretInput();
+      await loadProviderConnection();
+    } catch (e) {
+      setProviderSecretStatus('Error saving provider: ' + (e.detail || e.message));
+    }
+  }
+
+  async function clearProviderSecretConnection() {
+    try {
+      const result = await CLIENT.del('/settings/provider-connection/setup');
+      setProviderSecretStatus(result.message || 'Provider connection cleared.');
+      APP.showToast('Provider connection cleared', 'success');
+      clearProviderSecretInput();
+      await loadProviderConnection();
+    } catch (e) {
+      setProviderSecretStatus('Error clearing provider: ' + (e.detail || e.message));
+    }
+  }
+
+  function initProviderSecretSetupControls() {
+    document.getElementById('set-provider-secret-test')?.addEventListener('click', testProviderSecretConnection);
+    document.getElementById('set-provider-secret-save')?.addEventListener('click', saveProviderSecretConnection);
+    document.getElementById('set-provider-secret-clear')?.addEventListener('click', clearProviderSecretConnection);
+  }
   function initProviderSetupRequestControls() {
     document.getElementById('set-provider-setup-request-prepare')?.addEventListener('click', prepareProviderSetupRequest);
   }
@@ -765,6 +842,7 @@ function initCollapsibleSettingsSections() {
     initClientSupportActions();
     initClientIntegrationGuide();
     initProviderSetupRequestControls();
+    initProviderSecretSetupControls();
     document.getElementById('set-readiness-support')?.addEventListener('click', prepareReadinessSupportRequest);
     initCollapsibleSettingsSections();
   initSettingsSectionNavigation();

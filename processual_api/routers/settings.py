@@ -348,6 +348,22 @@ class ClientRequestPayload(BaseModel):
     message: str = Field(min_length=10, max_length=2000)
 
 
+class ClientProviderConnectionSetupPayload(BaseModel):
+    provider: str = Field(min_length=1)
+    provider_secret: str | None = Field(default=None, max_length=4096)
+    model: str | None = Field(default=None, max_length=200)
+
+
+CLIENT_PROVIDER_SECRET_OPTIONAL_PROVIDERS = {"opencode", "generic_openai_compatible"}
+
+
+def _normalize_client_provider(value: str) -> str:
+    provider = str(value or "").strip().lower()
+    known_providers = provider_ids()
+    if provider not in known_providers:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    return provider
+
 def _client_request_type_options() -> list[dict[str, str]]:
     return [
         {"id": request_type, "label": label}
@@ -475,6 +491,7 @@ def _client_provider_connection_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "provider": provider_status.get("provider") or "",
         "model": provider_status.get("model") or "",
         "last_tested": provider_status.get("last_tested"),
+        "secret_status": "stored_encrypted" if provider_status.get("encrypted_key") else "not_stored",
         "available_providers": sorted(provider_ids()),
         "billing_policy": BILLING_POLICY,
         "provider_cost_included": PROVIDER_COST_INCLUDED,
@@ -492,6 +509,66 @@ async def get_provider_connection(current_user: dict = Depends(get_current_user)
     raw = _load_raw(user_id)
     return _client_provider_connection_payload(raw)
 
+
+@router.put("/provider-connection/setup", response_model=dict)
+async def save_client_provider_connection(
+    body: ClientProviderConnectionSetupPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user.get("sub", "default")
+    provider = _normalize_client_provider(body.provider)
+    provider_secret = str(body.provider_secret or "").strip()
+    model = str(body.model or "").strip()
+
+    if not provider_secret and provider not in CLIENT_PROVIDER_SECRET_OPTIONAL_PROVIDERS:
+        raise HTTPException(status_code=400, detail="Provider secret is required")
+
+    encrypted = _encrypt_api_key(provider_secret, user_id) if provider_secret else None
+    if provider_secret and not encrypted:
+        raise HTTPException(status_code=503, detail="Provider secret encryption is unavailable")
+
+    raw = _load_raw(user_id)
+    previous = raw.get("llm_provider", {})
+    raw["llm_provider"] = {
+        "configured": bool(provider and (encrypted or provider in CLIENT_PROVIDER_SECRET_OPTIONAL_PROVIDERS)),
+        "provider": provider,
+        "model": model,
+        "last_tested": previous.get("last_tested"),
+    }
+    if encrypted:
+        raw["llm_provider"]["encrypted_key"] = encrypted
+
+    _save_raw(user_id, raw)
+    payload = _client_provider_connection_payload(raw)
+    payload["status"] = "saved"
+    payload["message"] = "Client BYOK provider connection saved. Raw provider secrets are never returned."
+    return payload
+
+
+@router.delete("/provider-connection/setup", response_model=dict)
+async def clear_client_provider_connection(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("sub", "default")
+    raw = _load_raw(user_id)
+    raw["llm_provider"] = {"configured": False, "provider": "", "model": ""}
+    _save_raw(user_id, raw)
+    payload = _client_provider_connection_payload(raw)
+    payload["status"] = "cleared"
+    payload["message"] = "Client BYOK provider connection cleared."
+    return payload
+
+
+@router.post("/provider-connection/test", response_model=TestConnectionResult)
+async def test_client_provider_connection(
+    body: ClientProviderConnectionSetupPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    provider = _normalize_client_provider(body.provider)
+    config = LLMProviderConfig(
+        provider=provider,
+        api_key=str(body.provider_secret or "").strip(),
+        model=str(body.model or "").strip(),
+    )
+    return await test_llm_provider(config, current_user)
 
 @router.put("/llm-provider", response_model=dict)
 async def save_llm_provider(body: LLMProviderConfig, current_user: dict = Depends(get_current_user)):
