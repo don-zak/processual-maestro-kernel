@@ -72,11 +72,41 @@ PAGES.settings = (() => {
     if (tz) tz.value = general.timezone || 'UTC';
   }
 
+  function normalizeClientPlanId(plan) {
+    return String(plan || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_");
+  }
+
+  function clientSubscriptionPlanId(sub) {
+    return sub.plan_id || sub.plan || "";
+  }
+
+  function isEnterpriseClientPlan(sub) {
+    const planId = normalizeClientPlanId(clientSubscriptionPlanId(sub));
+    return planId === "enterprise" || planId.indexOf("enterprise_") === 0;
+  }
+
+  function updateEnterpriseIntegrationEligibility(sub) {
+    const card = document.getElementById("set-enterprise-integration-eligibility-card");
+    if (!card || !sub) return;
+
+    const planId = normalizeClientPlanId(clientSubscriptionPlanId(sub));
+    const eligible = isEnterpriseClientPlan(sub);
+    card.style.display = eligible ? "" : "none";
+    setText("set-enterprise-integration-eligibility-plan", planId || "-");
+    setText(
+      "set-enterprise-integration-eligibility-status",
+      eligible ? "Eligible for enterprise integration" : "Hidden for non-enterprise plans"
+    );
+  }
   function applySubscription(sub) {
     if (!sub) return;
     readinessState.subscription = sub;
     updateClientReadiness();
     setText('set-sub-plan', sub.plan || '-');
+    updateEnterpriseIntegrationEligibility(sub);
     const statusEl = document.getElementById('set-sub-status');
     if (statusEl) {
       statusEl.textContent = sub.status || '-';
