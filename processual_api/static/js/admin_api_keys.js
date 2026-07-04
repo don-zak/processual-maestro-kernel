@@ -3,17 +3,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const CARD_ID = 'admin-api-key-lifecycle-card';
 
   const KEY_CATEGORIES = [
-    ['client_api', 'Client API — normal client access'],
-    ['pilot_client', 'Pilot Client — introductory access / pilot access'],
-    ['external_partner', 'External Partner — scoped partner access'],
-    ['service_integration', 'Service Integration — server-to-server access'],
-    ['billing_service', 'Billing Service — Lemon Squeezy or billing sync'],
-    ['support_viewer', 'Support Viewer — read-only support access'],
-    ['ops_admin', 'Ops Admin — provider, usage, and health operations'],
-    ['billing_admin', 'Billing Admin — clients, plans, subscriptions'],
-    ['security_admin', 'Security Admin — API keys and audit'],
-    ['owner_admin', 'Owner Admin — full owner-controlled access'],
-    ['emergency_bootstrap', 'Emergency Bootstrap — short-lived emergency access'],
+    ['client_api', 'Client API - normal client access'],
+    ['pilot_client', 'Pilot Client - introductory access / pilot access'],
+    ['external_partner', 'External Partner - scoped partner access'],
+    ['service_integration', 'Service Integration - server-to-server access'],
+    ['billing_service', 'Billing Service - Lemon Squeezy or billing sync'],
+    ['support_viewer', 'Support Viewer - read-only support access'],
+    ['ops_admin', 'Ops Admin - provider, usage, and health operations'],
+    ['billing_admin', 'Billing Admin - clients, plans, subscriptions'],
+    ['security_admin', 'Security Admin - API keys and audit'],
+    ['owner_admin', 'Owner Admin - full owner-controlled access'],
+    ['emergency_bootstrap', 'Emergency Bootstrap - short-lived emergency access'],
   ];
 
   const CATEGORY_DEFAULTS = {
@@ -237,11 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const target = document.getElementById('admin-api-key-create-result');
     if (!target) return;
 
-    const raw = result['api_key'] ?? '';
+    const raw = result.api_key ?? '';
     target.innerHTML = `
       <div class="admin-note ok">
-        <strong>One-time raw key created.</strong> This one-time value is the raw key.
-        Copy this raw key now. It will not be shown again.
+        <strong>One-time raw key created.</strong> Copy this one-time value now. It will not be shown again.
       </div>
       <div class="mono-block" style="white-space:pre-wrap">X-API-Key: ${escapeHtml(raw)}</div>
       <button id="admin-api-key-copy-created" class="btn secondary" type="button">Copy</button>
@@ -254,8 +253,8 @@ document.addEventListener('DOMContentLoaded', () => {
         to create an <strong>API Key for integration</strong> with service role, limited runtime scopes,
         issued_to metadata, revocable access, and X-API-Key usage examples.
       </div>
+    `;
 
-      <div class="admin-grid">
     document.getElementById('admin-api-key-copy-created')?.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(raw);

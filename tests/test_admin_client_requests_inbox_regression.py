@@ -148,7 +148,8 @@ def test_admin_client_requests_ui_hooks_are_registered() -> None:
     required = [
         "Clients",
         "/console/js/admin_client_requests.js",
-        "adminrequests01a",
+        "admin-client-requests-host",
+        "adminrequests01c",
     ]
     for token in required:
         assert token in html
@@ -161,6 +162,7 @@ def test_admin_client_requests_script_uses_admin_endpoint_only() -> None:
 
     required = [
         "PMK_ADMIN_CLIENT_REQUESTS",
+        "HOST_ID",
         "/settings/admin/client-requests",
         "admin-client-requests-refresh-btn",
         "admin-client-requests-status",
@@ -169,6 +171,14 @@ def test_admin_client_requests_script_uses_admin_endpoint_only() -> None:
         "Client Requests Inbox",
         "latest_requests",
         "status_counts",
+        "admin-client-request-actions",
+        "admin-client-request-meta",
+        "admin-client-request-row",
+        "admin-client-request-grid",
+        "admin-client-requests-style",
+        "MutationObserver",
+        "hashchange",
+        "data-admin-page",
         "request_id",
         "short_id",
         "client_id",

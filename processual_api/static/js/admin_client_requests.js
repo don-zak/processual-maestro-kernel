@@ -1,7 +1,9 @@
 (function () {
   const ENDPOINT = '/settings/admin/client-requests';
   const PAGE_ID = 'page-admin-clients';
+  const HOST_ID = 'admin-client-requests-host';
   const CARD_ID = 'admin-client-requests-card';
+  const STYLE_ID = 'admin-client-requests-style';
 
   const FIELDS = [
     'request_id',
@@ -13,6 +15,9 @@
     'created_at',
     'source',
   ];
+
+  let lastLoadAt = 0;
+  let scheduledRefresh = 0;
 
   function byId(id) {
     return document.getElementById(id);
@@ -35,6 +40,100 @@
     node.textContent = text(value);
     parent.appendChild(node);
     return node;
+  }
+
+  function installStyles() {
+    if (byId(STYLE_ID)) return;
+
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      #admin-client-requests-host {
+        margin-bottom: var(--s-5);
+      }
+
+      #admin-client-requests-card {
+        overflow: hidden;
+      }
+
+      .admin-client-requests-topline {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--s-3);
+        flex-wrap: wrap;
+      }
+
+      .admin-client-requests-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: var(--s-3);
+        margin-top: var(--s-3);
+      }
+
+      .admin-client-requests-summary .mono-block {
+        min-height: 74px;
+      }
+
+      .admin-client-request-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: var(--s-3);
+        margin-top: var(--s-4);
+      }
+
+      .admin-client-request-row {
+        border: 1px solid rgba(120, 150, 210, 0.28);
+        border-radius: 14px;
+        padding: var(--s-3);
+        background: rgba(6, 12, 24, 0.28);
+        min-width: 0;
+      }
+
+      .admin-client-request-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--s-3);
+        margin-bottom: var(--s-3);
+      }
+
+      .admin-client-request-title {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        overflow-wrap: anywhere;
+      }
+
+      .admin-client-request-status {
+        white-space: nowrap;
+        border: 1px solid rgba(120, 150, 210, 0.35);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+      }
+
+      .admin-client-request-meta {
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 6px 10px;
+        font-size: 12px;
+      }
+
+      .admin-client-request-meta-key {
+        opacity: 0.72;
+      }
+
+      .admin-client-request-meta-value {
+        overflow-wrap: anywhere;
+      }
+
+      .admin-client-request-actions {
+        margin-top: var(--s-3);
+        display: flex;
+        justify-content: flex-end;
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   function authHeaders(extra) {
@@ -85,37 +184,57 @@
     return data;
   }
 
-  function ensureCard() {
+  function ensureHost() {
     const page = byId(PAGE_ID);
     if (!page) return null;
 
+    let host = byId(HOST_ID);
+    if (host) return host;
+
+    host = document.createElement('div');
+    host.id = HOST_ID;
+
+    const wrapper = page.firstElementChild || page;
+    wrapper.insertBefore(host, wrapper.firstChild);
+
+    return host;
+  }
+
+  function ensureCard() {
+    installStyles();
+
+    const host = ensureHost();
+    if (!host) return null;
+
     let card = byId(CARD_ID);
+    if (card && card.parentNode !== host) {
+      host.appendChild(card);
+      return card;
+    }
+
     if (card) return card;
 
     card = document.createElement('div');
     card.id = CARD_ID;
     card.className = 'card';
+    card.dataset.adminClientRequestsCard = '1';
 
     card.innerHTML = [
-      '<div class="sec-hdr">',
+      '<div class="admin-client-requests-topline sec-hdr">',
       '<div>',
       '<div class="sh-title">Client Requests Inbox</div>',
       '<div class="sh-sub">Read-only supervisor view of client request summaries</div>',
       '</div>',
       '<button id="admin-client-requests-refresh-btn" class="btn sm" type="button">Refresh Requests</button>',
       '</div>',
+      '<div class="admin-client-requests-summary">',
       '<div id="admin-client-requests-status" class="mono-block" style="font-size:11px;white-space:pre-wrap">Client request inbox not loaded yet.</div>',
-      '<div id="admin-client-requests-counts" class="mono-block" style="margin-top:var(--s-3);font-size:11px;white-space:pre-wrap"></div>',
-      '<div id="admin-client-requests-list" style="margin-top:var(--s-3)"></div>',
+      '<div id="admin-client-requests-counts" class="mono-block" style="font-size:11px;white-space:pre-wrap"></div>',
+      '</div>',
+      '<div id="admin-client-requests-list"></div>',
     ].join('');
 
-    const firstCard = page.querySelector('.card');
-    if (firstCard && firstCard.parentNode) {
-      firstCard.parentNode.insertBefore(card, firstCard);
-    } else {
-      page.appendChild(card);
-    }
-
+    host.appendChild(card);
     return card;
   }
 
@@ -135,6 +254,56 @@
       .join('\n');
   }
 
+  function appendMeta(row, key, value) {
+    appendText(row, 'div', key, 'admin-client-request-meta-key');
+    appendText(row, 'div', value, 'admin-client-request-meta-value');
+  }
+
+  function renderRequestCard(item) {
+    const row = document.createElement('div');
+    row.className = 'admin-client-request-row';
+    row.dataset.requestId = text(item?.request_id || '');
+
+    const head = document.createElement('div');
+    head.className = 'admin-client-request-head';
+
+    const title = document.createElement('div');
+    title.className = 'admin-client-request-title';
+    title.textContent = text(item?.request_type || 'client_request');
+
+    const status = document.createElement('div');
+    status.className = 'admin-client-request-status';
+    status.textContent = text(item?.status || 'pending');
+
+    head.appendChild(title);
+    head.appendChild(status);
+    row.appendChild(head);
+
+    const meta = document.createElement('div');
+    meta.className = 'admin-client-request-meta';
+    appendMeta(meta, 'request_id', item?.request_id || '');
+    appendMeta(meta, 'short_id', item?.short_id || '');
+    appendMeta(meta, 'client_id', item?.client_id || '');
+    appendMeta(meta, 'requested_plan', item?.requested_plan || '');
+    appendMeta(meta, 'created_at', item?.created_at || '');
+    appendMeta(meta, 'source', item?.source || '');
+    row.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-client-request-actions';
+
+    const button = document.createElement('button');
+    button.className = 'btn secondary sm admin-client-request-select';
+    button.type = 'button';
+    button.dataset.requestId = text(item?.request_id || '');
+    button.textContent = 'Select';
+
+    actions.appendChild(button);
+    row.appendChild(actions);
+
+    return row;
+  }
+
   function renderList(requests) {
     const target = byId('admin-client-requests-list');
     clear(target);
@@ -145,39 +314,14 @@
       return;
     }
 
-    const wrap = document.createElement('div');
-    wrap.className = 'table-wrap';
+    const grid = document.createElement('div');
+    grid.className = 'admin-client-request-grid';
 
-    const table = document.createElement('table');
-    table.className = 'admin-table';
-
-    const thead = document.createElement('thead');
-    const headerRow = document.createElement('tr');
-    FIELDS.forEach((field) => appendText(headerRow, 'th', field));
-    appendText(headerRow, 'th', 'action');
-    thead.appendChild(headerRow);
-
-    const tbody = document.createElement('tbody');
     requests.forEach((item) => {
-      const row = document.createElement('tr');
-      FIELDS.forEach((field) => appendText(row, 'td', item?.[field] ?? ''));
-
-      const actionCell = document.createElement('td');
-      const button = document.createElement('button');
-      button.className = 'btn secondary sm admin-client-request-select';
-      button.type = 'button';
-      button.dataset.requestId = text(item?.request_id || '');
-      button.textContent = 'Select';
-      actionCell.appendChild(button);
-      row.appendChild(actionCell);
-
-      tbody.appendChild(row);
+      grid.appendChild(renderRequestCard(item));
     });
 
-    table.appendChild(thead);
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    target.appendChild(wrap);
+    target.appendChild(grid);
   }
 
   function renderAdminClientRequests(data) {
@@ -197,8 +341,14 @@
     renderList(data?.latest_requests || []);
   }
 
-  async function loadAdminClientRequests() {
+  async function loadAdminClientRequests(force) {
     ensureCard();
+
+    const now = Date.now();
+    if (!force && now - lastLoadAt < 1500) {
+      return null;
+    }
+    lastLoadAt = now;
 
     const statusTarget = byId('admin-client-requests-status');
     if (statusTarget) {
@@ -229,20 +379,76 @@
     if (refresh && !refresh.dataset.boundAdminClientRequests) {
       refresh.dataset.boundAdminClientRequests = '1';
       refresh.addEventListener('click', () => {
-        loadAdminClientRequests();
+        loadAdminClientRequests(true);
+      });
+    }
+  }
+
+  function refreshAdminClientRequestsSoon(force) {
+    window.clearTimeout(scheduledRefresh);
+    scheduledRefresh = window.setTimeout(() => {
+      bindAdminClientRequests();
+      loadAdminClientRequests(Boolean(force));
+    }, 80);
+  }
+
+  function installPageActivationHooks() {
+    document.addEventListener(
+      'click',
+      (event) => {
+        const button = event.target.closest('[data-admin-page], .nav-btn');
+        if (!button) return;
+
+        const targetPage = button.dataset?.adminPage || '';
+        const label = String(button.textContent || '').toLowerCase();
+        if (targetPage === 'clients' || label.includes('clients')) {
+          refreshAdminClientRequestsSoon(true);
+        }
+      },
+      true
+    );
+
+    window.addEventListener('hashchange', () => {
+      if (window.location.hash === '#clients') {
+        refreshAdminClientRequestsSoon(true);
+      }
+    });
+
+    const observer = new MutationObserver(() => {
+      const page = byId(PAGE_ID);
+      const host = byId(HOST_ID);
+      const card = byId(CARD_ID);
+      if (page && (!host || !card)) {
+        refreshAdminClientRequestsSoon(false);
+      }
+    });
+
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
       });
     }
   }
 
   function init() {
     bindAdminClientRequests();
-    loadAdminClientRequests();
+    loadAdminClientRequests(false);
+    installPageActivationHooks();
+
+    [150, 500, 1000, 1800].forEach((delay) => {
+      window.setTimeout(() => {
+        bindAdminClientRequests();
+        loadAdminClientRequests(false);
+      }, delay);
+    });
   }
 
   window.PMK_ADMIN_CLIENT_REQUESTS = {
     bindAdminClientRequests,
     loadAdminClientRequests,
     renderAdminClientRequests,
+    refreshAdminClientRequestsSoon,
   };
 
   if (document.readyState === 'loading') {
