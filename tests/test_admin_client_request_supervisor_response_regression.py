@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 from pathlib import Path
 
@@ -243,4 +243,3 @@ def test_client_settings_refresh_loads_client_request_timeline():
     assert "await loadClientRequests();" in source
     assert "function loadClientRequests()" in source
     assert "applyClientRequests(info)" in source
-
