@@ -207,6 +207,7 @@
   }
 
   async function refreshSupervisorOverviewCounters() {
+    ensureSupervisorHomeConsole();
     const host = ensureHost();
     if (!host) return;
 
@@ -238,6 +239,35 @@
     }, 0);
   }
 
+  function ensureSupervisorHomeConsole() {
+    if (document.getElementById('admin-supervisor-home-console')) return;
+
+    const overviewHost = document.getElementById(HOST_ID);
+    if (!overviewHost || !overviewHost.parentNode) return;
+
+    const consoleCard = document.createElement('div');
+    consoleCard.id = 'admin-supervisor-home-console';
+    consoleCard.className = 'card';
+    consoleCard.style.marginTop = 'var(--s-5)';
+    consoleCard.innerHTML = `
+      <div class="sec-hdr">
+        <div class="sh-title">Supervisor Operations Center</div>
+        <div class="sh-sub">visibility hub for supervisor operations - no policy changes</div>
+      </div>
+      <div class="admin-note">
+        Use this home console to jump to the current supervisor visibility surfaces:
+        <a href="#admin-supervisor-overview-counters">Supervisor Overview</a>,
+        <a href="#admin-supervisor-audit-summary">Recent Supervisor Audit</a>,
+        and <a href="#admin-api-key-lifecycle-summary">API Key Lifecycle Summary</a>.
+      </div>
+      <div class="muted" style="margin-top:var(--s-3)">
+        Backend enforcement remains authoritative. This is a visibility-only home surface with no raw keys or provider secrets.
+      </div>
+    `;
+
+    overviewHost.parentNode.insertBefore(consoleCard, overviewHost);
+  }
+
   function installSupervisorOverviewRefreshHooks() {
     window.addEventListener('load', () => {
       scheduleSupervisorOverviewRefresh();
@@ -259,7 +289,7 @@
     if (typeof MutationObserver === 'function') {
       const main = document.getElementById('main') || document.body;
       const observer = new MutationObserver(() => {
-        if (!document.getElementById(HOST_ID)) {
+        if (!document.getElementById(HOST_ID) || !document.getElementById('admin-supervisor-home-console')) {
           scheduleSupervisorOverviewRefresh();
         }
       });
