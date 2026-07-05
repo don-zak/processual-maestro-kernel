@@ -78,7 +78,24 @@
         </div>
       </div>
 
-        <div id="admin-supervisor-overview-counters" class="card" style="margin-top:var(--s-5)">
+
+        <div id="admin-supervisor-home-console" class="card" style="margin-top:var(--s-5)">
+          <div class="sec-hdr">
+            <div class="sh-title">Supervisor Operations Center</div>
+            <div class="sh-sub">visibility hub for supervisor operations - no policy changes</div>
+          </div>
+          <div class="admin-note">
+            Use this home console to jump to the current supervisor visibility surfaces:
+            <a href="#admin-supervisor-overview-counters">Supervisor Overview</a>,
+            <a href="#admin-supervisor-audit-summary">Recent Supervisor Audit</a>,
+            and <a href="#admin-api-key-lifecycle-summary">API Key Lifecycle Summary</a>.
+          </div>
+          <div class="muted" style="margin-top:var(--s-3)">
+            Backend enforcement remains authoritative. This is a visibility-only home surface with no raw keys or provider secrets.
+          </div>
+        </div>
+
+<div id="admin-supervisor-overview-counters" class="card" style="margin-top:var(--s-5)">
           <div class="sec-hdr">
             <div class="sh-title">Supervisor Overview</div>
             <div class="sh-sub">requests by status - visibility only</div>
