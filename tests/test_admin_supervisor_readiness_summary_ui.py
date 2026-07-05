@@ -14,7 +14,7 @@ def test_admin_loads_program_supervision_readiness_summary() -> None:
     assert "Program &amp; Supervision Readiness" in source
     assert "program runtime and supervision readiness" in source
     assert "admin_supervisor_readiness_summary.js" in source
-    assert "adminsuperreadiness02" in source
+    assert "adminsuperreadiness06" in source
 
 
 def test_supervisor_home_console_links_readiness_summary() -> None:
@@ -38,7 +38,7 @@ def test_readiness_summary_script_checks_program_and_supervision_surfaces() -> N
     assert "/settings/admin/audit-events?limit=3" in source
     assert "/settings/api-keys" in source
     assert "window.PMK_ADMIN_AUTH" in source
-    assert "credentials: 'include'" in source
+    assert "request.withCredentials = true" in source
     assert "visibility-only" in source
     assert "Backend enforcement remains authoritative" in source
 
@@ -92,16 +92,37 @@ def test_readiness_summary_passes_admin_auth_headers_to_checks() -> None:
     )
 
     assert "function readinessFetch" in source
-    assert "PMK_ADMIN_AUTH.headers" in source
-    assert "return fetch(path, options)" in source
-    assert 'credentials: "include"' in source
+    assert "window.PMK_ADMIN_AUTH.headers" in source
+    assert "new XMLHttpRequest" in source
+    assert "request.withCredentials = true" in source
 
 def test_readiness_summary_does_not_use_bridged_fetch_for_readiness_checks() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
         encoding="utf-8"
     )
 
-    assert "PMK_ADMIN_AUTH.headers" in source
-    assert "return fetch(path, options)" in source
+    assert "window.PMK_ADMIN_AUTH.headers" in source
+    assert "new XMLHttpRequest" in source
     assert "PMK_ADMIN_AUTH.fetch" not in source
     assert "bridgedFetch" not in source
+
+def test_readiness_summary_uses_xhr_to_avoid_global_fetch_bridge() -> None:
+    source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "new XMLHttpRequest" in source
+    assert "request.setRequestHeader" in source
+    assert "headers.forEach" in source
+    assert "window.PMK_ADMIN_AUTH.headers" in source
+    assert "return fetch(path, options)" not in source
+    assert "PMK_ADMIN_AUTH.fetch" not in source
+    assert "bridgedFetch" not in source
+
+def test_readiness_summary_does_not_gate_readiness_auth_headers_on_check_auth() -> None:
+    source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "window.PMK_ADMIN_AUTH.headers" in source
+    assert "check.auth &&" not in source

@@ -103,31 +103,51 @@
 
     return host;
   }
-  function readinessFetch(path) {
-    const options = { credentials: "include" };
+  function readinessFetch(path, headers = {}) {
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("GET", path, true);
+      request.withCredentials = true;
+      request.timeout = 10000;
 
-    if (
-      window.PMK_ADMIN_AUTH &&
-      typeof window.PMK_ADMIN_AUTH.headers === "function"
-    ) {
-      options.headers = window.PMK_ADMIN_AUTH.headers({});
-    }
+      if (headers && typeof headers.forEach === "function") {
+        headers.forEach((value, name) => {
+          if (value !== undefined && value !== null) {
+            request.setRequestHeader(name, String(value));
+          }
+        });
+      } else {
+        Object.entries(headers || {}).forEach(([name, value]) => {
+          if (value !== undefined && value !== null) {
+            request.setRequestHeader(name, String(value));
+          }
+        });
+      }
 
-    return fetch(path, options);
+      request.onload = () => {
+        resolve({
+          ok: request.status >= 200 && request.status < 300,
+          status: request.status,
+        });
+      };
+      request.onerror = () => reject(new Error("Readiness request failed"));
+      request.ontimeout = () => reject(new Error("Readiness request timed out"));
+      request.send();
+    });
   }
 
   async function checkEndpoint(check) {
     const startedAt = performance.now();
 
     try {
-      const response = await fetch(check.path, {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store',
-        headers: check.auth
-          ? authHeaders({ Accept: 'application/json' })
-          : { Accept: 'application/json' },
-      });
+      let headers = { Accept: 'application/json' };
+      if (
+        window.PMK_ADMIN_AUTH &&
+        typeof window.PMK_ADMIN_AUTH.headers === 'function'
+      ) {
+        headers = window.PMK_ADMIN_AUTH.headers(headers);
+      }
+      const response = await readinessFetch(check.path, headers);
 
       const elapsedMs = Math.max(0, Math.round(performance.now() - startedAt));
       return {
