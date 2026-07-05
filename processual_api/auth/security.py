@@ -6,13 +6,16 @@ import hmac
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from ..admin_audit_log import append_admin_audit_event
 from ..services.api_key_store import verify_dynamic_api_key
 from ..settings import settings
+from ..supervisor_session_keys import validate_supervisor_session_key
 
 try:
     from jose import JWTError, jwt
@@ -47,7 +50,128 @@ except ImportError:
     _bcrypt_lib = _PBKDF2CompatBcrypt()  # type: ignore[assignment]
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_supervisor_session_key_header = APIKeyHeader(name="X-Supervisor-Session-Key", auto_error=False)
 _bearer = HTTPBearer(auto_error=False)
+
+
+def _supervisor_session_key_store_path() -> Path:
+    configured = os.environ.get("PMK_SUPERVISOR_SESSION_KEYS_PATH", "").strip()
+    if configured:
+        return Path(configured)
+    return Path("data") / "supervisor_session_keys.json"
+
+
+def _auth_admin_audit_path() -> Path:
+    configured = os.environ.get("PMK_ADMIN_AUDIT_LOG_PATH", "").strip()
+    if configured:
+        return Path(configured)
+    return Path("data") / "admin_audit.jsonl"
+
+
+def _supervisor_actor_level_for_audit(user: dict[str, Any]) -> str:
+    return str(
+        user.get("supervision_level")
+        or user.get("supervisor_level")
+        or "legacy_admin"
+    )
+
+
+def _supervisor_session_key_denial_reason(exc: PermissionError) -> str:
+    detail = str(exc).lower()
+    if "expired" in detail:
+        return "expired_supervisor_session_key"
+    if "revoked" in detail:
+        return "revoked_supervisor_session_key"
+    return "invalid_supervisor_session_key"
+
+
+def _record_supervisor_session_key_denied(
+    *,
+    request: Request,
+    user: dict[str, Any],
+    reason: str,
+) -> None:
+    append_admin_audit_event(
+        audit_path=_auth_admin_audit_path(),
+        actor=str(user.get("email") or user.get("sub") or user.get("user_id") or "admin"),
+        actor_level=_supervisor_actor_level_for_audit(user),
+        action="supervisor_session_key_denied",
+        target_type="supervisor_session",
+        target_id=str(user.get("session_key_id") or "unknown"),
+        source="auth",
+        result="denied",
+        reason=reason,
+        request_path=str(request.url.path),
+    )
+
+
+def _merge_supervisor_session_user(
+    user: dict[str, Any],
+    session: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(user)
+    session_key_id = str(session.get("session_key_id") or "")
+    level = str(session.get("level") or "")
+
+    merged["supervision_level"] = level
+    merged["session_key_id"] = session_key_id
+    merged["supervisor_session_key_id"] = session_key_id
+    merged["supervisor_session_validated"] = True
+
+    session_scopes = [
+        str(scope)
+        for scope in session.get("scopes") or []
+        if str(scope or "").strip()
+    ]
+    merged["supervision_scopes"] = session_scopes
+
+    existing_scopes = [
+        str(scope)
+        for scope in merged.get("scopes") or []
+        if str(scope or "").strip()
+    ]
+    merged["scopes"] = sorted({*existing_scopes, *session_scopes})
+
+    issued_to = str(session.get("issued_to") or "").strip()
+    if issued_to:
+        merged["supervisor_session_issued_to"] = issued_to
+
+    session_label = str(session.get("session_label") or "").strip()
+    if session_label:
+        merged["supervisor_session_label"] = session_label
+
+    return merged
+
+
+def _apply_supervisor_session_header(
+    *,
+    request: Request,
+    user: dict[str, Any],
+    raw_supervisor_session_key: str | None,
+) -> dict[str, Any]:
+    raw_key = str(raw_supervisor_session_key or "").strip()
+    if not raw_key:
+        return user
+
+    try:
+        session = validate_supervisor_session_key(
+            _supervisor_session_key_store_path(),
+            raw_key,
+        )
+    except PermissionError as exc:
+        reason = _supervisor_session_key_denial_reason(exc)
+        _record_supervisor_session_key_denied(
+            request=request,
+            user=user,
+            reason=reason,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Supervisor session key denied.",
+        ) from exc
+
+    return _merge_supervisor_session_user(user, session)
+
 
 
 def _get_jwt_secret() -> str:
@@ -148,6 +272,7 @@ async def get_current_user(
     request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(_bearer),
     api_key: str | None = Depends(_api_key_header),
+    supervisor_session_key: str | None = Depends(_supervisor_session_key_header),
 ) -> dict:
     if bearer:
         payload = verify_access_token(bearer.credentials)
@@ -161,6 +286,11 @@ async def get_current_user(
             "session_type": payload.get("session_type", "jwt"),
             "scopes": payload.get("scopes", []),
         }
+        user = _apply_supervisor_session_header(
+            request=request,
+            user=user,
+            raw_supervisor_session_key=supervisor_session_key,
+        )
         request.state.current_user = user
         return user
 
