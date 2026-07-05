@@ -85,3 +85,13 @@ def test_admin_supervisor_readiness_summary_does_not_render_secret_fields():
     assert "key_hash" not in source
     assert "provider_secret" not in source
     assert "encrypted_key" not in source
+
+def test_readiness_summary_passes_admin_auth_headers_to_checks() -> None:
+    source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function readinessFetch" in source
+    assert "PMK_ADMIN_AUTH.headers" in source
+    assert "PMK_ADMIN_AUTH.fetch(path, options)" in source
+    assert 'credentials: "include"' in source

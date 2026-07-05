@@ -104,6 +104,25 @@
     return host;
   }
 
+  function readinessFetch(path) {
+    const options = { credentials: "include" };
+
+    if (
+      window.PMK_ADMIN_AUTH &&
+      typeof window.PMK_ADMIN_AUTH.headers === "function"
+    ) {
+      options.headers = window.PMK_ADMIN_AUTH.headers({});
+    }
+
+    if (
+      window.PMK_ADMIN_AUTH &&
+      typeof window.PMK_ADMIN_AUTH.fetch === "function"
+    ) {
+      return window.PMK_ADMIN_AUTH.fetch(path, options);
+    }
+
+    return fetch(path, options);
+  }
   async function checkEndpoint(check) {
     const startedAt = performance.now();
 
