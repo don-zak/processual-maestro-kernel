@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const PAGE_ID = 'page-admin-api-keys';
   const CARD_ID = 'admin-api-key-lifecycle-card';
+  const SUPERVISOR_SESSION_KEY_ENDPOINT = '/settings/admin/supervisor-session-keys';
 
   const KEY_CATEGORIES = [
     ['client_api', 'Client API - normal client access'],
@@ -81,6 +82,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // Backward-compatible regression markers for the existing admin API key area tests.
   // CLIENT.get('/settings/api-keys')
   // CLIENT.post('/settings/api-keys'
+
+  const SUPERVISOR_SESSION_KEY_FIELDS = [
+    'session_key_id',
+    'level',
+    'issued_to',
+    'session_label',
+    'reason',
+    'status',
+    'created_at',
+    'expires_at',
+    'last_used_at',
+    'revoked_at',
+    'revocation_reason',
+  ];
 
   const METADATA_FIELDS = [
     'key_id',
@@ -264,6 +279,183 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function supervisorKeyValue(id) {
+    return document.getElementById(id)?.value?.trim() || '';
+  }
+
+  function buildSupervisorSessionKeyPayload() {
+    return {
+      level: supervisorKeyValue('admin-supervisor-key-level'),
+      issued_to: supervisorKeyValue('admin-supervisor-key-issued-to'),
+      session_label: supervisorKeyValue('admin-supervisor-key-label'),
+      reason: supervisorKeyValue('admin-supervisor-key-reason'),
+      expires_at: supervisorKeyValue('admin-supervisor-key-expires-at'),
+    };
+  }
+
+  function renderOneTimeSupervisorSessionKey(result) {
+    const target = document.getElementById('admin-supervisor-key-create-result');
+    if (!target) return;
+
+    const raw = result.raw_key || '';
+    const record = result.record || {};
+    target.innerHTML = `
+      <div class="admin-note ok">
+        <strong>One-time supervisor session key created.</strong>
+        Copy this browser-session value now. It will not be shown again.
+      </div>
+      <div class="mono-block" style="white-space:pre-wrap">X-Supervisor-Session-Key: ${escapeHtml(raw)}</div>
+      <button id="admin-supervisor-key-copy-created" class="btn secondary" type="button">Copy Supervisor Key</button>
+      <div class="admin-note">
+        Safe record: ${escapeHtml(record.session_key_id || '')} /
+        ${escapeHtml(record.level || '')} / ${escapeHtml(record.issued_to || '')}
+      </div>
+    `;
+
+    document.getElementById('admin-supervisor-key-copy-created')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(raw);
+      } catch {
+        // Clipboard may be unavailable in some browsers.
+      }
+    });
+  }
+
+  function renderSupervisorSessionKeyRows(keys) {
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return '<div class="admin-note">No supervisor session keys found. Issue a supervisor key to create one.</div>';
+    }
+
+    const header = SUPERVISOR_SESSION_KEY_FIELDS.map((field) =>
+      `<th>${escapeHtml(field)}</th>`
+    ).join('');
+    const body = keys.map((key) => {
+      const sessionKeyId = key.session_key_id || '';
+      const cells = SUPERVISOR_SESSION_KEY_FIELDS.map((field) => {
+        const value = field === 'scopes' ? scopesText(key[field]) : key[field] ?? '';
+        return `<td>${escapeHtml(value)}</td>`;
+      }).join('');
+
+      return `
+        <tr>
+          ${cells}
+          <td>
+            <button class="btn danger admin-supervisor-key-revoke"
+              data-session-key-id="${escapeHtml(sessionKeyId)}" type="button">
+              Revoke
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead><tr>${header}<th>action</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  async function refreshSupervisorSessionKeys() {
+    const target = document.getElementById('admin-supervisor-key-table');
+    if (!target) return;
+
+    target.innerHTML = '<div class="admin-note">Loading supervisor session key metadata ...</div>';
+    try {
+      const data = await request('GET', SUPERVISOR_SESSION_KEY_ENDPOINT);
+      target.innerHTML = renderSupervisorSessionKeyRows(data.supervisor_session_keys || []);
+    } catch (error) {
+      target.innerHTML = `<div class="admin-note danger">Failed to load supervisor keys: ${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  async function issueSupervisorSessionKey() {
+    const target = document.getElementById('admin-supervisor-key-create-result');
+    if (target) {
+      target.innerHTML = '<div class="admin-note">Issuing supervisor session key ...</div>';
+    }
+
+    try {
+      const created = await request('POST', SUPERVISOR_SESSION_KEY_ENDPOINT, buildSupervisorSessionKeyPayload());
+      renderOneTimeSupervisorSessionKey(created);
+      await refreshSupervisorSessionKeys();
+    } catch (error) {
+      if (target) {
+        target.innerHTML = `<div class="admin-note danger">Supervisor key issue failed: ${escapeHtml(error.message)}</div>`;
+      }
+    }
+  }
+
+  async function revokeSupervisorSessionKey(sessionKeyId) {
+    if (!sessionKeyId) return;
+
+    const ok = window.confirm(
+      `Revoke supervisor session key ${sessionKeyId}? This disables the browser session key.`
+    );
+    if (!ok) return;
+
+    await request('POST', `${SUPERVISOR_SESSION_KEY_ENDPOINT}/${sessionKeyId}/revoke`, {
+      reason: 'Revoked from Admin API Keys page.',
+    });
+    await refreshSupervisorSessionKeys();
+  }
+
+  function renderSupervisorSessionKeyPanel() {
+    return `
+      <section id="admin-supervisor-session-key-panel" class="card" style="margin-top:var(--s-5)">
+        <h2>Supervisor Session Keys</h2>
+        <div class="admin-note">
+          Issue short-lived browser-session keys for review_supervisor or operations_supervisor.
+          These keys are separate from X-API-Key programmatic access.
+        </div>
+        <div class="admin-note">
+          Raw supervisor keys are shown once after issue. Safe metadata omits raw_key and key_hash.
+          Backend enforcement remains authoritative.
+        </div>
+
+        <div class="admin-grid">
+          <label>Supervisor level
+            <select id="admin-supervisor-key-level">
+              <option value="review_supervisor">review_supervisor</option>
+              <option value="operations_supervisor">operations_supervisor</option>
+            </select>
+          </label>
+          <label>Issued to
+            <input id="admin-supervisor-key-issued-to" placeholder="ops@example.com" />
+          </label>
+          <label>Session label
+            <input id="admin-supervisor-key-label" placeholder="browser session label" />
+          </label>
+          <label>Expires at
+            <input id="admin-supervisor-key-expires-at" placeholder="2026-07-05T18:00:00+00:00" />
+          </label>
+        </div>
+
+        <label>Reason
+          <input id="admin-supervisor-key-reason" placeholder="why this supervised session is needed" />
+        </label>
+
+        <div class="admin-actions">
+          <button id="admin-supervisor-key-issue-btn" class="btn primary" type="button">Issue Supervisor Key</button>
+          <button id="admin-supervisor-key-refresh-btn" class="btn secondary" type="button">Refresh Supervisor Keys</button>
+        </div>
+
+        <div id="admin-supervisor-key-create-result"></div>
+
+        <h3>Safe supervisor session key metadata</h3>
+        <div class="admin-note">
+          The table renders safe metadata only: session_key_id, level, issued_to,
+          session_label, reason, status, created_at, expires_at, last_used_at,
+          revoked_at, and revocation_reason.
+        </div>
+        <div id="admin-supervisor-key-table"></div>
+      </section>
+    `;
+  }
+
   function renderRows(keys) {
     if (!Array.isArray(keys) || keys.length === 0) {
       return '<div class="admin-note">No active API keys found. Use Generate governed key to create one.</div>';
@@ -432,6 +624,8 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
         last_used_at, created_at, expires_at, revoked_at.
       </div>
       <div id="admin-api-key-table"></div>
+
+      ${renderSupervisorSessionKeyPanel()}
     `;
 
     const categorySelect = document.getElementById('admin-api-key-category');
@@ -441,13 +635,22 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
     document.getElementById('admin-api-key-category')?.addEventListener('change', applyCategoryDefaults);
     document.getElementById('admin-api-key-generate-btn')?.addEventListener('click', createKey);
     document.getElementById('admin-api-key-refresh-btn')?.addEventListener('click', refreshKeys);
+    document.getElementById('admin-supervisor-key-issue-btn')?.addEventListener('click', issueSupervisorSessionKey);
+    document.getElementById('admin-supervisor-key-refresh-btn')?.addEventListener('click', refreshSupervisorSessionKeys);
     card.addEventListener('click', (event) => {
-      const button = event.target.closest('.admin-api-key-revoke');
-      if (!button) return;
-      revokeKey(button.dataset.keyId);
+      const button = event.target.closest('.admin-supervisor-key-revoke');
+      if (button) {
+        revokeSupervisorSessionKey(button.dataset.sessionKeyId);
+        return;
+      }
+
+      const apiButton = event.target.closest('.admin-api-key-revoke');
+      if (!apiButton) return;
+      revokeKey(apiButton.dataset.keyId);
     });
 
     refreshKeys();
+    refreshSupervisorSessionKeys();
   }
 
   if (document.readyState === 'loading') {

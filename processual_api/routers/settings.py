@@ -45,6 +45,11 @@ from ..supervision_rbac import (
     OWNER_SUPERVISOR,
     require_supervision_scope,
 )
+from ..supervisor_session_keys import (
+    issue_supervisor_session_key,
+    list_supervisor_session_keys,
+    revoke_supervisor_session_key,
+)
 
 try:
     from processual_kernel.security.crypto import decrypt_aes256_gcm, encrypt_aes256_gcm
@@ -2456,3 +2461,156 @@ async def get_usage_summary(current_user: dict = Depends(get_current_user)):
         api_key_id=api_key_filter,
         latest_limit=10,
     )
+
+
+class SupervisorSessionKeyIssueRequest(BaseModel):
+    level: str = Field(..., min_length=1)
+    issued_to: str = Field(..., min_length=1)
+    session_label: str = ""
+    reason: str = ""
+    expires_at: str = ""
+
+
+class SupervisorSessionKeyRevokeRequest(BaseModel):
+    reason: str = ""
+
+
+def _supervisor_session_key_store_path() -> Path:
+    return _DATA_DIR / "supervisor_session_keys.json"
+
+
+def _supervisor_session_key_actor(current_user: dict[str, Any]) -> dict[str, Any]:
+    actor = str(
+        current_user.get("email")
+        or current_user.get("sub")
+        or current_user.get("user_id")
+        or "admin"
+    )
+    return {
+        **current_user,
+        "email": actor,
+        "supervision_level": current_user.get("supervision_level")
+        or OWNER_SUPERVISOR,
+    }
+
+
+def _audit_supervisor_session_key_event(
+    *,
+    current_user: dict[str, Any],
+    action: str,
+    session_key_id: str,
+    result: str,
+    reason: str = "",
+) -> None:
+    append_admin_audit_event(
+        audit_path=_admin_audit_path(),
+        actor=str(
+            current_user.get("email")
+            or current_user.get("sub")
+            or current_user.get("user_id")
+            or "admin"
+        ),
+        actor_level=str(current_user.get("supervision_level") or OWNER_SUPERVISOR),
+        action=action,
+        target_type="supervisor_session_key",
+        target_id=session_key_id,
+        source="admin_api_keys_panel",
+        result=result,
+        reason=reason,
+    )
+
+
+@router.post("/admin/supervisor-session-keys", response_model=dict, status_code=201)
+async def create_admin_supervisor_session_key(
+    payload: SupervisorSessionKeyIssueRequest,
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
+    issuer = _supervisor_session_key_actor(current_user)
+    try:
+        issued = issue_supervisor_session_key(
+            _supervisor_session_key_store_path(),
+            issuer,
+            {
+                "level": payload.level,
+                "issued_to": payload.issued_to,
+                "session_label": payload.session_label,
+                "reason": payload.reason,
+                "expires_at": payload.expires_at,
+            },
+        )
+    except PermissionError as exc:
+        _audit_supervisor_session_key_event(
+            current_user=current_user,
+            action="supervisor_session_key_issue_denied",
+            session_key_id="unknown",
+            result="denied",
+            reason=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Supervisor session key issue denied.",
+        ) from exc
+
+    record = issued["record"]
+    _audit_supervisor_session_key_event(
+        current_user=current_user,
+        action="supervisor_session_key_issued",
+        session_key_id=str(record.get("session_key_id") or "unknown"),
+        result="success",
+        reason=payload.reason,
+    )
+    return {"status": "issued", "raw_key": issued["raw_key"], "record": record}
+
+
+@router.get("/admin/supervisor-session-keys", response_model=dict)
+async def list_admin_supervisor_session_keys(
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
+    actor = _supervisor_session_key_actor(current_user)
+    keys = list_supervisor_session_keys(_supervisor_session_key_store_path(), actor)
+    return {"count": len(keys), "supervisor_session_keys": keys}
+
+
+@router.post(
+    "/admin/supervisor-session-keys/{session_key_id}/revoke",
+    response_model=dict,
+)
+async def revoke_admin_supervisor_session_key(
+    session_key_id: str,
+    payload: SupervisorSessionKeyRevokeRequest,
+    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+):
+    actor = _supervisor_session_key_actor(current_user)
+    try:
+        record = revoke_supervisor_session_key(
+            _supervisor_session_key_store_path(),
+            actor,
+            session_key_id,
+            reason=payload.reason,
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supervisor session key not found.",
+        ) from exc
+    except PermissionError as exc:
+        _audit_supervisor_session_key_event(
+            current_user=current_user,
+            action="supervisor_session_key_revoke_denied",
+            session_key_id=session_key_id,
+            result="denied",
+            reason=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Supervisor session key revoke denied.",
+        ) from exc
+
+    _audit_supervisor_session_key_event(
+        current_user=current_user,
+        action="supervisor_session_key_revoked",
+        session_key_id=session_key_id,
+        result="success",
+        reason=payload.reason,
+    )
+    return {"status": "revoked", "record": record}
