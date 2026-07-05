@@ -137,6 +137,169 @@
     document.head.appendChild(style);
   }
 
+  const CLIENTS_STATUS_REVIEW_SCOPE = 'admin:clients:status_review';
+  const CLIENTS_STATUS_DECIDE_SCOPE = 'admin:clients:status_decide';
+  const CLIENTS_DRAFT_SCOPE = 'admin:clients:draft';
+  const CLIENTS_RESPOND_SCOPE = 'admin:clients:respond';
+
+  const ADMIN_SUPERVISOR_SCOPES = {
+    owner_supervisor: ['*'],
+    operations_supervisor: [
+      CLIENTS_STATUS_REVIEW_SCOPE,
+      CLIENTS_STATUS_DECIDE_SCOPE,
+      CLIENTS_DRAFT_SCOPE,
+      CLIENTS_RESPOND_SCOPE,
+    ],
+    review_supervisor: [CLIENTS_STATUS_REVIEW_SCOPE, CLIENTS_DRAFT_SCOPE],
+  };
+
+  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
+    'pmk_supervisor_session_key',
+    'admin_supervisor_session_key',
+    'supervisor_session_key',
+    'pmk_sup_session_key',
+  ];
+
+  const adminSupervisorSessionState = {
+    loaded: false,
+    user: null,
+    level: '',
+    scopes: [],
+    sessionKeyId: '',
+    validated: false,
+  };
+
+  function readStorageValue(keys) {
+    for (const key of keys) {
+      try {
+        const localValue = localStorage.getItem(key);
+        if (localValue) return localValue;
+      } catch {}
+
+      try {
+        const sessionValue = sessionStorage.getItem(key);
+        if (sessionValue) return sessionValue;
+      } catch {}
+    }
+
+    return '';
+  }
+
+  function getAdminSupervisorSessionKey() {
+    return readStorageValue(SUPERVISOR_SESSION_KEY_STORAGE_KEYS);
+  }
+
+  function normalizeScopeList(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((scope) => String(scope || '').trim())
+      .filter(Boolean);
+  }
+
+  function inferAdminSupervisorScopes(level, user) {
+    const explicit = normalizeScopeList(user?.supervision_scopes);
+    if (explicit.length) return explicit;
+
+    const normalLevel = String(level || '').trim().toLowerCase();
+    const mapped = ADMIN_SUPERVISOR_SCOPES[normalLevel] || [];
+    return mapped.slice();
+  }
+
+  function setAdminSupervisorSessionState(user) {
+    const level = String(user?.supervision_level || '').trim().toLowerCase();
+    adminSupervisorSessionState.loaded = true;
+    adminSupervisorSessionState.user = user || null;
+    adminSupervisorSessionState.level = level;
+    adminSupervisorSessionState.scopes = inferAdminSupervisorScopes(level, user || {});
+    adminSupervisorSessionState.sessionKeyId = String(
+      user?.session_key_id || user?.supervisor_session_key_id || ''
+    ).trim();
+    adminSupervisorSessionState.validated = Boolean(
+      user?.supervisor_session_validated || adminSupervisorSessionState.sessionKeyId
+    );
+    renderAdminSupervisorSessionSummary();
+  }
+
+  function supervisorSessionLabel() {
+    if (!adminSupervisorSessionState.loaded) return 'checking';
+    if (adminSupervisorSessionState.validated) return 'validated';
+    if (adminSupervisorSessionState.level) return 'legacy-compatible';
+    return 'legacy admin fallback';
+  }
+
+  function renderAdminSupervisorSessionSummary() {
+    const status = byId('admin-supervisor-session-status');
+    const level = byId('admin-supervisor-session-level');
+    const scopes = byId('admin-supervisor-session-scopes');
+
+    if (status) {
+      status.textContent = 'Supervisor session: ' + supervisorSessionLabel();
+    }
+    if (level) {
+      level.textContent =
+        'Level: ' + (adminSupervisorSessionState.level || 'owner-compatible legacy admin');
+    }
+    if (scopes) {
+      const listed = adminSupervisorSessionState.scopes.length
+        ? adminSupervisorSessionState.scopes.join(', ')
+        : 'backend fallback only';
+      scopes.textContent = 'Scopes: ' + listed;
+    }
+  }
+
+  async function fetchAdminSupervisorSessionState() {
+    try {
+      const data = await request('/auth/me');
+      setAdminSupervisorSessionState(data || {});
+      return data;
+    } catch (error) {
+      adminSupervisorSessionState.loaded = true;
+      renderAdminSupervisorSessionSummary();
+      return null;
+    }
+  }
+
+  function canAdminSupervisorUse(requiredScope) {
+    const scope = String(requiredScope || '').trim();
+    if (!scope) return true;
+
+    const scopes = adminSupervisorSessionState.scopes || [];
+    if (scopes.includes('*')) return true;
+    if (scopes.includes(scope)) return true;
+
+    const level = adminSupervisorSessionState.level;
+    const mapped = ADMIN_SUPERVISOR_SCOPES[level] || [];
+    return mapped.includes('*') || mapped.includes(scope);
+  }
+
+  function applyAdminSupervisorPermission(button, requiredScope, reason) {
+    if (!button) return;
+
+    const scope = String(requiredScope || '').trim();
+    if (!scope) return;
+
+    button.setAttribute('data-required-scope', scope);
+
+    if (canAdminSupervisorUse(scope)) {
+      button.removeAttribute('data-disabled-reason');
+      if (button.dataset.rbacDisabled === 'true') {
+        button.disabled = false;
+        delete button.dataset.rbacDisabled;
+      }
+      if (button.title && button.title.includes('Requires supervisor scope')) {
+        button.removeAttribute('title');
+      }
+      return;
+    }
+
+    const disabledReason =
+      reason || 'Requires supervisor scope: ' + scope;
+    button.disabled = true;
+    button.dataset.rbacDisabled = 'true';
+    button.setAttribute('data-disabled-reason', disabledReason);
+    button.title = disabledReason;
+  }
+
   function authHeaders(extra) {
     const auth = window.PMK_ADMIN_AUTH;
     if (auth && typeof auth.headers === 'function') {
@@ -151,8 +314,13 @@
       sessionStorage.getItem('auth_token') ||
       sessionStorage.getItem('admin_token');
 
+    const supervisorSessionKey = getAdminSupervisorSessionKey();
+
     return {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(supervisorSessionKey
+        ? { 'X-Supervisor-Session-Key': supervisorSessionKey }
+        : {}),
       ...(extra || {}),
     };
   }
@@ -408,6 +576,15 @@
       button.dataset.requestId = requestId;
       button.dataset.nextStatus = nextStatus;
       button.textContent = label;
+      const requiredScope =
+        nextStatus === 'reviewed'
+          ? CLIENTS_STATUS_REVIEW_SCOPE
+          : CLIENTS_STATUS_DECIDE_SCOPE;
+      applyAdminSupervisorPermission(
+        button,
+        requiredScope,
+        'Requires supervisor scope: ' + requiredScope
+      );
       actions.appendChild(button);
     });
 
@@ -548,6 +725,7 @@
       'secondary-btn admin-client-request-response-draft-action admin-client-request-response-draft-generate';
     generate.type = 'button';
     generate.textContent = isLatestDraftSent ? 'Generate new response' : 'Generate Draft';
+    applyAdminSupervisorPermission(generate, CLIENTS_DRAFT_SCOPE, 'Requires supervisor scope: ' + CLIENTS_DRAFT_SCOPE);
     generate.addEventListener('click', () => {
       generateAdminClientRequestResponseDraft(requestId);
     });
@@ -559,6 +737,7 @@
       'primary-btn admin-client-request-response-draft-action admin-client-request-response-draft-save';
     save.type = 'button';
     save.textContent = 'Save Draft';
+    applyAdminSupervisorPermission(save, CLIENTS_DRAFT_SCOPE, 'Requires supervisor scope: ' + CLIENTS_DRAFT_SCOPE);
     save.addEventListener('click', () => {
       saveAdminClientRequestResponseDraft(requestId);
     });
@@ -574,6 +753,7 @@
     if (isLatestDraftSent) {
       send.title = 'This draft was already sent. Generate new response before sending again.';
     }
+    applyAdminSupervisorPermission(send, CLIENTS_RESPOND_SCOPE, 'Requires supervisor scope: ' + CLIENTS_RESPOND_SCOPE);
     send.addEventListener('click', () => {
       sendAdminClientRequestSupervisorResponse(requestId);
     });
@@ -956,6 +1136,18 @@
       }, delay);
     });
   }
+
+  fetchAdminSupervisorSessionState();
+
+  window.PMK_ADMIN_CLIENT_REQUESTS_RBAC_UI = {
+    ADMIN_SUPERVISOR_SCOPES,
+    SUPERVISOR_SESSION_KEY_STORAGE_KEYS,
+    getAdminSupervisorSessionKey,
+    canAdminSupervisorUse,
+    applyAdminSupervisorPermission,
+    renderAdminSupervisorSessionSummary,
+    fetchAdminSupervisorSessionState,
+  };
 
   window.PMK_ADMIN_CLIENT_REQUESTS = {
     bindAdminClientRequests,
