@@ -14,7 +14,7 @@ def test_admin_loads_program_supervision_readiness_summary() -> None:
     assert "Program &amp; Supervision Readiness" in source
     assert "program runtime and supervision readiness" in source
     assert "admin_supervisor_readiness_summary.js" in source
-    assert "adminsuperreadiness01" in source
+    assert "adminsuperreadiness02" in source
 
 
 def test_supervisor_home_console_links_readiness_summary() -> None:
@@ -93,5 +93,15 @@ def test_readiness_summary_passes_admin_auth_headers_to_checks() -> None:
 
     assert "function readinessFetch" in source
     assert "PMK_ADMIN_AUTH.headers" in source
-    assert "PMK_ADMIN_AUTH.fetch(path, options)" in source
+    assert "return fetch(path, options)" in source
     assert 'credentials: "include"' in source
+
+def test_readiness_summary_does_not_use_bridged_fetch_for_readiness_checks() -> None:
+    source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "PMK_ADMIN_AUTH.headers" in source
+    assert "return fetch(path, options)" in source
+    assert "PMK_ADMIN_AUTH.fetch" not in source
+    assert "bridgedFetch" not in source
