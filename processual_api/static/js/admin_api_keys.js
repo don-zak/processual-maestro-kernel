@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const PAGE_ID = 'page-admin-api-keys';
   const CARD_ID = 'admin-api-key-lifecycle-card';
   const SUPERVISOR_SESSION_KEY_ENDPOINT = '/settings/admin/supervisor-session-keys';
+  const SUPERVISOR_SESSION_KEY_STORAGE_KEY = 'pmk_supervisor_session_key';
 
   const KEY_CATEGORIES = [
     ['client_api', 'Client API - normal client access'],
@@ -293,6 +294,70 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  function updateSupervisorSessionCardAfterUse(message) {
+    const status = document.getElementById('admin-supervisor-session-status');
+    const level = document.getElementById('admin-supervisor-session-level');
+    const scopes = document.getElementById('admin-supervisor-session-scopes');
+
+    if (status) {
+      status.textContent = message || 'Supervisor session: browser key updated';
+    }
+    if (level) {
+      level.textContent = 'Level: pending validation on next authenticated request';
+    }
+    if (scopes) {
+      scopes.textContent = 'Scopes: validated by backend through X-Supervisor-Session-Key';
+    }
+  }
+
+  function dispatchSupervisorSessionKeyUpdated() {
+    try {
+      window.dispatchEvent(new CustomEvent('pmk-supervisor-session-key-updated'));
+    } catch {
+      // CustomEvent may be unavailable in very old browsers.
+    }
+  }
+
+  function storeSupervisorSessionKeyForAdmin(raw) {
+    if (!raw) return;
+
+    try {
+      sessionStorage.setItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY, raw);
+    } catch {
+      // Session storage may be unavailable in restricted browser contexts.
+    }
+
+    updateSupervisorSessionCardAfterUse(
+      'Supervisor session: key stored for this browser session'
+    );
+    dispatchSupervisorSessionKeyUpdated();
+
+    const target = document.getElementById('admin-supervisor-key-use-status');
+    if (target) {
+      target.textContent = 'Supervisor key stored in this browser session.';
+    }
+  }
+
+  function clearSupervisorSessionKeyForAdmin() {
+    try {
+      sessionStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY);
+    } catch {}
+
+    try {
+      localStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY);
+    } catch {}
+
+    updateSupervisorSessionCardAfterUse(
+      'Supervisor session: no browser key stored'
+    );
+    dispatchSupervisorSessionKeyUpdated();
+
+    const target = document.getElementById('admin-supervisor-key-use-status');
+    if (target) {
+      target.textContent = 'Supervisor key cleared from this browser session.';
+    }
+  }
+
   function renderOneTimeSupervisorSessionKey(result) {
     const target = document.getElementById('admin-supervisor-key-create-result');
     if (!target) return;
@@ -306,6 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="mono-block" style="white-space:pre-wrap">X-Supervisor-Session-Key: ${escapeHtml(raw)}</div>
       <button id="admin-supervisor-key-copy-created" class="btn secondary" type="button">Copy Supervisor Key</button>
+      <button id="admin-supervisor-key-use-created" class="btn primary" type="button">Use this key for this browser session</button>
+      <div id="admin-supervisor-key-use-status" class="admin-note"></div>
       <div class="admin-note">
         Safe record: ${escapeHtml(record.session_key_id || '')} /
         ${escapeHtml(record.level || '')} / ${escapeHtml(record.issued_to || '')}
@@ -318,6 +385,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch {
         // Clipboard may be unavailable in some browsers.
       }
+    });
+
+    document.getElementById('admin-supervisor-key-use-created')?.addEventListener('click', () => {
+      storeSupervisorSessionKeyForAdmin(raw);
     });
   }
 
@@ -441,6 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="admin-actions">
           <button id="admin-supervisor-key-issue-btn" class="btn primary" type="button">Issue Supervisor Key</button>
           <button id="admin-supervisor-key-refresh-btn" class="btn secondary" type="button">Refresh Supervisor Keys</button>
+          <button id="admin-supervisor-key-clear-session" class="btn secondary" type="button">Clear supervisor session key</button>
         </div>
 
         <div id="admin-supervisor-key-create-result"></div>
@@ -637,6 +709,8 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
     document.getElementById('admin-api-key-refresh-btn')?.addEventListener('click', refreshKeys);
     document.getElementById('admin-supervisor-key-issue-btn')?.addEventListener('click', issueSupervisorSessionKey);
     document.getElementById('admin-supervisor-key-refresh-btn')?.addEventListener('click', refreshSupervisorSessionKeys);
+    document.getElementById('admin-supervisor-key-clear-session')?.addEventListener('click', clearSupervisorSessionKeyForAdmin);
+    document.getElementById('admin-supervisor-session-clear-key')?.addEventListener('click', clearSupervisorSessionKeyForAdmin);
     card.addEventListener('click', (event) => {
       const button = event.target.closest('.admin-supervisor-key-revoke');
       if (button) {

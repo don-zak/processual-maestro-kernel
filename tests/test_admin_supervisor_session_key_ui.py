@@ -15,7 +15,7 @@ def _script() -> str:
 def test_admin_api_keys_cache_bumped_for_supervisor_key_ui() -> None:
     html = _html()
 
-    assert "admin_api_keys.js?v=adminsuperkeysui01" in html
+    assert "admin_api_keys.js?v=adminsuperkeysux02" in html
 
 
 def test_supervisor_session_key_panel_is_added_to_api_keys_page() -> None:
@@ -101,6 +101,32 @@ def test_supervisor_session_key_ui_wires_controls_and_revoke_buttons() -> None:
         "addEventListener('click', refreshSupervisorSessionKeys)",
         "admin-supervisor-key-revoke",
         "button.dataset.sessionKeyId",
+    ]
+
+    for marker in required:
+        assert marker in script
+
+
+
+def test_supervisor_session_key_ui_can_store_and_clear_browser_session_key() -> None:
+    html = _html()
+    script = _script()
+
+    assert "admin-supervisor-session-clear-key" in html
+
+    required = [
+        "SUPERVISOR_SESSION_KEY_STORAGE_KEY",
+        "pmk_supervisor_session_key",
+        "storeSupervisorSessionKeyForAdmin",
+        "sessionStorage.setItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY, raw)",
+        "clearSupervisorSessionKeyForAdmin",
+        "sessionStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY)",
+        "admin-supervisor-key-use-created",
+        "Use this key for this browser session",
+        "admin-supervisor-key-clear-session",
+        "Clear supervisor session key",
+        "updateSupervisorSessionCardAfterUse",
+        "pmk-supervisor-session-key-updated",
     ]
 
     for marker in required:
