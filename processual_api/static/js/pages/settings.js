@@ -538,9 +538,19 @@ PAGES.settings = (() => {
 
 
   function clientRequestSupervisorResponses(request) {
-    return Array.isArray(request?.supervisor_responses)
+    const responses = Array.isArray(request?.supervisor_responses)
       ? request.supervisor_responses
       : [];
+    const seen = new Set();
+    return responses.filter((response) => {
+      const key = response?.draft_id ||
+        response?.response_id ||
+        [response?.sent_at || "", response?.body || ""].join("|");
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   function renderClientRequestSupervisorResponses(request) {

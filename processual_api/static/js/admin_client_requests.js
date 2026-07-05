@@ -455,11 +455,66 @@
     }
   }
 
+  function adminClientRequestSupervisorResponses(detail) {
+    return Array.isArray(detail?.supervisor_responses)
+      ? detail.supervisor_responses
+      : [];
+  }
+
+  function latestAdminClientRequestSupervisorResponse(detail) {
+    const responses = adminClientRequestSupervisorResponses(detail);
+    return responses.length ? responses[responses.length - 1] : null;
+  }
+
+  function adminClientRequestSupervisorResponseForDraft(detail, draftId) {
+    const safeDraftId = text(draftId || '');
+    if (!safeDraftId) return null;
+    const responses = adminClientRequestSupervisorResponses(detail);
+    for (let index = responses.length - 1; index >= 0; index -= 1) {
+      const response = responses[index];
+      if (text(response?.draft_id || '') === safeDraftId) {
+        return response;
+      }
+    }
+    return null;
+  }
+
+  function renderAdminClientRequestSentResponseSummary(detail, parent) {
+    if (!parent) return;
+
+    const responses = adminClientRequestSupervisorResponses(detail);
+    const latestResponse = latestAdminClientRequestSupervisorResponse(detail);
+
+    const summary = document.createElement('pre');
+    summary.id = 'admin-client-request-supervisor-response-summary';
+    summary.className = 'admin-client-request-supervisor-response-summary';
+
+    if (!responses.length) {
+      summary.textContent = 'Sent responses: 0';
+    } else {
+      summary.textContent = [
+        'Sent responses: ' + String(responses.length),
+        'Last sent response: ' +
+          text(latestResponse?.sent_at || latestResponse?.response_id || ''),
+        text(latestResponse?.body || ''),
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
+
+    parent.appendChild(summary);
+  }
+
   function renderAdminClientRequestResponseDraftPanel(detail, parent) {
     const requestId = detail?.request_id || detail?.short_id || '';
     if (!parent || !requestId) return;
 
     const latestDraft = latestSupervisorResponseDraft(detail);
+    const sentDraftResponse = adminClientRequestSupervisorResponseForDraft(
+      detail,
+      latestDraft?.draft_id || ''
+    );
+    const isLatestDraftSent = Boolean(sentDraftResponse);
     const section = document.createElement('section');
     section.id = 'admin-client-request-response-draft';
     section.className = 'admin-client-request-response-draft';
@@ -470,8 +525,9 @@
 
     const help = document.createElement('p');
     help.className = 'muted';
-    help.textContent =
-      'Draft only. Review and save here; sending is reserved for a later workflow.';
+    help.textContent = isLatestDraftSent
+      ? 'This draft was already sent. Generate new response to continue safely.'
+      : 'Draft, review, save, then send a supervisor response to the client timeline.';
     section.appendChild(help);
 
     const textarea = document.createElement('textarea');
@@ -491,7 +547,7 @@
     generate.className =
       'secondary-btn admin-client-request-response-draft-action admin-client-request-response-draft-generate';
     generate.type = 'button';
-    generate.textContent = 'Generate Draft';
+    generate.textContent = isLatestDraftSent ? 'Generate new response' : 'Generate Draft';
     generate.addEventListener('click', () => {
       generateAdminClientRequestResponseDraft(requestId);
     });
@@ -514,6 +570,10 @@
       'primary-btn admin-client-request-response-draft-action admin-client-request-response-draft-send';
     send.type = 'button';
     send.textContent = 'Send Response';
+    send.disabled = isLatestDraftSent;
+    if (isLatestDraftSent) {
+      send.title = 'This draft was already sent. Generate new response before sending again.';
+    }
     send.addEventListener('click', () => {
       sendAdminClientRequestSupervisorResponse(requestId);
     });
@@ -535,10 +595,13 @@
     const status = document.createElement('pre');
     status.id = 'admin-client-request-response-draft-status';
     status.className = 'admin-client-request-response-draft-status';
-    status.textContent = latestDraft
-      ? 'Draft saved: ' + text(latestDraft.updated_at || latestDraft.created_at || '')
-      : 'No saved draft yet.';
+    status.textContent = isLatestDraftSent
+      ? 'Already sent: ' + text(sentDraftResponse?.sent_at || sentDraftResponse?.response_id || '')
+      : latestDraft
+        ? 'Draft saved: ' + text(latestDraft.updated_at || latestDraft.created_at || '')
+        : 'No saved draft yet.';
     section.appendChild(status);
+    renderAdminClientRequestSentResponseSummary(detail, section);
 
     parent.appendChild(section);
   }
@@ -613,9 +676,15 @@
       });
       renderAdminClientRequestDetail(data?.request || {});
       await loadAdminClientRequests(true);
-      setAdminClientRequestResponseDraftStatus(
-        'supervisor_response_sent: Sent response for request ' + text(requestId) + '.'
-      );
+      if (data?.status === 'already_sent') {
+        setAdminClientRequestResponseDraftStatus(
+          'already_sent: Response already sent for request ' + text(requestId) + '.'
+        );
+      } else {
+        setAdminClientRequestResponseDraftStatus(
+          'supervisor_response_sent: Sent response for request ' + text(requestId) + '.'
+        );
+      }
       return data;
     } catch (error) {
       setAdminClientRequestResponseDraftStatus(

@@ -881,6 +881,28 @@ def _admin_find_response_draft(entry: dict, draft_id: str) -> dict | None:
     return None
 
 
+def _admin_find_supervisor_response_for_draft(
+    entry: dict,
+    draft_id: str,
+) -> dict | None:
+    """Return an already sent supervisor response for a response draft."""
+    safe_draft_id = str(draft_id or "").strip()
+    if not safe_draft_id:
+        return None
+
+    responses = entry.get("supervisor_responses") or []
+    if not isinstance(responses, list):
+        return None
+
+    for response in reversed(responses):
+        if not isinstance(response, dict):
+            continue
+        if str(response.get("draft_id") or "").strip() == safe_draft_id:
+            return response
+
+    return None
+
+
 def _admin_safe_supervisor_response_record(response: dict) -> dict:
     return {
         "response_id": str(response.get("response_id") or ""),
@@ -1256,6 +1278,20 @@ async def send_admin_client_request_supervisor_response(
             draft = _admin_find_response_draft(entry, draft_id)
             if not body and draft:
                 body = _admin_safe_supervisor_response_text(draft.get("body"))
+
+            existing_response = _admin_find_supervisor_response_for_draft(
+                entry,
+                draft_id,
+            )
+            if existing_response is not None:
+                safe_response = _admin_safe_supervisor_response_record(existing_response)
+                return {
+                    "ok": True,
+                    "status": "already_sent",
+                    "message": "Supervisor response already sent for this draft.",
+                    "request": _admin_client_request_detail(entry, fallback_user_id),
+                    "response": safe_response,
+                }
 
             if not body:
                 raise HTTPException(

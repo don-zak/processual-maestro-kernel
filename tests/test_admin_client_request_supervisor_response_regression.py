@@ -169,6 +169,58 @@ def test_admin_supervisor_response_sends_latest_draft_to_client_timeline(tmp_pat
     )
 
 
+def test_admin_supervisor_response_cannot_send_same_draft_twice(
+    tmp_path,
+    monkeypatch,
+):
+    path = _write_supervisor_response_file(tmp_path)
+    _patch_supervisor_response_files(monkeypatch, path)
+
+    current_user = {
+        "role": "admin",
+        "session_type": "ui_admin",
+        "email": "admin@example.test",
+    }
+
+    first = asyncio.run(
+        settings_routes.send_admin_client_request_supervisor_response(
+            "creq_supervisor_response",
+            {"draft_id": "rdraft_safe"},
+            current_user=current_user,
+        )
+    )
+    second = asyncio.run(
+        settings_routes.send_admin_client_request_supervisor_response(
+            "creq_supervisor_response",
+            {"draft_id": "rdraft_safe"},
+            current_user=current_user,
+        )
+    )
+
+    assert first["status"] == "sent"
+    assert second["status"] == "already_sent"
+    assert second["response"]["event"] == "supervisor_response_sent"
+    assert second["response"]["draft_id"] == "rdraft_safe"
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    entry = raw["client_requests"][0]
+
+    responses_for_draft = [
+        response
+        for response in entry.get("supervisor_responses", [])
+        if response.get("draft_id") == "rdraft_safe"
+    ]
+    assert len(responses_for_draft) == 1
+
+    sent_events = [
+        event
+        for event in entry.get("status_history", [])
+        if event.get("event") == "supervisor_response_sent"
+    ]
+    assert len(sent_events) == 1
+    assert entry["supervisor_response_drafts"][0]["state"] == "sent"
+
+
 def test_admin_supervisor_response_manual_body_is_redacted_before_persisting(
     tmp_path,
     monkeypatch,
@@ -234,7 +286,7 @@ def test_client_request_summary_includes_supervisor_responses(monkeypatch):
 def test_client_settings_cache_is_bumped_for_supervisor_response_timeline():
     source = _read(INDEX_HTML)
 
-    assert "pages/settings.js?v=settingsrequests02brefresh" in source
+    assert "pages/settings.js?v=settingsrequests02cdedupe" in source
 
 def test_client_settings_refresh_loads_client_request_timeline():
     source = _read(CLIENT_SETTINGS_JS)
