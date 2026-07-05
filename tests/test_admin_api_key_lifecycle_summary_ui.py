@@ -48,3 +48,11 @@ def test_api_key_lifecycle_summary_preserves_secret_boundary() -> None:
     assert "key_hash" not in source
     assert "provider_secret" not in source
     assert "encrypted_key" not in source
+
+
+def test_api_key_lifecycle_summary_has_static_placeholder() -> None:
+    source = read_text("processual_api/static/admin.html")
+
+    assert 'id="admin-api-key-lifecycle-summary"' in source
+    assert "API Key Lifecycle Summary" in source
+    assert "Loading API key lifecycle summary" in source

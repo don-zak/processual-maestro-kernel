@@ -49,3 +49,11 @@ def test_supervisor_stats_are_visibility_only_not_permissions() -> None:
     assert "key_hash" not in source
     assert "provider_secret" not in source
     assert "encrypted_key" not in source
+
+
+def test_admin_supervisor_overview_has_static_placeholder() -> None:
+    source = read_text("processual_api/static/admin.html")
+
+    assert 'id="admin-supervisor-overview-counters"' in source
+    assert "Supervisor Overview" in source
+    assert "Loading supervisor overview" in source

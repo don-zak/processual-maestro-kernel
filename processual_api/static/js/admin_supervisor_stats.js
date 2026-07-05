@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+(function () {
   const ENDPOINT = '/settings/admin/client-requests';
   const HOST_ID = 'admin-supervisor-overview-counters';
   const STATUS_KEYS = ['pending', 'reviewed', 'approved', 'rejected', 'completed'];
@@ -224,4 +224,5 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('pmk-supervisor-session-key-updated', () => {
     refreshSupervisorOverviewCounters();
   });
-});
+
+})();

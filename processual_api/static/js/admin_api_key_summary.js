@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+(function () {
   const API_KEYS_ENDPOINT = '/settings/api-keys';
   const SUPERVISOR_KEYS_ENDPOINT = '/settings/admin/supervisor-session-keys';
   const HOST_ID = 'admin-api-key-lifecycle-summary';
