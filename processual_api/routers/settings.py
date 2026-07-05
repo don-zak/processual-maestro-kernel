@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from processual_api.admin_audit_log import append_admin_audit_event
+from processual_api.admin_audit_log import append_admin_audit_event, read_admin_audit_events
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..billing.usage_pricing import (
@@ -2518,6 +2518,68 @@ def _audit_supervisor_session_key_event(
         result=result,
         reason=reason,
     )
+
+
+def _require_admin_audit_read(current_user: dict) -> None:
+    role = str(
+        current_user.get("role")
+        or current_user.get("user_role")
+        or current_user.get("account_role")
+        or ""
+    ).strip()
+    raw_scopes = current_user.get("scopes") or current_user.get("permissions") or []
+    if isinstance(raw_scopes, str):
+        raw_scopes = [raw_scopes]
+    scopes = {str(scope).strip() for scope in raw_scopes if str(scope).strip()}
+
+    allowed_roles = {
+        "admin",
+        "administrator",
+        "owner_admin",
+        "ops_admin",
+        "security_admin",
+    }
+    allowed_scopes = {
+        "*",
+        "admin",
+        "admin:*",
+        "admin:read",
+        "admin:audit:read",
+        "admin:settings",
+    }
+
+    if role in allowed_roles or scopes.intersection(allowed_scopes):
+        return
+
+    raise HTTPException(
+        status_code=403,
+        detail="Admin audit events require admin audit read access.",
+    )
+
+
+def _safe_admin_audit_limit(limit: int | None) -> int:
+    if limit is None:
+        return 50
+    return max(1, min(int(limit), 100))
+
+
+@router.get("/admin/audit-events", response_model=dict)
+async def list_admin_audit_events(
+    limit: int | None = 50,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_audit_read(current_user)
+    safe_limit = _safe_admin_audit_limit(limit)
+    events = read_admin_audit_events(_admin_audit_path(), limit=safe_limit)
+    events.reverse()
+    return {
+        "status": "ready",
+        "audit_events": events,
+        "latest_count": len(events),
+        "limit": safe_limit,
+        "message": "Recent admin audit events are ready.",
+    }
+
 
 
 @router.post("/admin/supervisor-session-keys", response_model=dict, status_code=201)
