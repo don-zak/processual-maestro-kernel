@@ -17,6 +17,10 @@
       optional: true,
     },
     {
+      label: "Governor",
+      path: "/cgt/govern/status",
+    },
+    {
       group: 'supervision readiness',
       label: 'Admin session identity',
       path: '/auth/me',
@@ -39,6 +43,14 @@
       label: 'API key lifecycle',
       path: '/settings/api-keys',
       auth: true,
+    },
+    {
+      label: "Adapters - Adapter Status",
+      path: "/adapters/status",
+    },
+    {
+      label: "Adapters - Adapter Readiness",
+      path: "/adapters/readiness",
     },
   ];
 

@@ -60,3 +60,28 @@ def test_readiness_summary_preserves_secret_boundaries() -> None:
     assert "key_hash" not in source
     assert "provider_secret" not in source
     assert "encrypted_key" not in source
+
+
+def test_admin_supervisor_readiness_summary_includes_governor_and_adapters():
+    source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Governor" in source
+    assert "/cgt/govern/status" in source
+    assert "Adapters" in source
+    assert "Adapter Status" in source
+    assert "/adapters/status" in source
+    assert "Adapter Readiness" in source
+    assert "/adapters/readiness" in source
+
+
+def test_admin_supervisor_readiness_summary_does_not_render_secret_fields():
+    source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "raw_key" not in source
+    assert "key_hash" not in source
+    assert "provider_secret" not in source
+    assert "encrypted_key" not in source
