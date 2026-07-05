@@ -259,6 +259,28 @@
     }
   }
 
+  function refreshAdminSupervisorPermissionButtons() {
+    document.querySelectorAll('[data-supervisor-scope]').forEach((button) => {
+      const scope = button.dataset.supervisorScope || '';
+      const reason =
+        button.dataset.supervisorDisabledReason ||
+        button.getAttribute('data-disabled-reason') ||
+        '';
+      applyAdminSupervisorPermission(button, scope, reason);
+    });
+  }
+
+  async function refreshAdminSupervisorSessionState() {
+    adminSupervisorSessionState.loaded = false;
+    renderAdminSupervisorSessionSummary();
+    await fetchAdminSupervisorSessionState();
+    refreshAdminSupervisorPermissionButtons();
+  }
+
+  window.addEventListener('pmk-supervisor-session-key-updated', () => {
+    refreshAdminSupervisorSessionState();
+  });
+
   function canAdminSupervisorUse(requiredScope) {
     const scope = String(requiredScope || '').trim();
     if (!scope) return true;
@@ -277,6 +299,11 @@
 
     const scope = String(requiredScope || '').trim();
     if (!scope) return;
+
+    button.dataset.supervisorScope = scope;
+    if (reason) {
+      button.dataset.supervisorDisabledReason = reason;
+    }
 
     button.setAttribute('data-required-scope', scope);
 

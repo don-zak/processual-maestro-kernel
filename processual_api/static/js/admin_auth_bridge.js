@@ -168,10 +168,34 @@
     return '';
   }
 
+  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
+    'pmk_supervisor_session_key',
+    'admin_supervisor_session_key',
+    'supervisor_session_key',
+    'pmk_sup_session_key',
+  ];
+
+  function supervisorSessionKey() {
+    for (const key of SUPERVISOR_SESSION_KEY_STORAGE_KEYS) {
+      try {
+        const sessionValue = sessionStorage.getItem(key);
+        if (sessionValue) return sessionValue;
+      } catch (error) {}
+
+      try {
+        const localValue = localStorage.getItem(key);
+        if (localValue) return localValue;
+      } catch (error) {}
+    }
+
+    return '';
+  }
+
   function headers(existingHeaders) {
     const result = new Headers(existingHeaders || {});
     const foundBearer = bearer();
     const foundApiKey = apiKey();
+    const foundSupervisorSessionKey = supervisorSessionKey();
 
     if (!result.has('Content-Type')) {
       result.set('Content-Type', 'application/json');
@@ -185,6 +209,10 @@
       result.set('X-API-Key', foundApiKey);
     }
 
+    if (foundSupervisorSessionKey && !result.has('X-Supervisor-Session-Key')) {
+      result.set('X-Supervisor-Session-Key', foundSupervisorSessionKey);
+    }
+
     return result;
   }
 
@@ -193,6 +221,7 @@
       bearerFound: Boolean(bearer()),
       bearerKey: tokenKey(),
       apiKeyFound: Boolean(apiKey()),
+      supervisorSessionKeyFound: Boolean(supervisorSessionKey()),
       localStorageKeys: Object.keys(localStorage).filter((key) =>
         /token|auth|jwt|session|maestro|processual|pmk/i.test(key)
       ),
@@ -251,6 +280,7 @@
     bearer,
     tokenKey,
     apiKey,
+    supervisorSessionKey,
     headers,
     diagnostic,
     installFetchBridge,
