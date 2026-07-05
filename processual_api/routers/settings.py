@@ -15,6 +15,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from processual_api.admin_audit_log import append_admin_audit_event
+
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..billing.usage_pricing import (
     BILLING_POLICY,
@@ -1072,6 +1074,83 @@ def _admin_request_status_actor(current_user: dict) -> str:
     )
 
 
+
+def _admin_audit_path():
+    return _DATA_DIR / "admin_audit.jsonl"
+
+
+def _admin_audit_actor(current_user: dict) -> str:
+    return str(
+        current_user.get("email")
+        or current_user.get("user_id")
+        or current_user.get("sub")
+        or "admin"
+    )
+
+
+def _admin_audit_actor_level(current_user: dict) -> str:
+    return str(current_user.get("supervision_level") or "owner_supervisor")
+
+
+def _admin_audit_session_key_id(current_user: dict) -> str | None:
+    value = (
+        current_user.get("session_key_id")
+        or current_user.get("supervisor_session_key_id")
+        or current_user.get("supervisor_key_id")
+    )
+    if value is None:
+        return None
+    return str(value)
+
+
+def _admin_audit_request_client_id(
+    entry: dict | None,
+    summary: dict | None,
+    fallback_user_id: str | None,
+) -> str | None:
+    if isinstance(summary, dict):
+        value = summary.get("client_id") or summary.get("user_id")
+        if value:
+            return str(value)
+    if isinstance(entry, dict):
+        value = entry.get("client_id") or entry.get("user_id")
+        if value:
+            return str(value)
+    if fallback_user_id:
+        return str(fallback_user_id)
+    return None
+
+
+def _record_admin_request_audit_event(
+    *,
+    current_user: dict,
+    action: str,
+    target_id: str,
+    result: str,
+    client_id: str | None = None,
+    safe_note: str | None = None,
+    reason: str | None = None,
+    request_path: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    append_admin_audit_event(
+        audit_path=_admin_audit_path(),
+        actor=_admin_audit_actor(current_user),
+        actor_level=_admin_audit_actor_level(current_user),
+        session_key_id=_admin_audit_session_key_id(current_user),
+        action=action,
+        target_type="client_request",
+        target_id=target_id,
+        client_id=client_id,
+        source="admin_clients_panel",
+        result=result,
+        safe_note=safe_note,
+        reason=reason,
+        request_path=request_path,
+        metadata=metadata,
+    )
+
+
 def _append_admin_request_status_history(
     entry: dict,
     *,
@@ -1110,7 +1189,23 @@ async def update_admin_client_request_status(
         raise HTTPException(status_code=404, detail="Client request not found.")
 
     next_status = _normalize_admin_request_status(payload.get("status"))
-    _require_admin_client_request_status_supervision_scope(current_user, next_status)
+    required_scope = (
+        CLIENTS_STATUS_REVIEW_SCOPE
+        if next_status == "reviewed"
+        else CLIENTS_STATUS_DECIDE_SCOPE
+    )
+    try:
+        _require_admin_client_request_status_supervision_scope(current_user, next_status)
+    except HTTPException:
+        _record_admin_request_audit_event(
+            current_user=current_user,
+            action="admin_client_request_status_denied",
+            target_id=requested,
+            result="denied",
+            reason=f"missing_scope: {required_scope}",
+            request_path=f"/settings/admin/client-requests/{requested}/status",
+        )
+        raise
     now = _admin_request_status_now_iso()
     note = _admin_request_status_note(payload)
     actor = _admin_request_status_actor(current_user)
@@ -1156,6 +1251,23 @@ async def update_admin_client_request_status(
                 encoding="utf-8",
             )
 
+            _record_admin_request_audit_event(
+                current_user=current_user,
+                action="admin_client_request_status_updated",
+                target_id=summary["request_id"],
+                client_id=_admin_audit_request_client_id(
+                    entry,
+                    summary,
+                    fallback_user_id,
+                ),
+                result="success",
+                safe_note=f"Client request status updated to {next_status}.",
+                request_path=(
+                    f"/settings/admin/client-requests/{summary['request_id']}/status"
+                ),
+                metadata={"status": next_status},
+            )
+
             return {
                 "status": "updated",
                 "request": _admin_client_request_detail(entry, fallback_user_id),
@@ -1170,9 +1282,23 @@ async def save_admin_client_request_response_draft(
     current_user: dict = Depends(get_current_user),
 ):
     _require_admin_client_requests_write(current_user)
-    _require_admin_supervision_scope(current_user, CLIENTS_DRAFT_SCOPE)
 
     requested = str(request_id or "").strip()
+    try:
+        _require_admin_supervision_scope(current_user, CLIENTS_DRAFT_SCOPE)
+    except HTTPException:
+        _record_admin_request_audit_event(
+            current_user=current_user,
+            action="supervisor_response_draft_denied",
+            target_id=requested,
+            result="denied",
+            reason=f"missing_scope: {CLIENTS_DRAFT_SCOPE}",
+            request_path=(
+                f"/settings/admin/client-requests/{requested}/response-draft"
+            ),
+        )
+        raise
+
     if not requested:
         raise HTTPException(status_code=404, detail="Client request not found.")
 
@@ -1259,6 +1385,27 @@ async def save_admin_client_request_response_draft(
             )
 
             safe_draft = _admin_safe_response_drafts(entry)[-1]
+            _record_admin_request_audit_event(
+                current_user=current_user,
+                action="supervisor_response_draft_saved",
+                target_id=summary["request_id"],
+                client_id=_admin_audit_request_client_id(
+                    entry,
+                    summary,
+                    fallback_user_id,
+                ),
+                result="success",
+                safe_note="Supervisor response draft saved.",
+                request_path=(
+                    f"/settings/admin/client-requests/"
+                    f"{summary['request_id']}/response-draft"
+                ),
+                metadata={
+                    "draft_id": safe_draft.get("draft_id"),
+                    "mode": mode,
+                    "template_id": safe_draft.get("template_id"),
+                },
+            )
             return {
                 "status": "draft_saved",
                 "request": _admin_client_request_detail(entry, fallback_user_id),
@@ -1276,9 +1423,23 @@ async def send_admin_client_request_supervisor_response(
     current_user: dict = Depends(get_current_user),
 ):
     _require_admin_client_requests_write(current_user)
-    _require_admin_supervision_scope(current_user, CLIENTS_RESPOND_SCOPE)
 
     requested = str(request_id or "").strip()
+    try:
+        _require_admin_supervision_scope(current_user, CLIENTS_RESPOND_SCOPE)
+    except HTTPException:
+        _record_admin_request_audit_event(
+            current_user=current_user,
+            action="supervisor_response_denied",
+            target_id=requested,
+            result="denied",
+            reason=f"missing_scope: {CLIENTS_RESPOND_SCOPE}",
+            request_path=(
+                f"/settings/admin/client-requests/{requested}/supervisor-response"
+            ),
+        )
+        raise
+
     if not requested:
         raise HTTPException(status_code=404, detail="Client request not found.")
 
@@ -1325,6 +1486,26 @@ async def send_admin_client_request_supervisor_response(
             )
             if existing_response is not None:
                 safe_response = _admin_safe_supervisor_response_record(existing_response)
+                _record_admin_request_audit_event(
+                    current_user=current_user,
+                    action="supervisor_response_already_sent",
+                    target_id=summary["request_id"],
+                    client_id=_admin_audit_request_client_id(
+                        entry,
+                        summary,
+                        fallback_user_id,
+                    ),
+                    result="already_sent",
+                    safe_note="Supervisor response already sent for this draft.",
+                    request_path=(
+                        f"/settings/admin/client-requests/"
+                        f"{summary['request_id']}/supervisor-response"
+                    ),
+                    metadata={
+                        "draft_id": draft_id,
+                        "response_id": safe_response.get("response_id"),
+                    },
+                )
                 return {
                     "ok": True,
                     "status": "already_sent",
@@ -1377,6 +1558,26 @@ async def send_admin_client_request_supervisor_response(
             )
 
             safe_response = _admin_safe_supervisor_response_record(response)
+            _record_admin_request_audit_event(
+                current_user=current_user,
+                action="supervisor_response_sent",
+                target_id=summary["request_id"],
+                client_id=_admin_audit_request_client_id(
+                    entry,
+                    summary,
+                    fallback_user_id,
+                ),
+                result="success",
+                safe_note="Supervisor response sent to client timeline.",
+                request_path=(
+                    f"/settings/admin/client-requests/"
+                    f"{summary['request_id']}/supervisor-response"
+                ),
+                metadata={
+                    "draft_id": response.get("draft_id"),
+                    "response_id": safe_response.get("response_id"),
+                },
+            )
             return {
                 "status": "sent",
                 "message": "Supervisor response sent to client timeline.",
