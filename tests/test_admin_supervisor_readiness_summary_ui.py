@@ -31,8 +31,8 @@ def test_readiness_summary_script_checks_program_and_supervision_surfaces() -> N
     assert "admin-program-supervision-readiness" in source
     assert "program readiness" in source
     assert "supervision readiness" in source
-    assert "/health" in source
-    assert "/ready" in source
+    assert "path: '/health/live'" in source
+    assert "path: '/health/ready'" in source
     assert "/auth/me" in source
     assert "/settings/admin/client-requests" in source
     assert "/settings/admin/audit-events?limit=3" in source

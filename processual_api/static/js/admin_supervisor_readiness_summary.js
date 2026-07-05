@@ -6,13 +6,13 @@
     {
       group: 'program readiness',
       label: 'Application health',
-      path: '/health',
+      path: '/health/live',
       auth: false,
     },
     {
       group: 'program readiness',
       label: 'Application readiness',
-      path: '/ready',
+      path: '/health/ready',
       auth: false,
       optional: true,
     },
