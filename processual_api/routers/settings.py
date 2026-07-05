@@ -35,6 +35,14 @@ from ..schemas.settings import (
 )
 from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 from ..services.usage_log_store import summarize_usage_logs
+from ..supervision_rbac import (
+    CLIENTS_DRAFT_SCOPE,
+    CLIENTS_RESPOND_SCOPE,
+    CLIENTS_STATUS_DECIDE_SCOPE,
+    CLIENTS_STATUS_REVIEW_SCOPE,
+    OWNER_SUPERVISOR,
+    require_supervision_scope,
+)
 
 try:
     from processual_kernel.security.crypto import decrypt_aes256_gcm, encrypt_aes256_gcm
@@ -1002,6 +1010,35 @@ def _require_admin_client_requests_write(current_user: dict) -> None:
     )
 
 
+
+def _admin_effective_supervision_user(current_user: dict) -> dict:
+    effective = dict(current_user or {})
+    if effective.get("supervision_level") or effective.get("supervision_scopes"):
+        return effective
+    role = str(effective.get("role") or "").strip().lower()
+    session_type = str(effective.get("session_type") or "").strip().lower()
+    if role == "admin" or session_type in {"ui_admin", "admin"}:
+        effective["supervision_level"] = OWNER_SUPERVISOR
+    return effective
+
+
+def _require_admin_supervision_scope(current_user: dict, scope: str) -> None:
+    try:
+        require_supervision_scope(_admin_effective_supervision_user(current_user), scope)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+def _require_admin_client_request_status_supervision_scope(
+    current_user: dict,
+    next_status: str,
+) -> None:
+    if str(next_status or "").strip().lower() == "reviewed":
+        _require_admin_supervision_scope(current_user, CLIENTS_STATUS_REVIEW_SCOPE)
+        return
+    _require_admin_supervision_scope(current_user, CLIENTS_STATUS_DECIDE_SCOPE)
+
+
 def _admin_request_status_now_iso() -> str:
     datetime_module = __import__("datetime")
     return datetime_module.datetime.now(datetime_module.timezone.utc).isoformat()
@@ -1073,6 +1110,7 @@ async def update_admin_client_request_status(
         raise HTTPException(status_code=404, detail="Client request not found.")
 
     next_status = _normalize_admin_request_status(payload.get("status"))
+    _require_admin_client_request_status_supervision_scope(current_user, next_status)
     now = _admin_request_status_now_iso()
     note = _admin_request_status_note(payload)
     actor = _admin_request_status_actor(current_user)
@@ -1132,6 +1170,7 @@ async def save_admin_client_request_response_draft(
     current_user: dict = Depends(get_current_user),
 ):
     _require_admin_client_requests_write(current_user)
+    _require_admin_supervision_scope(current_user, CLIENTS_DRAFT_SCOPE)
 
     requested = str(request_id or "").strip()
     if not requested:
@@ -1237,6 +1276,7 @@ async def send_admin_client_request_supervisor_response(
     current_user: dict = Depends(get_current_user),
 ):
     _require_admin_client_requests_write(current_user)
+    _require_admin_supervision_scope(current_user, CLIENTS_RESPOND_SCOPE)
 
     requested = str(request_id or "").strip()
     if not requested:
