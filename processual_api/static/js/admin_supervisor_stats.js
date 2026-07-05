@@ -225,4 +225,52 @@
     refreshSupervisorOverviewCounters();
   });
 
+  let supervisorOverviewRefreshTimer = null;
+
+  function scheduleSupervisorOverviewRefresh() {
+    if (supervisorOverviewRefreshTimer) {
+      window.clearTimeout(supervisorOverviewRefreshTimer);
+    }
+
+    supervisorOverviewRefreshTimer = window.setTimeout(() => {
+      supervisorOverviewRefreshTimer = null;
+      refreshSupervisorOverviewCounters();
+    }, 0);
+  }
+
+  function installSupervisorOverviewRefreshHooks() {
+    window.addEventListener('load', () => {
+      scheduleSupervisorOverviewRefresh();
+    });
+
+    window.addEventListener('pmk-supervisor-session-key-updated', () => {
+      scheduleSupervisorOverviewRefresh();
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') return;
+
+      if (target.closest('[data-admin-page]') || target.closest('.nav-btn')) {
+        window.setTimeout(() => scheduleSupervisorOverviewRefresh(), 0);
+      }
+    });
+
+    if (typeof MutationObserver === 'function') {
+      const main = document.getElementById('main') || document.body;
+      const observer = new MutationObserver(() => {
+        if (!document.getElementById(HOST_ID)) {
+          scheduleSupervisorOverviewRefresh();
+        }
+      });
+
+      observer.observe(main, { childList: true, subtree: true });
+    }
+  }
+
+  installSupervisorOverviewRefreshHooks();
+  scheduleSupervisorOverviewRefresh();
+  setTimeout(() => scheduleSupervisorOverviewRefresh(), 250);
+  setTimeout(() => scheduleSupervisorOverviewRefresh(), 1000);
+
 })();

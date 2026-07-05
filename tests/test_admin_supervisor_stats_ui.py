@@ -57,3 +57,14 @@ def test_admin_supervisor_overview_has_static_placeholder() -> None:
     assert 'id="admin-supervisor-overview-counters"' in source
     assert "Supervisor Overview" in source
     assert "Loading supervisor overview" in source
+
+
+def test_supervisor_stats_rehydrates_after_admin_home_runtime_changes() -> None:
+    source = read_text("processual_api/static/js/admin_supervisor_stats.js")
+
+    assert "scheduleSupervisorOverviewRefresh" in source
+    assert "installSupervisorOverviewRefreshHooks" in source
+    assert "MutationObserver" in source
+    assert "window.addEventListener('load'" in source
+    assert "setTimeout(() => scheduleSupervisorOverviewRefresh(), 250)" in source
+    assert "document.getElementById(HOST_ID)" in source
