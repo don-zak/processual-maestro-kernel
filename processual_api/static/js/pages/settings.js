@@ -19,8 +19,9 @@ PAGES.settings = (() => {
     return sessionStorage.getItem('maestro_role') || 'client';
   }
 
-  function refresh() {
+  async function refresh() {
     loadClientSettings();
+    await loadClientRequests();
   }
 
   function accountIdentityValue(account) {
@@ -535,6 +536,30 @@ PAGES.settings = (() => {
     ].join(" | ");
   }
 
+
+  function clientRequestSupervisorResponses(request) {
+    return Array.isArray(request?.supervisor_responses)
+      ? request.supervisor_responses
+      : [];
+  }
+
+  function renderClientRequestSupervisorResponses(request) {
+    const responses = clientRequestSupervisorResponses(request);
+    if (!responses.length) return "";
+
+    const lines = responses.map((response) => {
+      return [
+        "supervisor_response_sent",
+        response.sent_at || "-",
+        response.source || "supervisor_panel",
+        "Supervisor response",
+        response.body || "",
+      ].join(" | ");
+    });
+
+    return ["Supervisor response timeline"].concat(lines).join("\n");
+  }
+
   function renderClientRequestStatusTimeline(requests) {
     const request = latestClientRequest(requests);
     if (!request) {
@@ -548,6 +573,11 @@ PAGES.settings = (() => {
       const prefix = stage === status ? "> " : (clientRequestStatusRank(stage) < rank ? "✓ " : "- ");
       return prefix + stage + ": " + clientRequestStatusLabel(stage);
     });
+
+    const supervisorResponses = renderClientRequestSupervisorResponses(request);
+    if (supervisorResponses) {
+      lines.push(supervisorResponses);
+    }
 
     return ["Latest request status timeline"].concat(lines).join("\n");
   }

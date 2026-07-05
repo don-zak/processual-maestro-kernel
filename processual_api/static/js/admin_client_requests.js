@@ -377,6 +377,11 @@
     return detailPath(requestId) + '/response-draft';
   }
 
+
+  function supervisorResponsePath(requestId) {
+    return detailPath(requestId) + '/supervisor-response';
+  }
+
   function renderAdminClientRequestStatusActions(detail, parent) {
     const requestId = text(detail?.request_id || '');
     if (!requestId) return;
@@ -474,6 +479,7 @@
     textarea.className = 'admin-client-request-response-draft-body';
     textarea.rows = 6;
     textarea.value = text(latestDraft?.body || '');
+    textarea.dataset.draftId = text(latestDraft?.draft_id || '');
     textarea.placeholder = 'Generate or write a safe supervisor response draft.';
     section.appendChild(textarea);
 
@@ -501,6 +507,17 @@
       saveAdminClientRequestResponseDraft(requestId);
     });
     actions.appendChild(save);
+
+    const send = document.createElement('button');
+    send.id = 'admin-client-request-response-draft-send';
+    send.className =
+      'primary-btn admin-client-request-response-draft-action admin-client-request-response-draft-send';
+    send.type = 'button';
+    send.textContent = 'Send Response';
+    send.addEventListener('click', () => {
+      sendAdminClientRequestSupervisorResponse(requestId);
+    });
+    actions.appendChild(send);
 
     const copy = document.createElement('button');
     copy.id = 'admin-client-request-response-draft-copy';
@@ -572,6 +589,37 @@
     } catch (error) {
       setAdminClientRequestResponseDraftStatus(
         'Failed to save draft: ' +
+          (error && error.message ? error.message : String(error))
+      );
+      return null;
+    }
+  }
+
+
+  async function sendAdminClientRequestSupervisorResponse(requestId, body) {
+    const textarea = byId('admin-client-request-response-draft-body');
+    const draftBody =
+      typeof body === 'string' ? body : textarea && textarea.value ? textarea.value : '';
+    const draftId = textarea?.dataset?.draftId || '';
+
+    setAdminClientRequestResponseDraftStatus(
+      'Sending supervisor response for request ' + text(requestId) + ' ...'
+    );
+
+    try {
+      const data = await postJson(supervisorResponsePath(requestId), {
+        body: draftBody,
+        draft_id: draftId,
+      });
+      renderAdminClientRequestDetail(data?.request || {});
+      await loadAdminClientRequests(true);
+      setAdminClientRequestResponseDraftStatus(
+        'supervisor_response_sent: Sent response for request ' + text(requestId) + '.'
+      );
+      return data;
+    } catch (error) {
+      setAdminClientRequestResponseDraftStatus(
+        'Failed to send supervisor response: ' +
           (error && error.message ? error.message : String(error))
       );
       return null;
@@ -847,6 +895,7 @@
     updateAdminClientRequestStatus,
     generateAdminClientRequestResponseDraft,
     saveAdminClientRequestResponseDraft,
+    sendAdminClientRequestSupervisorResponse,
     copyAdminClientRequestResponseDraft,
     renderAdminClientRequests,
     renderAdminClientRequestDetail,

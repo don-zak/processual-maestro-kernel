@@ -79,7 +79,7 @@ def test_admin_response_draft_static_assets_do_not_expose_forbidden_markers():
 def test_admin_response_draft_cache_version_is_bumped():
     html = _read(ADMIN_HTML)
 
-    assert "admin_client_requests.js?v=adminrequests02a" in html
+    assert "admin_client_requests.js?v=adminrequests02b" in html
     assert "adminrequests01e" not in html
 
 def _sample_client_request() -> dict:

@@ -418,6 +418,7 @@ def _client_request_summary(entry: dict[str, Any]) -> dict[str, Any]:
         "created_at": created_at,
         "source": source,
         "message_preview": message_preview,
+        "supervisor_responses": _client_safe_supervisor_responses(entry),
     }
 
 
@@ -681,6 +682,7 @@ def _admin_client_request_detail(entry: dict, fallback_user_id: str) -> dict:
         "timeline": _admin_client_request_timeline(entry),
         "next_admin_action": _admin_client_request_next_action(request_status),
             "supervisor_response_drafts": _admin_safe_response_drafts(entry),
+            "supervisor_responses": _admin_safe_supervisor_responses(entry),
     }
 
 
@@ -838,6 +840,92 @@ def _append_admin_response_draft_history(
         {
             "status": str(entry.get("status") or "pending"),
             "event": "response_draft_saved",
+            "at": at,
+            "actor": actor,
+            "source": "admin_clients_panel",
+            "note": note,
+        }
+    )
+    entry["status_history"] = history
+
+
+
+def _admin_supervisor_response_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _admin_supervisor_response_actor(current_user: dict) -> str:
+    return _admin_response_draft_actor(current_user)
+
+
+def _admin_safe_supervisor_response_text(value) -> str:
+    return _admin_safe_response_draft_text(value)
+
+
+def _admin_find_response_draft(entry: dict, draft_id: str) -> dict | None:
+    drafts = entry.get("supervisor_response_drafts") or []
+    if not isinstance(drafts, list):
+        return None
+
+    safe_draft_id = str(draft_id or "").strip()
+    if safe_draft_id:
+        for draft in drafts:
+            if not isinstance(draft, dict):
+                continue
+            if str(draft.get("draft_id") or "") == safe_draft_id:
+                return draft
+
+    for draft in reversed(drafts):
+        if isinstance(draft, dict) and draft.get("body"):
+            return draft
+    return None
+
+
+def _admin_safe_supervisor_response_record(response: dict) -> dict:
+    return {
+        "response_id": str(response.get("response_id") or ""),
+        "request_id": str(response.get("request_id") or ""),
+        "draft_id": str(response.get("draft_id") or ""),
+        "body": _admin_safe_supervisor_response_text(response.get("body")),
+        "sent_at": str(response.get("sent_at") or ""),
+        "source": str(response.get("source") or "admin_clients_panel"),
+        "state": str(response.get("state") or "sent"),
+        "actor": str(response.get("actor") or ""),
+        "event": str(response.get("event") or "supervisor_response_sent"),
+    }
+
+
+def _client_safe_supervisor_responses(entry: dict) -> list[dict]:
+    responses = entry.get("supervisor_responses") or []
+    if not isinstance(responses, list):
+        return []
+
+    safe_responses = []
+    for response in responses:
+        if isinstance(response, dict):
+            safe_responses.append(_admin_safe_supervisor_response_record(response))
+    return safe_responses[-5:]
+
+
+def _admin_safe_supervisor_responses(entry: dict) -> list[dict]:
+    return _client_safe_supervisor_responses(entry)
+
+
+def _append_admin_supervisor_response_history(
+    entry: dict,
+    *,
+    at: str,
+    actor: str,
+    note: str,
+) -> None:
+    history = entry.get("status_history")
+    if not isinstance(history, list):
+        history = []
+
+    history.append(
+        {
+            "status": str(entry.get("status") or "pending"),
+            "event": "supervisor_response_sent",
             "at": at,
             "actor": actor,
             "source": "admin_clients_panel",
@@ -1114,6 +1202,110 @@ async def save_admin_client_request_response_draft(
                 "status": "draft_saved",
                 "request": _admin_client_request_detail(entry, fallback_user_id),
                 "draft": safe_draft,
+            }
+
+    raise HTTPException(status_code=404, detail="Client request not found.")
+
+
+
+@router.post("/admin/client-requests/{request_id}/supervisor-response", response_model=dict)
+async def send_admin_client_request_supervisor_response(
+    request_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_write(current_user)
+
+    requested = str(request_id or "").strip()
+    if not requested:
+        raise HTTPException(status_code=404, detail="Client request not found.")
+
+    now = _admin_supervisor_response_now_iso()
+    actor = _admin_supervisor_response_actor(current_user)
+    draft_id = _admin_safe_supervisor_response_text(payload.get("draft_id"))
+    body = _admin_safe_supervisor_response_text(
+        payload.get("body") or payload.get("draft") or ""
+    )
+
+    for path in _admin_client_request_raw_files():
+        if not path.is_file():
+            continue
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+
+        entries = raw.get("client_requests") or []
+        if not isinstance(entries, list):
+            continue
+
+        fallback_user_id = _admin_client_request_user_id_from_path(path)
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+
+            summary = _admin_client_request_summary(entry, fallback_user_id)
+            if requested not in {summary["request_id"], summary["short_id"]}:
+                continue
+
+            draft = _admin_find_response_draft(entry, draft_id)
+            if not body and draft:
+                body = _admin_safe_supervisor_response_text(draft.get("body"))
+
+            if not body:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Supervisor response body is required.",
+                )
+
+            responses = entry.get("supervisor_responses")
+            if not isinstance(responses, list):
+                responses = []
+
+            response = {
+                "response_id": f"sresp_{secrets.token_hex(8)}",
+                "request_id": summary["request_id"],
+                "draft_id": str(draft.get("draft_id") or "") if draft else draft_id,
+                "body": body,
+                "sent_at": now,
+                "source": "admin_clients_panel",
+                "state": "sent",
+                "actor": actor,
+                "event": "supervisor_response_sent",
+            }
+
+            responses.append(response)
+            entry["supervisor_responses"] = responses
+            entry["updated_at"] = now
+
+            if draft:
+                draft["state"] = "sent"
+                draft["sent_at"] = now
+                draft["updated_at"] = now
+
+            _append_admin_supervisor_response_history(
+                entry,
+                at=now,
+                actor=actor,
+                note="Supervisor response sent to client timeline.",
+            )
+
+            path.write_text(
+                json.dumps(raw, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            safe_response = _admin_safe_supervisor_response_record(response)
+            return {
+                "status": "sent",
+                "message": "Supervisor response sent to client timeline.",
+                "supervisor_response": safe_response,
+                "request": _admin_client_request_detail(entry, fallback_user_id),
             }
 
     raise HTTPException(status_code=404, detail="Client request not found.")
