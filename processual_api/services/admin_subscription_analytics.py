@@ -267,31 +267,73 @@ def _empty_summary() -> dict:
     }
 
 
+
+def _client_request_plan_is_accepted(record: dict[str, Any]) -> bool:
+    status = _first_text(
+        record,
+        "status",
+        "request_status",
+        "decision",
+        "approval_status",
+    ).lower()
+    return status in {"approved", "completed", "active", "accepted"}
+
+
+def _resolve_plan_from_settings(record: dict[str, Any]) -> tuple[str, str]:
+    direct_plan = _normalize_plan(_record_plan_id(record))
+    if direct_plan != "unknown":
+        return direct_plan, "settings"
+
+    client_requests = record.get("client_requests")
+    if isinstance(client_requests, list):
+        for request in reversed(client_requests):
+            if not isinstance(request, dict):
+                continue
+            if not _client_request_plan_is_accepted(request):
+                continue
+            request_plan = _normalize_plan(
+                _first_text(
+                    request,
+                    "approved_plan",
+                    "plan_id",
+                    "requested_plan",
+                )
+            )
+            if request_plan != "unknown":
+                return request_plan, "client_requests"
+
+    return "unknown", "missing"
+
+
+
 def _append_risk(
-    risk: list[dict],
+    risks: list[dict[str, Any]],
     *,
     severity: str,
     kind: str,
     client_id: str,
     plan_id: str,
-    used: int = 0,
-    limit: int = 0,
     message: str,
+    used: int | None = None,
+    limit: int | None = None,
+    plan_source: str | None = None,
 ) -> None:
-    risk.append(
-        {
-            "severity": severity,
-            "kind": kind,
-            "client_id": str(client_id or ""),
-            "plan_id": _normalize_plan(plan_id),
-            "used": _safe_int(used),
-            "limit": _safe_int(limit),
-            "message": str(message or "")[:240],
-        }
-    )
+    item: dict[str, Any] = {
+        "severity": severity,
+        "kind": kind,
+        "client_id": client_id,
+        "plan_id": plan_id,
+        "message": message,
+    }
 
+    if used is not None:
+        item["used"] = used
+    if limit is not None:
+        item["limit"] = limit
+    if plan_source:
+        item["plan_source"] = plan_source
 
-
+    risks.append(item)
 
 def _assert_no_forbidden_values(value: Any) -> None:
     forbidden_keys = {
@@ -327,6 +369,7 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
     client_statuses: dict[str, str] = {}
     client_usage: defaultdict[str, int] = defaultdict(int)
     client_limits: dict[str, int] = {}
+    client_plan_sources: dict[str, str] = {}
     client_key_counts: defaultdict[str, dict[str, int]] = defaultdict(
         lambda: {"active": 0, "revoked": 0}
     )
@@ -345,7 +388,8 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
         if not client_id:
             continue
 
-        plan_id = _normalize_plan(_record_plan_id(raw))
+        plan_id, plan_source = _resolve_plan_from_settings(raw)
+        client_plan_sources[client_id] = plan_source
         status = _client_status(
             _first_text(raw, "status", "account_status", "client_status")
             or _nested_text(raw, "subscription", "status"),
@@ -478,7 +522,8 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
                 plan_id=plan_id,
                 used=used,
                 limit=limit,
-                message="Client plan is unknown, so allowance cannot be calculated.",
+                plan_source=client_plan_sources.get(client_id, "missing"),
+                message="No plan source found for this client; allowance cannot be calculated.",
             )
 
         if used > 0 and limit <= 0:
@@ -526,6 +571,17 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
         )
     )
     summary["risk"] = summary["risk"][:25]
+    plan_source_counts = {"settings": 0, "client_requests": 0, "missing": 0}
+    for source in client_plan_sources.values():
+        plan_source_counts[source] = plan_source_counts.get(source, 0) + 1
+
+    counted_sources = sum(plan_source_counts.values())
+    total_clients = int(summary.get("clients", {}).get("total", 0) or 0)
+    if counted_sources < total_clients:
+        plan_source_counts["missing"] += total_clients - counted_sources
+
+    summary["plan_sources"] = plan_source_counts
+
     _assert_no_forbidden_values(summary)
 
     return summary
