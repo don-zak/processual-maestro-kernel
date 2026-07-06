@@ -48,7 +48,7 @@ def test_client_usage_summary_card_exposes_client_safe_fields() -> None:
 def test_client_usage_summary_script_uses_client_endpoint_only() -> None:
     js = SETTINGS_JS.read_text(encoding="utf-8")
 
-    assert "/settings/usage-summary" in js
+    assert "/settings/client/usage-summary" in js
     assert "loadUsageSummary" in js
     assert "applyUsageSummary" in js
 
@@ -80,3 +80,13 @@ def test_client_usage_summary_script_handles_empty_and_rejected_usage() -> None:
     assert "quota_status" in js
     assert "latest_usage_at" in js
     assert "provider_cost_included=false" in js
+
+
+def test_client_usage_summary_ui_uses_client_scoped_02a_endpoint() -> None:
+    js = SETTINGS_JS.read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "/settings/client/usage-summary" in js
+    assert "set-usage-plan-source" in html
+    assert "set-usage-percent" in html
+    assert "set-usage-provider-status" in html
+    assert "set-usage-recommendations" in html

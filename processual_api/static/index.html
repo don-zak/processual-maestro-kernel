@@ -667,7 +667,24 @@ pending ───────────────────→ deactivated
         </div>
 </div>
       <div id="set-usage-byok-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">BYOK: provider_cost_included=false. Provider costs are not included in Maestro usage units. Rejected requests are tracked separately from successful usage.</div>
-      <button id="set-usage-review-request" class="btn ghost sm" style="margin-top:var(--s-3)">Prepare usage review request</button>
+              <div class="inp-group">
+          <label class="inp-label">Plan Source</label>
+          <span id="set-usage-plan-source" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Usage Percent</label>
+          <span id="set-usage-percent" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider Connection</label>
+          <span id="set-usage-provider-status" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Usage Recommendations</label>
+          <span id="set-usage-recommendations" class="font-data text-muted">—</span>
+        </div>
+
+<button id="set-usage-review-request" class="btn ghost sm" style="margin-top:var(--s-3)">Prepare usage review request</button>
       <span id="set-usage-review-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">—</span>
 
       <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)" disabled>Manage Subscription - coming soon</button>

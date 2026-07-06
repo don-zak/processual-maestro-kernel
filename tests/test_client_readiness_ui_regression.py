@@ -64,7 +64,7 @@ def test_client_readiness_script_aggregates_existing_client_state() -> None:
 def test_client_readiness_uses_existing_safe_workflows_only() -> None:
     js = SETTINGS_JS.read_text(encoding="utf-8")
 
-    assert "/settings/usage-summary" in js
+    assert "/settings/client/usage-summary" in js
     assert "/settings/api-key-integration" in js
     assert "/settings/provider-connection" in js
     assert "/settings/client-requests" in js

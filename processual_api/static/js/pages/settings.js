@@ -126,6 +126,57 @@ PAGES.settings = (() => {
     return String(value);
   }
 
+  function usageSummaryPlan(summary) {
+    const plan = summary.plan && typeof summary.plan === 'object' ? summary.plan : {};
+    return {
+      planId: plan.plan_id || summary.plan_id || summary.plan || 'unknown',
+      source: plan.source || summary.plan_source || 'missing',
+      allowance: plan.monthly_unit_allowance ?? summary.monthly_included_units ?? summary.quota_limit ?? 0,
+    };
+  }
+
+  function usageSummaryUsage(summary) {
+    const usage = summary.usage && typeof summary.usage === 'object' ? summary.usage : {};
+    return {
+      used: usage.monthly_units_used ?? summary.total_units ?? summary.quota_used ?? 0,
+      allowance: usage.monthly_units_allowance ?? summary.monthly_included_units ?? summary.quota_limit ?? 0,
+      remaining: usage.monthly_units_remaining ?? summary.quota_remaining,
+      percent: usage.usage_percent ?? summary.usage_percent,
+    };
+  }
+
+  function usageSummaryQuota(summary) {
+    const quota = summary.quota && typeof summary.quota === 'object' ? summary.quota : {};
+    return {
+      status: quota.status || summary.quota_status || 'ok',
+      nearLimit: quota.near_limit === true,
+      exceeded: quota.exceeded === true,
+    };
+  }
+
+  function usageSummaryProvider(summary) {
+    const provider = summary.provider && typeof summary.provider === 'object' ? summary.provider : {};
+    return {
+      status: provider.connection_status || 'unknown',
+      byokRequired: provider.byok_required === true,
+      providerCostIncluded: provider.provider_cost_included === true,
+      providerName: provider.provider || '-',
+    };
+  }
+
+  function renderUsageRecommendations(recommendations) {
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      return 'No usage or subscription recommendations right now.';
+    }
+
+    return recommendations.map((item) => {
+      const severity = item.severity || 'info';
+      const kind = item.kind || 'recommendation';
+      const message = item.message || '';
+      return severity + ' / ' + kind + ': ' + message;
+    }).join('\n');
+  }
+
   function latestUsageStatus(summary) {
     const latest = Array.isArray(summary.latest_events) ? summary.latest_events[0] : null;
     if (!latest) return 'No recent usage';
@@ -138,44 +189,34 @@ PAGES.settings = (() => {
   }
 
   function applyUsageSummary(summary) {
-    if (!summary) return;
-    readinessState.usage = summary;
+    const safeSummary = summary || {};
+    readinessState.usage = safeSummary;
     updateClientReadiness();
 
-    setText('set-usage-plan', summary.plan_id || summary.plan || '-');
-    setText(
-      'set-usage-monthly-included-units',
-      formatNumber(summary.monthly_included_units || summary.allowance_units)
-    );
-    setText('set-usage-quota-used', formatNumber(summary.quota_used));
-    setText('set-usage-quota-remaining', formatNumber(summary.quota_remaining));
-    setText('set-usage-quota-status', summary.quota_status || '-');
-    setText('set-usage-total-units', formatNumber(summary.total_units));
-    setText('set-usage-rejected-requests', formatNumber(summary.rejected_requests));
-    setText('set-usage-latest-status', latestUsageStatus(summary));
-    setText('set-usage-current-period', summary.current_period || '-');
-    setText('set-usage-latest-usage-at', summary.latest_usage_at || '-');
+    const plan = usageSummaryPlan(safeSummary);
+    const usage = usageSummaryUsage(safeSummary);
+    const quota = usageSummaryQuota(safeSummary);
+    const provider = usageSummaryProvider(safeSummary);
 
-    const rejectedEl = document.getElementById('set-usage-rejected-requests');
-    if (rejectedEl) {
-      rejectedEl.style.color = Number(summary.rejected_requests || 0) > 0 ? 'var(--warn)' : '';
-    }
+    const rejectedRequests = Number(safeSummary.rejected_requests || safeSummary.quota_rejected || 0);
 
-    const quotaStatusEl = document.getElementById('set-usage-quota-status');
-    if (quotaStatusEl) {
-      const quotaStatus = String(summary.quota_status || '').toLowerCase();
-      const colors = {
-        ok: 'var(--ok)',
-        warning: 'var(--warn)',
-        exhausted: 'var(--error)',
-      };
-      quotaStatusEl.style.color = colors[quotaStatus] || '';
-    }
+    setText('set-usage-plan', plan.planId);
+    setText('set-usage-plan-source', plan.source);
+    setText('set-usage-monthly-included-units', formatNumber(usage.allowance));
+    setText('set-usage-quota-used', formatNumber(usage.used));
+    setText('set-usage-quota-remaining', usage.remaining === null || usage.remaining === undefined ? 'Not available' : formatNumber(usage.remaining));
+    setText('set-usage-total-units', formatNumber(usage.used));
+    setText('set-usage-rejected-requests', formatNumber(rejectedRequests));
+    setText('set-usage-quota-status', quota.status + (quota.exceeded ? ' / exceeded' : (quota.nearLimit ? ' / near limit' : '')));
+    setText('set-usage-percent', usage.percent === null || usage.percent === undefined ? 'Not available' : String(usage.percent) + '%');
+    setText('set-usage-provider-status', provider.status + ' / ' + provider.providerName);
+    setText('set-usage-recommendations', renderUsageRecommendations(safeSummary.recommendations));
+    setText('set-usage-latest-status', latestUsageStatus(safeSummary));
   }
 
   async function loadUsageSummary() {
     try {
-      const summary = await CLIENT.get('/settings/usage-summary');
+      const summary = await CLIENT.get('/settings/client/usage-summary');
       applyUsageSummary(summary);
     } catch (e) {
       setText('set-usage-latest-status', 'Usage summary unavailable');
