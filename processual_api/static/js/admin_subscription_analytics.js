@@ -112,7 +112,7 @@
           state: missing > 0 ? "not-wired" : "",
         })}
         <div class="admin-subscription-analytics-note" data-state="not-wired">
-          No verified plan source was found for these clients. Allowance remains
+          No verified plan source was found for these clients. Client usage summaries will show zero allowance until a verified plan source is stored. Store the plan in settings or subscriptions, or approve and complete a client request before expecting allowance. Allowance remains
           source-of-truth zero until a plan is stored in settings, subscriptions,
           or an approved client request.
         </div>

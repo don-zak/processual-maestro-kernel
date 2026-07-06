@@ -8,7 +8,7 @@ def test_admin_subscription_analytics_host_and_script_are_wired():
     html = ADMIN_HTML.read_text(encoding="utf-8")
 
     assert 'id="admin-subscription-analytics-host"' in html
-    assert "admin_subscription_analytics.js?v=adminsubscriptions01e" in html
+    assert "admin_subscription_analytics.js?v=adminsubscriptions01f" in html
 
 
 def test_admin_subscription_analytics_js_uses_real_endpoint_and_admin_auth():
@@ -94,3 +94,18 @@ def test_admin_subscription_analytics_renders_plan_source_diagnostics():
     assert "No verified plan source" in js
     assert "source-of-truth zero" in js
     assert "admin-subscription-analytics-plan-sources" in js
+
+
+def test_admin_subscription_analytics_cross_links_missing_plan_to_client_usage_summary() -> None:
+    from pathlib import Path
+
+    source = Path("processual_api/static/js/admin_subscription_analytics.js").read_text(
+        encoding="utf-8"
+    )
+    html = Path("processual_api/static/admin.html").read_text(encoding="utf-8")
+
+    assert "Client usage summaries will show zero allowance" in source
+    assert "verified plan source is stored" in source
+    assert "approve and complete a client request" in source
+    assert "source-of-truth zero" not in source or "Client usage summaries" in source
+    assert "adminsubscriptions01f" in html
