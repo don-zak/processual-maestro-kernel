@@ -8,7 +8,7 @@ def test_admin_subscription_analytics_host_and_script_are_wired():
     html = ADMIN_HTML.read_text(encoding="utf-8")
 
     assert 'id="admin-subscription-analytics-host"' in html
-    assert "admin_subscription_analytics.js?v=adminsubscriptions01b" in html
+    assert "admin_subscription_analytics.js?v=adminsubscriptions01e" in html
 
 
 def test_admin_subscription_analytics_js_uses_real_endpoint_and_admin_auth():
@@ -82,3 +82,15 @@ def test_admin_subscription_analytics_renders_allowance_not_wired_state():
     assert "admin-subscription-analytics-summary" in js
     assert ".admin-subscription-analytics-summary" in html
     assert '.admin-subscription-analytics-note[data-state="not-wired"]' in html
+
+def test_admin_subscription_analytics_renders_plan_source_diagnostics():
+    js = ADMIN_SUBSCRIPTION_JS.read_text(encoding="utf-8")
+
+    assert "Plan source diagnostics" in js
+    assert "plan_sources" in js
+    assert "Settings" in js
+    assert "Client requests" in js
+    assert "Missing" in js
+    assert "No verified plan source" in js
+    assert "source-of-truth zero" in js
+    assert "admin-subscription-analytics-plan-sources" in js

@@ -91,6 +91,34 @@
       </div>
     `;
   }
+  function planSourceDiagnostics(planSources) {
+    const sources = planSources || {};
+    const settings = Number(sources.settings || 0);
+    const clientRequests = Number(sources.client_requests || 0);
+    const missing = Number(sources.missing || 0);
+    const total = settings + clientRequests + missing;
+
+    if (total <= 0) {
+      return "";
+    }
+
+    return `
+      <div class="admin-subscription-analytics-plan-sources">
+        <h3>Plan source diagnostics</h3>
+        ${metric("Settings", settings)}
+        ${metric("Client requests", clientRequests)}
+        ${metric("Missing", missing, {
+          detail: missing > 0 ? "No verified plan source" : "",
+          state: missing > 0 ? "not-wired" : "",
+        })}
+        <div class="admin-subscription-analytics-note" data-state="not-wired">
+          No verified plan source was found for these clients. Allowance remains
+          source-of-truth zero until a plan is stored in settings, subscriptions,
+          or an approved client request.
+        </div>
+      </div>
+    `;
+  }
 
   function renderRisk(riskItems) {
     if (!Array.isArray(riskItems) || riskItems.length === 0) {
@@ -148,6 +176,7 @@
     const subscriptions = payload.subscriptions || {};
     const plans = payload.plans || {};
     const risk = payload.risk || [];
+    const planSources = payload.plan_sources || {};
 
     host.innerHTML = `
       <section class="admin-card admin-subscription-analytics-card" aria-live="polite">
@@ -223,6 +252,8 @@
           ${metric("Enterprise integration", plans.enterprise_integration)}
           ${metric("Unknown", plans.unknown)}
         </div>
+
+        ${planSourceDiagnostics(planSources)}
 
         <div class="admin-subscription-analytics-risks">
           <h3>Risk indicators</h3>
