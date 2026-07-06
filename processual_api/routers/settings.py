@@ -39,6 +39,7 @@ from ..services.admin_subscription_analytics import build_admin_subscription_ana
 from ..services.client_plan_source import (
     ClientRequestPlanApplyError,
     apply_verified_client_request_plan,
+    supported_verified_plan,
 )
 from ..services.client_usage_summary import build_client_usage_summary
 from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
@@ -1217,6 +1218,178 @@ def _admin_client_request_apply_plan_error_reason(
 ) -> str:
     reason = str(getattr(exc, "reason", "") or str(exc) or "").strip()
     return reason or "invalid_request"
+
+
+
+DIRECT_ADMIN_PLAN_SOURCE = "settings"
+
+
+def _supported_admin_direct_plan(plan_value) -> tuple[str, int]:
+    try:
+        return supported_verified_plan(plan_value)
+    except (KeyError, TypeError, ValueError):
+        return "", 0
+
+
+def _admin_direct_plan_payload_value(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("plan_id", "plan", "approved_plan"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _record_admin_client_plan_audit_event(
+    *,
+    current_user: dict,
+    action: str,
+    client_id: str,
+    result: str,
+    safe_note: str | None = None,
+    reason: str | None = None,
+    request_path: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    append_admin_audit_event(
+        audit_path=_admin_audit_path(),
+        actor=_admin_audit_actor(current_user),
+        actor_level=_admin_audit_actor_level(current_user),
+        action=action,
+        target_type="client_plan",
+        target_id=client_id,
+        client_id=client_id,
+        source="admin_clients_panel",
+        result=result,
+        safe_note=safe_note,
+        reason=reason,
+        request_path=request_path,
+        metadata=metadata,
+    )
+
+
+@router.post("/admin/clients/{client_id}/plan", response_model=dict)
+async def set_admin_client_plan(
+    client_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_write(current_user)
+
+    requested_client_id = str(client_id or "").strip()
+    if not requested_client_id:
+        raise HTTPException(status_code=404, detail="Client not found.")
+
+    try:
+        _require_admin_supervision_scope(current_user, CLIENTS_STATUS_DECIDE_SCOPE)
+    except HTTPException:
+        _record_admin_client_plan_audit_event(
+            current_user=current_user,
+            action="admin_client_plan_set_denied",
+            client_id=requested_client_id,
+            result="denied",
+            reason=f"missing_scope: {CLIENTS_STATUS_DECIDE_SCOPE}",
+            request_path=f"/settings/admin/clients/{requested_client_id}/plan",
+        )
+        raise
+
+    requested_plan = _admin_direct_plan_payload_value(payload)
+    plan_id, allowance = _supported_admin_direct_plan(requested_plan)
+    if not plan_id or allowance <= 0:
+        _record_admin_client_plan_audit_event(
+            current_user=current_user,
+            action="admin_client_plan_set_failed",
+            client_id=requested_client_id,
+            result="failure",
+            reason="unsupported_plan",
+            request_path=f"/settings/admin/clients/{requested_client_id}/plan",
+            metadata={"requested_plan": requested_plan},
+        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="unsupported_plan")
+
+    raw = _load_raw(requested_client_id)
+    if not isinstance(raw, dict):
+        raw = {}
+
+    existing_subscription = raw.get("subscription") if isinstance(raw.get("subscription"), dict) else {}
+    already_set = (
+        str(raw.get("approved_plan") or "").strip() == plan_id
+        and str(raw.get("plan_source") or "").strip() == DIRECT_ADMIN_PLAN_SOURCE
+        and bool(raw.get("plan_applied"))
+        and str(existing_subscription.get("plan_id") or existing_subscription.get("plan") or "").strip()
+        == plan_id
+    )
+
+    now = _admin_request_status_now_iso()
+    actor = _admin_request_status_actor(current_user)
+
+    if not already_set:
+        client = raw.get("client") if isinstance(raw.get("client"), dict) else {}
+        client["client_id"] = str(client.get("client_id") or requested_client_id)
+        raw["client"] = client
+
+        subscription = dict(existing_subscription)
+        subscription["plan_id"] = plan_id
+        subscription["plan"] = plan_id
+        subscription["status"] = str(subscription.get("status") or "active")
+        raw["subscription"] = subscription
+
+        raw["approved_plan"] = plan_id
+        raw["plan_source"] = DIRECT_ADMIN_PLAN_SOURCE
+        raw["plan_applied"] = True
+        raw["plan_applied_at"] = now
+        raw["plan_applied_by"] = actor
+        raw["updated_at"] = now
+
+        history = raw.get("plan_history") if isinstance(raw.get("plan_history"), list) else []
+        history.append(
+            {
+                "event": "plan_set",
+                "plan_id": plan_id,
+                "plan_source": DIRECT_ADMIN_PLAN_SOURCE,
+                "at": now,
+                "actor": actor,
+                "source": "admin_clients_panel",
+            }
+        )
+        raw["plan_history"] = history
+
+        _save_raw(requested_client_id, raw)
+
+    status_value = "already_set" if already_set else "plan_set"
+    _record_admin_client_plan_audit_event(
+        current_user=current_user,
+        action="admin_client_plan_set",
+        client_id=requested_client_id,
+        result="success",
+        safe_note=f"Direct admin client plan {status_value}.",
+        request_path=f"/settings/admin/clients/{requested_client_id}/plan",
+        metadata={
+            "status": status_value,
+            "plan_id": plan_id,
+            "plan_source": DIRECT_ADMIN_PLAN_SOURCE,
+            "changed": not already_set,
+        },
+    )
+
+    return {
+        "status": status_value,
+        "changed": not already_set,
+        "client_id": requested_client_id,
+        "plan": {
+            "plan_id": plan_id,
+            "source": DIRECT_ADMIN_PLAN_SOURCE,
+            "monthly_unit_allowance": allowance,
+        },
+        "settings": {
+            "approved_plan": plan_id,
+            "plan_source": DIRECT_ADMIN_PLAN_SOURCE,
+            "plan_applied": True,
+            "plan_applied_at": str(raw.get("plan_applied_at") or ""),
+            "plan_applied_by": str(raw.get("plan_applied_by") or ""),
+        },
+    }
 
 
 @router.post("/admin/client-requests/{request_id}/apply-plan", response_model=dict)
