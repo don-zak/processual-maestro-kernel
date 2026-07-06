@@ -17,6 +17,10 @@
     'source',
   ];
 
+  const DIRECT_ADMIN_PLAN_OPTIONS = [
+    'enterprise',
+  ];
+
   let lastLoadAt = 0;
   let scheduledRefresh = 0;
 
@@ -577,6 +581,10 @@
     return detailPath(requestId) + '/apply-plan';
   }
 
+  function directClientPlanPath(clientId) {
+    return '/settings/admin/clients/' + encodeURIComponent(text(clientId)) + '/plan';
+  }
+
 
 
   function responseDraftPath(requestId) {
@@ -699,6 +707,130 @@
     } catch (error) {
       setAdminClientRequestApplyPlanStatus(
         'Failed to apply requested plan: ' +
+          (error && error.message ? error.message : String(error))
+      );
+      return null;
+    }
+  }
+
+  function setAdminDirectClientPlanStatus(message) {
+    const target = byId('admin-direct-client-plan-status');
+    if (target) {
+      target.textContent = message;
+    }
+  }
+
+  function renderAdminDirectClientPlanPanel(detail, parent) {
+    const clientId = text(detail?.client_id || detail?.user_id || '').trim();
+    if (!parent || !clientId) return;
+
+    const section = document.createElement('section');
+    section.id = 'admin-direct-client-plan';
+    section.className = 'admin-direct-client-plan';
+    section.style.marginTop = 'var(--s-3)';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Direct Client Plan';
+    section.appendChild(title);
+
+    const note = document.createElement('p');
+    note.className = 'admin-note';
+    note.textContent =
+      'Set the verified client plan directly from Admin settings. Allowance is resolved from the pricing catalog; no manual allowance is stored.';
+    section.appendChild(note);
+
+    const summary = document.createElement('pre');
+    summary.id = 'admin-direct-client-plan-summary';
+    summary.className = 'admin-direct-client-plan-summary';
+    summary.textContent = [
+      'client_id: ' + clientId,
+      'approved_plan: ' + text(detail?.approved_plan || ''),
+      'plan_source: ' + text(detail?.plan_source || ''),
+      'plan_applied: ' + (detail?.plan_applied ? 'true' : 'false'),
+      'plan_applied_at: ' + text(detail?.plan_applied_at || ''),
+      'plan_applied_by: ' + text(detail?.plan_applied_by || ''),
+    ].join('\n');
+    section.appendChild(summary);
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-direct-client-plan-actions';
+    actions.style.display = 'flex';
+    actions.style.gap = 'var(--s-2)';
+    actions.style.flexWrap = 'wrap';
+
+    const select = document.createElement('select');
+    select.id = 'admin-direct-client-plan-select';
+    select.setAttribute('aria-label', 'Direct client plan');
+    DIRECT_ADMIN_PLAN_OPTIONS.forEach((planId) => {
+      const option = document.createElement('option');
+      option.value = planId;
+      option.textContent = planId;
+      if (text(detail?.approved_plan || '').trim() === planId) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
+    actions.appendChild(select);
+
+    const button = document.createElement('button');
+    button.id = 'admin-direct-client-plan-button';
+    button.className = 'primary-btn admin-direct-client-plan-button';
+    button.type = 'button';
+    button.dataset.clientId = clientId;
+    button.dataset.supervisorScope = CLIENTS_STATUS_DECIDE_SCOPE;
+    button.dataset.supervisorDisabledReason =
+      'Requires supervisor scope: ' + CLIENTS_STATUS_DECIDE_SCOPE;
+    button.textContent = 'Set direct plan';
+    applyAdminSupervisorPermission(
+      button,
+      CLIENTS_STATUS_DECIDE_SCOPE,
+      'Requires supervisor scope: ' + CLIENTS_STATUS_DECIDE_SCOPE
+    );
+    button.addEventListener('click', () => {
+      setAdminDirectClientPlan(clientId, select.value);
+    });
+    actions.appendChild(button);
+
+    section.appendChild(actions);
+
+    const status = document.createElement('pre');
+    status.id = 'admin-direct-client-plan-status';
+    status.className = 'admin-direct-client-plan-status';
+    status.textContent =
+      'Direct plan changes write plan_source=settings and use catalog allowance.';
+    section.appendChild(status);
+
+    parent.appendChild(section);
+  }
+
+  async function setAdminDirectClientPlan(clientId, planId) {
+    setAdminDirectClientPlanStatus(
+      'Setting direct client plan for ' +
+        text(clientId) +
+        ' to ' +
+        text(planId) +
+        ' ...'
+    );
+
+    try {
+      const data = await postJson(directClientPlanPath(clientId), { plan_id: planId });
+      const source = text(data?.settings?.plan_source || data?.plan?.source || 'settings');
+      const allowance = text(data?.plan?.monthly_unit_allowance || '');
+      setAdminDirectClientPlanStatus(
+        'Direct client plan result: ' +
+          text(data?.status || 'plan_set') +
+          '; plan_id=' +
+          text(data?.plan?.plan_id || planId) +
+          '; plan_source=' +
+          source +
+          '; monthly_unit_allowance=' +
+          allowance +
+          '.'
+      );
+      return data;
+    } catch (error) {
+      setAdminDirectClientPlanStatus(
+        'Failed to set direct client plan: ' +
           (error && error.message ? error.message : String(error))
       );
       return null;
@@ -1104,6 +1236,7 @@
     body.appendChild(grid);
     renderAdminClientRequestStatusActions(detail, body);
     renderAdminClientRequestApplyPlanPanel(detail, body);
+    renderAdminDirectClientPlanPanel(detail, body);
     renderAdminClientRequestResponseDraftPanel(detail, body);
     renderTimeline(detail, body);
     refreshAdminSupervisorPermissionButtons();
