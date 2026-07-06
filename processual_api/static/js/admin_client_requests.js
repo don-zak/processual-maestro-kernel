@@ -285,7 +285,14 @@
     const scope = String(requiredScope || '').trim();
     if (!scope) return true;
 
-    const scopes = adminSupervisorSessionState.scopes || [];
+    const rawScopes = Array.isArray(adminSupervisorSessionState.scopes)
+      ? adminSupervisorSessionState.scopes
+      : [];
+    const authUserScopes =
+      adminSupervisorSessionState.user && Array.isArray(adminSupervisorSessionState.user.scopes)
+        ? adminSupervisorSessionState.user.scopes
+        : [];
+    const scopes = [...new Set([...rawScopes, ...authUserScopes])];
     if (scopes.includes('*')) return true;
     if (scopes.includes(scope)) return true;
 
@@ -566,6 +573,10 @@
     return detailPath(requestId) + '/status';
   }
 
+  function applyPlanPath(requestId) {
+    return detailPath(requestId) + '/apply-plan';
+  }
+
 
 
   function responseDraftPath(requestId) {
@@ -575,6 +586,123 @@
 
   function supervisorResponsePath(requestId) {
     return detailPath(requestId) + '/supervisor-response';
+  }
+
+
+  function canShowAdminClientRequestApplyPlan(detail) {
+    const requestStatus = text(detail?.status || '').trim().toLowerCase();
+    const requestedPlan = text(detail?.requested_plan || '').trim();
+    return Boolean(
+      requestedPlan &&
+        ['approved', 'completed'].includes(requestStatus) &&
+        !detail?.plan_applied
+    );
+  }
+
+  function hasAdminClientRequestPlanSummary(detail) {
+    return Boolean(
+      text(detail?.requested_plan || '').trim() ||
+        text(detail?.approved_plan || '').trim() ||
+        detail?.plan_applied
+    );
+  }
+
+  function setAdminClientRequestApplyPlanStatus(message) {
+    const target = byId('admin-client-request-apply-plan-status');
+    if (target) {
+      target.textContent = message;
+    }
+  }
+
+  function renderAdminClientRequestApplyPlanPanel(detail, parent) {
+    const requestId = text(detail?.request_id || detail?.short_id || '');
+    if (!parent || !requestId || !hasAdminClientRequestPlanSummary(detail)) return;
+
+    const section = document.createElement('section');
+    section.id = 'admin-client-request-apply-plan';
+    section.className = 'admin-client-request-apply-plan';
+    section.style.marginTop = 'var(--s-3)';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Requested Plan';
+    section.appendChild(title);
+
+    const summary = document.createElement('pre');
+    summary.id = 'admin-client-request-apply-plan-summary';
+    summary.className = 'admin-client-request-apply-plan-summary';
+    summary.textContent = [
+      'requested_plan: ' + text(detail?.requested_plan || ''),
+      'approved_plan: ' + text(detail?.approved_plan || ''),
+      'plan_source: ' + text(detail?.plan_source || ''),
+      'plan_applied: ' + (detail?.plan_applied ? 'true' : 'false'),
+      'plan_applied_at: ' + text(detail?.plan_applied_at || ''),
+    ].join('\n');
+    section.appendChild(summary);
+
+    if (canShowAdminClientRequestApplyPlan(detail)) {
+      const actions = document.createElement('div');
+      actions.className = 'admin-client-request-apply-plan-actions';
+      actions.style.display = 'flex';
+      actions.style.gap = 'var(--s-2)';
+      actions.style.flexWrap = 'wrap';
+
+      const button = document.createElement('button');
+      button.id = 'admin-client-request-apply-plan-button';
+      button.className = 'primary-btn admin-client-request-apply-plan-button';
+      button.type = 'button';
+      button.dataset.requestId = requestId;
+      button.dataset.supervisorScope = CLIENTS_STATUS_DECIDE_SCOPE;
+      button.dataset.supervisorDisabledReason =
+        'Requires supervisor scope: ' + CLIENTS_STATUS_DECIDE_SCOPE;
+      button.textContent = 'Apply requested plan';
+      applyAdminSupervisorPermission(
+        button,
+        CLIENTS_STATUS_DECIDE_SCOPE,
+        'Requires supervisor scope: ' + CLIENTS_STATUS_DECIDE_SCOPE
+      );
+      button.addEventListener('click', () => {
+        applyAdminClientRequestRequestedPlan(requestId);
+      });
+      actions.appendChild(button);
+      section.appendChild(actions);
+    }
+
+    const status = document.createElement('pre');
+    status.id = 'admin-client-request-apply-plan-status';
+    status.className = 'admin-client-request-apply-plan-status';
+    status.textContent = detail?.plan_applied
+      ? 'Requested plan already applied.'
+      : canShowAdminClientRequestApplyPlan(detail)
+        ? 'Ready to apply requested plan.'
+        : 'Requested plan is not ready to apply.';
+    section.appendChild(status);
+
+    parent.appendChild(section);
+  }
+
+  async function applyAdminClientRequestRequestedPlan(requestId) {
+    setAdminClientRequestApplyPlanStatus(
+      'Applying requested plan for request ' + text(requestId) + ' ...'
+    );
+
+    try {
+      const data = await postJson(applyPlanPath(requestId), {});
+      renderAdminClientRequestDetail(data?.request || {});
+      setAdminClientRequestApplyPlanStatus(
+        'Applied requested plan for request ' +
+          text(requestId) +
+          ': ' +
+          text(data?.status || 'plan_applied') +
+          '.'
+      );
+      return data;
+    } catch (error) {
+      setAdminClientRequestApplyPlanStatus(
+        'Failed to apply requested plan: ' +
+          (error && error.message ? error.message : String(error))
+      );
+      return null;
+    }
   }
 
   function renderAdminClientRequestStatusActions(detail, parent) {
@@ -615,6 +743,12 @@
       actions.appendChild(button);
     });
 
+    const note = document.createElement('div');
+    note.className = 'admin-note admin-client-request-action-scope-note';
+    note.textContent =
+      'Action permissions: Review requires admin:clients:status_review; Approve, Reject, Complete, and Apply requested plan require admin:clients:status_decide.';
+    actions.appendChild(note);
+
     parent.appendChild(actions);
   }
   function renderTimeline(detail, parent) {
@@ -632,7 +766,7 @@
       const node = document.createElement('div');
       node.className = 'admin-client-request-timeline-item';
       node.textContent = [
-        text(item?.status || 'pending'),
+        text(item?.status || item?.event || 'pending'),
         text(item?.at || ''),
         text(item?.source || ''),
       ]
@@ -955,6 +1089,11 @@
     appendMeta(grid, 'request_type', detail?.request_type || '');
     appendMeta(grid, 'request_label', detail?.request_label || '');
     appendMeta(grid, 'requested_plan', detail?.requested_plan || '');
+    appendMeta(grid, 'approved_plan', detail?.approved_plan || '');
+    appendMeta(grid, 'plan_source', detail?.plan_source || '');
+    appendMeta(grid, 'plan_applied', detail?.plan_applied ? 'true' : 'false');
+    appendMeta(grid, 'plan_applied_at', detail?.plan_applied_at || '');
+    appendMeta(grid, 'plan_applied_by', detail?.plan_applied_by || '');
     appendMeta(grid, 'status', detail?.status || '');
     appendMeta(grid, 'source', detail?.source || '');
     appendMeta(grid, 'created_at', detail?.created_at || '');
@@ -964,8 +1103,10 @@
 
     body.appendChild(grid);
     renderAdminClientRequestStatusActions(detail, body);
+    renderAdminClientRequestApplyPlanPanel(detail, body);
     renderAdminClientRequestResponseDraftPanel(detail, body);
     renderTimeline(detail, body);
+    refreshAdminSupervisorPermissionButtons();
   }
 
   async function loadAdminClientRequestDetail(requestId) {
