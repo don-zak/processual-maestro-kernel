@@ -86,8 +86,8 @@ def test_dockerfile_keeps_public_and_private_targets_with_non_root_runtime():
         "adduser --system --uid 1001",
         "USER app",
         "HEALTHCHECK --interval=30s",
-        "CMD curl -f http://localhost:8000/health/live || exit 1",
-        'CMD ["uvicorn", "processual_api.main:app", "--host", "0.0.0.0", "--port", "8000"]',
+        "CMD curl -f http://localhost:${PORT:-8000}/health/live || exit 1",
+        'CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]',
     ]
 
     assert_contains_all(text, required, "Dockerfile production runtime")

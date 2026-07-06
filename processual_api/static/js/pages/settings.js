@@ -131,6 +131,8 @@ PAGES.settings = (() => {
     return {
       planId: plan.plan_id || summary.plan_id || summary.plan || 'unknown',
       source: plan.source || summary.plan_source || 'missing',
+      pricingVersion: plan.pricing_version || summary.pricing_version || summary.pricing?.pricing_version || '-',
+      billingPolicy: plan.billing_policy || summary.billing_policy || summary.pricing?.billing_policy || 'byok',
       allowance: plan.monthly_unit_allowance ?? summary.monthly_included_units ?? summary.quota_limit ?? 0,
     };
   }
@@ -262,6 +264,8 @@ PAGES.settings = (() => {
         'Please review our Maestro usage and quota status.',
         'plan=' + plan.planId,
         'plan_source=' + plan.source,
+        'pricing_version=' + (plan.pricingVersion || '-'),
+        'billing_policy=' + (plan.billingPolicy || '-'),
         'monthly_units_used=' + formatNumber(usage.used),
         'monthly_units_allowance=' + formatNumber(usage.allowance),
         'monthly_units_remaining=' + remaining,

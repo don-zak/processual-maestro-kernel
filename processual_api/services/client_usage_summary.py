@@ -4,6 +4,7 @@ from typing import Any
 
 from processual_api.billing.usage_pricing import (
     BILLING_POLICY,
+    PRICING_VERSION,
     PROVIDER_COST_INCLUDED,
     monthly_unit_allowance,
     normalize_plan_id,
@@ -177,6 +178,8 @@ def build_client_usage_summary(
     provider = _provider_summary(raw)
 
     return {
+        "pricing_version": PRICING_VERSION,
+        "billing_policy": BILLING_POLICY,
         "client_id": client_id,
         "user_id": user_id,
         "plan": {

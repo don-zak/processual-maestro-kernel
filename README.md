@@ -335,3 +335,17 @@ kubectl apply -k ops/k8s/overlays/dev/
 ## License
 
 MIT
+
+## Cloud Run readiness
+
+The container is Cloud Run ready: it binds Uvicorn to `${PORT:-8000}`, keeps the live health check on `/health/live`, and exposes readiness through `/health/ready`.
+
+Required production environment values remain explicit and must not use local defaults:
+
+- `JWT_SECRET`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `MAESTRO_ADMIN_EMAIL`
+- `MAESTRO_ADMIN_PASSWORD`
+
+Billing remains BYOK: provider costs are not included in Processual Maestro pricing.
