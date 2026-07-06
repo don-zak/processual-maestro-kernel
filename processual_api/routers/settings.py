@@ -36,6 +36,7 @@ from ..schemas.settings import (
     TestConnectionResult,
 )
 from ..services.admin_subscription_analytics import build_admin_subscription_analytics
+from ..services.client_usage_summary import build_client_usage_summary
 from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 from ..services.usage_log_store import summarize_usage_logs
 from ..supervision_rbac import (
@@ -2469,6 +2470,39 @@ async def get_usage_summary(current_user: dict = Depends(get_current_user)):
         client_id=client_id,
         api_key_id=api_key_filter,
         latest_limit=10,
+    )
+
+
+
+@router.get("/client/usage-summary", response_model=dict)
+async def get_client_usage_summary(current_user: dict = Depends(get_current_user)):
+    """Return a client-scoped usage/subscription summary.
+
+    This endpoint intentionally ignores query parameters such as client_id and
+    derives the identity only from the authenticated current_user.
+    """
+
+    user_id = str(
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or "default"
+    )
+    client_id = str(current_user.get("client_id") or user_id)
+    api_key_id = str(current_user.get("api_key_id") or "")
+    api_key_filter = api_key_id if api_key_id and api_key_id != "env" else None
+
+    raw = _load_raw(user_id)
+    ledger_summary = summarize_usage_logs(
+        client_id=client_id,
+        api_key_id=api_key_filter,
+        latest_limit=10,
+    )
+
+    return build_client_usage_summary(
+        user_id=user_id,
+        client_id=client_id,
+        ledger_summary=ledger_summary,
+        raw_settings=raw,
     )
 
 
