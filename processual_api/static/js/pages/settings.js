@@ -228,6 +228,31 @@ PAGES.settings = (() => {
     const requestType = document.getElementById('set-client-request-type');
     const requestedPlan = document.getElementById('set-client-request-plan');
     const message = document.getElementById('set-client-request-message');
+    const plan = usageSummaryPlan(summary);
+    const usage = usageSummaryUsage(summary);
+    const quota = usageSummaryQuota(summary);
+    const provider = usageSummaryProvider(summary);
+    const usageDetails = summary.usage && typeof summary.usage === 'object' ? summary.usage : {};
+    const latestUsageAt = usageDetails.latest_usage_at || summary.latest_usage_at || 'No recent usage';
+    const currentPeriod = usageDetails.current_period || summary.current_period || '-';
+    const recommendations = Array.isArray(summary.recommendations)
+      ? summary.recommendations.map((item) => {
+          if (item && typeof item === 'object') {
+            return item.message || item.kind || '';
+          }
+          return String(item || '');
+        }).filter(Boolean)
+      : [];
+    const remaining = usage.remaining === null || usage.remaining === undefined
+      ? 'Not available'
+      : formatNumber(usage.remaining);
+    const percent = usage.percent === null || usage.percent === undefined
+      ? 'Not available'
+      : String(usage.percent) + '%';
+    const quotaState = quota.status + (quota.exceeded ? ' / exceeded' : (quota.nearLimit ? ' / near limit' : ''));
+    const recommendationText = recommendations.length
+      ? recommendations.join(' | ')
+      : 'No usage or subscription recommendations right now.';
 
     if (requestType) requestType.value = 'billing_usage_review';
     if (requestedPlan) requestedPlan.value = '';
@@ -235,17 +260,20 @@ PAGES.settings = (() => {
     if (message) {
       message.value = [
         'Please review our Maestro usage and quota status.',
-        'plan=' + (summary.plan_id || summary.plan || '-'),
-        'monthly_included_units=' + formatNumber(summary.monthly_included_units || summary.allowance_units),
-        'quota_used=' + formatNumber(summary.quota_used),
-        'quota_remaining=' + formatNumber(summary.quota_remaining),
-        'quota_status=' + (summary.quota_status || '-'),
-        'total_units=' + formatNumber(summary.total_units),
-        'rejected_requests=' + formatNumber(summary.rejected_requests),
-        'current_period=' + (summary.current_period || '-'),
-        'latest_usage_at=' + (summary.latest_usage_at || '-'),
+        'plan=' + plan.planId,
+        'plan_source=' + plan.source,
+        'monthly_units_used=' + formatNumber(usage.used),
+        'monthly_units_allowance=' + formatNumber(usage.allowance),
+        'monthly_units_remaining=' + remaining,
+        'usage_percent=' + percent,
+        'current_period=' + currentPeriod,
+        'latest_usage_at=' + latestUsageAt,
+        'quota_status=' + quotaState,
+        'provider_connection=' + provider.status,
+        'byok_required=' + (provider.byokRequired ? 'yes' : 'no'),
         'provider_cost_included=false',
         'No provider secrets or raw keys included.',
+        'recommendations=' + recommendationText,
       ].join('\n');
     }
 

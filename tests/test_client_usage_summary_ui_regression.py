@@ -90,3 +90,30 @@ def test_client_usage_summary_ui_uses_client_scoped_02a_endpoint() -> None:
     assert "set-usage-percent" in html
     assert "set-usage-provider-status" in html
     assert "set-usage-recommendations" in html
+
+def test_usage_review_request_uses_client_usage_summary_payload() -> None:
+    from pathlib import Path
+
+    source = Path("processual_api/static/js/pages/settings.js").read_text(encoding="utf-8")
+
+    assert "function prepareUsageReviewRequest()" in source
+    assert "usageSummaryPlan(summary)" in source
+    assert "usageSummaryUsage(summary)" in source
+    assert "usageSummaryQuota(summary)" in source
+    assert "usageSummaryProvider(summary)" in source
+
+    assert "plan_source=" in source
+    assert "monthly_units_used=" in source
+    assert "monthly_units_allowance=" in source
+    assert "usage_percent=" in source
+    assert "provider_connection=" in source
+    assert "recommendations=" in source
+    assert "billing_usage_review" in source
+
+    legacy_markers = [
+        "monthly_included_units=' + formatNumber(summary.monthly_included_units",
+        "quota_used=' + formatNumber(summary.quota_used)",
+        "total_units=' + formatNumber(summary.total_units)",
+    ]
+    for marker in legacy_markers:
+        assert marker not in source
