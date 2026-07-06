@@ -35,6 +35,7 @@ from ..schemas.settings import (
     SubscriptionInfo,
     TestConnectionResult,
 )
+from ..services.admin_subscription_analytics import build_admin_subscription_analytics
 from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 from ..services.usage_log_store import summarize_usage_logs
 from ..supervision_rbac import (
@@ -554,6 +555,14 @@ def _admin_client_request_user_id_from_path(path) -> str:
 def _admin_client_request_raw_files() -> list:
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
     return sorted(_DATA_DIR.glob("*.json"))
+
+
+@router.get("/admin/subscription-analytics", response_model=dict)
+async def get_admin_subscription_analytics(
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_read(current_user)
+    return build_admin_subscription_analytics(_DATA_DIR)
 
 
 @router.get("/admin/client-requests", response_model=dict)
