@@ -115,4 +115,3 @@ def apply_verified_client_request_plan(
             'monthly_unit_allowance': allowance,
         },
     }
-

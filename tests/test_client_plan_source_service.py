@@ -142,4 +142,3 @@ def test_apply_verified_client_request_plan_rejects_unknown_plan():
 
     assert exc.value.reason == 'unsupported_plan'
     assert entry == before
-
