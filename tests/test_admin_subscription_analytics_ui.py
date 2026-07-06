@@ -82,4 +82,3 @@ def test_admin_subscription_analytics_renders_allowance_not_wired_state():
     assert "admin-subscription-analytics-summary" in js
     assert ".admin-subscription-analytics-summary" in html
     assert '.admin-subscription-analytics-note[data-state="not-wired"]' in html
-
