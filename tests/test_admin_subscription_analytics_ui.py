@@ -71,4 +71,3 @@ def test_admin_subscription_analytics_card_has_local_styles():
     assert ".admin-subscription-analytics-card" in html
     assert ".admin-subscription-analytics-grid" in html
     assert "button[data-admin-subscription-refresh]" in html
-
