@@ -349,3 +349,49 @@ Required production environment values remain explicit and must not use local de
 - `MAESTRO_ADMIN_PASSWORD`
 
 Billing remains BYOK: provider costs are not included in Processual Maestro pricing.
+
+## Cloud Run deploy contract
+
+Processual Maestro is Cloud Run-ready, but deployment is intentionally an explicit operator step. The repository-level Cloud Build contract builds and publishes the container image; it does not deploy the service automatically.
+
+Build the image with Cloud Build:
+
+```powershell
+gcloud builds submit --config cloudbuild.yaml --substitutions _REGION=us-central1,_REPOSITORY=processual-maestro,_SERVICE=processual-maestro-api
+```
+
+Deploy the already-built image only after production secrets and environment variables are configured:
+
+```powershell
+gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production --set-secrets JWT_SECRET=JWT_SECRET:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest
+```
+
+Cloud Run provides the runtime `PORT` value. The container keeps the default fallback `${PORT:-8000}` for local compatibility.
+
+Live health check:
+
+```text
+/health/live
+```
+
+Readiness check:
+
+```text
+/health/ready
+```
+
+### Required production environment matrix
+
+| Variable | Required for Cloud Run | Delivery | Notes |
+| --- | --- | --- | --- |
+| `ENVIRONMENT` | Yes | env var | Set to `production` for production deployment checks. |
+| `JWT_SECRET` | Yes | Secret Manager | Must be strong and unique. Never use `CHANGE_ME_IN_PRODUCTION`. |
+| `DATABASE_URL` | Yes | Secret Manager | Production database connection string. |
+| `REDIS_URL` | Yes | Secret Manager | Production Redis connection string. |
+| `MAESTRO_ADMIN_EMAIL` | Yes | Secret Manager | Initial admin login identity. |
+| `MAESTRO_ADMIN_PASSWORD` | Yes | Secret Manager | Initial admin login secret. |
+| `POSTGRES_PASSWORD` | Required when using bundled Postgres | Secret Manager | Not needed when `DATABASE_URL` points to managed SQL with its own secret. |
+| `REDIS_PASSWORD` | Required when Redis requires auth | Secret Manager | Keep aligned with the deployed Redis provider. |
+| `GRAFANA_ADMIN_PASSWORD` | Required when Grafana is deployed | Secret Manager | Not required for API-only Cloud Run deployments. |
+
+Billing remains BYOK: provider costs are not included in Maestro usage pricing, and plan allowances must come from the pricing catalog rather than deployment configuration.
