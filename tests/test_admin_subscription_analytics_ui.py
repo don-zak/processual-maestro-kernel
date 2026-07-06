@@ -52,3 +52,23 @@ def test_admin_subscription_analytics_ui_does_not_render_secret_markers():
 
     for marker in forbidden:
         assert marker not in js
+
+def test_admin_subscription_analytics_host_is_not_inserted_between_scripts():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+
+    host_index = html.index('id="admin-subscription-analytics-host"')
+    nearby_before = html[max(0, host_index - 260):host_index].lower()
+    nearby_after = html[host_index:host_index + 260].lower()
+
+    assert "<script" not in nearby_before
+    assert "</script>" not in nearby_before
+    assert "<script" not in nearby_after
+
+def test_admin_subscription_analytics_card_has_local_styles():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+
+    assert 'id="admin-subscription-analytics-style"' in html
+    assert ".admin-subscription-analytics-card" in html
+    assert ".admin-subscription-analytics-grid" in html
+    assert "button[data-admin-subscription-refresh]" in html
+

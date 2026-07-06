@@ -10,6 +10,142 @@
   .admin-page { display: none; }
   .admin-page.active { display: block; }
 </style>
+<style id="admin-subscription-analytics-style">
+  #admin-subscription-analytics-host {
+    margin: 0 0 1.25rem;
+  }
+
+  .admin-subscription-analytics-card {
+    border: 1px solid rgba(126, 166, 255, 0.28);
+    border-radius: 18px;
+    padding: 1.2rem;
+    background:
+      linear-gradient(135deg, rgba(21, 35, 62, 0.92), rgba(7, 12, 22, 0.94)),
+      rgba(12, 18, 32, 0.92);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    color: #dbe7ff;
+  }
+
+  .admin-subscription-analytics-card .admin-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .admin-subscription-analytics-card .admin-eyebrow {
+    margin: 0 0 0.25rem;
+    color: #8fb3ff;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .admin-subscription-analytics-card h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .admin-subscription-analytics-card h3 {
+    margin: 0 0 0.7rem;
+    font-size: 0.95rem;
+    color: #ffffff;
+  }
+
+  .admin-subscription-analytics-card code {
+    color: #b9d0ff;
+  }
+
+  .admin-subscription-analytics-card button[data-admin-subscription-refresh] {
+    border: 1px solid rgba(126, 166, 255, 0.38);
+    border-radius: 999px;
+    padding: 0.45rem 0.85rem;
+    background: rgba(91, 132, 255, 0.14);
+    color: #e9f0ff;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .admin-subscription-analytics-card button[data-admin-subscription-refresh]:hover {
+    background: rgba(91, 132, 255, 0.24);
+  }
+
+  .admin-subscription-analytics-grid,
+  .admin-subscription-analytics-plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.85rem;
+    margin-top: 0.9rem;
+  }
+
+  .admin-subscription-analytics-grid > div,
+  .admin-subscription-analytics-plans,
+  .admin-subscription-analytics-risks {
+    border: 1px solid rgba(126, 166, 255, 0.18);
+    border-radius: 14px;
+    padding: 0.9rem;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .admin-subscription-analytics-metric {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.38rem 0;
+    padding: 0.46rem 0.55rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .admin-subscription-analytics-label {
+    color: #aebddb;
+    font-size: 0.86rem;
+  }
+
+  .admin-subscription-analytics-metric strong {
+    color: #ffffff;
+    font-size: 1rem;
+  }
+
+  .admin-subscription-analytics-risks {
+    margin-top: 0.9rem;
+  }
+
+  .admin-subscription-analytics-risks ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .admin-subscription-analytics-risk {
+    display: grid;
+    gap: 0.2rem;
+    border-left: 3px solid #8fb3ff;
+    border-radius: 10px;
+    padding: 0.55rem 0.65rem;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .admin-subscription-analytics-risk[data-severity="warning"] {
+    border-left-color: #ffd166;
+  }
+
+  .admin-subscription-analytics-risk[data-severity="danger"] {
+    border-left-color: #ff5f7a;
+  }
+
+  .admin-subscription-analytics-risk span,
+  .admin-subscription-analytics-risk small,
+  .admin-subscription-analytics-empty,
+  .admin-subscription-analytics-card .admin-muted {
+    color: #aebddb;
+  }
+</style>
 </head>
 <body>
 <div id="bg-grid"></div>
@@ -212,6 +348,10 @@
 </div>
 <!-- ===== ADMIN PAGE: Usage Monitor ===== -->
 <div id="page-admin-usage" class="admin-page">
+<section class="admin-panel" aria-label="Subscription and usage analytics">
+  <div id="admin-subscription-analytics-host"></div>
+</section>
+
   <div>
     <div class="sec-hdr">
       <div class="sh-title">Usage Monitor</div>
@@ -453,10 +593,7 @@
 <script src="/console/js/admin_runtime_fixups.js?v=adminruntime05"></script>
 <script src="/console/js/admin_home_layout.js?v=adminruntime05"></script>
 <script src="/console/js/admin_supervisor_audit_summary.js?v=adminsuperaudit01"></script>\n<script src="/console/js/admin_api_key_summary.js?v=adminapikeysummary01"></script>
-<script src="/console/js/admin_supervisor_readiness_summary.js?v=adminsuperreadiness06"></script>\n<section class="admin-panel" aria-label="Subscription and usage analytics">
-  <div id="admin-subscription-analytics-host"></div>
-</section>
-
+<script src="/console/js/admin_supervisor_readiness_summary.js?v=adminsuperreadiness06"></script>\n
 <script src="/console/js/admin_supervisor_stats.js?v=adminsuperstats01"></script>
 <script src="/console/js/admin_client_requests.js?v=adminrbacui01"></script>
 <script src="/console/js/admin_subscription_analytics.js?v=adminsubscriptions01b"></script>
