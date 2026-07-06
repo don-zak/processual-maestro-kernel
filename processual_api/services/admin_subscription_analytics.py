@@ -30,7 +30,6 @@ FORBIDDEN_MARKERS = (
     "encrypted_key",
     "provider_secret",
     "raw_key",
-    "secret",
     "token",
     "password",
 )
@@ -322,6 +321,9 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
     client_statuses: dict[str, str] = {}
     client_usage: defaultdict[str, int] = defaultdict(int)
     client_limits: dict[str, int] = {}
+    client_key_counts: defaultdict[str, dict[str, int]] = defaultdict(
+        lambda: {"active": 0, "revoked": 0}
+    )
 
     for settings_path in sorted(base_dir.glob("settings_*.json")):
         raw = _read_json(settings_path, {})
@@ -352,8 +354,10 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
         for key_record in _iter_dict_records(api_key_records):
             if _api_key_is_revoked(key_record):
                 summary["api_keys"]["revoked"] += 1
+                client_key_counts[client_id]["revoked"] += 1
             else:
                 summary["api_keys"]["active"] += 1
+                client_key_counts[client_id]["active"] += 1
             summary["api_keys"][_api_key_profile(key_record)] += 1
 
     subscriptions_path = base_dir / "subscriptions.json"
@@ -361,9 +365,13 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
     for subscription in _iter_dict_records(subscriptions_raw):
         client_id = _record_client_id(subscription)
         plan_id = _normalize_plan(_record_plan_id(subscription))
-        status = _subscription_status(
-            _first_text(subscription, "status", "subscription_status", "stage")
-        )
+        raw_subscription_status = _first_text(
+            subscription,
+            "status",
+            "subscription_status",
+            "stage",
+        ).lower()
+        status = _subscription_status(raw_subscription_status)
 
         summary["subscriptions"][status] += 1
 
@@ -390,6 +398,17 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
                 plan_id=plan_id,
                 message="Subscription is not active.",
             )
+
+        if raw_subscription_status in {"suspended", "disabled", "blocked"}:
+            _append_risk(
+                summary["risk"],
+                severity="danger",
+                kind="subscription_suspended",
+                client_id=client_id,
+                plan_id=plan_id,
+                message="Subscription is suspended or disabled.",
+            )
+
 
     current_period = datetime.now(UTC).strftime("%Y-%m")
     for record in _read_usage_records(base_dir) or []:
@@ -428,6 +447,45 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
         used = client_usage.get(client_id, 0)
         limit = client_limits.get(client_id) or _plan_allowance(plan_id)
         summary["usage"]["monthly_units_allowance"] += limit
+
+        active_keys = client_key_counts.get(client_id, {}).get("active", 0)
+        revoked_keys = client_key_counts.get(client_id, {}).get("revoked", 0)
+
+        if active_keys == 0 and revoked_keys > 0:
+            _append_risk(
+                summary["risk"],
+                severity="warning",
+                kind="inactive_keys",
+                client_id=client_id,
+                plan_id=plan_id,
+                used=used,
+                limit=limit,
+                message="Client has revoked or inactive keys and no active key.",
+            )
+
+        if plan_id == "unknown":
+            _append_risk(
+                summary["risk"],
+                severity="warning",
+                kind="unknown_plan",
+                client_id=client_id,
+                plan_id=plan_id,
+                used=used,
+                limit=limit,
+                message="Client plan is unknown, so allowance cannot be calculated.",
+            )
+
+        if used > 0 and limit <= 0:
+            _append_risk(
+                summary["risk"],
+                severity="warning",
+                kind="usage_without_allowance",
+                client_id=client_id,
+                plan_id=plan_id,
+                used=used,
+                limit=limit,
+                message="Client has usage but no known allowance.",
+            )
 
         if limit > 0 and used >= limit:
             summary["usage"]["quota_exceeded"] += 1
