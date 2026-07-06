@@ -36,6 +36,10 @@ from ..schemas.settings import (
     TestConnectionResult,
 )
 from ..services.admin_subscription_analytics import build_admin_subscription_analytics
+from ..services.client_plan_source import (
+    ClientRequestPlanApplyError,
+    apply_verified_client_request_plan,
+)
 from ..services.client_usage_summary import build_client_usage_summary
 from ..services.plan_store import PLAN_POLICIES, get_plan_policy, quota_limit_for_plan, resolve_plan_id
 from ..services.usage_log_store import summarize_usage_logs
@@ -699,6 +703,11 @@ def _admin_client_request_detail(entry: dict, fallback_user_id: str) -> dict:
         "request_type": summary["request_type"],
         "request_label": _admin_safe_request_text(entry.get("request_label") or summary["request_type"]),
         "requested_plan": summary["requested_plan"],
+        "approved_plan": _admin_safe_request_text(entry.get("approved_plan") or ""),
+        "plan_source": _admin_safe_request_text(entry.get("plan_source") or ""),
+        "plan_applied": bool(entry.get("plan_applied")),
+        "plan_applied_at": _admin_safe_request_text(entry.get("plan_applied_at") or ""),
+        "plan_applied_by": _admin_safe_request_text(entry.get("plan_applied_by") or ""),
         "status": request_status,
         "source": summary["source"],
         "created_at": summary["created_at"],
@@ -1189,6 +1198,154 @@ def _append_admin_request_status_history(
 
     history.append(event)
     entry["status_history"] = history
+
+
+
+def _admin_client_request_apply_plan_error_status(
+    exc: ClientRequestPlanApplyError,
+) -> int:
+    reason = str(getattr(exc, "reason", "") or str(exc) or "").strip()
+    if reason == "request_not_approved":
+        return status.HTTP_409_CONFLICT
+    if reason == "unsupported_plan":
+        return status.HTTP_422_UNPROCESSABLE_CONTENT
+    return status.HTTP_400_BAD_REQUEST
+
+
+def _admin_client_request_apply_plan_error_reason(
+    exc: ClientRequestPlanApplyError,
+) -> str:
+    reason = str(getattr(exc, "reason", "") or str(exc) or "").strip()
+    return reason or "invalid_request"
+
+
+@router.post("/admin/client-requests/{request_id}/apply-plan", response_model=dict)
+async def apply_admin_client_request_plan(
+    request_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_write(current_user)
+
+    requested = str(request_id or "").strip()
+    try:
+        _require_admin_supervision_scope(current_user, CLIENTS_STATUS_DECIDE_SCOPE)
+    except HTTPException:
+        _record_admin_request_audit_event(
+            current_user=current_user,
+            action="admin_client_request_plan_apply_denied",
+            target_id=requested,
+            result="denied",
+            reason=f"missing_scope: {CLIENTS_STATUS_DECIDE_SCOPE}",
+            request_path=f"/settings/admin/client-requests/{requested}/apply-plan",
+        )
+        raise
+
+    if not requested:
+        raise HTTPException(status_code=404, detail="Client request not found.")
+
+    now = _admin_request_status_now_iso()
+    actor = _admin_request_status_actor(current_user)
+
+    for path in _admin_client_request_raw_files():
+        if not path.is_file():
+            continue
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+
+        entries = raw.get("client_requests") or []
+        if not isinstance(entries, list):
+            continue
+
+        fallback_user_id = _admin_client_request_user_id_from_path(path)
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+
+            summary = _admin_client_request_summary(entry, fallback_user_id)
+            if requested not in {summary["request_id"], summary["short_id"]}:
+                continue
+
+            try:
+                result = apply_verified_client_request_plan(entry, actor=actor, now=now)
+            except ClientRequestPlanApplyError as exc:
+                reason = _admin_client_request_apply_plan_error_reason(exc)
+                _record_admin_request_audit_event(
+                    current_user=current_user,
+                    action="admin_client_request_plan_apply_failed",
+                    target_id=summary["request_id"],
+                    client_id=_admin_audit_request_client_id(
+                        entry,
+                        summary,
+                        fallback_user_id,
+                    ),
+                    result="failure",
+                    reason=reason,
+                    request_path=(
+                        f"/settings/admin/client-requests/"
+                        f"{summary['request_id']}/apply-plan"
+                    ),
+                    metadata={"reason": reason},
+                )
+                raise HTTPException(
+                    status_code=_admin_client_request_apply_plan_error_status(exc),
+                    detail=reason,
+                ) from exc
+
+            changed = bool(result.get("changed"))
+            if changed:
+                path.write_text(
+                    json.dumps(raw, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+
+            plan = result.get("plan") if isinstance(result.get("plan"), dict) else {}
+            status_value = str(
+                result.get("status")
+                or ("plan_applied" if changed else "already_applied")
+            )
+            audit_action = (
+                "admin_client_request_plan_applied"
+                if changed
+                else "admin_client_request_plan_already_applied"
+            )
+            _record_admin_request_audit_event(
+                current_user=current_user,
+                action=audit_action,
+                target_id=summary["request_id"],
+                client_id=_admin_audit_request_client_id(
+                    entry,
+                    summary,
+                    fallback_user_id,
+                ),
+                result="success",
+                safe_note=f"Verified requested plan {status_value}.",
+                request_path=(
+                    f"/settings/admin/client-requests/"
+                    f"{summary['request_id']}/apply-plan"
+                ),
+                metadata={
+                    "status": status_value,
+                    "plan_id": plan.get("plan_id"),
+                    "plan_source": plan.get("source"),
+                    "changed": changed,
+                },
+            )
+
+            return {
+                "status": status_value,
+                "plan": plan,
+                "changed": changed,
+                "request": _admin_client_request_detail(entry, fallback_user_id),
+            }
+
+    raise HTTPException(status_code=404, detail="Client request not found.")
 
 
 @router.post("/admin/client-requests/{request_id}/status", response_model=dict)
