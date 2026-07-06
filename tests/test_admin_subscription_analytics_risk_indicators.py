@@ -105,3 +105,18 @@ def test_admin_subscription_analytics_keeps_risk_payload_secret_free(tmp_path):
     assert "do-not-leak" not in serialized
     assert "provider_secret" not in serialized
     assert "encrypted_key" not in serialized
+
+def test_admin_subscription_analytics_allows_safe_client_ids_with_sensitive_words(tmp_path):
+    _write_json(
+        tmp_path / "settings_api_key_user.json",
+        {
+            "client_id": "api_key_user",
+            "plan_id": "unknown",
+            "api_keys": [],
+        },
+    )
+
+    summary = build_admin_subscription_analytics(tmp_path)
+
+    assert summary["clients"]["total"] == 1
+    assert any(item["client_id"] == "api_key_user" for item in summary["risk"])

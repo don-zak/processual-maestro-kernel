@@ -292,9 +292,24 @@ def _append_risk(
 
 
 
+
 def _assert_no_forbidden_values(value: Any) -> None:
+    forbidden_keys = {
+        "api_key",
+        "raw_key",
+        "encrypted_key",
+        "provider_secret",
+        "token",
+        "password",
+    }
+
     if isinstance(value, dict):
-        for nested in value.values():
+        for key, nested in value.items():
+            normalized_key = str(key or "").strip().lower()
+            if normalized_key in forbidden_keys:
+                raise RuntimeError(
+                    "Admin subscription analytics payload contains a forbidden key."
+                )
             _assert_no_forbidden_values(nested)
         return
 
@@ -302,15 +317,6 @@ def _assert_no_forbidden_values(value: Any) -> None:
         for nested in value:
             _assert_no_forbidden_values(nested)
         return
-
-    if value is None:
-        return
-
-    text_value = str(value).lower()
-    if any(marker in text_value for marker in FORBIDDEN_MARKERS):
-        raise RuntimeError(
-            "Admin subscription analytics payload contains a forbidden value."
-        )
 
 def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> dict:
     base_dir = Path(data_dir or "processual_api/data")
