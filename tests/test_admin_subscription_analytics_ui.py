@@ -71,3 +71,15 @@ def test_admin_subscription_analytics_card_has_local_styles():
     assert ".admin-subscription-analytics-card" in html
     assert ".admin-subscription-analytics-grid" in html
     assert "button[data-admin-subscription-refresh]" in html
+
+def test_admin_subscription_analytics_renders_allowance_not_wired_state():
+    js = ADMIN_SUBSCRIPTION_JS.read_text(encoding="utf-8")
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+
+    assert "Monthly allowance data is not wired yet for these clients" in js
+    assert "Not wired yet" in js
+    assert "admin-subscription-analytics-note" in js
+    assert "admin-subscription-analytics-summary" in js
+    assert ".admin-subscription-analytics-summary" in html
+    assert '.admin-subscription-analytics-note[data-state="not-wired"]' in html
+

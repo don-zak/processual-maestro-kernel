@@ -72,6 +72,35 @@
     background: rgba(91, 132, 255, 0.24);
   }
 
+  .admin-subscription-analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.7rem;
+    margin: 1rem 0 0.95rem;
+  }
+
+  .admin-subscription-analytics-pill {
+    border: 1px solid rgba(126, 166, 255, 0.2);
+    border-radius: 14px;
+    padding: 0.75rem 0.85rem;
+    background: rgba(91, 132, 255, 0.08);
+  }
+
+  .admin-subscription-analytics-pill span {
+    display: block;
+    color: #aebddb;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .admin-subscription-analytics-pill strong {
+    display: block;
+    margin-top: 0.25rem;
+    color: #ffffff;
+    font-size: 1.35rem;
+  }
+
   .admin-subscription-analytics-grid,
   .admin-subscription-analytics-plans {
     display: grid;
@@ -109,6 +138,40 @@
     color: #ffffff;
     font-size: 1rem;
   }
+
+  .admin-subscription-analytics-value {
+    display: grid;
+    justify-items: end;
+    gap: 0.1rem;
+  }
+
+  .admin-subscription-analytics-value small {
+    color: #ffd166;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .admin-subscription-analytics-metric[data-state="not-wired"] {
+    border: 1px solid rgba(255, 209, 102, 0.32);
+    background: rgba(255, 209, 102, 0.07);
+  }
+
+  .admin-subscription-analytics-note {
+    margin-top: 0.65rem;
+    border-radius: 12px;
+    padding: 0.7rem 0.75rem;
+    color: #aebddb;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .admin-subscription-analytics-note[data-state="not-wired"] {
+    border: 1px solid rgba(255, 209, 102, 0.26);
+    color: #ffe3a0;
+    background: rgba(255, 209, 102, 0.07);
+  }
+
 
   .admin-subscription-analytics-risks {
     margin-top: 0.9rem;

@@ -38,11 +38,56 @@
     return {};
   }
 
-  function metric(label, value) {
+  function metric(label, value, options) {
+    const detail = options && options.detail ? options.detail : "";
+    const state = options && options.state ? options.state : "";
+
     return `
-      <div class="admin-subscription-analytics-metric">
+      <div class="admin-subscription-analytics-metric" data-state="${escapeHtml(state)}">
         <span class="admin-subscription-analytics-label">${escapeHtml(label)}</span>
+        <span class="admin-subscription-analytics-value">
+          <strong>${escapeHtml(numberText(value))}</strong>
+          ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+        </span>
+      </div>
+    `;
+  }
+
+  function summaryPill(label, value) {
+    return `
+      <div class="admin-subscription-analytics-pill">
+        <span>${escapeHtml(label)}</span>
         <strong>${escapeHtml(numberText(value))}</strong>
+      </div>
+    `;
+  }
+
+  function allowanceNote(clients, usage) {
+    const totalClients = Number(clients.total || 0);
+    const allowance = Number(usage.monthly_units_allowance || 0);
+    const used = Number(usage.monthly_units_used || 0);
+
+    if (totalClients > 0 && allowance <= 0) {
+      return `
+        <div class="admin-subscription-analytics-note" data-state="not-wired">
+          Monthly allowance data is not wired yet for these clients. The card is showing
+          source-of-truth zeros instead of estimated or mock quota values.
+        </div>
+      `;
+    }
+
+    if (allowance > 0) {
+      const percent = Math.min(100, Math.round((used / allowance) * 100));
+      return `
+        <div class="admin-subscription-analytics-note" data-state="ready">
+          Monthly usage is at ${escapeHtml(percent)}% of the known allowance.
+        </div>
+      `;
+    }
+
+    return `
+      <div class="admin-subscription-analytics-note" data-state="empty">
+        No client allowance data is available yet.
       </div>
     `;
   }
@@ -117,6 +162,13 @@
           <button type="button" data-admin-subscription-refresh>Refresh</button>
         </div>
 
+        <div class="admin-subscription-analytics-summary">
+          ${summaryPill("Clients", clients.total)}
+          ${summaryPill("Active subscriptions", subscriptions.active)}
+          ${summaryPill("Monthly units", usage.monthly_units_used)}
+          ${summaryPill("Risk indicators", Array.isArray(risk) ? risk.length : 0)}
+        </div>
+
         <div class="admin-subscription-analytics-grid">
           <div>
             <h3>Clients</h3>
@@ -128,11 +180,19 @@
           </div>
 
           <div>
-            <h3>Usage</h3>
+            <h3>Usage &amp; quota</h3>
             ${metric("Monthly units used", usage.monthly_units_used)}
-            ${metric("Monthly allowance", usage.monthly_units_allowance)}
+            ${metric("Monthly allowance", usage.monthly_units_allowance, {
+              detail: Number(clients.total || 0) > 0 && Number(usage.monthly_units_allowance || 0) <= 0
+                ? "Not wired yet"
+                : "",
+              state: Number(clients.total || 0) > 0 && Number(usage.monthly_units_allowance || 0) <= 0
+                ? "not-wired"
+                : "",
+            })}
             ${metric("Near quota limit", usage.near_quota_limit)}
             ${metric("Quota exceeded", usage.quota_exceeded)}
+            ${allowanceNote(clients, usage)}
           </div>
 
           <div>
