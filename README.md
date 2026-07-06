@@ -363,7 +363,7 @@ gcloud builds submit --config cloudbuild.yaml --substitutions _REGION=us-central
 Deploy the already-built image only after production secrets and environment variables are configured:
 
 ```powershell
-gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production --set-secrets JWT_SECRET=JWT_SECRET:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest
+gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production,APP_ENV=production,API_DEBUG=false --set-secrets JWT_SECRET=JWT_SECRET:latest,API_KEYS=API_KEYS:latest,PROCESSUAL_CRYPTO_KEY_B64=PROCESSUAL_CRYPTO_KEY_B64:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest,POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,GRAFANA_ADMIN_PASSWORD=GRAFANA_ADMIN_PASSWORD:latest
 ```
 
 Cloud Run provides the runtime `PORT` value. The container keeps the default fallback `${PORT:-8000}` for local compatibility.
@@ -386,12 +386,20 @@ Readiness check:
 | --- | --- | --- | --- |
 | `ENVIRONMENT` | Yes | env var | Set to `production` for production deployment checks. |
 | `JWT_SECRET` | Yes | Secret Manager | Must be strong and unique. Never use `CHANGE_ME_IN_PRODUCTION`. |
+| `API_KEYS` | Yes | Secret Manager | Strong service/API bootstrap key. Do not use development fallback keys. |
+| `PROCESSUAL_CRYPTO_KEY_B64` | Yes | Secret Manager | Base64-encoded 32-byte encryption key for protected secrets. |
 | `DATABASE_URL` | Yes | Secret Manager | Production database connection string. |
 | `REDIS_URL` | Yes | Secret Manager | Production Redis connection string. |
 | `MAESTRO_ADMIN_EMAIL` | Yes | Secret Manager | Initial admin login identity. |
 | `MAESTRO_ADMIN_PASSWORD` | Yes | Secret Manager | Initial admin login secret. |
-| `POSTGRES_PASSWORD` | Required when using bundled Postgres | Secret Manager | Not needed when `DATABASE_URL` points to managed SQL with its own secret. |
-| `REDIS_PASSWORD` | Required when Redis requires auth | Secret Manager | Keep aligned with the deployed Redis provider. |
-| `GRAFANA_ADMIN_PASSWORD` | Required when Grafana is deployed | Secret Manager | Not required for API-only Cloud Run deployments. |
+| `POSTGRES_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; use a strong value even when the database provider is external. |
+| `REDIS_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; keep aligned with the deployed Redis provider. |
+| `GRAFANA_ADMIN_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; keep a strong secret even for API-only deployments. |
 
 Billing remains BYOK: provider costs are not included in Maestro usage pricing, and plan allowances must come from the pricing catalog rather than deployment configuration.
+
+### Production secrets contract
+
+The Cloud Run deploy command must map every production secret through Secret Manager. Do not place real secret values in `cloudbuild.yaml`, README examples, static assets, tests, or committed `.env` files.
+
+The canonical production secret names are maintained in `processual_api/settings.py` as `PRODUCTION_SECRET_ENV_VARS`; documentation and regression tests must stay aligned with that contract.

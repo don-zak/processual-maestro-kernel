@@ -4,6 +4,19 @@ import os
 import warnings
 from dataclasses import dataclass, field
 
+PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
+    "JWT_SECRET",
+    "API_KEYS",
+    "PROCESSUAL_CRYPTO_KEY_B64",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "MAESTRO_ADMIN_EMAIL",
+    "MAESTRO_ADMIN_PASSWORD",
+    "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
+    "GRAFANA_ADMIN_PASSWORD",
+)
+
 
 @dataclass
 class APISettings:
