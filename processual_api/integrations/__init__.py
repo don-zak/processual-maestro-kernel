@@ -49,3 +49,20 @@ __all__ = [
     "list_sector_profiles",
     "scope_requires_supervisor_approval",
 ]
+
+# INTEGRATION-CREDENTIALS-11D exports begin
+from processual_api.integrations.credential_profiles import (
+    CredentialProfile,
+    get_credential_profile,
+    list_credential_profiles,
+    validate_credential_profiles,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "CredentialProfile",
+    "get_credential_profile",
+    "list_credential_profiles",
+    "validate_credential_profiles",
+]
+# INTEGRATION-CREDENTIALS-11D exports end
