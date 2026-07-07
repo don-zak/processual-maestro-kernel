@@ -313,6 +313,125 @@ h1{
   display:block!important;
 }
 
+
+/* PRICING-COST-08G-R1: public pricing factors are hidden until opened. */
+.pricing-factors-actions{
+  margin-top:18px;
+  display:flex;
+  justify-content:center;
+}
+
+.pricing-factors-toggle{
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  color:var(--text);
+  padding:10px 16px;
+  cursor:pointer;
+}
+
+.pricing-factors-card{
+  display:none!important;
+  margin-top:14px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:20px;
+  padding:18px;
+  background:rgba(255,255,255,.05);
+}
+
+.pricing-factors-card.is-open{
+  display:block!important;
+}
+
+.pricing-factors-content[hidden]{
+  display:none!important;
+}
+
+.pricing-factors-content h3{
+  margin:0 0 10px;
+}
+
+.pricing-factors-content p,
+.pricing-factors-content li{
+  color:var(--muted);
+  line-height:1.6;
+}
+
+.pricing-factors-list{
+  margin:12px 0;
+  padding-inline-start:22px;
+}
+
+.pricing-factors-note{
+  margin-top:12px;
+  font-size:.95rem;
+}
+
+
+/* PRICING-COST-08G-R1: unified bottom actions under the offers panel. */
+.pricing-bottom-actions{
+  margin-top:18px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+}
+
+.pricing-bottom-action{
+  min-height:48px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:12px 22px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.08);
+  color:var(--text);
+  font:inherit;
+  font-weight:700;
+  line-height:1;
+  text-decoration:none;
+  cursor:pointer;
+  transition:transform .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.pricing-bottom-action:hover,
+.pricing-bottom-action:focus-visible{
+  transform:translateY(-1px);
+  border-color:rgba(255,255,255,.32);
+  outline:none;
+}
+
+.pricing-bottom-action--primary{
+  border-color:rgba(245,158,11,.75);
+  background:rgba(245,158,11,.12);
+  color:#fff7ed;
+}
+
+.pricing-bottom-action--secondary{
+  border-color:rgba(96,165,250,.35);
+  background:rgba(37,99,235,.1);
+  color:#93c5fd;
+}
+
+.pricing-bottom-action--info{
+  border-color:rgba(148,163,184,.45);
+  background:rgba(148,163,184,.12);
+  color:#e5e7eb;
+}
+
+.pricing-bottom-action--policy{
+  border-color:rgba(34,197,94,.45);
+  background:rgba(34,197,94,.1);
+  color:#bbf7d0;
+}
+
+.pricing-bottom-action[aria-expanded="true"]{
+  border-color:rgba(255,255,255,.48);
+  background:rgba(255,255,255,.15);
+}
+
 </style>
 </head>
 <body>
@@ -378,8 +497,51 @@ h1{
       <div class="offer-grid" id="pricing-offer-grid"></div>
 
       <div class="refund-terms-actions">
+      <div class="pricing-factors-actions pricing-bottom-actions" id="pricing-factors-actions">
         <button
-          class="refund-terms-button"
+          type="button"
+          class="pricing-factors-toggle pricing-bottom-action pricing-bottom-action--info"
+          id="pricing-factors-toggle"
+          aria-expanded="false"
+          aria-controls="pricing-factors-card"
+          data-label-ar="عوامل التسعير"
+          data-label-en="Pricing factors under review"
+        >
+          Pricing factors under review
+        </button>
+      </div>
+      <article class="pricing-factors-card" id="pricing-factors-card" aria-hidden="true">
+        <section class="pricing-factors-content" data-pricing-factors-lang="ar" lang="ar" dir="rtl" hidden>
+          <h3>عوامل التسعير قيد المراجعة</h3>
+          <p id="pricing-factors-state-ar">تحميل حالة مراجعة التسعير...</p>
+          <ul class="pricing-factors-list">
+            <li>تراعي الأسعار البنية التحتية والتشغيل العام للخدمة.</li>
+            <li>تراعي معالجة الدفع والالتزامات الضريبية القابلة للتطبيق.</li>
+            <li>تراعي الدعم والإشراف وجهد الدمج عند الحاجة.</li>
+            <li>تطبق سياسة BYOK، ولا تشمل الأسعار تكاليف مزود الذكاء الاصطناعي.</li>
+          </ul>
+          <p class="pricing-factors-note">
+            لا تنشر هذه الصفحة تفاصيل الاحتساب الداخلي أو قيم الكلفة أو منطق الربحية.
+          </p>
+        </section>
+        <section class="pricing-factors-content" data-pricing-factors-lang="en" lang="en" hidden>
+          <h3>Pricing factors under review</h3>
+          <p id="pricing-factors-state-en">Loading pricing review status...</p>
+          <ul class="pricing-factors-list">
+            <li>Pricing considers infrastructure and general service operations.</li>
+            <li>Pricing considers payment processing and applicable tax handling.</li>
+            <li>Pricing considers support, supervision, and integration effort when needed.</li>
+            <li>BYOK applies, and AI provider costs are not included.</li>
+          </ul>
+          <p class="pricing-factors-note">
+            This page does not publish internal calculation details, cost values, or profitability logic.
+          </p>
+        </section>
+      </article>
+
+
+        <button
+          class="refund-terms-button pricing-bottom-action pricing-bottom-action--policy"
           id="pricing-refund-terms-toggle"
           type="button"
           aria-expanded="false"
@@ -420,8 +582,8 @@ h1{
     </section>
 
     <div class="cta-row">
-      <a class="cta" href="/apply" aria-label="Request access">Request access</a>
-      <a class="cta secondary" href="/login">Return to login</a>
+      <a class="cta pricing-bottom-action pricing-bottom-action--primary" href="/apply" aria-label="Request access">Request access</a>
+      <a class="cta secondary pricing-bottom-action pricing-bottom-action--secondary" href="/login">Return to login</a>
     </div>
 
     <p class="footer-note">
@@ -714,6 +876,122 @@ h1{
       document.addEventListener("DOMContentLoaded", setupRefundTermsToggle);
     } else {
       setupRefundTermsToggle();
+    }
+  })();
+
+
+  (function pmkPricingFactorsToggleController() {
+    function currentPricingFactorsLanguage() {
+      const pageLang = String(document.documentElement.getAttribute("lang") || "en").toLowerCase();
+      return pageLang.startsWith("ar") ? "ar" : "en";
+    }
+
+    function syncPricingFactorsLanguage(button, card) {
+      const activeLang = currentPricingFactorsLanguage();
+      const isArabic = activeLang === "ar";
+
+      button.textContent = isArabic
+        ? button.dataset.labelAr || "عوامل التسعير"
+        : button.dataset.labelEn || "Pricing factors under review";
+
+      card.setAttribute("lang", activeLang);
+      card.setAttribute("dir", isArabic ? "rtl" : "ltr");
+
+      card.querySelectorAll("[data-pricing-factors-lang]").forEach((section) => {
+        const isActive = section.dataset.pricingFactorsLang === activeLang;
+        section.hidden = !isActive;
+        section.setAttribute("aria-hidden", isActive ? "false" : "true");
+      });
+    }
+
+    function setPricingFactorsOpen(card, button, isOpen) {
+      card.classList.toggle("is-open", isOpen);
+      card.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    }
+
+    function setPricingFactorsStatus(payload) {
+      const reviewStatus = payload && payload.review_status ? payload.review_status : "pending_review";
+      const billingPolicy = payload && payload.billing_policy ? String(payload.billing_policy).toUpperCase() : "BYOK";
+      const providerExcluded = payload && payload.provider_cost_included === false;
+      const checkoutDisabled = payload && payload.approved_for_checkout === false;
+
+      const english = [
+        `Review status: ${reviewStatus}`,
+        billingPolicy,
+        providerExcluded ? "AI provider costs excluded" : "provider cost policy under review",
+        checkoutDisabled ? "checkout disabled" : "checkout under review",
+      ].join(" · ");
+
+      const arabic = [
+        `حالة المراجعة: ${reviewStatus}`,
+        billingPolicy,
+        providerExcluded ? "تكاليف مزود الذكاء الاصطناعي غير مشمولة" : "سياسة كلفة المزود قيد المراجعة",
+        checkoutDisabled ? "الدفع غير مفعل" : "الدفع قيد المراجعة",
+      ].join(" · ");
+
+      const englishState = document.getElementById("pricing-factors-state-en");
+      const arabicState = document.getElementById("pricing-factors-state-ar");
+
+      if (englishState) {
+        englishState.textContent = english;
+      }
+
+      if (arabicState) {
+        arabicState.textContent = arabic;
+      }
+    }
+
+    async function loadPublicPricingFactors() {
+      try {
+        const response = await fetch("/billing/unit-cost-assumptions", {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        setPricingFactorsStatus(payload);
+      } catch (error) {
+        setPricingFactorsStatus({
+          review_status: "pending_review",
+          billing_policy: "byok",
+          provider_cost_included: false,
+          approved_for_checkout: false,
+        });
+      }
+    }
+
+    function setupPricingFactorsToggle() {
+      const button = document.getElementById("pricing-factors-toggle");
+      const card = document.getElementById("pricing-factors-card");
+
+      if (!button || !card || button.dataset.pricingFactorsController === "ready") {
+        return;
+      }
+
+      button.dataset.pricingFactorsController = "ready";
+      syncPricingFactorsLanguage(button, card);
+      setPricingFactorsOpen(card, button, false);
+      loadPublicPricingFactors();
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        syncPricingFactorsLanguage(button, card);
+        const nextOpen = !card.classList.contains("is-open");
+        setPricingFactorsOpen(card, button, nextOpen);
+      }, true);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", setupPricingFactorsToggle);
+    } else {
+      setupPricingFactorsToggle();
     }
   })();
 
