@@ -413,3 +413,15 @@ Processual Maestro currently uses a draft subscription pricing catalog.
 - Provider costs are not included.
 - Monthly Maestro unit allowances are resolved from the usage pricing catalog.
 - Lemon Squeezy checkout is not considered production-ready until approved plan prices and variant IDs are mapped to the subscription catalog.
+
+## Versioned offer price book
+
+Processual Maestro now keeps subscription plans separate from draft commercial offers.
+
+- Offer price book status: draft_review.
+- Prices are pending review and no production amounts are published.
+- Currency and amount fields remain null until pricing is approved.
+- Trial duration, monthly pricing, yearly pricing, setup fees, commits, and overage rules are not finalized.
+- Checkout remains disabled for all offers.
+- Monthly Maestro unit allowances are still resolved from `usage_pricing.py`, not from payment-provider payloads.
+- Lemon Squeezy variant mapping must not be enabled until offer prices, intervals, and variant IDs are approved.

@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from processual_api.billing.offer_pricebook import public_offer_pricebook
 from processual_api.billing.subscription_catalog import public_subscription_catalog
 
 from ..auth.security import get_current_user
@@ -347,3 +348,9 @@ def _variant_to_plan(variant_id: str) -> str:
 async def get_pricing_catalog() -> dict[str, object]:
     """Return the public-safe draft subscription pricing catalog."""
     return public_subscription_catalog()
+
+
+@router.get("/offer-pricebook")
+async def get_offer_pricebook() -> dict[str, object]:
+    """Return the public-safe draft offer price book."""
+    return public_offer_pricebook()
