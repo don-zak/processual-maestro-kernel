@@ -56,6 +56,84 @@ h1{font-size:13px;font-weight:600;text-align:center;margin-bottom:18px;color:var
 .back-link{display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:16px;font-family:var(--font-data);font-size:10px;color:var(--muted);text-decoration:none;transition:color 0.2s}
 .back-link:hover{color:var(--amber)}
 [dir="rtl"] .back-link .arrow{transform:rotate(180deg)}
+/* LOGIN-GATEWAY-08B commercial and recovery actions */
+.login-secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.login-secondary-action {
+  min-height: 3rem;
+  border: 1px solid rgba(61, 88, 145, 0.55);
+  border-radius: 16px;
+  background: rgba(9, 18, 36, 0.84);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.login-secondary-action:hover,
+.login-secondary-action:focus-visible {
+  border-color: rgba(245, 166, 35, 0.72);
+  color: var(--text);
+  background: rgba(13, 25, 48, 0.96);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.login-secondary-action-label {
+  display: block;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.login-gateway-panel {
+  border: 1px solid rgba(61, 88, 145, 0.34);
+  border-radius: 16px;
+  background: rgba(9, 18, 36, 0.72);
+  margin-top: 0.9rem;
+  padding: 0.95rem 1rem;
+}
+
+.login-gateway-panel-title {
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  color: var(--text);
+}
+
+.login-gateway-panel-copy {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0.35rem 0 0;
+  opacity: 0.9;
+}
+
+.login-gateway-panel-copy a {
+  color: var(--amber);
+  text-decoration: none;
+}
+
+.login-gateway-panel-copy a:hover {
+  text-decoration: underline;
+}
+
+html[dir="rtl"] .login-gateway-panel,
+html[dir="rtl"] .login-secondary-action {
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .login-secondary-actions {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 <script src="/console/js/login_token_capture.js?v=adminauth01"></script>
 </head>
@@ -95,7 +173,60 @@ h1{font-size:13px;font-weight:600;text-align:center;margin-bottom:18px;color:var
 
     <button id="login-btn" class="btn primary"><span data-en="Sign In" data-ar="&#1578;&#1587;&#1580;&#1610;&#1604; &#1575;&#1604;&#1583;&#1582;&#1608;&#1604;">Sign In</span></button>
     <div id="login-error" class="error-msg"></div>
-    <div class="btn-text" data-en="New user? <a href=&quot;/apply&quot;>Request access</a>" data-ar="&#1605;&#1587;&#1578;&#1582;&#1583;&#1605; &#1580;&#1583;&#1610;&#1583;&#1567; <a href=&quot;/apply&quot;>&#1591;&#1604;&#1576; &#1608;&#1589;&#1608;&#1604;</a>">New user? <a href="/apply">Request access</a></div>
+<div class="login-secondary-actions" id="login-commercial-actions" aria-label="Access options">
+  <button
+    type="button"
+    class="login-secondary-action"
+    id="login-offers-registration-button"
+    data-login-panel-target="commercial-offers-panel"
+    aria-expanded="false"
+  >
+    <span
+      class="login-secondary-action-label"
+      data-en="Offers &amp; Registration"
+      data-ar="العروض والتسجيل"
+    >Offers &amp; Registration</span>
+  </button>
+  <button
+    type="button"
+    class="login-secondary-action"
+    id="login-lost-access-button"
+    data-login-panel-target="lost-access-panel"
+    aria-expanded="false"
+  >
+    <span
+      class="login-secondary-action-label"
+      data-en="Lost Access?"
+      data-ar="فقدت بيانات الدخول؟"
+    >Lost Access?</span>
+  </button>
+</div>
+
+<div class="login-gateway-panel" id="commercial-offers-panel" hidden>
+  <p
+    class="login-gateway-panel-title"
+    data-en="Commercial offers are being prepared."
+    data-ar="يجري تجهيز العروض التجارية."
+  >Commercial offers are being prepared.</p>
+  <p
+    class="login-gateway-panel-copy"
+    data-en='Request <a href="/apply" aria-label="Request access">access</a> for pricing and onboarding. Checkout is not enabled from this login gateway yet.'
+    data-ar='اطلب <a href="/apply">الوصول</a> للحصول على معلومات التسعير والإعداد. الدفع المباشر غير مفعّل من بوابة الدخول حاليًا.'
+  >Request <a href="/apply">access</a> for pricing and onboarding. Checkout is not enabled from this login gateway yet.</p>
+</div>
+
+<div class="login-gateway-panel" id="lost-access-panel" hidden>
+  <p
+    class="login-gateway-panel-title"
+    data-en="Need help getting back in?"
+    data-ar="هل تحتاج مساعدة في استعادة الوصول؟"
+  >Need help getting back in?</p>
+  <p
+    class="login-gateway-panel-copy"
+    data-en="Contact your administrator or support contact. If an account exists, the admin team can help recover access."
+    data-ar="تواصل مع المسؤول أو جهة الدعم. إذا كان الحساب موجودًا، يمكن لفريق الإدارة مساعدتك في استعادة الوصول."
+  >Contact your administrator or support contact. If an account exists, the admin team can help recover access.</p>
+</div>
   </div>
   <div class="footer">v2.0.0 &nbsp;&middot;&nbsp; B2B &middot; Invite-only</div>
 </div>
@@ -210,6 +341,33 @@ async function doLogin() {
 }
 document.getElementById('login-btn').addEventListener('click', doLogin);
 document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+</script>
+<script>
+(function () {
+  const gatewayButtons = document.querySelectorAll("[data-login-panel-target]");
+
+  function closeGatewayPanels(exceptPanel) {
+    gatewayButtons.forEach((button) => {
+      const panel = document.getElementById(button.dataset.loginPanelTarget);
+      if (!panel) return;
+      if (panel !== exceptPanel) {
+        panel.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  gatewayButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = document.getElementById(button.dataset.loginPanelTarget);
+      if (!panel) return;
+      const willOpen = panel.hidden;
+      closeGatewayPanels(panel);
+      panel.hidden = !willOpen;
+      button.setAttribute("aria-expanded", String(willOpen));
+    });
+  });
+})();
 </script>
 </body>
 </html>
