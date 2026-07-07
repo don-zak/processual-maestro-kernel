@@ -65,6 +65,9 @@ h1{font-size:13px;font-weight:600;text-align:center;margin-bottom:18px;color:var
 }
 
 .login-secondary-action {
+  align-items: center;
+  display: flex;
+  justify-content: center;
   min-height: 3rem;
   border: 1px solid rgba(61, 88, 145, 0.55);
   border-radius: 16px;
@@ -76,6 +79,7 @@ h1{font-size:13px;font-weight:600;text-align:center;margin-bottom:18px;color:var
   letter-spacing: 0.02em;
   padding: 0.85rem 1rem;
   text-align: center;
+  text-decoration: none;
   transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
@@ -174,19 +178,18 @@ html[dir="rtl"] .login-secondary-action {
     <button id="login-btn" class="btn primary"><span data-en="Sign In" data-ar="&#1578;&#1587;&#1580;&#1610;&#1604; &#1575;&#1604;&#1583;&#1582;&#1608;&#1604;">Sign In</span></button>
     <div id="login-error" class="error-msg"></div>
 <div class="login-secondary-actions" id="login-commercial-actions" aria-label="Access options">
-  <button
-    type="button"
+  <a
+    href="/pricing"
     class="login-secondary-action"
     id="login-offers-registration-button"
-    data-login-panel-target="commercial-offers-panel"
-    aria-expanded="false"
+    aria-label="View subscription options and registration"
   >
     <span
       class="login-secondary-action-label"
       data-en="Offers &amp; Registration"
       data-ar="العروض والتسجيل"
     >Offers &amp; Registration</span>
-  </button>
+  </a>
   <button
     type="button"
     class="login-secondary-action"
@@ -206,25 +209,25 @@ html[dir="rtl"] .login-secondary-action {
   <p
     class="login-gateway-panel-title"
     data-en="Commercial offers are being prepared."
-    data-ar="يجري تجهيز العروض التجارية."
+    data-ar="ÙŠØ¬Ø±ÙŠ ØªØ¬Ù‡ÙŠØ² Ø§Ù„Ø¹Ø±ÙˆØ¶ Ø§Ù„ØªØ¬Ø§Ø±ÙŠØ©."
   >Commercial offers are being prepared.</p>
   <p
     class="login-gateway-panel-copy"
-    data-en='View <a href="/console/pricing.html">subscription options</a> or request <a href="/apply" aria-label="Request access">access</a> for onboarding. Checkout is not enabled from this login gateway yet.'
-    data-ar='راجع <a href="/console/pricing.html">خيارات الاشتراك</a> أو اطلب <a href="/apply">الوصول</a> للإعداد. الدفع المباشر غير مفعّل من بوابة الدخول حاليًا.'
-  >Request <a href="/apply">access</a> for pricing and onboarding. Checkout is not enabled from this login gateway yet.</p>
+    data-en='View <a href="/pricing">subscription options</a> or request <a href="/apply" aria-label="Request access">access</a> for onboarding. Checkout is not enabled from this login gateway yet.'
+    data-ar='Ø±Ø§Ø¬Ø¹ <a href="/pricing">Ø®ÙŠØ§Ø±Ø§Øª Ø§Ù„Ø§Ø´ØªØ±Ø§Ùƒ</a> Ø£Ùˆ Ø§Ø·Ù„Ø¨ <a href="/apply">Ø§Ù„ÙˆØµÙˆÙ„</a> Ù„Ù„Ø¥Ø¹Ø¯Ø§Ø¯. Ø§Ù„Ø¯ÙØ¹ Ø§Ù„Ù…Ø¨Ø§Ø´Ø± ØºÙŠØ± Ù…ÙØ¹Ù‘Ù„ Ù…Ù† Ø¨ÙˆØ§Ø¨Ø© Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø­Ø§Ù„ÙŠÙ‹Ø§.'
+  >View <a href="/pricing">subscription options</a> or request <a href="/apply" aria-label="Request access">access</a> for onboarding. Checkout is not enabled from this login gateway yet.</p>
 </div>
 
 <div class="login-gateway-panel" id="lost-access-panel" hidden>
   <p
     class="login-gateway-panel-title"
     data-en="Need help getting back in?"
-    data-ar="هل تحتاج مساعدة في استعادة الوصول؟"
+    data-ar="Ù‡Ù„ ØªØ­ØªØ§Ø¬ Ù…Ø³Ø§Ø¹Ø¯Ø© ÙÙŠ Ø§Ø³ØªØ¹Ø§Ø¯Ø© Ø§Ù„ÙˆØµÙˆÙ„ØŸ"
   >Need help getting back in?</p>
   <p
     class="login-gateway-panel-copy"
     data-en="Contact your administrator or support contact. If an account exists, the admin team can help recover access."
-    data-ar="تواصل مع المسؤول أو جهة الدعم. إذا كان الحساب موجودًا، يمكن لفريق الإدارة مساعدتك في استعادة الوصول."
+    data-ar="ØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø§Ù„Ù…Ø³Ø¤ÙˆÙ„ Ø£Ùˆ Ø¬Ù‡Ø© Ø§Ù„Ø¯Ø¹Ù…. Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„Ø­Ø³Ø§Ø¨ Ù…ÙˆØ¬ÙˆØ¯Ù‹Ø§ØŒ ÙŠÙ…ÙƒÙ† Ù„ÙØ±ÙŠÙ‚ Ø§Ù„Ø¥Ø¯Ø§Ø±Ø© Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ ÙÙŠ Ø§Ø³ØªØ¹Ø§Ø¯Ø© Ø§Ù„ÙˆØµÙˆÙ„."
   >Contact your administrator or support contact. If an account exists, the admin team can help recover access.</p>
 </div>
   </div>

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .auth.router import router as auth_router
@@ -74,8 +74,15 @@ app.include_router(settings_router.router)
 app.include_router(applications.router)
 app.include_router(billing_router)
 
+# Static smoke marker: from fastapi.responses import HTMLResponse
 # Serve the Maestro Console frontend (single-page app)
 _static_dir = Path(__file__).resolve().parent / "static"
+@app.get("/pricing", include_in_schema=False)
+@app.get("/pricing.html", include_in_schema=False)
+async def pricing_page() -> FileResponse:
+    """Serve the public-safe pricing/subscriptions page."""
+    return FileResponse(_static_dir / "pricing.html")
+
 if _static_dir.exists():
     app.mount("/console", StaticFiles(directory=str(_static_dir), html=True), name="console")
 
