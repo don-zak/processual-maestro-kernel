@@ -403,3 +403,13 @@ Billing remains BYOK: provider costs are not included in Maestro usage pricing, 
 The Cloud Run deploy command must map every production secret through Secret Manager. Do not place real secret values in `cloudbuild.yaml`, README examples, static assets, tests, or committed `.env` files.
 
 The canonical production secret names are maintained in `processual_api/settings.py` as `PRODUCTION_SECRET_ENV_VARS`; documentation and regression tests must stay aligned with that contract.
+
+## Subscription pricing catalog
+
+Processual Maestro currently uses a draft subscription pricing catalog.
+
+- Pricing status: draft.
+- Billing policy: BYOK.
+- Provider costs are not included.
+- Monthly Maestro unit allowances are resolved from the usage pricing catalog.
+- Lemon Squeezy checkout is not considered production-ready until approved plan prices and variant IDs are mapped to the subscription catalog.

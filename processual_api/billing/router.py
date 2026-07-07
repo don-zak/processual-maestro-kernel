@@ -12,6 +12,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from processual_api.billing.subscription_catalog import public_subscription_catalog
+
 from ..auth.security import get_current_user
 from ..services.discord_service import DiscordService
 
@@ -339,3 +341,9 @@ def _variant_to_plan(variant_id: str) -> str:
         if vid and str(vid) == str(variant_id):
             mapping[str(vid)] = plan.replace("_yearly", "")
     return mapping.get(str(variant_id), "unknown")
+
+
+@router.get("/pricing-catalog")
+async def get_pricing_catalog() -> dict[str, object]:
+    """Return the public-safe draft subscription pricing catalog."""
+    return public_subscription_catalog()
