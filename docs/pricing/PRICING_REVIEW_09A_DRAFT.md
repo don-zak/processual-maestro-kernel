@@ -1,10 +1,10 @@
 # PRICING-REVIEW-09A — Draft Market Pricing Review
 
-Status: `draft_review`  
-Public pricing approved: `false`  
-Checkout approved: `false`  
-Lemon Squeezy wiring approved: `false`  
-Currency approved: `false`  
+Status: `draft_review`
+Public pricing approved: `false`
+Checkout approved: `false`
+Lemon Squeezy wiring approved: `false`
+Currency approved: `false`
 Provider cost policy: `BYOK; AI provider costs excluded`
 
 ## Purpose
