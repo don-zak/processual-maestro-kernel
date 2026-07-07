@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from processual_api.billing.offer_pricebook import public_offer_pricebook
 from processual_api.billing.subscription_catalog import public_subscription_catalog
+from processual_api.billing.unit_cost_assumptions import get_unit_cost_assumptions as build_unit_cost_assumptions
 
 from ..auth.security import get_current_user
 from ..services.discord_service import DiscordService
@@ -354,3 +355,10 @@ async def get_pricing_catalog() -> dict[str, object]:
 async def get_offer_pricebook() -> dict[str, object]:
     """Return the public-safe draft offer price book."""
     return public_offer_pricebook()
+
+
+
+@router.get("/unit-cost-assumptions")
+async def get_unit_cost_assumptions() -> dict[str, object]:
+    """Return the public-safe draft unit cost assumptions model."""
+    return build_unit_cost_assumptions()
