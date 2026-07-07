@@ -9,7 +9,7 @@ def test_pricing_page_route_serves_static_pricing_surface() -> None:
     assert response.status_code == 200
     assert "Subscription options" in response.text
     assert 'id="pricing-plan-grid"' in response.text
-    assert 'fetch("/billing/pricing-catalog"' in response.text
+    assert 'loadJson("/billing/pricing-catalog")' in response.text
 
 
 def test_pricing_html_route_alias_serves_static_pricing_surface() -> None:

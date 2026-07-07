@@ -13,7 +13,7 @@ def test_pricing_surface_file_exists_and_fetches_public_catalog() -> None:
 
     assert PRICING_HTML.exists()
     assert "Subscription options" in text
-    assert 'fetch("/billing/pricing-catalog"' in text
+    assert 'loadJson("/billing/pricing-catalog")' in text
     assert 'id="pricing-plan-grid"' in text
     assert "commercially_listed" in text
 
