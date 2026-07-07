@@ -45,3 +45,28 @@ def test_pricing_surface_offer_metadata_is_secret_safe() -> None:
     assert "webhook_secret" not in text
     assert "lemonsqueezy" not in text
     assert "lemon_squeezy" not in text
+
+
+def test_pricing_surface_has_bilingual_refund_terms_card() -> None:
+    source = Path("processual_api/static/pricing.html").read_text(encoding="utf-8")
+
+    assert 'id="pricing-refund-terms-toggle"' in source
+    assert "شروط الاسترجاع / Refund terms" in source
+    assert 'id="pricing-refund-terms-card"' in source
+    assert "تُراجع طلبات الاسترجاع" in source
+    assert "Refund requests are reviewed" in source
+    assert "program runs" in source
+    assert "تنفيذ المهام" in source
+    assert "external agents" in source
+    assert "وكلائه أو مزوديه" in source
+    assert "aria-expanded" in source
+    assert "aria-hidden" in source
+
+
+def test_pricing_surface_renders_fulfillment_policy_labels() -> None:
+    source = Path("processual_api/static/pricing.html").read_text(encoding="utf-8")
+
+    assert "fulfillmentLabel" in source
+    assert "Paid trial · no supervisor approval required" in source
+    assert "Enterprise review required before custom pricing" in source
+    assert "Self-service after registration and payment" in source

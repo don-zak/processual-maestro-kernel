@@ -45,3 +45,33 @@ def test_policy_returns_copy_not_shared_state():
     second = classify_offer_fulfillment(offer)
 
     assert second["requires_supervisor_review"] is False
+
+
+def test_paid_trial_is_public_self_service_without_supervisor_review():
+    offer = {"offer_id": "starter_trial", "plan_id": "starter"}
+
+    enriched = apply_offer_fulfillment_policy(offer)
+
+    assert enriched["offer_kind"] == "paid_trial"
+    assert enriched["fulfillment_mode"] == "paid_trial"
+    assert enriched["public_offer"] is True
+    assert enriched["requires_supervisor_review"] is False
+    assert enriched["payment_required"] is True
+    assert enriched["activation_policy"] == "automatic_after_successful_payment"
+    assert enriched["refund_policy"]["refund_basis"] == "operational_outcome_not_achieved"
+
+
+def test_enterprise_trial_is_excluded_from_general_paid_trial():
+    offer = {
+        "offer_id": "enterprise_integration_trial",
+        "plan_id": "enterprise_integration_starter",
+    }
+
+    enriched = apply_offer_fulfillment_policy(offer)
+
+    assert enriched["offer_kind"] == "enterprise_evaluation"
+    assert enriched["fulfillment_mode"] == "enterprise_review"
+    assert enriched["public_offer"] is False
+    assert enriched["excluded_from_general_paid_trial"] is True
+    assert enriched["requires_supervisor_review"] is True
+    assert enriched["requires_preparation"] is True

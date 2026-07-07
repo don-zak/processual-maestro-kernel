@@ -344,6 +344,49 @@ h1{
       </div>
       <p class="catalog-state" id="offer-pricebook-state">Loading offer price book...</p>
       <div class="offer-grid" id="pricing-offer-grid"></div>
+
+      <div class="refund-terms-actions">
+        <button
+          class="refund-terms-button"
+          id="pricing-refund-terms-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="pricing-refund-terms-card"
+        >
+          شروط الاسترجاع / Refund terms
+        </button>
+      </div>
+
+      <article class="refund-terms-card" id="pricing-refund-terms-card" aria-hidden="true">
+        <div class="refund-terms-grid">
+          <section class="refund-terms-lang" lang="ar" dir="rtl">
+            <h3>شروط الاسترجاع</h3>
+            <p>
+              تُراجع طلبات الاسترجاع إذا لم يتحقق الغرض التشغيلي الأساسي من التجربة،
+              ويقصد بذلك تشغيل البرنامج، تنفيذ المهام المحددة داخل نطاق التجربة،
+              والحصول على نتائج قابلة للتحقق داخل البرنامج.
+            </p>
+            <ul>
+              <li>لا يشمل الاسترجاع عجز العميل عن الربط مع وكلائه أو مزوديه أو حساباته الخارجية.</li>
+              <li>لا يشمل مشاكل بيانات الاعتماد أو الإعدادات التابعة للعميل.</li>
+              <li>لا يُعد انتهاء مدة التجربة قبل استكمال كمية الاستخدام سببًا مستقلًا للاسترجاع.</li>
+            </ul>
+          </section>
+          <section class="refund-terms-lang" lang="en">
+            <h3>Refund terms</h3>
+            <p>
+              Refund requests are reviewed when the core operational outcome of the paid trial
+              is not achieved. This means the program runs, the agreed in-scope tasks execute,
+              and verifiable results are obtained inside the program.
+            </p>
+            <ul>
+              <li>Refunds do not cover the customer’s inability to connect external agents, providers, or accounts.</li>
+              <li>Refunds do not cover customer-side credential or configuration issues.</li>
+              <li>Trial expiration before the proposed usage quantity is consumed is not by itself a refund reason.</li>
+            </ul>
+          </section>
+        </div>
+      </article>
     </section>
 
     <div class="cta-row">
@@ -368,6 +411,8 @@ h1{
   const summaryBilling = document.getElementById("summary-billing-policy");
   const summaryProvider = document.getElementById("summary-provider-costs");
   const summaryCheckout = document.getElementById("summary-checkout");
+  const refundTermsToggle = document.getElementById("pricing-refund-terms-toggle");
+  const refundTermsCard = document.getElementById("pricing-refund-terms-card");
 
   function text(value, fallback) {
     if (value === null || value === undefined || value === "") return fallback;
@@ -420,6 +465,16 @@ h1{
     `;
   }
 
+  function fulfillmentLabel(offer) {
+    if (offer.fulfillment_mode === "paid_trial") {
+      return "Paid trial · no supervisor approval required";
+    }
+    if (offer.fulfillment_mode === "enterprise_review") {
+      return "Enterprise review required before custom pricing";
+    }
+    return "Self-service after registration and payment";
+  }
+
   function offerCard(offer) {
     return `
       <article class="offer-card" data-offer-id="${text(offer.offer_id, "unknown")}">
@@ -427,6 +482,7 @@ h1{
         <p class="offer-description">${text(offer.description, "Draft offer under review.")}</p>
         <div class="review-label">${text(offer.public_price_label, "Pricing pending review")}</div>
         <div class="draft-note">${text(offer.price_review_note, "Pricing calculation is not defined yet.")}</div>
+        <div class="offer-policy-note">${fulfillmentLabel(offer)}</div>
         <div class="offer-meta">
           <div class="meta-item">
             <span class="meta-label">Plan</span>

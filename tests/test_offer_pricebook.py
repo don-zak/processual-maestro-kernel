@@ -52,7 +52,6 @@ def test_offer_pricebook_has_expected_offer_shapes_without_prices() -> None:
         "starter_yearly",
         "business_monthly",
         "business_yearly",
-        "enterprise_integration_trial",
         "enterprise_integration_starter_monthly",
         "enterprise_integration_starter_yearly",
         "enterprise_contact",
@@ -108,3 +107,32 @@ def test_public_offer_pricebook_is_secret_safe() -> None:
 
     for marker in SECRET_MARKERS:
         assert marker not in serialized
+
+
+def test_paid_trial_and_enterprise_evaluation_have_distinct_public_policy() -> None:
+    starter_trial = get_offer_price("starter_trial")
+    enterprise_trial = get_offer_price("enterprise_integration_trial")
+
+    assert starter_trial is not None
+    assert starter_trial["offer_kind"] == "paid_trial"
+    assert starter_trial["commercially_listed"] is True
+    assert starter_trial["requires_supervisor_review"] is False
+    assert starter_trial["refund_policy"]["refund_basis"] == "operational_outcome_not_achieved"
+    assert "program_runs" in starter_trial["refund_policy"]["success_criteria"]
+    assert "tasks_execute" in starter_trial["refund_policy"]["success_criteria"]
+    assert "results_are_obtained" in starter_trial["refund_policy"]["success_criteria"]
+    assert (
+        "customer_failed_to_connect_external_agents"
+        in starter_trial["refund_policy"]["excluded_refund_reasons"]
+    )
+    assert (
+        "trial_period_expired_before_usage_quantity_completed"
+        in starter_trial["refund_policy"]["excluded_refund_reasons"]
+    )
+
+    assert enterprise_trial is not None
+    assert enterprise_trial["offer_kind"] == "enterprise_evaluation"
+    assert enterprise_trial["commercially_listed"] is False
+    assert enterprise_trial["excluded_from_general_paid_trial"] is True
+    assert enterprise_trial["requires_supervisor_review"] is True
+    assert enterprise_trial["requires_preparation"] is True

@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from processual_api.billing.offer_fulfillment_policy import apply_offer_fulfillment_policy
 from processual_api.billing.subscription_catalog import get_subscription_plan
 from processual_api.billing.usage_pricing import (
     BILLING_POLICY,
@@ -47,7 +48,10 @@ _OFFER_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "trial_duration_days": None,
         "commercially_listed": True,
         "requires_sales_contact": False,
-        "description": "Draft trial offer for evaluating Starter access.",
+        "description": (
+            "Paid trial for evaluating Starter access after registration and payment. "
+            "No supervisor approval is required."
+        ),
     },
     {
         "offer_id": "starter_monthly",
@@ -92,12 +96,15 @@ _OFFER_DEFINITIONS: tuple[dict[str, Any], ...] = (
     {
         "offer_id": "enterprise_integration_trial",
         "plan_id": "enterprise_integration_starter",
-        "display_name": "Enterprise Integration Trial",
+        "display_name": "Enterprise Integration Evaluation",
         "billing_interval": "trial",
         "trial_duration_days": None,
-        "commercially_listed": True,
+        "commercially_listed": False,
         "requires_sales_contact": True,
-        "description": "Draft trial offer for enterprise integration evaluation.",
+        "description": (
+            "Enterprise evaluation is prepared separately after review, scoping, "
+            "and integration assessment."
+        ),
     },
     {
         "offer_id": "enterprise_integration_starter_monthly",
@@ -183,7 +190,7 @@ def _offer_payload(offer_definition: dict[str, Any]) -> dict[str, Any]:
     for price_field in _PRICE_FIELDS:
         payload[price_field] = None
 
-    return payload
+    return apply_offer_fulfillment_policy(payload)
 
 
 def list_offer_prices(*, include_unlisted: bool = True) -> list[dict[str, Any]]:
