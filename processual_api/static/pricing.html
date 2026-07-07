@@ -281,6 +281,38 @@ h1{
   .status-row,.plan-grid,.offer-grid{grid-template-columns:1fr}
   .section-heading{align-items:flex-start;flex-direction:column}
 }
+
+.refund-terms-content{
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  padding:16px;
+  background:rgba(255,255,255,.05);
+}
+
+.refund-terms-content[hidden]{
+  display:none!important;
+}
+
+.refund-terms-content h3{
+  margin:0 0 10px;
+}
+
+.refund-terms-content p,
+.refund-terms-content li{
+  color:var(--muted);
+  line-height:1.6;
+}
+
+
+/* PRICING-OFFERS-08F-R2: refund terms are hidden until the button opens them. */
+.refund-terms-card{
+  display:none!important;
+}
+
+.refund-terms-card.is-open{
+  display:block!important;
+}
+
 </style>
 </head>
 <body>
@@ -352,40 +384,38 @@ h1{
           type="button"
           aria-expanded="false"
           aria-controls="pricing-refund-terms-card"
-        >
-          شروط الاسترجاع / Refund terms
+         data-label-ar="شروط الاسترجاع" data-label-en="Refund terms">
+          Refund terms
         </button>
       </div>
 
       <article class="refund-terms-card" id="pricing-refund-terms-card" aria-hidden="true">
-        <div class="refund-terms-grid">
-          <section class="refund-terms-lang" lang="ar" dir="rtl">
-            <h3>شروط الاسترجاع</h3>
-            <p>
-              تُراجع طلبات الاسترجاع إذا لم يتحقق الغرض التشغيلي الأساسي من التجربة،
-              ويقصد بذلك تشغيل البرنامج، تنفيذ المهام المحددة داخل نطاق التجربة،
-              والحصول على نتائج قابلة للتحقق داخل البرنامج.
-            </p>
-            <ul>
-              <li>لا يشمل الاسترجاع عجز العميل عن الربط مع وكلائه أو مزوديه أو حساباته الخارجية.</li>
-              <li>لا يشمل مشاكل بيانات الاعتماد أو الإعدادات التابعة للعميل.</li>
-              <li>لا يُعد انتهاء مدة التجربة قبل استكمال كمية الاستخدام سببًا مستقلًا للاسترجاع.</li>
-            </ul>
-          </section>
-          <section class="refund-terms-lang" lang="en">
-            <h3>Refund terms</h3>
-            <p>
-              Refund requests are reviewed when the core operational outcome of the paid trial
-              is not achieved. This means the program runs, the agreed in-scope tasks execute,
-              and verifiable results are obtained inside the program.
-            </p>
-            <ul>
-              <li>Refunds do not cover the customer’s inability to connect external agents, providers, or accounts.</li>
-              <li>Refunds do not cover customer-side credential or configuration issues.</li>
-              <li>Trial expiration before the proposed usage quantity is consumed is not by itself a refund reason.</li>
-            </ul>
-          </section>
-        </div>
+        <section class="refund-terms-content" data-refund-lang="ar" lang="ar" dir="rtl" hidden>
+          <h3>شروط الاسترجاع</h3>
+          <p>
+            تُراجع طلبات الاسترجاع إذا لم يتحقق الغرض التشغيلي الأساسي من التجربة،
+            ويقصد بذلك تشغيل البرنامج، تنفيذ المهام المحددة داخل نطاق التجربة،
+            والحصول على نتائج قابلة للتحقق داخل البرنامج.
+          </p>
+          <ul>
+            <li>لا يشمل الاسترجاع عجز العميل عن الربط مع وكلائه أو مزوديه أو حساباته الخارجية.</li>
+            <li>لا يشمل مشاكل بيانات الاعتماد أو الإعدادات التابعة للعميل.</li>
+            <li>لا يُعد انتهاء مدة التجربة قبل استكمال كمية الاستخدام سببًا مستقلًا للاسترجاع.</li>
+          </ul>
+        </section>
+        <section class="refund-terms-content" data-refund-lang="en" lang="en" hidden>
+          <h3>Refund terms</h3>
+          <p>
+            Refund requests are reviewed when the core operational outcome of the paid trial
+            is not achieved. This means the program runs, the agreed in-scope tasks execute,
+            and verifiable results are obtained inside the program.
+          </p>
+          <ul>
+            <li>Refunds do not cover the customer’s inability to connect external agents, providers, or accounts.</li>
+            <li>Refunds do not cover customer-side credential or configuration issues.</li>
+            <li>Trial expiration before the proposed usage quantity is consumed is not by itself a refund reason.</li>
+          </ul>
+        </section>
       </article>
     </section>
 
@@ -582,6 +612,111 @@ h1{
 
   loadPricingSurface();
 })();
+
+  (function pmkRefundTermsLanguageScoped() {
+    function refundTermsLanguage() {
+      const pageLang = String(document.documentElement.getAttribute("lang") || "en").toLowerCase();
+      return pageLang.startsWith("ar") ? "ar" : "en";
+    }
+
+    function syncRefundTermsLanguage() {
+      const refundTermsToggle = document.getElementById("pricing-refund-terms-toggle");
+      const refundTermsCard = document.getElementById("pricing-refund-terms-card");
+
+      if (!refundTermsToggle || !refundTermsCard) {
+        return;
+      }
+
+      const activeLang = refundTermsLanguage();
+      const isArabic = activeLang === "ar";
+
+      refundTermsToggle.textContent = isArabic
+        ? refundTermsToggle.dataset.labelAr
+        : refundTermsToggle.dataset.labelEn;
+      refundTermsCard.setAttribute("lang", activeLang);
+      refundTermsCard.setAttribute("dir", isArabic ? "rtl" : "ltr");
+
+      refundTermsCard.querySelectorAll("[data-refund-lang]").forEach((section) => {
+        const isActive = section.dataset.refundLang === activeLang;
+        section.hidden = !isActive;
+        section.setAttribute("aria-hidden", isActive ? "false" : "true");
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", syncRefundTermsLanguage);
+    } else {
+      syncRefundTermsLanguage();
+    }
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.id === "pricing-refund-terms-toggle") {
+        syncRefundTermsLanguage();
+      }
+    });
+  })();
+
+
+  (function pmkRefundTermsToggleController() {
+    function currentRefundLanguage() {
+      const pageLang = String(document.documentElement.getAttribute("lang") || "en").toLowerCase();
+      return pageLang.startsWith("ar") ? "ar" : "en";
+    }
+
+    function syncLanguage(button, card) {
+      const activeLang = currentRefundLanguage();
+      const isArabic = activeLang === "ar";
+
+      button.textContent = isArabic
+        ? button.dataset.labelAr || "شروط الاسترجاع"
+        : button.dataset.labelEn || "Refund terms";
+
+      card.setAttribute("lang", activeLang);
+      card.setAttribute("dir", isArabic ? "rtl" : "ltr");
+
+      card.querySelectorAll("[data-refund-lang]").forEach((section) => {
+        const isActive = section.dataset.refundLang === activeLang;
+        section.hidden = !isActive;
+        section.setAttribute("aria-hidden", isActive ? "false" : "true");
+      });
+    }
+
+    function setRefundTermsOpen(card, button, isOpen) {
+      card.classList.toggle("is-open", isOpen);
+      card.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    }
+
+    function setupRefundTermsToggle() {
+      const button = document.getElementById("pricing-refund-terms-toggle");
+      const card = document.getElementById("pricing-refund-terms-card");
+
+      if (!button || !card || button.dataset.refundToggleController === "ready") {
+        return;
+      }
+
+      button.dataset.refundToggleController = "ready";
+      syncLanguage(button, card);
+      setRefundTermsOpen(card, button, false);
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        syncLanguage(button, card);
+        const nextOpen = !card.classList.contains("is-open");
+        setRefundTermsOpen(card, button, nextOpen);
+      }, true);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", setupRefundTermsToggle);
+    } else {
+      setupRefundTermsToggle();
+    }
+  })();
+
 </script>
 </body>
 </html>
