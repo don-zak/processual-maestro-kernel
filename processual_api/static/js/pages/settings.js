@@ -1429,3 +1429,188 @@ function initCollapsibleSettingsSections() {
 
   return { init, refresh };
 })();
+
+/* CLIENT_INTEGRATION_READINESS_11L_MARKER: client-safe integration readiness surface. */
+(function () {
+  "use strict";
+
+  const CLIENT_INTEGRATION_READINESS_11L_MARKER = "clientreadiness11l";
+
+  function getById(id) {
+    return document.getElementById(id);
+  }
+
+  function setText(id, value) {
+    const element = getById(id);
+    if (element) {
+      element.textContent = value;
+    }
+  }
+
+  function replaceList(id, items) {
+    const list = getById(id);
+    if (!list) {
+      return;
+    }
+
+    list.innerHTML = "";
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    });
+  }
+
+  function selectedOperationalProfile() {
+    const selector = getById("set-api-key-operational-profile-selector");
+    const selectedOption =
+      selector && selector.selectedOptions && selector.selectedOptions.length
+        ? selector.selectedOptions[0]
+        : null;
+
+    const profileId =
+      selector && selector.value && selector.value !== "none" ? selector.value : "";
+
+    const displayName = selectedOption
+      ? selectedOption.textContent.trim()
+      : profileId || "";
+
+    return {
+      profileId,
+      displayName,
+      hasProfile: Boolean(profileId),
+    };
+  }
+
+  function operationalProfileStatusText() {
+    const enabled = getById("set-api-key-operational-profile-enabled");
+    if (!enabled) {
+      return "";
+    }
+    return enabled.textContent || "";
+  }
+
+  function renderClientIntegrationReadiness() {
+    const card = getById("set-integration-readiness-card");
+    if (!card) {
+      return null;
+    }
+
+    const profile = selectedOperationalProfile();
+    const operationalStatus = operationalProfileStatusText().toLowerCase();
+
+    const appearsLocked =
+      operationalStatus.includes("locked") ||
+      operationalStatus.includes("disabled") ||
+      operationalStatus.includes("not available") ||
+      operationalStatus.includes("unavailable");
+
+    const productionConnectorApproved = false;
+    const runtimeConnectorApproved = false;
+
+    let status = "Not reviewed";
+    let sandbox = "Pending customer inputs";
+    let nextAction =
+      "Next action: select an operational profile and submit an integration key request for supervisor review.";
+
+    const missingInputs = [
+      "Provide sandbox API documentation or integration reference.",
+      "Confirm customer-side technical contact and review path.",
+      "Confirm expected read/write scope boundaries for the selected integration.",
+    ];
+
+    const missingControls = [
+      "Confirm sandbox-before-production approval.",
+      "Confirm supervisor review for write or restricted scopes.",
+      "Keep raw credentials outside Maestro requests.",
+    ];
+
+    if (appearsLocked) {
+      status = "Locked";
+      sandbox = "Enterprise integration access required";
+      missingInputs.unshift("Upgrade or unlock enterprise integration access.");
+      nextAction =
+        "Next action: request enterprise integration access before sandbox readiness review.";
+    } else if (profile.hasProfile) {
+      status = "Profile selected";
+      sandbox = "Ready for supervisor readiness review";
+      missingInputs.unshift(
+        `Selected operational profile: ${profile.displayName || profile.profileId}.`
+      );
+      nextAction =
+        "Next action: submit the integration key request with this operational profile for supervisor review.";
+    } else {
+      missingInputs.unshift("Select an operational API key profile.");
+    }
+
+    setText("set-integration-readiness-status", status);
+    setText("set-integration-readiness-sandbox", sandbox);
+    setText("set-integration-readiness-production", String(productionConnectorApproved));
+    setText("set-integration-readiness-runtime", String(runtimeConnectorApproved));
+    setText("set-integration-readiness-next-action", nextAction);
+    setText(
+      "set-integration-readiness-safety",
+      "Safety: no raw secrets, no customer credentials, no external HTTP calls, no runtime connector, and no production connector approval are enabled from this surface."
+    );
+
+    replaceList("set-integration-readiness-missing-inputs", missingInputs);
+    replaceList("set-integration-readiness-missing-controls", missingControls);
+
+    card.dataset.state = profile.hasProfile ? "profile-selected" : "pending-profile";
+    card.dataset.productionConnectorApproved = String(productionConnectorApproved);
+    card.dataset.runtimeConnectorApproved = String(runtimeConnectorApproved);
+    card.dataset.rawSecretVisible = "false";
+    card.dataset.externalHttpEnabled = "false";
+
+    return {
+      marker: CLIENT_INTEGRATION_READINESS_11L_MARKER,
+      hasProfile: profile.hasProfile,
+      profileId: profile.profileId,
+      production_connector_approved: productionConnectorApproved,
+      runtime_connector_approved: runtimeConnectorApproved,
+      rawSecretVisible: false,
+      external_http_enabled: false,
+    };
+  }
+
+  function initClientIntegrationReadiness() {
+    renderClientIntegrationReadiness();
+
+    const selector = getById("set-api-key-operational-profile-selector");
+    if (selector) {
+      selector.addEventListener("change", renderClientIntegrationReadiness);
+    }
+
+    const watched = [
+      getById("set-api-key-operational-profile-enabled"),
+      getById("set-api-key-operational-profile-summary"),
+      getById("set-api-key-operational-profile-readiness"),
+    ].filter(Boolean);
+
+    if (watched.length && window.MutationObserver) {
+      const observer = new MutationObserver(() => {
+        renderClientIntegrationReadiness();
+      });
+
+      watched.forEach((element) => {
+        observer.observe(element, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      });
+    }
+  }
+
+  window.PMK_CLIENT_INTEGRATION_READINESS = {
+    marker: CLIENT_INTEGRATION_READINESS_11L_MARKER,
+    renderClientIntegrationReadiness,
+    initClientIntegrationReadiness,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initClientIntegrationReadiness);
+  } else {
+    initClientIntegrationReadiness();
+  }
+})();

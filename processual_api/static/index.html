@@ -989,5 +989,68 @@ pending ───────────────────→ deactivated
 APP.init();
 TOUR.init();
 </script>
+
+        <section
+          id="set-integration-readiness-card" data-cache-marker="clientreadiness11l"
+          class="settings-card"
+          data-phase="INTEGRATION-READINESS-11L"
+          aria-label="Client integration readiness"
+        >
+          <div class="settings-card-header">
+            <div>
+              <p class="eyebrow">Enterprise integration</p>
+              <h3>Integration Readiness</h3>
+            </div>
+            <span id="set-integration-readiness-status" class="status-pill">Not reviewed</span>
+          </div>
+
+          <p class="muted">
+            Client-safe readiness summary for API integration requests. This card prepares sandbox review
+            without exposing credentials, customer endpoints, internal security notes, or production connector approval.
+          </p>
+
+          <dl class="settings-summary-grid" aria-label="Integration readiness summary">
+            <div>
+              <dt>Sandbox readiness</dt>
+              <dd id="set-integration-readiness-sandbox">Pending customer inputs</dd>
+            </div>
+            <div>
+              <dt>Production connector approved</dt>
+              <dd id="set-integration-readiness-production">false</dd>
+            </div>
+            <div>
+              <dt>Runtime connector approved</dt>
+              <dd id="set-integration-readiness-runtime">false</dd>
+            </div>
+          </dl>
+
+          <div class="settings-grid two">
+            <div>
+              <h4>Missing customer inputs</h4>
+              <ul id="set-integration-readiness-missing-inputs">
+                <li>Select an operational API key profile.</li>
+                <li>Provide sandbox API documentation or integration reference.</li>
+                <li>Confirm customer-side technical contact and review path.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Missing security controls</h4>
+              <ul id="set-integration-readiness-missing-controls">
+                <li>Confirm sandbox-before-production approval.</li>
+                <li>Confirm supervisor review for write or restricted scopes.</li>
+                <li>Keep raw credentials outside Maestro requests.</li>
+              </ul>
+            </div>
+          </div>
+
+          <p id="set-integration-readiness-next-action" class="muted">
+            Next action: select an operational profile and submit an integration key request for supervisor review.
+          </p>
+
+          <p id="set-integration-readiness-safety" class="muted">
+            Safety: no raw secrets, no customer credentials, no external HTTP calls, no runtime connector,
+            and no production connector approval are enabled from this surface.
+          </p>
+        </section>
 </body>
 </html>
