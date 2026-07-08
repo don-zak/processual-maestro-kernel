@@ -718,7 +718,38 @@ pending ───────────────────→ deactivated
           <label class="inp-label">Active Integration Keys</label>
           <span id="set-api-key-integration-count" class="font-data">—</span>
         </div>
-        <div class="inp-group">
+                      <div class="inp-group">
+                <label for="set-api-key-operational-profile-selector">Operational Profile</label>
+                <select id="set-api-key-operational-profile-selector">
+                  <option value="">Choose operational purpose</option>
+                </select>
+              </div>
+              <div class="inp-group">
+                <label>Operational Profile Count</label>
+                <span id="set-api-key-operational-profile-count">0</span>
+              </div>
+              <div class="inp-group">
+                <label>Operational Profiles Enabled</label>
+                <span id="set-api-key-operational-profile-enabled">false</span>
+              </div>
+              <div class="inp-group wide">
+                <label>Selected Operational Profile</label>
+                <pre id="set-api-key-operational-profile-summary" class="mono-block">Operational profiles load after integration status.</pre>
+              </div>
+              <div class="inp-group wide">
+                <label>Allowed Scopes</label>
+                <pre id="set-api-key-operational-profile-allowed-scopes" class="mono-block">—</pre>
+              </div>
+              <div class="inp-group wide">
+                <label>Forbidden Scopes</label>
+                <pre id="set-api-key-operational-profile-forbidden-scopes" class="mono-block">—</pre>
+              </div>
+              <div class="inp-group wide">
+                <label>Readiness and Supervisor Requirements</label>
+                <pre id="set-api-key-operational-profile-readiness" class="mono-block">Integration readiness and supervisor requirements load with the selected profile.</pre>
+              </div>
+              <p id="set-api-key-operational-profile-safety" class="muted">Production connector approval remains separate. Runtime connectors are not approved from this selector. Raw integration secrets are never displayed.</p>
+<div class="inp-group">
           <label class="inp-label">Default Scopes</label>
           <span id="set-api-key-integration-scopes" class="font-data text-muted">—</span>
         </div>
