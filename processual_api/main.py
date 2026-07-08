@@ -417,3 +417,28 @@ async def integration_readiness_supervisor_scope_audit_12b(request, call_next):
     _append_integration_readiness_audit_12b(request, payload, response.status_code)
     return response
 # END INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_AUDIT
+
+# BEGIN INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_ROUTES
+
+@app.get("/settings/admin/integration-readiness-operator-package")
+def admin_integration_readiness_operator_package_12c():
+    from processual_api.services.operator_readiness_package import (
+        build_operator_readiness_package_12c,
+    )
+
+    return build_operator_readiness_package_12c()
+
+
+@app.get("/settings/admin/integration-readiness-operator-package/export")
+def admin_integration_readiness_operator_package_export_12c():
+    from starlette.responses import PlainTextResponse
+
+    from processual_api.services.operator_readiness_package import (
+        render_operator_readiness_markdown_12c,
+    )
+
+    return PlainTextResponse(
+        render_operator_readiness_markdown_12c(),
+        media_type="text/markdown; charset=utf-8",
+    )
+# END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_ROUTES

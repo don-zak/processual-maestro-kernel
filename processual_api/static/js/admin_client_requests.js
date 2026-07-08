@@ -2725,3 +2725,115 @@
   };
 })();
 // END INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_HEADERS
+
+// BEGIN INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_UI
+
+(function () {
+  "use strict";
+
+  const packageEndpoint = "/settings/admin/integration-readiness-operator-package";
+  const exportEndpoint = "/settings/admin/integration-readiness-operator-package/export";
+
+  function escapeHtml12c(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function boolText12c(value) {
+    return String(value) === "true" ? "true" : "false";
+  }
+
+  function listRows12c(items, title, keyName) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      return `<section><h3>${escapeHtml12c(title)}</h3><p>No items.</p></section>`;
+    }
+
+    const rows = list.map((item) => {
+      const key = escapeHtml12c(item[keyName] || item.item_key || item.step_key || "");
+      const label = escapeHtml12c(item.label || "");
+      const status = escapeHtml12c(item.status || item.required_before || "");
+      return `<li><strong>${key}</strong> - ${label} <span>${status}</span></li>`;
+    });
+
+    return `<section><h3>${escapeHtml12c(title)}</h3><ul>${rows.join("")}</ul></section>`;
+  }
+
+  function renderOperatorPackage12c(payload) {
+    const body = document.querySelector("#admin-integration-readiness-operator-package-body");
+    if (!body) {
+      return;
+    }
+
+    const blockers = Array.isArray(payload.production_blockers)
+      ? payload.production_blockers
+      : [];
+
+    body.innerHTML = [
+      `<p><strong>Package:</strong> ${escapeHtml12c(payload.package_version)}</p>`,
+      `<p><strong>Status:</strong> ${escapeHtml12c(payload.package_status)}</p>`,
+      `<p><strong>Handoff:</strong> ${escapeHtml12c(payload.handoff_status)}</p>`,
+      `<p><strong>Cases:</strong> <span data-admin-operator-package-case-count>${
+        escapeHtml12c(payload.case_count || 0)
+      }</span></p>`,
+      `<p><strong>Pilot ready:</strong> <span data-admin-operator-package-pilot-ready>${
+        boolText12c(payload.pilot_handoff_ready)
+      }</span></p>`,
+      listRows12c(payload.operator_required_inputs, "Operator required inputs", "item_key"),
+      listRows12c(payload.pilot_handoff_steps, "Pilot handoff steps", "step_key"),
+      listRows12c(blockers, "Production blockers", "blocker_key"),
+      "<section><h3>Guardrails</h3>",
+      `<p data-admin-operator-package-production-allowed>${
+        boolText12c(payload.production_allowed)
+      }</p>`,
+      `<p data-admin-operator-package-runtime-approved>${
+        boolText12c(payload.runtime_connector_approved)
+      }</p>`,
+      `<p data-admin-operator-package-external-http>${
+        boolText12c(payload.external_http_enabled)
+      }</p>`,
+      `<p data-admin-operator-package-raw-secret>${boolText12c(payload.raw_secret_visible)}</p>`,
+      "</section>",
+      `<p><a href="${exportEndpoint}" data-admin-operator-package-export>Export Markdown</a></p>`,
+    ].join("");
+  }
+
+  async function loadOperatorReadinessPackage12c() {
+    const body = document.querySelector("#admin-integration-readiness-operator-package-body");
+    if (!body) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(packageEndpoint, {
+        credentials: "same-origin",
+      });
+      const payload = await response.json();
+      renderOperatorPackage12c(payload);
+      body.dataset.state = "ready";
+      return payload;
+    } catch (error) {
+      body.dataset.state = "error";
+      body.textContent = "Operator readiness package unavailable.";
+      return { error: String(error) };
+    }
+  }
+
+  window.PMK_OPERATOR_READINESS_PACKAGE_12C = {
+    marker: "adminpackage12c",
+    endpoint: packageEndpoint,
+    exportEndpoint,
+    load: loadOperatorReadinessPackage12c,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadOperatorReadinessPackage12c);
+  } else {
+    loadOperatorReadinessPackage12c();
+  }
+})();
+// END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_UI
