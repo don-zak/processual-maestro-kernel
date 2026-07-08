@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 INDEX_HTML = Path("processual_api/static/index.html")
 SETTINGS_JS = Path("processual_api/static/js/pages/settings.js")
@@ -54,7 +54,6 @@ def test_client_api_key_operational_profile_selector_remains_ui_only() -> None:
         "/admin",
         "encrypted_key",
         "hashed_key",
-        "integration_key_profile_id",
         "production_connector_approved = true",
         "runtime_connector_approved = true",
     )

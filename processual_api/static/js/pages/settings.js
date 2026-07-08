@@ -346,7 +346,7 @@ PAGES.settings = (() => {
   }
 
 
-  function integrationKeyRequestMessage(action) {
+  function integrationOperationalProfileRequestLines() {   const info = readinessState.integration || {};   const profile = selectedIntegrationOperationalProfile(info);   if (!profile) {     return [       "integration_key_profile_id=-",       "operational_profile_status=not_selected",       "Production connector approval remains separate.",       "Runtime connectors are not approved from this request.",     ];   }   return [     "integration_key_profile_id=" + (profile.profile_id || "-"),     "operational_profile_status=selected",     "operational_profile_display_name=" + (profile.display_name || "-"),     "base_key_profile=" + (profile.base_key_profile || "-"),     "operational_profile_environment=" + (profile.environment || "sandbox"),     "requested_scopes=" + integrationProfileScopes(profile, "allowed_scopes"),     "forbidden_scopes=" + integrationProfileScopes(profile, "forbidden_scopes"),     "requires_enterprise_plan=" + String(profile.requires_enterprise_plan === true),     "requires_integration_readiness=" + String(profile.requires_integration_readiness === true),     "requires_supervisor_for_write=" + String(profile.requires_supervisor_for_write === true),     "production_allowed=" + String(profile.production_allowed === true),     "runtime_connector_approved=" + String(profile.runtime_connector_approved === true),     "operational_profile_next_action=" + (profile.next_action || "-"),     "Production connector approval remains separate.",     "Runtime connectors are not approved from this request.",     "No raw integration secret is included.",   ]; } function integrationKeyRequestMessage(action) {
     const info = readinessState.integration || {};
     const keys = Array.isArray(info.keys) ? info.keys : [];
     const key = keys[0] || {};
@@ -373,10 +373,7 @@ PAGES.settings = (() => {
       "last_used_at=" + (key.last_used_at || "never"),
       "created_at=" + (key.created_at || "-"),
       "No raw integration secret is included.",
-    ].join("\n");
-  }
-
-  function prepareIntegrationKeyRequest(action) {
+    ].concat(integrationOperationalProfileRequestLines()).join("\n"); } function prepareIntegrationKeyRequest(action) {
     const requestTypes = {
       provisioning: "integration_key_provisioning",
       rotation: "integration_key_rotation",
