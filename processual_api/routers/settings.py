@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from processual_api.admin_audit_log import append_admin_audit_event, read_admin_audit_events
+from processual_api.integrations.api_key_operational_profiles import api_key_operational_profiles_payload
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..billing.usage_pricing import (
@@ -2342,6 +2343,29 @@ def _allows_client_api_key_integration(plan_id: str | None) -> bool:
     return allows_enterprise_integration(normalized) or normalized == "enterprise_private"
 
 
+
+
+def _client_api_key_operational_profiles_payload(*, enabled: bool) -> dict[str, Any]:
+    catalog = api_key_operational_profiles_payload()
+    raw_profiles = catalog.get("profiles", ()) if enabled else ()
+    profiles = list(raw_profiles) if isinstance(raw_profiles, (list, tuple)) else []
+    profile_count = len(profiles)
+
+    return {
+        "operational_profiles_enabled": bool(enabled),
+        "operational_profiles": profiles,
+        "operational_profile_count": profile_count,
+        "raw_secret_visible": False,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "integration_readiness_required": True,
+        "supervisor_approval_required": True,
+        "operational_profiles_message": (
+            "Operational API key profiles describe intended Maestro API usage. "
+            "They do not approve customer-specific production connectors."
+        ),
+    }
+
 def _resolve_client_api_key_integration_plan_id(
     user_id: str,
     raw: dict[str, Any],
@@ -2465,22 +2489,22 @@ async def get_api_key_integration(current_user: dict = Depends(get_current_user)
                 "API Key Integration is available for Enterprise "
                 "Integration plans."
             ),
+            **_client_api_key_operational_profiles_payload(enabled=False),
             "keys": [],
             "key_count": 0,
         }
 
     keys = _active_client_integration_keys(raw, client_id)
-
     return {
         "enabled": True,
         "status": "available",
         "plan_id": plan_id,
         "eligible_plans": eligible_plans,
         "message": "API Key Integration is available for this client.",
+        **_client_api_key_operational_profiles_payload(enabled=True),
         "keys": keys,
         "key_count": len(keys),
     }
-
 @router.get("/plans", response_model=list[dict])
 async def list_plans(current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE))):
     return [get_plan_policy(plan_id) for plan_id in PLAN_POLICIES.keys()]
