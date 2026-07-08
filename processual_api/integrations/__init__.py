@@ -66,3 +66,26 @@ __all__ = [
     "validate_credential_profiles",
 ]
 # INTEGRATION-CREDENTIALS-11D exports end
+
+# INTEGRATION-READINESS-11E exports begin
+from processual_api.integrations.integration_readiness import (
+    IntegrationReadinessCheck,
+    ReadinessCheckStatus,
+    evaluate_integration_readiness,
+    get_integration_readiness_check,
+    list_integration_readiness_checks,
+    summarize_integration_readiness,
+    validate_integration_readiness_checks,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "IntegrationReadinessCheck",
+    "ReadinessCheckStatus",
+    "evaluate_integration_readiness",
+    "get_integration_readiness_check",
+    "list_integration_readiness_checks",
+    "summarize_integration_readiness",
+    "validate_integration_readiness_checks",
+]
+# INTEGRATION-READINESS-11E exports end
