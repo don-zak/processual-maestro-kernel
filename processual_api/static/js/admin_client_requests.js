@@ -2684,3 +2684,44 @@
   }
 })();
 // END INTEGRATION_READINESS_12A_CASE_MANAGEMENT_UI
+
+// BEGIN INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_HEADERS
+
+(function () {
+  "use strict";
+
+  function supervisorHeaders12b() {
+    const headers = {};
+    const auth = window.PMK_ADMIN_AUTH || {};
+    if (auth && typeof auth.headers === "function") {
+      try {
+        Object.assign(headers, auth.headers() || {});
+      } catch (_error) {
+        // Keep fallback headers below.
+      }
+    } else if (auth && auth.headers && typeof auth.headers === "object") {
+      Object.assign(headers, auth.headers);
+    }
+
+    try {
+      const sessionKey = window.sessionStorage.getItem("pmk_supervisor_session_key");
+      if (sessionKey && !headers["X-Admin-Supervisor-Session"]) {
+        headers["X-Admin-Supervisor-Session"] = sessionKey;
+      }
+    } catch (_error) {
+      // sessionStorage can be unavailable in hardened browser contexts.
+    }
+
+    if (!headers["X-Admin-Supervisor-Scope"]) {
+      headers["X-Admin-Supervisor-Scope"] = "admin:integration_readiness:review";
+    }
+
+    return headers;
+  }
+
+  window.PMK_INTEGRATION_READINESS_SUPERVISOR_SCOPE_12B = {
+    marker: "admincase12b",
+    headers: supervisorHeaders12b,
+  };
+})();
+// END INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_HEADERS

@@ -38,6 +38,13 @@ def _seed_case(path):
     return case_id
 
 
+def _headers_12b_for_12a() -> dict[str, str]:
+    return {
+        "X-Admin-Supervisor-Session": "test-supervisor-session-12a",
+        "X-Admin-Supervisor-Scope": "admin:integration_readiness:review",
+    }
+
+
 def test_admin_integration_readiness_case_management_12a_list_detail_and_action(
     tmp_path,
     monkeypatch,
@@ -72,6 +79,7 @@ def test_admin_integration_readiness_case_management_12a_list_detail_and_action(
 
     action_response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
+        headers=_headers_12b_for_12a(),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
@@ -109,6 +117,7 @@ def test_admin_integration_readiness_case_management_12a_rejects_invalid_status(
     client = TestClient(app)
     response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
+        headers=_headers_12b_for_12a(),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
@@ -153,6 +162,7 @@ def test_admin_integration_readiness_summary_route_12a_compat(
     client = TestClient(app)
     action_response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
+        headers=_headers_12b_for_12a(),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",

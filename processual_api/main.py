@@ -265,3 +265,155 @@ app.add_api_route(
     name="admin_integration_readiness_tracking_summary_12a_compat",
 )
 # END INTEGRATION_READINESS_12A_SUMMARY_ROUTE_REBIND
+
+# BEGIN INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_AUDIT
+
+_INTEGRATION_READINESS_WRITE_PATHS_12B = {
+    "/settings/admin/integration-readiness-tracking/cases",
+    "/settings/admin/integration-readiness-tracking/case-item-action",
+}
+_INTEGRATION_READINESS_WRITE_PREFIX_12B = (
+    "/settings/admin/integration-readiness-tracking/cases/"
+)
+_INTEGRATION_READINESS_ALLOWED_SCOPES_12B = {
+    "admin:clients:status_decide",
+    "admin:clients:review",
+    "admin:integration_readiness:review",
+    "admin:integration_readiness:write",
+}
+
+
+def _integration_readiness_write_requires_scope_12b(path: str, method: str) -> bool:
+    if method.upper() != "POST":
+        return False
+    if path in _INTEGRATION_READINESS_WRITE_PATHS_12B:
+        return True
+    return path.startswith(_INTEGRATION_READINESS_WRITE_PREFIX_12B)
+
+
+def _split_supervisor_scopes_12b(value: str) -> set[str]:
+    scopes = set()
+    for part in str(value or "").replace(",", " ").split():
+        text = part.strip()
+        if text:
+            scopes.add(text)
+    return scopes
+
+
+def _extract_readiness_audit_body_12b(raw_body: bytes) -> dict:
+    if not raw_body:
+        return {}
+    try:
+        json_module = __import__("json")
+        payload = json_module.loads(raw_body.decode("utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _integration_readiness_audit_path_12b():
+    os_module = __import__("os")
+    pathlib_module = __import__("pathlib", fromlist=["Path"])
+    env_path = os_module.getenv("PMK_ADMIN_AUDIT_EVENTS_PATH")
+    if env_path:
+        return pathlib_module.Path(env_path)
+    return pathlib_module.Path("data") / "admin_audit_events.jsonl"
+
+
+def _append_integration_readiness_audit_12b(request, payload: dict, status_code: int) -> None:
+    if status_code >= 400:
+        return
+
+    json_module = __import__("json")
+    datetime_module = __import__("datetime", fromlist=["UTC", "datetime"])
+
+    path = _integration_readiness_audit_path_12b()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    event = {
+        "event": "integration_readiness_case_write",
+        "event_type": "integration_readiness_case_write",
+        "path": str(request.url.path),
+        "method": request.method,
+        "case_id": str(payload.get("case_id") or ""),
+        "item_key": str(payload.get("item_key") or ""),
+        "status": str(payload.get("status") or ""),
+        "supervisor_session_present": bool(
+            request.headers.get("X-Admin-Supervisor-Session")
+        ),
+        "supervisor_scope": str(
+            request.headers.get("X-Admin-Supervisor-Scope")
+            or request.headers.get("X-Admin-Supervisor-Scopes")
+            or ""
+        ),
+        "at": datetime_module.datetime.now(datetime_module.UTC)
+        .replace(microsecond=0)
+        .isoformat(),
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "external_http_enabled": False,
+        "raw_secret_visible": False,
+    }
+
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json_module.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+@app.middleware("http")
+async def integration_readiness_supervisor_scope_audit_12b(request, call_next):
+    if not _integration_readiness_write_requires_scope_12b(
+        str(request.url.path),
+        request.method,
+    ):
+        return await call_next(request)
+
+    from starlette.responses import JSONResponse
+
+    body = await request.body()
+    payload = _extract_readiness_audit_body_12b(body)
+
+    async def receive_once_12b():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request._receive = receive_once_12b
+
+    supervisor_session = str(
+        request.headers.get("X-Admin-Supervisor-Session") or ""
+    ).strip()
+    if not supervisor_session:
+        return JSONResponse(
+            {
+                "detail": "Supervisor session required for integration readiness writes",
+                "production_allowed": False,
+                "runtime_connector_approved": False,
+                "external_http_enabled": False,
+                "raw_secret_visible": False,
+            },
+            status_code=403,
+        )
+
+    explicit_scope_header = (
+        request.headers.get("X-Admin-Supervisor-Scope")
+        or request.headers.get("X-Admin-Supervisor-Scopes")
+        or ""
+    )
+    explicit_scopes = _split_supervisor_scopes_12b(explicit_scope_header)
+    if explicit_scopes and not (
+        explicit_scopes & _INTEGRATION_READINESS_ALLOWED_SCOPES_12B
+    ):
+        return JSONResponse(
+            {
+                "detail": "Supervisor scope does not allow integration readiness writes",
+                "required_scopes": sorted(_INTEGRATION_READINESS_ALLOWED_SCOPES_12B),
+                "production_allowed": False,
+                "runtime_connector_approved": False,
+                "external_http_enabled": False,
+                "raw_secret_visible": False,
+            },
+            status_code=403,
+        )
+
+    response = await call_next(request)
+    _append_integration_readiness_audit_12b(request, payload, response.status_code)
+    return response
+# END INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_AUDIT
