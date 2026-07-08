@@ -1,13 +1,14 @@
 from pathlib import Path
 
 ADMIN_HTML = Path("processual_api/static/admin.html")
-ADMIN_JS = Path("processual_api/static/js/admin_integration_readiness.js")
+ADMIN_JS = Path("processual_api/static/js/admin_client_requests.js")
 
 
 def test_admin_integration_readiness_script_is_loaded() -> None:
     html = ADMIN_HTML.read_text(encoding="utf-8")
-    assert "admin_integration_readiness.js" in html
-    assert "adminintegrationreadiness11k" in html
+    assert "admin_client_requests.js" in html
+    assert "adminreadiness11kr1" in html
+    assert "admin_integration_readiness.js" not in html
 
 
 def test_admin_integration_readiness_card_markers_exist() -> None:
