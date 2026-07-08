@@ -2099,3 +2099,219 @@
     initSupervisorIntegrationReadinessWorkflow();
   }
 })();
+
+/* ADMIN_INTEGRATION_READINESS_TRACKING_SUMMARY_11O_MARKER:
+   admin-visible readiness tracking summary without fake client cases. */
+(function () {
+  "use strict";
+
+  const TRACKING_MARKER = "admintracking11o";
+
+  function getById(id) {
+    return document.getElementById(id);
+  }
+
+  function setText(id, value) {
+    const element = getById(id);
+    if (element) {
+      element.textContent = value;
+    }
+  }
+
+  function trackingAnchor() {
+    return (
+      getById("admin-client-request-integration-readiness-workflow-card") ||
+      getById("admin-integration-readiness-card") ||
+      getById("admin-client-request-integration-key-bridge") ||
+      getById("admin-client-api-keys-quick-bridge") ||
+      document.querySelector("main") ||
+      document.body
+    );
+  }
+
+  function ensureTrackingSummaryCard() {
+    let card = getById("admin-integration-readiness-tracking-summary-card");
+    if (card) {
+      return card;
+    }
+
+    card = document.createElement("section");
+    card.id = "admin-integration-readiness-tracking-summary-card";
+    card.className = "admin-card settings-card";
+    card.dataset.phase = "INTEGRATION-READINESS-11O";
+    card.dataset.cacheMarker = TRACKING_MARKER;
+    card.dataset.productionConnectorApproved = "false";
+    card.dataset.runtimeConnectorApproved = "false";
+    card.dataset.externalHttpEnabled = "false";
+    card.dataset.rawSecretVisible = "false";
+    card.setAttribute("aria-label", "Admin integration readiness tracking summary");
+
+    card.innerHTML = `
+      <div class="settings-card-header">
+        <div>
+          <p class="eyebrow">Readiness tracking</p>
+          <h3>Integration Readiness Tracking Summary</h3>
+        </div>
+        <span
+          id="admin-integration-readiness-tracking-state"
+          class="status-pill"
+        >Foundation ready</span>
+      </div>
+
+      <p class="muted">
+        This supervisor summary distinguishes declarative readiness checks from
+        client-specific tracking cases. It does not invent customer submissions.
+      </p>
+
+      <dl class="settings-summary-grid" aria-label="Integration readiness tracking counters">
+        <div>
+          <dt>Tracking foundation</dt>
+          <dd id="admin-integration-readiness-tracking-foundation">available</dd>
+        </div>
+        <div>
+          <dt>Persisted cases</dt>
+          <dd id="admin-integration-readiness-tracking-cases">0</dd>
+        </div>
+        <div>
+          <dt>Provided inputs</dt>
+          <dd id="admin-integration-readiness-tracking-provided">0</dd>
+        </div>
+        <div>
+          <dt>Verified items</dt>
+          <dd id="admin-integration-readiness-tracking-verified">0</dd>
+        </div>
+        <div>
+          <dt>Rejected items</dt>
+          <dd id="admin-integration-readiness-tracking-rejected">0</dd>
+        </div>
+        <div>
+          <dt>Timeline events</dt>
+          <dd id="admin-integration-readiness-tracking-events">0</dd>
+        </div>
+      </dl>
+
+      <table
+        id="admin-integration-readiness-tracking-cases-table"
+        class="admin-table"
+        aria-label="Integration readiness tracking cases"
+      >
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th>Client</th>
+            <th>Request</th>
+            <th>Status</th>
+            <th>Inputs</th>
+            <th>Controls</th>
+            <th>Sandbox</th>
+          </tr>
+        </thead>
+        <tbody id="admin-integration-readiness-tracking-cases-body">
+          <tr>
+            <td colspan="7">
+              No persisted readiness tracking cases yet. Use 11N tracking
+              foundation first, then connect a safe admin route or storage layer
+              in a later phase.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p id="admin-integration-readiness-tracking-empty" class="muted">
+        Empty state is intentional: current readiness checks are declarative.
+        Client-specific tracking requires persisted cases or a safe admin
+        tracking route.
+      </p>
+
+      <p id="admin-integration-readiness-tracking-safety" class="muted">
+        Safety: no raw secrets, no customer credentials, no external HTTP calls,
+        no runtime connector, and no production connector approval are enabled
+        from this tracking summary.
+      </p>
+    `;
+
+    const anchor = trackingAnchor();
+
+    if (
+      anchor &&
+      anchor !== document.body &&
+      anchor.parentNode &&
+      anchor.parentNode.insertBefore
+    ) {
+      anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    } else if (anchor && anchor.appendChild) {
+      anchor.appendChild(card);
+    } else {
+      document.body.appendChild(card);
+    }
+
+    return card;
+  }
+
+  function renderIntegrationReadinessTrackingSummary(summary) {
+    const card = ensureTrackingSummaryCard();
+    const safeSummary = summary && typeof summary === "object" ? summary : {};
+
+    const persistedCases = Number(safeSummary.persistedCases || 0);
+    const providedInputs = Number(safeSummary.providedInputs || 0);
+    const verifiedItems = Number(safeSummary.verifiedItems || 0);
+    const rejectedItems = Number(safeSummary.rejectedItems || 0);
+    const timelineEvents = Number(safeSummary.timelineEvents || 0);
+
+    setText("admin-integration-readiness-tracking-foundation", "available");
+    setText("admin-integration-readiness-tracking-cases", String(persistedCases));
+    setText("admin-integration-readiness-tracking-provided", String(providedInputs));
+    setText("admin-integration-readiness-tracking-verified", String(verifiedItems));
+    setText("admin-integration-readiness-tracking-rejected", String(rejectedItems));
+    setText("admin-integration-readiness-tracking-events", String(timelineEvents));
+    setText(
+      "admin-integration-readiness-tracking-state",
+      persistedCases > 0 ? "Tracking cases available" : "Foundation ready"
+    );
+
+    card.dataset.persistedCases = String(persistedCases);
+    card.dataset.providedInputs = String(providedInputs);
+    card.dataset.verifiedItems = String(verifiedItems);
+    card.dataset.rejectedItems = String(rejectedItems);
+    card.dataset.timelineEvents = String(timelineEvents);
+    card.dataset.productionConnectorApproved = "false";
+    card.dataset.runtimeConnectorApproved = "false";
+    card.dataset.externalHttpEnabled = "false";
+    card.dataset.rawSecretVisible = "false";
+
+    return {
+      marker: TRACKING_MARKER,
+      persistedCases,
+      providedInputs,
+      verifiedItems,
+      rejectedItems,
+      timelineEvents,
+      productionConnectorApproved: false,
+      runtimeConnectorApproved: false,
+      externalHttpEnabled: false,
+      rawSecretVisible: false,
+    };
+  }
+
+  function initIntegrationReadinessTrackingSummary() {
+    renderIntegrationReadinessTrackingSummary({
+      persistedCases: 0,
+      providedInputs: 0,
+      verifiedItems: 0,
+      rejectedItems: 0,
+      timelineEvents: 0,
+    });
+  }
+
+  window.PMK_ADMIN_INTEGRATION_READINESS_TRACKING_SUMMARY = {
+    marker: TRACKING_MARKER,
+    renderIntegrationReadinessTrackingSummary,
+    initIntegrationReadinessTrackingSummary,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initIntegrationReadinessTrackingSummary);
+  } else {
+    initIntegrationReadinessTrackingSummary();
+  }
+})();
