@@ -166,3 +166,102 @@ async def admin_update_integration_readiness_tracking_case_item_11p(
             "external_http_enabled": False,
             "raw_secret_visible": False,
         }
+
+# BEGIN INTEGRATION_READINESS_12A_CASE_MANAGEMENT_ROUTES
+
+@app.get("/settings/admin/integration-readiness-tracking/cases")
+def admin_integration_readiness_tracking_cases_12a():
+    from processual_api.services.integration_readiness_tracking_store import (
+        list_tracking_cases_12a,
+    )
+
+    return list_tracking_cases_12a()
+
+
+@app.get("/settings/admin/integration-readiness-tracking/case-detail")
+def admin_integration_readiness_tracking_case_detail_query_12a(case_id: str):
+    from fastapi import HTTPException
+
+    from processual_api.services.integration_readiness_tracking_store import (
+        build_tracking_case_detail_payload_12a,
+    )
+
+    try:
+        return build_tracking_case_detail_payload_12a(case_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Integration readiness case not found",
+        ) from exc
+
+
+@app.get("/settings/admin/integration-readiness-tracking/cases/{case_id:path}")
+def admin_integration_readiness_tracking_case_detail_12a(case_id: str):
+    from fastapi import HTTPException
+
+    from processual_api.services.integration_readiness_tracking_store import (
+        build_tracking_case_detail_payload_12a,
+    )
+
+    try:
+        return build_tracking_case_detail_payload_12a(case_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Integration readiness case not found",
+        ) from exc
+
+
+@app.post("/settings/admin/integration-readiness-tracking/case-item-action")
+def admin_integration_readiness_tracking_case_item_action_12a(
+    payload: dict[str, object],
+):
+    from fastapi import HTTPException
+
+    from processual_api.services.integration_readiness_tracking_store import (
+        update_tracking_case_item_12a,
+    )
+
+    try:
+        return update_tracking_case_item_12a(
+            case_id=str(payload.get("case_id") or ""),
+            item_key=str(payload.get("item_key") or ""),
+            status=str(payload.get("status") or ""),
+            safe_reference=str(payload.get("safe_reference") or ""),
+            note=str(payload.get("note") or ""),
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Integration readiness case not found",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+# END INTEGRATION_READINESS_12A_CASE_MANAGEMENT_ROUTES
+
+# BEGIN INTEGRATION_READINESS_12A_SUMMARY_ROUTE_REBIND
+
+def _admin_integration_readiness_tracking_summary_12a_compat():
+    from processual_api.services.integration_readiness_tracking_store import (
+        build_tracking_summary_12a_compat,
+    )
+
+    return build_tracking_summary_12a_compat()
+
+
+app.router.routes = [
+    route
+    for route in app.router.routes
+    if not (
+        getattr(route, "path", "") == "/settings/admin/integration-readiness-tracking"
+        and "GET" in (getattr(route, "methods", set()) or set())
+    )
+]
+
+app.add_api_route(
+    "/settings/admin/integration-readiness-tracking",
+    _admin_integration_readiness_tracking_summary_12a_compat,
+    methods=["GET"],
+    name="admin_integration_readiness_tracking_summary_12a_compat",
+)
+# END INTEGRATION_READINESS_12A_SUMMARY_ROUTE_REBIND

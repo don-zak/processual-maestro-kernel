@@ -2381,3 +2381,306 @@
     initIntegrationReadinessTrackingSummary();
   }
 })();
+
+// BEGIN INTEGRATION_READINESS_12A_CASE_MANAGEMENT_UI
+
+(function () {
+  "use strict";
+
+  const marker = "admincase12a";
+  const listEndpoint = "/settings/admin/integration-readiness-tracking/cases";
+  const detailEndpoint = "/settings/admin/integration-readiness-tracking/case-detail";
+  const actionEndpoint = "/settings/admin/integration-readiness-tracking/case-item-action";
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function visibleText(value, fallback) {
+    const text = String(value == null ? "" : value).trim();
+    return text || fallback || "—";
+  }
+
+  function ensureCaseManagementHost() {
+    let host = document.querySelector("#admin-integration-readiness-case-management-host");
+    if (host) {
+      return host;
+    }
+
+    host = document.createElement("section");
+    host.id = "admin-integration-readiness-case-management-host";
+    host.setAttribute("data-admin-integration-readiness-case-management", "12a");
+    host.setAttribute("aria-label", "Integration readiness case management");
+    host.className = "admin-card admin-integration-readiness-case-management";
+    host.innerHTML = [
+      "<h2>Integration readiness case management</h2>",
+      "<p class=\"admin-muted\">Supervisor-safe case tracking for external integration readiness.</p>",
+      "<div data-admin-integration-readiness-case-table data-admincase12a=\"case-table\">Loading integration readiness cases…</div>",
+      "<div data-admin-integration-readiness-case-detail data-admincase12a=\"case-detail\">Select a readiness case to review required inputs, controls, and timeline.</div>",
+    ].join("");
+
+    const anchor = document.querySelector("#admin-integration-readiness-tracking-summary-host");
+    if (anchor && anchor.parentElement) {
+      anchor.parentElement.insertBefore(host, anchor.nextSibling);
+    } else {
+      document.body.appendChild(host);
+    }
+    return host;
+  }
+
+  async function fetchJson(url, options) {
+    const response = await fetch(url, Object.assign({ credentials: "same-origin" }, options || {}));
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_error) {
+      payload = {};
+    }
+    if (!response.ok) {
+      throw new Error(payload.detail || `Request failed: ${response.status}`);
+    }
+    return payload;
+  }
+
+  function renderEmptyDetail(host, message) {
+    const detail = host.querySelector("[data-admin-integration-readiness-case-detail]");
+    if (!detail) {
+      return;
+    }
+    detail.innerHTML = [
+      "<section class=\"admin-integration-readiness-case-detail-empty\" data-admin-integration-readiness-case-detail-empty>",
+      `<p>${escapeHtml(message || "No readiness case selected.")}</p>`,
+      "<button type=\"button\" disabled data-admin-integration-readiness-item-action-provided>Mark Provided</button>",
+      "<button type=\"button\" disabled data-admin-integration-readiness-item-action-verified>Verify</button>",
+      "<button type=\"button\" disabled data-admin-integration-readiness-item-action-rejected>Reject</button>",
+      "<div data-admin-integration-readiness-case-timeline>No timeline events yet.</div>",
+      "</section>",
+    ].join("");
+  }
+
+  function renderCaseTable(host, cases) {
+    const tableHost = host.querySelector("[data-admin-integration-readiness-case-table]");
+    if (!tableHost) {
+      return;
+    }
+
+    if (!cases.length) {
+      tableHost.innerHTML = [
+        "<div class=\"admin-empty\" data-admin-integration-readiness-case-table-empty>",
+        "No persisted readiness cases yet.",
+        "</div>",
+      ].join("");
+      renderEmptyDetail(host, "No readiness case selected yet.");
+      return;
+    }
+
+    const rows = cases.map((item) => {
+      const caseId = visibleText(item.case_id, "");
+      return [
+        "<tr>",
+        `<td><button type="button" data-admin-integration-readiness-open-case data-case-id="${escapeHtml(caseId)}">${escapeHtml(caseId)}</button></td>`,
+        `<td>${escapeHtml(visibleText(item.client_id))}</td>`,
+        `<td>${escapeHtml(visibleText(item.adapter_id))}</td>`,
+        `<td>${escapeHtml(String(item.provided_inputs || 0))}</td>`,
+        `<td>${escapeHtml(String(item.verified_items || 0))}</td>`,
+        `<td>${escapeHtml(String(item.rejected_items || 0))}</td>`,
+        `<td>${escapeHtml(String(item.timeline_events || 0))}</td>`,
+        "</tr>",
+      ].join("");
+    }).join("");
+
+    tableHost.innerHTML = [
+      `<table data-admincase12a="${marker}" class="admin-table admin-integration-readiness-case-table">`,
+      "<thead><tr>",
+      "<th>Case</th><th>Client</th><th>Adapter</th><th>Provided</th><th>Verified</th><th>Rejected</th><th>Timeline</th>",
+      "</tr></thead>",
+      `<tbody>${rows}</tbody>`,
+      "</table>",
+    ].join("");
+  }
+
+  function itemRows(caseId, title, items) {
+    const rows = (items || []).map((item) => {
+      const itemKey = visibleText(item.item_key, "");
+      return [
+        `<tr data-admin-integration-readiness-item-row data-case-id="${escapeHtml(caseId)}" data-item-key="${escapeHtml(itemKey)}">`,
+        `<td>${escapeHtml(visibleText(item.label, itemKey))}</td>`,
+        `<td>${escapeHtml(visibleText(item.status, "missing"))}</td>`,
+        `<td><input type="text" data-admin-integration-readiness-safe-reference-input placeholder="safe reference only" value="${escapeHtml(item.safe_reference || "")}"></td>`,
+        "<td>",
+        `<button type="button" data-admin-integration-readiness-item-action-provided data-case-id="${escapeHtml(caseId)}" data-item-key="${escapeHtml(itemKey)}">Mark Provided</button> `,
+        `<button type="button" data-admin-integration-readiness-item-action-verified data-case-id="${escapeHtml(caseId)}" data-item-key="${escapeHtml(itemKey)}">Verify</button> `,
+        `<button type="button" data-admin-integration-readiness-item-action-rejected data-case-id="${escapeHtml(caseId)}" data-item-key="${escapeHtml(itemKey)}">Reject</button>`,
+        "</td>",
+        "</tr>",
+      ].join("");
+    }).join("");
+
+    return [
+      `<h4>${escapeHtml(title)}</h4>`,
+      "<table class=\"admin-table admin-integration-readiness-items\">",
+      "<thead><tr><th>Item</th><th>Status</th><th>Safe reference</th><th>Action</th></tr></thead>",
+      `<tbody>${rows || "<tr><td colspan=\"4\">No items.</td></tr>"}</tbody>`,
+      "</table>",
+    ].join("");
+  }
+
+  function timelineRows(timeline) {
+    const events = timeline || [];
+    if (!events.length) {
+      return "<div data-admin-integration-readiness-case-timeline>No timeline events yet.</div>";
+    }
+
+    const rows = events.map((event) => {
+      return [
+        "<li>",
+        `<strong>${escapeHtml(visibleText(event.event, "event"))}</strong>`,
+        ` — ${escapeHtml(visibleText(event.item_key))}`,
+        ` — ${escapeHtml(visibleText(event.status))}`,
+        ` — ${escapeHtml(visibleText(event.at))}`,
+        "</li>",
+      ].join("");
+    }).join("");
+
+    return `<ul data-admin-integration-readiness-case-timeline>${rows}</ul>`;
+  }
+
+  function renderCaseDetail(host, payload) {
+    const detail = host.querySelector("[data-admin-integration-readiness-case-detail]");
+    if (!detail) {
+      return;
+    }
+
+    const casePayload = payload.case || payload;
+    const caseId = visibleText(casePayload.case_id || payload.case_id, "");
+
+    detail.innerHTML = [
+      `<section class="admin-integration-readiness-case-detail" data-admincase12a="${marker}">`,
+      `<h3>Readiness case: ${escapeHtml(caseId)}</h3>`,
+      `<p><strong>Client:</strong> ${escapeHtml(visibleText(casePayload.client_id))}</p>`,
+      `<p><strong>Request:</strong> ${escapeHtml(visibleText(casePayload.request_id))}</p>`,
+      `<p><strong>Adapter:</strong> ${escapeHtml(visibleText(casePayload.adapter_id))}</p>`,
+      itemRows(caseId, "Required inputs", casePayload.input_statuses || payload.input_statuses || []),
+      itemRows(caseId, "Security controls", casePayload.security_control_statuses || payload.security_control_statuses || []),
+      "<h4>Timeline</h4>",
+      timelineRows(casePayload.timeline || payload.timeline || []),
+      "</section>",
+    ].join("");
+  }
+
+  async function openCase(host, caseId) {
+    const payload = await fetchJson(`${detailEndpoint}?case_id=${encodeURIComponent(caseId)}`);
+    renderCaseDetail(host, payload);
+  }
+
+  async function refreshSummaryCounters() {
+    if (typeof window.loadIntegrationReadinessTrackingSummary === "function") {
+      await window.loadIntegrationReadinessTrackingSummary();
+    }
+    window.dispatchEvent(new CustomEvent("pmk-integration-readiness-tracking-updated", {
+      detail: { marker },
+    }));
+  }
+
+  async function applyItemAction(host, button, status) {
+    const row = button.closest("[data-admin-integration-readiness-item-row]");
+    if (!row) {
+      return;
+    }
+
+    const caseId = button.getAttribute("data-case-id") || row.getAttribute("data-case-id") || "";
+    const itemKey = button.getAttribute("data-item-key") || row.getAttribute("data-item-key") || "";
+    const referenceInput = row.querySelector("[data-admin-integration-readiness-safe-reference-input]");
+    const safeReference = referenceInput ? referenceInput.value : "";
+
+    button.disabled = true;
+    try {
+      const payload = await fetchJson(actionEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          case_id: caseId,
+          item_key: itemKey,
+          status,
+          safe_reference: safeReference,
+          note: "admin-ui-12a",
+        }),
+      });
+      renderCaseDetail(host, payload);
+      await refreshSummaryCounters();
+      await loadIntegrationReadinessCaseManagement();
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function loadIntegrationReadinessCaseManagement() {
+    const host = ensureCaseManagementHost();
+    host.setAttribute("data-admincase12a-loader", marker);
+
+    try {
+      const payload = await fetchJson(listEndpoint);
+      const cases = Array.isArray(payload.cases) ? payload.cases : [];
+      renderCaseTable(host, cases);
+      if (cases.length) {
+        await openCase(host, cases[0].case_id);
+      } else {
+        renderEmptyDetail(host, "No readiness case selected yet.");
+      }
+      host.dataset.state = "ready";
+    } catch (error) {
+      host.dataset.state = "error";
+      renderEmptyDetail(host, error.message || "Unable to load integration readiness cases.");
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    const host = ensureCaseManagementHost();
+
+    const openButton = event.target.closest("[data-admin-integration-readiness-open-case]");
+    if (openButton) {
+      event.preventDefault();
+      openCase(host, openButton.getAttribute("data-case-id") || "");
+      return;
+    }
+
+    const providedButton = event.target.closest("[data-admin-integration-readiness-item-action-provided]");
+    if (providedButton && !providedButton.disabled) {
+      event.preventDefault();
+      applyItemAction(host, providedButton, "provided");
+      return;
+    }
+
+    const verifiedButton = event.target.closest("[data-admin-integration-readiness-item-action-verified]");
+    if (verifiedButton && !verifiedButton.disabled) {
+      event.preventDefault();
+      applyItemAction(host, verifiedButton, "verified");
+      return;
+    }
+
+    const rejectedButton = event.target.closest("[data-admin-integration-readiness-item-action-rejected]");
+    if (rejectedButton && !rejectedButton.disabled) {
+      event.preventDefault();
+      applyItemAction(host, rejectedButton, "rejected");
+    }
+  });
+
+  window.PMK_INTEGRATION_READINESS_CASE_MANAGEMENT_12A = {
+    marker,
+    load: loadIntegrationReadinessCaseManagement,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadIntegrationReadinessCaseManagement);
+  } else {
+    loadIntegrationReadinessCaseManagement();
+  }
+})();
+// END INTEGRATION_READINESS_12A_CASE_MANAGEMENT_UI
