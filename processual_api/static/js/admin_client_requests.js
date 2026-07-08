@@ -1196,6 +1196,212 @@
   }
 
 
+
+  // ADMIN-INTEGRATION-KEYS-11F bridge begin
+  const ADMIN_INTEGRATION_KEY_BRIDGE_STORAGE = 'pmk_admin_integration_key_bridge';
+
+  function adminIntegrationBridgeValue(value) {
+    if (value === null || value === undefined) return '';
+    return String(value);
+  }
+
+  function adminIntegrationKeyBridgePayload(detail) {
+    const clientId = adminIntegrationBridgeValue(detail && detail.client_id);
+    const userId = adminIntegrationBridgeValue(detail && detail.user_id);
+    const requestId = adminIntegrationBridgeValue(
+      detail && (detail.request_id || detail.short_id)
+    );
+    const requestedPlan = adminIntegrationBridgeValue(
+      detail && (detail.requested_plan || detail.approved_plan)
+    );
+
+    return {
+      source: 'admin_client_request_detail',
+      request_id: requestId,
+      client_id: clientId,
+      user_id: userId,
+      requested_plan: requestedPlan,
+      key_profile: 'service_integration',
+      category: 'service_integration',
+      purpose: requestId
+        ? 'Integration key provisioning review for request ' + requestId
+        : 'Integration key provisioning review',
+      label: clientId
+        ? clientId + ' service integration key'
+        : 'Service integration key',
+      issued_to: userId || clientId,
+      production_connector_approved: false,
+      raw_secret_visible: false,
+    };
+  }
+
+  function setAdminIntegrationKeyBridgeStatus(message) {
+    const target = byId('admin-client-request-integration-key-bridge-status');
+    if (target) target.textContent = message || '';
+  }
+
+  function setAdminIntegrationBridgeInput(id, value) {
+    const input = document.getElementById(id);
+    if (!input) return false;
+    input.value = adminIntegrationBridgeValue(value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  function applyAdminIntegrationKeyBridgeDom(payload) {
+    if (!payload) return false;
+
+    let applied = false;
+
+    const category = document.getElementById('admin-api-key-category');
+    if (category) {
+      category.value = 'service_integration';
+      category.dispatchEvent(new Event('change', { bubbles: true }));
+      applied = true;
+    }
+
+    applied =
+      setAdminIntegrationBridgeInput('admin-api-key-client-id', payload.client_id) ||
+      applied;
+    applied =
+      setAdminIntegrationBridgeInput('admin-api-key-user-id', payload.user_id) ||
+      applied;
+    applied =
+      setAdminIntegrationBridgeInput(
+        'admin-api-key-plan-id',
+        payload.requested_plan
+      ) || applied;
+    applied =
+      setAdminIntegrationBridgeInput('admin-api-key-purpose', payload.purpose) ||
+      applied;
+    applied =
+      setAdminIntegrationBridgeInput('admin-api-key-label', payload.label) ||
+      applied;
+    applied =
+      setAdminIntegrationBridgeInput('admin-api-key-issued-to', payload.issued_to) ||
+      applied;
+
+    const result = document.getElementById('admin-api-key-create-result');
+    if (result && applied) {
+      result.textContent =
+        'Client integration key context loaded from Admin request detail. ' +
+        'No raw secrets are shown. Production connector approval remains separate.';
+    }
+
+    return applied;
+  }
+
+  function openAdminIntegrationKeyBridge(detail) {
+    const payload = adminIntegrationKeyBridgePayload(detail);
+
+    if (!payload.client_id) {
+      setAdminIntegrationKeyBridgeStatus(
+        'Client ID is missing; cannot prepare integration key context.'
+      );
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(
+        ADMIN_INTEGRATION_KEY_BRIDGE_STORAGE,
+        JSON.stringify(payload)
+      );
+    } catch (error) {
+      // Browser storage is optional; the custom event still carries the payload.
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('pmk-admin-integration-key-bridge', { detail: payload })
+    );
+
+    const applied = applyAdminIntegrationKeyBridgeDom(payload);
+    const target =
+      document.getElementById('admin-api-key-client-id') ||
+      document.getElementById('admin-api-key-table') ||
+      document.getElementById('admin-api-key-create-result');
+
+    if (target && target.scrollIntoView) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    setAdminIntegrationKeyBridgeStatus(
+      applied
+        ? 'Integration key admin fields prepared for this client.'
+        : 'Integration key context saved. Open the Admin API Keys panel to apply it.'
+    );
+  }
+
+  function appendAdminIntegrationBridgeMeta(parent, label, value) {
+    const row = document.createElement('div');
+    row.className = 'admin-client-request-detail-row';
+
+    const key = document.createElement('span');
+    key.className = 'admin-client-request-detail-key';
+    key.textContent = label;
+
+    const val = document.createElement('span');
+    val.className = 'admin-client-request-detail-value';
+    val.textContent = adminIntegrationBridgeValue(value) || '-';
+
+    row.appendChild(key);
+    row.appendChild(val);
+    parent.appendChild(row);
+  }
+
+  function renderAdminIntegrationKeyBridgePanel(detail, parent) {
+    if (!parent) return;
+
+    const payload = adminIntegrationKeyBridgePayload(detail);
+    const panel = document.createElement('section');
+    panel.id = 'admin-client-request-integration-key-bridge';
+    panel.className = 'admin-client-request-panel';
+    panel.setAttribute('aria-label', 'Admin integration key bridge');
+
+    const title = document.createElement('h3');
+    title.textContent = 'Integration Key Admin Bridge';
+    panel.appendChild(title);
+
+    const note = document.createElement('p');
+    note.className = 'text-muted';
+    note.textContent =
+      'Prepare the Admin API Keys panel with this client context. This does not reveal raw secrets and does not approve a production connector.';
+    panel.appendChild(note);
+
+    const meta = document.createElement('div');
+    meta.className = 'admin-client-request-detail-grid';
+    appendAdminIntegrationBridgeMeta(meta, 'client_id', payload.client_id);
+    appendAdminIntegrationBridgeMeta(meta, 'user_id', payload.user_id);
+    appendAdminIntegrationBridgeMeta(meta, 'key_profile', 'service_integration');
+    appendAdminIntegrationBridgeMeta(meta, 'production_connector_approved', 'false');
+    panel.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-client-request-actions';
+
+    const button = document.createElement('button');
+    button.id = 'admin-client-request-open-integration-keys';
+    button.className = 'btn sm';
+    button.type = 'button';
+    button.textContent = 'Open Integration API Keys';
+    button.dataset.clientId = payload.client_id;
+    button.dataset.keyProfile = 'service_integration';
+    button.addEventListener('click', () => openAdminIntegrationKeyBridge(detail));
+    actions.appendChild(button);
+
+    const status = document.createElement('div');
+    status.id = 'admin-client-request-integration-key-bridge-status';
+    status.className = 'admin-status';
+    status.textContent =
+      'Ready to prepare service_integration key metadata. No raw integration key is displayed.';
+    actions.appendChild(status);
+
+    panel.appendChild(actions);
+    parent.appendChild(panel);
+  }
+  // ADMIN-INTEGRATION-KEYS-11F bridge end
+
+
   function renderAdminClientRequestDetail(detail) {
     ensureCard();
 
@@ -1237,6 +1443,7 @@
     renderAdminClientRequestStatusActions(detail, body);
     renderAdminClientRequestApplyPlanPanel(detail, body);
     renderAdminDirectClientPlanPanel(detail, body);
+    renderAdminIntegrationKeyBridgePanel(detail, body);
     renderAdminClientRequestResponseDraftPanel(detail, body);
     renderTimeline(detail, body);
     refreshAdminSupervisorPermissionButtons();

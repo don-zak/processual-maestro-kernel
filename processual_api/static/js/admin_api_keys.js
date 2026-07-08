@@ -733,3 +733,83 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
     renderCard();
   }
 });
+
+
+// ADMIN-INTEGRATION-KEYS-11F pending bridge begin
+(function () {
+  const bridgeStorageKey = 'pmk_admin_integration_key_bridge';
+
+  function bridgeValue(value) {
+    if (value === null || value === undefined) return '';
+    return String(value);
+  }
+
+  function setBridgeInput(id, value) {
+    const input = document.getElementById(id);
+    if (!input) return false;
+    input.value = bridgeValue(value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  function applyBridgePayload(payload) {
+    if (!payload || !payload.client_id) return false;
+
+    let applied = false;
+
+    const category = document.getElementById('admin-api-key-category');
+    if (category) {
+      category.value = 'service_integration';
+      category.dispatchEvent(new Event('change', { bubbles: true }));
+      applied = true;
+    }
+
+    applied = setBridgeInput('admin-api-key-client-id', payload.client_id) || applied;
+    applied = setBridgeInput('admin-api-key-user-id', payload.user_id) || applied;
+    applied =
+      setBridgeInput('admin-api-key-plan-id', payload.requested_plan) || applied;
+    applied = setBridgeInput('admin-api-key-purpose', payload.purpose) || applied;
+    applied = setBridgeInput('admin-api-key-label', payload.label) || applied;
+    applied = setBridgeInput('admin-api-key-issued-to', payload.issued_to) || applied;
+
+    const result = document.getElementById('admin-api-key-create-result');
+    if (result && applied) {
+      result.textContent =
+        'Loaded integration key context from Admin client request. ' +
+        'No raw secrets are shown. Production connector approval remains separate.';
+    }
+
+    return applied;
+  }
+
+  function readStoredBridgePayload() {
+    try {
+      const raw = sessionStorage.getItem(bridgeStorageKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function applyStoredBridgePayload() {
+    const payload = readStoredBridgePayload();
+    if (payload) applyBridgePayload(payload);
+  }
+
+  window.PMK_ADMIN_INTEGRATION_KEY_BRIDGE = {
+    apply: applyBridgePayload,
+    applyStored: applyStoredBridgePayload,
+  };
+
+  window.addEventListener('pmk-admin-integration-key-bridge', (event) => {
+    applyBridgePayload(event.detail || {});
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyStoredBridgePayload);
+  } else {
+    setTimeout(applyStoredBridgePayload, 0);
+  }
+})();
+// ADMIN-INTEGRATION-KEYS-11F pending bridge end
