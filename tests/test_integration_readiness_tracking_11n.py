@@ -168,4 +168,3 @@ def test_readiness_tracking_module_does_not_enable_runtime_or_external_http():
 
     for marker in forbidden:
         assert marker not in text
-
