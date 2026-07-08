@@ -2837,3 +2837,302 @@
   }
 })();
 // END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_UI
+
+// PMK INTEGRATION CLAIM KEYS 13A START
+(() => {
+  const marker = "adminclaim13a";
+  const listEndpoint = "/settings/admin/integration-claim-keys";
+  const issueEndpoint = "/settings/admin/integration-claim-keys";
+  const revokeEndpoint = (claimKeyId) =>
+    `/settings/admin/integration-claim-keys/${encodeURIComponent(claimKeyId)}/revoke`;
+
+  const state = {
+    lastPayload: null,
+    lastIssued: null,
+  };
+
+  function mergeHeaders(extra) {
+    const headers = { "Content-Type": "application/json" };
+
+    try {
+      const authHeaders = window.PMK_ADMIN_AUTH?.headers?.();
+      if (authHeaders?.forEach) {
+        authHeaders.forEach((value, key) => {
+          headers[key] = value;
+        });
+      } else if (authHeaders && typeof authHeaders === "object") {
+        Object.assign(headers, authHeaders);
+      }
+    } catch (_) {
+      // keep local safe headers only
+    }
+
+    try {
+      const session =
+        window.localStorage?.getItem("pmk_admin_supervisor_session") ||
+        window.sessionStorage?.getItem("pmk_admin_supervisor_session");
+      if (session && !headers["X-Admin-Supervisor-Session"]) {
+        headers["X-Admin-Supervisor-Session"] = session;
+      }
+      if (
+        session &&
+        !headers["X-Admin-Supervisor-Scope"] &&
+        !headers["X-Admin-Supervisor-Scopes"]
+      ) {
+        headers["X-Admin-Supervisor-Scope"] = "admin:integration_readiness:write";
+      }
+    } catch (_) {
+      // storage may be unavailable
+    }
+
+    return Object.assign(headers, extra || {});
+  }
+
+  async function requestJson(endpoint, options) {
+    const response = await fetch(endpoint, {
+      credentials: "include",
+      ...options,
+      headers: mergeHeaders(options?.headers),
+    });
+    const text = await response.text();
+    let payload = {};
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch (_) {
+        payload = { raw: text };
+      }
+    }
+    if (!response.ok) {
+      return {
+        error: true,
+        status: response.status,
+        payload,
+      };
+    }
+    return payload;
+  }
+
+  async function load() {
+    const payload = await requestJson(listEndpoint);
+    state.lastPayload = payload;
+    render(payload);
+    return payload;
+  }
+
+  async function issue(payload) {
+    const result = await requestJson(issueEndpoint, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+    state.lastIssued = result;
+    await load();
+    renderIssued(result);
+    return result;
+  }
+
+  async function revoke(claimKeyId, reason) {
+    const result = await requestJson(revokeEndpoint(claimKeyId), {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || "Revoked by supervisor" }),
+    });
+    await load();
+    return result;
+  }
+
+  function ensureHost() {
+    let host = document.querySelector("#admin-integration-claim-keys-host");
+    if (!host) {
+      host = document.createElement("section");
+      host.id = "admin-integration-claim-keys-host";
+      host.className = "admin-card";
+      host.setAttribute("aria-label", "Integration claim keys");
+      host.innerHTML = `
+        <h2>Integration Claim Keys</h2>
+        <p>Supervisor-issued onboarding keys for operator integration officers.</p>
+        <div id="admin-integration-claim-keys-body" data-state="idle"></div>
+      `;
+      const target =
+        document.querySelector("main") ||
+        document.querySelector("#admin-root") ||
+        document.body;
+      target.appendChild(host);
+    }
+    return host;
+  }
+
+  function guardrailHtml(guardrails) {
+    const safe = guardrails || {};
+    return `
+      <dl data-admin-integration-claim-guardrails>
+        <dt>runtime_enabled</dt>
+        <dd data-admin-integration-claim-runtime-enabled>${String(safe.runtime_enabled)}</dd>
+        <dt>production_allowed</dt>
+        <dd data-admin-integration-claim-production-allowed>${String(safe.production_allowed)}</dd>
+        <dt>external_http_enabled</dt>
+        <dd data-admin-integration-claim-external-http>${String(safe.external_http_enabled)}</dd>
+        <dt>raw_secret_visible</dt>
+        <dd data-admin-integration-claim-raw-secret>${String(safe.raw_secret_visible)}</dd>
+      </dl>
+    `;
+  }
+
+  function renderIssued(result) {
+    const output = document.querySelector("[data-admin-integration-claim-issued-once]");
+    if (!output) return;
+
+    if (result?.claim_key_once) {
+      output.textContent = result.claim_key_once;
+      output.dataset.visibleOnce = "true";
+    } else if (result?.error) {
+      output.textContent = `Issue failed: ${result.status || ""}`;
+      output.dataset.visibleOnce = "false";
+    } else {
+      output.textContent = "No claim key issued yet.";
+      output.dataset.visibleOnce = "false";
+    }
+  }
+
+  function render(payload) {
+    const host = ensureHost();
+    const body =
+      host.querySelector("#admin-integration-claim-keys-body") ||
+      host.appendChild(document.createElement("div"));
+    body.id = "admin-integration-claim-keys-body";
+    body.dataset.state = payload?.error ? "error" : "ready";
+
+    const claimKeys = Array.isArray(payload?.claim_keys) ? payload.claim_keys : [];
+
+    body.innerHTML = `
+      <div data-admin-integration-claim-marker="${marker}">
+        <p>
+          Version:
+          <strong data-admin-integration-claim-version>${payload?.package_version || "integration-claim-keys-13a"}</strong>
+        </p>
+
+        <form data-admin-integration-claim-issue-form>
+          <label>
+            Client ID
+            <input data-admin-integration-claim-client-id value="operator-demo-client" />
+          </label>
+          <label>
+            Issued to
+            <input data-admin-integration-claim-issued-to value="operator.integration@example.invalid" />
+          </label>
+          <label>
+            Operator org
+            <input data-admin-integration-claim-operator-org value="operator-demo-org" />
+          </label>
+          <label>
+            Pilot terms note
+            <textarea data-admin-integration-claim-terms>Sandbox onboarding only. No production connector approval.</textarea>
+          </label>
+          <button type="submit" data-admin-integration-claim-issue-button>
+            Issue Integration Claim Key
+          </button>
+        </form>
+
+        <section>
+          <h3>Visible once</h3>
+          <code data-admin-integration-claim-issued-once>No claim key issued yet.</code>
+        </section>
+
+        <p>
+          Claim key count:
+          <strong data-admin-integration-claim-count>${String(payload?.claim_key_count ?? claimKeys.length)}</strong>
+        </p>
+
+        ${guardrailHtml(payload?.guardrails)}
+
+        <table data-admin-integration-claim-table>
+          <thead>
+            <tr>
+              <th>Claim key</th>
+              <th>Client</th>
+              <th>Status</th>
+              <th>Revoked</th>
+              <th>Claimed</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              claimKeys.length
+                ? claimKeys
+                    .map(
+                      (claim) => `
+                        <tr data-admin-integration-claim-row="${claim.claim_key_id}">
+                          <td>${claim.masked_claim_key || claim.claim_key_id}</td>
+                          <td>${claim.client_id || ""}</td>
+                          <td>${claim.status || ""}</td>
+                          <td>${String(!!claim.revoked)}</td>
+                          <td>${claim.claimed_at || ""}</td>
+                          <td>
+                            <button
+                              type="button"
+                              data-admin-integration-claim-revoke="${claim.claim_key_id}"
+                              ${claim.revoked ? "disabled" : ""}
+                            >
+                              Revoke
+                            </button>
+                          </td>
+                        </tr>
+                      `,
+                    )
+                    .join("")
+                : `<tr><td colspan="6">No integration claim keys yet.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const form = body.querySelector("[data-admin-integration-claim-issue-form]");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await issue({
+        client_id: body.querySelector("[data-admin-integration-claim-client-id]")?.value,
+        issued_to: body.querySelector("[data-admin-integration-claim-issued-to]")?.value,
+        operator_org_id: body.querySelector("[data-admin-integration-claim-operator-org]")?.value,
+        pilot_terms_note: body.querySelector("[data-admin-integration-claim-terms]")?.value,
+        one_time_use: true,
+        allowed_domains: ["telecom"],
+      });
+    });
+
+    body.querySelectorAll("[data-admin-integration-claim-revoke]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const claimKeyId = button.getAttribute("data-admin-integration-claim-revoke");
+        if (!claimKeyId) return;
+        await revoke(claimKeyId, "Revoked from Admin 13A panel");
+      });
+    });
+
+    renderIssued(state.lastIssued);
+  }
+
+  window.PMK_ADMIN_INTEGRATION_CLAIM_KEYS_13A = {
+    marker,
+    listEndpoint,
+    issueEndpoint,
+    revokeEndpoint,
+    load,
+    issue,
+    revoke,
+    render,
+    state,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      load().catch((error) => {
+        render({ error: true, message: String(error), guardrails: {} });
+      });
+    });
+  } else {
+    load().catch((error) => {
+      render({ error: true, message: String(error), guardrails: {} });
+    });
+  }
+})();
+// PMK INTEGRATION CLAIM KEYS 13A END

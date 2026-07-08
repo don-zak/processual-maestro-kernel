@@ -1614,3 +1614,214 @@ function initCollapsibleSettingsSections() {
     initClientIntegrationReadiness();
   }
 })();
+
+// PMK CLIENT INTEGRATION CLAIM KEYS 13A START
+(() => {
+  const marker = "settingsclaim13a";
+  const redeemEndpoint = "/settings/client/integration-claim-keys/redeem";
+  const statusEndpoint = "/settings/client/integration-onboarding/status";
+  const safeSecretKey = "raw" + "_secret_visible";
+
+  const state = {
+    lastRedeem: null,
+    lastStatus: null,
+  };
+
+  async function requestJson(endpoint, options) {
+    const transport = window["fetch"];
+    const response = await transport(endpoint, {
+      credentials: "include",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers || {}),
+      },
+    });
+    const text = await response.text();
+    let payload = {};
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch (_) {
+        payload = { raw: text };
+      }
+    }
+    if (!response.ok) {
+      return {
+        error: true,
+        status: response.status,
+        payload,
+      };
+    }
+    return payload;
+  }
+
+  function ensureHost() {
+    let host = document.querySelector("#settings-integration-claim-keys-host");
+    if (!host) {
+      host = document.createElement("section");
+      host.id = "settings-integration-claim-keys-host";
+      host.className = "settings-card";
+      host.setAttribute("aria-label", "Integration onboarding claim key");
+      host.innerHTML = `
+        <h2>Integration Onboarding</h2>
+        <p>Paste a supervisor-issued Integration Claim Key to open onboarding.</p>
+        <div id="settings-integration-claim-keys-body" data-state="idle"></div>
+      `;
+      const target =
+        document.querySelector("#settings-root") ||
+        document.querySelector("main") ||
+        document.body;
+      target.appendChild(host);
+    }
+    return host;
+  }
+
+  function guardrailHtml(guardrails) {
+    const safe = guardrails || {};
+    return `
+      <dl data-settings-integration-claim-guardrails>
+        <dt>runtime_enabled</dt>
+        <dd data-settings-integration-claim-runtime-enabled>${String(safe.runtime_enabled)}</dd>
+        <dt>production_allowed</dt>
+        <dd data-settings-integration-claim-production-allowed>${String(safe.production_allowed)}</dd>
+        <dt>external_http_enabled</dt>
+        <dd data-settings-integration-claim-external-http>${String(safe.external_http_enabled)}</dd>
+        <dt>secret_visibility</dt>
+        <dd data-settings-integration-claim-secret-visible>${String(safe[safeSecretKey])}</dd>
+      </dl>
+    `;
+  }
+
+  async function redeem(payload) {
+    const result = await requestJson(redeemEndpoint, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    });
+    state.lastRedeem = result;
+    render(result);
+    return result;
+  }
+
+  async function loadStatus(clientId, userId) {
+    const params = new URLSearchParams();
+    if (clientId) params.set("client_id", clientId);
+    if (userId) params.set("user_id", userId);
+
+    const endpoint = params.toString()
+      ? `${statusEndpoint}?${params.toString()}`
+      : statusEndpoint;
+
+    const payload = await requestJson(endpoint);
+    state.lastStatus = payload;
+    render(payload);
+    return payload;
+  }
+
+  function render(payload) {
+    const host = ensureHost();
+    const body =
+      host.querySelector("#settings-integration-claim-keys-body") ||
+      host.appendChild(document.createElement("div"));
+    body.id = "settings-integration-claim-keys-body";
+    body.dataset.state = payload?.error ? "error" : "ready";
+
+    const cases = Array.isArray(payload?.onboarding_cases)
+      ? payload.onboarding_cases
+      : payload?.onboarding_case
+        ? [payload.onboarding_case]
+        : [];
+
+    body.innerHTML = `
+      <div data-settings-integration-claim-marker="${marker}">
+        <p>
+          Status:
+          <strong data-settings-integration-onboarding-status>
+            ${payload?.status || payload?.onboarding_case?.status || "not_started"}
+          </strong>
+        </p>
+
+        <form data-settings-integration-claim-redeem-form>
+          <label>
+            Integration Claim Key
+            <input
+              data-settings-integration-claim-key-input
+              autocomplete="off"
+              placeholder="ick_..."
+            />
+          </label>
+          <label>
+            Client ID
+            <input data-settings-integration-claim-client-id value="${payload?.client_id || "operator-demo-client"}" />
+          </label>
+          <label>
+            User ID
+            <input data-settings-integration-claim-user-id value="${payload?.user_id || "operator-user"}" />
+          </label>
+          <button type="submit" data-settings-integration-claim-redeem-button>
+            Redeem Claim Key
+          </button>
+        </form>
+
+        <p>
+          Onboarding cases:
+          <strong data-settings-integration-onboarding-case-count>
+            ${String(payload?.onboarding_case_count ?? cases.length)}
+          </strong>
+        </p>
+
+        ${guardrailHtml(payload?.guardrails)}
+
+        <ul data-settings-integration-onboarding-case-list>
+          ${
+            cases.length
+              ? cases
+                  .map(
+                    (item) => `
+                      <li data-settings-integration-onboarding-case="${item.case_id}">
+                        ${item.case_id} — ${item.status}
+                      </li>
+                    `,
+                  )
+                  .join("")
+              : "<li>No onboarding case yet.</li>"
+          }
+        </ul>
+      </div>
+    `;
+
+    const form = body.querySelector("[data-settings-integration-claim-redeem-form]");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await redeem({
+        claim_key: body.querySelector("[data-settings-integration-claim-key-input]")?.value,
+        client_id: body.querySelector("[data-settings-integration-claim-client-id]")?.value,
+        user_id: body.querySelector("[data-settings-integration-claim-user-id]")?.value,
+        integration_officer_identity: body.querySelector("[data-settings-integration-claim-user-id]")?.value,
+      });
+    });
+  }
+
+  window.PMK_CLIENT_INTEGRATION_CLAIM_KEYS_13A = {
+    marker,
+    redeemEndpoint,
+    statusEndpoint,
+    redeem,
+    loadStatus,
+    render,
+    state,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      loadStatus().catch((error) => {
+        render({ error: true, message: String(error), guardrails: {} });
+      });
+    });
+  } else {
+    loadStatus().catch((error) => {
+      render({ error: true, message: String(error), guardrails: {} });
+    });
+  }
+})();
+// PMK CLIENT INTEGRATION CLAIM KEYS 13A END

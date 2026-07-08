@@ -4,9 +4,30 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi import HTTPException as PMK13AHTTPException
+from fastapi import Request as PMK13ARequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+from processual_api.services.integration_claim_keys import (
+    GUARDRAILS as PMK13A_CLAIM_GUARDRAILS,
+)
+from processual_api.services.integration_claim_keys import (
+    get_client_integration_onboarding_status as pmk13a_get_client_integration_onboarding_status,
+)
+from processual_api.services.integration_claim_keys import (
+    issue_integration_claim_key as pmk13a_issue_integration_claim_key,
+)
+from processual_api.services.integration_claim_keys import (
+    list_integration_claim_keys as pmk13a_list_integration_claim_keys,
+)
+from processual_api.services.integration_claim_keys import (
+    redeem_integration_claim_key as pmk13a_redeem_integration_claim_key,
+)
+from processual_api.services.integration_claim_keys import (
+    revoke_integration_claim_key as pmk13a_revoke_integration_claim_key,
+)
 
 from .auth.router import router as auth_router
 from .billing.router import router as billing_router
@@ -442,3 +463,93 @@ def admin_integration_readiness_operator_package_export_12c():
         media_type="text/markdown; charset=utf-8",
     )
 # END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_ROUTES
+
+# PMK INTEGRATION CLAIM KEYS 13A START
+
+PMK13A_ALLOWED_SUPERVISOR_SCOPES = {
+    "admin:clients:review",
+    "admin:clients:status_decide",
+    "admin:integration_readiness:review",
+    "admin:integration_readiness:write",
+}
+
+
+def _pmk13a_split_scopes(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    scopes: set[str] = set()
+    for chunk in str(value).replace(",", " ").split():
+        text = chunk.strip()
+        if text:
+            scopes.add(text)
+    return scopes
+
+
+def _pmk13a_request_scopes(request: PMK13ARequest) -> set[str]:
+    scopes = set()
+    scopes |= _pmk13a_split_scopes(request.headers.get("X-Admin-Supervisor-Scope"))
+    scopes |= _pmk13a_split_scopes(request.headers.get("X-Admin-Supervisor-Scopes"))
+    return scopes
+
+
+def _pmk13a_require_supervisor_write(request: PMK13ARequest) -> None:
+    session = request.headers.get("X-Admin-Supervisor-Session")
+    scopes = _pmk13a_request_scopes(request)
+    if session and scopes.intersection(PMK13A_ALLOWED_SUPERVISOR_SCOPES):
+        return
+
+    raise PMK13AHTTPException(
+        status_code=403,
+        detail={
+            "error": "supervisor_scope_required",
+            "required_any_scope": sorted(PMK13A_ALLOWED_SUPERVISOR_SCOPES),
+            "supervisor_session_present": bool(session),
+            "provided_scopes": sorted(scopes),
+            **PMK13A_CLAIM_GUARDRAILS,
+        },
+    )
+
+
+@app.post("/settings/admin/integration-claim-keys")
+async def pmk13a_admin_issue_integration_claim_key(request: PMK13ARequest):
+    _pmk13a_require_supervisor_write(request)
+    payload = await request.json()
+    issued_by = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    return pmk13a_issue_integration_claim_key(payload, issued_by=issued_by)
+
+
+@app.get("/settings/admin/integration-claim-keys")
+async def pmk13a_admin_list_integration_claim_keys():
+    return pmk13a_list_integration_claim_keys()
+
+
+@app.post("/settings/admin/integration-claim-keys/{claim_key_id}/revoke")
+async def pmk13a_admin_revoke_integration_claim_key(
+    claim_key_id: str,
+    request: PMK13ARequest,
+):
+    _pmk13a_require_supervisor_write(request)
+    payload = await request.json()
+    revoked_by = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    return pmk13a_revoke_integration_claim_key(
+        claim_key_id,
+        revoked_by=revoked_by,
+        reason=str(payload.get("reason", "")).strip(),
+    )
+
+
+@app.post("/settings/client/integration-claim-keys/redeem")
+async def pmk13a_client_redeem_integration_claim_key(request: PMK13ARequest):
+    payload = await request.json()
+    return pmk13a_redeem_integration_claim_key(payload)
+
+
+@app.get("/settings/client/integration-onboarding/status")
+async def pmk13a_client_integration_onboarding_status(request: PMK13ARequest):
+    return pmk13a_get_client_integration_onboarding_status(
+        client_id=request.query_params.get("client_id"),
+        user_id=request.query_params.get("user_id"),
+    )
+
+
+# PMK INTEGRATION CLAIM KEYS 13A END
