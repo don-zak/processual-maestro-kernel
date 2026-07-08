@@ -17,6 +17,10 @@ from pydantic import BaseModel, Field
 
 from processual_api.admin_audit_log import append_admin_audit_event, read_admin_audit_events
 from processual_api.integrations.api_key_operational_profiles import api_key_operational_profiles_payload
+from processual_api.integrations.integration_readiness import (
+    list_integration_readiness_checks,
+    summarize_integration_readiness,
+)
 
 from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
 from ..billing.usage_pricing import (
@@ -563,6 +567,54 @@ def _admin_client_request_raw_files() -> list:
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
     return sorted(_DATA_DIR.glob("*.json"))
 
+
+
+def _admin_integration_readiness_check_item(check) -> dict[str, Any]:
+    return {
+        "readiness_check_id": str(check.readiness_check_id),
+        "adapter_contract_id": str(check.contract_id),
+        "credential_profile_id": str(check.credential_profile_id),
+        "required_inputs": list(check.required_inputs),
+        "missing_inputs": list(check.missing_inputs),
+        "required_security_controls": list(check.required_security_controls),
+        "missing_security_controls": list(check.missing_security_controls),
+        "status": str(check.status),
+        "blocking_reasons": list(check.blocking_reasons),
+        "next_action": str(check.next_action),
+        "sandbox_ready": bool(check.sandbox_ready),
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
+
+
+def _admin_integration_readiness_payload() -> dict[str, Any]:
+    checks = list_integration_readiness_checks()
+    summary = summarize_integration_readiness(checks)
+    return {
+        "status": "ready",
+        "surface": "admin_integration_readiness",
+        "summary": summary,
+        "checks": [_admin_integration_readiness_check_item(check) for check in checks],
+        "guardrails": {
+            "read_only": True,
+            "raw_secret_visible": False,
+            "production_allowed": False,
+            "runtime_connector_approved": False,
+            "external_http_enabled": False,
+        },
+        "message": (
+            "Integration readiness is visibility-only. "
+            "Production connectors and runtime connectors remain unapproved."
+        ),
+    }
+
+
+@router.get("/admin/integration-readiness", response_model=dict)
+async def get_admin_integration_readiness(
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin_client_requests_read(current_user)
+    return _admin_integration_readiness_payload()
 
 @router.get("/admin/subscription-analytics", response_model=dict)
 async def get_admin_subscription_analytics(
