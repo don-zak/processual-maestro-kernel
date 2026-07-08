@@ -1775,3 +1775,327 @@
 
   window.PMK_ADMIN_INTEGRATION_READINESS = { loadIntegrationReadiness };
 })();
+
+/* ADMIN_CLIENT_REQUEST_INTEGRATION_READINESS_WORKFLOW_11M_MARKER:
+   supervisor workflow for integration readiness requests. */
+(function () {
+  "use strict";
+
+  const WORKFLOW_MARKER = "adminreadinessworkflow11m";
+  const WORKFLOW_EVENT = "pmk-admin-integration-key-bridge";
+
+  let lastBridgeDetail = null;
+
+  function getById(id) {
+    return document.getElementById(id);
+  }
+
+  function setText(id, value) {
+    const element = getById(id);
+    if (element) {
+      element.textContent = value;
+    }
+  }
+
+  function replaceList(id, items) {
+    const list = getById(id);
+    if (!list) {
+      return;
+    }
+
+    list.innerHTML = "";
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    });
+  }
+
+  function workflowAnchor() {
+    return (
+      getById("admin-client-request-integration-key-bridge") ||
+      getById("admin-client-api-keys-quick-bridge") ||
+      getById("admin-client-request-detail") ||
+      getById("admin-client-request-detail-card") ||
+      document.querySelector("[data-admin-client-request-detail]") ||
+      document.querySelector("main") ||
+      document.body
+    );
+  }
+
+  function ensureWorkflowCard() {
+    let card = getById("admin-client-request-integration-readiness-workflow-card");
+    if (card) {
+      return card;
+    }
+
+    card = document.createElement("section");
+    card.id = "admin-client-request-integration-readiness-workflow-card";
+    card.className = "admin-card settings-card";
+    card.dataset.phase = "INTEGRATION-READINESS-11M";
+    card.dataset.cacheMarker = WORKFLOW_MARKER;
+    card.setAttribute("aria-label", "Supervisor integration readiness workflow");
+
+    card.innerHTML = `
+      <div class="settings-card-header">
+        <div>
+          <p class="eyebrow">Supervisor workflow</p>
+          <h3>Integration Readiness Review</h3>
+        </div>
+        <span
+          id="admin-client-request-integration-readiness-status"
+          class="status-pill"
+        >Pending request context</span>
+      </div>
+
+      <p class="muted">
+        Supervisor-only workflow for reviewing integration key/profile requests.
+        This panel prepares sandbox review, client follow-up, and safe response
+        drafting without enabling production connectors.
+      </p>
+
+      <dl class="settings-summary-grid" aria-label="Supervisor readiness summary">
+        <div>
+          <dt>Requested profile</dt>
+          <dd id="admin-client-request-integration-readiness-profile">Not selected</dd>
+        </div>
+        <div>
+          <dt>Sandbox review</dt>
+          <dd id="admin-client-request-integration-readiness-sandbox">Pending</dd>
+        </div>
+        <div>
+          <dt>Production connector approved</dt>
+          <dd id="admin-client-request-integration-readiness-production">false</dd>
+        </div>
+        <div>
+          <dt>Runtime connector approved</dt>
+          <dd id="admin-client-request-integration-readiness-runtime">false</dd>
+        </div>
+      </dl>
+
+      <div class="settings-grid two">
+        <div>
+          <h4>Readiness blockers</h4>
+          <ul id="admin-client-request-integration-readiness-blockers">
+            <li>Open an integration request or use the Integration API Keys bridge.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Supervisor next actions</h4>
+          <ul id="admin-client-request-integration-readiness-actions">
+            <li>Confirm the requested operational profile.</li>
+            <li>Ask the client for missing sandbox documentation.</li>
+            <li>Keep production approval separate.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p id="admin-client-request-integration-readiness-safety" class="muted">
+        Safety: no raw secrets, no customer credentials, no external HTTP calls,
+        no runtime connector, and no production connector approval are enabled
+        from this workflow.
+      </p>
+
+      <div class="settings-actions">
+        <button
+          id="admin-client-request-integration-readiness-draft-button"
+          type="button"
+        >Generate safe supervisor draft</button>
+      </div>
+
+      <textarea
+        id="admin-client-request-integration-readiness-draft"
+        rows="8"
+        readonly
+        aria-label="Safe supervisor response draft"
+      ></textarea>
+    `;
+
+    const anchor = workflowAnchor();
+
+    if (
+      anchor &&
+      anchor !== document.body &&
+      anchor.parentNode &&
+      anchor.parentNode.insertBefore
+    ) {
+      anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    } else if (anchor && anchor.appendChild) {
+      anchor.appendChild(card);
+    } else {
+      document.body.appendChild(card);
+    }
+
+    return card;
+  }
+
+  function normalizeBridgeDetail(detail) {
+    const source = detail && typeof detail === "object" ? detail : {};
+
+    const requestedProfile =
+      source.integrationKeyProfileId ||
+      source.integration_key_profile_id ||
+      source.operationalProfileId ||
+      source.key_profile ||
+      source.category ||
+      "";
+
+    const displayName =
+      source.operationalProfileDisplayName ||
+      source.operational_profile_display_name ||
+      source.displayName ||
+      source.display_name ||
+      requestedProfile ||
+      "Not selected";
+
+    return {
+      requestedProfile,
+      displayName,
+      source: source.source || "admin_client_request",
+      category: source.category || source.key_profile || "",
+      hasProfile: Boolean(requestedProfile),
+    };
+  }
+
+  function supervisorDraftText(context) {
+    const profile = context.hasProfile ? context.displayName : "the requested profile";
+
+    return [
+      "Hello,",
+      "",
+      `We reviewed your integration request for ${profile}.`,
+      "",
+      "Before sandbox readiness can be confirmed, please provide or confirm:",
+      "- Sandbox API documentation or integration reference.",
+      "- Customer-side technical contact and review path.",
+      "- Expected read/write scope boundaries.",
+      "- Security controls for sandbox-before-production review.",
+      "",
+      "Production connector approval remains separate.",
+      "Runtime connectors are not approved from this request.",
+      "No raw integration secret should be sent in this request.",
+      "",
+      "Once the missing items are provided, a supervisor can continue the sandbox readiness review.",
+    ].join("\n");
+  }
+
+  function renderSupervisorIntegrationReadinessWorkflow(detail) {
+    if (detail && typeof detail === "object") {
+      lastBridgeDetail = detail;
+    }
+
+    const card = ensureWorkflowCard();
+    const context = normalizeBridgeDetail(lastBridgeDetail || {});
+    const productionConnectorApproved = false;
+    const runtimeConnectorApproved = false;
+    const externalHttpEnabled = false;
+    const rawSecretVisible = false;
+
+    const blockers = [
+      "Confirm sandbox API documentation or integration reference.",
+      "Confirm customer-side technical contact and review path.",
+      "Confirm requested read/write scope boundaries.",
+      "Confirm sandbox-before-production controls.",
+    ];
+
+    const actions = [
+      "Review the requested operational profile.",
+      "Ask the client for missing documents or security controls.",
+      "Approve sandbox review only when readiness blockers are resolved.",
+      "Keep production write approval separate from this request.",
+    ];
+
+    if (!context.hasProfile) {
+      blockers.unshift(
+        "No operational profile context is selected yet. Use the Integration API Keys bridge from a client request."
+      );
+    }
+
+    setText(
+      "admin-client-request-integration-readiness-status",
+      context.hasProfile ? "Ready for supervisor review" : "Pending request context"
+    );
+    setText(
+      "admin-client-request-integration-readiness-profile",
+      context.displayName || "Not selected"
+    );
+    setText(
+      "admin-client-request-integration-readiness-sandbox",
+      context.hasProfile ? "Pending blocker review" : "Pending profile context"
+    );
+    setText(
+      "admin-client-request-integration-readiness-production",
+      String(productionConnectorApproved)
+    );
+    setText(
+      "admin-client-request-integration-readiness-runtime",
+      String(runtimeConnectorApproved)
+    );
+    setText(
+      "admin-client-request-integration-readiness-safety",
+      "Safety: no raw secrets, no customer credentials, no external HTTP calls, no runtime connector, and no production connector approval are enabled from this workflow."
+    );
+
+    replaceList("admin-client-request-integration-readiness-blockers", blockers);
+    replaceList("admin-client-request-integration-readiness-actions", actions);
+
+    card.dataset.state = context.hasProfile ? "profile-context" : "pending-context";
+    card.dataset.productionConnectorApproved = String(productionConnectorApproved);
+    card.dataset.runtimeConnectorApproved = String(runtimeConnectorApproved);
+    card.dataset.externalHttpEnabled = String(externalHttpEnabled);
+    card.dataset.rawSecretVisible = String(rawSecretVisible);
+
+    return {
+      marker: WORKFLOW_MARKER,
+      hasProfile: context.hasProfile,
+      requestedProfile: context.requestedProfile,
+      productionConnectorApproved,
+      runtimeConnectorApproved,
+      externalHttpEnabled,
+      rawSecretVisible,
+    };
+  }
+
+  function generateSafeSupervisorDraft() {
+    const context = normalizeBridgeDetail(lastBridgeDetail || {});
+    const draft = supervisorDraftText(context);
+    const output = getById("admin-client-request-integration-readiness-draft");
+
+    if (output) {
+      output.value = draft;
+    }
+
+    return draft;
+  }
+
+  function initSupervisorIntegrationReadinessWorkflow() {
+    renderSupervisorIntegrationReadinessWorkflow();
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (
+        target &&
+        target.id === "admin-client-request-integration-readiness-draft-button"
+      ) {
+        generateSafeSupervisorDraft();
+      }
+    });
+
+    window.addEventListener(WORKFLOW_EVENT, (event) => {
+      renderSupervisorIntegrationReadinessWorkflow(event.detail || {});
+    });
+  }
+
+  window.PMK_ADMIN_CLIENT_REQUEST_INTEGRATION_READINESS_WORKFLOW = {
+    marker: WORKFLOW_MARKER,
+    renderSupervisorIntegrationReadinessWorkflow,
+    generateSafeSupervisorDraft,
+    initSupervisorIntegrationReadinessWorkflow,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initSupervisorIntegrationReadinessWorkflow);
+  } else {
+    initSupervisorIntegrationReadinessWorkflow();
+  }
+})();
