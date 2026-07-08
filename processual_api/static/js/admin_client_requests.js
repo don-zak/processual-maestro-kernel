@@ -450,7 +450,7 @@
     return card;
   }
 
-  function renderCounts(counts) {
+  function renderAdminClientApiKeysQuickBridge(parent) {   if (!parent || document.getElementById('admin-client-api-keys-quick-bridge')) return;   const panel = document.createElement('section');   panel.id = 'admin-client-api-keys-quick-bridge';   panel.className = 'admin-client-request-panel';   panel.setAttribute('aria-label', 'Admin API Keys quick bridge');   const title = document.createElement('h3');   title.textContent = 'Integration API Keys';   panel.appendChild(title);   const note = document.createElement('p');   note.className = 'text-muted';   note.textContent = 'Open the Admin API Keys panel from the Clients area. Select a client request first to pre-fill client-specific metadata.';   panel.appendChild(note);   const actions = document.createElement('div');   actions.className = 'admin-client-request-actions';   const button = document.createElement('button');   button.id = 'admin-client-open-api-keys-panel';   button.className = 'btn sm';   button.type = 'button';   button.textContent = 'Open Integration API Keys';   button.addEventListener('click', () => {     const payload = {       source: 'admin_clients_quick_bridge',       key_profile: 'service_integration',       category: 'service_integration',       production_connector_approved: false,       raw_secret_visible: false,     };     try {       sessionStorage.setItem(ADMIN_INTEGRATION_KEY_BRIDGE_STORAGE, JSON.stringify(payload));     } catch {}     window.dispatchEvent(new CustomEvent('pmk-admin-integration-key-bridge', { detail: payload }));     const target = document.getElementById('admin-api-key-client-id') || document.getElementById('admin-api-key-create-result') || document.getElementById('admin-api-key-table');     if (target && target.scrollIntoView) {       target.scrollIntoView({ behavior: 'smooth', block: 'center' });     }   });   actions.appendChild(button);   const status = document.createElement('div');   status.id = 'admin-client-api-keys-quick-bridge-status';   status.className = 'admin-status';   status.textContent = 'Visible admin shortcut only. No raw secret is shown and no production connector is approved.';   actions.appendChild(status);   panel.appendChild(actions);   parent.appendChild(panel); } function renderCounts(counts) {
     const target = byId('admin-client-requests-counts');
     clear(target);
     if (!target) return;
@@ -1515,7 +1515,7 @@
     }
 
     renderCounts(data?.status_counts || {});
-    renderList(data?.latest_requests || []);
+    const card = byId(CARD_ID); renderAdminClientApiKeysQuickBridge(card); renderList(data?.latest_requests || []);
   }
 
   async function loadAdminClientRequests(force) {
