@@ -12,7 +12,11 @@ def _phase_block() -> str:
     js = _read(ADMIN_CLIENT_REQUESTS_JS)
     marker = "ADMIN_CLIENT_REQUEST_INTEGRATION_READINESS_WORKFLOW_11M_MARKER"
     assert marker in js
-    return js[js.index(marker) :]
+    block = js[js.index(marker) :]
+    next_marker = "ADMIN_INTEGRATION_READINESS_TRACKING_SUMMARY_11O_MARKER"
+    if next_marker in block:
+        block = block[: block.index(next_marker)]
+    return block
 
 
 def test_supervisor_readiness_workflow_loads_from_existing_admin_script():

@@ -118,3 +118,51 @@ async def metrics_endpoint():
         return Response(content=generate_latest(), media_type="text/plain")
     except Exception:
         return PlainTextResponse("# Prometheus metrics not available\n")
+
+# INTEGRATION_READINESS_TRACKING_11P_MAIN_ROUTE_MARKER
+@app.get("/settings/admin/integration-readiness-tracking")
+async def admin_integration_readiness_tracking_summary_11p() -> dict[str, object]:
+    """Return safe integration readiness tracking summary."""
+
+    from processual_api.services.integration_readiness_tracking_store import (
+        admin_tracking_summary_payload,
+    )
+
+    return admin_tracking_summary_payload()
+
+
+@app.post("/settings/admin/integration-readiness-tracking/cases")
+async def admin_create_integration_readiness_tracking_case_11p(
+    payload: dict[str, object],
+) -> dict[str, object]:
+    """Create or replace a safe readiness tracking case."""
+
+    from processual_api.services.integration_readiness_tracking_store import (
+        create_tracking_case_from_payload,
+    )
+
+    return create_tracking_case_from_payload(dict(payload))
+
+
+@app.post("/settings/admin/integration-readiness-tracking/cases/{case_id:path}/items")
+async def admin_update_integration_readiness_tracking_case_item_11p(
+    case_id: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    """Update a safe readiness tracking case item."""
+
+    from processual_api.services.integration_readiness_tracking_store import (
+        update_tracking_case_item_from_payload,
+    )
+
+    try:
+        return update_tracking_case_item_from_payload(case_id, dict(payload))
+    except KeyError:
+        return {
+            "error": "readiness_tracking_case_not_found",
+            "case_id": case_id,
+            "production_allowed": False,
+            "runtime_connector_approved": False,
+            "external_http_enabled": False,
+            "raw_secret_visible": False,
+        }

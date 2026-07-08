@@ -1826,6 +1826,10 @@
   function ensureWorkflowCard() {
     let card = getById("admin-client-request-integration-readiness-workflow-card");
     if (card) {
+      const host = trackingHost();
+      if (host && card.parentNode !== host) {
+        host.appendChild(card);
+      }
       return card;
     }
 
@@ -2105,7 +2109,7 @@
 (function () {
   "use strict";
 
-  const TRACKING_MARKER = "admintracking11o";
+  const TRACKING_MARKER = "admintracking11o-admintrackingroute11p-visiblehost";
 
   function getById(id) {
     return document.getElementById(id);
@@ -2118,12 +2122,15 @@
     }
   }
 
+  /* ADMIN_INTEGRATION_READINESS_TRACKING_VISIBLE_HOST_11P_MARKER:
+     force the tracking summary into a visible static admin host. */
+  function trackingHost() {
+    return getById("admin-integration-readiness-tracking-summary-host");
+  }
+
   function trackingAnchor() {
     return (
-      getById("admin-client-request-integration-readiness-workflow-card") ||
-      getById("admin-integration-readiness-card") ||
-      getById("admin-client-request-integration-key-bridge") ||
-      getById("admin-client-api-keys-quick-bridge") ||
+      trackingHost() ||
       document.querySelector("main") ||
       document.body
     );
@@ -2132,6 +2139,10 @@
   function ensureTrackingSummaryCard() {
     let card = getById("admin-integration-readiness-tracking-summary-card");
     if (card) {
+      const host = trackingHost();
+      if (host && card.parentNode !== host) {
+        host.appendChild(card);
+      }
       return card;
     }
 
@@ -2230,9 +2241,13 @@
       </p>
     `;
 
+    const host = trackingHost();
     const anchor = trackingAnchor();
 
-    if (
+    if (host && host.appendChild) {
+      host.innerHTML = "";
+      host.appendChild(card);
+    } else if (
       anchor &&
       anchor !== document.body &&
       anchor.parentNode &&
@@ -2293,19 +2308,70 @@
     };
   }
 
-  function initIntegrationReadinessTrackingSummary() {
-    renderIntegrationReadinessTrackingSummary({
+  /* ADMIN_INTEGRATION_READINESS_TRACKING_ROUTE_11P_MARKER:
+     same-origin admin tracking route loader. */
+  async function loadIntegrationReadinessTrackingSummary() {
+    const fallback = {
       persistedCases: 0,
       providedInputs: 0,
       verifiedItems: 0,
       rejectedItems: 0,
       timelineEvents: 0,
-    });
+    };
+
+    try {
+      const headers =
+        window.PMK_ADMIN_AUTH && typeof window.PMK_ADMIN_AUTH.headers === "function"
+          ? window.PMK_ADMIN_AUTH.headers()
+          : {};
+
+      const response = await fetch("/settings/admin/integration-readiness-tracking", {
+        credentials: "same-origin",
+        headers,
+      });
+
+      if (!response.ok) {
+        renderIntegrationReadinessTrackingSummary(fallback);
+        return {
+          marker: TRACKING_MARKER,
+          loaded: false,
+          status: response.status,
+          productionConnectorApproved: false,
+          runtimeConnectorApproved: false,
+          externalHttpEnabled: false,
+          rawSecretVisible: false,
+        };
+      }
+
+      const payload = await response.json();
+      return renderIntegrationReadinessTrackingSummary({
+        persistedCases: payload.persisted_cases || 0,
+        providedInputs: payload.provided_inputs || 0,
+        verifiedItems: payload.verified_items || 0,
+        rejectedItems: payload.rejected_items || 0,
+        timelineEvents: payload.timeline_events || 0,
+      });
+    } catch (error) {
+      renderIntegrationReadinessTrackingSummary(fallback);
+      return {
+        marker: TRACKING_MARKER,
+        loaded: false,
+        error: String(error && error.message ? error.message : error),
+        productionConnectorApproved: false,
+        runtimeConnectorApproved: false,
+        externalHttpEnabled: false,
+        rawSecretVisible: false,
+      };
+    }
+  }
+  function initIntegrationReadinessTrackingSummary() {
+    loadIntegrationReadinessTrackingSummary();
   }
 
   window.PMK_ADMIN_INTEGRATION_READINESS_TRACKING_SUMMARY = {
     marker: TRACKING_MARKER,
     renderIntegrationReadinessTrackingSummary,
+    loadIntegrationReadinessTrackingSummary,
     initIntegrationReadinessTrackingSummary,
   };
 

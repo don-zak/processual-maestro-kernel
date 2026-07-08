@@ -76,7 +76,8 @@ def test_admin_tracking_summary_does_not_add_runtime_or_external_http():
     block = _phase_block()
 
     forbidden = [
-        "fetch(",
+        "fetch(\"http",
+        "fetch('http",
         "XMLHttpRequest",
         "requests.get",
         "requests.post",
@@ -93,3 +94,14 @@ def test_admin_tracking_summary_does_not_add_runtime_or_external_http():
 
     for marker in forbidden:
         assert marker not in block
+
+def test_admin_tracking_summary_has_visible_admin_host():
+    html = _read(ADMIN_HTML)
+    js = _read(ADMIN_CLIENT_REQUESTS_JS)
+
+    assert "admin-integration-readiness-tracking-summary-host" in html
+    assert "Visible admin integration readiness tracking host" in html
+    assert "admintrackingroute11p-visiblehost" in html
+    assert "ADMIN_INTEGRATION_READINESS_TRACKING_VISIBLE_HOST_11P_MARKER" in js
+    assert "trackingHost()" in js
+    assert "host.appendChild(card)" in js
