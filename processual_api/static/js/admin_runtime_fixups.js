@@ -241,8 +241,8 @@
       '</select>',
       '</div>',
       '<div>',
-      '<label for="admin-api-key-label">Label</label>',
-      '<input id="admin-api-key-label" class="inp" placeholder="client-or-team-name" />',
+      '<label for="admin-api-key-profile-label">Label</label>',
+      '<input id="admin-api-key-profile-label" class="inp" placeholder="client-or-team-name" />',
       '</div>',
     ].join('');
 
@@ -281,7 +281,7 @@
   async function generateProfiledApiKey() {
     const profileName = document.getElementById('admin-api-key-profile')?.value || 'service_integration';
     const profile = keyProfile(profileName);
-    const labelInput = document.getElementById('admin-api-key-label')?.value || '';
+    const labelInput = document.getElementById('admin-api-key-profile-label')?.value || '';
     const label =
       labelInput.trim() ||
       profile.category + '-' + new Date().toISOString().replaceAll(':', '-').slice(0, 19);
