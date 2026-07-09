@@ -732,3 +732,38 @@ body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table tr:hover td {
   font-weight: 700 !important;
   margin-top: 0.55rem !important;
 }
+/* 13E-H1 admin scrollbar hardening */
+#main,
+.admin-page,
+.card,
+.mono-block,
+.admin-table-wrap {
+  scrollbar-width: auto;
+}
+
+#main::-webkit-scrollbar,
+.admin-page::-webkit-scrollbar,
+.card::-webkit-scrollbar,
+.mono-block::-webkit-scrollbar,
+.admin-table-wrap::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+#main::-webkit-scrollbar-thumb,
+.admin-page::-webkit-scrollbar-thumb,
+.card::-webkit-scrollbar-thumb,
+.mono-block::-webkit-scrollbar-thumb,
+.admin-table-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+#main::-webkit-scrollbar-track,
+.admin-page::-webkit-scrollbar-track,
+.card::-webkit-scrollbar-track,
+.mono-block::-webkit-scrollbar-track,
+.admin-table-wrap::-webkit-scrollbar-track {
+  border-radius: 999px;
+}

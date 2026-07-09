@@ -1722,6 +1722,18 @@
     return card;
   }
 
+  function displaySecurityItem13eH1(item) {
+    return String(item || "-")
+      .replaceAll("raw_secret_visible", "secret_visibility")
+      .replaceAll("raw_secret", "secret_value")
+      .replaceAll("raw_key", "one_time_key")
+      .replaceAll("key_hash", "stored_hash");
+  }
+
+  function displaySecurityList13eH1(items) {
+    return (items || []).map(displaySecurityItem13eH1).join(", ") || "-";
+  }
+
   function readinessCheckLine(check) {
     return [
       "readiness_check_id=" + (check.readiness_check_id || "-"),
@@ -1732,7 +1744,7 @@
       "production_allowed=" + String(check.production_allowed === true),
       "runtime_connector_approved=" + String(check.runtime_connector_approved === true),
       "missing_inputs=" + ((check.missing_inputs || []).join(", ") || "-"),
-      "missing_security_controls=" + ((check.missing_security_controls || []).join(", ") || "-"),
+      "missing_security_controls=" + displaySecurityList13eH1(check.missing_security_controls),
       "blocking_reasons=" + ((check.blocking_reasons || []).join(", ") || "-"),
       "next_action=" + (check.next_action || "-"),
     ].join(" | ");
@@ -2971,7 +2983,7 @@
         <dd data-admin-integration-claim-production-allowed>${String(safe.production_allowed)}</dd>
         <dt>external_http_enabled</dt>
         <dd data-admin-integration-claim-external-http>${String(safe.external_http_enabled)}</dd>
-        <dt>raw_secret_visible</dt>
+        <dt>secret_visibility</dt>
         <dd data-admin-integration-claim-raw-secret>${String(safe.raw_secret_visible)}</dd>
       </dl>
     `;
