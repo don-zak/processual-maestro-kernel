@@ -4,6 +4,81 @@ document.addEventListener('DOMContentLoaded', () => {
   const SUPERVISOR_SESSION_KEY_ENDPOINT = '/settings/admin/supervisor-session-keys';
   const SUPERVISOR_SESSION_KEY_STORAGE_KEY = 'pmk_supervisor_session_key';
 
+  function formatAdminApiErrorValue(value) {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => formatAdminApiErrorValue(item))
+        .filter(Boolean)
+        .join(' | ');
+    }
+
+    if (typeof value === 'object') {
+      const preferred = [
+        'error',
+        'code',
+        'message',
+        'msg',
+        'reason',
+        'required_scope',
+        'required_scopes',
+        'provided_scope',
+        'provided_scopes',
+        'field',
+        'loc',
+        'type',
+      ];
+
+      const parts = [];
+      preferred.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+          const formatted = formatAdminApiErrorValue(value[key]);
+          if (formatted) {
+            parts.push(`${key}: ${formatted}`);
+          }
+        }
+      });
+
+      if (parts.length) {
+        return parts.join(' | ');
+      }
+
+      try {
+        return JSON.stringify(value);
+      } catch (error) {
+        return String(value);
+      }
+    }
+
+    return String(value);
+  }
+
+  function formatAdminApiError(data, status) {
+    if (!data) {
+      return `HTTP ${status}`;
+    }
+
+    const detail = Object.prototype.hasOwnProperty.call(data, 'detail') ? data.detail : null;
+    const error = Object.prototype.hasOwnProperty.call(data, 'error') ? data.error : null;
+    const message = Object.prototype.hasOwnProperty.call(data, 'message') ? data.message : null;
+
+    return (
+      formatAdminApiErrorValue(detail) ||
+      formatAdminApiErrorValue(error) ||
+      formatAdminApiErrorValue(message) ||
+      formatAdminApiErrorValue(data) ||
+      `HTTP ${status}`
+    );
+  }
+
+
   const KEY_CATEGORIES = [
     ['client_api', 'Client API - normal client access'],
     ['pilot_client', 'Pilot Client - introductory access / pilot access'],
@@ -168,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!response.ok) {
-      throw new Error(data.detail || data.error || `HTTP ${response.status}`);
+      throw new Error(formatAdminApiError(data, response.status));
     }
 
     return data;
