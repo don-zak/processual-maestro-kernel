@@ -558,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
           These keys are separate from X-API-Key programmatic access.
         </div>
         <div class="admin-note">
-          Raw supervisor keys are shown once after issue. Safe metadata omits raw_key and key_hash.
+          Raw supervisor keys are shown once after issue. Safe metadata omits secret values and stored hashes.
           Backend enforcement remains authoritative.
         </div>
 
