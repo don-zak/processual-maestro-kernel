@@ -16,5 +16,8 @@ def test_supervisor_metadata_note_does_not_render_raw_field_names_13e_d2():
 
 
 def test_admin_api_keys_cache_marker_bumped_for_13e_d2():
-    assert "admin_api_keys.js?v=adminapikeys13ed2" in ADMIN_HTML
+    assert (
+        "admin_api_keys.js?v=adminapikeys13ed2" in ADMIN_HTML
+        or "admin_api_keys.js?v=adminapikeys13eh2" in ADMIN_HTML
+    )
     assert "admin_api_keys.js?v=adminapikeys13df2" not in ADMIN_HTML

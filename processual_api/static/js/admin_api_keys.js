@@ -467,44 +467,80 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function metadataDisplayValue(item, field) {
+    if (!item) return '';
+    let value = field === 'scopes' ? scopesText(item[field]) : item[field];
+
+    if ((value === undefined || value === null || value === '') && field === 'key_id') {
+      value = item.id || '';
+    }
+
+    if (Array.isArray(value)) return value.join(', ');
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    return value ?? '';
+  }
+
+  function renderMetadataCardFields(fields, item) {
+    return fields.map((field) => {
+      const value = metadataDisplayValue(item, field);
+      return `
+        <div class="admin-api-key-metadata-card-row">
+          <strong>${escapeHtml(field)}</strong>
+          <span>${escapeHtml(value)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderMetadataDetailsCard({ className, summary, fields, item, actionHtml }) {
+    return `
+      <details class="${escapeHtml(className)}">
+        <summary>${escapeHtml(summary)}</summary>
+        <div class="admin-api-key-metadata-card-body">
+          <div class="admin-api-key-metadata-card-grid">
+            ${renderMetadataCardFields(fields, item)}
+          </div>
+          <div class="admin-actions">
+            ${actionHtml || ''}
+          </div>
+        </div>
+      </details>
+    `;
+  }
+
   function renderSupervisorSessionKeyRows(keys) {
     if (!Array.isArray(keys) || keys.length === 0) {
       return '<div class="admin-note">No supervisor session keys found. Issue a supervisor key to create one.</div>';
     }
 
-    const header = SUPERVISOR_SESSION_KEY_FIELDS.map((field) =>
-      `<th>${escapeHtml(field)}</th>`
-    ).join('');
-    const body = keys.map((key) => {
+    const cards = keys.map((key) => {
       const sessionKeyId = key.session_key_id || '';
-      const cells = SUPERVISOR_SESSION_KEY_FIELDS.map((field) => {
-        const value = field === 'scopes' ? scopesText(key[field]) : key[field] ?? '';
-        return `<td>${escapeHtml(value)}</td>`;
-      }).join('');
+      const summary = [
+        sessionKeyId || 'supervisor-session-key',
+        key.level || 'level pending',
+        key.status || 'status pending',
+      ].join(' / ');
 
-      return `
-        <tr>
-          ${cells}
-          <td>
-            <button class="btn danger admin-supervisor-key-revoke"
-              data-session-key-id="${escapeHtml(sessionKeyId)}" type="button">
-              Revoke
-            </button>
-          </td>
-        </tr>
-      `;
+      return renderMetadataDetailsCard({
+        className: 'admin-api-key-metadata-card admin-supervisor-session-metadata-card',
+        summary,
+        fields: SUPERVISOR_SESSION_KEY_FIELDS,
+        item: key,
+        actionHtml: `
+          <button class="btn danger admin-supervisor-key-revoke"
+            data-session-key-id="${escapeHtml(sessionKeyId)}" type="button">
+            Revoke
+          </button>
+        `,
+      });
     }).join('');
 
     return `
-      <div class="table-wrap">
-        <table class="admin-table">
-          <thead><tr>${header}<th>action</th></tr></thead>
-          <tbody>${body}</tbody>
-        </table>
+      <div class="admin-api-key-metadata-card-list admin-supervisor-session-metadata-card-list">
+        ${cards}
       </div>
     `;
   }
-
   async function refreshSupervisorSessionKeys() {
     const target = document.getElementById('admin-supervisor-key-table');
     if (!target) return;
@@ -594,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <h3>Safe supervisor session key metadata</h3>
         <div class="admin-note">
-          The table renders safe metadata only: session_key_id, level, issued_to,
+          The cards render safe metadata only: session_key_id, level, issued_to,
           session_label, reason, status, created_at, expires_at, last_used_at,
           revoked_at, and revocation_reason.
         </div>
@@ -608,36 +644,34 @@ document.addEventListener('DOMContentLoaded', () => {
       return '<div class="admin-note">No active API keys found. Use Generate governed key to create one.</div>';
     }
 
-    const header = METADATA_FIELDS.map((field) => `<th>${escapeHtml(field)}</th>`).join('');
-    const body = keys.map((key) => {
+    const cards = keys.map((key) => {
       const keyId = key.key_id || key.id || '';
-      const cells = METADATA_FIELDS.map((field) => {
-        const value = field === 'scopes' ? scopesText(key[field]) : key[field] ?? key.id ?? '';
-        return `<td>${escapeHtml(value)}</td>`;
-      }).join('');
+      const summary = [
+        keyId || 'api-key',
+        key.label || key.category || 'metadata',
+        key.status || 'status pending',
+      ].join(' / ');
 
-      return `
-        <tr>
-          ${cells}
-          <td>
-            <button class="btn danger admin-api-key-revoke" data-key-id="${escapeHtml(keyId)}" type="button">
-              Revoke
-            </button>
-          </td>
-        </tr>
-      `;
+      return renderMetadataDetailsCard({
+        className: 'admin-api-key-metadata-card',
+        summary,
+        fields: METADATA_FIELDS,
+        item: key,
+        actionHtml: `
+          <button class="btn danger admin-api-key-revoke"
+            data-key-id="${escapeHtml(keyId)}" type="button">
+            Revoke
+          </button>
+        `,
+      });
     }).join('');
 
     return `
-      <div class="table-wrap">
-        <table class="admin-table">
-          <thead><tr>${header}<th>action</th></tr></thead>
-          <tbody>${body}</tbody>
-        </table>
+      <div class="admin-api-key-metadata-card-list">
+        ${cards}
       </div>
     `;
   }
-
   async function refreshKeys() {
     const target = document.getElementById('admin-api-key-table');
     if (!target) return;
@@ -764,9 +798,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" -d "{}" http://127.0.0.1:8000/cgt/govern</div>
 
-      <h3>Safe metadata table</h3>
+      <h3>Safe metadata cards</h3>
       <div class="admin-note">
-        The table renders safe metadata only: key_id, prefix, label, category, role, scopes,
+        The cards render safe metadata only: key_id, prefix, label, category, role, scopes,
         client_id, user_id, plan_id, quota_limit, quota_used, status, usage_count,
         last_used_at, created_at, expires_at, revoked_at.
       </div>
