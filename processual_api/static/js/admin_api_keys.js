@@ -495,7 +495,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderMetadataDetailsCard({ className, summary, fields, item, actionHtml }) {
     return `
       <details class="${escapeHtml(className)}">
-        <summary>${escapeHtml(summary)}</summary>
+        <summary class="admin-api-key-metadata-card-summary">
+          <span class="admin-api-key-metadata-card-title">${escapeHtml(summary)}</span>
+          <span class="admin-api-key-metadata-card-toggle" aria-hidden="true">
+            <span class="admin-api-key-metadata-card-toggle-open">Open</span>
+            <span class="admin-api-key-metadata-card-toggle-close">Close</span>
+          </span>
+        </summary>
         <div class="admin-api-key-metadata-card-body">
           <div class="admin-api-key-metadata-card-grid">
             ${renderMetadataCardFields(fields, item)}

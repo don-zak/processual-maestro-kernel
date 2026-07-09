@@ -767,3 +767,123 @@ body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table tr:hover td {
 .admin-table-wrap::-webkit-scrollbar-track {
   border-radius: 999px;
 }
+
+/* 13E-H3 API key metadata card readability */
+#page-admin-api-keys .admin-api-key-metadata-card-list {
+  display: grid;
+  gap: var(--s-3, 0.75rem);
+  margin-top: var(--s-3, 0.75rem);
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-body {
+  padding: 0 1rem 1rem;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-row strong,
+#page-admin-api-keys .admin-api-key-metadata-card-row span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  #page-admin-api-keys .admin-api-key-metadata-card-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
+/* 13E-H3-R1 force metadata cards collapsed by default */
+#page-admin-api-keys .admin-api-key-metadata-card:not([open]) .admin-api-key-metadata-card-body {
+  display: none !important;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-body {
+  display: block;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card > summary::after {
+  content: " Expand";
+  float: right;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] > summary::after {
+  content: " Collapse";
+}
+
+/* 13E-H3-R2 visible metadata card toggle */
+#page-admin-api-keys .admin-api-key-metadata-card > summary::after {
+  content: none !important;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-summary {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  padding: 0.24rem 0.58rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-toggle-close {
+  display: none;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-toggle-open {
+  display: none;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-toggle-close {
+  display: inline;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card:not([open]) .admin-api-key-metadata-card-body {
+  display: none !important;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-body {
+  display: block;
+}
