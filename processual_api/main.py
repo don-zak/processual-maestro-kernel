@@ -341,7 +341,13 @@ def _integration_readiness_audit_path_12b():
     return pathlib_module.Path("data") / "admin_audit_events.jsonl"
 
 
-def _append_integration_readiness_audit_12b(request, payload: dict, status_code: int) -> None:
+def _append_integration_readiness_audit_12b(
+    request,
+    payload: dict,
+    status_code: int,
+    *,
+    supervisor_session: dict[str, object] | None = None,
+) -> None:
     if status_code >= 400:
         return
 
@@ -350,6 +356,8 @@ def _append_integration_readiness_audit_12b(request, payload: dict, status_code:
 
     path = _integration_readiness_audit_path_12b()
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    safe_supervisor = supervisor_session or {}
 
     event = {
         "event": "integration_readiness_case_write",
@@ -360,9 +368,26 @@ def _append_integration_readiness_audit_12b(request, payload: dict, status_code:
         "item_key": str(payload.get("item_key") or ""),
         "status": str(payload.get("status") or ""),
         "supervisor_session_present": bool(
-            request.headers.get("X-Admin-Supervisor-Session")
+            safe_supervisor.get("session_present")
+        )
+        if safe_supervisor
+        else bool(
+            request.headers.get("X-Supervisor-Session-Key")
+            or request.headers.get("X-Admin-Supervisor-Session")
         ),
-        "supervisor_scope": str(
+        "supervisor_session_validated": bool(
+            safe_supervisor.get("session_validated")
+        )
+        if safe_supervisor
+        else False,
+        "session_key_id": str(safe_supervisor.get("session_key_id") or ""),
+        "supervisor_scope": ",".join(
+            str(scope)
+            for scope in safe_supervisor.get("provided_scopes", [])
+            if str(scope or "").strip()
+        )
+        if safe_supervisor
+        else str(
             request.headers.get("X-Admin-Supervisor-Scope")
             or request.headers.get("X-Admin-Supervisor-Scopes")
             or ""
@@ -397,6 +422,45 @@ async def integration_readiness_supervisor_scope_audit_12b(request, call_next):
         return {"type": "http.request", "body": body, "more_body": False}
 
     request._receive = receive_once_12b
+
+    if request.headers.get("X-Supervisor-Session-Key"):
+        from processual_api.services.supervisor_session_write_guard import (
+            SupervisorSessionWriteGuardError,
+            require_validated_supervisor_write_session,
+        )
+
+        try:
+            safe_supervisor = require_validated_supervisor_write_session(
+                request,
+                _INTEGRATION_READINESS_ALLOWED_SCOPES_12B,
+                guard_name="integration readiness writes",
+            )
+        except SupervisorSessionWriteGuardError as exc:
+            return JSONResponse(
+                {
+                    "detail": exc.detail,
+                    "error": exc.error,
+                    "required_scopes": exc.required_scopes,
+                    "supervisor_session_present": exc.session_present,
+                    "supervisor_session_validated": exc.session_validated,
+                    "session_key_id": exc.session_key_id,
+                    "provided_scopes": exc.provided_scopes,
+                    "production_allowed": False,
+                    "runtime_connector_approved": False,
+                    "external_http_enabled": False,
+                    "raw_secret_visible": False,
+                },
+                status_code=403,
+            )
+
+        response = await call_next(request)
+        _append_integration_readiness_audit_12b(
+            request,
+            payload,
+            response.status_code,
+            supervisor_session=safe_supervisor,
+        )
+        return response
 
     supervisor_session = str(
         request.headers.get("X-Admin-Supervisor-Session") or ""
