@@ -89,3 +89,44 @@ __all__ = [
     "validate_integration_readiness_checks",
 ]
 # INTEGRATION-READINESS-11E exports end
+
+# TELECOM-CONNECTIVITY-16A exports begin
+from processual_api.integrations.connector_registry import (
+    RUNTIME_CONNECTOR_CONTRACTS,
+    SUPPORTED_RUNTIME_CONNECTORS,
+    get_runtime_connector_contract,
+    list_runtime_connector_contracts,
+    list_runtime_connectors_for_adapter,
+    list_runtime_connectors_for_family,
+    validate_runtime_connector_registry,
+)
+from processual_api.integrations.runtime_contracts import (
+    SUPPORTED_CONNECTOR_CONTRACT_FAMILIES,
+    SUPPORTED_CONNECTOR_DATA_CLASSIFICATIONS,
+    SUPPORTED_CONNECTOR_ENVIRONMENTS,
+    ConnectorCapability,
+    ConnectorCapabilityAccess,
+    ConnectorContractFamily,
+    ConnectorRuntimeContract,
+    normalize_runtime_connector_id,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "RUNTIME_CONNECTOR_CONTRACTS",
+    "SUPPORTED_CONNECTOR_CONTRACT_FAMILIES",
+    "SUPPORTED_CONNECTOR_DATA_CLASSIFICATIONS",
+    "SUPPORTED_CONNECTOR_ENVIRONMENTS",
+    "SUPPORTED_RUNTIME_CONNECTORS",
+    "ConnectorCapability",
+    "ConnectorCapabilityAccess",
+    "ConnectorContractFamily",
+    "ConnectorRuntimeContract",
+    "get_runtime_connector_contract",
+    "list_runtime_connector_contracts",
+    "list_runtime_connectors_for_adapter",
+    "list_runtime_connectors_for_family",
+    "normalize_runtime_connector_id",
+    "validate_runtime_connector_registry",
+]
+# TELECOM-CONNECTIVITY-16A exports end
