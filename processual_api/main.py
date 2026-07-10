@@ -772,109 +772,38 @@ def _pmk14e_write_guardrails() -> dict[str, bool]:
     }
 
 
-def _pmk14e_supervisor_session_store_path():
-    import os  # noqa: PLC0415
-    from pathlib import Path  # noqa: PLC0415
-
-    configured = os.environ.get(
-        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
-        "",
-    ).strip()
-
-    if configured:
-        return Path(configured)
-
-    return _pmk13b_supervisor_session_store_path()
-
-
 def _pmk14e_require_supervisor_write(
     request: PMK13ARequest,
 ) -> str:
     from fastapi import HTTPException  # noqa: PLC0415
 
-    from processual_api.supervisor_session_keys import (  # noqa: PLC0415
-        validate_supervisor_session_key,
+    from processual_api.services.supervisor_session_write_guard import (  # noqa: PLC0415
+        SupervisorSessionWriteGuardError,
+        require_validated_supervisor_write_session,
     )
 
-    supervisor_session = str(
-        request.headers.get("X-Supervisor-Session-Key")
-        or request.headers.get("X-Admin-Supervisor-Session")
-        or ""
-    ).strip()
-
-    if not supervisor_session:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "supervisor_session_required",
-                "required_any_scope": sorted(
-                    PMK14E_ALLOWED_SUPERVISOR_SCOPES
-                ),
-                "supervisor_session_present": False,
-                "supervisor_session_validated": False,
-                "provided_scopes": [],
-                **_pmk14e_write_guardrails(),
-            },
-        )
-
     try:
-        safe_session = validate_supervisor_session_key(
-            _pmk14e_supervisor_session_store_path(),
-            supervisor_session,
+        safe_supervisor = require_validated_supervisor_write_session(
+            request,
+            PMK14E_ALLOWED_SUPERVISOR_SCOPES,
+            guard_name="operator pilot handoff progress writes",
         )
-    except (PermissionError, OSError, ValueError, TypeError) as exc:
+    except SupervisorSessionWriteGuardError as exc:
         raise HTTPException(
             status_code=403,
             detail={
-                "error": "invalid_supervisor_session",
-                "required_any_scope": sorted(
-                    PMK14E_ALLOWED_SUPERVISOR_SCOPES
-                ),
-                "supervisor_session_present": True,
-                "supervisor_session_validated": False,
-                "provided_scopes": [],
+                "error": exc.error,
+                "message": exc.detail,
+                "required_any_scope": exc.required_scopes,
+                "supervisor_session_present": exc.session_present,
+                "supervisor_session_validated": exc.session_validated,
+                "session_key_id": exc.session_key_id,
+                "provided_scopes": exc.provided_scopes,
                 **_pmk14e_write_guardrails(),
             },
         ) from exc
 
-    raw_scopes = safe_session.get("scopes") or []
-
-    if isinstance(raw_scopes, str):
-        raw_scopes = [raw_scopes]
-
-    supervisor_scopes = {
-        str(scope).strip()
-        for scope in raw_scopes
-        if str(scope or "").strip()
-    }
-
-    session_key_id = str(
-        safe_session.get("session_key_id") or ""
-    ).strip()
-
-    if (
-        not session_key_id
-        or not supervisor_scopes.intersection(
-            PMK14E_ALLOWED_SUPERVISOR_SCOPES
-        )
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "supervisor_scope_required",
-                "required_any_scope": sorted(
-                    PMK14E_ALLOWED_SUPERVISOR_SCOPES
-                ),
-                "supervisor_session_present": True,
-                "supervisor_session_validated": True,
-                "session_key_id": session_key_id,
-                "provided_scopes": sorted(supervisor_scopes),
-                **_pmk14e_write_guardrails(),
-            },
-        )
-
-    # Persist only the safe identifier. Never persist the raw session key.
-    return session_key_id
+    return str(safe_supervisor["session_key_id"])
 
 @app.get("/settings/admin/operator-pilot-handoff/progress")
 def admin_operator_pilot_handoff_progress_14e() -> dict[str, object]:

@@ -548,31 +548,47 @@ def test_14e_progress_routes_reject_unregistered_methods(
 
 
 def test_14e_progress_validated_guard_contract_is_visible() -> None:
-    source = Path("processual_api/main.py").read_text(encoding="utf-8")
+    source = Path("processual_api/main.py").read_text(
+        encoding="utf-8"
+    )
 
-    start_marker = "# PMK OPERATOR PILOT HANDOFF PROGRESS 14E START"
+    start_marker = (
+        "# PMK OPERATOR PILOT HANDOFF PROGRESS 14E START"
+    )
+    end_marker = (
+        "# PMK OPERATOR PILOT HANDOFF PROGRESS 14E END"
+    )
 
-    end_marker = "# PMK OPERATOR PILOT HANDOFF PROGRESS 14E END"
-
-    route_block = source[source.index(start_marker) : source.index(end_marker) + len(end_marker)]
+    route_block = source[
+        source.index(start_marker):
+        source.index(end_marker) + len(end_marker)
+    ]
 
     required = [
-        "validate_supervisor_session_key",
-        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
-        '"X-Supervisor-Session-Key"',
-        '"X-Admin-Supervisor-Session"',
-        '"invalid_supervisor_session"',
-        '"supervisor_session_validated": True',
-        'safe_session.get("session_key_id")',
-        "return session_key_id",
+        "require_validated_supervisor_write_session",
+        "SupervisorSessionWriteGuardError",
+        "PMK14E_ALLOWED_SUPERVISOR_SCOPES",
+        '"supervisor_session_present"',
+        '"supervisor_session_validated"',
+        '"session_key_id"',
+        '"provided_scopes"',
+        'str(safe_supervisor["session_key_id"])',
         'progress_payload["supervisor_actor"] = supervisor_actor',
     ]
 
     for marker in required:
         assert marker in route_block
 
-    assert "_pmk13b_request_scopes(request)" not in route_block
-    assert "return supervisor_session" not in route_block
+    for forbidden in [
+        "validate_supervisor_session_key",
+        "_pmk14e_supervisor_session_store_path",
+        '"X-Supervisor-Session-Key"',
+        '"X-Admin-Supervisor-Session"',
+        'request.headers.get("X-Admin-Supervisor-Scope")',
+        'request.headers.get("X-Admin-Supervisor-Scopes")',
+        "return supervisor_session",
+    ]:
+        assert forbidden not in route_block
 
 
 def test_14e_progress_route_block_has_no_external_execution() -> None:
