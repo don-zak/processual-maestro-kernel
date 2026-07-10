@@ -3,6 +3,7 @@
     home: 'page-admin-home',
     adapters: 'page-admin-adapters',
     'api-keys': 'page-admin-api-keys',
+    'operator-pilot-handoff': 'page-operator-pilot-handoff',
     clients: 'page-admin-clients',
     usage: 'page-admin-usage',
     'program-progress': 'page-admin-program-progress',

@@ -211,6 +211,7 @@
   }
 </style>
 <link rel="stylesheet" href="/console/css/admin_ui_hardening_13c.css?v=adminui13c-13eh3r2toggle">
+  <link rel="stylesheet" href="/console/css/admin_operator_pilot_handoff.css?v=operatorhandoff14a-r6nav">
 </head>
 <body>
 <div id="bg-grid"></div>
@@ -227,6 +228,7 @@
       <button class="nav-btn active" data-admin-page="home" type="button"><span class="nav-ind"></span><span class="nav-ico">A</span><span>Admin Home</span></button>
       <button class="nav-btn" data-admin-page="adapters" type="button"><span class="nav-ind"></span><span class="nav-ico">P</span><span>Adapters</span></button>
       <button class="nav-btn" data-admin-page="api-keys" type="button"><span class="nav-ind"></span><span class="nav-ico">K</span><span>API Keys</span></button>
+      <button class="nav-btn" data-admin-page="operator-pilot-handoff" type="button"><span class="nav-ind"></span><span class="nav-ico">O</span><span>Pilot Handoff</span></button>
       <button class="nav-btn" type="button" data-admin-page="clients"><span class="nav-ind"></span><span class="nav-ico">C</span><span>Clients</span></button>
       <button class="nav-btn" type="button" data-admin-page="usage"><span class="nav-ind"></span><span class="nav-ico">U</span><span>Usage Monitor</span></button>
       <button class="nav-btn" type="button" data-admin-page="program-progress"><span class="nav-ind"></span><span class="nav-ico">R</span><span>Program Progress</span></button>
@@ -491,6 +493,16 @@
 </section>
 <!-- END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_HOST -->
 
+    <section
+      id="page-operator-pilot-handoff"
+      class="admin-page admin-operator-pilot-handoff-page"
+      aria-label="Operator pilot handoff"
+    >
+      <div
+        id="operator-pilot-handoff-root"
+        data-phase="operator-pilot-handoff-14a"
+      ></div>
+    </section>
 </main>
 </div>
 <script id="admin-nav-click-fallback">
@@ -499,6 +511,7 @@
     home: 'page-admin-home',
     adapters: 'page-admin-adapters',
     'api-keys': 'page-admin-api-keys',
+    'operator-pilot-handoff': 'page-operator-pilot-handoff',
     clients: 'page-admin-clients',
     usage: 'page-admin-usage',
     'program-progress': 'page-admin-program-progress',
@@ -689,7 +702,7 @@
 <script src="/console/js/adapters/adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_api_keys.js?v=adminapikeys13eh2"></script>
-<script src="/console/js/admin_nav.js?v=adminruntime05"></script>
+<script src="/console/js/admin_nav.js?v=adminnav14a"></script>
 <script src="/console/js/admin_session.js?v=adminruntime05"></script>
 <script src="/console/js/admin_actions.js?v=adminruntime05"></script>
 <script src="/console/js/admin_dashboard.js?v=adminruntime05"></script>
@@ -742,5 +755,6 @@
 </section>
   <script src="/console/js/admin_integration_pilot_controls_13b.js?v=adminpilot13b-session-storage-r1"></script>
     <script src="/console/js/admin_ui_hardening_13c.js?v=adminui13c-r3"></script>
+  <script src="/console/js/admin_operator_pilot_handoff.js?v=operatorhandoff14a-r6nav"></script>
 </body>
 </html>

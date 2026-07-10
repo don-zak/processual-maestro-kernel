@@ -1,0 +1,59 @@
+/* Operator Pilot Handoff 14A - official Admin page styling. */
+#page-operator-pilot-handoff {
+  padding-bottom: 64px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-shell {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+#page-operator-pilot-handoff .operator-pilot-header,
+#page-operator-pilot-handoff .operator-pilot-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .035);
+  padding: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+
+#page-operator-pilot-handoff .operator-pilot-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: .35rem;
+}
+
+#page-operator-pilot-handoff .operator-pilot-subtitle,
+#page-operator-pilot-handoff .operator-pilot-muted {
+  color: var(--muted);
+}
+
+#page-operator-pilot-handoff .operator-pilot-grid,
+#page-operator-pilot-handoff .operator-pilot-tools,
+#page-operator-pilot-handoff .operator-pilot-specializations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3);
+}
+
+#page-operator-pilot-handoff .operator-pilot-stat,
+#page-operator-pilot-handoff .operator-pilot-input,
+#page-operator-pilot-handoff .operator-pilot-specialization,
+#page-operator-pilot-handoff .operator-pilot-guardrail {
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 14px;
+  padding: var(--s-3);
+  background: rgba(0, 0, 0, .12);
+}
+
+#page-operator-pilot-handoff .operator-pilot-guardrails,
+#page-operator-pilot-handoff .operator-pilot-actions,
+#page-operator-pilot-handoff .operator-pilot-success {
+  display: grid;
+  gap: var(--s-3);
+}
+
+#page-operator-pilot-handoff button {
+  min-height: 36px;
+}
