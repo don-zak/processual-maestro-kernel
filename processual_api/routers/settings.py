@@ -1262,7 +1262,7 @@ def _admin_client_request_apply_plan_error_status(
     if reason == "request_not_approved":
         return status.HTTP_409_CONFLICT
     if reason == "unsupported_plan":
-        return status.HTTP_422_UNPROCESSABLE_CONTENT
+        return status.HTTP_422_UNPROCESSABLE_ENTITY
     return status.HTTP_400_BAD_REQUEST
 
 
@@ -1359,7 +1359,7 @@ async def set_admin_client_plan(
             request_path=f"/settings/admin/clients/{requested_client_id}/plan",
             metadata={"requested_plan": requested_plan},
         )
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="unsupported_plan")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unsupported_plan")
 
     raw = _load_raw(requested_client_id)
     if not isinstance(raw, dict):

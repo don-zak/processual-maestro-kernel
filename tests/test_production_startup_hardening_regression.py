@@ -25,6 +25,8 @@ def _api_settings_class(monkeypatch):
 
 def _set_strong_production_env(monkeypatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("MAESTRO_ADMIN_EMAIL", "ops-admin@example.test")
+    monkeypatch.setenv("MAESTRO_ADMIN_PASSWORD", "StrongLocalAdminPassword-15A-2026!")
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("API_DEBUG", "true")
     monkeypatch.setenv("JWT_SECRET", "prod-test-jwt-secret-with-enough-length-and-entropy")

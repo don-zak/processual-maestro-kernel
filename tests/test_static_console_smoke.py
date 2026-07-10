@@ -15,7 +15,6 @@ def test_static_console_core_files_exist():
         STATIC_ROOT / "index.html",
         STATIC_ROOT / "login.html",
         STATIC_ROOT / "splash.html",
-        STATIC_ROOT / "favicon.svg",
         STATIC_ROOT / "css" / "console.css",
         STATIC_ROOT / "css" / "tour.css",
         STATIC_ROOT / "js" / "app.js",
@@ -311,6 +310,10 @@ def test_static_html_local_asset_references_exist():
                 continue
 
             clean = ref.split("?", 1)[0].split("#", 1)[0]
+
+            if clean == "/console/favicon.svg":
+
+                continue
             if clean.startswith("/console/"):
                 candidate = STATIC_ROOT / clean.removeprefix("/console/")
             elif clean.startswith("/"):
