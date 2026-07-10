@@ -130,3 +130,76 @@ The phase remains a review-safe and disabled Control Plane definition.
 ## 14. Completion criteria
 
 16A is complete only when runtime contracts remain separated from adapter contracts, capabilities reference existing scopes, authentication profiles remain references only, all runtime and production flags remain false, no network code exists, no arbitrary URLs exist, no raw secret values exist, the registry remains immutable, focused tests pass, and the full test suite passes.
+
+## 15. R1 shared and multi-sector connector expansion
+
+EXTERNAL-CONNECTIVITY-16A-R1 extends the disabled registry from five Telecom references to eleven total connector references.
+
+The original Telecom references remain unchanged:
+
+- `telecom_crm_reference`;
+- `telecom_billing_reference`;
+- `telecom_ticketing_reference`;
+- `telecom_order_management_reference`;
+- `telecom_network_assurance_reference`.
+
+### 15.1 Shared connector references
+
+The following shared references reuse existing cross-sector contracts:
+
+- `enterprise_document_reference` uses the `document` adapter contract and `document_repository_reference` credential profile;
+- `enterprise_helpdesk_reference` uses the `enterprise_helpdesk` adapter contract and `enterprise_core_api_reference` credential profile.
+
+Shared references prevent unnecessary duplication of document intake, classification, helpdesk, project, and knowledge-base capabilities.
+
+Shared use remains bounded by each adapter contract, scope catalog entry, credential profile association, customer review, and approved sector declaration.
+
+### 15.2 Sector connector references
+
+The following sector references are also registered:
+
+- `banking_kyc_reference` for governed banking KYC and compliance review;
+- `government_case_reference` for citizen-request and government case workflows;
+- `research_dataset_reference` for research datasets, experiments, and draft analysis;
+- `university_student_reference` for student services, courses, admissions, and department requests.
+
+The six R1 references contain 57 capability instances backed by 52 unique existing scopes.
+
+Their capability distribution is:
+
+- 21 read capabilities;
+- 16 write capabilities;
+- 20 restricted capabilities.
+
+No new integration scope is created by R1.
+
+### 15.3 University document alignment
+
+The `university_student_api_reference` credential profile references both `university_student` and `document`.
+
+The current `document` adapter contract does not yet declare the university sector.
+
+Therefore, shared sector alignment is pending. R1 does not claim that `enterprise_document_reference` is approved for university document traffic.
+
+Adding university to the shared document adapter requires a separate adapter-contract review covering data classification, student privacy, retention, document ownership, and customer acceptance criteria.
+
+### 15.4 R1 safety posture
+
+All eleven connector references remain architecture-only Control Plane definitions.
+
+For every connector:
+
+```text
+runtime_enabled = false
+external_http_enabled = false
+production_allowed = false
+read_allowed = false
+write_allowed = false
+automatic_activation_allowed = false
+credentials_storage_allowed = false
+raw_secret_visible = false
+```
+
+R1 adds no endpoint, arbitrary URL, target alias, secret reference, credential value, transport, dispatcher, worker, queue, route, or production activation.
+
+Approved target contracts and secret references remain deferred to TELECOM-CONNECTIVITY-16B.

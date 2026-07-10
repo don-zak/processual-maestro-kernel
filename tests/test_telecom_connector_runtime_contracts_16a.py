@@ -74,6 +74,18 @@ def test_telecom_connectivity_16a_document_guardrails() -> None:
         "deferred to 16d",
         "production connector approval",
         "full test suite passes",
+        "enterprise_document_reference",
+        "enterprise_helpdesk_reference",
+        "banking_kyc_reference",
+        "government_case_reference",
+        "research_dataset_reference",
+        "university_student_reference",
+        "eleven total connector references",
+        "57 capability instances",
+        "52 unique existing scopes",
+        "shared sector alignment is pending",
+        "does not yet declare the university sector",
+        "r1 adds no endpoint",
     )
 
     for marker in expected_markers:
@@ -87,6 +99,12 @@ def test_runtime_connector_registry_is_populated_and_immutable() -> None:
         "telecom_ticketing_reference",
         "telecom_order_management_reference",
         "telecom_network_assurance_reference",
+        "enterprise_document_reference",
+        "enterprise_helpdesk_reference",
+        "banking_kyc_reference",
+        "government_case_reference",
+        "research_dataset_reference",
+        "university_student_reference",
     }
 
     assert set(SUPPORTED_RUNTIME_CONNECTORS) == expected_connectors
@@ -396,3 +414,89 @@ def test_public_package_exports_preserve_existing_contracts() -> None:
     assert hasattr(integrations, "IntegrationReadinessCheck")
     assert hasattr(integrations, "get_integration_scope")
     assert hasattr(integrations, "get_sector_profile")
+
+def test_shared_and_sector_runtime_references_are_registered() -> None:
+    expected = {
+        "enterprise_document_reference": (
+            "document",
+            "document_repository_reference",
+            7,
+        ),
+        "enterprise_helpdesk_reference": (
+            "enterprise_helpdesk",
+            "enterprise_core_api_reference",
+            9,
+        ),
+        "banking_kyc_reference": (
+            "banking_kyc",
+            "banking_kyc_api_reference",
+            11,
+        ),
+        "government_case_reference": (
+            "government_case",
+            "government_case_api_reference",
+            10,
+        ),
+        "research_dataset_reference": (
+            "research_dataset",
+            "research_dataset_api_reference",
+            10,
+        ),
+        "university_student_reference": (
+            "university_student",
+            "university_student_api_reference",
+            10,
+        ),
+    }
+
+    contracts = {
+        contract.connector_id: contract
+        for contract in list_runtime_connector_contracts()
+    }
+
+    assert len(contracts) == 11
+    assert set(expected).issubset(contracts)
+
+    new_contracts = tuple(
+        contracts[connector_id]
+        for connector_id in expected
+    )
+
+    assert sum(
+        len(contract.capabilities)
+        for contract in new_contracts
+    ) == 57
+
+    assert len({
+        capability.scope_id
+        for contract in new_contracts
+        for capability in contract.capabilities
+    }) == 52
+
+    for connector_id, values in expected.items():
+        adapter_id, profile_id, capability_count = values
+        contract = get_runtime_connector_contract(connector_id)
+
+        assert contract.adapter_contract_id == adapter_id
+        assert contract.authentication_profile_ids == (
+            profile_id,
+        )
+        assert len(contract.capabilities) == capability_count
+        assert contract.runtime_enabled is False
+        assert contract.external_http_enabled is False
+        assert contract.production_allowed is False
+        assert contract.read_allowed is False
+        assert contract.write_allowed is False
+        assert contract.credentials_storage_allowed is False
+        assert contract.raw_secret_visible is False
+
+    assert {
+        contract.connector_id
+        for contract in list_runtime_connectors_for_family(
+            "generic-enterprise"
+        )
+    } == {
+        "enterprise_document_reference",
+        "enterprise_helpdesk_reference",
+        "research_dataset_reference",
+    }
