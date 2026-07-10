@@ -127,3 +127,22 @@ def test_operator_pilot_handoff_14a_css_is_scoped_to_official_page() -> None:
     assert ".operator-pilot-specializations" in css
     assert ".operator-pilot-guardrails" in css
     assert "grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))" in css
+
+def test_operator_pilot_handoff_ui_explains_supervisor_handoff_scope() -> None:
+    js = _read(HANDOFF_JS)
+    css = _read(HANDOFF_CSS)
+
+    assert "function ensureExplanationPanel" in js
+    assert "operator-pilot-explainer" in js
+    assert "What this handoff page does" in js
+    assert "What remains blocked" in js
+    assert "Next operator action" in js
+
+    assert ".operator-pilot-explainer-grid" in css
+    assert ".operator-pilot-explainer-card" in css
+    assert ".operator-pilot-tools button" in css
+    assert "color: var(--text)" in css
+
+    assert "MutationObserver" not in js
+    assert "fetch(" not in js
+    assert "XMLHttpRequest" not in js

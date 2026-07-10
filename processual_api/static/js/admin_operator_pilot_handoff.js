@@ -431,8 +431,45 @@
     bindTools();
   }
 
+  function ensureExplanationPanel() {
+    const root = findRoot();
+    if (!root) return;
+
+    const shell = root.querySelector(".operator-pilot-shell");
+    if (!shell || shell.querySelector(".operator-pilot-explainer")) return;
+
+    const panel = document.createElement("section");
+    panel.className = "operator-pilot-panel operator-pilot-explainer";
+    panel.setAttribute("aria-label", "Operator pilot handoff explanation");
+    panel.innerHTML = [
+      '<div class="operator-pilot-title">What this handoff page does</div>',
+      '<div class="operator-pilot-explainer-grid">',
+      '<div class="operator-pilot-explainer-card">',
+      '<strong>Supervisor purpose</strong>',
+      '<p>Prepare a sandbox-only package that tells an external organization what inputs are needed before a pilot can be reviewed.</p>',
+      '</div>',
+      '<div class="operator-pilot-explainer-card">',
+      '<strong>What remains blocked</strong>',
+      '<p>Production access, runtime connectors, customer credentials, production writes, and external HTTP calls remain explicitly blocked.</p>',
+      '</div>',
+      '<div class="operator-pilot-explainer-card">',
+      '<strong>Next operator action</strong>',
+      '<p>Provide API documentation, sandbox URL, authentication method, scopes, sample payloads, rate limits, and security contacts.</p>',
+      '</div>',
+      '</div>'
+    ].join("");
+
+    const header = shell.querySelector(".operator-pilot-header");
+    if (header && header.nextSibling) {
+      shell.insertBefore(panel, header.nextSibling);
+      return;
+    }
+
+    shell.prepend(panel);
+  }
   function init() {
     render();
+    ensureExplanationPanel();
   }
   window.PMK_OPERATOR_PILOT_HANDOFF_14A = {
     buildMarkdown,

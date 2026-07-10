@@ -485,6 +485,44 @@ def _pmk13a_split_scopes(value: str | None) -> set[str]:
     return scopes
 
 
+
+# BEGIN INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
+
+@app.get("/settings/admin/operator-pilot-handoff")
+def admin_operator_pilot_handoff_package_14b():
+    """Return the safe read-only operator pilot handoff package."""
+    from processual_api.services.operator_pilot_handoff import (
+        build_operator_pilot_handoff_package,
+    )
+
+    return build_operator_pilot_handoff_package()
+
+
+@app.get("/settings/admin/operator-pilot-handoff/export")
+def admin_operator_pilot_handoff_export_14b():
+    """Export the safe operator pilot handoff package as Markdown."""
+    from starlette.responses import PlainTextResponse
+
+    from processual_api.services.operator_pilot_handoff import (
+        build_operator_pilot_handoff_package,
+        render_operator_pilot_handoff_markdown,
+    )
+
+    package = build_operator_pilot_handoff_package()
+    markdown = render_operator_pilot_handoff_markdown(package)
+
+    return PlainTextResponse(
+        markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="operator-pilot-handoff-14b.md"'
+            )
+        },
+    )
+
+
+# END INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
 def _pmk13a_request_scopes(request: PMK13ARequest) -> set[str]:
     scopes = set()
     scopes |= _pmk13a_split_scopes(request.headers.get("X-Admin-Supervisor-Scope"))

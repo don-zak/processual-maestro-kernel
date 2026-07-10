@@ -57,3 +57,65 @@
 #page-operator-pilot-handoff button {
   min-height: 36px;
 }
+
+/* 14B-R1: explanatory panel and readable supervisor controls. */
+#page-operator-pilot-handoff .operator-pilot-explainer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s-3);
+}
+
+#page-operator-pilot-handoff .operator-pilot-explainer-card {
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 14px;
+  padding: var(--s-3);
+  background: rgba(0, 0, 0, .14);
+}
+
+#page-operator-pilot-handoff .operator-pilot-explainer-card p {
+  margin: .5rem 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+#page-operator-pilot-handoff .operator-pilot-tools button {
+  border: 1px solid rgba(140, 180, 255, .34);
+  border-radius: 14px;
+  background: rgba(65, 105, 180, .18);
+  color: var(--text);
+  font-weight: 700;
+  padding: .75rem 1rem;
+  cursor: pointer;
+}
+
+#page-operator-pilot-handoff .operator-pilot-tools button:hover,
+#page-operator-pilot-handoff .operator-pilot-tools button:focus {
+  background: rgba(65, 105, 180, .28);
+  outline: 2px solid rgba(140, 180, 255, .36);
+  outline-offset: 2px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-panel ul,
+#page-operator-pilot-handoff .operator-pilot-panel ol {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+#page-operator-pilot-handoff li.operator-pilot-input,
+#page-operator-pilot-handoff li.operator-pilot-specialization,
+#page-operator-pilot-handoff li.operator-pilot-guardrail {
+  list-style: none;
+}
+
+#page-operator-pilot-handoff li.operator-pilot-input::marker,
+#page-operator-pilot-handoff li.operator-pilot-specialization::marker,
+#page-operator-pilot-handoff li.operator-pilot-guardrail::marker {
+  content: "";
+}
+
+#page-operator-pilot-handoff .operator-pilot-input,
+#page-operator-pilot-handoff .operator-pilot-specialization,
+#page-operator-pilot-handoff .operator-pilot-guardrail {
+  line-height: 1.5;
+}

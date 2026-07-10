@@ -315,61 +315,115 @@ def build_operator_pilot_handoff_package(
     }
 
 
-def render_operator_pilot_handoff_markdown(
-    package: dict[str, Any] | None = None,
-) -> str:
-    handoff = package or build_operator_pilot_handoff_package()
-    guardrails = handoff["guardrails"]
+def _handoff_14b_markdown_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "pending"
+    text = str(value).strip()
+    return text or "pending"
 
-    lines = [
+
+def _handoff_14b_item_label(item: object) -> str:
+    if isinstance(item, dict):
+        return str(
+            item.get("label")
+            or item.get("name")
+            or item.get("input_key")
+            or item.get("key")
+            or "Required input"
+        )
+    return str(item)
+
+
+def render_operator_pilot_handoff_markdown(package: dict[str, object] | None = None) -> str:
+    """Render a supervisor-safe Markdown handoff package."""
+    if package is None:
+        package = build_operator_pilot_handoff_package()
+
+    guardrails = dict(package.get("guardrails") or {})
+    required_inputs = list(package.get("required_operator_inputs") or [])
+    specializations = list(package.get("entity_specializations") or [])
+    success_criteria = list(package.get("pilot_success_criteria") or [])
+
+    lines: list[str] = [
         "# Operator Pilot Handoff",
         "",
-        f"- Package: `{handoff['package_id']}`",
-        f"- Status: `{handoff['handoff_status']}`",
-        f"- Case: `{handoff['case_id']}`",
-        f"- Organization: `{handoff['operator_name']}`",
-        f"- Pilot ready: `{handoff['pilot_ready']}`",
-        f"- Production gate: `{handoff['production_gate_status']}`",
+        f"Package ID: {_handoff_14b_markdown_value(package.get('package_id'))}",
+        f"Package status: {_handoff_14b_markdown_value(package.get('package_status'))}",
+        f"Handoff status: {_handoff_14b_markdown_value(package.get('handoff_status'))}",
+        f"Pilot ready: {_handoff_14b_markdown_value(package.get('pilot_ready'))}",
         "",
-        "## Sandbox Guardrails",
+        "## Machine-readable guardrail keys",
+        "",
+        f"- production_allowed: {_handoff_14b_markdown_value(guardrails.get('production_allowed'))}",
+        (
+            "- runtime_connector_approved: "
+            f"{_handoff_14b_markdown_value(guardrails.get('runtime_connector_approved'))}"
+        ),
+        (
+            "- customer_credentials_present: "
+            f"{_handoff_14b_markdown_value(guardrails.get('customer_credentials_present'))}"
+        ),
+        f"- external_http_allowed: {_handoff_14b_markdown_value(guardrails.get('external_http_allowed'))}",
+        (
+            "- production_writes_allowed: "
+            f"{_handoff_14b_markdown_value(guardrails.get('production_writes_allowed'))}"
+        ),
+        (
+            "- automatic_activation_allowed: "
+            f"{_handoff_14b_markdown_value(guardrails.get('automatic_activation_allowed'))}"
+        ),
+        "",
+        "## Supervisor meaning",
+        "",
+        (
+            "This package prepares a sandbox-only handoff for an external "
+            "organization. It does not approve production, does not store "
+            "credentials, does not enable runtime connectors, and does not "
+            "execute external HTTP calls."
+        ),
+        "",
+        "## Legacy safety summary",
+        "",
+        "- Sandbox only.",
+        "- No production endpoint is approved.",
+        "- No customer credentials are accepted.",
+        "- No runtime connector is approved.",
+        "- No external HTTP call is executed.",
+        "- Production requires a separate supervisor-approved phase.",
+        "",
+        "## Required organization inputs",
         "",
     ]
 
-    for key, value in guardrails.items():
-        lines.append(f"- `{key}`: `{value}`")
+    for item in required_inputs:
+        lines.append(f"- {_handoff_14b_item_label(item)}")
 
-    lines.extend(["", "## Required Operator Inputs", ""])
+    lines.extend(["", "## Supported organization types", ""])
 
-    for item in handoff["required_operator_inputs"]:
-        required = "required" if item["required"] else "optional"
-        lines.append(f"- {item['label']} — {required} — `{item['status']}`")
+    for item in specializations:
+        lines.append(f"- {_handoff_14b_item_label(item)}")
 
-    lines.extend(["", "## Supported Organization Types", ""])
+    lines.extend(["", "## Pilot success criteria", ""])
 
-    for item in handoff["entity_specializations"]:
-        domains = ", ".join(item["domains"])
-        lines.append(f"- {item['label']}: {domains}")
-
-    lines.extend(["", "## Pilot Success Criteria", ""])
-
-    for criterion in handoff["pilot_success_criteria"]:
-        lines.append(f"- {criterion}")
-
-    lines.extend(["", "## Supervisor Next Actions", ""])
-
-    for action in handoff["supervisor_next_actions"]:
-        lines.append(f"- {action}")
+    if success_criteria:
+        for item in success_criteria:
+            lines.append(f"- {_handoff_14b_item_label(item)}")
+    else:
+        lines.append("- Sandbox prerequisites reviewed by supervisor.")
+        lines.append("- No production approval granted by this package.")
 
     lines.extend(
         [
             "",
-            "## Explicit Blockers",
+            "## Next supervisor action",
             "",
-            "- No production endpoint is approved in this package.",
-            "- No customer credentials are accepted in this package.",
-            "- No runtime connector is approved in this package.",
-            "- No external HTTP call is executed by this package.",
-            "- Production requires a separate supervisor-approved phase.",
+            (
+                "Collect the missing organization inputs, review the sandbox "
+                "contract, and keep production/runtime approval blocked until "
+                "a separate supervisor-approved phase exists."
+            ),
             "",
         ]
     )
