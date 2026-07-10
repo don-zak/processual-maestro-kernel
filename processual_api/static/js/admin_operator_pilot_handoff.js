@@ -851,3 +851,704 @@ render();
   }
 })();
 // PMK OPERATOR PILOT HANDOFF ACTIONS UI 14D END
+
+// PMK OPERATOR PILOT HANDOFF PROGRESS UI 14E START
+(() => {
+  "use strict";
+
+  const PROGRESS_API_14E =
+    "/settings/admin/operator-pilot-handoff/progress";
+
+  const PROGRESS_UPDATE_API_14E =
+    "/settings/admin/operator-pilot-handoff/progress/actions/";
+
+  const PROGRESS_ALLOWED_STATUSES_14E = [
+    "pending_operator_input",
+    "requested",
+    "received_for_review",
+    "needs_clarification"
+  ];
+
+  const PROGRESS_WRITE_SCOPE_14E =
+    "admin:integration_readiness:write";
+
+  let progressPackage14E = null;
+  let progressLoadState14E = "progress_loading";
+  let progressSaveState14E = "progress_idle";
+  let lastProgressMessage14E = null;
+
+  function progressRoot14E() {
+    return document.getElementById(
+      "operator-pilot-handoff-root"
+    );
+  }
+
+  function escapeProgressHtml14E(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function progressGuardrailsAreSafe14E(guardrails) {
+    return Boolean(
+      guardrails &&
+      guardrails.production_allowed === false &&
+      guardrails.runtime_connector_approved === false &&
+      guardrails.customer_credentials_present === false &&
+      guardrails.external_http_allowed === false &&
+      guardrails.automatic_activation_allowed === false &&
+      guardrails.action_execution_allowed === false &&
+      guardrails.credentials_storage_allowed === false &&
+      guardrails.free_form_secret_fields_allowed === false &&
+      guardrails.local_progress_tracking_only === true
+    );
+  }
+
+  function normalizeProgressPackage14E(payload) {
+    if (!payload || typeof payload !== "object") return null;
+
+    if (
+      payload.phase_id !==
+      "operator-pilot-handoff-progress-14e"
+    ) {
+      return null;
+    }
+
+    if (
+      payload.schema_version !==
+      "operator_pilot_handoff_progress_14e"
+    ) {
+      return null;
+    }
+
+    if (payload.storage !== "local_json_only") return null;
+
+    if (!progressGuardrailsAreSafe14E(payload.guardrails)) {
+      return null;
+    }
+
+    if (!Array.isArray(payload.actions)) return null;
+    if (payload.actions.length !== 12) return null;
+    if (payload.action_count !== payload.actions.length) {
+      return null;
+    }
+
+    if (!Array.isArray(payload.allowed_statuses)) {
+      return null;
+    }
+
+    const statusesAreExact =
+      PROGRESS_ALLOWED_STATUSES_14E.every((status) =>
+        payload.allowed_statuses.includes(status)
+      ) &&
+      payload.allowed_statuses.every((status) =>
+        PROGRESS_ALLOWED_STATUSES_14E.includes(status)
+      );
+
+    if (!statusesAreExact) return null;
+
+    const actionsAreSafe = payload.actions.every(
+      (action) =>
+        action &&
+        typeof action.action_id === "string" &&
+        action.action_id.length > 0 &&
+        PROGRESS_ALLOWED_STATUSES_14E.includes(
+          action.status
+        ) &&
+        action.execution_mode === "copy_only"
+    );
+
+    return actionsAreSafe ? payload : null;
+  }
+
+  function readStorage14E(storage, key) {
+    try {
+      return String(storage?.getItem(key) || "").trim();
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function supervisorSession14E() {
+    const candidates = [
+      readStorage14E(
+        window.sessionStorage,
+        "pmk_supervisor_session_key"
+      ),
+      readStorage14E(
+        window.localStorage,
+        "pmk_admin_supervisor_session"
+      ),
+      readStorage14E(
+        window.sessionStorage,
+        "pmk_admin_supervisor_session"
+      ),
+      readStorage14E(
+        window.localStorage,
+        "admin_supervisor_session_key"
+      ),
+      readStorage14E(
+        window.sessionStorage,
+        "admin_supervisor_session_key"
+      )
+    ];
+
+    return candidates.find(Boolean) || "";
+  }
+
+  function progressWriteAvailable14E() {
+    return Boolean(supervisorSession14E());
+  }
+
+  function progressHeaders14E(writeRequest) {
+    const headers = {
+      Accept: "application/json"
+    };
+
+    const auth = window.PMK_ADMIN_AUTH || {};
+
+    if (typeof auth.headers === "function") {
+      try {
+        Object.assign(headers, auth.headers() || {});
+      } catch (_error) {
+        // Continue with safe local headers.
+      }
+    } else if (
+      auth.headers &&
+      typeof auth.headers === "object"
+    ) {
+      Object.assign(headers, auth.headers);
+    }
+
+    if (writeRequest) {
+      const session = supervisorSession14E();
+
+      headers["Content-Type"] = "application/json";
+
+      if (session) {
+        headers["X-Admin-Supervisor-Session"] = session;
+        headers["X-Admin-Supervisor-Scope"] =
+          PROGRESS_WRITE_SCOPE_14E;
+      }
+    }
+
+    return headers;
+  }
+
+  function progressDetailMessage14E(payload, fallback) {
+    const detail = payload?.detail;
+
+    if (typeof detail === "string" && detail.trim()) {
+      return detail.trim();
+    }
+
+    if (
+      detail &&
+      typeof detail === "object" &&
+      typeof detail.error === "string"
+    ) {
+      return detail.error;
+    }
+
+    return fallback;
+  }
+
+  async function loadProgress14E() {
+    progressLoadState14E = "progress_loading";
+
+    try {
+      const response = await fetch(PROGRESS_API_14E, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: progressHeaders14E(false)
+      });
+
+      if (!response.ok) {
+        progressLoadState14E =
+          "progress_http_" + response.status;
+        return null;
+      }
+
+      const normalized = normalizeProgressPackage14E(
+        await response.json()
+      );
+
+      if (!normalized) {
+        progressLoadState14E =
+          "progress_rejected_guardrails";
+        return null;
+      }
+
+      progressPackage14E = normalized;
+      progressLoadState14E = "progress_loaded";
+
+      return normalized;
+    } catch (_error) {
+      progressLoadState14E = "progress_error";
+      return null;
+    }
+  }
+
+  function setProgressDatasets14E(root, payload) {
+    root.dataset.progressLoadState =
+      progressLoadState14E;
+
+    root.dataset.progressSaveState =
+      progressSaveState14E;
+
+    root.dataset.progressActionCount = String(
+      payload ? payload.action_count : 0
+    );
+
+    root.dataset.progressStorage = String(
+      payload?.storage || ""
+    );
+
+    root.dataset.progressTimelineEvents = String(
+      payload?.timeline_event_count || 0
+    );
+
+    root.dataset.progressWriteAvailable = String(
+      progressWriteAvailable14E()
+    );
+
+    root.dataset.progressProductionAllowed = String(
+      Boolean(
+        payload?.guardrails?.production_allowed
+      )
+    );
+
+    root.dataset.progressRuntimeConnectorApproved =
+      String(
+        Boolean(
+          payload?.guardrails
+            ?.runtime_connector_approved
+        )
+      );
+  }
+
+  function progressOptions14E(currentStatus) {
+    return PROGRESS_ALLOWED_STATUSES_14E
+      .map(
+        (status) => `
+          <option
+            value="${escapeProgressHtml14E(status)}"
+            ${status === currentStatus ? "selected" : ""}
+          >
+            ${escapeProgressHtml14E(
+              status.replaceAll("_", " ")
+            )}
+          </option>
+        `
+      )
+      .join("");
+  }
+
+  function progressMessageForAction14E(actionId) {
+    if (
+      !lastProgressMessage14E ||
+      lastProgressMessage14E.actionId !== actionId
+    ) {
+      return "";
+    }
+
+    return `
+      <div
+        class="operator-pilot-progress-message"
+        data-state="${escapeProgressHtml14E(
+          lastProgressMessage14E.state
+        )}"
+      >
+        ${escapeProgressHtml14E(
+          lastProgressMessage14E.text
+        )}
+      </div>
+    `;
+  }
+
+  function progressControlMarkup14E(progress) {
+    const writeAvailable =
+      progressWriteAvailable14E();
+
+    const disabled = writeAvailable ? "" : "disabled";
+
+    const sessionMessage = writeAvailable
+      ? "Safe local progress update. No action is executed."
+      : "Store a supervisor session key to enable progress updates.";
+
+    return `
+      <section
+        class="operator-pilot-action-progress-14e"
+        data-progress-action-id="${escapeProgressHtml14E(
+          progress.action_id
+        )}"
+      >
+        <div class="operator-pilot-progress-heading">
+          <strong>Readiness progress</strong>
+          <span
+            class="operator-pilot-progress-current"
+            data-progress-current-status
+          >
+            ${escapeProgressHtml14E(
+              progress.status.replaceAll("_", " ")
+            )}
+          </span>
+        </div>
+
+        <label class="operator-pilot-progress-field">
+          <span>Status</span>
+          <select
+            data-operator-pilot-progress-status
+            ${disabled}
+          >
+            ${progressOptions14E(progress.status)}
+          </select>
+        </label>
+
+        <label class="operator-pilot-progress-field">
+          <span>Safe supervisor note</span>
+          <input
+            type="text"
+            maxlength="240"
+            value="${escapeProgressHtml14E(
+              progress.note || ""
+            )}"
+            placeholder="No secrets, credentials, tokens, or URLs"
+            data-operator-pilot-progress-note
+            ${disabled}
+          >
+        </label>
+
+        <button
+          type="button"
+          class="operator-pilot-progress-save"
+          data-operator-pilot-progress-save="${escapeProgressHtml14E(
+            progress.action_id
+          )}"
+          data-supervisor-scope="${PROGRESS_WRITE_SCOPE_14E}"
+          data-supervisor-disabled-reason="Supervisor write session required"
+          ${disabled}
+        >
+          Save progress
+        </button>
+
+        <p class="operator-pilot-progress-safety">
+          ${escapeProgressHtml14E(sessionMessage)}
+        </p>
+
+        ${progressMessageForAction14E(progress.action_id)}
+      </section>
+    `;
+  }
+
+  function progressByActionId14E(payload) {
+    return new Map(
+      (payload?.actions || []).map((action) => [
+        action.action_id,
+        action
+      ])
+    );
+  }
+
+  function bindProgressSaveButtons14E(root) {
+    root
+      .querySelectorAll(
+        "[data-operator-pilot-progress-save]"
+      )
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          const actionId =
+            button.dataset.operatorPilotProgressSave;
+
+          const control = button.closest(
+            ".operator-pilot-action-progress-14e"
+          );
+
+          const status = control?.querySelector(
+            "[data-operator-pilot-progress-status]"
+          )?.value;
+
+          const note = control?.querySelector(
+            "[data-operator-pilot-progress-note]"
+          )?.value?.trim() || "";
+
+          if (!actionId || !control) return;
+
+          if (!progressWriteAvailable14E()) {
+            progressSaveState14E =
+              "progress_save_session_required";
+
+            lastProgressMessage14E = {
+              actionId,
+              state: "error",
+              text:
+                "Supervisor session required. No progress was saved."
+            };
+
+            renderProgressControls14E(
+              progressPackage14E
+            );
+            return;
+          }
+
+          button.disabled = true;
+          button.textContent = "Saving…";
+          progressSaveState14E = "progress_saving";
+
+          try {
+            const response = await fetch(
+              PROGRESS_UPDATE_API_14E +
+                encodeURIComponent(actionId),
+              {
+                method: "POST",
+                credentials: "same-origin",
+                headers: progressHeaders14E(true),
+                body: JSON.stringify({
+                  status,
+                  note
+                })
+              }
+            );
+
+            const rawText = await response.text();
+            let responsePayload = {};
+
+            if (rawText) {
+              try {
+                responsePayload =
+                  JSON.parse(rawText);
+              } catch (_error) {
+                responsePayload = {};
+              }
+            }
+
+            if (!response.ok) {
+              progressSaveState14E =
+                "progress_save_http_" +
+                response.status;
+
+              lastProgressMessage14E = {
+                actionId,
+                state: "error",
+                text: progressDetailMessage14E(
+                  responsePayload,
+                  "Progress update was rejected."
+                )
+              };
+
+              renderProgressControls14E(
+                progressPackage14E
+              );
+              return;
+            }
+
+            const normalized =
+              normalizeProgressPackage14E(
+                responsePayload
+              );
+
+            if (!normalized) {
+              progressSaveState14E =
+                "progress_save_rejected_guardrails";
+
+              lastProgressMessage14E = {
+                actionId,
+                state: "error",
+                text:
+                  "Unsafe progress response rejected. No UI state was accepted."
+              };
+
+              renderProgressControls14E(
+                progressPackage14E
+              );
+              return;
+            }
+
+            progressPackage14E = normalized;
+            progressLoadState14E =
+              "progress_loaded";
+            progressSaveState14E =
+              "progress_saved";
+
+            lastProgressMessage14E = {
+              actionId,
+              state: "success",
+              text:
+                "Progress saved locally for supervisor review."
+            };
+
+            renderProgressControls14E(
+              normalized
+            );
+          } catch (_error) {
+            progressSaveState14E =
+              "progress_save_error";
+
+            lastProgressMessage14E = {
+              actionId,
+              state: "error",
+              text:
+                "Progress save failed. No external request was sent."
+            };
+
+            renderProgressControls14E(
+              progressPackage14E
+            );
+          }
+        });
+      });
+  }
+
+  function renderProgressControls14E(payload) {
+    const root = progressRoot14E();
+    if (!root) return false;
+
+    const actionsPanel = root.querySelector(
+      "#operator-pilot-actions-14d"
+    );
+
+    if (!actionsPanel) return false;
+
+    setProgressDatasets14E(root, payload);
+
+    actionsPanel
+      .querySelectorAll(
+        ".operator-pilot-action-progress-14e"
+      )
+      .forEach((node) => node.remove());
+
+    const progressMap =
+      progressByActionId14E(payload);
+
+    actionsPanel
+      .querySelectorAll(
+        ".operator-pilot-action-card[data-action-id]"
+      )
+      .forEach((card) => {
+        const actionId =
+          card.dataset.actionId || "";
+
+        const progress = progressMap.get(actionId);
+
+        if (!progress) {
+          const unavailable =
+            document.createElement("section");
+
+          unavailable.className =
+            "operator-pilot-action-progress-14e";
+
+          unavailable.dataset.progressActionId =
+            actionId;
+
+          unavailable.innerHTML = `
+            <p class="operator-pilot-progress-safety">
+              Progress unavailable:
+              ${escapeProgressHtml14E(
+                progressLoadState14E
+              )}
+            </p>
+          `;
+
+          card.appendChild(unavailable);
+          return;
+        }
+
+        const wrapper =
+          document.createElement("div");
+
+        wrapper.innerHTML =
+          progressControlMarkup14E(progress);
+
+        card.appendChild(wrapper.firstElementChild);
+      });
+
+    bindProgressSaveButtons14E(actionsPanel);
+
+    return true;
+  }
+
+  async function waitForActionCards14E() {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const root = progressRoot14E();
+
+      if (
+        root?.querySelectorAll(
+          ".operator-pilot-action-card[data-action-id]"
+        ).length === 12
+      ) {
+        return true;
+      }
+
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, 75)
+      );
+    }
+
+    return false;
+  }
+
+  function bindProgressRecovery14E() {
+    const rebuildButton =
+      document.getElementById(
+        "operator-pilot-rebuild"
+      );
+
+    if (
+      rebuildButton &&
+      rebuildButton.dataset.progressRecovery14e !== "1"
+    ) {
+      rebuildButton.dataset.progressRecovery14e = "1";
+
+      rebuildButton.addEventListener("click", () => {
+        window.setTimeout(async () => {
+          await waitForActionCards14E();
+
+          renderProgressControls14E(
+            progressPackage14E
+          );
+        }, 0);
+      });
+    }
+
+    window.addEventListener(
+      "pmk-supervisor-session-key-updated",
+      () => {
+        renderProgressControls14E(
+          progressPackage14E
+        );
+      }
+    );
+  }
+
+  async function initProgress14E() {
+    const results = await Promise.all([
+      loadProgress14E(),
+      waitForActionCards14E()
+    ]);
+
+    renderProgressControls14E(results[0]);
+    bindProgressRecovery14E();
+  }
+
+  window.PMK_OPERATOR_PILOT_HANDOFF_PROGRESS_14E = {
+    api: PROGRESS_API_14E,
+    updateApi: PROGRESS_UPDATE_API_14E,
+    load: loadProgress14E,
+    normalize: normalizeProgressPackage14E,
+    render: renderProgressControls14E,
+    session: supervisorSession14E,
+    writeAvailable: progressWriteAvailable14E
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      initProgress14E
+    );
+  } else {
+    initProgress14E();
+  }
+})();
+// PMK OPERATOR PILOT HANDOFF PROGRESS UI 14E END

@@ -12,8 +12,8 @@ def _read(path: Path) -> str:
 def test_operator_pilot_handoff_14d_cache_bump_is_wired() -> None:
     html = _read(ADMIN_HTML)
 
-    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14dactions" in html
-    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14dactions" in html
+    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress" in html
+    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14eprogress" in html
     assert "operatorhandoff14cbackend" not in html
 
 

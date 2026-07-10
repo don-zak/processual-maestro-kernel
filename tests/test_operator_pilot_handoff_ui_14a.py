@@ -26,8 +26,8 @@ def test_operator_pilot_handoff_14a_admin_page_is_wired() -> None:
     assert 'id="operator-pilot-handoff-root"' in html
     assert 'data-admin-page="operator-pilot-handoff"' in html
     assert "Pilot Handoff" in html
-    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14dactions" in html
-    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14dactions" in html
+    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress" in html
+    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14eprogress" in html
 
     assert 'class="admin-page admin-operator-pilot-handoff-page"' in section_chunk
 
@@ -152,8 +152,8 @@ def test_operator_pilot_handoff_14c_loads_from_backend_with_safe_fallback() -> N
     html = _read(ADMIN_HTML)
     js = _read(HANDOFF_JS)
 
-    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14dactions" in html
-    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14dactions" in html
+    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress" in html
+    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14eprogress" in html
 
     assert 'OPERATOR_PILOT_HANDOFF_API_14C = "/settings/admin/operator-pilot-handoff"' in js
     assert "OPERATOR_PILOT_HANDOFF_EXPORT_API_14C" in js

@@ -219,3 +219,133 @@
   }
 }
 /* PMK OPERATOR PILOT HANDOFF ACTIONS UI 14D END */
+
+/* PMK OPERATOR PILOT HANDOFF PROGRESS UI 14E START */
+
+#page-operator-pilot-handoff
+.operator-pilot-action-progress-14e {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(150, 178, 220, 0.24);
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-heading strong {
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(132, 177, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(87, 134, 224, 0.13);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-field {
+  display: grid;
+  gap: 0.32rem;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-field > span {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--admin-muted, #aebddb);
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-field select,
+#page-operator-pilot-handoff
+.operator-pilot-progress-field input {
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0.5rem 0.62rem;
+  border: 1px solid rgba(145, 172, 214, 0.32);
+  border-radius: 0.55rem;
+  background: rgba(12, 23, 43, 0.72);
+  color: inherit;
+  font: inherit;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-field select:disabled,
+#page-operator-pilot-handoff
+.operator-pilot-progress-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-save {
+  min-height: 2.25rem;
+  padding: 0.48rem 0.75rem;
+  border: 1px solid rgba(132, 177, 255, 0.42);
+  border-radius: 0.55rem;
+  background: rgba(66, 117, 214, 0.2);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-save:hover:not(:disabled) {
+  background: rgba(66, 117, 214, 0.32);
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-save:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-safety {
+  margin: 0;
+  color: var(--admin-muted, #aebddb);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-message {
+  padding: 0.48rem 0.58rem;
+  border: 1px solid rgba(145, 172, 214, 0.3);
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-message[data-state="success"] {
+  border-color: rgba(87, 204, 153, 0.5);
+  background: rgba(42, 147, 103, 0.14);
+}
+
+#page-operator-pilot-handoff
+.operator-pilot-progress-message[data-state="error"] {
+  border-color: rgba(255, 119, 137, 0.5);
+  background: rgba(181, 56, 79, 0.14);
+}
+
+/* PMK OPERATOR PILOT HANDOFF PROGRESS UI 14E END */
