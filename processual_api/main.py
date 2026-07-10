@@ -763,3 +763,16 @@ async def pmk13b_admin_issue_activation_permission_key(task_id: str, request: PM
 
 
 # PMK INTEGRATION PILOT CONTROLS 13B END
+
+# PMK OPERATOR PILOT HANDOFF ACTIONS 14D START
+@app.get("/settings/admin/operator-pilot-handoff/actions-preview")
+def admin_operator_pilot_handoff_actions_preview_14d() -> dict[str, object]:
+    """Return the read-only operator pilot handoff actions preview."""
+    from processual_api.services.operator_pilot_handoff_actions import (  # noqa: PLC0415
+        build_operator_pilot_handoff_actions_preview,
+    )
+
+    return build_operator_pilot_handoff_actions_preview()
+
+
+# PMK OPERATOR PILOT HANDOFF ACTIONS 14D END

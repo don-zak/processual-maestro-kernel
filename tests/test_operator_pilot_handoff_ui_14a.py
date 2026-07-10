@@ -4,9 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ADMIN_HTML = ROOT / "processual_api" / "static" / "admin.html"
 ADMIN_NAV_JS = ROOT / "processual_api" / "static" / "js" / "admin_nav.js"
 HANDOFF_JS = ROOT / "processual_api" / "static" / "js" / "admin_operator_pilot_handoff.js"
-HANDOFF_CSS = (
-    ROOT / "processual_api" / "static" / "css" / "admin_operator_pilot_handoff.css"
-)
+HANDOFF_CSS = ROOT / "processual_api" / "static" / "css" / "admin_operator_pilot_handoff.css"
 
 
 def _read(path: Path) -> str:
@@ -28,8 +26,8 @@ def test_operator_pilot_handoff_14a_admin_page_is_wired() -> None:
     assert 'id="operator-pilot-handoff-root"' in html
     assert 'data-admin-page="operator-pilot-handoff"' in html
     assert "Pilot Handoff" in html
-    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14cbackend" in html
-    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14cbackend" in html
+    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14dactions" in html
+    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14dactions" in html
 
     assert 'class="admin-page admin-operator-pilot-handoff-page"' in section_chunk
 
@@ -154,8 +152,8 @@ def test_operator_pilot_handoff_14c_loads_from_backend_with_safe_fallback() -> N
     html = _read(ADMIN_HTML)
     js = _read(HANDOFF_JS)
 
-    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14cbackend" in html
-    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14cbackend" in html
+    assert "admin_operator_pilot_handoff.js?v=operatorhandoff14dactions" in html
+    assert "admin_operator_pilot_handoff.css?v=operatorhandoff14dactions" in html
 
     assert 'OPERATOR_PILOT_HANDOFF_API_14C = "/settings/admin/operator-pilot-handoff"' in js
     assert "OPERATOR_PILOT_HANDOFF_EXPORT_API_14C" in js
@@ -189,6 +187,7 @@ def test_operator_pilot_handoff_14c_rejects_unsafe_backend_guardrails() -> None:
 
     for marker in guardrail_markers:
         assert marker in js
+
 
 def test_operator_pilot_handoff_14c_exposes_backend_load_state_for_browser_proof() -> None:
     js = _read(HANDOFF_JS)

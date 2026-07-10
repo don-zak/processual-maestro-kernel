@@ -119,3 +119,103 @@
 #page-operator-pilot-handoff .operator-pilot-guardrail {
   line-height: 1.5;
 }
+
+/* PMK OPERATOR PILOT HANDOFF ACTIONS UI 14D START */
+#page-operator-pilot-handoff .operator-pilot-actions-14d {
+  display: grid;
+  gap: 18px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-actions-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-actions-header p {
+  max-width: 760px;
+  margin: 8px 0 0;
+}
+
+#page-operator-pilot-handoff .operator-pilot-actions-state,
+#page-operator-pilot-handoff .operator-pilot-action-status {
+  width: fit-content;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+#page-operator-pilot-handoff .operator-pilot-actions-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-actions-summary span {
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-card p {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-meta {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-meta div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-meta dt {
+  font-weight: 700;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#page-operator-pilot-handoff .operator-pilot-action-copy {
+  width: 100%;
+  margin-top: auto;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  #page-operator-pilot-handoff .operator-pilot-actions-header {
+    flex-direction: column;
+  }
+
+  #page-operator-pilot-handoff .operator-pilot-action-meta div {
+    grid-template-columns: 1fr;
+  }
+}
+/* PMK OPERATOR PILOT HANDOFF ACTIONS UI 14D END */

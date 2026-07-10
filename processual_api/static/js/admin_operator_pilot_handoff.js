@@ -559,3 +559,295 @@ render();
     init();
   }
 })();
+
+// PMK OPERATOR PILOT HANDOFF ACTIONS UI 14D START
+(() => {
+  "use strict";
+
+  const OPERATOR_PILOT_HANDOFF_ACTIONS_API_14D =
+    "/settings/admin/operator-pilot-handoff/actions-preview";
+
+  let actionsLoadState14D = "actions_loading";
+  let actionsPackage14D = null;
+
+  function root14D() {
+    return document.getElementById("operator-pilot-handoff-root");
+  }
+
+  function escapeHtml14D(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function normalizeActionsPackage14D(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    if (payload.read_only !== true || payload.preview_only !== true) return null;
+
+    const guardrails = payload.guardrails || {};
+    if (
+      guardrails.production_allowed !== false ||
+      guardrails.runtime_connector_approved !== false ||
+      guardrails.customer_credentials_present !== false ||
+      guardrails.external_http_allowed !== false ||
+      guardrails.persistent_write_allowed !== false ||
+      guardrails.automatic_activation_allowed !== false
+    ) {
+      return null;
+    }
+
+    if (!Array.isArray(payload.actions)) return null;
+    if (payload.actions.length < 10) return null;
+    if (payload.actions.length !== payload.action_count) return null;
+
+    const actionsAreSafe = payload.actions.every(
+      (action) =>
+        action &&
+        typeof action === "object" &&
+        action.execution_mode === "copy_only" &&
+        action.requires_credentials === false &&
+        action.requires_production === false &&
+        action.runtime_connector_approved === false &&
+        action.external_http_allowed === false &&
+        action.persistent_write_allowed === false
+    );
+
+    return actionsAreSafe ? payload : null;
+  }
+
+  async function loadActionsPackage14D() {
+    try {
+      const response = await fetch(OPERATOR_PILOT_HANDOFF_ACTIONS_API_14D, {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" }
+      });
+
+      if (!response.ok) {
+        actionsLoadState14D = "actions_http_" + response.status;
+        return null;
+      }
+
+      const normalized = normalizeActionsPackage14D(await response.json());
+      if (!normalized) {
+        actionsLoadState14D = "actions_rejected_guardrails";
+        return null;
+      }
+
+      actionsPackage14D = normalized;
+      actionsLoadState14D = "actions_loaded";
+      return normalized;
+    } catch (error) {
+      actionsLoadState14D = "actions_error";
+      return null;
+    }
+  }
+
+  async function copyText14D(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+
+  function requestNote14D(action) {
+    return [
+      `Action: ${action.label}`,
+      `Requested from: ${action.required_from}`,
+      `Purpose: ${action.description}`,
+      `Supervisor note: ${action.supervisor_note}`,
+      "Execution mode: copy-only",
+      "Production access: blocked",
+      "Runtime connector approval: blocked",
+      "Credentials: not requested or stored",
+      "External HTTP execution: blocked"
+    ].join("\n");
+  }
+
+  function renderActionCards14D(actions) {
+    return actions
+      .map(
+        (action) => `
+          <article
+            class="operator-pilot-action-card"
+            data-action-id="${escapeHtml14D(action.action_id)}"
+          >
+            <span class="operator-pilot-action-status">
+              ${escapeHtml14D(action.status)}
+            </span>
+            <h4>${escapeHtml14D(action.label)}</h4>
+            <p>${escapeHtml14D(action.description)}</p>
+            <dl class="operator-pilot-action-meta">
+              <div>
+                <dt>Requested from</dt>
+                <dd>${escapeHtml14D(action.required_from)}</dd>
+              </div>
+              <div>
+                <dt>Execution</dt>
+                <dd>${escapeHtml14D(action.execution_mode)}</dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              class="operator-pilot-action-copy"
+              data-operator-pilot-copy-action="${escapeHtml14D(action.action_id)}"
+            >
+              Copy request note
+            </button>
+          </article>
+        `
+      )
+      .join("");
+  }
+
+  function setDatasets14D(root, payload) {
+    root.dataset.actionsLoadState = actionsLoadState14D;
+    root.dataset.actionsCount = String(payload ? payload.action_count : 0);
+    root.dataset.actionsReadOnly = String(Boolean(payload && payload.read_only));
+    root.dataset.actionsPreviewOnly = String(
+      Boolean(payload && payload.preview_only)
+    );
+  }
+
+  function bindCopyButtons14D(panel, payload) {
+    panel
+      .querySelectorAll("[data-operator-pilot-copy-action]")
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          const action = payload.actions.find(
+            (item) =>
+              item.action_id === button.dataset.operatorPilotCopyAction
+          );
+          if (!action) return;
+
+          await copyText14D(requestNote14D(action));
+          button.textContent = "Request note copied";
+          window.setTimeout(() => {
+            button.textContent = "Copy request note";
+          }, 1600);
+        });
+      });
+  }
+
+  function renderActions14D(payload) {
+    const root = root14D();
+    if (!root) return false;
+
+    const shell = root.querySelector(".operator-pilot-shell");
+    if (!shell) return false;
+
+    const previous = shell.querySelector("#operator-pilot-actions-14d");
+    if (previous) previous.remove();
+
+    const panel = document.createElement("section");
+    panel.id = "operator-pilot-actions-14d";
+    panel.className = "operator-pilot-panel operator-pilot-actions-14d";
+    panel.setAttribute("aria-label", "Supervisor readiness actions");
+
+    setDatasets14D(root, payload);
+
+    if (!payload) {
+      panel.innerHTML = `
+        <div class="operator-pilot-actions-header">
+          <div>
+            <div class="operator-pilot-title">Supervisor readiness actions</div>
+            <p>Read-only action preview is unavailable. No action was executed.</p>
+          </div>
+          <span class="operator-pilot-actions-state">
+            ${escapeHtml14D(actionsLoadState14D)}
+          </span>
+        </div>
+      `;
+    } else {
+      panel.innerHTML = `
+        <div class="operator-pilot-actions-header">
+          <div>
+            <div class="operator-pilot-title">Supervisor readiness actions</div>
+            <p>
+              Prepare copy-only requests for operator inputs. This preview does
+              not save progress, send messages, activate connectors, or grant
+              production access.
+            </p>
+          </div>
+          <span class="operator-pilot-actions-state">
+            ${escapeHtml14D(actionsLoadState14D)}
+          </span>
+        </div>
+        <div class="operator-pilot-actions-summary">
+          <span><strong>${escapeHtml14D(payload.action_count)}</strong> pending actions</span>
+          <span>Read-only preview</span>
+          <span>Copy-only controls</span>
+        </div>
+        <div class="operator-pilot-actions-grid">
+          ${renderActionCards14D(payload.actions)}
+        </div>
+      `;
+      bindCopyButtons14D(panel, payload);
+    }
+
+    const explainer = shell.querySelector(".operator-pilot-explainer");
+    if (explainer) {
+      explainer.insertAdjacentElement("afterend", panel);
+    } else {
+      shell.appendChild(panel);
+    }
+
+    return true;
+  }
+
+  async function waitForShell14D() {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const root = root14D();
+      if (root && root.querySelector(".operator-pilot-shell")) return true;
+      await new Promise((resolve) => window.setTimeout(resolve, 25));
+    }
+    return false;
+  }
+
+  function bindRebuildRecovery14D() {
+    const rebuild = document.getElementById("operator-pilot-rebuild");
+    if (!rebuild || rebuild.dataset.actionsRecovery14d === "1") return;
+
+    rebuild.dataset.actionsRecovery14d = "1";
+    rebuild.addEventListener("click", () => {
+      window.setTimeout(() => {
+        renderActions14D(actionsPackage14D);
+        bindRebuildRecovery14D();
+      }, 0);
+    });
+  }
+
+  async function initActions14D() {
+    const results = await Promise.all([
+      loadActionsPackage14D(),
+      waitForShell14D()
+    ]);
+    renderActions14D(results[0]);
+    bindRebuildRecovery14D();
+  }
+
+  window.PMK_OPERATOR_PILOT_HANDOFF_ACTIONS_14D = {
+    api: OPERATOR_PILOT_HANDOFF_ACTIONS_API_14D,
+    load: loadActionsPackage14D,
+    normalize: normalizeActionsPackage14D,
+    render: renderActions14D
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initActions14D);
+  } else {
+    initActions14D();
+  }
+})();
+// PMK OPERATOR PILOT HANDOFF ACTIONS UI 14D END
