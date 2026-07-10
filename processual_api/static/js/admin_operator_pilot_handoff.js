@@ -159,6 +159,66 @@
       "Block production until a separate approval phase"
     ]
   };
+  const OPERATOR_PILOT_HANDOFF_API_14C = "/settings/admin/operator-pilot-handoff";
+  const OPERATOR_PILOT_HANDOFF_EXPORT_API_14C =
+    "/settings/admin/operator-pilot-handoff/export";
+
+  let activePackage14C = PACKAGE;
+  let backendLoadState14C = "static_fallback";
+
+  function packageForRender14C() {
+    return activePackage14C || PACKAGE;
+  }
+
+  function normalizeBackendPackage14C(payload) {
+    if (!payload || typeof payload !== "object") return null;
+
+    const guardrails = payload.guardrails || {};
+    if (
+      guardrails.production_allowed !== false ||
+      guardrails.runtime_connector_approved !== false ||
+      guardrails.customer_credentials_present !== false ||
+      guardrails.external_http_allowed !== false
+    ) {
+      return null;
+    }
+
+    return Object.assign({}, PACKAGE, payload, {
+      guardrails: Object.assign({}, PACKAGE.guardrails || {}, guardrails)
+    });
+  }
+
+  async function loadBackendPackage14C() {
+    try {
+      const response = await fetch(OPERATOR_PILOT_HANDOFF_API_14C, {
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        backendLoadState14C = "backend_http_" + response.status;
+        return packageForRender14C();
+      }
+
+      const payload = await response.json();
+      const normalized = normalizeBackendPackage14C(payload);
+
+      if (!normalized) {
+        backendLoadState14C = "backend_rejected_guardrails";
+        return packageForRender14C();
+      }
+
+      activePackage14C = normalized;
+      backendLoadState14C = "backend_loaded";
+      return activePackage14C;
+    } catch (error) {
+      backendLoadState14C = "backend_error";
+      return packageForRender14C();
+    }
+  }
+
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -201,7 +261,9 @@
   }
 
   function buildMarkdown() {
-    const lines = [
+
+    const PACKAGE = packageForRender14C();
+const lines = [
       "# Operator Pilot Handoff",
       "",
       `- Package: \`${PACKAGE.package_id}\``,
@@ -321,15 +383,18 @@
   }
 
   function render() {
+    const PACKAGE = packageForRender14C();
+    const guardrails = PACKAGE.guardrails || PACKAGE;
     const root = findRoot();
     if (!root) return;
 
+    root.dataset.backendLoadState = backendLoadState14C;
     root.dataset.phase = PACKAGE.package_id;
     root.dataset.handoffStatus = PACKAGE.handoff_status;
     root.dataset.pilotReady = String(PACKAGE.pilot_ready);
-    root.dataset.productionAllowed = String(PACKAGE.production_allowed);
+    root.dataset.productionAllowed = String(guardrails.production_allowed);
     root.dataset.runtimeConnectorApproved = String(
-      PACKAGE.runtime_connector_approved
+      guardrails.runtime_connector_approved
     );
 
     root.innerHTML = `
@@ -467,9 +532,20 @@
 
     shell.prepend(panel);
   }
-  function init() {
-    render();
+
+  function downloadBackendMarkdown14C() {
+    window.open(OPERATOR_PILOT_HANDOFF_EXPORT_API_14C, "_blank", "noopener");
+  }
+  async function init() {
+
+    await loadBackendPackage14C();
+render();
     ensureExplanationPanel();
+
+    const exportButton = document.getElementById("operator-pilot-export");
+    if (exportButton) {
+      exportButton.addEventListener("click", downloadBackendMarkdown14C);
+    }
   }
   window.PMK_OPERATOR_PILOT_HANDOFF_14A = {
     buildMarkdown,
