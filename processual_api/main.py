@@ -312,15 +312,6 @@ def _integration_readiness_write_requires_scope_12b(path: str, method: str) -> b
     return path.startswith(_INTEGRATION_READINESS_WRITE_PREFIX_12B)
 
 
-def _split_supervisor_scopes_12b(value: str) -> set[str]:
-    scopes = set()
-    for part in str(value or "").replace(",", " ").split():
-        text = part.strip()
-        if text:
-            scopes.add(text)
-    return scopes
-
-
 def _extract_readiness_audit_body_12b(raw_body: bytes) -> dict:
     if not raw_body:
         return {}
@@ -369,28 +360,15 @@ def _append_integration_readiness_audit_12b(
         "status": str(payload.get("status") or ""),
         "supervisor_session_present": bool(
             safe_supervisor.get("session_present")
-        )
-        if safe_supervisor
-        else bool(
-            request.headers.get("X-Supervisor-Session-Key")
-            or request.headers.get("X-Admin-Supervisor-Session")
         ),
         "supervisor_session_validated": bool(
             safe_supervisor.get("session_validated")
-        )
-        if safe_supervisor
-        else False,
+        ),
         "session_key_id": str(safe_supervisor.get("session_key_id") or ""),
         "supervisor_scope": ",".join(
             str(scope)
             for scope in safe_supervisor.get("provided_scopes", [])
             if str(scope or "").strip()
-        )
-        if safe_supervisor
-        else str(
-            request.headers.get("X-Admin-Supervisor-Scope")
-            or request.headers.get("X-Admin-Supervisor-Scopes")
-            or ""
         ),
         "at": datetime_module.datetime.now(datetime_module.UTC)
         .replace(microsecond=0)
@@ -423,73 +401,30 @@ async def integration_readiness_supervisor_scope_audit_12b(request, call_next):
 
     request._receive = receive_once_12b
 
-    if request.headers.get("X-Supervisor-Session-Key"):
-        from processual_api.services.supervisor_session_write_guard import (
-            SupervisorSessionWriteGuardError,
-            require_validated_supervisor_write_session,
-        )
-
-        try:
-            safe_supervisor = require_validated_supervisor_write_session(
-                request,
-                _INTEGRATION_READINESS_ALLOWED_SCOPES_12B,
-                guard_name="integration readiness writes",
-            )
-        except SupervisorSessionWriteGuardError as exc:
-            return JSONResponse(
-                {
-                    "detail": exc.detail,
-                    "error": exc.error,
-                    "required_scopes": exc.required_scopes,
-                    "supervisor_session_present": exc.session_present,
-                    "supervisor_session_validated": exc.session_validated,
-                    "session_key_id": exc.session_key_id,
-                    "provided_scopes": exc.provided_scopes,
-                    "production_allowed": False,
-                    "runtime_connector_approved": False,
-                    "external_http_enabled": False,
-                    "raw_secret_visible": False,
-                },
-                status_code=403,
-            )
-
-        response = await call_next(request)
-        _append_integration_readiness_audit_12b(
-            request,
-            payload,
-            response.status_code,
-            supervisor_session=safe_supervisor,
-        )
-        return response
-
-    supervisor_session = str(
-        request.headers.get("X-Admin-Supervisor-Session") or ""
-    ).strip()
-    if not supervisor_session:
-        return JSONResponse(
-            {
-                "detail": "Supervisor session required for integration readiness writes",
-                "production_allowed": False,
-                "runtime_connector_approved": False,
-                "external_http_enabled": False,
-                "raw_secret_visible": False,
-            },
-            status_code=403,
-        )
-
-    explicit_scope_header = (
-        request.headers.get("X-Admin-Supervisor-Scope")
-        or request.headers.get("X-Admin-Supervisor-Scopes")
-        or ""
+    from processual_api.services.supervisor_session_write_guard import (
+        SupervisorSessionWriteGuardError,
+        require_validated_supervisor_write_session,
     )
-    explicit_scopes = _split_supervisor_scopes_12b(explicit_scope_header)
-    if explicit_scopes and not (
-        explicit_scopes & _INTEGRATION_READINESS_ALLOWED_SCOPES_12B
-    ):
+
+    # Validate both the canonical and legacy supervisor session headers through
+    # the same central guard. Client-supplied scope headers are not trusted for
+    # authorization and cannot elevate the validated session record.
+    try:
+        safe_supervisor = require_validated_supervisor_write_session(
+            request,
+            _INTEGRATION_READINESS_ALLOWED_SCOPES_12B,
+            guard_name="integration readiness writes",
+        )
+    except SupervisorSessionWriteGuardError as exc:
         return JSONResponse(
             {
-                "detail": "Supervisor scope does not allow integration readiness writes",
-                "required_scopes": sorted(_INTEGRATION_READINESS_ALLOWED_SCOPES_12B),
+                "detail": exc.detail,
+                "error": exc.error,
+                "required_scopes": exc.required_scopes,
+                "supervisor_session_present": exc.session_present,
+                "supervisor_session_validated": exc.session_validated,
+                "session_key_id": exc.session_key_id,
+                "provided_scopes": exc.provided_scopes,
                 "production_allowed": False,
                 "runtime_connector_approved": False,
                 "external_http_enabled": False,
@@ -499,7 +434,12 @@ async def integration_readiness_supervisor_scope_audit_12b(request, call_next):
         )
 
     response = await call_next(request)
-    _append_integration_readiness_audit_12b(request, payload, response.status_code)
+    _append_integration_readiness_audit_12b(
+        request,
+        payload,
+        response.status_code,
+        supervisor_session=safe_supervisor,
+    )
     return response
 # END INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_AUDIT
 

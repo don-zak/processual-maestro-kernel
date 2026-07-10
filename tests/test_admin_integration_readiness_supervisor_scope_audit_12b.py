@@ -1,10 +1,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+from processual_api.supervisor_session_keys import issue_supervisor_session_key
 
 
 def _seed_case(path: Path) -> str:
@@ -39,10 +42,64 @@ def _seed_case(path: Path) -> str:
     return case_id
 
 
-def _headers_12b(scope: str = "admin:integration_readiness:review") -> dict[str, str]:
+def _supervisor_session_keys_test_helper_module_12b():
+    helper_path = Path("tests/test_admin_supervisor_session_keys.py").resolve()
+    spec = importlib.util.spec_from_file_location(
+        "pmk_supervisor_session_keys_test_helpers_12b",
+        helper_path,
+    )
+
+    if spec is None or spec.loader is None:
+        raise AssertionError("Could not load supervisor session key test helpers")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _issue_legacy_session_12b(
+    store: Path,
+    *,
+    scopes: list[str],
+) -> dict[str, object]:
+    module = _supervisor_session_keys_test_helper_module_12b()
+
+    issued = issue_supervisor_session_key(
+        store,
+        dict(module._owner()),
+        {
+            "label": "12B validated legacy readiness session",
+            "level": "operations_supervisor",
+            "scopes": scopes,
+        },
+    )
+
+    raw_store = json.loads(store.read_text(encoding="utf-8"))
+    records = raw_store.get("supervisor_session_keys") or []
+
+    for record in records:
+        if (
+            str(record.get("session_key_id") or "")
+            == str(issued["record"]["session_key_id"])
+        ):
+            record["scopes"] = list(scopes)
+
+    store.write_text(
+        json.dumps(raw_store, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    issued["record"]["scopes"] = list(scopes)
+    return issued
+
+
+def _headers_12b(
+    raw_key: str,
+    spoofed_scope: str,
+) -> dict[str, str]:
     return {
-        "X-Admin-Supervisor-Session": "test-supervisor-session-12b",
-        "X-Admin-Supervisor-Scope": scope,
+        "X-Admin-Supervisor-Session": raw_key,
+        "X-Admin-Supervisor-Scope": spoofed_scope,
     }
 
 
@@ -102,15 +159,27 @@ def test_integration_readiness_12b_wrong_scope_is_forbidden(
     monkeypatch,
 ):
     store_path = tmp_path / "integration_readiness_cases.json"
+    supervisor_store = tmp_path / "supervisor_session_keys.json"
     case_id = _seed_case(store_path)
     monkeypatch.setenv("PMK_INTEGRATION_READINESS_CASES_PATH", str(store_path))
+    monkeypatch.setenv(
+        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
+        str(supervisor_store),
+    )
+    issued = _issue_legacy_session_12b(
+        supervisor_store,
+        scopes=["admin:billing:read"],
+    )
 
     from processual_api.main import app
 
     client = TestClient(app)
     response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
-        headers=_headers_12b("admin:billing:read"),
+        headers=_headers_12b(
+            str(issued["raw_key"]),
+            "admin:integration_readiness:write",
+        ),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
@@ -122,6 +191,11 @@ def test_integration_readiness_12b_wrong_scope_is_forbidden(
     assert response.status_code == 403
     payload = response.json()
     assert "does not allow" in payload["detail"]
+    assert payload["error"] == "supervisor_scope_required"
+    assert payload["supervisor_session_present"] is True
+    assert payload["supervisor_session_validated"] is True
+    assert payload["session_key_id"] == issued["record"]["session_key_id"]
+    assert "admin:billing:read" in payload["provided_scopes"]
     assert payload["raw_secret_visible"] is False
 
 
@@ -131,16 +205,28 @@ def test_integration_readiness_12b_write_with_supervisor_scope_is_audited(
 ):
     store_path = tmp_path / "integration_readiness_cases.json"
     audit_path = tmp_path / "admin_audit_events.jsonl"
+    supervisor_store = tmp_path / "supervisor_session_keys.json"
     case_id = _seed_case(store_path)
     monkeypatch.setenv("PMK_INTEGRATION_READINESS_CASES_PATH", str(store_path))
     monkeypatch.setenv("PMK_ADMIN_AUDIT_EVENTS_PATH", str(audit_path))
+    monkeypatch.setenv(
+        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
+        str(supervisor_store),
+    )
+    issued = _issue_legacy_session_12b(
+        supervisor_store,
+        scopes=["admin:integration_readiness:review"],
+    )
 
     from processual_api.main import app
 
     client = TestClient(app)
     response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
-        headers=_headers_12b(),
+        headers=_headers_12b(
+            str(issued["raw_key"]),
+            "admin:billing:read",
+        ),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
@@ -163,6 +249,11 @@ def test_integration_readiness_12b_write_with_supervisor_scope_is_audited(
     assert event["item_key"] == "enterprise_core_api_reference"
     assert event["status"] == "provided"
     assert event["supervisor_session_present"] is True
+    assert event["supervisor_session_validated"] is True
+    assert event["session_key_id"] == issued["record"]["session_key_id"]
+    assert "admin:integration_readiness:review" in event["supervisor_scope"]
+    assert "admin:billing:read" not in event["supervisor_scope"]
+    assert str(issued["raw_key"]) not in json.dumps(event)
     assert event["production_allowed"] is False
     assert event["runtime_connector_approved"] is False
     assert event["external_http_enabled"] is False

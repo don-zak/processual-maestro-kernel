@@ -1,9 +1,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+from processual_api.supervisor_session_keys import issue_supervisor_session_key
 
 
 def _seed_case(path):
@@ -38,9 +42,57 @@ def _seed_case(path):
     return case_id
 
 
-def _headers_12b_for_12a() -> dict[str, str]:
+def _supervisor_session_keys_test_helper_module_12a():
+    helper_path = Path("tests/test_admin_supervisor_session_keys.py").resolve()
+    spec = importlib.util.spec_from_file_location(
+        "pmk_supervisor_session_keys_test_helpers_12a",
+        helper_path,
+    )
+
+    if spec is None or spec.loader is None:
+        raise AssertionError("Could not load supervisor session key test helpers")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _issue_legacy_session_12a(store: Path) -> dict[str, object]:
+    module = _supervisor_session_keys_test_helper_module_12a()
+    scopes = ["admin:integration_readiness:review"]
+
+    issued = issue_supervisor_session_key(
+        store,
+        dict(module._owner()),
+        {
+            "label": "12A validated legacy readiness session",
+            "level": "operations_supervisor",
+            "scopes": scopes,
+        },
+    )
+
+    raw_store = json.loads(store.read_text(encoding="utf-8"))
+    records = raw_store.get("supervisor_session_keys") or []
+
+    for record in records:
+        if (
+            str(record.get("session_key_id") or "")
+            == str(issued["record"]["session_key_id"])
+        ):
+            record["scopes"] = list(scopes)
+
+    store.write_text(
+        json.dumps(raw_store, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    issued["record"]["scopes"] = list(scopes)
+    return issued
+
+
+def _headers_12b_for_12a(raw_key: str) -> dict[str, str]:
     return {
-        "X-Admin-Supervisor-Session": "test-supervisor-session-12a",
+        "X-Admin-Supervisor-Session": raw_key,
         "X-Admin-Supervisor-Scope": "admin:integration_readiness:review",
     }
 
@@ -50,8 +102,14 @@ def test_admin_integration_readiness_case_management_12a_list_detail_and_action(
     monkeypatch,
 ):
     store_path = tmp_path / "integration_readiness_cases.json"
+    supervisor_store = tmp_path / "supervisor_session_keys.json"
     case_id = _seed_case(store_path)
     monkeypatch.setenv("PMK_INTEGRATION_READINESS_CASES_PATH", str(store_path))
+    monkeypatch.setenv(
+        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
+        str(supervisor_store),
+    )
+    issued = _issue_legacy_session_12a(supervisor_store)
 
     from processual_api.main import app
 
@@ -79,7 +137,7 @@ def test_admin_integration_readiness_case_management_12a_list_detail_and_action(
 
     action_response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
-        headers=_headers_12b_for_12a(),
+        headers=_headers_12b_for_12a(str(issued["raw_key"])),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
@@ -109,15 +167,21 @@ def test_admin_integration_readiness_case_management_12a_rejects_invalid_status(
     monkeypatch,
 ):
     store_path = tmp_path / "integration_readiness_cases.json"
+    supervisor_store = tmp_path / "supervisor_session_keys.json"
     case_id = _seed_case(store_path)
     monkeypatch.setenv("PMK_INTEGRATION_READINESS_CASES_PATH", str(store_path))
+    monkeypatch.setenv(
+        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
+        str(supervisor_store),
+    )
+    issued = _issue_legacy_session_12a(supervisor_store)
 
     from processual_api.main import app
 
     client = TestClient(app)
     response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
-        headers=_headers_12b_for_12a(),
+        headers=_headers_12b_for_12a(str(issued["raw_key"])),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
@@ -154,15 +218,21 @@ def test_admin_integration_readiness_summary_route_12a_compat(
     monkeypatch,
 ):
     store_path = tmp_path / "integration_readiness_cases.json"
+    supervisor_store = tmp_path / "supervisor_session_keys.json"
     case_id = _seed_case(store_path)
     monkeypatch.setenv("PMK_INTEGRATION_READINESS_CASES_PATH", str(store_path))
+    monkeypatch.setenv(
+        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
+        str(supervisor_store),
+    )
+    issued = _issue_legacy_session_12a(supervisor_store)
 
     from processual_api.main import app
 
     client = TestClient(app)
     action_response = client.post(
         "/settings/admin/integration-readiness-tracking/case-item-action",
-        headers=_headers_12b_for_12a(),
+        headers=_headers_12b_for_12a(str(issued["raw_key"])),
         json={
             "case_id": case_id,
             "item_key": "enterprise_core_api_reference",
