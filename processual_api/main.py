@@ -604,74 +604,43 @@ PMK13B_ALLOWED_SUPERVISOR_SCOPES = {
 }
 
 
-def _pmk13b_split_scopes(value: str | None) -> set[str]:
-    if not value:
-        return set()
-    scopes: set[str] = set()
-    for chunk in str(value).replace(",", " ").split():
-        text = chunk.strip()
-        if text:
-            scopes.add(text)
-    return scopes
-
-
 def _pmk13b_supervisor_session_store_path():
     from pathlib import Path
 
     return Path(__file__).resolve().parent / "data" / "supervisor_session_keys.json"
 
 
-def _pmk13b_scopes_from_supervisor_session(raw_key: str | None) -> set[str]:
-    if not raw_key:
-        return set()
-
-    try:
-        from processual_api.supervisor_session_keys import validate_supervisor_session_key
-
-        safe_record = validate_supervisor_session_key(
-            _pmk13b_supervisor_session_store_path(),
-            str(raw_key),
-        )
-    except (PermissionError, OSError, ValueError, TypeError):
-        return set()
-
-    raw_scopes = safe_record.get("scopes") or []
-    if isinstance(raw_scopes, str):
-        raw_scopes = [raw_scopes]
-
-    return {str(scope).strip() for scope in raw_scopes if str(scope).strip()}
-
-
-def _pmk13b_request_scopes(request) -> set[str]:
-    scopes = set()
-    scopes |= _pmk13b_split_scopes(request.headers.get("X-Admin-Supervisor-Scope"))
-    scopes |= _pmk13b_split_scopes(request.headers.get("X-Admin-Supervisor-Scopes"))
-    scopes |= _pmk13b_scopes_from_supervisor_session(
-        request.headers.get("X-Admin-Supervisor-Session")
-    )
-    return scopes
-
-
-def _pmk13b_require_supervisor_write(request) -> None:
+def _pmk13b_require_supervisor_write(
+    request: PMK13ARequest,
+) -> dict[str, object]:
     from fastapi import HTTPException
 
     from processual_api.services.integration_pilot_controls import GUARDRAILS
-
-    session = request.headers.get("X-Admin-Supervisor-Session")
-    scopes = _pmk13b_request_scopes(request)
-    if session and scopes.intersection(PMK13B_ALLOWED_SUPERVISOR_SCOPES):
-        return
-
-    raise HTTPException(
-        status_code=403,
-        detail={
-            "error": "supervisor_scope_required",
-            "required_any_scope": sorted(PMK13B_ALLOWED_SUPERVISOR_SCOPES),
-            "supervisor_session_present": bool(session),
-            "provided_scopes": sorted(scopes),
-            **GUARDRAILS,
-        },
+    from processual_api.services.supervisor_session_write_guard import (
+        SupervisorSessionWriteGuardError,
+        require_validated_supervisor_write_session,
     )
+
+    try:
+        return require_validated_supervisor_write_session(
+            request,
+            PMK13B_ALLOWED_SUPERVISOR_SCOPES,
+            guard_name="integration pilot control writes",
+        )
+    except SupervisorSessionWriteGuardError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": exc.error,
+                "message": exc.detail,
+                "required_any_scope": exc.required_scopes,
+                "supervisor_session_present": exc.session_present,
+                "supervisor_session_validated": exc.session_validated,
+                "session_key_id": exc.session_key_id,
+                "provided_scopes": exc.provided_scopes,
+                **GUARDRAILS,
+            },
+        ) from exc
 
 
 @app.get("/settings/admin/integration-tasks")
@@ -685,9 +654,9 @@ async def pmk13b_admin_list_integration_tasks():
 async def pmk13b_admin_create_integration_task(request: PMK13ARequest):
     from processual_api.services.integration_pilot_controls import create_integration_task
 
-    _pmk13b_require_supervisor_write(request)
+    supervisor_session = _pmk13b_require_supervisor_write(request)
     payload = await request.json()
-    actor = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    actor = str(supervisor_session["session_key_id"])
     return create_integration_task(payload, created_by=actor)
 
 
@@ -695,9 +664,9 @@ async def pmk13b_admin_create_integration_task(request: PMK13ARequest):
 async def pmk13b_admin_suspend_integration_task(task_id: str, request: PMK13ARequest):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
-    _pmk13b_require_supervisor_write(request)
+    supervisor_session = _pmk13b_require_supervisor_write(request)
     payload = await request.json()
-    actor = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "suspend",
@@ -710,9 +679,9 @@ async def pmk13b_admin_suspend_integration_task(task_id: str, request: PMK13AReq
 async def pmk13b_admin_resume_integration_task(task_id: str, request: PMK13ARequest):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
-    _pmk13b_require_supervisor_write(request)
+    supervisor_session = _pmk13b_require_supervisor_write(request)
     payload = await request.json()
-    actor = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "resume",
@@ -725,9 +694,9 @@ async def pmk13b_admin_resume_integration_task(task_id: str, request: PMK13ARequ
 async def pmk13b_admin_revoke_integration_task(task_id: str, request: PMK13ARequest):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
-    _pmk13b_require_supervisor_write(request)
+    supervisor_session = _pmk13b_require_supervisor_write(request)
     payload = await request.json()
-    actor = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "revoke",
@@ -740,9 +709,9 @@ async def pmk13b_admin_revoke_integration_task(task_id: str, request: PMK13ARequ
 async def pmk13b_admin_cancel_integration_task(task_id: str, request: PMK13ARequest):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
-    _pmk13b_require_supervisor_write(request)
+    supervisor_session = _pmk13b_require_supervisor_write(request)
     payload = await request.json()
-    actor = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "cancel",
@@ -757,10 +726,14 @@ async def pmk13b_admin_issue_activation_permission_key(task_id: str, request: PM
         issue_activation_permission_key,
     )
 
-    _pmk13b_require_supervisor_write(request)
+    supervisor_session = _pmk13b_require_supervisor_write(request)
     payload = await request.json()
-    actor = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
-    return issue_activation_permission_key(task_id, payload, issued_by=actor)
+    actor = str(supervisor_session["session_key_id"])
+    return issue_activation_permission_key(
+        task_id,
+        payload,
+        issued_by=actor,
+    )
 
 
 # PMK INTEGRATION PILOT CONTROLS 13B END
