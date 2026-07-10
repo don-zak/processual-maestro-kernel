@@ -478,17 +478,6 @@ PMK13A_ALLOWED_SUPERVISOR_SCOPES = {
 }
 
 
-def _pmk13a_split_scopes(value: str | None) -> set[str]:
-    if not value:
-        return set()
-    scopes: set[str] = set()
-    for chunk in str(value).replace(",", " ").split():
-        text = chunk.strip()
-        if text:
-            scopes.add(text)
-    return scopes
-
-
 
 # BEGIN INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
 
@@ -527,37 +516,45 @@ def admin_operator_pilot_handoff_export_14b():
 
 
 # END INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
-def _pmk13a_request_scopes(request: PMK13ARequest) -> set[str]:
-    scopes = set()
-    scopes |= _pmk13a_split_scopes(request.headers.get("X-Admin-Supervisor-Scope"))
-    scopes |= _pmk13a_split_scopes(request.headers.get("X-Admin-Supervisor-Scopes"))
-    return scopes
-
-
-def _pmk13a_require_supervisor_write(request: PMK13ARequest) -> None:
-    session = request.headers.get("X-Admin-Supervisor-Session")
-    scopes = _pmk13a_request_scopes(request)
-    if session and scopes.intersection(PMK13A_ALLOWED_SUPERVISOR_SCOPES):
-        return
-
-    raise PMK13AHTTPException(
-        status_code=403,
-        detail={
-            "error": "supervisor_scope_required",
-            "required_any_scope": sorted(PMK13A_ALLOWED_SUPERVISOR_SCOPES),
-            "supervisor_session_present": bool(session),
-            "provided_scopes": sorted(scopes),
-            **PMK13A_CLAIM_GUARDRAILS,
-        },
+def _pmk13a_require_supervisor_write(
+    request: PMK13ARequest,
+) -> dict[str, object]:
+    from processual_api.services.supervisor_session_write_guard import (
+        SupervisorSessionWriteGuardError,
+        require_validated_supervisor_write_session,
     )
+
+    try:
+        return require_validated_supervisor_write_session(
+            request,
+            PMK13A_ALLOWED_SUPERVISOR_SCOPES,
+            guard_name="integration claim key writes",
+        )
+    except SupervisorSessionWriteGuardError as exc:
+        raise PMK13AHTTPException(
+            status_code=403,
+            detail={
+                "error": exc.error,
+                "message": exc.detail,
+                "required_any_scope": exc.required_scopes,
+                "supervisor_session_present": exc.session_present,
+                "supervisor_session_validated": exc.session_validated,
+                "session_key_id": exc.session_key_id,
+                "provided_scopes": exc.provided_scopes,
+                **PMK13A_CLAIM_GUARDRAILS,
+            },
+        ) from exc
 
 
 @app.post("/settings/admin/integration-claim-keys")
 async def pmk13a_admin_issue_integration_claim_key(request: PMK13ARequest):
-    _pmk13a_require_supervisor_write(request)
+    supervisor_session = _pmk13a_require_supervisor_write(request)
     payload = await request.json()
-    issued_by = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
-    return pmk13a_issue_integration_claim_key(payload, issued_by=issued_by)
+    issued_by = str(supervisor_session["session_key_id"])
+    return pmk13a_issue_integration_claim_key(
+        payload,
+        issued_by=issued_by,
+    )
 
 
 @app.get("/settings/admin/integration-claim-keys")
@@ -570,9 +567,9 @@ async def pmk13a_admin_revoke_integration_claim_key(
     claim_key_id: str,
     request: PMK13ARequest,
 ):
-    _pmk13a_require_supervisor_write(request)
+    supervisor_session = _pmk13a_require_supervisor_write(request)
     payload = await request.json()
-    revoked_by = request.headers.get("X-Admin-Supervisor-Session") or "supervisor"
+    revoked_by = str(supervisor_session["session_key_id"])
     return pmk13a_revoke_integration_claim_key(
         claim_key_id,
         revoked_by=revoked_by,

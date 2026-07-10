@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from processual_api.main import app
 from processual_api.services import integration_claim_keys as claim_keys
+from processual_api.supervisor_session_keys import issue_supervisor_session_key
 
 
 def _setup_paths(tmp_path, monkeypatch):
@@ -18,6 +20,63 @@ def _setup_paths(tmp_path, monkeypatch):
         "PMK_ADMIN_AUDIT_EVENTS_PATH",
         str(tmp_path / "admin_audit_events.jsonl"),
     )
+    monkeypatch.setenv(
+        "PMK_SUPERVISOR_SESSION_KEYS_PATH",
+        str(tmp_path / "supervisor_session_keys.json"),
+    )
+
+
+def _supervisor_session_keys_test_helper_module_13a():
+    helper_path = Path("tests/test_admin_supervisor_session_keys.py").resolve()
+    spec = importlib.util.spec_from_file_location(
+        "pmk_supervisor_session_keys_test_helpers_13a",
+        helper_path,
+    )
+
+    if spec is None or spec.loader is None:
+        raise AssertionError(
+            "Could not load supervisor session key test helpers"
+        )
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _issue_supervisor_session_13a(
+    store: Path,
+    *,
+    scopes: list[str],
+) -> dict[str, object]:
+    module = _supervisor_session_keys_test_helper_module_13a()
+
+    issued = issue_supervisor_session_key(
+        store,
+        dict(module._owner()),
+        {
+            "label": "13A validated claim key route session",
+            "level": "operations_supervisor",
+            "scopes": scopes,
+        },
+    )
+
+    raw_store = json.loads(store.read_text(encoding="utf-8"))
+    records = raw_store.get("supervisor_session_keys") or []
+
+    for record in records:
+        if (
+            str(record.get("session_key_id") or "")
+            == str(issued["record"]["session_key_id"])
+        ):
+            record["scopes"] = list(scopes)
+
+    store.write_text(
+        json.dumps(raw_store, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    issued["record"]["scopes"] = list(scopes)
+    return issued
 
 
 def test_issue_claim_key_masks_raw_and_preserves_guardrails(tmp_path, monkeypatch):
@@ -142,6 +201,17 @@ def test_routes_require_supervisor_for_admin_write_and_allow_client_redeem(
     monkeypatch,
 ):
     _setup_paths(tmp_path, monkeypatch)
+
+    supervisor_store = tmp_path / "supervisor_session_keys.json"
+    insufficient_session = _issue_supervisor_session_13a(
+        supervisor_store,
+        scopes=["admin:billing:read"],
+    )
+    write_session = _issue_supervisor_session_13a(
+        supervisor_store,
+        scopes=["admin:integration_readiness:write"],
+    )
+
     client = TestClient(app)
 
     no_session = client.post(
@@ -158,8 +228,12 @@ def test_routes_require_supervisor_for_admin_write_and_allow_client_redeem(
     wrong_scope = client.post(
         "/settings/admin/integration-claim-keys",
         headers={
-            "X-Admin-Supervisor-Session": "session-proof",
-            "X-Admin-Supervisor-Scope": "admin:billing:read",
+            "X-Admin-Supervisor-Session": str(
+                insufficient_session["raw_key"]
+            ),
+            "X-Admin-Supervisor-Scope": (
+                "admin:integration_readiness:write"
+            ),
         },
         json={
             "client_id": "operator-client-route-13a",
@@ -168,12 +242,24 @@ def test_routes_require_supervisor_for_admin_write_and_allow_client_redeem(
     )
 
     assert wrong_scope.status_code == 403
+    wrong_detail = wrong_scope.json()["detail"]
+    assert wrong_detail["error"] == "supervisor_scope_required"
+    assert wrong_detail["supervisor_session_validated"] is True
+    assert (
+        wrong_detail["session_key_id"]
+        == insufficient_session["record"]["session_key_id"]
+    )
+    assert "admin:billing:read" in wrong_detail["provided_scopes"]
+    assert (
+        "admin:integration_readiness:write"
+        not in wrong_detail["provided_scopes"]
+    )
 
     issued_response = client.post(
         "/settings/admin/integration-claim-keys",
         headers={
-            "X-Admin-Supervisor-Session": "session-proof",
-            "X-Admin-Supervisor-Scope": "admin:integration_readiness:write",
+            "X-Admin-Supervisor-Session": str(write_session["raw_key"]),
+            "X-Admin-Supervisor-Scope": "admin:billing:read",
         },
         json={
             "client_id": "operator-client-route-13a",
@@ -186,11 +272,18 @@ def test_routes_require_supervisor_for_admin_write_and_allow_client_redeem(
     issued = issued_response.json()
     assert issued["claim_key"]["production_allowed"] is False
     assert issued["claim_key"]["runtime_enabled"] is False
+    assert (
+        issued["claim_key"]["issued_by"]
+        == write_session["record"]["session_key_id"]
+    )
+    assert str(write_session["raw_key"]) not in issued_response.text
 
     listed_response = client.get("/settings/admin/integration-claim-keys")
     assert listed_response.status_code == 200
     listed = listed_response.json()
-    assert issued["claim_key_once"] not in json.dumps(listed)
+    listed_text = json.dumps(listed)
+    assert issued["claim_key_once"] not in listed_text
+    assert str(write_session["raw_key"]) not in listed_text
     assert listed["claim_key_count"] == 1
 
     redeemed_response = client.post(
@@ -225,3 +318,5 @@ def test_routes_require_supervisor_for_admin_write_and_allow_client_redeem(
     audit_text = audit_path.read_text(encoding="utf-8")
     assert "integration_claim_key_issued" in audit_text
     assert "integration_claim_key_redeemed" in audit_text
+    assert str(write_session["raw_key"]) not in audit_text
+    assert str(write_session["record"]["session_key_id"]) in audit_text
