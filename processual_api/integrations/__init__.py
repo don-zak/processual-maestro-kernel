@@ -251,3 +251,20 @@ __all__ = [
     "validate_connector_operation_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16C exports end
+
+# EXTERNAL-CONNECTIVITY-16D exports begin
+from processual_api.integrations.mock_dispatcher import (
+    ConnectorDispatchRequest,
+    ConnectorDispatchResult,
+    ConnectorDispatchStatus,
+    ConnectorMockDispatcher,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "ConnectorDispatchRequest",
+    "ConnectorDispatchResult",
+    "ConnectorDispatchStatus",
+    "ConnectorMockDispatcher",
+]
+# EXTERNAL-CONNECTIVITY-16D exports end
