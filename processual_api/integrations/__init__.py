@@ -501,3 +501,43 @@ __all__ += [
     "validate_connector_sandbox_read_fault_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R6 exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R7 exports begin
+from .sandbox_evidence import (  # noqa: E402
+    CONNECTOR_SANDBOX_EVIDENCE_CONTRACTS,
+    SUPPORTED_CONNECTOR_SANDBOX_EVIDENCE_CONTRACTS,
+    ConnectorSandboxEvidenceAssessment,
+    ConnectorSandboxEvidenceBundle,
+    ConnectorSandboxEvidenceBundleStatus,
+    ConnectorSandboxEvidenceContract,
+    ConnectorSandboxEvidenceContractStatus,
+    ConnectorSandboxEvidenceRequest,
+    ConnectorSandboxEvidenceSourceKind,
+    assess_connector_sandbox_evidence_contract,
+    build_connector_sandbox_evidence_bundle,
+    get_connector_sandbox_evidence_contract,
+    list_connector_sandbox_evidence_contracts,
+    normalize_connector_sandbox_evidence_contract_id,
+    validate_connector_sandbox_evidence_contracts,
+    validate_connector_sandbox_evidence_registry,
+)
+
+__all__ += [
+    "CONNECTOR_SANDBOX_EVIDENCE_CONTRACTS",
+    "SUPPORTED_CONNECTOR_SANDBOX_EVIDENCE_CONTRACTS",
+    "ConnectorSandboxEvidenceAssessment",
+    "ConnectorSandboxEvidenceBundle",
+    "ConnectorSandboxEvidenceBundleStatus",
+    "ConnectorSandboxEvidenceContract",
+    "ConnectorSandboxEvidenceContractStatus",
+    "ConnectorSandboxEvidenceRequest",
+    "ConnectorSandboxEvidenceSourceKind",
+    "assess_connector_sandbox_evidence_contract",
+    "build_connector_sandbox_evidence_bundle",
+    "get_connector_sandbox_evidence_contract",
+    "list_connector_sandbox_evidence_contracts",
+    "normalize_connector_sandbox_evidence_contract_id",
+    "validate_connector_sandbox_evidence_contracts",
+    "validate_connector_sandbox_evidence_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R7 exports end
