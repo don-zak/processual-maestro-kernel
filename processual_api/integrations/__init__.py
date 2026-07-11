@@ -332,3 +332,46 @@ __all__ = [
     "validate_connector_secret_manager_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R2 exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R3 exports begin
+from processual_api.integrations.transport_contracts import (
+    CONNECTOR_TRANSPORT_CONTRACTS,
+    SUPPORTED_CONNECTOR_TRANSPORT_CONTRACTS,
+    ConnectorNoNetworkTransport,
+    ConnectorTransport,
+    ConnectorTransportAssessment,
+    ConnectorTransportContract,
+    ConnectorTransportContractStatus,
+    ConnectorTransportMode,
+    ConnectorTransportRequest,
+    ConnectorTransportResult,
+    ConnectorTransportResultStatus,
+    assess_connector_transport_contract,
+    get_connector_transport_contract,
+    list_connector_transport_contracts,
+    normalize_connector_transport_id,
+    validate_connector_transport_contracts,
+    validate_connector_transport_registry,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "CONNECTOR_TRANSPORT_CONTRACTS",
+    "SUPPORTED_CONNECTOR_TRANSPORT_CONTRACTS",
+    "ConnectorNoNetworkTransport",
+    "ConnectorTransport",
+    "ConnectorTransportAssessment",
+    "ConnectorTransportContract",
+    "ConnectorTransportContractStatus",
+    "ConnectorTransportMode",
+    "ConnectorTransportRequest",
+    "ConnectorTransportResult",
+    "ConnectorTransportResultStatus",
+    "assess_connector_transport_contract",
+    "get_connector_transport_contract",
+    "list_connector_transport_contracts",
+    "normalize_connector_transport_id",
+    "validate_connector_transport_contracts",
+    "validate_connector_transport_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R3 exports end
