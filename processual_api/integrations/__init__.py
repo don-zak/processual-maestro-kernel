@@ -416,3 +416,46 @@ __all__ = [
     "validate_connector_fake_sandbox_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R4 exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R5 exports begin
+from processual_api.integrations.sandbox_read_workflow import (
+    CONNECTOR_SANDBOX_READ_WORKFLOW_CONTRACTS,
+    SUPPORTED_CONNECTOR_SANDBOX_READ_WORKFLOWS,
+    ConnectorDeterministicSandboxReadWorkflow,
+    ConnectorSandboxReadWorkflowAssessment,
+    ConnectorSandboxReadWorkflowContract,
+    ConnectorSandboxReadWorkflowMode,
+    ConnectorSandboxReadWorkflowRequest,
+    ConnectorSandboxReadWorkflowResult,
+    ConnectorSandboxReadWorkflowResultStatus,
+    ConnectorSandboxReadWorkflowStatus,
+    assess_connector_sandbox_read_workflow,
+    execute_connector_sandbox_read_workflow,
+    get_connector_sandbox_read_workflow_contract,
+    list_connector_sandbox_read_workflow_contracts,
+    normalize_connector_sandbox_read_workflow_id,
+    validate_connector_sandbox_read_workflow_contracts,
+    validate_connector_sandbox_read_workflow_registry,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "CONNECTOR_SANDBOX_READ_WORKFLOW_CONTRACTS",
+    "SUPPORTED_CONNECTOR_SANDBOX_READ_WORKFLOWS",
+    "ConnectorDeterministicSandboxReadWorkflow",
+    "ConnectorSandboxReadWorkflowAssessment",
+    "ConnectorSandboxReadWorkflowContract",
+    "ConnectorSandboxReadWorkflowMode",
+    "ConnectorSandboxReadWorkflowRequest",
+    "ConnectorSandboxReadWorkflowResult",
+    "ConnectorSandboxReadWorkflowResultStatus",
+    "ConnectorSandboxReadWorkflowStatus",
+    "assess_connector_sandbox_read_workflow",
+    "execute_connector_sandbox_read_workflow",
+    "get_connector_sandbox_read_workflow_contract",
+    "list_connector_sandbox_read_workflow_contracts",
+    "normalize_connector_sandbox_read_workflow_id",
+    "validate_connector_sandbox_read_workflow_contracts",
+    "validate_connector_sandbox_read_workflow_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R5 exports end
