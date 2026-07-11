@@ -375,3 +375,44 @@ __all__ = [
     "validate_connector_transport_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R3 exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R4 exports begin
+from processual_api.integrations.fake_sandbox_transport import (
+    CONNECTOR_FAKE_SANDBOX_CONTRACTS,
+    SUPPORTED_CONNECTOR_FAKE_SANDBOX_CONTRACTS,
+    ConnectorDeterministicFakeSandboxTransport,
+    ConnectorFakeSandboxAssessment,
+    ConnectorFakeSandboxContract,
+    ConnectorFakeSandboxMode,
+    ConnectorFakeSandboxRequest,
+    ConnectorFakeSandboxResult,
+    ConnectorFakeSandboxResultStatus,
+    ConnectorFakeSandboxStatus,
+    assess_connector_fake_sandbox_transport,
+    get_connector_fake_sandbox_contract,
+    list_connector_fake_sandbox_contracts,
+    normalize_connector_fake_sandbox_transport_id,
+    validate_connector_fake_sandbox_contracts,
+    validate_connector_fake_sandbox_registry,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "CONNECTOR_FAKE_SANDBOX_CONTRACTS",
+    "SUPPORTED_CONNECTOR_FAKE_SANDBOX_CONTRACTS",
+    "ConnectorDeterministicFakeSandboxTransport",
+    "ConnectorFakeSandboxAssessment",
+    "ConnectorFakeSandboxContract",
+    "ConnectorFakeSandboxMode",
+    "ConnectorFakeSandboxRequest",
+    "ConnectorFakeSandboxResult",
+    "ConnectorFakeSandboxResultStatus",
+    "ConnectorFakeSandboxStatus",
+    "assess_connector_fake_sandbox_transport",
+    "get_connector_fake_sandbox_contract",
+    "list_connector_fake_sandbox_contracts",
+    "normalize_connector_fake_sandbox_transport_id",
+    "validate_connector_fake_sandbox_contracts",
+    "validate_connector_fake_sandbox_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R4 exports end
