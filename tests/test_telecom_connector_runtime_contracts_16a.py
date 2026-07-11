@@ -83,14 +83,35 @@ def test_telecom_connectivity_16a_document_guardrails() -> None:
         "eleven total connector references",
         "57 capability instances",
         "52 unique existing scopes",
-        "shared sector alignment is pending",
-        "does not yet declare the university sector",
         "r1 adds no endpoint",
     )
 
     for marker in expected_markers:
         assert marker in text
 
+
+def test_university_document_alignment_guardrail_is_stable() -> None:
+    text = _document_text()
+    expected_markers = (
+        "external-connectivity-16a-r2a",
+        "`university_student_api_reference` credential profile",
+        "references both `university_student` and `document`",
+        "does not yet declare the university sector",
+        "shared sector alignment is pending",
+        "r1 does not claim that `enterprise_document_reference` is "
+        "approved for university document traffic",
+        "separate adapter-contract review covering data classification",
+        "student privacy",
+        "retention",
+        "document ownership",
+        "customer acceptance criteria",
+        "dedicated documentation guardrail",
+        "changes no credential profile association",
+        "later profile-boundary change must be reviewed and tested "
+        "separately",
+    )
+    for marker in expected_markers:
+        assert marker in text
 
 def test_runtime_connector_registry_is_populated_and_immutable() -> None:
     expected_connectors = {

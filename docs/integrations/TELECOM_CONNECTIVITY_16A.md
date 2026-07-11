@@ -183,6 +183,10 @@ Therefore, shared sector alignment is pending. R1 does not claim that `enterpris
 
 Adding university to the shared document adapter requires a separate adapter-contract review covering data classification, student privacy, retention, document ownership, and customer acceptance criteria.
 
+EXTERNAL-CONNECTIVITY-16A-R2A stabilizes this university/document boundary as a dedicated documentation guardrail.
+
+R2A changes no credential profile association, adapter sector, integration scope, runtime contract, or connector registry entry. A later profile-boundary change must be reviewed and tested separately.
+
 ### 15.4 R1 safety posture
 
 All eleven connector references remain architecture-only Control Plane definitions.
