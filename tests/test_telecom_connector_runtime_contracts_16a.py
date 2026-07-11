@@ -94,24 +94,30 @@ def test_university_document_alignment_guardrail_is_stable() -> None:
     text = _document_text()
     expected_markers = (
         "external-connectivity-16a-r2a",
-        "`university_student_api_reference` credential profile",
-        "references both `university_student` and `document`",
-        "does not yet declare the university sector",
-        "shared sector alignment is pending",
-        "r1 does not claim that `enterprise_document_reference` is "
-        "approved for university document traffic",
-        "separate adapter-contract review covering data classification",
+        "external-connectivity-16a-r2b",
+        "narrows `university_student_api_reference` to the "
+        "`university_student` adapter contract only",
+        "no longer references the shared `document` adapter contract",
+        "does not declare the university sector",
+        "`enterprise_document_reference` is not approved for "
+        "university document traffic",
+        "does not add the university sector to the shared document adapter",
+        "does not create a `university_document` adapter",
+        "creates no new integration scope, connector, endpoint, "
+        "credential value, external http path, runtime permission, "
+        "or production approval",
+        "separately governed adapter-contract review covering data "
+        "classification",
         "student privacy",
         "retention",
         "document ownership",
         "customer acceptance criteria",
-        "dedicated documentation guardrail",
-        "changes no credential profile association",
-        "later profile-boundary change must be reviewed and tested "
-        "separately",
+        "dedicated tests",
+        "r2b applies the separately reviewed profile-boundary change",
     )
     for marker in expected_markers:
         assert marker in text
+
 
 def test_runtime_connector_registry_is_populated_and_immutable() -> None:
     expected_connectors = {

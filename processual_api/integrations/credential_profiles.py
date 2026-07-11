@@ -346,10 +346,7 @@ CREDENTIAL_PROFILES: tuple[CredentialProfile, ...] = (
             "Readiness profile for university student-information integration "
             "planning with least-privilege and sandbox-first controls."
         ),
-        adapter_contract_ids=(
-            UNIVERSITY_STUDENT_CONTRACT_ID,
-            DOCUMENT_CONTRACT_ID,
-        ),
+        adapter_contract_ids=(UNIVERSITY_STUDENT_CONTRACT_ID,),
         supported_auth_methods=(
             "api_key_reference",
             "oauth_client_reference",

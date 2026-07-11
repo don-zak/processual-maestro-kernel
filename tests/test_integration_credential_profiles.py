@@ -120,6 +120,13 @@ def test_all_adapter_contracts_are_covered_by_a_credential_profile() -> None:
     assert adapter_contract_ids.issubset(referenced_contract_ids)
 
 
+def test_university_student_profile_excludes_shared_document_contract() -> None:
+    profile = get_credential_profile("university_student_api_reference")
+
+    assert profile.adapter_contract_ids == ("university_student",)
+    assert "document" not in profile.adapter_contract_ids
+
+
 def test_credential_profile_validation_has_no_issues() -> None:
     assert validate_credential_profiles() == ()
 

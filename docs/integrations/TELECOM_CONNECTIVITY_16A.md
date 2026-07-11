@@ -173,19 +173,17 @@ Their capability distribution is:
 
 No new integration scope is created by R1.
 
-### 15.3 University document alignment
+### 15.3 University document boundary
 
-The `university_student_api_reference` credential profile references both `university_student` and `document`.
+EXTERNAL-CONNECTIVITY-16A-R2B narrows `university_student_api_reference` to the `university_student` adapter contract only.
 
-The current `document` adapter contract does not yet declare the university sector.
+The profile no longer references the shared `document` adapter contract. The current `document` adapter contract still does not declare the university sector, and `enterprise_document_reference` is not approved for university document traffic.
 
-Therefore, shared sector alignment is pending. R1 does not claim that `enterprise_document_reference` is approved for university document traffic.
+R2B does not add the university sector to the shared document adapter, does not create a `university_document` adapter, and creates no new integration scope, connector, endpoint, credential value, external HTTP path, runtime permission, or production approval.
 
-Adding university to the shared document adapter requires a separate adapter-contract review covering data classification, student privacy, retention, document ownership, and customer acceptance criteria.
+Any future university document support requires a separately governed adapter-contract review covering data classification, student privacy, retention, document ownership, customer acceptance criteria, and dedicated tests.
 
-EXTERNAL-CONNECTIVITY-16A-R2A stabilizes this university/document boundary as a dedicated documentation guardrail.
-
-R2A changes no credential profile association, adapter sector, integration scope, runtime contract, or connector registry entry. A later profile-boundary change must be reviewed and tested separately.
+EXTERNAL-CONNECTIVITY-16A-R2A established the dedicated documentation guardrail. R2B applies the separately reviewed profile-boundary change.
 
 ### 15.4 R1 safety posture
 
