@@ -268,3 +268,34 @@ __all__ = [
     "ConnectorMockDispatcher",
 ]
 # EXTERNAL-CONNECTIVITY-16D exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R1 exports begin
+from processual_api.integrations.sandbox_pilot import (
+    CONNECTOR_SANDBOX_PILOT_CONTRACTS,
+    SUPPORTED_CONNECTOR_SANDBOX_PILOT_CONTRACTS,
+    ConnectorSandboxPilotAssessment,
+    ConnectorSandboxPilotContract,
+    ConnectorSandboxPilotStatus,
+    assess_connector_sandbox_pilot,
+    get_connector_sandbox_pilot_contract,
+    list_connector_sandbox_pilot_contracts,
+    normalize_connector_sandbox_pilot_id,
+    validate_connector_sandbox_pilot_contracts,
+    validate_connector_sandbox_pilot_registry,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "CONNECTOR_SANDBOX_PILOT_CONTRACTS",
+    "SUPPORTED_CONNECTOR_SANDBOX_PILOT_CONTRACTS",
+    "ConnectorSandboxPilotAssessment",
+    "ConnectorSandboxPilotContract",
+    "ConnectorSandboxPilotStatus",
+    "assess_connector_sandbox_pilot",
+    "get_connector_sandbox_pilot_contract",
+    "list_connector_sandbox_pilot_contracts",
+    "normalize_connector_sandbox_pilot_id",
+    "validate_connector_sandbox_pilot_contracts",
+    "validate_connector_sandbox_pilot_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R1 exports end
