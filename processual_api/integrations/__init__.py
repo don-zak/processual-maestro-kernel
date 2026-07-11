@@ -299,3 +299,36 @@ __all__ = [
     "validate_connector_sandbox_pilot_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R1 exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R2 exports begin
+from processual_api.integrations.secret_manager_contracts import (
+    CONNECTOR_SECRET_MANAGER_CONTRACTS,
+    SUPPORTED_CONNECTOR_SECRET_MANAGER_CONTRACTS,
+    ConnectorSecretManagerAssessment,
+    ConnectorSecretManagerContract,
+    ConnectorSecretManagerMode,
+    ConnectorSecretManagerStatus,
+    assess_connector_secret_manager_contract,
+    get_connector_secret_manager_contract,
+    list_connector_secret_manager_contracts,
+    normalize_connector_secret_manager_contract_id,
+    validate_connector_secret_manager_contracts,
+    validate_connector_secret_manager_registry,
+)
+
+__all__ = [
+    *list(globals().get("__all__", ())),
+    "CONNECTOR_SECRET_MANAGER_CONTRACTS",
+    "SUPPORTED_CONNECTOR_SECRET_MANAGER_CONTRACTS",
+    "ConnectorSecretManagerAssessment",
+    "ConnectorSecretManagerContract",
+    "ConnectorSecretManagerMode",
+    "ConnectorSecretManagerStatus",
+    "assess_connector_secret_manager_contract",
+    "get_connector_secret_manager_contract",
+    "list_connector_secret_manager_contracts",
+    "normalize_connector_secret_manager_contract_id",
+    "validate_connector_secret_manager_contracts",
+    "validate_connector_secret_manager_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R2 exports end
