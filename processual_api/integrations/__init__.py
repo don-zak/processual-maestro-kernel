@@ -459,3 +459,45 @@ __all__ = [
     "validate_connector_sandbox_read_workflow_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R5 exports end
+
+# EXTERNAL-CONNECTIVITY-16E-R6 exports begin
+from .sandbox_read_faults import (
+    CONNECTOR_SANDBOX_READ_FAULT_PROFILES,
+    SUPPORTED_CONNECTOR_SANDBOX_READ_FAULT_PROFILES,
+    ConnectorDeterministicSandboxReadFaultSimulator,
+    ConnectorSandboxReadFaultAssessment,
+    ConnectorSandboxReadFaultKind,
+    ConnectorSandboxReadFaultProfile,
+    ConnectorSandboxReadFaultProfileStatus,
+    ConnectorSandboxReadFaultRequest,
+    ConnectorSandboxReadFaultResult,
+    ConnectorSandboxReadFaultResultStatus,
+    assess_connector_sandbox_read_fault_profile,
+    execute_connector_sandbox_read_fault,
+    get_connector_sandbox_read_fault_profile,
+    list_connector_sandbox_read_fault_profiles,
+    normalize_connector_sandbox_read_fault_profile_id,
+    validate_connector_sandbox_read_fault_profiles,
+    validate_connector_sandbox_read_fault_registry,
+)
+
+__all__ += [
+    "CONNECTOR_SANDBOX_READ_FAULT_PROFILES",
+    "SUPPORTED_CONNECTOR_SANDBOX_READ_FAULT_PROFILES",
+    "ConnectorDeterministicSandboxReadFaultSimulator",
+    "ConnectorSandboxReadFaultAssessment",
+    "ConnectorSandboxReadFaultKind",
+    "ConnectorSandboxReadFaultProfile",
+    "ConnectorSandboxReadFaultProfileStatus",
+    "ConnectorSandboxReadFaultRequest",
+    "ConnectorSandboxReadFaultResult",
+    "ConnectorSandboxReadFaultResultStatus",
+    "assess_connector_sandbox_read_fault_profile",
+    "execute_connector_sandbox_read_fault",
+    "get_connector_sandbox_read_fault_profile",
+    "list_connector_sandbox_read_fault_profiles",
+    "normalize_connector_sandbox_read_fault_profile_id",
+    "validate_connector_sandbox_read_fault_profiles",
+    "validate_connector_sandbox_read_fault_registry",
+]
+# EXTERNAL-CONNECTIVITY-16E-R6 exports end
