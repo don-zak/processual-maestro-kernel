@@ -679,3 +679,18 @@ __all__ += [
     "validate_training_connection_request_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16G-R1 exports end
+# EXTERNAL-CONNECTIVITY-16G-R2 exports begin
+from .training_customer_input_review import (  # noqa: E402
+    TrainingCustomerInputReview,
+    TrainingCustomerInputReviewStatus,
+    TrainingCustomerInputSubmission,
+    review_training_customer_input_submission,
+)
+
+__all__ += [
+    "TrainingCustomerInputReview",
+    "TrainingCustomerInputReviewStatus",
+    "TrainingCustomerInputSubmission",
+    "review_training_customer_input_submission",
+]
+# EXTERNAL-CONNECTIVITY-16G-R2 exports end
