@@ -707,3 +707,14 @@ __all__ += [
     "run_training_activation_lifecycle",
 ]
 # EXTERNAL-CONNECTIVITY-16G-R3 exports end
+# EXTERNAL-CONNECTIVITY-16G-R4 exports begin
+from .training_secret_provider_binding import (  # noqa: E402
+    TrainingSecretProviderBindingSimulation,
+    simulate_training_secret_provider_binding,
+)
+
+__all__ += [
+    "TrainingSecretProviderBindingSimulation",
+    "simulate_training_secret_provider_binding",
+]
+# EXTERNAL-CONNECTIVITY-16G-R4 exports end

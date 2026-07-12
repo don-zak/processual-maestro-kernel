@@ -457,3 +457,114 @@ def issue_activation_permission_key(
         "task": _sanitize_task(task),
         "guardrails": dict(GUARDRAILS),
     }
+
+def _parse_activation_permission_expiry(
+    value: Any,
+) -> datetime | None:
+    cleaned = _clean_string(value)
+    if not cleaned:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(
+            cleaned.replace("Z", "+00:00")
+        )
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        return None
+
+    return parsed.astimezone(UTC)
+
+
+def validate_activation_permission_key(
+    task_id: str,
+    raw_key: str,
+) -> dict[str, Any]:
+    """Validate an issued key against persisted state without side effects."""
+
+    store = _load_store()
+    task = _find_task(store, task_id)
+
+    if not task:
+        return {
+            "ok": False,
+            "error": "task_not_found",
+            "task_id": task_id,
+            "activation_permission_key_valid": False,
+            "guardrails": dict(GUARDRAILS),
+        }
+
+    safe_task = _sanitize_task(task)
+
+    if (
+        task.get("status") != "activation_permission_issued"
+        or task.get("status") in DISABLED_STATUSES
+        or task.get("integration_key_revoked") is True
+    ):
+        return {
+            "ok": False,
+            "error": "activation_permission_key_inactive",
+            "activation_permission_key_valid": False,
+            "task": safe_task,
+            "guardrails": dict(GUARDRAILS),
+        }
+
+    stored_key_id = _clean_string(
+        task.get("activation_permission_key_id")
+    )
+    stored_key_hash = _clean_string(
+        task.get("activation_permission_key_hash")
+    )
+    expires_at = _parse_activation_permission_expiry(
+        task.get("activation_permission_expires_at")
+    )
+
+    if not stored_key_id or not stored_key_hash or expires_at is None:
+        return {
+            "ok": False,
+            "error": "activation_permission_key_metadata_invalid",
+            "activation_permission_key_valid": False,
+            "task": safe_task,
+            "guardrails": dict(GUARDRAILS),
+        }
+
+    if expires_at <= _utcnow():
+        return {
+            "ok": False,
+            "error": "activation_permission_key_expired",
+            "activation_permission_key_valid": False,
+            "task": safe_task,
+            "guardrails": dict(GUARDRAILS),
+        }
+
+    if not isinstance(raw_key, str):
+        raw_key = ""
+
+    provided_key_id, separator, provided_secret = raw_key.partition(".")
+    provided_key_hash = _hash_key(raw_key) if raw_key else ""
+
+    key_matches = (
+        bool(separator)
+        and bool(provided_secret)
+        and secrets.compare_digest(provided_key_id, stored_key_id)
+        and secrets.compare_digest(provided_key_hash, stored_key_hash)
+    )
+
+    if not key_matches:
+        return {
+            "ok": False,
+            "error": "invalid_activation_permission_key",
+            "activation_permission_key_valid": False,
+            "task": safe_task,
+            "guardrails": dict(GUARDRAILS),
+        }
+
+    return {
+        "ok": True,
+        "package_version": "integration-pilot-controls-16g-r4",
+        "activation_permission_key_valid": True,
+        "task": safe_task,
+        "guardrails": dict(GUARDRAILS),
+    }
