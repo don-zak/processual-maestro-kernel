@@ -607,3 +607,36 @@ __all__ += [
     "validate_secret_provider_binding_readiness_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16F-R2A exports end
+# EXTERNAL-CONNECTIVITY-16F-R3A exports begin
+from .outbound_allowlist_tls_readiness import (  # noqa: E402
+    OUTBOUND_ALLOWLIST_TLS_READINESS_CONTRACTS,
+    SUPPORTED_OUTBOUND_ALLOWLIST_TLS_READINESS,
+    OutboundAllowlistTlsReadinessAssessment,
+    OutboundAllowlistTlsReadinessContract,
+    OutboundAllowlistTlsReadinessStatus,
+    OutboundAllowlistTlsReferenceSubmission,
+    TlsMinimumVersion,
+    assess_outbound_allowlist_tls_readiness,
+    get_outbound_allowlist_tls_readiness_contract,
+    list_outbound_allowlist_tls_readiness_contracts,
+    normalize_outbound_allowlist_tls_readiness_id,
+    validate_outbound_allowlist_tls_readiness_contracts,
+    validate_outbound_allowlist_tls_readiness_registry,
+)
+
+__all__ += [
+    "OUTBOUND_ALLOWLIST_TLS_READINESS_CONTRACTS",
+    "SUPPORTED_OUTBOUND_ALLOWLIST_TLS_READINESS",
+    "OutboundAllowlistTlsReadinessAssessment",
+    "OutboundAllowlistTlsReadinessContract",
+    "OutboundAllowlistTlsReadinessStatus",
+    "OutboundAllowlistTlsReferenceSubmission",
+    "TlsMinimumVersion",
+    "assess_outbound_allowlist_tls_readiness",
+    "get_outbound_allowlist_tls_readiness_contract",
+    "list_outbound_allowlist_tls_readiness_contracts",
+    "normalize_outbound_allowlist_tls_readiness_id",
+    "validate_outbound_allowlist_tls_readiness_contracts",
+    "validate_outbound_allowlist_tls_readiness_registry",
+]
+# EXTERNAL-CONNECTIVITY-16F-R3A exports end
