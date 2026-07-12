@@ -573,3 +573,37 @@ __all__ += [
     "validate_operator_sandbox_intake_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16F-R1 exports end
+
+# EXTERNAL-CONNECTIVITY-16F-R2A exports begin
+from .secret_provider_binding_readiness import (  # noqa: E402
+    SECRET_PROVIDER_BINDING_READINESS_CONTRACTS,
+    SUPPORTED_SECRET_PROVIDER_BINDING_READINESS,
+    SecretProviderBindingReadinessAssessment,
+    SecretProviderBindingReadinessContract,
+    SecretProviderBindingReadinessStatus,
+    SecretProviderKind,
+    SecretProviderReferenceSubmission,
+    assess_secret_provider_binding_readiness,
+    get_secret_provider_binding_readiness_contract,
+    list_secret_provider_binding_readiness_contracts,
+    normalize_secret_provider_binding_readiness_id,
+    validate_secret_provider_binding_readiness_contracts,
+    validate_secret_provider_binding_readiness_registry,
+)
+
+__all__ += [
+    "SECRET_PROVIDER_BINDING_READINESS_CONTRACTS",
+    "SUPPORTED_SECRET_PROVIDER_BINDING_READINESS",
+    "SecretProviderBindingReadinessAssessment",
+    "SecretProviderBindingReadinessContract",
+    "SecretProviderBindingReadinessStatus",
+    "SecretProviderKind",
+    "SecretProviderReferenceSubmission",
+    "assess_secret_provider_binding_readiness",
+    "get_secret_provider_binding_readiness_contract",
+    "list_secret_provider_binding_readiness_contracts",
+    "normalize_secret_provider_binding_readiness_id",
+    "validate_secret_provider_binding_readiness_contracts",
+    "validate_secret_provider_binding_readiness_registry",
+]
+# EXTERNAL-CONNECTIVITY-16F-R2A exports end
