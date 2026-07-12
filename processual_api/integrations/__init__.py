@@ -718,3 +718,14 @@ __all__ += [
     "simulate_training_secret_provider_binding",
 ]
 # EXTERNAL-CONNECTIVITY-16G-R4 exports end
+# EXTERNAL-CONNECTIVITY-16G-R5 exports begin
+from .training_outbound_tls_approval import (  # noqa: E402
+    TrainingOutboundTlsApprovalSimulation,
+    simulate_training_outbound_tls_approval,
+)
+
+__all__ += [
+    "TrainingOutboundTlsApprovalSimulation",
+    "simulate_training_outbound_tls_approval",
+]
+# EXTERNAL-CONNECTIVITY-16G-R5 exports end
