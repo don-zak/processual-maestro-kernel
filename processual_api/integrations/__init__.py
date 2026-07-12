@@ -541,3 +541,35 @@ __all__ += [
     "validate_connector_sandbox_evidence_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16E-R7 exports end
+
+# EXTERNAL-CONNECTIVITY-16F-R1 exports begin
+from .operator_sandbox_intake import (  # noqa: E402
+    OPERATOR_SANDBOX_INTAKE_CONTRACTS,
+    SUPPORTED_OPERATOR_SANDBOX_INTAKES,
+    OperatorSandboxIntakeAssessment,
+    OperatorSandboxIntakeContract,
+    OperatorSandboxIntakeStatus,
+    OperatorSandboxReferenceSubmission,
+    assess_operator_sandbox_intake,
+    get_operator_sandbox_intake_contract,
+    list_operator_sandbox_intake_contracts,
+    normalize_operator_sandbox_intake_id,
+    validate_operator_sandbox_intake_contracts,
+    validate_operator_sandbox_intake_registry,
+)
+
+__all__ += [
+    "OPERATOR_SANDBOX_INTAKE_CONTRACTS",
+    "SUPPORTED_OPERATOR_SANDBOX_INTAKES",
+    "OperatorSandboxIntakeAssessment",
+    "OperatorSandboxIntakeContract",
+    "OperatorSandboxIntakeStatus",
+    "OperatorSandboxReferenceSubmission",
+    "assess_operator_sandbox_intake",
+    "get_operator_sandbox_intake_contract",
+    "list_operator_sandbox_intake_contracts",
+    "normalize_operator_sandbox_intake_id",
+    "validate_operator_sandbox_intake_contracts",
+    "validate_operator_sandbox_intake_registry",
+]
+# EXTERNAL-CONNECTIVITY-16F-R1 exports end
