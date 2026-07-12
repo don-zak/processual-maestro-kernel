@@ -640,3 +640,42 @@ __all__ += [
     "validate_outbound_allowlist_tls_readiness_registry",
 ]
 # EXTERNAL-CONNECTIVITY-16F-R3A exports end
+# EXTERNAL-CONNECTIVITY-16G-R1 exports begin
+from .training_connection_request import (  # noqa: E402
+    SUPPORTED_TRAINING_CONNECTION_REQUESTS,
+    TRAINING_CONNECTION_REQUEST_CONTRACTS,
+    TrainingConnectionInputDomain,
+    TrainingConnectionRequestAssessment,
+    TrainingConnectionRequestContract,
+    TrainingConnectionRequestStatus,
+    TrainingCustomerInputItem,
+    TrainingCustomerInputPackage,
+    assess_training_connection_request,
+    build_training_customer_input_package,
+    get_training_connection_request_contract,
+    list_training_connection_request_contracts,
+    normalize_training_connection_request_id,
+    render_training_customer_input_request,
+    validate_training_connection_request_contracts,
+    validate_training_connection_request_registry,
+)
+
+__all__ += [
+    "SUPPORTED_TRAINING_CONNECTION_REQUESTS",
+    "TRAINING_CONNECTION_REQUEST_CONTRACTS",
+    "TrainingConnectionInputDomain",
+    "TrainingConnectionRequestAssessment",
+    "TrainingConnectionRequestContract",
+    "TrainingConnectionRequestStatus",
+    "TrainingCustomerInputItem",
+    "TrainingCustomerInputPackage",
+    "assess_training_connection_request",
+    "build_training_customer_input_package",
+    "get_training_connection_request_contract",
+    "list_training_connection_request_contracts",
+    "normalize_training_connection_request_id",
+    "render_training_customer_input_request",
+    "validate_training_connection_request_contracts",
+    "validate_training_connection_request_registry",
+]
+# EXTERNAL-CONNECTIVITY-16G-R1 exports end
