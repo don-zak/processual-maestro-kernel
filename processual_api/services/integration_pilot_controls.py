@@ -398,6 +398,20 @@ def issue_activation_permission_key(
             "guardrails": dict(GUARDRAILS),
         }
 
+    activation_permission_already_issued = (
+        bool(task.get("activation_permission_key_id"))
+        or bool(task.get("activation_permission_key_hash"))
+        or bool(task.get("activation_permission_issued_at"))
+        or task.get("status") == "activation_permission_issued"
+    )
+    if activation_permission_already_issued:
+        return {
+            "ok": False,
+            "error": "activation_permission_key_already_issued",
+            "task": _sanitize_task(task),
+            "guardrails": dict(GUARDRAILS),
+        }
+
     now = _utcnow()
     expires_at = _clean_string(payload.get("expires_at"))
     if not expires_at:

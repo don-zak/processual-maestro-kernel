@@ -694,3 +694,16 @@ __all__ += [
     "review_training_customer_input_submission",
 ]
 # EXTERNAL-CONNECTIVITY-16G-R2 exports end
+# EXTERNAL-CONNECTIVITY-16G-R3 exports begin
+from .training_activation_lifecycle import (  # noqa: E402
+    TrainingActivationExercise,
+    TrainingActivationIsolation,
+    run_training_activation_lifecycle,
+)
+
+__all__ += [
+    "TrainingActivationExercise",
+    "TrainingActivationIsolation",
+    "run_training_activation_lifecycle",
+]
+# EXTERNAL-CONNECTIVITY-16G-R3 exports end
