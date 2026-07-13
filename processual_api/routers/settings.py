@@ -1153,7 +1153,10 @@ def _admin_request_status_actor(current_user: dict) -> str:
 
 
 
-def _admin_audit_path():
+def _admin_audit_path() -> Path:
+    configured = os.environ.get("PMK_ADMIN_AUDIT_LOG_PATH", "").strip()
+    if configured:
+        return Path(configured)
     return _DATA_DIR / "admin_audit.jsonl"
 
 
@@ -2925,6 +2928,9 @@ class SupervisorSessionKeyRevokeRequest(BaseModel):
 
 
 def _supervisor_session_key_store_path() -> Path:
+    configured = os.environ.get("PMK_SUPERVISOR_SESSION_KEYS_PATH", "").strip()
+    if configured:
+        return Path(configured)
     return _DATA_DIR / "supervisor_session_keys.json"
 
 

@@ -277,6 +277,10 @@ def _settings_route_entry() -> dict:
 def _seed_settings_route_request(tmp_path, monkeypatch) -> None:
     from processual_api.routers import settings as settings_routes
 
+    monkeypatch.setenv(
+        "PMK_ADMIN_AUDIT_LOG_PATH",
+        str(tmp_path / "admin_audit.jsonl"),
+    )
     monkeypatch.setattr(settings_routes, "_DATA_DIR", tmp_path)
     settings_routes._save_raw(
         "client-header",

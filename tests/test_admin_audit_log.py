@@ -173,6 +173,10 @@ def _write_audit_route_file(tmp_path):
 def _patch_audit_route_files(monkeypatch, path) -> None:
     from processual_api.routers import settings as settings_routes
 
+    monkeypatch.setenv(
+        "PMK_ADMIN_AUDIT_LOG_PATH",
+        str(path.parent / "admin_audit.jsonl"),
+    )
     monkeypatch.setattr(settings_routes, "_DATA_DIR", path.parent)
     monkeypatch.setattr(settings_routes, "_admin_client_request_raw_files", lambda: [path])
 
