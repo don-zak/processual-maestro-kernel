@@ -10,6 +10,8 @@ from processual_api.integrations.external_connectivity_cases import (
     ExternalConnectivityCase,
     ExternalConnectivityCaseState,
     ExternalConnectivityReadinessAssessment,
+    SupervisorReadinessAttestation,
+    SupervisorReadinessDecision,
 )
 
 
@@ -117,6 +119,59 @@ class ExternalConnectivityReadinessAssessmentResponse(
     production_allowed: Literal[False] = False
 
 
+class ExternalConnectivityReadinessReviewRequest(
+    _FrozenForbidModel
+):
+    expected_revision: int = Field(ge=1)
+
+
+class ExternalConnectivitySupervisorDecisionRequest(
+    _FrozenForbidModel
+):
+    expected_revision: int = Field(ge=1)
+    expected_package_fingerprint: str = Field(
+        pattern=r"^[0-9a-f]{64}$"
+    )
+    decision: SupervisorReadinessDecision
+    reason_code: str = Field(min_length=1, max_length=240)
+    expires_at: str = Field(min_length=1, max_length=80)
+
+
+class SupervisorReadinessAttestationResponse(
+    _FrozenForbidModel
+):
+    attestation_id: str
+    case_id: str
+    readiness_assessment_id: str
+    customer_package_fingerprint: str = Field(
+        pattern=r"^[0-9a-f]{64}$"
+    )
+    decision: SupervisorReadinessDecision
+    supervisor_actor: str
+    reason_code: str
+    issued_at: str
+    expires_at: str
+    production_allowed: Literal[False] = False
+    qualification_key_issuance_allowed: Literal[False] = False
+    sandbox_activation_allowed: Literal[False] = False
+    external_http_allowed: Literal[False] = False
+    secret_resolution_allowed: Literal[False] = False
+
+
+class ExternalConnectivityReviewResultResponse(
+    _FrozenForbidModel
+):
+    case: ExternalConnectivityCaseResponse
+    assessment: ExternalConnectivityReadinessAssessmentResponse
+
+
+class ExternalConnectivitySupervisorDecisionResultResponse(
+    _FrozenForbidModel
+):
+    case: ExternalConnectivityCaseResponse
+    attestation: SupervisorReadinessAttestationResponse
+
+
 def customer_reference_package_from_submission(
     *,
     case_id: str,
@@ -173,12 +228,34 @@ def external_connectivity_assessment_response_from_contract(
     )
 
 
+def supervisor_readiness_attestation_response_from_contract(
+    attestation: SupervisorReadinessAttestation,
+) -> SupervisorReadinessAttestationResponse:
+    if not isinstance(
+        attestation,
+        SupervisorReadinessAttestation,
+    ):
+        raise TypeError(
+            "supervisor_readiness_attestation_required"
+        )
+
+    return SupervisorReadinessAttestationResponse.model_validate(
+        asdict(attestation)
+    )
+
+
 __all__ = [
     "CustomerReferencePackageSubmissionRequest",
     "ExternalConnectivityCaseCreateRequest",
     "ExternalConnectivityCaseResponse",
     "ExternalConnectivityReadinessAssessmentResponse",
+    "ExternalConnectivityReadinessReviewRequest",
+    "ExternalConnectivityReviewResultResponse",
+    "ExternalConnectivitySupervisorDecisionRequest",
+    "ExternalConnectivitySupervisorDecisionResultResponse",
+    "SupervisorReadinessAttestationResponse",
     "customer_reference_package_from_submission",
     "external_connectivity_assessment_response_from_contract",
     "external_connectivity_case_response_from_contract",
+    "supervisor_readiness_attestation_response_from_contract",
 ]

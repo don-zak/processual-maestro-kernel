@@ -6,6 +6,7 @@ import math
 import re
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final
@@ -52,6 +53,12 @@ class ExternalConnectivityAuditEventType(StrEnum):
     CASE_CLOSED = "case_closed"
     TRANSITION_REJECTED = "transition_rejected"
     PROHIBITED_FIELD_REJECTED = "prohibited_field_rejected"
+
+
+class SupervisorReadinessDecision(StrEnum):
+    APPROVED = "approved"
+    REMEDIATION_REQUIRED = "remediation_required"
+    REJECTED = "rejected"
 
 
 PROHIBITED_CUSTOMER_FIELD_NAMES: Final[frozenset[str]] = frozenset(
@@ -189,6 +196,27 @@ def _require_sha256_or_empty(field_name: str, value: str) -> None:
 def _require_default_deny(field_name: str, value: bool) -> None:
     if value is not False:
         raise ValueError(f"{field_name}_must_be_false")
+
+
+def _require_aware_datetime(
+    field_name: str,
+    value: str,
+) -> datetime:
+    _require_text(field_name, value)
+
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{field_name}_must_be_iso_datetime"
+        ) from exc
+
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(
+            f"{field_name}_must_be_timezone_aware"
+        )
+
+    return parsed
 
 
 def _normalize_customer_field_name(value: object) -> str:
@@ -475,6 +503,146 @@ class ExternalConnectivityCase:
             _require_default_deny(field_name, value)
 
 
+@dataclass(frozen=True, slots=True)
+class SupervisorReadinessAttestation:
+    attestation_id: str
+    case_id: str
+    readiness_assessment_id: str
+    customer_package_fingerprint: str
+    decision: SupervisorReadinessDecision
+    supervisor_actor: str
+    reason_code: str
+    issued_at: str
+    expires_at: str
+    production_allowed: bool = False
+    qualification_key_issuance_allowed: bool = False
+    sandbox_activation_allowed: bool = False
+    external_http_allowed: bool = False
+    secret_resolution_allowed: bool = False
+
+    def __post_init__(self) -> None:
+        _require_identifier(
+            "attestation_id",
+            self.attestation_id,
+        )
+        _require_identifier("case_id", self.case_id)
+        _require_identifier(
+            "readiness_assessment_id",
+            self.readiness_assessment_id,
+        )
+        _require_sha256_or_empty(
+            "customer_package_fingerprint",
+            self.customer_package_fingerprint,
+        )
+
+        if not self.customer_package_fingerprint:
+            raise ValueError(
+                "customer_package_fingerprint_required"
+            )
+
+        if not isinstance(
+            self.decision,
+            SupervisorReadinessDecision,
+        ):
+            raise ValueError(
+                "supervisor_readiness_decision_invalid"
+            )
+
+        _require_identifier(
+            "supervisor_actor",
+            self.supervisor_actor,
+        )
+        _require_identifier(
+            "reason_code",
+            self.reason_code,
+        )
+
+        issued = _require_aware_datetime(
+            "issued_at",
+            self.issued_at,
+        )
+        expires = _require_aware_datetime(
+            "expires_at",
+            self.expires_at,
+        )
+
+        if expires <= issued:
+            raise ValueError(
+                "expires_at_must_follow_issued_at"
+            )
+
+        default_deny_fields = (
+            ("production_allowed", self.production_allowed),
+            (
+                "qualification_key_issuance_allowed",
+                self.qualification_key_issuance_allowed,
+            ),
+            (
+                "sandbox_activation_allowed",
+                self.sandbox_activation_allowed,
+            ),
+            (
+                "external_http_allowed",
+                self.external_http_allowed,
+            ),
+            (
+                "secret_resolution_allowed",
+                self.secret_resolution_allowed,
+            ),
+        )
+
+        for field_name, value in default_deny_fields:
+            _require_default_deny(field_name, value)
+
+
+def is_supervisor_readiness_attestation_current(
+    attestation: SupervisorReadinessAttestation,
+    case: ExternalConnectivityCase,
+    *,
+    checked_at: str,
+) -> bool:
+    if not isinstance(
+        attestation,
+        SupervisorReadinessAttestation,
+    ):
+        raise TypeError(
+            "supervisor_readiness_attestation_required"
+        )
+
+    if not isinstance(case, ExternalConnectivityCase):
+        raise TypeError("external_connectivity_case_required")
+
+    checked = _require_aware_datetime(
+        "checked_at",
+        checked_at,
+    )
+    issued = _require_aware_datetime(
+        "issued_at",
+        attestation.issued_at,
+    )
+    expires = _require_aware_datetime(
+        "expires_at",
+        attestation.expires_at,
+    )
+
+    return (
+        attestation.decision
+        is SupervisorReadinessDecision.APPROVED
+        and case.state
+        is ExternalConnectivityCaseState.READINESS_APPROVED
+        and attestation.case_id == case.case_id
+        and (
+            attestation.readiness_assessment_id
+            == case.readiness_assessment_id
+        )
+        and (
+            attestation.customer_package_fingerprint
+            == case.customer_package_fingerprint
+        )
+        and issued <= checked < expires
+    )
+
+
 def _customer_reference_package_payload(
     package: CustomerReferencePackage,
 ) -> dict[str, Any]:
@@ -590,4 +758,7 @@ __all__ = [
     "customer_reference_package_fingerprint",
     "find_prohibited_customer_fields",
     "is_external_connectivity_transition_allowed",
+    "is_supervisor_readiness_attestation_current",
+    "SupervisorReadinessAttestation",
+    "SupervisorReadinessDecision",
 ]

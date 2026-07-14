@@ -6,6 +6,11 @@ from .external_connectivity import (
     ExternalConnectivityCaseCreateRequest,
     ExternalConnectivityCaseResponse,
     ExternalConnectivityReadinessAssessmentResponse,
+    ExternalConnectivityReadinessReviewRequest,
+    ExternalConnectivityReviewResultResponse,
+    ExternalConnectivitySupervisorDecisionRequest,
+    ExternalConnectivitySupervisorDecisionResultResponse,
+    SupervisorReadinessAttestationResponse,
 )
 from .governance import FateReport, GovernanceReport
 from .workflows import WorkflowCreateRequest, WorkflowDetailResponse, WorkflowResponse
@@ -23,4 +28,9 @@ __all__ = [
     "ExternalConnectivityCaseCreateRequest",
     "ExternalConnectivityCaseResponse",
     "ExternalConnectivityReadinessAssessmentResponse",
+    "ExternalConnectivityReadinessReviewRequest",
+    "ExternalConnectivityReviewResultResponse",
+    "ExternalConnectivitySupervisorDecisionRequest",
+    "ExternalConnectivitySupervisorDecisionResultResponse",
+    "SupervisorReadinessAttestationResponse",
 ]

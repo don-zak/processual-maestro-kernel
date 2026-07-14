@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import Body, FastAPI
 from fastapi import HTTPException as PMK13AHTTPException
@@ -9,8 +11,33 @@ from fastapi import Request as PMK13ARequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
+from processual_api.integrations.external_connectivity_cases import (
+    SupervisorReadinessDecision,
+    find_prohibited_customer_fields,
+)
+from processual_api.schemas.external_connectivity import (
+    CustomerReferencePackageSubmissionRequest,
+    ExternalConnectivityCaseCreateRequest,
+    ExternalConnectivityCaseResponse,
+    ExternalConnectivityReadinessReviewRequest,
+    ExternalConnectivityReviewResultResponse,
+    ExternalConnectivitySupervisorDecisionRequest,
+    ExternalConnectivitySupervisorDecisionResultResponse,
+    external_connectivity_assessment_response_from_contract,
+    external_connectivity_case_response_from_contract,
+    supervisor_readiness_attestation_response_from_contract,
+)
+from processual_api.services.external_connectivity_intake import (
+    ExternalConnectivityIntakeError,
+    create_external_connectivity_case,
+    get_external_connectivity_case,
+    list_external_connectivity_cases,
+    record_external_connectivity_supervisor_decision,
+    review_external_connectivity_reference_package,
+    submit_external_connectivity_reference_package,
+)
 from processual_api.services.integration_claim_keys import (
     GUARDRAILS as PMK13A_CLAIM_GUARDRAILS,
 )
@@ -918,3 +945,361 @@ async def admin_update_operator_pilot_handoff_progress_14e(
 
 
 # PMK OPERATOR PILOT HANDOFF PROGRESS 14E END
+# BEGIN EXTERNAL_CONNECTIVITY_R9_ROUTES
+
+_PMK_R9_BASE_PATH = "/settings/admin/external-connectivity/cases"
+_PMK_R9_ALLOWED_SUPERVISOR_SCOPES = {
+    "admin:clients:review",
+    "admin:clients:status_decide",
+    "admin:integration_readiness:review",
+    "admin:integration_readiness:write",
+}
+
+
+def _pmk_r9_now() -> str:
+    return (
+        datetime.now(UTC)
+        .replace(microsecond=0)
+        .isoformat()
+    )
+
+
+def _pmk_r9_guardrails() -> dict[str, bool]:
+    return {
+        "production_allowed": False,
+        "runtime_connector_allowed": False,
+        "external_http_allowed": False,
+        "secret_resolution_allowed": False,
+        "automatic_activation_allowed": False,
+        "raw_secret_visible": False,
+        "qualification_key_issuance_allowed": False,
+        "sandbox_activation_allowed": False,
+    }
+
+
+def _pmk_r9_write_actor_or_denial(
+    request: PMK13ARequest,
+):
+    from starlette.responses import JSONResponse
+
+    from processual_api.services.supervisor_session_write_guard import (
+        SupervisorSessionWriteGuardError,
+        require_validated_supervisor_write_session,
+    )
+
+    try:
+        safe_session = require_validated_supervisor_write_session(
+            request,
+            _PMK_R9_ALLOWED_SUPERVISOR_SCOPES,
+            guard_name="external connectivity writes",
+        )
+    except SupervisorSessionWriteGuardError as exc:
+        return "", JSONResponse(
+            {
+                "error": exc.error,
+                "message": exc.detail,
+                "required_scopes": exc.required_scopes,
+                "supervisor_session_present": exc.session_present,
+                "supervisor_session_validated": (
+                    exc.session_validated
+                ),
+                "session_key_id": exc.session_key_id,
+                "provided_scopes": exc.provided_scopes,
+                **_pmk_r9_guardrails(),
+            },
+            status_code=403,
+        )
+
+    return str(safe_session["session_key_id"]), None
+
+
+def _pmk_r9_service_error_response(
+    exc: ExternalConnectivityIntakeError,
+):
+    from starlette.responses import JSONResponse
+
+    not_found = {
+        "external_connectivity_case_not_found",
+        "current_customer_package_not_found",
+        "current_readiness_assessment_not_found",
+    }
+    conflicts = {
+        "case_already_exists",
+        "customer_package_already_exists",
+        "case_revision_conflict",
+        "package_fingerprint_conflict",
+        "readiness_assessment_already_exists",
+        "supervisor_attestation_already_exists",
+    }
+
+    status_code = 422
+
+    if exc.code in not_found:
+        status_code = 404
+
+    if exc.code in conflicts:
+        status_code = 409
+
+    return JSONResponse(
+        {
+            "error": exc.code,
+            **_pmk_r9_guardrails(),
+        },
+        status_code=status_code,
+    )
+
+
+@app.get(
+    _PMK_R9_BASE_PATH,
+    response_model=list[ExternalConnectivityCaseResponse],
+)
+def pmk_r9_list_external_connectivity_cases():
+    return [
+        external_connectivity_case_response_from_contract(case)
+        for case in list_external_connectivity_cases()
+    ]
+
+
+@app.post(
+    _PMK_R9_BASE_PATH,
+    response_model=ExternalConnectivityCaseResponse,
+    status_code=201,
+)
+def pmk_r9_create_external_connectivity_case(
+    request: PMK13ARequest,
+    payload: ExternalConnectivityCaseCreateRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(
+        request
+    )
+
+    if denial is not None:
+        return denial
+
+    try:
+        case = create_external_connectivity_case(
+            payload,
+            case_id=f"eccase_{uuid4().hex}",
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
+        )
+    except ExternalConnectivityIntakeError as exc:
+        return _pmk_r9_service_error_response(exc)
+
+    return external_connectivity_case_response_from_contract(
+        case
+    )
+
+
+@app.get(
+    f"{_PMK_R9_BASE_PATH}/{{case_id}}",
+    response_model=ExternalConnectivityCaseResponse,
+)
+def pmk_r9_get_external_connectivity_case(
+    case_id: str,
+):
+    try:
+        case = get_external_connectivity_case(case_id)
+    except ExternalConnectivityIntakeError as exc:
+        return _pmk_r9_service_error_response(exc)
+
+    return external_connectivity_case_response_from_contract(
+        case
+    )
+
+
+@app.post(
+    f"{_PMK_R9_BASE_PATH}/{{case_id}}/reference-package",
+    response_model=ExternalConnectivityCaseResponse,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": (
+                        CustomerReferencePackageSubmissionRequest
+                        .model_json_schema()
+                    )
+                }
+            },
+        }
+    },
+)
+def pmk_r9_submit_reference_package(
+    case_id: str,
+    request: PMK13ARequest,
+    expected_revision: int,
+    payload: dict[str, object] = Body(...),
+):
+    from starlette.responses import JSONResponse
+
+    actor, denial = _pmk_r9_write_actor_or_denial(
+        request
+    )
+
+    if denial is not None:
+        return denial
+
+    prohibited = find_prohibited_customer_fields(
+        payload
+    )
+
+    if prohibited:
+        return JSONResponse(
+            {
+                "error": "prohibited_customer_fields_present",
+                "prohibited_field_count": len(prohibited),
+                **_pmk_r9_guardrails(),
+            },
+            status_code=422,
+        )
+
+    try:
+        validated_payload = (
+            CustomerReferencePackageSubmissionRequest
+            .model_validate(payload)
+        )
+    except ValidationError:
+        return JSONResponse(
+            {
+                "error": (
+                    "customer_reference_package_invalid"
+                ),
+                **_pmk_r9_guardrails(),
+            },
+            status_code=422,
+        )
+
+    try:
+        case = (
+            submit_external_connectivity_reference_package(
+                case_id,
+                validated_payload,
+                expected_revision=expected_revision,
+                actor=actor,
+                occurred_at=_pmk_r9_now(),
+            )
+        )
+    except ExternalConnectivityIntakeError as exc:
+        return _pmk_r9_service_error_response(exc)
+
+    return external_connectivity_case_response_from_contract(
+        case
+    )
+
+
+@app.post(
+    f"{_PMK_R9_BASE_PATH}/{{case_id}}/readiness-review",
+    response_model=ExternalConnectivityReviewResultResponse,
+)
+def pmk_r9_review_reference_package(
+    case_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivityReadinessReviewRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(
+        request
+    )
+
+    if denial is not None:
+        return denial
+
+    try:
+        assessment = (
+            review_external_connectivity_reference_package(
+                case_id,
+                assessment_id=(
+                    f"ecassessment_{uuid4().hex}"
+                ),
+                expected_revision=(
+                    payload.expected_revision
+                ),
+                actor=actor,
+                occurred_at=_pmk_r9_now(),
+            )
+        )
+        case = get_external_connectivity_case(case_id)
+    except ExternalConnectivityIntakeError as exc:
+        return _pmk_r9_service_error_response(exc)
+
+    return ExternalConnectivityReviewResultResponse(
+        case=(
+            external_connectivity_case_response_from_contract(
+                case
+            )
+        ),
+        assessment=(
+            external_connectivity_assessment_response_from_contract(
+                assessment
+            )
+        ),
+    )
+
+
+@app.post(
+    f"{_PMK_R9_BASE_PATH}/{{case_id}}/supervisor-decision",
+    response_model=(
+        ExternalConnectivitySupervisorDecisionResultResponse
+    ),
+)
+def pmk_r9_record_supervisor_decision(
+    case_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivitySupervisorDecisionRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(
+        request
+    )
+
+    if denial is not None:
+        return denial
+
+    try:
+        attestation = (
+            record_external_connectivity_supervisor_decision(
+                case_id,
+                decision=SupervisorReadinessDecision(
+                    payload.decision
+                ),
+                attestation_id=(
+                    f"ecattestation_{uuid4().hex}"
+                ),
+                expected_revision=(
+                    payload.expected_revision
+                ),
+                expected_package_fingerprint=(
+                    payload.expected_package_fingerprint
+                ),
+                actor=actor,
+                reason_code=payload.reason_code,
+                occurred_at=_pmk_r9_now(),
+                expires_at=payload.expires_at,
+            )
+        )
+        case = get_external_connectivity_case(case_id)
+    except ExternalConnectivityIntakeError as exc:
+        return _pmk_r9_service_error_response(exc)
+    except ValueError:
+        return _pmk_r9_service_error_response(
+            ExternalConnectivityIntakeError(
+                "supervisor_attestation_invalid"
+            )
+        )
+
+    return (
+        ExternalConnectivitySupervisorDecisionResultResponse(
+            case=(
+                external_connectivity_case_response_from_contract(
+                    case
+                )
+            ),
+            attestation=(
+                supervisor_readiness_attestation_response_from_contract(
+                    attestation
+                )
+            ),
+        )
+    )
+
+
+# END EXTERNAL_CONNECTIVITY_R9_ROUTES

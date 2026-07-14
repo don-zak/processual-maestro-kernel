@@ -754,3 +754,16 @@ __all__ += [
     "is_external_connectivity_transition_allowed",
 ]
 # EXTERNAL-CONNECTIVITY-R8 exports end
+# EXTERNAL-CONNECTIVITY-R9 exports begin
+from .external_connectivity_cases import (  # noqa: E402
+    SupervisorReadinessAttestation,
+    SupervisorReadinessDecision,
+    is_supervisor_readiness_attestation_current,
+)
+
+__all__ += [
+    "SupervisorReadinessAttestation",
+    "SupervisorReadinessDecision",
+    "is_supervisor_readiness_attestation_current",
+]
+# EXTERNAL-CONNECTIVITY-R9 exports end

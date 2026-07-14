@@ -12,6 +12,8 @@ from processual_api.integrations.external_connectivity_cases import (
     ExternalConnectivityCase,
     ExternalConnectivityCaseState,
     ExternalConnectivityReadinessAssessment,
+    SupervisorReadinessAttestation,
+    SupervisorReadinessDecision,
     customer_reference_package_fingerprint,
 )
 
@@ -37,6 +39,9 @@ class ExternalConnectivityCaseStoreSnapshot:
     readiness_assessments: tuple[
         ExternalConnectivityReadinessAssessment, ...
     ] = ()
+    supervisor_readiness_attestations: tuple[
+        SupervisorReadinessAttestation, ...
+    ] = ()
     schema_version: str = (
         EXTERNAL_CONNECTIVITY_CASE_STORE_SCHEMA_VERSION
     )
@@ -51,6 +56,13 @@ class ExternalConnectivityCaseStoreSnapshot:
         if not isinstance(self.readiness_assessments, tuple):
             raise ValueError(
                 "store_readiness_assessments_must_be_tuple"
+            )
+        if not isinstance(
+            self.supervisor_readiness_attestations,
+            tuple,
+        ):
+            raise ValueError(
+                "store_supervisor_attestations_must_be_tuple"
             )
         if (
             self.schema_version
@@ -126,6 +138,17 @@ def _validate_snapshot(
         ):
             raise ValueError("store_assessment_record_invalid")
 
+    for attestation in (
+        snapshot.supervisor_readiness_attestations
+    ):
+        if not isinstance(
+            attestation,
+            SupervisorReadinessAttestation,
+        ):
+            raise ValueError(
+                "store_supervisor_attestation_record_invalid"
+            )
+
     duplicate_case_id = _duplicate_identifier(
         snapshot.cases,
         attribute="case_id",
@@ -149,6 +172,15 @@ def _validate_snapshot(
     if duplicate_assessment_id:
         raise ValueError(
             f"duplicate_assessment_id:{duplicate_assessment_id}"
+        )
+
+    duplicate_attestation_id = _duplicate_identifier(
+        snapshot.supervisor_readiness_attestations,
+        attribute="attestation_id",
+    )
+    if duplicate_attestation_id:
+        raise ValueError(
+            f"duplicate_attestation_id:{duplicate_attestation_id}"
         )
 
     cases_by_id = {
@@ -224,6 +256,51 @@ def _validate_snapshot(
                 "assessment_package_fingerprint_mismatch"
             )
 
+    for attestation in (
+        snapshot.supervisor_readiness_attestations
+    ):
+        case = cases_by_id.get(attestation.case_id)
+
+        if case is None:
+            raise ValueError(
+                f"attestation_case_missing:{attestation.case_id}"
+            )
+
+        assessment = assessments_by_id.get(
+            attestation.readiness_assessment_id
+        )
+
+        if assessment is None:
+            raise ValueError(
+                "attestation_assessment_missing"
+            )
+
+        if assessment.case_id != attestation.case_id:
+            raise ValueError(
+                "attestation_assessment_case_mismatch"
+            )
+
+        if (
+            assessment.customer_package_fingerprint
+            != attestation.customer_package_fingerprint
+        ):
+            raise ValueError(
+                "attestation_assessment_fingerprint_mismatch"
+            )
+
+        known_fingerprints = package_fingerprints_by_case.get(
+            attestation.case_id,
+            set(),
+        )
+
+        if (
+            attestation.customer_package_fingerprint
+            not in known_fingerprints
+        ):
+            raise ValueError(
+                "attestation_package_fingerprint_missing"
+            )
+
     for case in snapshot.cases:
         known_fingerprints = package_fingerprints_by_case.get(
             case.case_id,
@@ -297,6 +374,14 @@ def _assessment_to_dict(
     return payload
 
 
+def _attestation_to_dict(
+    attestation: SupervisorReadinessAttestation,
+) -> dict[str, Any]:
+    payload = asdict(attestation)
+    payload["decision"] = attestation.decision.value
+    return payload
+
+
 def _snapshot_to_dict(
     snapshot: ExternalConnectivityCaseStoreSnapshot,
 ) -> dict[str, Any]:
@@ -313,6 +398,12 @@ def _snapshot_to_dict(
         "readiness_assessments": [
             _assessment_to_dict(assessment)
             for assessment in snapshot.readiness_assessments
+        ],
+        "supervisor_readiness_attestations": [
+            _attestation_to_dict(attestation)
+            for attestation in (
+                snapshot.supervisor_readiness_attestations
+            )
         ],
     }
 
@@ -390,6 +481,25 @@ def _assessment_from_dict(
         ) from exc
 
 
+def _attestation_from_dict(
+    value: object,
+) -> SupervisorReadinessAttestation:
+    payload = _record_mapping(
+        value,
+        error="store_supervisor_attestation_record_invalid",
+    )
+
+    try:
+        payload["decision"] = SupervisorReadinessDecision(
+            payload["decision"]
+        )
+        return SupervisorReadinessAttestation(**payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "store_supervisor_attestation_record_invalid"
+        ) from exc
+
+
 def _snapshot_from_dict(
     payload: object,
 ) -> ExternalConnectivityCaseStoreSnapshot:
@@ -411,6 +521,10 @@ def _snapshot_from_dict(
         "readiness_assessments",
         [],
     )
+    raw_attestations = payload.get(
+        "supervisor_readiness_attestations",
+        [],
+    )
 
     if not isinstance(raw_cases, list):
         raise ValueError("store_cases_invalid")
@@ -420,6 +534,10 @@ def _snapshot_from_dict(
         )
     if not isinstance(raw_assessments, list):
         raise ValueError("store_readiness_assessments_invalid")
+    if not isinstance(raw_attestations, list):
+        raise ValueError(
+            "store_supervisor_attestations_invalid"
+        )
 
     snapshot = ExternalConnectivityCaseStoreSnapshot(
         cases=tuple(
@@ -433,6 +551,10 @@ def _snapshot_from_dict(
         readiness_assessments=tuple(
             _assessment_from_dict(value)
             for value in raw_assessments
+        ),
+        supervisor_readiness_attestations=tuple(
+            _attestation_from_dict(value)
+            for value in raw_attestations
         ),
     )
 
