@@ -729,3 +729,28 @@ __all__ += [
     "simulate_training_outbound_tls_approval",
 ]
 # EXTERNAL-CONNECTIVITY-16G-R5 exports end
+# EXTERNAL-CONNECTIVITY-R8 exports begin
+from .external_connectivity_cases import (  # noqa: E402
+    CustomerReferencePackage,
+    ExternalConnectivityAuditEventType,
+    ExternalConnectivityCase,
+    ExternalConnectivityCaseState,
+    ExternalConnectivityReadinessAssessment,
+    advance_external_connectivity_case,
+    customer_reference_package_fingerprint,
+    find_prohibited_customer_fields,
+    is_external_connectivity_transition_allowed,
+)
+
+__all__ += [
+    "CustomerReferencePackage",
+    "ExternalConnectivityAuditEventType",
+    "ExternalConnectivityCase",
+    "ExternalConnectivityCaseState",
+    "ExternalConnectivityReadinessAssessment",
+    "advance_external_connectivity_case",
+    "customer_reference_package_fingerprint",
+    "find_prohibited_customer_fields",
+    "is_external_connectivity_transition_allowed",
+]
+# EXTERNAL-CONNECTIVITY-R8 exports end
