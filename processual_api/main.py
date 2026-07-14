@@ -3,12 +3,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Body, FastAPI
 from fastapi import HTTPException as PMK13AHTTPException
 from fastapi import Request as PMK13ARequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict
 
 from processual_api.services.integration_claim_keys import (
     GUARDRAILS as PMK13A_CLAIM_GUARDRAILS,
@@ -650,88 +651,141 @@ async def pmk13b_admin_list_integration_tasks():
     return list_integration_tasks()
 
 
+class PMK13BIntegrationTaskCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class PMK13BIntegrationTaskControlRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    reason: str = ""
+
+
+class PMK13BActivationPermissionKeyIssueRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+def _pmk13b_model_payload(payload: BaseModel) -> dict[str, object]:
+    return payload.model_dump()
+
+
 @app.post("/settings/admin/integration-tasks")
-async def pmk13b_admin_create_integration_task(request: PMK13ARequest):
+async def pmk13b_admin_create_integration_task(
+    request: PMK13ARequest,
+    payload: PMK13BIntegrationTaskCreateRequest = Body(
+        default_factory=PMK13BIntegrationTaskCreateRequest
+    ),
+):
     from processual_api.services.integration_pilot_controls import create_integration_task
 
     supervisor_session = _pmk13b_require_supervisor_write(request)
-    payload = await request.json()
+    payload_data = _pmk13b_model_payload(payload)
     actor = str(supervisor_session["session_key_id"])
-    return create_integration_task(payload, created_by=actor)
+    return create_integration_task(payload_data, created_by=actor)
 
 
 @app.post("/settings/admin/integration-tasks/{task_id}/suspend")
-async def pmk13b_admin_suspend_integration_task(task_id: str, request: PMK13ARequest):
+async def pmk13b_admin_suspend_integration_task(
+    task_id: str,
+    request: PMK13ARequest,
+    payload: PMK13BIntegrationTaskControlRequest = Body(
+        default_factory=PMK13BIntegrationTaskControlRequest
+    ),
+):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
     supervisor_session = _pmk13b_require_supervisor_write(request)
-    payload = await request.json()
+    payload_data = _pmk13b_model_payload(payload)
     actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "suspend",
         actor=actor,
-        reason=str(payload.get("reason", "")).strip(),
+        reason=str(payload_data.get("reason", "")).strip(),
     )
 
 
 @app.post("/settings/admin/integration-tasks/{task_id}/resume")
-async def pmk13b_admin_resume_integration_task(task_id: str, request: PMK13ARequest):
+async def pmk13b_admin_resume_integration_task(
+    task_id: str,
+    request: PMK13ARequest,
+    payload: PMK13BIntegrationTaskControlRequest = Body(
+        default_factory=PMK13BIntegrationTaskControlRequest
+    ),
+):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
     supervisor_session = _pmk13b_require_supervisor_write(request)
-    payload = await request.json()
+    payload_data = _pmk13b_model_payload(payload)
     actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "resume",
         actor=actor,
-        reason=str(payload.get("reason", "")).strip(),
+        reason=str(payload_data.get("reason", "")).strip(),
     )
 
 
 @app.post("/settings/admin/integration-tasks/{task_id}/revoke")
-async def pmk13b_admin_revoke_integration_task(task_id: str, request: PMK13ARequest):
+async def pmk13b_admin_revoke_integration_task(
+    task_id: str,
+    request: PMK13ARequest,
+    payload: PMK13BIntegrationTaskControlRequest = Body(
+        default_factory=PMK13BIntegrationTaskControlRequest
+    ),
+):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
     supervisor_session = _pmk13b_require_supervisor_write(request)
-    payload = await request.json()
+    payload_data = _pmk13b_model_payload(payload)
     actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "revoke",
         actor=actor,
-        reason=str(payload.get("reason", "")).strip(),
+        reason=str(payload_data.get("reason", "")).strip(),
     )
 
 
 @app.post("/settings/admin/integration-tasks/{task_id}/cancel")
-async def pmk13b_admin_cancel_integration_task(task_id: str, request: PMK13ARequest):
+async def pmk13b_admin_cancel_integration_task(
+    task_id: str,
+    request: PMK13ARequest,
+    payload: PMK13BIntegrationTaskControlRequest = Body(
+        default_factory=PMK13BIntegrationTaskControlRequest
+    ),
+):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
     supervisor_session = _pmk13b_require_supervisor_write(request)
-    payload = await request.json()
+    payload_data = _pmk13b_model_payload(payload)
     actor = str(supervisor_session["session_key_id"])
     return control_integration_task(
         task_id,
         "cancel",
         actor=actor,
-        reason=str(payload.get("reason", "")).strip(),
+        reason=str(payload_data.get("reason", "")).strip(),
     )
 
 
 @app.post("/settings/admin/integration-tasks/{task_id}/activation-permission-key")
-async def pmk13b_admin_issue_activation_permission_key(task_id: str, request: PMK13ARequest):
+async def pmk13b_admin_issue_activation_permission_key(
+    task_id: str,
+    request: PMK13ARequest,
+    payload: PMK13BActivationPermissionKeyIssueRequest = Body(
+        default_factory=PMK13BActivationPermissionKeyIssueRequest
+    ),
+):
     from processual_api.services.integration_pilot_controls import (
         issue_activation_permission_key,
     )
 
     supervisor_session = _pmk13b_require_supervisor_write(request)
-    payload = await request.json()
+    payload_data = _pmk13b_model_payload(payload)
     actor = str(supervisor_session["session_key_id"])
     return issue_activation_permission_key(
         task_id,
-        payload,
+        payload_data,
         issued_by=actor,
     )
 
