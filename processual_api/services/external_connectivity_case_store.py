@@ -11,7 +11,11 @@ from processual_api.integrations.external_connectivity_cases import (
     CustomerReferencePackage,
     ExternalConnectivityCase,
     ExternalConnectivityCaseState,
+    ExternalConnectivityQualificationKey,
+    ExternalConnectivityQualificationKeyStatus,
     ExternalConnectivityReadinessAssessment,
+    ExternalConnectivitySandboxApiKey,
+    ExternalConnectivitySandboxApiKeyStatus,
     SupervisorReadinessAttestation,
     SupervisorReadinessDecision,
     customer_reference_package_fingerprint,
@@ -42,6 +46,12 @@ class ExternalConnectivityCaseStoreSnapshot:
     supervisor_readiness_attestations: tuple[
         SupervisorReadinessAttestation, ...
     ] = ()
+    qualification_keys: tuple[
+        ExternalConnectivityQualificationKey, ...
+    ] = ()
+    sandbox_api_keys: tuple[
+        ExternalConnectivitySandboxApiKey, ...
+    ] = ()
     schema_version: str = (
         EXTERNAL_CONNECTIVITY_CASE_STORE_SCHEMA_VERSION
     )
@@ -63,6 +73,14 @@ class ExternalConnectivityCaseStoreSnapshot:
         ):
             raise ValueError(
                 "store_supervisor_attestations_must_be_tuple"
+            )
+        if not isinstance(self.qualification_keys, tuple):
+            raise ValueError(
+                "store_qualification_keys_must_be_tuple"
+            )
+        if not isinstance(self.sandbox_api_keys, tuple):
+            raise ValueError(
+                "store_sandbox_api_keys_must_be_tuple"
             )
         if (
             self.schema_version
@@ -149,6 +167,24 @@ def _validate_snapshot(
                 "store_supervisor_attestation_record_invalid"
             )
 
+    for qualification_key in snapshot.qualification_keys:
+        if not isinstance(
+            qualification_key,
+            ExternalConnectivityQualificationKey,
+        ):
+            raise ValueError(
+                "store_qualification_key_record_invalid"
+            )
+
+    for sandbox_api_key in snapshot.sandbox_api_keys:
+        if not isinstance(
+            sandbox_api_key,
+            ExternalConnectivitySandboxApiKey,
+        ):
+            raise ValueError(
+                "store_sandbox_api_key_record_invalid"
+            )
+
     duplicate_case_id = _duplicate_identifier(
         snapshot.cases,
         attribute="case_id",
@@ -181,6 +217,26 @@ def _validate_snapshot(
     if duplicate_attestation_id:
         raise ValueError(
             f"duplicate_attestation_id:{duplicate_attestation_id}"
+        )
+
+    duplicate_qualification_key_id = _duplicate_identifier(
+        snapshot.qualification_keys,
+        attribute="qualification_key_id",
+    )
+    if duplicate_qualification_key_id:
+        raise ValueError(
+            "duplicate_qualification_key_id:"
+            f"{duplicate_qualification_key_id}"
+        )
+
+    duplicate_sandbox_api_key_id = _duplicate_identifier(
+        snapshot.sandbox_api_keys,
+        attribute="sandbox_api_key_id",
+    )
+    if duplicate_sandbox_api_key_id:
+        raise ValueError(
+            "duplicate_sandbox_api_key_id:"
+            f"{duplicate_sandbox_api_key_id}"
         )
 
     cases_by_id = {
@@ -336,6 +392,110 @@ def _validate_snapshot(
                 )
 
 
+    attestations_by_id = {
+        attestation.attestation_id: attestation
+        for attestation in (
+            snapshot.supervisor_readiness_attestations
+        )
+    }
+
+    qualification_keys_by_id = {
+        qualification_key.qualification_key_id: qualification_key
+        for qualification_key in snapshot.qualification_keys
+    }
+
+    for qualification_key in snapshot.qualification_keys:
+        case = cases_by_id.get(qualification_key.case_id)
+
+        if case is None:
+            raise ValueError(
+                "qualification_key_case_missing"
+            )
+
+        if qualification_key.client_id != case.client_id:
+            raise ValueError(
+                "qualification_key_client_mismatch"
+            )
+
+        attestation = attestations_by_id.get(
+            qualification_key.attestation_id
+        )
+
+        if attestation is None:
+            raise ValueError(
+                "qualification_key_attestation_missing"
+            )
+
+        if attestation.case_id != qualification_key.case_id:
+            raise ValueError(
+                "qualification_key_attestation_case_mismatch"
+            )
+
+        if (
+            attestation.readiness_assessment_id
+            != qualification_key.readiness_assessment_id
+        ):
+            raise ValueError(
+                "qualification_key_assessment_mismatch"
+            )
+
+        if (
+            attestation.customer_package_fingerprint
+            != qualification_key.customer_package_fingerprint
+        ):
+            raise ValueError(
+                "qualification_key_fingerprint_mismatch"
+            )
+
+    for sandbox_api_key in snapshot.sandbox_api_keys:
+        case = cases_by_id.get(sandbox_api_key.case_id)
+
+        if case is None:
+            raise ValueError(
+                "sandbox_api_key_case_missing"
+            )
+
+        qualification_key = qualification_keys_by_id.get(
+            sandbox_api_key.qualification_key_id
+        )
+
+        if qualification_key is None:
+            raise ValueError(
+                "sandbox_api_key_qualification_key_missing"
+            )
+
+        if qualification_key.case_id != sandbox_api_key.case_id:
+            raise ValueError(
+                "sandbox_api_key_qualification_case_mismatch"
+            )
+
+        if sandbox_api_key.client_id != case.client_id:
+            raise ValueError(
+                "sandbox_api_key_client_mismatch"
+            )
+
+        if sandbox_api_key.connector_id != case.connector_id:
+            raise ValueError(
+                "sandbox_api_key_connector_mismatch"
+            )
+
+        if (
+            sandbox_api_key.credential_profile_id
+            != case.credential_profile_id
+        ):
+            raise ValueError(
+                "sandbox_api_key_credential_profile_mismatch"
+            )
+
+        if (
+            sandbox_api_key.target_environment
+            != case.target_environment
+        ):
+            raise ValueError(
+                "sandbox_api_key_environment_mismatch"
+            )
+
+
 def _case_to_dict(
     case: ExternalConnectivityCase,
 ) -> dict[str, Any]:
@@ -382,6 +542,25 @@ def _attestation_to_dict(
     return payload
 
 
+def _qualification_key_to_dict(
+    qualification_key: ExternalConnectivityQualificationKey,
+) -> dict[str, Any]:
+    payload = asdict(qualification_key)
+    payload["status"] = qualification_key.status.value
+    return payload
+
+
+def _sandbox_api_key_to_dict(
+    sandbox_api_key: ExternalConnectivitySandboxApiKey,
+) -> dict[str, Any]:
+    payload = asdict(sandbox_api_key)
+    payload["status"] = sandbox_api_key.status.value
+    payload["allowed_scope_ids"] = list(
+        sandbox_api_key.allowed_scope_ids
+    )
+    return payload
+
+
 def _snapshot_to_dict(
     snapshot: ExternalConnectivityCaseStoreSnapshot,
 ) -> dict[str, Any]:
@@ -404,6 +583,14 @@ def _snapshot_to_dict(
             for attestation in (
                 snapshot.supervisor_readiness_attestations
             )
+        ],
+        "qualification_keys": [
+            _qualification_key_to_dict(qualification_key)
+            for qualification_key in snapshot.qualification_keys
+        ],
+        "sandbox_api_keys": [
+            _sandbox_api_key_to_dict(sandbox_api_key)
+            for sandbox_api_key in snapshot.sandbox_api_keys
         ],
     }
 
@@ -500,6 +687,51 @@ def _attestation_from_dict(
         ) from exc
 
 
+def _qualification_key_from_dict(
+    value: object,
+) -> ExternalConnectivityQualificationKey:
+    payload = _record_mapping(
+        value,
+        error="store_qualification_key_record_invalid",
+    )
+
+    try:
+        payload["status"] = (
+            ExternalConnectivityQualificationKeyStatus(
+                payload["status"]
+            )
+        )
+        return ExternalConnectivityQualificationKey(**payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "store_qualification_key_record_invalid"
+        ) from exc
+
+
+def _sandbox_api_key_from_dict(
+    value: object,
+) -> ExternalConnectivitySandboxApiKey:
+    payload = _record_mapping(
+        value,
+        error="store_sandbox_api_key_record_invalid",
+    )
+
+    try:
+        payload["status"] = (
+            ExternalConnectivitySandboxApiKeyStatus(
+                payload["status"]
+            )
+        )
+        payload["allowed_scope_ids"] = tuple(
+            payload["allowed_scope_ids"]
+        )
+        return ExternalConnectivitySandboxApiKey(**payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "store_sandbox_api_key_record_invalid"
+        ) from exc
+
+
 def _snapshot_from_dict(
     payload: object,
 ) -> ExternalConnectivityCaseStoreSnapshot:
@@ -526,6 +758,15 @@ def _snapshot_from_dict(
         [],
     )
 
+    raw_qualification_keys = payload.get(
+        "qualification_keys",
+        [],
+    )
+    raw_sandbox_api_keys = payload.get(
+        "sandbox_api_keys",
+        [],
+    )
+
     if not isinstance(raw_cases, list):
         raise ValueError("store_cases_invalid")
     if not isinstance(raw_packages, list):
@@ -537,6 +778,15 @@ def _snapshot_from_dict(
     if not isinstance(raw_attestations, list):
         raise ValueError(
             "store_supervisor_attestations_invalid"
+        )
+
+    if not isinstance(raw_qualification_keys, list):
+        raise ValueError(
+            "store_qualification_keys_invalid"
+        )
+    if not isinstance(raw_sandbox_api_keys, list):
+        raise ValueError(
+            "store_sandbox_api_keys_invalid"
         )
 
     snapshot = ExternalConnectivityCaseStoreSnapshot(
@@ -555,6 +805,14 @@ def _snapshot_from_dict(
         supervisor_readiness_attestations=tuple(
             _attestation_from_dict(value)
             for value in raw_attestations
+        ),
+        qualification_keys=tuple(
+            _qualification_key_from_dict(value)
+            for value in raw_qualification_keys
+        ),
+        sandbox_api_keys=tuple(
+            _sandbox_api_key_from_dict(value)
+            for value in raw_sandbox_api_keys
         ),
     )
 

@@ -21,8 +21,15 @@ from processual_api.schemas.external_connectivity import (
     CustomerReferencePackageSubmissionRequest,
     ExternalConnectivityCaseCreateRequest,
     ExternalConnectivityCaseResponse,
+    ExternalConnectivityKeyMutationRequest,
+    ExternalConnectivityKeyMutationResponse,
+    ExternalConnectivityQualificationKeyIssueRequest,
+    ExternalConnectivityQualificationKeyIssueResponse,
+    ExternalConnectivityQualificationRedeemRequest,
     ExternalConnectivityReadinessReviewRequest,
     ExternalConnectivityReviewResultResponse,
+    ExternalConnectivitySandboxApiKeyIssueRequest,
+    ExternalConnectivitySandboxApiKeyIssueResponse,
     ExternalConnectivitySupervisorDecisionRequest,
     ExternalConnectivitySupervisorDecisionResultResponse,
     external_connectivity_assessment_response_from_contract,
@@ -37,6 +44,15 @@ from processual_api.services.external_connectivity_intake import (
     record_external_connectivity_supervisor_decision,
     review_external_connectivity_reference_package,
     submit_external_connectivity_reference_package,
+)
+from processual_api.services.external_connectivity_qualification import (
+    ExternalConnectivityQualificationError,
+    issue_external_connectivity_qualification_key,
+    issue_external_connectivity_sandbox_api_key,
+    redeem_external_connectivity_qualification_key,
+    revoke_external_connectivity_qualification_key,
+    revoke_external_connectivity_sandbox_api_key,
+    suspend_external_connectivity_sandbox_api_key,
 )
 from processual_api.services.integration_claim_keys import (
     GUARDRAILS as PMK13A_CLAIM_GUARDRAILS,
@@ -1303,3 +1319,258 @@ def pmk_r9_record_supervisor_decision(
 
 
 # END EXTERNAL_CONNECTIVITY_R9_ROUTES
+# BEGIN EXTERNAL_CONNECTIVITY_R10_KEY_ROUTES
+
+_PMK_R10_CLIENT_REDEEM_PATH = (
+    "/settings/client/external-connectivity/qualification/redeem"
+)
+
+
+def _pmk_r10_error_response(
+    exc: ExternalConnectivityQualificationError,
+):
+    from starlette.responses import JSONResponse
+
+    code = str(exc)
+    status_code = 422
+
+    if code.endswith("_not_found"):
+        status_code = 404
+
+    conflict_codes = {
+        "case_revision_conflict",
+        "qualification_key_already_issued",
+        "qualification_key_already_redeemed",
+        "qualification_key_already_revoked",
+        "sandbox_api_key_already_issued",
+        "sandbox_api_key_already_revoked",
+    }
+
+    if code in conflict_codes:
+        status_code = 409
+
+    return JSONResponse(
+        {
+            "error": code,
+            **_pmk_r9_guardrails(),
+        },
+        status_code=status_code,
+    )
+
+
+def _pmk_r10_response_payload(
+    result: dict[str, object],
+) -> dict[str, object]:
+    payload = dict(result)
+    payload["case"] = (
+        external_connectivity_case_response_from_contract(
+            result["case"]
+        )
+    )
+    return payload
+
+
+def _pmk_r10_mutation_response(
+    result: dict[str, object],
+) -> ExternalConnectivityKeyMutationResponse:
+    return ExternalConnectivityKeyMutationResponse.model_validate(
+        _pmk_r10_response_payload(result)
+    )
+
+
+@app.post(
+    f"{_PMK_R9_BASE_PATH}/{{case_id}}/qualification-key",
+    response_model=(
+        ExternalConnectivityQualificationKeyIssueResponse
+    ),
+    status_code=201,
+)
+def pmk_r10_issue_qualification_key(
+    case_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivityQualificationKeyIssueRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
+
+    if denial is not None:
+        return denial
+
+    try:
+        result = issue_external_connectivity_qualification_key(
+            case_id,
+            qualification_key_id=f"ecqk_{uuid4().hex}",
+            expected_revision=payload.expected_revision,
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
+            expires_at=payload.expires_at,
+        )
+    except ExternalConnectivityQualificationError as exc:
+        return _pmk_r10_error_response(exc)
+
+    return (
+        ExternalConnectivityQualificationKeyIssueResponse
+        .model_validate(
+            _pmk_r10_response_payload(result)
+        )
+    )
+
+
+@app.post(
+    _PMK_R10_CLIENT_REDEEM_PATH,
+    response_model=ExternalConnectivityKeyMutationResponse,
+)
+def pmk_r10_redeem_qualification_key(
+    payload: ExternalConnectivityQualificationRedeemRequest,
+):
+    try:
+        result = redeem_external_connectivity_qualification_key(
+            payload.qualification_key,
+            client_id=payload.client_id,
+            redeemed_by=payload.redeemed_by,
+            expected_revision=payload.expected_revision,
+            occurred_at=_pmk_r9_now(),
+        )
+    except ExternalConnectivityQualificationError as exc:
+        return _pmk_r10_error_response(exc)
+
+    return _pmk_r10_mutation_response(result)
+
+
+@app.post(
+    (
+        f"{_PMK_R9_BASE_PATH}/{{case_id}}/qualification-key/"
+        "{qualification_key_id}/revoke"
+    ),
+    response_model=ExternalConnectivityKeyMutationResponse,
+)
+def pmk_r10_revoke_qualification_key(
+    case_id: str,
+    qualification_key_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivityKeyMutationRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
+
+    if denial is not None:
+        return denial
+
+    try:
+        result = revoke_external_connectivity_qualification_key(
+            qualification_key_id,
+            case_id=case_id,
+            expected_revision=payload.expected_revision,
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
+        )
+    except ExternalConnectivityQualificationError as exc:
+        return _pmk_r10_error_response(exc)
+
+    return _pmk_r10_mutation_response(result)
+
+
+@app.post(
+    f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key",
+    response_model=ExternalConnectivitySandboxApiKeyIssueResponse,
+    status_code=201,
+)
+def pmk_r10_issue_sandbox_api_key(
+    case_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivitySandboxApiKeyIssueRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
+
+    if denial is not None:
+        return denial
+
+    try:
+        result = issue_external_connectivity_sandbox_api_key(
+            case_id,
+            sandbox_api_key_id=f"ecsbk_{uuid4().hex}",
+            allowed_scope_ids=payload.allowed_scope_ids,
+            expected_revision=payload.expected_revision,
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
+            expires_at=payload.expires_at,
+        )
+    except (
+        ExternalConnectivityQualificationError,
+        ValueError,
+    ) as exc:
+        return _pmk_r10_error_response(
+            ExternalConnectivityQualificationError(str(exc))
+        )
+
+    return (
+        ExternalConnectivitySandboxApiKeyIssueResponse
+        .model_validate(
+            _pmk_r10_response_payload(result)
+        )
+    )
+
+
+@app.post(
+    (
+        f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key/"
+        "{sandbox_api_key_id}/suspend"
+    ),
+    response_model=ExternalConnectivityKeyMutationResponse,
+)
+def pmk_r10_suspend_sandbox_api_key(
+    case_id: str,
+    sandbox_api_key_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivityKeyMutationRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
+
+    if denial is not None:
+        return denial
+
+    try:
+        result = suspend_external_connectivity_sandbox_api_key(
+            sandbox_api_key_id,
+            case_id=case_id,
+            expected_revision=payload.expected_revision,
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
+        )
+    except ExternalConnectivityQualificationError as exc:
+        return _pmk_r10_error_response(exc)
+
+    return _pmk_r10_mutation_response(result)
+
+
+@app.post(
+    (
+        f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key/"
+        "{sandbox_api_key_id}/revoke"
+    ),
+    response_model=ExternalConnectivityKeyMutationResponse,
+)
+def pmk_r10_revoke_sandbox_api_key(
+    case_id: str,
+    sandbox_api_key_id: str,
+    request: PMK13ARequest,
+    payload: ExternalConnectivityKeyMutationRequest,
+):
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
+
+    if denial is not None:
+        return denial
+
+    try:
+        result = revoke_external_connectivity_sandbox_api_key(
+            sandbox_api_key_id,
+            case_id=case_id,
+            expected_revision=payload.expected_revision,
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
+        )
+    except ExternalConnectivityQualificationError as exc:
+        return _pmk_r10_error_response(exc)
+
+    return _pmk_r10_mutation_response(result)
+
+
+# END EXTERNAL_CONNECTIVITY_R10_KEY_ROUTES

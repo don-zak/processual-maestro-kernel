@@ -9,7 +9,9 @@ from processual_api.integrations.external_connectivity_cases import (
     CustomerReferencePackage,
     ExternalConnectivityCase,
     ExternalConnectivityCaseState,
+    ExternalConnectivityQualificationKeyStatus,
     ExternalConnectivityReadinessAssessment,
+    ExternalConnectivitySandboxApiKeyStatus,
     SupervisorReadinessAttestation,
     SupervisorReadinessDecision,
 )
@@ -172,6 +174,128 @@ class ExternalConnectivitySupervisorDecisionResultResponse(
     attestation: SupervisorReadinessAttestationResponse
 
 
+class ExternalConnectivityQualificationKeyIssueRequest(
+    _FrozenForbidModel
+):
+    expected_revision: int = Field(ge=1)
+    expires_at: str = Field(min_length=1, max_length=80)
+
+
+class ExternalConnectivityQualificationRedeemRequest(
+    _FrozenForbidModel
+):
+    qualification_key: str = Field(min_length=1, max_length=512)
+    client_id: str = Field(min_length=1, max_length=240)
+    redeemed_by: str = Field(min_length=1, max_length=240)
+    expected_revision: int = Field(ge=1)
+
+
+class ExternalConnectivitySandboxApiKeyIssueRequest(
+    _FrozenForbidModel
+):
+    expected_revision: int = Field(ge=1)
+    allowed_scope_ids: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=100,
+    )
+    expires_at: str = Field(min_length=1, max_length=80)
+
+
+class ExternalConnectivityKeyMutationRequest(
+    _FrozenForbidModel
+):
+    expected_revision: int = Field(ge=1)
+
+
+class ExternalConnectivityQualificationKeyResponse(
+    _FrozenForbidModel
+):
+    qualification_key_id: str
+    case_id: str
+    client_id: str
+    attestation_id: str
+    readiness_assessment_id: str
+    customer_package_fingerprint: str = Field(
+        pattern=r"^[0-9a-f]{64}$"
+    )
+    status: ExternalConnectivityQualificationKeyStatus
+    issued_at: str
+    expires_at: str
+    issued_by: str
+    redeemed_at: str
+    redeemed_by: str
+    revoked_at: str
+    revoked_by: str
+    production_allowed: Literal[False] = False
+    external_http_allowed: Literal[False] = False
+    secret_resolution_allowed: Literal[False] = False
+    sandbox_activation_allowed: Literal[False] = False
+    raw_secret_visible: Literal[False] = False
+
+
+class ExternalConnectivitySandboxApiKeyResponse(
+    _FrozenForbidModel
+):
+    sandbox_api_key_id: str
+    case_id: str
+    client_id: str
+    qualification_key_id: str
+    connector_id: str
+    credential_profile_id: str
+    target_environment: Literal["sandbox"]
+    allowed_scope_ids: tuple[str, ...]
+    status: ExternalConnectivitySandboxApiKeyStatus
+    issued_at: str
+    expires_at: str
+    issued_by: str
+    suspended_at: str
+    suspended_by: str
+    revoked_at: str
+    revoked_by: str
+    runtime_connector_allowed: Literal[False] = False
+    production_allowed: Literal[False] = False
+    external_http_allowed: Literal[False] = False
+    secret_resolution_allowed: Literal[False] = False
+    automatic_activation_allowed: Literal[False] = False
+    raw_secret_visible: Literal[False] = False
+
+
+class ExternalConnectivityQualificationKeyIssueResponse(
+    _FrozenForbidModel
+):
+    schema_version: str
+    qualification_key_once: str
+    raw_qualification_key_visible_once: Literal[True]
+    qualification_key: ExternalConnectivityQualificationKeyResponse
+    case: ExternalConnectivityCaseResponse
+    guardrails: dict[str, bool]
+
+
+class ExternalConnectivitySandboxApiKeyIssueResponse(
+    _FrozenForbidModel
+):
+    schema_version: str
+    sandbox_api_key_once: str
+    raw_sandbox_api_key_visible_once: Literal[True]
+    sandbox_api_key: ExternalConnectivitySandboxApiKeyResponse
+    case: ExternalConnectivityCaseResponse
+    guardrails: dict[str, bool]
+
+
+class ExternalConnectivityKeyMutationResponse(
+    _FrozenForbidModel
+):
+    schema_version: str
+    case: ExternalConnectivityCaseResponse
+    guardrails: dict[str, bool]
+    qualification_key: (
+        ExternalConnectivityQualificationKeyResponse | None
+    ) = None
+    sandbox_api_key: (
+        ExternalConnectivitySandboxApiKeyResponse | None
+    ) = None
+
+
 def customer_reference_package_from_submission(
     *,
     case_id: str,
@@ -254,6 +378,15 @@ __all__ = [
     "ExternalConnectivitySupervisorDecisionRequest",
     "ExternalConnectivitySupervisorDecisionResultResponse",
     "SupervisorReadinessAttestationResponse",
+    "ExternalConnectivityKeyMutationRequest",
+    "ExternalConnectivityKeyMutationResponse",
+    "ExternalConnectivityQualificationKeyIssueRequest",
+    "ExternalConnectivityQualificationKeyIssueResponse",
+    "ExternalConnectivityQualificationKeyResponse",
+    "ExternalConnectivityQualificationRedeemRequest",
+    "ExternalConnectivitySandboxApiKeyIssueRequest",
+    "ExternalConnectivitySandboxApiKeyIssueResponse",
+    "ExternalConnectivitySandboxApiKeyResponse",
     "customer_reference_package_from_submission",
     "external_connectivity_assessment_response_from_contract",
     "external_connectivity_case_response_from_contract",

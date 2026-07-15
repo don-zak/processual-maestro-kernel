@@ -745,6 +745,284 @@ def advance_external_connectivity_case(
     return replace(case, **changes)
 
 
+class ExternalConnectivityQualificationKeyStatus(StrEnum):
+    ISSUED = "issued"
+    REDEEMED = "redeemed"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
+class ExternalConnectivitySandboxApiKeyStatus(StrEnum):
+    ISSUED = "issued"
+    SUSPENDED = "suspended"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalConnectivityQualificationKey:
+    qualification_key_id: str
+    case_id: str
+    client_id: str
+    attestation_id: str
+    readiness_assessment_id: str
+    customer_package_fingerprint: str
+    key_hash: str
+    status: ExternalConnectivityQualificationKeyStatus
+    issued_at: str
+    expires_at: str
+    issued_by: str
+    redeemed_at: str = ""
+    redeemed_by: str = ""
+    revoked_at: str = ""
+    revoked_by: str = ""
+    production_allowed: bool = False
+    external_http_allowed: bool = False
+    secret_resolution_allowed: bool = False
+    sandbox_activation_allowed: bool = False
+    raw_secret_visible: bool = False
+
+    def __post_init__(self) -> None:
+        for field_name, value in (
+            ("qualification_key_id", self.qualification_key_id),
+            ("case_id", self.case_id),
+            ("client_id", self.client_id),
+            ("attestation_id", self.attestation_id),
+            (
+                "readiness_assessment_id",
+                self.readiness_assessment_id,
+            ),
+            ("issued_by", self.issued_by),
+        ):
+            _require_identifier(field_name, value)
+
+        _require_sha256_or_empty(
+            "customer_package_fingerprint",
+            self.customer_package_fingerprint,
+        )
+        if not self.customer_package_fingerprint:
+            raise ValueError(
+                "customer_package_fingerprint_required"
+            )
+
+        _require_sha256_or_empty("key_hash", self.key_hash)
+        if not self.key_hash:
+            raise ValueError("qualification_key_hash_required")
+
+        if not isinstance(
+            self.status,
+            ExternalConnectivityQualificationKeyStatus,
+        ):
+            raise ValueError(
+                "qualification_key_status_invalid"
+            )
+
+        issued = _require_aware_datetime(
+            "issued_at",
+            self.issued_at,
+        )
+        expires = _require_aware_datetime(
+            "expires_at",
+            self.expires_at,
+        )
+        if expires <= issued:
+            raise ValueError(
+                "expires_at_must_follow_issued_at"
+            )
+
+        optional_identity_fields = (
+            ("redeemed_by", self.redeemed_by),
+            ("revoked_by", self.revoked_by),
+        )
+        for field_name, value in optional_identity_fields:
+            if value:
+                _require_identifier(field_name, value)
+
+        optional_datetime_fields = (
+            ("redeemed_at", self.redeemed_at),
+            ("revoked_at", self.revoked_at),
+        )
+        for field_name, value in optional_datetime_fields:
+            if value:
+                _require_aware_datetime(field_name, value)
+
+        if (
+            self.status
+            is ExternalConnectivityQualificationKeyStatus.REDEEMED
+            and (not self.redeemed_at or not self.redeemed_by)
+        ):
+            raise ValueError(
+                "redeemed_qualification_key_metadata_required"
+            )
+
+        if (
+            self.status
+            is ExternalConnectivityQualificationKeyStatus.REVOKED
+            and (not self.revoked_at or not self.revoked_by)
+        ):
+            raise ValueError(
+                "revoked_qualification_key_metadata_required"
+            )
+
+        default_deny_fields = (
+            ("production_allowed", self.production_allowed),
+            ("external_http_allowed", self.external_http_allowed),
+            (
+                "secret_resolution_allowed",
+                self.secret_resolution_allowed,
+            ),
+            (
+                "sandbox_activation_allowed",
+                self.sandbox_activation_allowed,
+            ),
+            ("raw_secret_visible", self.raw_secret_visible),
+        )
+        for field_name, value in default_deny_fields:
+            _require_default_deny(field_name, value)
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalConnectivitySandboxApiKey:
+    sandbox_api_key_id: str
+    case_id: str
+    client_id: str
+    qualification_key_id: str
+    connector_id: str
+    credential_profile_id: str
+    target_environment: str
+    allowed_scope_ids: tuple[str, ...]
+    key_hash: str
+    status: ExternalConnectivitySandboxApiKeyStatus
+    issued_at: str
+    expires_at: str
+    issued_by: str
+    suspended_at: str = ""
+    suspended_by: str = ""
+    revoked_at: str = ""
+    revoked_by: str = ""
+    runtime_connector_allowed: bool = False
+    production_allowed: bool = False
+    external_http_allowed: bool = False
+    secret_resolution_allowed: bool = False
+    automatic_activation_allowed: bool = False
+    raw_secret_visible: bool = False
+
+    def __post_init__(self) -> None:
+        for field_name, value in (
+            ("sandbox_api_key_id", self.sandbox_api_key_id),
+            ("case_id", self.case_id),
+            ("client_id", self.client_id),
+            ("qualification_key_id", self.qualification_key_id),
+            ("connector_id", self.connector_id),
+            (
+                "credential_profile_id",
+                self.credential_profile_id,
+            ),
+            ("issued_by", self.issued_by),
+        ):
+            _require_identifier(field_name, value)
+
+        if self.target_environment != "sandbox":
+            raise ValueError(
+                "target_environment_must_be_sandbox"
+            )
+
+        if not isinstance(self.allowed_scope_ids, tuple):
+            raise ValueError(
+                "allowed_scope_ids_must_be_tuple"
+            )
+        if not self.allowed_scope_ids:
+            raise ValueError(
+                "allowed_scope_ids_required"
+            )
+        if len(set(self.allowed_scope_ids)) != len(
+            self.allowed_scope_ids
+        ):
+            raise ValueError(
+                "allowed_scope_ids_must_be_unique"
+            )
+        for scope_id in self.allowed_scope_ids:
+            _require_identifier("allowed_scope_id", scope_id)
+
+        _require_sha256_or_empty("key_hash", self.key_hash)
+        if not self.key_hash:
+            raise ValueError("sandbox_api_key_hash_required")
+
+        if not isinstance(
+            self.status,
+            ExternalConnectivitySandboxApiKeyStatus,
+        ):
+            raise ValueError(
+                "sandbox_api_key_status_invalid"
+            )
+
+        issued = _require_aware_datetime(
+            "issued_at",
+            self.issued_at,
+        )
+        expires = _require_aware_datetime(
+            "expires_at",
+            self.expires_at,
+        )
+        if expires <= issued:
+            raise ValueError(
+                "expires_at_must_follow_issued_at"
+            )
+
+        optional_identity_fields = (
+            ("suspended_by", self.suspended_by),
+            ("revoked_by", self.revoked_by),
+        )
+        for field_name, value in optional_identity_fields:
+            if value:
+                _require_identifier(field_name, value)
+
+        optional_datetime_fields = (
+            ("suspended_at", self.suspended_at),
+            ("revoked_at", self.revoked_at),
+        )
+        for field_name, value in optional_datetime_fields:
+            if value:
+                _require_aware_datetime(field_name, value)
+
+        if (
+            self.status
+            is ExternalConnectivitySandboxApiKeyStatus.SUSPENDED
+            and (not self.suspended_at or not self.suspended_by)
+        ):
+            raise ValueError(
+                "suspended_sandbox_api_key_metadata_required"
+            )
+
+        if (
+            self.status
+            is ExternalConnectivitySandboxApiKeyStatus.REVOKED
+            and (not self.revoked_at or not self.revoked_by)
+        ):
+            raise ValueError(
+                "revoked_sandbox_api_key_metadata_required"
+            )
+
+        default_deny_fields = (
+            (
+                "runtime_connector_allowed",
+                self.runtime_connector_allowed,
+            ),
+            ("production_allowed", self.production_allowed),
+            ("external_http_allowed", self.external_http_allowed),
+            (
+                "secret_resolution_allowed",
+                self.secret_resolution_allowed,
+            ),
+            (
+                "automatic_activation_allowed",
+                self.automatic_activation_allowed,
+            ),
+            ("raw_secret_visible", self.raw_secret_visible),
+        )
+        for field_name, value in default_deny_fields:
+            _require_default_deny(field_name, value)
+
 __all__ = [
     "ALLOWED_EXTERNAL_CONNECTIVITY_TRANSITIONS",
     "EXTERNAL_CONNECTIVITY_CASE_SCHEMA_VERSION",
@@ -753,6 +1031,10 @@ __all__ = [
     "ExternalConnectivityAuditEventType",
     "ExternalConnectivityCase",
     "ExternalConnectivityCaseState",
+    "ExternalConnectivityQualificationKey",
+    "ExternalConnectivityQualificationKeyStatus",
+    "ExternalConnectivitySandboxApiKey",
+    "ExternalConnectivitySandboxApiKeyStatus",
     "ExternalConnectivityReadinessAssessment",
     "advance_external_connectivity_case",
     "customer_reference_package_fingerprint",

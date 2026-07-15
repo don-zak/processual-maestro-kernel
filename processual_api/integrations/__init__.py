@@ -767,3 +767,18 @@ __all__ += [
     "is_supervisor_readiness_attestation_current",
 ]
 # EXTERNAL-CONNECTIVITY-R9 exports end
+# EXTERNAL-CONNECTIVITY-R10 exports begin
+from .external_connectivity_cases import (  # noqa: E402
+    ExternalConnectivityQualificationKey,
+    ExternalConnectivityQualificationKeyStatus,
+    ExternalConnectivitySandboxApiKey,
+    ExternalConnectivitySandboxApiKeyStatus,
+)
+
+__all__ += [
+    "ExternalConnectivityQualificationKey",
+    "ExternalConnectivityQualificationKeyStatus",
+    "ExternalConnectivitySandboxApiKey",
+    "ExternalConnectivitySandboxApiKeyStatus",
+]
+# EXTERNAL-CONNECTIVITY-R10 exports end
