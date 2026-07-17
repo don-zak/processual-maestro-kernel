@@ -1,7 +1,31 @@
 import json
 import logging
 
+from processual_api.cgt_governor.data import storage as storage_module
 from processual_api.cgt_governor.data.storage import JsonlEvaluationStore
+
+
+def test_generate_eval_id_marks_digest_as_non_security(monkeypatch):
+    digest_calls = []
+
+    class _Digest:
+        @staticmethod
+        def hexdigest():
+            return "abcdef123456"
+
+    def fake_md5(payload, *, usedforsecurity):
+        digest_calls.append((payload, usedforsecurity))
+        return _Digest()
+
+    monkeypatch.setattr(storage_module.hashlib, "md5", fake_md5)
+
+    eval_id = JsonlEvaluationStore._generate_eval_id()
+
+    assert eval_id.startswith("eval_")
+    assert eval_id.endswith("_abcdef")
+    assert len(digest_calls) == 1
+    assert digest_calls[0][0]
+    assert digest_calls[0][1] is False
 
 
 def test_jsonl_evaluation_store_appends_dict_and_json_string(tmp_path, monkeypatch):
