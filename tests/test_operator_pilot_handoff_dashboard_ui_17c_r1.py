@@ -17,10 +17,10 @@ def test_17c_assets_are_wired_after_legacy_compatibility_assets() -> None:
     html = _read(ADMIN_HTML)
 
     legacy = html.index("admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress")
-    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r2")
+    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r3")
 
     assert legacy < dashboard
-    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r2" in html
+    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r3" in html
     assert "PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED" in _read(LEGACY_JS)
 
 
@@ -133,6 +133,9 @@ def test_17c_css_is_scoped_responsive_and_accessible() -> None:
     assert "@container pmk17c-workspace (max-width: 820px)" in css
     assert "@media (max-height: 520px) and (orientation: landscape)" in css
     assert "overflow-wrap: anywhere" in css
+    assert 'body[data-admin-active-page="operator-pilot-handoff"]' in css
+    assert "#main > :not(#page-operator-pilot-handoff)" in css
+    assert "height: 100%" in css
 
 
 def test_17c_shell_exposes_stable_visual_diagnostic_state() -> None:
@@ -148,3 +151,12 @@ def test_17c_shell_exposes_stable_visual_diagnostic_state() -> None:
         'timeZone: "UTC"',
     ):
         assert marker in js
+
+
+def test_17c_route_owns_the_main_viewport_without_legacy_siblings() -> None:
+    html = _read(ADMIN_HTML)
+    nav_js = _read(ROOT / "processual_api/static/js/admin_nav.js")
+
+    assert "document.body.dataset.adminActivePage = activePage" in html
+    assert "document.body.dataset.adminActivePage = activePage" in nav_js
+    assert "admin_nav.js?v=adminnav14ar1" in html
