@@ -18,10 +18,11 @@ from ..settings import settings
 from ..supervisor_session_keys import validate_supervisor_session_key
 
 try:
-    from jose import JWTError, jwt
+    import jwt
+    from jwt import PyJWTError
 except ImportError:
     jwt: Any = None  # type: ignore[no-redef]
-    JWTError: type[Exception] = Exception  # type: ignore[no-redef]
+    PyJWTError: type[Exception] = Exception  # type: ignore[no-redef]
 
 class _PBKDF2CompatBcrypt:
     """Tiny bcrypt-compatible fallback for minimal local/test environments.
@@ -192,7 +193,7 @@ def create_access_token(
     scopes: list[str] | None = None,
 ) -> str:
     if jwt is None:
-        raise RuntimeError("python-jose is not installed. Install with: pip install python-jose[cryptography]")
+        raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
     now = datetime.now(UTC)
     expire = now + (
         expires_delta if expires_delta is not None else timedelta(minutes=settings.jwt_expire_minutes)
@@ -213,11 +214,11 @@ def create_access_token(
 
 def verify_access_token(token: str) -> dict:
     if jwt is None:
-        raise RuntimeError("python-jose is not installed. Install with: pip install python-jose[cryptography]")
+        raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
     try:
         payload = jwt.decode(token, _get_jwt_secret(), algorithms=[_get_jwt_algorithm()])
         return payload
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 
@@ -378,7 +379,7 @@ def require_quota(quota_scope: str = "evaluation"):
                 amount=pricing.units_charged,
             )
         except HTTPException as exc:
-            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
             if detail.get("error") == "quota_exceeded":
                 rejected_user = dict(current_user)
                 rejected_user["quota_rejected"] = True
