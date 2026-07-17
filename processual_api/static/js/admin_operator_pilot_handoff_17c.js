@@ -90,6 +90,22 @@
     return raw.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
+  function formatTimestamp(value) {
+    if (!value) return "Not recorded";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: "UTC",
+      timeZoneName: "short"
+    }).format(date);
+  }
+
   function safeArray(value) {
     return Array.isArray(value) ? value : [];
   }
@@ -378,7 +394,8 @@
 
   function renderShell(pkg) {
     const status = pkg.handoff_status || pkg.package_status || "pending_operator_inputs";
-    return `<section class="pmk17c-shell">
+    const updatedAt = pkg.updated_at || "";
+    return `<section class="pmk17c-shell" data-phase="pilot-handoff-17c-r1" data-load-state="${escapeHtml(state.loadState)}" data-active-tab="${escapeHtml(state.activeTab)}" data-production-allowed="false" data-runtime-connector-approved="false">
       <header class="pmk17c-hero">
         <div class="pmk17c-hero-main">
           <div class="pmk17c-kicker">Pilot handoff · governed integration</div>
@@ -395,7 +412,7 @@
           <div><dt>Sector</dt><dd>${escapeHtml(label(pkg.sector || "Not selected"))}</dd></div>
           <div><dt>Environment</dt><dd>Sandbox</dd></div>
           <div><dt>Owner</dt><dd>${escapeHtml(pkg.owner || "Integration supervisor")}</dd></div>
-          <div><dt>Last updated</dt><dd>${escapeHtml(pkg.updated_at || "Not recorded")}</dd></div>
+          <div><dt>Last updated</dt><dd title="${escapeHtml(updatedAt)}">${escapeHtml(formatTimestamp(updatedAt))}</dd></div>
         </dl>
         <ol class="pmk17c-phase-rail">${phaseRail()}</ol>
       </header>
