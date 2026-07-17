@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import inspect
 
+from processual_api.services.external_connectivity_case_store import (
+    ExternalConnectivityCaseStoreSnapshot,
+)
 from processual_api.services.external_connectivity_qualification import (
     EXTERNAL_CONNECTIVITY_QUALIFICATION_SCHEMA_VERSION,
     ExternalConnectivityQualificationError,
@@ -11,10 +14,6 @@ from processual_api.services.external_connectivity_qualification import (
     revoke_external_connectivity_qualification_key,
     revoke_external_connectivity_sandbox_api_key,
     suspend_external_connectivity_sandbox_api_key,
-)
-
-from processual_api.services.external_connectivity_case_store import (
-    ExternalConnectivityCaseStoreSnapshot,
 )
 
 

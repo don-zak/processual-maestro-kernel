@@ -8,6 +8,7 @@ on:
 
 jobs:
   lint-and-test:
+    if: ${{ endsWith(github.repository, '-private') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
