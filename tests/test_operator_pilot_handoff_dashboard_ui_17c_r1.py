@@ -17,10 +17,10 @@ def test_17c_assets_are_wired_after_legacy_compatibility_assets() -> None:
     html = _read(ADMIN_HTML)
 
     legacy = html.index("admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress")
-    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r4")
+    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r5")
 
     assert legacy < dashboard
-    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r4" in html
+    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r5" in html
     assert "PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED" in _read(LEGACY_JS)
 
 
@@ -139,7 +139,9 @@ def test_17c_css_is_scoped_responsive_and_accessible() -> None:
     assert "height: 100dvh !important" in css
     assert "padding-bottom: 0 !important" in css
     assert "overflow: hidden !important" in css
-    assert "flex: 1 1 0" in css
+    assert "position: absolute" in css
+    assert "inset: 0" in css
+    assert "height: auto !important" in css
 
 
 def test_17c_shell_exposes_stable_visual_diagnostic_state() -> None:
