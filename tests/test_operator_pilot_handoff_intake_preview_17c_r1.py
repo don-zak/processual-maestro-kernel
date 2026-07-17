@@ -104,6 +104,28 @@ def test_manifest_rejects_production_target_and_unknown_top_level_fields() -> No
         build_operator_pilot_handoff_intake_preview(manifest)
 
 
+@pytest.mark.parametrize("invalid_value", [123, "2548545555dfg12", "document://"])
+def test_manifest_rejects_invalid_api_documentation_reference(
+    invalid_value: object,
+) -> None:
+    manifest = _complete_manifest()
+    manifest["integration"]["api_documentation_ref"] = invalid_value  # type: ignore[index]
+
+    with pytest.raises(
+        IntakePreviewValidationError,
+        match="integration.api_documentation_ref",
+    ):
+        build_operator_pilot_handoff_intake_preview(manifest)
+
+
+def test_manifest_rejects_invalid_reference_list_shape() -> None:
+    manifest = _complete_manifest()
+    manifest["evidence_refs"] = ["plain-evidence-id"]
+
+    with pytest.raises(IntakePreviewValidationError, match="evidence_refs"):
+        build_operator_pilot_handoff_intake_preview(manifest)
+
+
 def test_preview_does_not_echo_manifest_or_contact_values() -> None:
     preview = build_operator_pilot_handoff_intake_preview(_complete_manifest())
     rendered = repr(preview)

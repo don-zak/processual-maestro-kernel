@@ -128,3 +128,18 @@ def test_intake_preview_rejects_production_environment() -> None:
     assert response.status_code == 422
     assert "must remain sandbox" in response.text
 
+
+def test_intake_preview_rejects_non_reference_api_documentation_value() -> None:
+    manifest = _manifest()
+    manifest["integration"]["api_documentation_ref"] = "2548545555dfg12"  # type: ignore[index]
+
+    with TestClient(app) as client:
+        response = client.post(
+            ENDPOINT,
+            json=manifest,
+            headers=_authorization(["*"]),
+        )
+
+    assert response.status_code == 422
+    assert "integration.api_documentation_ref" in response.text
+    assert "2548545555dfg12" not in response.text

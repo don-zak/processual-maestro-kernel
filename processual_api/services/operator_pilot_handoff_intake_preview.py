@@ -66,6 +66,23 @@ _PROHIBITED_VALUE_MARKERS = (
     "bearer ",
 )
 
+_REFERENCE_FIELDS = {
+    "organization.technical_contact_ref": "contact://",
+    "integration.api_documentation_ref": "document://",
+    "integration.sandbox_base_url_ref": "target://",
+    "operations.rate_limit_ref": "policy://",
+    "operations.support_contact_ref": "contact://",
+    "operations.maintenance_window_ref": "window://",
+    "governance.retention_policy_ref": "policy://",
+    "governance.incident_contact_ref": "contact://",
+}
+
+_REFERENCE_LIST_FIELDS = {
+    "integration.sample_payload_refs": "evidence://",
+    "network_security.outbound_allowlist_refs": "allowlist://",
+    "evidence_refs": "evidence://",
+}
+
 
 class IntakePreviewValidationError(ValueError):
     """Raised when an intake manifest violates the safe preview contract."""
@@ -127,6 +144,41 @@ def _manifest_digest(payload: Mapping[str, object]) -> str:
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
 
 
+def _validate_reference_fields(payload: Mapping[str, object]) -> None:
+    for path, prefix in _REFERENCE_FIELDS.items():
+        value = _value_at_path(payload, path)
+        if not _is_present(value):
+            continue
+        if not isinstance(value, str) or not value.strip().startswith(prefix):
+            raise IntakePreviewValidationError(
+                f"{path} must be a {prefix} reference"
+            )
+        if not value.strip()[len(prefix) :]:
+            raise IntakePreviewValidationError(
+                f"{path} must identify a referenced resource"
+            )
+
+    for path, prefix in _REFERENCE_LIST_FIELDS.items():
+        value = _value_at_path(payload, path)
+        if not _is_present(value):
+            continue
+        if not isinstance(value, Sequence) or isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            raise IntakePreviewValidationError(
+                f"{path} must be a list of {prefix} references"
+            )
+        for item in value:
+            if not isinstance(item, str) or not item.strip().startswith(prefix):
+                raise IntakePreviewValidationError(
+                    f"{path} must contain only {prefix} references"
+                )
+            if not item.strip()[len(prefix) :]:
+                raise IntakePreviewValidationError(
+                    f"{path} must identify referenced resources"
+                )
+
+
 def _review_queue(payload: Mapping[str, object]) -> list[dict[str, str]]:
     return [
         {
@@ -166,6 +218,8 @@ def build_operator_pilot_handoff_intake_preview(
         )
 
     _scan_for_prohibited_content(raw_manifest)
+
+    _validate_reference_fields(raw_manifest)
 
     if raw_manifest.get("manifest_version") != MANIFEST_VERSION:
         raise IntakePreviewValidationError(
