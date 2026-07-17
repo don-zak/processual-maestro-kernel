@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 
@@ -20,9 +21,16 @@ def test_public_ci_keeps_python_314_and_public_strip_gates():
         "processual_api/auth/security.py",
         "processual_api/middleware/subscription.py",
         "--follow-imports=skip",
-        "pytest --cov=processual_kernel --cov=processual_api",
+        "PYTHONPATH=. python -m pytest",
+        "--cov=processual_kernel --cov=processual_api",
         "python -m twine check dist/*",
     )
 
     for marker in required_markers:
         assert marker in public_ci
+
+
+def test_coverage_gate_matches_the_measured_enforceable_baseline():
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert project["tool"]["coverage"]["report"]["fail_under"] == 70

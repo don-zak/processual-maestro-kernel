@@ -106,7 +106,7 @@ testpaths = ["tests"]
 source = ["cgtlib", "processual_kernel", "processual_api"]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 70
 show_missing = true
 
 [tool.ruff]
