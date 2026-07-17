@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN_HTML = ROOT / "processual_api/static/admin.html"
 DASHBOARD_JS = ROOT / "processual_api/static/js/admin_operator_pilot_handoff_17c.js"
