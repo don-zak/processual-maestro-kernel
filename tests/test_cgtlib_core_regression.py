@@ -1,4 +1,10 @@
+import json
+import shutil
+import subprocess
+import sys
+import textwrap
 from dataclasses import is_dataclass, replace
+from pathlib import Path
 
 import pytest
 
@@ -24,11 +30,6 @@ from cgtlib.validation import (
     ensure_not_empty,
     ensure_unit_interval,
 )
-
-
-def _assert_private_engine_unavailable(exc: BaseException) -> None:
-    assert exc.__class__.__name__ == "_FeatureUnavailableError"
-    assert "private CGT engine" in str(exc)
 
 
 def _sample_phase(phase_id: str = "phase-a") -> PhaseState:
@@ -105,32 +106,77 @@ def test_public_top_level_exports_core_symbols_and_fallback_wrappers():
         assert hasattr(cgt, symbol), symbol
 
 
-def test_private_engine_dependent_top_level_wrappers_fail_clearly():
-    unavailable_calls = [
-        lambda: cgt.build_public_api_snapshot(),
-        lambda: cgt.compute_phase_mass([0.2, 0.3, 0.5]),
-        lambda: cgt.compute_existential_score(0.9, 0.8, 0.7),
-        lambda: cgt.canonical_phase_state(
-            "phase",
-            mass=1.0,
-            mean_retention=0.8,
-            harmony=0.75,
-            fatigue=0.1,
-        ),
-        lambda: cgt.evaluate_fate_vector(
-            retention=0.8,
-            harmony=0.75,
-            compatibility=0.7,
-            distortion=0.1,
-        ),
-        lambda: cgt.validate_parameters(CGTParameters()),
-        lambda: cgt.validate_phase_state(_sample_phase()),
-    ]
+def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
+    source_package = Path(cgt.__file__).resolve().parent
+    stripped_root = tmp_path / "public-strip"
+    shutil.copytree(
+        source_package,
+        stripped_root / "cgtlib",
+        ignore=shutil.ignore_patterns("private", "__pycache__", "*.pyc", "pyproject.toml"),
+    )
 
-    for call in unavailable_calls:
-        with pytest.raises(Exception) as exc_info:
-            call()
-        _assert_private_engine_unavailable(exc_info.value)
+    probe = textwrap.dedent(
+        """
+        import json
+        import sys
+
+        sys.path.insert(0, sys.argv[1])
+        import cgtlib as cgt
+
+        unavailable_calls = [
+            lambda: cgt.build_public_api_snapshot(),
+            lambda: cgt.compute_phase_mass([0.2, 0.3, 0.5]),
+            lambda: cgt.compute_existential_score(0.9, 0.8, 0.7),
+            lambda: cgt.canonical_phase_state(
+                "phase",
+                mass=1.0,
+                mean_retention=0.8,
+                harmony=0.75,
+                fatigue=0.1,
+            ),
+            lambda: cgt.evaluate_fate_vector(
+                retention=0.8,
+                harmony=0.75,
+                compatibility=0.7,
+                distortion=0.1,
+            ),
+            lambda: cgt.validate_parameters(cgt.CGTParameters()),
+            lambda: cgt.validate_phase_state(
+                cgt.PhaseState(
+                    phase_id="phase-a",
+                    mass=1.0,
+                    mean_retention=0.8,
+                    harmony=0.75,
+                    fatigue=0.1,
+                )
+            ),
+        ]
+
+        errors = []
+        for call in unavailable_calls:
+            try:
+                call()
+            except Exception as exc:
+                errors.append([exc.__class__.__name__, str(exc)])
+            else:
+                errors.append([None, None])
+
+        print(json.dumps({"has_private": cgt._HAS_PRIVATE, "errors": errors}))
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe, str(stripped_root)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["has_private"] is False
+    assert len(payload["errors"]) == 7
+    for error_name, message in payload["errors"]:
+        assert error_name == "_FeatureUnavailableError"
+        assert "private CGT engine" in message
 
 
 def test_public_validation_primitives_work_without_private_engine():
