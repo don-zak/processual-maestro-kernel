@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 
@@ -126,4 +128,3 @@ def test_17c_css_is_scoped_responsive_and_accessible() -> None:
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert ":focus-visible" in css
     assert "overflow-x: auto" in css
-

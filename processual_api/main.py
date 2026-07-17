@@ -560,6 +560,9 @@ def admin_operator_pilot_handoff_export_14b():
     )
 
 
+# END INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
+
+# BEGIN PILOT_HANDOFF_17C_R1_INTAKE_PREVIEW_ROUTE
 @app.post("/settings/admin/operator-pilot-handoff/intake-preview")
 def admin_operator_pilot_handoff_intake_preview_17c_r1(
     payload: dict[str, object] = Body(...),
@@ -577,9 +580,9 @@ def admin_operator_pilot_handoff_intake_preview_17c_r1(
         return build_operator_pilot_handoff_intake_preview(payload)
     except IntakePreviewValidationError as exc:
         raise PMK13AHTTPException(status_code=422, detail=str(exc)) from exc
+# END PILOT_HANDOFF_17C_R1_INTAKE_PREVIEW_ROUTE
 
 
-# END INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
 def _pmk13a_require_supervisor_write(
     request: PMK13ARequest,
 ) -> dict[str, object]:
