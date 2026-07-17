@@ -22,11 +22,19 @@
 
 #page-operator-pilot-handoff.active {
   flex: 1 1 auto;
+  height: 100%;
+  max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Route isolation: legacy readiness hosts remain on Admin Home, not in Handoff. */
+body[data-admin-active-page="operator-pilot-handoff"]
+  #main > :not(#page-operator-pilot-handoff) {
+  display: none !important;
 }
 
 #page-operator-pilot-handoff .pmk17c-shell {
