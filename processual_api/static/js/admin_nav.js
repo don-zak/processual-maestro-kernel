@@ -218,6 +218,7 @@
 
   function setActivePage(page) {
     const activePage = normalizePage(page);
+    document.body.dataset.adminActivePage = activePage;
 
     document.querySelectorAll('[data-admin-page], .nav-btn').forEach((button) => {
       const buttonPage = pageFromButton(button);

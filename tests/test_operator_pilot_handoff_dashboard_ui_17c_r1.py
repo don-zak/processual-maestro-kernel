@@ -1,0 +1,168 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+ADMIN_HTML = ROOT / "processual_api/static/admin.html"
+DASHBOARD_JS = ROOT / "processual_api/static/js/admin_operator_pilot_handoff_17c.js"
+DASHBOARD_CSS = ROOT / "processual_api/static/css/admin_operator_pilot_handoff_17c.css"
+LEGACY_JS = ROOT / "processual_api/static/js/admin_operator_pilot_handoff.js"
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_17c_assets_are_wired_after_legacy_compatibility_assets() -> None:
+    html = _read(ADMIN_HTML)
+
+    legacy = html.index("admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress")
+    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r5")
+
+    assert legacy < dashboard
+    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r5" in html
+    assert "PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED" in _read(LEGACY_JS)
+
+
+def test_17c_dashboard_has_case_header_phase_rail_and_six_tabs() -> None:
+    js = _read(DASHBOARD_JS)
+
+    for marker in (
+        "Integration Pilot Workspace",
+        "Pilot ID",
+        "Organization",
+        "Environment",
+        "Owner",
+        "Last updated",
+        "Inputs",
+        "Sandbox validation",
+        "Production review",
+        "Overview",
+        "Intake & Validation",
+        "Required Inputs",
+        "Reviews & Controls",
+        "Pilot Plan",
+        "Evidence & Audit",
+    ):
+        assert marker in js
+
+
+def test_17c_intake_explains_and_implements_reference_data_flow() -> None:
+    js = _read(DASHBOARD_JS)
+
+    for marker in (
+        "Prepare",
+        "Import",
+        "Validate",
+        "Review",
+        "Safe JSON manifest",
+        "Paste manifest",
+        "Automated intake",
+        "pilot-handoff-intake-17c-r1",
+        "/settings/admin/operator-pilot-handoff/intake-preview",
+        "Validate package",
+        "No persistence in R1.",
+        "Secret-bearing fields are prohibited",
+        "Maximum 256 KB",
+    ):
+        assert marker in js
+
+
+def test_17c_uses_tables_instead_of_repeated_action_cards() -> None:
+    js = _read(DASHBOARD_JS)
+
+    assert "<table>" in js
+    assert "Required inputs" in js
+    assert "Reviews &amp; controls" in js
+    assert "Pilot plan" in js
+    assert "operator-pilot-action-card" not in js
+    assert "Supported organization types and domains" not in js
+    assert "What this handoff page does" not in js
+
+
+def test_17c_handles_loading_unauthorized_error_and_empty_states() -> None:
+    js = _read(DASHBOARD_JS)
+
+    for marker in (
+        'loadState: "loading"',
+        '"unauthorized"',
+        '"backend_unavailable"',
+        "Admin session expired",
+        "Sign in again",
+        "Pilot data could not be loaded",
+        "No case-specific input actions are available.",
+        "No case evidence has been attached.",
+    ):
+        assert marker in js
+
+
+def test_17c_ui_remains_default_deny_and_has_no_operational_control() -> None:
+    js = _read(DASHBOARD_JS)
+
+    assert 'host.dataset.productionAllowed = "false"' in js
+    assert 'host.dataset.runtimeConnectorApproved = "false"' in js
+    assert "This is not sandbox authorization." in js
+
+    for forbidden in (
+        "production_allowed: true",
+        "runtime_connector_approved: true",
+        "XMLHttpRequest",
+        "MutationObserver",
+        'fetch("http',
+        "Store credential values",
+    ):
+        assert forbidden not in js
+
+
+def test_17c_css_is_scoped_responsive_and_accessible() -> None:
+    css = _read(DASHBOARD_CSS)
+
+    assert css.count("#page-operator-pilot-handoff") >= 40
+    assert ".pmk17c-phase-rail" in css
+    assert ".pmk17c-tabs" in css
+    assert ".pmk17c-table-wrap" in css
+    assert ".pmk17c-dropzone" in css
+    assert "@media (max-width: 820px)" in css
+    assert "@media (max-width: 580px)" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ":focus-visible" in css
+    assert "overflow-x: auto" in css
+    assert "#page-operator-pilot-handoff.active" in css
+    assert "overflow-y: auto" in css
+    assert "container-type: inline-size" in css
+    assert "@container pmk17c-workspace (max-width: 820px)" in css
+    assert "@media (max-height: 520px) and (orientation: landscape)" in css
+    assert "overflow-wrap: anywhere" in css
+    assert 'body[data-admin-active-page="operator-pilot-handoff"]' in css
+    assert "#main > :not(#page-operator-pilot-handoff)" in css
+    assert 'body[data-admin-active-page="operator-pilot-handoff"] #main' in css
+    assert "height: 100dvh !important" in css
+    assert "padding-bottom: 0 !important" in css
+    assert "overflow: hidden !important" in css
+    assert "position: absolute" in css
+    assert "inset: 0" in css
+    assert "height: auto !important" in css
+
+
+def test_17c_shell_exposes_stable_visual_diagnostic_state() -> None:
+    js = _read(DASHBOARD_JS)
+
+    for marker in (
+        'data-phase="pilot-handoff-17c-r1"',
+        'data-load-state=',
+        'data-active-tab=',
+        'data-production-allowed="false"',
+        'data-runtime-connector-approved="false"',
+        "formatTimestamp",
+        'timeZone: "UTC"',
+    ):
+        assert marker in js
+
+
+def test_17c_route_owns_the_main_viewport_without_legacy_siblings() -> None:
+    html = _read(ADMIN_HTML)
+    nav_js = _read(ROOT / "processual_api/static/js/admin_nav.js")
+
+    assert "document.body.dataset.adminActivePage = activePage" in html
+    assert "document.body.dataset.adminActivePage = activePage" in nav_js
+    assert "admin_nav.js?v=adminnav14ar1" in html
