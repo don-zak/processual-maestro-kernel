@@ -88,6 +88,7 @@ administrative authority through the existing authenticated dependency.
 - `processual_api/static/css/admin_operator_pilot_handoff_17c.css`
 - `tests/test_operator_pilot_handoff_intake_preview_17c_r1.py`
 - `tests/test_operator_pilot_handoff_intake_preview_route_17c_r1.py`
+- `tests/test_operator_pilot_handoff_intake_preview_http_17c_r1.py`
 - `tests/test_operator_pilot_handoff_dashboard_ui_17c_r1.py`
 
 ## Validation performed in the implementation workspace
@@ -104,4 +105,3 @@ administrative authority through the existing authenticated dependency.
 17C-R1 does not persist intake manifests, mutate case state, resolve secrets,
 contact customer systems, execute connectors, issue qualification keys, start
 a sandbox transport, or authorize production.
-
