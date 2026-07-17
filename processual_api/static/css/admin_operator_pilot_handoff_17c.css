@@ -1,0 +1,863 @@
+/* Pilot Handoff 17C-R1: case-focused, reference-only workspace. */
+#page-operator-pilot-handoff {
+  --ph-bg: #07101f;
+  --ph-panel: rgba(15, 28, 49, 0.82);
+  --ph-panel-strong: #101f35;
+  --ph-line: rgba(151, 173, 204, 0.18);
+  --ph-line-strong: rgba(151, 173, 204, 0.32);
+  --ph-text: #f4f7fb;
+  --ph-muted: #9eacc0;
+  --ph-blue: #71a7ff;
+  --ph-cyan: #5dd8cb;
+  --ph-amber: #f3bd61;
+  --ph-red: #f08a93;
+  --ph-shadow: 0 22px 70px rgba(0, 0, 0, 0.24);
+  color: var(--ph-text);
+}
+
+#page-operator-pilot-handoff .pmk17c-shell {
+  display: grid;
+  gap: 18px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 8px 2px 40px;
+}
+
+#page-operator-pilot-handoff .pmk17c-hero,
+#page-operator-pilot-handoff .pmk17c-panel,
+#page-operator-pilot-handoff .pmk17c-state {
+  border: 1px solid var(--ph-line);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(18, 35, 59, 0.96), rgba(8, 18, 33, 0.94));
+  box-shadow: var(--ph-shadow);
+}
+
+#page-operator-pilot-handoff .pmk17c-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(20px, 3vw, 34px);
+}
+
+#page-operator-pilot-handoff .pmk17c-hero::after {
+  position: absolute;
+  top: -160px;
+  right: -130px;
+  width: 440px;
+  height: 440px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(65, 139, 255, 0.22), transparent 68%);
+  content: "";
+  pointer-events: none;
+}
+
+#page-operator-pilot-handoff .pmk17c-hero-main,
+#page-operator-pilot-handoff .pmk17c-hero-actions,
+#page-operator-pilot-handoff .pmk17c-identity,
+#page-operator-pilot-handoff .pmk17c-phase-rail {
+  position: relative;
+  z-index: 1;
+}
+
+#page-operator-pilot-handoff .pmk17c-hero-main {
+  max-width: 850px;
+}
+
+#page-operator-pilot-handoff .pmk17c-kicker {
+  margin-bottom: 8px;
+  color: var(--ph-blue);
+  font: 700 10px/1.4 "Space Mono", monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#page-operator-pilot-handoff .pmk17c-title-row,
+#page-operator-pilot-handoff .pmk17c-panel-head,
+#page-operator-pilot-handoff .pmk17c-intake-footer,
+#page-operator-pilot-handoff .pmk17c-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#page-operator-pilot-handoff .pmk17c-title-row h2 {
+  margin: 0;
+  color: var(--ph-text);
+  font-size: clamp(25px, 3vw, 40px);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+#page-operator-pilot-handoff .pmk17c-hero-main > p {
+  max-width: 760px;
+  margin: 15px 0 0;
+  color: #bac6d7;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+#page-operator-pilot-handoff .pmk17c-hero-actions {
+  position: absolute;
+  top: 28px;
+  right: 30px;
+  display: flex;
+  gap: 8px;
+}
+
+#page-operator-pilot-handoff button,
+#page-operator-pilot-handoff a {
+  font: inherit;
+}
+
+#page-operator-pilot-handoff .pmk17c-primary,
+#page-operator-pilot-handoff .pmk17c-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: 11px;
+  padding: 9px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+#page-operator-pilot-handoff .pmk17c-primary {
+  border: 1px solid #79aaff;
+  background: linear-gradient(135deg, #5f95ee, #3977d9);
+  color: #fff;
+  font-weight: 750;
+  box-shadow: 0 10px 26px rgba(50, 107, 207, 0.25);
+}
+
+#page-operator-pilot-handoff .pmk17c-secondary {
+  border: 1px solid var(--ph-line-strong);
+  background: rgba(10, 20, 35, 0.58);
+  color: #dce6f5;
+}
+
+#page-operator-pilot-handoff .pmk17c-primary:hover,
+#page-operator-pilot-handoff .pmk17c-secondary:hover {
+  transform: translateY(-1px);
+  border-color: var(--ph-blue);
+}
+
+#page-operator-pilot-handoff .pmk17c-primary:focus-visible,
+#page-operator-pilot-handoff .pmk17c-secondary:focus-visible,
+#page-operator-pilot-handoff .pmk17c-tabs button:focus-visible,
+#page-operator-pilot-handoff textarea:focus-visible,
+#page-operator-pilot-handoff .pmk17c-dropzone:focus-within {
+  outline: 3px solid rgba(113, 167, 255, 0.3);
+  outline-offset: 2px;
+}
+
+#page-operator-pilot-handoff .pmk17c-identity {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  margin: 30px 0 0;
+  border-top: 1px solid var(--ph-line);
+  border-bottom: 1px solid var(--ph-line);
+}
+
+#page-operator-pilot-handoff .pmk17c-identity div {
+  min-width: 0;
+  padding: 15px 14px;
+  border-right: 1px solid var(--ph-line);
+}
+
+#page-operator-pilot-handoff .pmk17c-identity div:last-child {
+  border-right: 0;
+}
+
+#page-operator-pilot-handoff .pmk17c-identity dt,
+#page-operator-pilot-handoff .pmk17c-identity dd {
+  margin: 0;
+}
+
+#page-operator-pilot-handoff .pmk17c-identity dt {
+  margin-bottom: 5px;
+  color: var(--ph-muted);
+  font: 600 9px/1.3 "Space Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#page-operator-pilot-handoff .pmk17c-identity dd {
+  overflow: hidden;
+  color: var(--ph-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase-rail {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ph-muted);
+  font-size: 10px;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase::after {
+  position: absolute;
+  top: 13px;
+  right: 0;
+  left: 34px;
+  height: 1px;
+  background: var(--ph-line-strong);
+  content: "";
+}
+
+#page-operator-pilot-handoff .pmk17c-phase:last-child::after {
+  display: none;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--ph-line-strong);
+  border-radius: 50%;
+  background: #0b1728;
+  font-family: "Space Mono", monospace;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase strong {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  padding-right: 7px;
+  background: #0e1c30;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase.active {
+  color: #fff;
+}
+
+#page-operator-pilot-handoff .pmk17c-phase.active > span {
+  border-color: var(--ph-blue);
+  background: var(--ph-blue);
+  color: #07101f;
+}
+
+#page-operator-pilot-handoff .pmk17c-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--ph-line);
+  border-radius: 15px;
+  padding: 5px;
+  background: rgba(6, 14, 26, 0.72);
+  scrollbar-width: thin;
+}
+
+#page-operator-pilot-handoff .pmk17c-tabs button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 15px;
+  background: transparent;
+  color: var(--ph-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#page-operator-pilot-handoff .pmk17c-tabs button.active {
+  background: #162a47;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(113, 167, 255, 0.25);
+}
+
+#page-operator-pilot-handoff .pmk17c-content {
+  min-width: 0;
+}
+
+#page-operator-pilot-handoff .pmk17c-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+#page-operator-pilot-handoff .pmk17c-metric {
+  min-width: 0;
+  border: 1px solid var(--ph-line);
+  border-radius: 16px;
+  padding: 17px;
+  background: var(--ph-panel);
+}
+
+#page-operator-pilot-handoff .pmk17c-metric > span,
+#page-operator-pilot-handoff .pmk17c-metric > small {
+  display: block;
+  color: var(--ph-muted);
+  font-size: 10px;
+}
+
+#page-operator-pilot-handoff .pmk17c-metric > strong {
+  display: block;
+  overflow: hidden;
+  margin: 8px 0 6px;
+  color: #fff;
+  font-size: clamp(18px, 2vw, 26px);
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+}
+
+#page-operator-pilot-handoff .pmk17c-metric.good { border-color: rgba(93, 216, 203, 0.35); }
+#page-operator-pilot-handoff .pmk17c-metric.warn { border-color: rgba(243, 189, 97, 0.35); }
+#page-operator-pilot-handoff .pmk17c-metric.locked { background: rgba(9, 17, 29, 0.78); }
+
+#page-operator-pilot-handoff .pmk17c-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+#page-operator-pilot-handoff .pmk17c-panel {
+  padding: clamp(18px, 2.4vw, 28px);
+}
+
+#page-operator-pilot-handoff .pmk17c-panel h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+#page-operator-pilot-handoff .pmk17c-next {
+  background: linear-gradient(135deg, rgba(38, 82, 143, 0.48), rgba(10, 24, 43, 0.92));
+}
+
+#page-operator-pilot-handoff .pmk17c-next > p {
+  max-width: 640px;
+  margin: 12px 0 20px;
+  color: #bdcadb;
+  line-height: 1.7;
+}
+
+#page-operator-pilot-handoff .pmk17c-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid var(--ph-line-strong);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(122, 145, 177, 0.11);
+  color: #cbd6e7;
+  font: 700 9px/1.2 "Space Mono", monospace;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+#page-operator-pilot-handoff .pmk17c-badge.good { border-color: rgba(93, 216, 203, 0.45); color: var(--ph-cyan); }
+#page-operator-pilot-handoff .pmk17c-badge.warn { border-color: rgba(243, 189, 97, 0.45); color: var(--ph-amber); }
+#page-operator-pilot-handoff .pmk17c-badge.bad { border-color: rgba(240, 138, 147, 0.45); color: var(--ph-red); }
+#page-operator-pilot-handoff .pmk17c-badge.locked { color: #a6b1c1; }
+
+#page-operator-pilot-handoff .pmk17c-clean-list {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#page-operator-pilot-handoff .pmk17c-clean-list li {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  border-top: 1px solid var(--ph-line);
+  padding-top: 10px;
+}
+
+#page-operator-pilot-handoff .pmk17c-clean-list li > span {
+  color: var(--ph-blue);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+}
+
+#page-operator-pilot-handoff .pmk17c-clean-list strong,
+#page-operator-pilot-handoff .pmk17c-clean-list small {
+  display: block;
+}
+
+#page-operator-pilot-handoff .pmk17c-clean-list small {
+  margin-top: 3px;
+  color: var(--ph-muted);
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#page-operator-pilot-handoff .pmk17c-flow-step {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ph-line);
+  border-radius: 14px;
+  padding: 13px;
+  background: rgba(12, 25, 43, 0.76);
+}
+
+#page-operator-pilot-handoff .pmk17c-flow-step > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(113, 167, 255, 0.14);
+  color: var(--ph-blue);
+  font-family: "Space Mono", monospace;
+}
+
+#page-operator-pilot-handoff .pmk17c-flow-step strong,
+#page-operator-pilot-handoff .pmk17c-flow-step small {
+  display: block;
+}
+
+#page-operator-pilot-handoff .pmk17c-flow-step small {
+  margin-top: 3px;
+  color: var(--ph-muted);
+  font-size: 9px;
+}
+
+#page-operator-pilot-handoff .pmk17c-method-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-boundary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid var(--ph-line);
+  border-radius: 14px;
+  background: var(--ph-line);
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-boundary > div {
+  padding: 15px 17px;
+  background: rgba(10, 22, 39, 0.94);
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-boundary strong,
+#page-operator-pilot-handoff .pmk17c-intake-boundary span {
+  display: block;
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-boundary strong {
+  margin-bottom: 5px;
+  color: var(--ph-cyan);
+  font-size: 11px;
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-boundary > div:last-child strong {
+  color: var(--ph-red);
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-boundary span {
+  color: var(--ph-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+#page-operator-pilot-handoff .pmk17c-method {
+  border: 1px solid var(--ph-line);
+  border-radius: 16px;
+  padding: 18px;
+  background: rgba(12, 25, 43, 0.72);
+}
+
+#page-operator-pilot-handoff .pmk17c-method.active {
+  border-color: rgba(113, 167, 255, 0.48);
+  background: linear-gradient(140deg, rgba(49, 97, 164, 0.32), rgba(12, 25, 43, 0.82));
+}
+
+#page-operator-pilot-handoff .pmk17c-method > span {
+  color: var(--ph-blue);
+  font: 700 9px/1.2 "Space Mono", monospace;
+  text-transform: uppercase;
+}
+
+#page-operator-pilot-handoff .pmk17c-method h3 {
+  margin: 9px 0 7px;
+  font-size: 14px;
+}
+
+#page-operator-pilot-handoff .pmk17c-method p {
+  margin: 0;
+  color: var(--ph-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+#page-operator-pilot-handoff .pmk17c-method code {
+  display: block;
+  overflow: hidden;
+  margin-top: 10px;
+  color: var(--ph-blue);
+  font: 9px/1.5 "Space Mono", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page-operator-pilot-handoff .pmk17c-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#page-operator-pilot-handoff .pmk17c-dropzone {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  margin-top: 20px;
+  border: 1px dashed rgba(113, 167, 255, 0.48);
+  border-radius: 16px;
+  background: rgba(40, 83, 145, 0.11);
+  color: #e6eef9;
+  cursor: pointer;
+  text-align: center;
+}
+
+#page-operator-pilot-handoff .pmk17c-dropzone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+#page-operator-pilot-handoff .pmk17c-dropzone small,
+#page-operator-pilot-handoff .pmk17c-textarea-label,
+#page-operator-pilot-handoff .pmk17c-safety-note {
+  color: var(--ph-muted);
+  font-size: 10px;
+}
+
+#page-operator-pilot-handoff .pmk17c-dropzone[data-dragging="true"] {
+  border-style: solid;
+  border-color: var(--ph-blue);
+  background: rgba(50, 106, 191, 0.2);
+}
+
+#page-operator-pilot-handoff .pmk17c-textarea-label {
+  display: block;
+  margin: 18px 0 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#page-operator-pilot-handoff #pmk17c-manifest-text {
+  width: 100%;
+  min-height: 230px;
+  resize: vertical;
+  border: 1px solid var(--ph-line-strong);
+  border-radius: 14px;
+  padding: 15px;
+  background: #071221;
+  color: #d8e4f3;
+  font: 11px/1.65 "Space Mono", monospace;
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-footer {
+  margin-top: 12px;
+}
+
+#page-operator-pilot-handoff .pmk17c-safety-note {
+  max-width: 720px;
+  line-height: 1.55;
+}
+
+#page-operator-pilot-handoff .pmk17c-safety-note strong {
+  color: var(--ph-cyan);
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-result {
+  margin-top: 16px;
+  border: 1px solid var(--ph-line);
+  border-radius: 14px;
+  padding: 16px;
+  background: rgba(5, 14, 26, 0.66);
+  color: var(--ph-muted);
+  font-size: 11px;
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-result[data-state="loaded"] {
+  border-color: rgba(93, 216, 203, 0.38);
+}
+
+#page-operator-pilot-handoff .pmk17c-intake-result[data-state="error"] {
+  border-color: rgba(240, 138, 147, 0.42);
+  color: #f5b3b9;
+}
+
+#page-operator-pilot-handoff .pmk17c-result-head > div > span,
+#page-operator-pilot-handoff .pmk17c-result-head > div > strong,
+#page-operator-pilot-handoff .pmk17c-score span,
+#page-operator-pilot-handoff .pmk17c-score strong {
+  display: block;
+}
+
+#page-operator-pilot-handoff .pmk17c-result-head > div > strong {
+  margin-top: 4px;
+  color: #fff;
+  font-size: 17px;
+}
+
+#page-operator-pilot-handoff .pmk17c-score {
+  text-align: right;
+}
+
+#page-operator-pilot-handoff .pmk17c-score strong {
+  color: var(--ph-cyan);
+  font-size: 24px;
+}
+
+#page-operator-pilot-handoff .pmk17c-result-meta,
+#page-operator-pilot-handoff .pmk17c-policy-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+#page-operator-pilot-handoff .pmk17c-result-meta span,
+#page-operator-pilot-handoff .pmk17c-policy-strip > * {
+  border: 1px solid var(--ph-line);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: rgba(129, 151, 181, 0.08);
+  font: 9px/1.3 "Space Mono", monospace;
+}
+
+#page-operator-pilot-handoff .pmk17c-missing ul {
+  columns: 2;
+  margin-bottom: 0;
+  padding-left: 18px;
+}
+
+#page-operator-pilot-handoff .pmk17c-ready-note {
+  margin-bottom: 0;
+  color: var(--ph-cyan);
+}
+
+#page-operator-pilot-handoff .pmk17c-table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+#page-operator-pilot-handoff .pmk17c-table-panel > .pmk17c-panel-head {
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--ph-line);
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap table {
+  width: 100%;
+  min-width: 840px;
+  border-collapse: collapse;
+  color: #d9e3f0;
+  font-size: 11px;
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap th,
+#page-operator-pilot-handoff .pmk17c-table-wrap td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ph-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap th {
+  background: rgba(5, 13, 24, 0.56);
+  color: var(--ph-muted);
+  font: 700 9px/1.3 "Space Mono", monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap tbody tr:hover {
+  background: rgba(113, 167, 255, 0.045);
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap td strong,
+#page-operator-pilot-handoff .pmk17c-table-wrap td small {
+  display: block;
+}
+
+#page-operator-pilot-handoff .pmk17c-table-wrap td small {
+  max-width: 360px;
+  margin-top: 5px;
+  color: var(--ph-muted);
+  line-height: 1.5;
+}
+
+#page-operator-pilot-handoff .pmk17c-empty-cell {
+  padding: 42px !important;
+  color: var(--ph-muted);
+  text-align: center !important;
+}
+
+#page-operator-pilot-handoff .pmk17c-policy-strip {
+  margin: 16px 20px 20px;
+}
+
+#page-operator-pilot-handoff .pmk17c-policy-strip span {
+  color: var(--ph-muted);
+}
+
+#page-operator-pilot-handoff .pmk17c-policy-strip strong {
+  color: var(--ph-red);
+}
+
+#page-operator-pilot-handoff .pmk17c-state {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  align-content: center;
+  padding: 42px;
+  text-align: center;
+}
+
+#page-operator-pilot-handoff .pmk17c-state h2 {
+  margin: 15px 0 6px;
+  color: #fff;
+}
+
+#page-operator-pilot-handoff .pmk17c-state p {
+  max-width: 520px;
+  margin: 0 0 20px;
+  color: var(--ph-muted);
+}
+
+#page-operator-pilot-handoff .pmk17c-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(113, 167, 255, 0.2);
+  border-top-color: var(--ph-blue);
+  border-radius: 50%;
+  animation: pmk17c-spin 800ms linear infinite;
+}
+
+@keyframes pmk17c-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1180px) {
+  #page-operator-pilot-handoff .pmk17c-hero-actions {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin-top: 18px;
+  }
+  #page-operator-pilot-handoff .pmk17c-identity,
+  #page-operator-pilot-handoff .pmk17c-summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  #page-operator-pilot-handoff .pmk17c-identity div:nth-child(3) {
+    border-right: 0;
+  }
+  #page-operator-pilot-handoff .pmk17c-identity div:nth-child(-n+3) {
+    border-bottom: 1px solid var(--ph-line);
+  }
+}
+
+@media (max-width: 820px) {
+  #page-operator-pilot-handoff .pmk17c-overview-grid,
+  #page-operator-pilot-handoff .pmk17c-method-grid {
+    grid-template-columns: 1fr;
+  }
+  #page-operator-pilot-handoff .pmk17c-intake-flow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  #page-operator-pilot-handoff .pmk17c-phase-rail {
+    grid-template-columns: repeat(3, 1fr);
+    row-gap: 14px;
+  }
+  #page-operator-pilot-handoff .pmk17c-phase:nth-child(3)::after,
+  #page-operator-pilot-handoff .pmk17c-phase:last-child::after {
+    display: none;
+  }
+}
+
+@media (max-width: 580px) {
+  #page-operator-pilot-handoff .pmk17c-title-row,
+  #page-operator-pilot-handoff .pmk17c-panel-head,
+  #page-operator-pilot-handoff .pmk17c-intake-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  #page-operator-pilot-handoff .pmk17c-identity,
+  #page-operator-pilot-handoff .pmk17c-summary-grid,
+  #page-operator-pilot-handoff .pmk17c-intake-flow,
+  #page-operator-pilot-handoff .pmk17c-intake-boundary {
+    grid-template-columns: 1fr;
+  }
+  #page-operator-pilot-handoff .pmk17c-identity div {
+    border-right: 0;
+    border-bottom: 1px solid var(--ph-line);
+  }
+  #page-operator-pilot-handoff .pmk17c-phase-rail {
+    grid-template-columns: 1fr;
+  }
+  #page-operator-pilot-handoff .pmk17c-phase::after {
+    display: none;
+  }
+  #page-operator-pilot-handoff .pmk17c-missing ul {
+    columns: 1;
+  }
+  #page-operator-pilot-handoff .pmk17c-hero-actions,
+  #page-operator-pilot-handoff .pmk17c-inline-actions {
+    width: 100%;
+  }
+  #page-operator-pilot-handoff .pmk17c-hero-actions > *,
+  #page-operator-pilot-handoff .pmk17c-inline-actions > * {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page-operator-pilot-handoff *,
+  #page-operator-pilot-handoff *::before,
+  #page-operator-pilot-handoff *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Body, FastAPI
+from fastapi import Body, Depends, FastAPI
 from fastapi import HTTPException as PMK13AHTTPException
 from fastapi import Request as PMK13ARequest
 from fastapi.middleware.cors import CORSMiddleware
@@ -74,6 +74,7 @@ from processual_api.services.integration_claim_keys import (
 )
 
 from .auth.router import router as auth_router
+from .auth.security import require_scope
 from .billing.router import router as billing_router
 from .cache.redis import close_redis, init_redis
 from .cgt_governor.adapters.registry import adapter_registry
@@ -557,6 +558,25 @@ def admin_operator_pilot_handoff_export_14b():
             )
         },
     )
+
+
+@app.post("/settings/admin/operator-pilot-handoff/intake-preview")
+def admin_operator_pilot_handoff_intake_preview_17c_r1(
+    payload: dict[str, object] = Body(...),
+    _current_user: dict = Depends(
+        require_scope("admin:integration_readiness:review")
+    ),
+) -> dict[str, object]:
+    """Assess a reference-only sandbox manifest without persisting it."""
+    from processual_api.services.operator_pilot_handoff_intake_preview import (
+        IntakePreviewValidationError,
+        build_operator_pilot_handoff_intake_preview,
+    )
+
+    try:
+        return build_operator_pilot_handoff_intake_preview(payload)
+    except IntakePreviewValidationError as exc:
+        raise PMK13AHTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # END INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES

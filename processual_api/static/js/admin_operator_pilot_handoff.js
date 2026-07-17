@@ -537,6 +537,7 @@ const lines = [
     window.open(OPERATOR_PILOT_HANDOFF_EXPORT_API_14C, "_blank", "noopener");
   }
   async function init() {
+    if (window.PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED) return;
 
     await loadBackendPackage14C();
 render();
@@ -829,6 +830,7 @@ render();
   }
 
   async function initActions14D() {
+    if (window.PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED) return;
     const results = await Promise.all([
       loadActionsPackage14D(),
       waitForShell14D()
@@ -1523,6 +1525,7 @@ render();
   }
 
   async function initProgress14E() {
+    if (window.PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED) return;
     const results = await Promise.all([
       loadProgress14E(),
       waitForActionCards14E()
