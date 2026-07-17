@@ -17,10 +17,10 @@ def test_17c_assets_are_wired_after_legacy_compatibility_assets() -> None:
     html = _read(ADMIN_HTML)
 
     legacy = html.index("admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress")
-    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1")
+    dashboard = html.index("admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r2")
 
     assert legacy < dashboard
-    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1" in html
+    assert "admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r2" in html
     assert "PMK_OPERATOR_PILOT_HANDOFF_17C_ENABLED" in _read(LEGACY_JS)
 
 
