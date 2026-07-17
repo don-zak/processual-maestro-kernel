@@ -127,3 +127,24 @@ def test_17c_css_is_scoped_responsive_and_accessible() -> None:
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert ":focus-visible" in css
     assert "overflow-x: auto" in css
+    assert "#page-operator-pilot-handoff.active" in css
+    assert "overflow-y: auto" in css
+    assert "container-type: inline-size" in css
+    assert "@container pmk17c-workspace (max-width: 820px)" in css
+    assert "@media (max-height: 520px) and (orientation: landscape)" in css
+    assert "overflow-wrap: anywhere" in css
+
+
+def test_17c_shell_exposes_stable_visual_diagnostic_state() -> None:
+    js = _read(DASHBOARD_JS)
+
+    for marker in (
+        'data-phase="pilot-handoff-17c-r1"',
+        'data-load-state=',
+        'data-active-tab=',
+        'data-production-allowed="false"',
+        'data-runtime-connector-approved="false"',
+        "formatTimestamp",
+        'timeZone: "UTC"',
+    ):
+        assert marker in js
