@@ -60,7 +60,8 @@ jobs:
 
       - name: Unit tests
         run: |
-          pytest --cov=processual_kernel --cov=processual_api \
+          PYTHONPATH=. python -m pytest \
+            --cov=processual_kernel --cov=processual_api \
             --cov-report=xml --cov-report=term-missing -q
 
       - name: Build package
