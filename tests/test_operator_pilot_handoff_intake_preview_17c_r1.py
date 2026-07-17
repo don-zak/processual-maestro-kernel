@@ -134,4 +134,3 @@ def test_preview_does_not_echo_manifest_or_contact_values() -> None:
     assert "contact://integration-team" not in rendered
     assert "requested_scopes" not in preview
     assert "manifest" not in preview
-
