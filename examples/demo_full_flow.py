@@ -9,30 +9,29 @@ Shows the complete pipeline end-to-end:
 """
 from __future__ import annotations
 
-import locale, sys
+import locale
+import sys
+
 if locale.getpreferredencoding().upper() in ("CP1252", "ASCII"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 import sys
-import math
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import asyncio
-from pprint import pprint
 
-from cgtlib import evaluate_structural_transition, CGTParameters
+from cgtlib import CGTParameters, evaluate_structural_transition
 from cgtlib.types import PhaseState
-from processual_kernel import AgentCriticality, AgentSpec, AgentTelemetry, ProcessualCGTKernel
-from processual_kernel.audit import JsonlAuditSink
-
 from processual_api.adapters.agent_runtime import (
     AgentExecutionResult,
     RuntimeAdapter,
     RuntimeHealth,
     runtime_registry,
 )
+from processual_kernel import AgentCriticality, AgentSpec, AgentTelemetry, ProcessualCGTKernel
+from processual_kernel.audit import JsonlAuditSink
 
 
 class LangGraphRuntime(RuntimeAdapter):
@@ -157,7 +156,8 @@ async def run_demo() -> None:
     # ── Step 5: API Interaction ──────────────────────────────────────────
     print("=== 5. HTTP API (/cgt/evaluate) ===")
     try:
-        from httpx import AsyncClient, ASGITransport
+        from httpx import ASGITransport, AsyncClient
+
         from processual_api.main import app
 
         transport = ASGITransport(app=app)

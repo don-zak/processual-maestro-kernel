@@ -271,7 +271,12 @@ function setLanguage(l) {
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 document.getElementById('lang-ar').addEventListener('click', () => setLanguage('ar'));
 
-launchBtn.addEventListener('click', () => { window.location.href = '/login'; });
+launchBtn.addEventListener('click', () => {
+  sessionStorage.setItem('maestro_descent_gate_seen', '1');
+  sessionStorage.setItem('maestro_descent_gate_seen_at', new Date().toISOString());
+  window.location.href = '/login';
+});
+
 
 // --- Start ---
 setTimeout(() => { step = 0; bootStep(); }, 600);

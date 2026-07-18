@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJQcm9jZXNzdWFsIE1hZXN0cm8iPgogIDxyZWN0IHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgcng9IjE2IiBmaWxsPSIjMGYxNzJhIi8+CiAgPHBhdGggZD0iTTE3IDQzVjIxaDEyYzUuMyAwIDguOCAzLjIgOC44IDhzLTMuNSA4LTguOCA4aC01djZoLTd6bTctMTJoNC40YzEuOSAwIDMuMS0uOCAzLjEtMnMtMS4yLTItMy4xLTJIMjR2NHoiIGZpbGw9IiNmNTllMGIiLz4KICA8cGF0aCBkPSJNMzggNDNWMjFoN2w1IDguNyA1LTguN2g3djIyaC03VjMyLjhsLTMuNSA2aC0zbC0zLjUtNlY0M2gtN3oiIGZpbGw9IiM5M2M1ZmQiLz4KPC9zdmc+Cg=="/>
+
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Maestro Subscription Options</title>
+<style>
+:root{
+  --bg:#05080d;
+  --card:#101722;
+  --panel:#0b1324;
+  --line:#263a5f;
+  --line-soft:rgba(61,88,145,.42);
+  --text:#e7edf8;
+  --muted:#6780aa;
+  --amber:#f5a623;
+  --green:#73d08a;
+  --blue:#7dd3fc;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 20% 10%,rgba(245,166,35,.08),transparent 26rem),
+    radial-gradient(circle at 80% 20%,rgba(125,211,252,.08),transparent 28rem),
+    var(--bg);
+  color:var(--text);
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.page{
+  width:min(1120px,calc(100% - 32px));
+  margin:0 auto;
+  padding:42px 0 56px;
+}
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:28px;
+}
+.brand{
+  letter-spacing:.28em;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.back-link{
+  color:var(--muted);
+  text-decoration:none;
+  border:1px solid var(--line-soft);
+  border-radius:999px;
+  padding:10px 14px;
+}
+.back-link:hover{
+  color:var(--text);
+  border-color:rgba(245,166,35,.65);
+}
+.hero{
+  border:1px solid var(--line-soft);
+  border-radius:28px;
+  background:rgba(16,23,34,.82);
+  padding:30px;
+  box-shadow:0 24px 80px rgba(0,0,0,.32);
+}
+.eyebrow{
+  color:var(--amber);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  margin:0 0 10px;
+}
+h1{
+  font-size:clamp(32px,6vw,58px);
+  line-height:1;
+  margin:0 0 14px;
+}
+.hero-copy{
+  color:var(--muted);
+  font-size:17px;
+  line-height:1.6;
+  margin:0;
+  max-width:780px;
+}
+.status-row{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+  margin:22px 0 0;
+}
+.status-pill{
+  border:1px solid var(--line-soft);
+  border-radius:18px;
+  background:rgba(11,19,36,.74);
+  padding:14px;
+}
+.status-label{
+  color:var(--muted);
+  display:block;
+  font-size:12px;
+  margin-bottom:5px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.status-value{
+  color:var(--text);
+  font-weight:700;
+}
+.surface-section{
+  margin-top:34px;
+}
+.section-heading{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:14px;
+}
+.section-heading h2{
+  font-size:28px;
+  margin:0;
+}
+.section-copy{
+  color:var(--muted);
+  line-height:1.55;
+  margin:8px 0 0;
+  max-width:760px;
+}
+.catalog-state{
+  color:var(--muted);
+  margin:18px 0;
+}
+.plan-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:16px;
+  margin-top:18px;
+}
+.offer-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:16px;
+  margin-top:18px;
+}
+.plan-card,
+.offer-card{
+  border:1px solid var(--line-soft);
+  border-radius:24px;
+  background:rgba(11,19,36,.82);
+  padding:20px;
+  min-height:100%;
+}
+.plan-card h3,
+.offer-card h3{
+  font-size:22px;
+  margin:0 0 8px;
+}
+.plan-description,
+.offer-description{
+  color:var(--muted);
+  line-height:1.5;
+  min-height:72px;
+}
+.price-label{
+  color:var(--amber);
+  font-size:28px;
+  font-weight:800;
+  margin:18px 0 4px;
+}
+.review-label{
+  color:var(--amber);
+  font-size:20px;
+  font-weight:800;
+  margin:16px 0 4px;
+}
+.draft-note{
+  color:var(--muted);
+  font-size:13px;
+}
+.plan-meta,
+.offer-meta{
+  display:grid;
+  gap:10px;
+  margin:18px 0;
+}
+.meta-item{
+  border:1px solid rgba(61,88,145,.28);
+  border-radius:14px;
+  padding:10px;
+}
+.meta-label{
+  color:var(--muted);
+  display:block;
+  font-size:12px;
+  margin-bottom:3px;
+}
+.meta-value{
+  font-weight:700;
+}
+.feature-list{
+  margin:18px 0 0;
+  padding:0;
+  list-style:none;
+}
+.feature-list li{
+  color:var(--text);
+  margin:9px 0;
+  padding-left:20px;
+  position:relative;
+}
+.feature-list li::before{
+  content:"";
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--green);
+  position:absolute;
+  left:0;
+  top:.62em;
+}
+.badge{
+  border:1px solid rgba(125,211,252,.32);
+  border-radius:999px;
+  color:var(--blue);
+  display:inline-flex;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.05em;
+  padding:6px 10px;
+  text-transform:uppercase;
+}
+.badge.warning{
+  border-color:rgba(245,166,35,.42);
+  color:var(--amber);
+}
+.cta-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:32px;
+}
+.cta{
+  border:1px solid rgba(245,166,35,.62);
+  border-radius:16px;
+  background:rgba(245,166,35,.12);
+  color:var(--text);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:46px;
+  padding:0 18px;
+  text-decoration:none;
+  font-weight:700;
+}
+.cta.secondary{
+  border-color:var(--line-soft);
+  background:rgba(11,19,36,.72);
+  color:var(--muted);
+}
+.footer-note{
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.55;
+  margin-top:22px;
+}
+.error{
+  border:1px solid rgba(255,68,102,.45);
+  border-radius:18px;
+  color:#ffd5dd;
+  background:rgba(255,68,102,.08);
+  padding:16px;
+}
+@media(max-width:980px){
+  .status-row,.plan-grid,.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px){
+  .page{width:min(100% - 22px,1120px);padding-top:24px}
+  .topbar{align-items:flex-start;flex-direction:column}
+  .hero{padding:22px}
+  .status-row,.plan-grid,.offer-grid{grid-template-columns:1fr}
+  .section-heading{align-items:flex-start;flex-direction:column}
+}
+
+.refund-terms-content{
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  padding:16px;
+  background:rgba(255,255,255,.05);
+}
+
+.refund-terms-content[hidden]{
+  display:none!important;
+}
+
+.refund-terms-content h3{
+  margin:0 0 10px;
+}
+
+.refund-terms-content p,
+.refund-terms-content li{
+  color:var(--muted);
+  line-height:1.6;
+}
+
+
+/* PRICING-OFFERS-08F-R2: refund terms are hidden until the button opens them. */
+.refund-terms-card{
+  display:none!important;
+}
+
+.refund-terms-card.is-open{
+  display:block!important;
+}
+
+
+/* PRICING-COST-08G-R1: public pricing factors are hidden until opened. */
+.pricing-factors-actions{
+  margin-top:18px;
+  display:flex;
+  justify-content:center;
+}
+
+.pricing-factors-toggle{
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  color:var(--text);
+  padding:10px 16px;
+  cursor:pointer;
+}
+
+.pricing-factors-card{
+  display:none!important;
+  margin-top:14px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:20px;
+  padding:18px;
+  background:rgba(255,255,255,.05);
+}
+
+.pricing-factors-card.is-open{
+  display:block!important;
+}
+
+.pricing-factors-content[hidden]{
+  display:none!important;
+}
+
+.pricing-factors-content h3{
+  margin:0 0 10px;
+}
+
+.pricing-factors-content p,
+.pricing-factors-content li{
+  color:var(--muted);
+  line-height:1.6;
+}
+
+.pricing-factors-list{
+  margin:12px 0;
+  padding-inline-start:22px;
+}
+
+.pricing-factors-note{
+  margin-top:12px;
+  font-size:.95rem;
+}
+
+
+/* PRICING-COST-08G-R1: unified bottom actions under the offers panel. */
+.pricing-bottom-actions{
+  margin-top:18px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+}
+
+.pricing-bottom-action{
+  min-height:48px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:12px 22px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.08);
+  color:var(--text);
+  font:inherit;
+  font-weight:700;
+  line-height:1;
+  text-decoration:none;
+  cursor:pointer;
+  transition:transform .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.pricing-bottom-action:hover,
+.pricing-bottom-action:focus-visible{
+  transform:translateY(-1px);
+  border-color:rgba(255,255,255,.32);
+  outline:none;
+}
+
+.pricing-bottom-action--primary{
+  border-color:rgba(245,158,11,.75);
+  background:rgba(245,158,11,.12);
+  color:#fff7ed;
+}
+
+.pricing-bottom-action--secondary{
+  border-color:rgba(96,165,250,.35);
+  background:rgba(37,99,235,.1);
+  color:#93c5fd;
+}
+
+.pricing-bottom-action--info{
+  border-color:rgba(148,163,184,.45);
+  background:rgba(148,163,184,.12);
+  color:#e5e7eb;
+}
+
+.pricing-bottom-action--policy{
+  border-color:rgba(34,197,94,.45);
+  background:rgba(34,197,94,.1);
+  color:#bbf7d0;
+}
+
+.pricing-bottom-action[aria-expanded="true"]{
+  border-color:rgba(255,255,255,.48);
+  background:rgba(255,255,255,.15);
+}
+
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="topbar">
+    <div class="brand">MAESTRO</div>
+    <a class="back-link" href="/login">Back to login</a>
+  </div>
+
+  <section class="hero">
+    <p class="eyebrow">Draft subscription catalog</p>
+    <h1>Subscription options</h1>
+    <p class="hero-copy">
+      Processual Maestro currently lists draft commercial subscription options and draft offer structures.
+      Pricing values are not approved, checkout is disabled, and provider costs are not included.
+    </p>
+
+    <div class="status-row" id="catalog-summary" aria-label="Catalog summary">
+      <div class="status-pill">
+        <span class="status-label">Pricing</span>
+        <span class="status-value" id="summary-pricing-status">Loading</span>
+      </div>
+      <div class="status-pill">
+        <span class="status-label">Billing</span>
+        <span class="status-value" id="summary-billing-policy">Loading</span>
+      </div>
+      <div class="status-pill">
+        <span class="status-label">Provider costs</span>
+        <span class="status-value" id="summary-provider-costs">Loading</span>
+      </div>
+      <div class="status-pill">
+        <span class="status-label">Checkout</span>
+        <span class="status-value" id="summary-checkout">Loading</span>
+      </div>
+    </div>
+
+    <section class="surface-section" id="pricing-plans-section">
+      <div class="section-heading">
+        <div>
+          <span class="badge">Plans</span>
+          <h2>Commercial plans</h2>
+          <p class="section-copy">
+            Plans define audience, features, BYOK policy, and monthly Maestro unit allowance.
+          </p>
+        </div>
+      </div>
+      <p class="catalog-state" id="catalog-state">Loading subscription catalog...</p>
+      <div class="plan-grid" id="pricing-plan-grid"></div>
+    </section>
+
+    <section class="surface-section" id="pricing-offers-section">
+      <div class="section-heading">
+        <div>
+          <span class="badge warning">Draft offers</span>
+          <h2>Offer structures under review</h2>
+          <p class="section-copy">
+            Offers define trial, monthly, yearly, and contact-sales structures.
+            Amounts and calculation method are intentionally pending review.
+          </p>
+        </div>
+      </div>
+      <p class="catalog-state" id="offer-pricebook-state">Loading offer price book...</p>
+      <div class="offer-grid" id="pricing-offer-grid"></div>
+
+      <div class="refund-terms-actions">
+      <div class="pricing-factors-actions pricing-bottom-actions" id="pricing-factors-actions">
+        <button
+          type="button"
+          class="pricing-factors-toggle pricing-bottom-action pricing-bottom-action--info"
+          id="pricing-factors-toggle"
+          aria-expanded="false"
+          aria-controls="pricing-factors-card"
+          data-label-ar="عوامل التسعير"
+          data-label-en="Pricing factors under review"
+        >
+          Pricing factors under review
+        </button>
+      </div>
+      <article class="pricing-factors-card" id="pricing-factors-card" aria-hidden="true">
+        <section class="pricing-factors-content" data-pricing-factors-lang="ar" lang="ar" dir="rtl" hidden>
+          <h3>عوامل التسعير قيد المراجعة</h3>
+          <p id="pricing-factors-state-ar">تحميل حالة مراجعة التسعير...</p>
+          <ul class="pricing-factors-list">
+            <li>تراعي الأسعار البنية التحتية والتشغيل العام للخدمة.</li>
+            <li>تراعي معالجة الدفع والالتزامات الضريبية القابلة للتطبيق.</li>
+            <li>تراعي الدعم والإشراف وجهد الدمج عند الحاجة.</li>
+            <li>تطبق سياسة BYOK، ولا تشمل الأسعار تكاليف مزود الذكاء الاصطناعي.</li>
+          </ul>
+          <p class="pricing-factors-note">
+            لا تنشر هذه الصفحة تفاصيل الاحتساب الداخلي أو قيم الكلفة أو منطق الربحية.
+          </p>
+        </section>
+        <section class="pricing-factors-content" data-pricing-factors-lang="en" lang="en" hidden>
+          <h3>Pricing factors under review</h3>
+          <p id="pricing-factors-state-en">Loading pricing review status...</p>
+          <ul class="pricing-factors-list">
+            <li>Pricing considers infrastructure and general service operations.</li>
+            <li>Pricing considers payment processing and applicable tax handling.</li>
+            <li>Pricing considers support, supervision, and integration effort when needed.</li>
+            <li>BYOK applies, and AI provider costs are not included.</li>
+          </ul>
+          <p class="pricing-factors-note">
+            This page does not publish internal calculation details, cost values, or profitability logic.
+          </p>
+        </section>
+      </article>
+
+
+        <button
+          class="refund-terms-button pricing-bottom-action pricing-bottom-action--policy"
+          id="pricing-refund-terms-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="pricing-refund-terms-card"
+         data-label-ar="شروط الاسترجاع" data-label-en="Refund terms">
+          Refund terms
+        </button>
+      </div>
+
+      <article class="refund-terms-card" id="pricing-refund-terms-card" aria-hidden="true">
+        <section class="refund-terms-content" data-refund-lang="ar" lang="ar" dir="rtl" hidden>
+          <h3>شروط الاسترجاع</h3>
+          <p>
+            تُراجع طلبات الاسترجاع إذا لم يتحقق الغرض التشغيلي الأساسي من التجربة،
+            ويقصد بذلك تشغيل البرنامج، تنفيذ المهام المحددة داخل نطاق التجربة،
+            والحصول على نتائج قابلة للتحقق داخل البرنامج.
+          </p>
+          <ul>
+            <li>لا يشمل الاسترجاع عجز العميل عن الربط مع وكلائه أو مزوديه أو حساباته الخارجية.</li>
+            <li>لا يشمل مشاكل بيانات الاعتماد أو الإعدادات التابعة للعميل.</li>
+            <li>لا يُعد انتهاء مدة التجربة قبل استكمال كمية الاستخدام سببًا مستقلًا للاسترجاع.</li>
+          </ul>
+        </section>
+        <section class="refund-terms-content" data-refund-lang="en" lang="en" hidden>
+          <h3>Refund terms</h3>
+          <p>
+            Refund requests are reviewed when the core operational outcome of the paid trial
+            is not achieved. This means the program runs, the agreed in-scope tasks execute,
+            and verifiable results are obtained inside the program.
+          </p>
+          <ul>
+            <li>Refunds do not cover the customer’s inability to connect external agents, providers, or accounts.</li>
+            <li>Refunds do not cover customer-side credential or configuration issues.</li>
+            <li>Trial expiration before the proposed usage quantity is consumed is not by itself a refund reason.</li>
+          </ul>
+        </section>
+      </article>
+    </section>
+
+    <div class="cta-row">
+      <a class="cta pricing-bottom-action pricing-bottom-action--primary" href="/apply" aria-label="Request access">Request access</a>
+      <a class="cta secondary pricing-bottom-action pricing-bottom-action--secondary" href="/login">Return to login</a>
+    </div>
+
+    <p class="footer-note">
+      BYOK remains the billing policy. Clients bring their own provider connection;
+      provider usage costs are outside the Maestro subscription and offer catalog.
+    </p>
+  </section>
+</main>
+
+<script>
+(function () {
+  const state = document.getElementById("catalog-state");
+  const offerState = document.getElementById("offer-pricebook-state");
+  const grid = document.getElementById("pricing-plan-grid");
+  const offerGrid = document.getElementById("pricing-offer-grid");
+  const summaryPricing = document.getElementById("summary-pricing-status");
+  const summaryBilling = document.getElementById("summary-billing-policy");
+  const summaryProvider = document.getElementById("summary-provider-costs");
+  const summaryCheckout = document.getElementById("summary-checkout");
+  const refundTermsToggle = document.getElementById("pricing-refund-terms-toggle");
+  const refundTermsCard = document.getElementById("pricing-refund-terms-card");
+
+  function text(value, fallback) {
+    if (value === null || value === undefined || value === "") return fallback;
+    return String(value);
+  }
+
+  function formatAudience(value) {
+    return text(value, "Not specified").replaceAll("_", " ");
+  }
+
+  function formatInterval(value) {
+    return text(value, "not defined").replaceAll("_", " ");
+  }
+
+  function formatPending(value, fallback) {
+    if (value === null || value === undefined || value === "") return fallback;
+    return String(value);
+  }
+
+  function planCard(plan) {
+    const features = Array.isArray(plan.features) ? plan.features : [];
+    const featureItems = features.map((feature) => `<li>${text(feature, "")}</li>`).join("");
+
+    return `
+      <article class="plan-card" data-plan-id="${text(plan.plan_id, "unknown")}">
+        <h3>${text(plan.display_name, "Plan")}</h3>
+        <p class="plan-description">${text(plan.description, "Draft subscription option.")}</p>
+        <div class="price-label">${text(plan.price_label, "TBD")}</div>
+        <div class="draft-note">Draft pricing — final prices are not published.</div>
+        <div class="plan-meta">
+          <div class="meta-item">
+            <span class="meta-label">Audience</span>
+            <span class="meta-value">${formatAudience(plan.audience)}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Monthly Maestro units</span>
+            <span class="meta-value">${text(plan.monthly_unit_allowance, "TBD")}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Billing policy</span>
+            <span class="meta-value">${text(plan.billing_policy, "BYOK").toUpperCase()}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Checkout</span>
+            <span class="meta-value">${plan.checkout_enabled ? "Enabled" : "Disabled"}</span>
+          </div>
+        </div>
+        <ul class="feature-list">${featureItems}</ul>
+      </article>
+    `;
+  }
+
+  function fulfillmentLabel(offer) {
+    if (offer.fulfillment_mode === "paid_trial") {
+      return "Paid trial · no supervisor approval required";
+    }
+    if (offer.fulfillment_mode === "enterprise_review") {
+      return "Enterprise review required before custom pricing";
+    }
+    return "Self-service after registration and payment";
+  }
+
+  function offerCard(offer) {
+    return `
+      <article class="offer-card" data-offer-id="${text(offer.offer_id, "unknown")}">
+        <h3>${text(offer.display_name, "Offer")}</h3>
+        <p class="offer-description">${text(offer.description, "Draft offer under review.")}</p>
+        <div class="review-label">${text(offer.public_price_label, "Pricing pending review")}</div>
+        <div class="draft-note">${text(offer.price_review_note, "Pricing calculation is not defined yet.")}</div>
+        <div class="offer-policy-note">${fulfillmentLabel(offer)}</div>
+        <div class="offer-meta">
+          <div class="meta-item">
+            <span class="meta-label">Plan</span>
+            <span class="meta-value">${text(offer.plan_display_name, offer.plan_id)}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Billing interval</span>
+            <span class="meta-value">${formatInterval(offer.billing_interval)}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Amount</span>
+            <span class="meta-value">${formatPending(offer.amount_cents, "Pending review")}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Currency</span>
+            <span class="meta-value">${formatPending(offer.currency, "Pending review")}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Trial duration</span>
+            <span class="meta-value">${formatPending(offer.trial_duration_days, "Pending review")}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Calculation method</span>
+            <span class="meta-value">${formatInterval(offer.price_calculation_status)}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Sales contact</span>
+            <span class="meta-value">${offer.requires_sales_contact ? "Required" : "Not required"}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Checkout</span>
+            <span class="meta-value">${offer.checkout_enabled ? "Enabled" : "Disabled"}</span>
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderCatalog(payload) {
+    const plans = Array.isArray(payload.plans) ? payload.plans : [];
+    const commercialPlans = plans.filter((plan) => plan.commercially_listed === true);
+
+    summaryPricing.textContent = text(payload.pricing_status, "draft");
+    summaryBilling.textContent = text(payload.billing_policy, "byok").toUpperCase();
+    summaryProvider.textContent = payload.provider_cost_included ? "Included" : "Not included";
+    summaryCheckout.textContent = payload.checkout_enabled ? "Enabled" : "Disabled";
+
+    if (!commercialPlans.length) {
+      state.textContent = "No commercial subscription options are listed yet.";
+      grid.innerHTML = "";
+      return;
+    }
+
+    state.textContent = `Catalog ${text(payload.catalog_version, "draft")} · ${commercialPlans.length} listed plans`;
+    grid.innerHTML = commercialPlans.map(planCard).join("");
+  }
+
+  function renderOfferPricebook(payload) {
+    const offers = Array.isArray(payload.offers) ? payload.offers : [];
+    const listedOffers = offers.filter((offer) => offer.commercially_listed === true);
+
+    if (!listedOffers.length) {
+      offerState.textContent = "No draft offers are listed yet.";
+      offerGrid.innerHTML = "";
+      return;
+    }
+
+    offerState.textContent = `Offer price book ${text(payload.pricebook_version, "draft")} · ${listedOffers.length} draft offers`;
+    offerGrid.innerHTML = listedOffers.map(offerCard).join("");
+  }
+
+  async function loadJson(url) {
+    const response = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!response.ok) {
+      throw new Error(`${url} failed: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async function loadPricingSurface() {
+    try {
+      const [catalogPayload, offerPayload] = await Promise.all([
+        loadJson("/billing/pricing-catalog"),
+        loadJson("/billing/offer-pricebook")
+      ]);
+      renderCatalog(catalogPayload);
+      renderOfferPricebook(offerPayload);
+    } catch (error) {
+      state.innerHTML = `<div class="error">Unable to load subscription catalog. ${error.message}</div>`;
+      offerState.innerHTML = `<div class="error">Unable to load offer price book. ${error.message}</div>`;
+      summaryPricing.textContent = "Unavailable";
+      summaryBilling.textContent = "Unavailable";
+      summaryProvider.textContent = "Unavailable";
+      summaryCheckout.textContent = "Disabled";
+    }
+  }
+
+  loadPricingSurface();
+})();
+
+  (function pmkRefundTermsLanguageScoped() {
+    function refundTermsLanguage() {
+      const pageLang = String(document.documentElement.getAttribute("lang") || "en").toLowerCase();
+      return pageLang.startsWith("ar") ? "ar" : "en";
+    }
+
+    function syncRefundTermsLanguage() {
+      const refundTermsToggle = document.getElementById("pricing-refund-terms-toggle");
+      const refundTermsCard = document.getElementById("pricing-refund-terms-card");
+
+      if (!refundTermsToggle || !refundTermsCard) {
+        return;
+      }
+
+      const activeLang = refundTermsLanguage();
+      const isArabic = activeLang === "ar";
+
+      refundTermsToggle.textContent = isArabic
+        ? refundTermsToggle.dataset.labelAr
+        : refundTermsToggle.dataset.labelEn;
+      refundTermsCard.setAttribute("lang", activeLang);
+      refundTermsCard.setAttribute("dir", isArabic ? "rtl" : "ltr");
+
+      refundTermsCard.querySelectorAll("[data-refund-lang]").forEach((section) => {
+        const isActive = section.dataset.refundLang === activeLang;
+        section.hidden = !isActive;
+        section.setAttribute("aria-hidden", isActive ? "false" : "true");
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", syncRefundTermsLanguage);
+    } else {
+      syncRefundTermsLanguage();
+    }
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.id === "pricing-refund-terms-toggle") {
+        syncRefundTermsLanguage();
+      }
+    });
+  })();
+
+
+  (function pmkRefundTermsToggleController() {
+    function currentRefundLanguage() {
+      const pageLang = String(document.documentElement.getAttribute("lang") || "en").toLowerCase();
+      return pageLang.startsWith("ar") ? "ar" : "en";
+    }
+
+    function syncLanguage(button, card) {
+      const activeLang = currentRefundLanguage();
+      const isArabic = activeLang === "ar";
+
+      button.textContent = isArabic
+        ? button.dataset.labelAr || "شروط الاسترجاع"
+        : button.dataset.labelEn || "Refund terms";
+
+      card.setAttribute("lang", activeLang);
+      card.setAttribute("dir", isArabic ? "rtl" : "ltr");
+
+      card.querySelectorAll("[data-refund-lang]").forEach((section) => {
+        const isActive = section.dataset.refundLang === activeLang;
+        section.hidden = !isActive;
+        section.setAttribute("aria-hidden", isActive ? "false" : "true");
+      });
+    }
+
+    function setRefundTermsOpen(card, button, isOpen) {
+      card.classList.toggle("is-open", isOpen);
+      card.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    }
+
+    function setupRefundTermsToggle() {
+      const button = document.getElementById("pricing-refund-terms-toggle");
+      const card = document.getElementById("pricing-refund-terms-card");
+
+      if (!button || !card || button.dataset.refundToggleController === "ready") {
+        return;
+      }
+
+      button.dataset.refundToggleController = "ready";
+      syncLanguage(button, card);
+      setRefundTermsOpen(card, button, false);
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        syncLanguage(button, card);
+        const nextOpen = !card.classList.contains("is-open");
+        setRefundTermsOpen(card, button, nextOpen);
+      }, true);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", setupRefundTermsToggle);
+    } else {
+      setupRefundTermsToggle();
+    }
+  })();
+
+
+  (function pmkPricingFactorsToggleController() {
+    function currentPricingFactorsLanguage() {
+      const pageLang = String(document.documentElement.getAttribute("lang") || "en").toLowerCase();
+      return pageLang.startsWith("ar") ? "ar" : "en";
+    }
+
+    function syncPricingFactorsLanguage(button, card) {
+      const activeLang = currentPricingFactorsLanguage();
+      const isArabic = activeLang === "ar";
+
+      button.textContent = isArabic
+        ? button.dataset.labelAr || "عوامل التسعير"
+        : button.dataset.labelEn || "Pricing factors under review";
+
+      card.setAttribute("lang", activeLang);
+      card.setAttribute("dir", isArabic ? "rtl" : "ltr");
+
+      card.querySelectorAll("[data-pricing-factors-lang]").forEach((section) => {
+        const isActive = section.dataset.pricingFactorsLang === activeLang;
+        section.hidden = !isActive;
+        section.setAttribute("aria-hidden", isActive ? "false" : "true");
+      });
+    }
+
+    function setPricingFactorsOpen(card, button, isOpen) {
+      card.classList.toggle("is-open", isOpen);
+      card.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    }
+
+    function setPricingFactorsStatus(payload) {
+      const reviewStatus = payload && payload.review_status ? payload.review_status : "pending_review";
+      const billingPolicy = payload && payload.billing_policy ? String(payload.billing_policy).toUpperCase() : "BYOK";
+      const providerExcluded = payload && payload.provider_cost_included === false;
+      const checkoutDisabled = payload && payload.approved_for_checkout === false;
+
+      const english = [
+        `Review status: ${reviewStatus}`,
+        billingPolicy,
+        providerExcluded ? "AI provider costs excluded" : "provider cost policy under review",
+        checkoutDisabled ? "checkout disabled" : "checkout under review",
+      ].join(" · ");
+
+      const arabic = [
+        `حالة المراجعة: ${reviewStatus}`,
+        billingPolicy,
+        providerExcluded ? "تكاليف مزود الذكاء الاصطناعي غير مشمولة" : "سياسة كلفة المزود قيد المراجعة",
+        checkoutDisabled ? "الدفع غير مفعل" : "الدفع قيد المراجعة",
+      ].join(" · ");
+
+      const englishState = document.getElementById("pricing-factors-state-en");
+      const arabicState = document.getElementById("pricing-factors-state-ar");
+
+      if (englishState) {
+        englishState.textContent = english;
+      }
+
+      if (arabicState) {
+        arabicState.textContent = arabic;
+      }
+    }
+
+    async function loadPublicPricingFactors() {
+      try {
+        const response = await fetch("/billing/unit-cost-assumptions", {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        setPricingFactorsStatus(payload);
+      } catch (error) {
+        setPricingFactorsStatus({
+          review_status: "pending_review",
+          billing_policy: "byok",
+          provider_cost_included: false,
+          approved_for_checkout: false,
+        });
+      }
+    }
+
+    function setupPricingFactorsToggle() {
+      const button = document.getElementById("pricing-factors-toggle");
+      const card = document.getElementById("pricing-factors-card");
+
+      if (!button || !card || button.dataset.pricingFactorsController === "ready") {
+        return;
+      }
+
+      button.dataset.pricingFactorsController = "ready";
+      syncPricingFactorsLanguage(button, card);
+      setPricingFactorsOpen(card, button, false);
+      loadPublicPricingFactors();
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        syncPricingFactorsLanguage(button, card);
+        const nextOpen = !card.classList.contains("is-open");
+        setPricingFactorsOpen(card, button, nextOpen);
+      }, true);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", setupPricingFactorsToggle);
+    } else {
+      setupPricingFactorsToggle();
+    }
+  })();
+
+</script>
+</body>
+</html>

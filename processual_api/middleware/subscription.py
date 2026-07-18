@@ -51,13 +51,15 @@ def _extract_user_id(request: Request) -> str | None:
         return None
     token = auth[7:]
 
-    if _JWT_SECRET is None:
+    jwt_secret = _JWT_SECRET
+    if jwt_secret is None:
         from ..settings import settings as _s
         globals()["_JWT_SECRET"] = _s.jwt_secret
+        jwt_secret = _s.jwt_secret
 
     try:
-        from jose import jwt
-        payload = jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+        import jwt
+        payload = jwt.decode(token, jwt_secret, algorithms=[_JWT_ALGORITHM])
         return payload.get("sub")
     except Exception:
         return None
@@ -153,4 +155,3 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             )
 
         return await call_next(request)
-

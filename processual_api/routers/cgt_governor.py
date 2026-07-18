@@ -1,4 +1,4 @@
-﻿"""CGT Governor routes - adapter comparison, auto-repair, analysis, gateway management, and simulations."""
+"""CGT Governor routes - adapter comparison, auto-repair, analysis, gateway management, and simulations."""
 
 from __future__ import annotations
 
@@ -9,16 +9,17 @@ import time
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ..auth.security import get_current_user
+from ..auth.security import get_current_user, require_quota, require_scope
+from ..cgt_governor.adapters.provider_metadata import provider_env_map, provider_public_metadata
 from ..cgt_governor.adapters.registry import adapter_registry
 from ..cgt_governor.data.storage import eval_store
-from ..cgt_governor.policy import PolicyContext, policy_engine as runtime_policy_engine
+from ..cgt_governor.policy import PolicyContext
+from ..cgt_governor.policy import policy_engine as runtime_policy_engine
 from ..cgt_governor.security import decrypt_log_entry, encrypt_log_entry, get_crypto_key, sign_response
 
 logger = logging.getLogger("processual_api.routers.cgt_governor")
@@ -58,17 +59,19 @@ def _save_adapter_config(provider: str, api_key: str, model: str = "", base_url:
     if _adapter_crypto_available and _ADAPTER_CRYPTO_KEY and api_key:
         try:
             envelope = encrypt_aes256_gcm(api_key.encode("utf-8"), _ADAPTER_CRYPTO_KEY, key_id=provider)
-            config["encrypted_key"] = json.dumps({
-                "algorithm": envelope.algorithm,
-                "key_id": envelope.key_id,
-                "nonce_b64": envelope.nonce_b64,
-                "aad_b64": envelope.aad_b64,
-                "ciphertext_b64": envelope.ciphertext_b64,
-                "plaintext_sha3_256": envelope.plaintext_sha3_256,
-                "ciphertext_sha3_256": envelope.ciphertext_sha3_256,
-                "schema_version": envelope.schema_version,
-                "created_at": envelope.created_at,
-            })
+            config["encrypted_key"] = json.dumps(
+                {
+                    "algorithm": envelope.algorithm,
+                    "key_id": envelope.key_id,
+                    "nonce_b64": envelope.nonce_b64,
+                    "aad_b64": envelope.aad_b64,
+                    "ciphertext_b64": envelope.ciphertext_b64,
+                    "plaintext_sha3_256": envelope.plaintext_sha3_256,
+                    "ciphertext_sha3_256": envelope.ciphertext_sha3_256,
+                    "schema_version": envelope.schema_version,
+                    "created_at": envelope.created_at,
+                }
+            )
         except Exception:
             pass
     path = _adapter_config_path()
@@ -249,8 +252,7 @@ def _resolve_scores(
         auto = analyze_cgt(req.client_query, req.answer, language=req.language)
     else:
         logger.warning(
-            "client_query is empty - falling back to default scores. "
-            "Send 'client_query' for real CGT analysis."
+            "client_query is empty - falling back to default scores. Send 'client_query' for real CGT analysis."
         )
 
     raw = {
@@ -351,6 +353,7 @@ def _evaluate_and_record(
             increment_governance_action,
             increment_pdf_report,
         )
+
         increment_cgt_evaluations()
         increment_fate_rank(result.rank.value)
         increment_governance_action(pd.action.value)
@@ -376,6 +379,7 @@ def _evaluate_and_record(
         entry["repair_round"] = context.repair_round
         entry["parent_eval_id"] = context.parent_eval_id
     from ..cgt_governor.data.storage import JsonlEvaluationStore
+
     entry["eval_id"] = JsonlEvaluationStore._generate_eval_id()
     encrypted = encrypt_log_entry(entry, _crypto_key)
     eval_store.append(json.loads(encrypted) if isinstance(encrypted, str) else encrypted)
@@ -391,7 +395,7 @@ def _evaluate_and_record(
 
 
 @router.post("/cgt/govern")
-async def govern(req: GovernRequest, current_user: dict = Depends(get_current_user)):
+async def govern(req: GovernRequest, current_user: dict = Depends(require_quota("evaluation"))):
     scores = _resolve_scores(req)
     ev = _evaluate_and_record(
         answer=req.answer,
@@ -400,11 +404,30 @@ async def govern(req: GovernRequest, current_user: dict = Depends(get_current_us
         context=req.context,
         reason="govern",
     )
-    em = "auto" if req.client_query else "explicit" if any(v is not None for v in (
-        req.compatibility, req.coherence, req.structural_support, req.usefulness,
-        req.complexity, req.fatigue, req.shock, req.lift, req.novelty,
-        req.no_answer, req.hallucination, req.constraint_failure, req.speed,
-    )) else "fallback"
+    em = (
+        "auto"
+        if req.client_query
+        else "explicit"
+        if any(
+            v is not None
+            for v in (
+                req.compatibility,
+                req.coherence,
+                req.structural_support,
+                req.usefulness,
+                req.complexity,
+                req.fatigue,
+                req.shock,
+                req.lift,
+                req.novelty,
+                req.no_answer,
+                req.hallucination,
+                req.constraint_failure,
+                req.speed,
+            )
+        )
+        else "fallback"
+    )
     return {
         **ev["response_data"],
         "signature": ev["signature"],
@@ -428,11 +451,30 @@ async def govern_batch(req: BatchGovernRequest, current_user: dict = Depends(get
             context=ans.context,
             reason="batch",
         )
-        em = "auto" if ans.client_query else "explicit" if any(v is not None for v in (
-            ans.compatibility, ans.coherence, ans.structural_support, ans.usefulness,
-            ans.complexity, ans.fatigue, ans.shock, ans.lift, ans.novelty,
-            ans.no_answer, ans.hallucination, ans.constraint_failure, ans.speed,
-        )) else "fallback"
+        em = (
+            "auto"
+            if ans.client_query
+            else "explicit"
+            if any(
+                v is not None
+                for v in (
+                    ans.compatibility,
+                    ans.coherence,
+                    ans.structural_support,
+                    ans.usefulness,
+                    ans.complexity,
+                    ans.fatigue,
+                    ans.shock,
+                    ans.lift,
+                    ans.novelty,
+                    ans.no_answer,
+                    ans.hallucination,
+                    ans.constraint_failure,
+                    ans.speed,
+                )
+            )
+            else "fallback"
+        )
         results.append(
             {
                 **ev["response_data"],
@@ -485,20 +527,18 @@ async def governor_metrics(current_user: dict = Depends(get_current_user)):
         dist[rank] = dist.get(rank, 0) + 1
         reward = entry.get("reward", 0)
         reward_sum += reward
-        psi_history.append({
-            "index": i,
-            "reward": reward,
-            "rank": rank,
-        })
+        psi_history.append(
+            {
+                "index": i,
+                "reward": reward,
+                "rank": rank,
+            }
+        )
 
     agents = gateway_registry.list()
     agent_total = len(agents)
     agent_active = sum(1 for a in agents if a.state.value == "active")
-    agent_avg_reward = (
-        sum(a.average_reward for a in agents) / agent_total
-        if agent_total
-        else 0
-    )
+    agent_avg_reward = sum(a.average_reward for a in agents) / agent_total if agent_total else 0
 
     # Action distribution from runtime policy engine
     action_dist = runtime_policy_engine.action_distribution
@@ -867,11 +907,30 @@ async def govern_report(req: ReportRequest, current_user: dict = Depends(get_cur
 
     pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
 
-    em = "auto" if req.client_query else "explicit" if any(v is not None for v in (
-        req.compatibility, req.coherence, req.structural_support, req.usefulness,
-        req.complexity, req.fatigue, req.shock, req.lift, req.novelty,
-        req.no_answer, req.hallucination, req.constraint_failure, req.speed,
-    )) else "fallback"
+    em = (
+        "auto"
+        if req.client_query
+        else "explicit"
+        if any(
+            v is not None
+            for v in (
+                req.compatibility,
+                req.coherence,
+                req.structural_support,
+                req.usefulness,
+                req.complexity,
+                req.fatigue,
+                req.shock,
+                req.lift,
+                req.novelty,
+                req.no_answer,
+                req.hallucination,
+                req.constraint_failure,
+                req.speed,
+            )
+        )
+        else "fallback"
+    )
     return {
         **ev["response_data"],
         "scores": scores,
@@ -1118,6 +1177,7 @@ async def gateway_evaluate(req: GatewayEvaluateRequest, current_user: dict = Dep
 
     # Record runtime policy action
     from ..cgt_governor.gateway import gateway_registry
+
     agent_obj = gateway_registry.get(req.agent_id)
     ctx = PolicyContext(
         avg_reward=getattr(decision, "reward", 0.0),
@@ -1142,6 +1202,7 @@ async def gateway_evaluate(req: GatewayEvaluateRequest, current_user: dict = Dep
             increment_governance_action,
             increment_pdf_report,
         )
+
         increment_cgt_evaluations()
         increment_fate_rank(decision.rank)
         increment_governance_action(pd.action.value)
@@ -1170,6 +1231,7 @@ async def gateway_evaluate(req: GatewayEvaluateRequest, current_user: dict = Dep
         "provider": agent_obj.adapter_name if agent_obj else "",
     }
     from ..cgt_governor.data.storage import JsonlEvaluationStore
+
     gw_entry["eval_id"] = JsonlEvaluationStore._generate_eval_id()
     encrypted = encrypt_log_entry(gw_entry, _crypto_key)
     eval_store.append(json.loads(encrypted) if isinstance(encrypted, str) else encrypted)
@@ -1412,11 +1474,13 @@ async def gateway_report_pdf(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/adapters/status")
-async def adapters_status(current_user: dict = Depends(get_current_user)):
+async def adapters_status(current_user: dict = Depends(require_scope("read:adapters"))):
     providers = []
     for name, adapter in adapter_registry.all().items():
+        metadata = provider_public_metadata(name)
         providers.append(
             {
+                **metadata,
                 "name": adapter.provider_name,
                 "configured": adapter.is_configured(),
                 "default_model": adapter.default_model,
@@ -1430,17 +1494,10 @@ async def adapters_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/adapters/configure")
-async def configure_adapter(req: ConfigureAdapterRequest, current_user: dict = Depends(get_current_user)):
-    if current_user.get("sub") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-
-    env_map = {
-        "openai": ("OPENAI_API_KEY", "OPENAI_DEFAULT_MODEL", ""),
-        "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_DEFAULT_MODEL", ""),
-        "gemini": ("GEMINI_API_KEY", "GEMINI_DEFAULT_MODEL", ""),
-        "deepseek": ("DEEPSEEK_API_KEY", "DEEPSEEK_DEFAULT_MODEL", ""),
-        "opencode": ("OPENCODE_API_KEY", "OPENCODE_DEFAULT_MODEL", "OPENCODE_API_URL"),
-    }
+async def configure_adapter(
+    req: ConfigureAdapterRequest, _current_user: dict = Depends(require_scope("admin:settings"))
+):
+    env_map = provider_env_map()
 
     key = req.provider.lower()
     if key not in env_map:
@@ -1462,8 +1519,48 @@ async def configure_adapter(req: ConfigureAdapterRequest, current_user: dict = D
     return {"provider": req.provider, "configured": True}
 
 
+@router.get("/adapters/readiness")
+async def adapters_readiness(_current_user: dict = Depends(require_scope("admin:settings"))):
+    import time
+
+    providers = []
+    for name, adapter in adapter_registry.all().items():
+        metadata = provider_public_metadata(name)
+        start = time.monotonic()
+        try:
+            ok = await adapter.is_available()
+            latency = round((time.monotonic() - start) * 1000)
+            message = "Connected" if ok else "Unreachable"
+        except Exception as exc:
+            ok = False
+            latency = round((time.monotonic() - start) * 1000)
+            message = f"Adapter error: {type(exc).__name__}"
+
+        providers.append(
+            {
+                **metadata,
+                "provider": name,
+                "name": adapter.provider_name,
+                "configured": adapter.is_configured(),
+                "ok": ok,
+                "latency_ms": latency,
+                "model": adapter.default_model,
+                "message": message,
+            }
+        )
+
+    default_adapter = adapter_registry.default()
+    return {
+        "providers": providers,
+        "total": len(providers),
+        "configured_count": sum(1 for item in providers if item["configured"]),
+        "ok_count": sum(1 for item in providers if item["ok"]),
+        "default": default_adapter.provider_name if default_adapter else None,
+    }
+
+
 @router.post("/adapters/test")
-async def test_adapter(req: TestAdapterRequest, current_user: dict = Depends(get_current_user)):
+async def test_adapter(req: TestAdapterRequest, _current_user: dict = Depends(require_scope("admin:settings"))):
     adapter = adapter_registry.get(req.provider)
     if not adapter:
         raise HTTPException(status_code=404, detail=f"Adapter not found: {req.provider}")
@@ -1474,8 +1571,11 @@ async def test_adapter(req: TestAdapterRequest, current_user: dict = Depends(get
     try:
         available = await adapter.is_available()
         latency = round((time.monotonic() - start) * 1000)
+        metadata = provider_public_metadata(req.provider)
         return {
+            **metadata,
             "provider": req.provider,
+            "name": adapter.provider_name,
             "ok": available,
             "latency_ms": latency,
             "model": adapter.default_model,
@@ -1483,12 +1583,13 @@ async def test_adapter(req: TestAdapterRequest, current_user: dict = Depends(get
         }
     except Exception as exc:
         latency = round((time.monotonic() - start) * 1000)
+        metadata = provider_public_metadata(req.provider)
         return {
+            **metadata,
             "provider": req.provider,
+            "name": adapter.provider_name,
             "ok": False,
             "latency_ms": latency,
             "model": adapter.default_model,
             "message": f"Adapter error: {type(exc).__name__}",
         }
-
-

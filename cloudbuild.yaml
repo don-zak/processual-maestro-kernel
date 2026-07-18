@@ -1,0 +1,25 @@
+﻿# Cloud Build contract for Processual Maestro Cloud Run images.
+# This file builds and pushes the container image only.
+# Cloud Run deployment remains an explicit operator action documented in README.md.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}
+      - --tag
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:latest
+      - .
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:latest
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: processual-maestro
+  _SERVICE: processual-maestro-api
+
+options:
+  logging: CLOUD_LOGGING_ONLY

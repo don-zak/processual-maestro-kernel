@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJQcm9jZXNzdWFsIE1hZXN0cm8iPgogIDxyZWN0IHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgcng9IjE2IiBmaWxsPSIjMGYxNzJhIi8+CiAgPHBhdGggZD0iTTE3IDQzVjIxaDEyYzUuMyAwIDguOCAzLjIgOC44IDhzLTMuNSA4LTguOCA4aC01djZoLTd6bTctMTJoNC40YzEuOSAwIDMuMS0uOCAzLjEtMnMtMS4yLTItMy4xLTJIMjR2NHoiIGZpbGw9IiNmNTllMGIiLz4KICA8cGF0aCBkPSJNMzggNDNWMjFoN2w1IDguNyA1LTguN2g3djIyaC03VjMyLjhsLTMuNSA2aC0zbC0zLjUtNlY0M2gtN3oiIGZpbGw9IiM5M2M1ZmQiLz4KPC9zdmc+Cg=="/>
+
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Processual Maestro — Console</title>
@@ -34,7 +36,6 @@
   <button class="nav-btn" data-page="governor"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Governor</span></button>
   <button class="nav-btn" data-page="gateway"><span class="nav-ind"></span><span class="nav-ico">⬡</span><span>Gateway</span></button>
   <button class="nav-btn" data-page="simulation"><span class="nav-ind"></span><span class="nav-ico">⟐</span><span>Simulation</span></button>
-  <button class="nav-btn" data-page="adapters"><span class="nav-ind"></span><span class="nav-ico">⇆</span><span>Adapters</span></button>
   <button class="nav-btn" data-page="settings"><span class="nav-ind"></span><span class="nav-ico">⚙</span><span>Settings</span></button>
 </div>
 <div id="sidebar-footer">
@@ -438,112 +439,166 @@ pending ───────────────────→ deactivated
 <!-- ===== PAGE: Settings ===== -->
 <div class="page" id="page-settings">
 <div>
-  <div class="sec-hdr"><div class="sh-title">Settings</div><div class="sh-sub">System configuration</div></div>
+  <div class="sec-hdr"><div class="sh-title">Client Settings</div><div class="sh-sub">Account, preferences, plan, and support</div></div>
 
   <div class="settings-sections">
 
-    <!-- General -->
+  <div class="settings-section-nav" aria-label="Client settings sections">
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="readiness">Readiness</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="account">Account</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="plan-usage">Plan &amp; Usage</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="integration-guide">Integration Guide</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="provider">Provider</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="requests">Requests</button>
+    <button type="button" class="btn sm settings-section-nav__button" data-settings-nav-target="supervisor">Supervisor</button>
+  </div>
+
+
+    <!-- Settings Section Controls -->
+    <div class="card" id="set-section-collapse-controls">
+      <div class="sec-hdr">
+        <div class="sh-title">Settings Sections</div>
+        <div class="sh-sub">Collapse sections to keep the client settings page compact</div>
+      </div>
+      <button id="set-sections-expand" class="btn sm">Expand all</button>
+      <button id="set-sections-collapse" class="btn sm" style="margin-left:var(--s-2)">Collapse all except readiness</button>
+      <span id="set-sections-collapse-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Sections are ready</span>
+    </div>
+
+    <!-- Operational Readiness -->
+    <div class="card settings-section" id="set-client-readiness-card" data-settings-section-key="readiness">
+      <div class="sec-hdr">
+        <div class="sh-title">Operational Readiness</div>
+        <div class="sh-sub">Client launch checklist across account, plan, usage, integration, provider, and support</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Readiness Score</label>
+          <span id="set-readiness-score" class="font-data" style="font-weight:600;color:var(--amber)">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Next Step</label>
+          <span id="set-readiness-next-step" class="font-data text-muted">Loading client readiness</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Account</label>
+          <span id="set-readiness-account" class="font-data text-muted">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Plan &amp; Usage</label>
+          <span id="set-readiness-plan" class="font-data text-muted">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Integration Key</label>
+          <span id="set-readiness-integration" class="font-data text-muted">Loading</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">BYOK Provider</label>
+          <span id="set-readiness-provider" class="font-data text-muted">Loading</span>
+        </div>
+      </div>
+      <div id="set-readiness-checklist" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Readiness checklist will update after client settings load.</div>
+      <button id="set-readiness-support" class="btn sm" style="margin-top:var(--s-3)">Prepare readiness support request</button>
+      <div id="set-client-launch-card" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">
+        <strong>Client Workspace Launch Path</strong>
+        <div>Current step: <span id="set-launch-current-step">Loading</span></div>
+        <div>Owner: <span id="set-launch-owner">Client</span></div>
+        <div>Safe action: use Requests &amp; Billing or Supervisor Messages only. Do not paste provider secrets or raw integration keys.</div>
+      </div>
+      <button id="set-launch-primary-action" class="btn sm" style="margin-top:var(--s-3)">Prepare next setup request</button>
+      <button id="set-launch-secondary-action" class="btn ghost sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Open Requests &amp; Billing</button>
+      <span id="set-launch-action-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+      <div id="set-launch-checklist" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Client workspace launch checklist will update after client settings load.</div>
+      <div id="set-client-action-center-card" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">
+        <strong>Client Workspace Action Center</strong>
+        <div>Next action: <span id="set-action-center-next">Loading</span></div>
+        <div>Owner: <span id="set-action-center-owner">Client</span></div>
+        <div>Pending admin follow-up: <span id="set-action-center-pending">0</span></div>
+        <div>Last request: <span id="set-action-center-last-request">Loading</span></div>
+        <div>Provider setup: <span id="set-action-center-provider">Loading</span></div>
+        <div>Integration access: <span id="set-action-center-integration">Loading</span></div>
+        <div>Safe actions only: Requests &amp; Billing and Supervisor Messages. Do not paste provider secrets or raw integration keys.</div>
+      </div>
+      <button id="set-action-center-provider-action" class="btn sm" style="margin-top:var(--s-3)">Prepare provider setup</button>
+      <button id="set-action-center-usage-action" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Prepare usage review</button>
+      <button id="set-action-center-integration-action" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Request integration key</button>
+      <button id="set-action-center-requests-action" class="btn ghost sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Open Requests &amp; Billing</button>
+      <span id="set-action-center-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+    </div>
+
+    <!-- Account -->
+    <div class="card settings-section" data-settings-section-key="account">
+      <div class="sec-hdr">
+        <div class="sh-title">Account</div>
+        <div class="sh-sub">Current client session identity</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Signed in as</label>
+          <span id="set-account-user" class="font-data" style="font-weight:600">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Role</label>
+          <span id="set-account-role" class="font-data" style="font-weight:600;color:var(--amber)">client</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Session</label>
+          <span id="set-account-session" class="font-data text-muted">UI client session</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Client ID</label>
+          <span id="set-account-client-id" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Session Type</label>
+          <span id="set-account-session-type" class="font-data text-muted">ui_client</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Scopes</label>
+          <span id="set-account-scopes" class="font-data text-muted">evaluation</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Identity Status</label>
+          <span id="set-account-status" class="font-data text-muted">Waiting for /auth/me</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preferences -->
     <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">General</div></div>
+      <div class="sec-hdr"><div class="sh-title">Preferences</div></div>
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Language</label>
           <select id="set-lang" class="inp-sel">
             <option value="en">English</option>
-            <option value="ar">العربية</option>
+            <option value="ar">Arabic</option>
           </select>
         </div>
         <div class="inp-group">
-          <label class="inp-label">Dashboard Refresh</label>
+          <label class="inp-label">Refresh Interval</label>
           <select id="set-refresh" class="inp-sel">
-            <option value="10">10s</option>
-            <option value="30" selected>30s</option>
-            <option value="60">60s</option>
-            <option value="0">Off</option>
+            <option value="10">10 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+            <option value="300">5 minutes</option>
           </select>
         </div>
         <div class="inp-group">
           <label class="inp-label">Timezone</label>
-          <select id="set-tz" class="inp-sel">
-            <option value="UTC">UTC</option>
-            <option value="US/Eastern">US/Eastern</option>
-            <option value="US/Pacific">US/Pacific</option>
-            <option value="Europe/London">Europe/London</option>
-            <option value="Europe/Paris">Europe/Paris</option>
-            <option value="Asia/Dubai">Asia/Dubai</option>
-            <option value="Asia/Riyadh">Asia/Riyadh</option>
-            <option value="Asia/Tokyo">Asia/Tokyo</option>
-          </select>
+          <input id="set-tz" class="inp" placeholder="UTC">
         </div>
       </div>
-      <button id="set-general-save" class="btn accent sm" style="margin-top:var(--s-3)">Save General</button>
-      <span id="set-general-status" class="font-data text-muted" style="font-size:10px;margin-left:8px"></span>
+      <button id="set-general-save" class="btn accent sm" style="margin-top:var(--s-3)">Save Preferences</button>
+      <span id="set-general-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)"></span>
     </div>
 
-    <!-- LLM Provider -->
-    <div class="card settings-section">
+    <!-- Plan and Usage -->
+    <div class="card settings-section" id="set-usage-summary-card" data-settings-section-key="plan-usage">
       <div class="sec-hdr">
-        <div class="sh-title">LLM Provider for Reports</div>
-        <div class="sh-sub">Optional — used for AI-generated report explanations</div>
+        <div class="sh-title">Plan and Usage</div>
+        <div class="sh-sub">Read-only account status and Maestro usage units</div>
       </div>
-      <div id="set-llm-status" class="status-badge" style="margin-bottom:var(--s-3)">Not configured</div>
-      <div class="settings-grid">
-        <div class="inp-group">
-          <label class="inp-label">Provider</label>
-          <select id="set-llm-provider" class="inp-sel">
-            <option value="opencode">OpenCode (local)</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Google Gemini</option>
-            <option value="deepseek">DeepSeek</option>
-          </select>
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">API Key</label>
-          <input id="set-llm-key" class="inp" type="password" placeholder="sk-...">
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">Model</label>
-          <input id="set-llm-model" class="inp" placeholder="e.g. gpt-4o">
-        </div>
-      </div>
-      <div class="flex-gap" style="margin-top:var(--s-3)">
-        <button id="set-llm-save" class="btn accent sm">Save &amp; Test</button>
-        <button id="set-llm-test" class="btn ghost sm">Test Connection</button>
-        <button id="set-llm-clear" class="btn ghost sm" style="color:var(--error)">Clear Key</button>
-      </div>
-      <div id="set-llm-result" class="font-data" style="font-size:10px;margin-top:var(--s-2)"></div>
-    </div>
-
-    <!-- Notifications -->
-    <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">Notifications</div></div>
-      <div class="settings-grid">
-        <div class="inp-group">
-          <label class="inp-label">Discord Webhook URL</label>
-          <input id="set-webhook" class="inp" placeholder="https://discord.com/api/webhooks/..." type="url">
-        </div>
-        <div class="inp-group">
-          <label class="inp-label">Alert Level</label>
-          <select id="set-alert-level" class="inp-sel">
-            <option value="debug">Debug</option>
-            <option value="info">Info</option>
-            <option value="warning" selected>Warning</option>
-            <option value="error">Error</option>
-            <option value="critical">Critical only</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex-gap" style="margin-top:var(--s-3)">
-        <button id="set-notif-save" class="btn accent sm">Save</button>
-        <button id="set-notif-test" class="btn ghost sm">Test Webhook</button>
-      </div>
-      <span id="set-notif-status" class="font-data text-muted" style="font-size:10px;margin-left:8px"></span>
-    </div>
-
-    <!-- Subscription -->
-    <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">Subscription</div></div>
       <div class="settings-grid">
         <div class="inp-group">
           <label class="inp-label">Plan</label>
@@ -554,60 +609,340 @@ pending ───────────────────→ deactivated
           <span id="set-sub-status" class="font-data" style="font-weight:600">—</span>
         </div>
         <div class="inp-group">
-          <label class="inp-label">Renews</label>
-          <span id="set-sub-renews" class="font-data">—</span>
+          <label class="inp-label">Renews At</label>
+          <span id="set-sub-renews" class="font-data text-muted">—</span>
         </div>
         <div class="inp-group">
           <label class="inp-label">Seats</label>
-          <span id="set-sub-seats" class="font-data">—</span>
+          <span id="set-sub-seats" class="font-data text-muted">—</span>
         </div>
       </div>
-      <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)">Manage Subscription →</button>
-    </div>
 
-    <!-- Security -->
-    <div class="card settings-section">
-      <div class="sec-hdr"><div class="sh-title">Security</div></div>
+      <div class="sec-hdr" style="margin-top:var(--s-3)">
+        <div class="sh-title">Usage &amp; Quotas</div>
+        <div class="sh-sub">Client ledger summary from Maestro usage units</div>
+      </div>
       <div class="settings-grid">
         <div class="inp-group">
-          <label class="inp-label">API Keys</label>
-          <div id="set-apikeys-list" class="font-data text-muted" style="font-size:11px">No API keys configured</div>
-          <button id="set-apikey-generate" class="btn ghost sm" style="margin-top:var(--s-2)">+ Generate New Key</button>
-          <div id="set-apikey-result" class="font-data" style="font-size:10px;margin-top:var(--s-1)"></div>
+          <label class="inp-label">Usage Plan</label>
+          <span id="set-usage-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
+        </div>
+
+
+        <div class="inp-group">
+          <label class="inp-label">Monthly Included Units</label>
+          <span id="set-usage-monthly-included-units" class="font-data">—</span>
+        </div>
+<div class="inp-group">
+          <label class="inp-label">Quota Used</label>
+          <span id="set-usage-quota-used" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Quota Remaining</label>
+          <span id="set-usage-quota-remaining" class="font-data">—</span>
+        </div>
+
+        <div class="inp-group">
+          <label class="inp-label">Quota Status</label>
+          <span id="set-usage-quota-status" class="font-data">—</span>
+        </div>
+<div class="inp-group">
+          <label class="inp-label">Total Units</label>
+          <span id="set-usage-total-units" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Rejected Requests</label>
+          <span id="set-usage-rejected-requests" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Latest Status</label>
+          <span id="set-usage-latest-status" class="font-data text-muted">—</span>
+        </div>
+
+        <div class="inp-group">
+          <label class="inp-label">Current Period</label>
+          <span id="set-usage-current-period" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Latest Usage At</label>
+          <span id="set-usage-latest-usage-at" class="font-data text-muted">—</span>
+        </div>
+</div>
+      <div id="set-usage-byok-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">BYOK: provider_cost_included=false. Provider costs are not included in Maestro usage units. Rejected requests are tracked separately from successful usage.</div>
+              <div class="inp-group">
+          <label class="inp-label">Plan Source</label>
+          <span id="set-usage-plan-source" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Usage Percent</label>
+          <span id="set-usage-percent" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider Connection</label>
+          <span id="set-usage-provider-status" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Usage Recommendations</label>
+          <span id="set-usage-recommendations" class="font-data text-muted">—</span>
+        </div>
+
+<button id="set-usage-review-request" class="btn ghost sm" style="margin-top:var(--s-3)">Prepare usage review request</button>
+      <span id="set-usage-review-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">—</span>
+
+      <button id="set-sub-manage" class="btn ghost sm" style="margin-top:var(--s-3)" disabled>Manage Subscription - coming soon</button>
+      <div id="set-enterprise-integration-eligibility-card" class="mono-block" style="display:none;font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">
+        <strong>Enterprise Integration Eligibility</strong>
+        <div>Plan: <span id="set-enterprise-integration-eligibility-plan">—</span></div>
+        <div>Status: <span id="set-enterprise-integration-eligibility-status">Hidden for non-enterprise plans</span></div>
+        <div>Enterprise integration controls are shown only for enterprise plans. Starter and Business clients should request an upgrade first.</div>
+      </div>
+    </div>
+
+
+    <!-- Enterprise Integration -->
+    <div class="card settings-section" id="set-api-key-integration-card" style="display:none">
+      <div class="sec-hdr">
+        <div class="sh-title">API Key Integration</div>
+        <div class="sh-sub">Enterprise-only client integration status</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Integration Plan</label>
+          <span id="set-api-key-integration-plan" class="font-data" style="font-weight:600;color:var(--amber)">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Integration Status</label>
+          <span id="set-api-key-integration-status" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Active Integration Keys</label>
+          <span id="set-api-key-integration-count" class="font-data">—</span>
+        </div>
+                      <div class="inp-group">
+                <label for="set-api-key-operational-profile-selector">Operational Profile</label>
+                <select id="set-api-key-operational-profile-selector">
+                  <option value="">Choose operational purpose</option>
+                </select>
+              </div>
+              <div class="inp-group">
+                <label>Operational Profile Count</label>
+                <span id="set-api-key-operational-profile-count">0</span>
+              </div>
+              <div class="inp-group">
+                <label>Operational Profiles Enabled</label>
+                <span id="set-api-key-operational-profile-enabled">false</span>
+              </div>
+              <div class="inp-group wide">
+                <label>Selected Operational Profile</label>
+                <pre id="set-api-key-operational-profile-summary" class="mono-block">Operational profiles load after integration status.</pre>
+              </div>
+              <div class="inp-group wide">
+                <label>Allowed Scopes</label>
+                <pre id="set-api-key-operational-profile-allowed-scopes" class="mono-block">—</pre>
+              </div>
+              <div class="inp-group wide">
+                <label>Forbidden Scopes</label>
+                <pre id="set-api-key-operational-profile-forbidden-scopes" class="mono-block">—</pre>
+              </div>
+              <div class="inp-group wide">
+                <label>Readiness and Supervisor Requirements</label>
+                <pre id="set-api-key-operational-profile-readiness" class="mono-block">Integration readiness and supervisor requirements load with the selected profile.</pre>
+              </div>
+              <p id="set-api-key-operational-profile-safety" class="muted">Production connector approval remains separate. Runtime connectors are not approved from this selector. Raw integration secrets are never displayed.</p>
+<div class="inp-group">
+          <label class="inp-label">Default Scopes</label>
+          <span id="set-api-key-integration-scopes" class="font-data text-muted">—</span>
         </div>
       </div>
+      <div id="set-api-key-integration-keys" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No integration keys issued yet. Contact the Maestro admin team to create one.</div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Only prefixes, scopes, quotas, and usage metadata are shown here. Raw secret keys are never displayed after creation.</div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Use Requests &amp; Billing to request integration key provisioning, rotation, or deactivation. No raw integration secret is included.</div>
+      <button id="set-api-key-request-provisioning" class="btn sm" style="margin-top:var(--s-3)">Request integration key provisioning</button>
+      <button id="set-api-key-request-rotation" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Request key rotation</button>
+      <button id="set-api-key-request-deactivation" class="btn ghost sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Request key deactivation</button>
+      <span id="set-api-key-request-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
     </div>
 
-  </div>
-</div>
-</div>
 
-<!-- ===== PAGE: Adapters ===== -->
-<div class="page" id="page-adapters">
-<div>
-  <div class="sec-hdr"><div class="sh-title">Adapter Manager</div><div class="sh-sub">Provider configuration and testing</div></div>
-  <div id="adp-grid" class="grid-3" style="margin-bottom:var(--s-5)"></div>
-
-  <div class="grid-2-eq">
-    <div class="card">
-      <div class="sec-hdr"><div class="sh-title">Configure Provider</div></div>
-      <div class="flex-gap" style="flex-wrap:wrap;gap:6px">
-        <select id="adp-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
-        <input id="adp-api-key" class="inp" type="password" placeholder="API Key" style="width:160px;font-size:11px">
-        <input id="adp-model" class="inp" placeholder="Model (optional)" style="width:120px;font-size:11px">
-        <input id="adp-base-url" class="inp" placeholder="Base URL (optional)" style="width:140px;font-size:11px">
-        <button id="adp-configure-btn" class="btn accent sm">Configure</button>
+    <!-- Client Integration Guide -->
+    <div class="card settings-section" id="set-client-integration-guide-card" data-settings-section-key="integration-guide">
+      <div class="sec-hdr">
+        <div class="sh-title">Client Integration Guide</div>
+        <div class="sh-sub">Copy-safe setup notes for client integration, BYOK provider setup, and support handoff</div>
       </div>
-      <div id="adp-config-result"></div>
-    </div>
-    <div class="card">
-      <div class="sec-hdr"><div class="sh-title">Test Connection</div></div>
-      <div class="flex-gap">
-        <select id="adp-test-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
-        <button id="adp-test-btn" class="btn accent sm">Test</button>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Base URL</label>
+          <span id="set-guide-base-url" class="font-data text-muted">&lt;maestro-base-url&gt;</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Auth Header</label>
+          <span class="font-data text-muted">Authorization: Bearer &lt;client-integration-key&gt;</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider Policy</label>
+          <span class="font-data text-muted">BYOK / provider costs are not included</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Secret Safety</label>
+          <span class="font-data text-muted">Use placeholders in support messages</span>
+        </div>
       </div>
-      <div id="adp-test-result"></div>
+      <div id="set-guide-output" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Integration notes use placeholders only. Do not paste raw provider secrets or raw integration keys into support requests.</div>
+      <button id="set-guide-copy-quickstart" class="btn sm" style="margin-top:var(--s-3)">Copy quickstart notes</button>
+      <button id="set-guide-copy-checklist" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Copy readiness checklist</button>
+      <button id="set-guide-support" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Prepare integration support request</button>
     </div>
+    <!-- Provider Connections -->
+    <div class="card settings-section" id="set-provider-connection-card" data-settings-section-key="provider">
+      <div class="sec-hdr">
+        <div class="sh-title">Provider Connections</div>
+        <div class="sh-sub">Client BYOK provider status</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Connection Status</label>
+          <span id="set-provider-connection-status" class="font-data" style="font-weight:600">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider</label>
+          <span id="set-provider-connection-provider" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Model</label>
+          <span id="set-provider-connection-model" class="font-data text-muted">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider Cost Included</label>
+          <span id="set-provider-connection-cost" class="font-data text-muted">false</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Last Tested</label>
+          <span id="set-provider-connection-last-tested" class="font-data text-muted">never</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Secret Status</label>
+          <span id="set-provider-connection-secret-status" class="font-data text-muted">hidden / not displayed</span>
+        </div>
+      </div>
+      <div id="set-provider-connection-providers" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Available providers will appear after client settings load.</div>
+      <div class="settings-grid" id="set-provider-setup-request" style="margin-top:var(--s-3)">
+        <div class="inp-group">
+          <label class="inp-label">Requested Provider</label>
+          <select id="set-provider-setup-provider" class="inp">
+            <option value="">Select provider for setup request</option>
+            <option value="openai">openai</option>
+            <option value="anthropic">anthropic</option>
+            <option value="gemini">gemini</option>
+            <option value="deepseek">deepseek</option>
+            <option value="openrouter">openrouter</option>
+            <option value="opencode">opencode</option>
+            <option value="generic_openai_compatible">generic_openai_compatible</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Requested Model</label>
+          <input id="set-provider-setup-model" class="inp" type="text" placeholder="model name only; no secrets" autocomplete="off">
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Provider API Key</label>
+          <input id="set-provider-secret-input" class="inp" type="password" placeholder="Paste provider key for save/test; never displayed after submit" autocomplete="off">
+        </div>
+      </div>
+      <div style="margin-top:var(--s-3)">
+        <button id="set-provider-secret-test" class="btn sm" type="button">Test provider</button>
+        <button id="set-provider-secret-save" class="btn sm" type="button" style="margin-left:var(--s-2)">Save provider</button>
+        <button id="set-provider-secret-clear" class="btn sm" type="button" style="margin-left:var(--s-2)">Clear provider</button>
+        <button id="set-provider-setup-request-prepare" class="btn sm" type="button" style="margin-left:var(--s-2)">Prepare provider setup request</button>
+      </div>
+      <div id="set-provider-setup-request-status" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Provider API keys are sent only to the secure provider connection endpoint for save/test actions and are never displayed after submission. You can still prepare a supervisor request without secrets. Do not paste provider secrets here.</div>
+      <div id="set-provider-connection-note" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Client provider status is read-only in this phase. Raw provider secrets are never displayed in the client console.</div>
+    </div>
+
+
+    <!-- Requests & Billing -->
+    <div class="card settings-section" id="set-client-requests-card" data-settings-section-key="requests">
+      <div class="sec-hdr">
+        <div class="sh-title">Requests &amp; Billing</div>
+        <div class="sh-sub">Client requests for billing, upgrades, integration, and support</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Request Type</label>
+          <select id="set-client-request-type" class="inp-sel">
+            <option value="enterprise_integration_upgrade">Upgrade to Enterprise Integration</option>
+            <option value="integration_key_provisioning">Request integration key provisioning</option>
+            <option value="integration_key_rotation">Request integration key rotation</option>
+            <option value="integration_key_deactivation">Request integration key deactivation</option>
+            <option value="provider_setup_help">Provider setup help</option>
+            <option value="billing_usage_review">Billing and usage review</option>
+            <option value="general_support">General support</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Requested Plan</label>
+          <select id="set-client-request-plan" class="inp-sel">
+            <option value="">No plan change</option>
+            <option value="enterprise_integration">Enterprise Integration</option>
+            <option value="enterprise_integration_starter">Enterprise Integration Starter</option>
+            <option value="business">Business</option>
+            <option value="starter">Starter</option>
+          </select>
+        </div>
+      </div>
+      <div class="inp-group" style="margin-top:var(--s-3)">
+        <label class="inp-label">Request Message</label>
+        <textarea id="set-client-request-message" class="inp" rows="4" placeholder="Describe what you need from the Maestro admin/support team. Do not paste provider secrets or raw keys."></textarea>
+      </div>
+      <button id="set-client-request-submit" class="btn accent sm" style="margin-top:var(--s-3)">Submit Request</button>
+      <span id="set-client-request-status" class="font-data" style="font-size:10px;margin-left:var(--s-2)">—</span>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Latest request status history is shown newest first with short id, type, requested plan, status, created_at, and source.</div>
+      <div id="set-client-request-latest-summary" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Latest request summary will appear after client requests load.</div>
+      <div id="set-client-request-timeline" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Request status timeline will appear after client requests load.</div>
+      <div id="set-client-request-next-action" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Next safe client action will appear after client requests load.</div>
+      <div id="set-client-request-history" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">No client requests submitted yet. Submitted requests will appear here newest first.</div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Requests are saved for admin follow-up. Payment checkout and provider secret changes are not performed from this panel.</div>
+    </div>
+    <!-- Supervisor Messages -->
+    <div class="card settings-section" id="set-client-support-card" data-settings-section-key="supervisor">
+      <div class="sec-hdr">
+        <div class="sh-title">Supervisor Messages &amp; Support</div>
+        <div class="sh-sub">Message the Maestro supervisor/admin team without exposing provider secrets or raw keys</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Message Type</label>
+          <select id="set-supervisor-message-type" class="inp-sel">
+            <option value="general_support">General support</option>
+            <option value="provider_setup_help">Provider setup help</option>
+            <option value="billing_usage_review">Billing and usage review</option>
+            <option value="integration_key_provisioning">Integration key provisioning</option>
+            <option value="integration_key_rotation">Integration key rotation</option>
+            <option value="integration_key_deactivation">Integration key deactivation</option>
+            <option value="enterprise_integration_upgrade">Enterprise integration upgrade</option>
+          </select>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Requested Plan</label>
+          <select id="set-supervisor-message-plan" class="inp-sel">
+            <option value="">No plan change</option>
+            <option value="enterprise_integration">Enterprise Integration</option>
+            <option value="enterprise_integration_starter">Enterprise Integration Starter</option>
+            <option value="business">Business</option>
+            <option value="starter">Starter</option>
+          </select>
+        </div>
+      </div>
+      <div class="inp-group" style="margin-top:var(--s-3)">
+        <label class="inp-label">Message to Supervisor</label>
+        <textarea id="set-supervisor-message-body" class="inp" rows="4" placeholder="Write a message for the Maestro supervisor. Use placeholders only; do not paste raw provider secrets or raw integration keys."></textarea>
+      </div>
+      <button id="set-supervisor-message-send" class="btn accent sm" style="margin-top:var(--s-3)">Send supervisor message</button>
+      <button id="set-supervisor-message-prefill" class="btn sm" style="margin-top:var(--s-3);margin-left:var(--s-2)">Prefill readiness review</button>
+      <span id="set-supervisor-message-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">Supervisor messages are saved through the existing client request workflow for admin follow-up. They do not open payment checkout, change provider secrets, or call admin-only routes.</div>
+    </div>
+
   </div>
 </div>
 </div>
@@ -634,21 +969,18 @@ pending ───────────────────→ deactivated
 <script src="js/adapters/governance.js"></script>
 <script src="js/adapters/telemetry.js"></script>
 <script src="js/adapters/reports.js"></script>
-<script src="js/adapters/adapters.js"></script>
-
 <script>var PAGES = {};</script>
 
 <script src="js/pages/overview.js"></script>
 <script src="js/pages/gateway.js"></script>
 <script src="js/pages/governor.js"></script>
 <script src="js/pages/simulation.js"></script>
-<script src="js/pages/adapters.js"></script>
 <script src="js/pages/cgt.js"></script>
 <script src="js/pages/workflows.js"></script>
 <script src="js/pages/governance.js"></script>
 <script src="js/pages/telemetry.js"></script>
 <script src="js/pages/reports.js"></script>
-<script src="js/pages/settings.js"></script>
+<script src="js/pages/settings.js?v=settingsrequests02cdedupe"></script>
 
 <script src="js/tour/tour-steps.js"></script>
 <script src="js/tour/tour-engine.js"></script>
@@ -657,5 +989,68 @@ pending ───────────────────→ deactivated
 APP.init();
 TOUR.init();
 </script>
+
+        <section
+          id="set-integration-readiness-card" data-cache-marker="clientreadiness11l"
+          class="settings-card"
+          data-phase="INTEGRATION-READINESS-11L"
+          aria-label="Client integration readiness"
+        >
+          <div class="settings-card-header">
+            <div>
+              <p class="eyebrow">Enterprise integration</p>
+              <h3>Integration Readiness</h3>
+            </div>
+            <span id="set-integration-readiness-status" class="status-pill">Not reviewed</span>
+          </div>
+
+          <p class="muted">
+            Client-safe readiness summary for API integration requests. This card prepares sandbox review
+            without exposing credentials, customer endpoints, internal security notes, or production connector approval.
+          </p>
+
+          <dl class="settings-summary-grid" aria-label="Integration readiness summary">
+            <div>
+              <dt>Sandbox readiness</dt>
+              <dd id="set-integration-readiness-sandbox">Pending customer inputs</dd>
+            </div>
+            <div>
+              <dt>Production connector approved</dt>
+              <dd id="set-integration-readiness-production">false</dd>
+            </div>
+            <div>
+              <dt>Runtime connector approved</dt>
+              <dd id="set-integration-readiness-runtime">false</dd>
+            </div>
+          </dl>
+
+          <div class="settings-grid two">
+            <div>
+              <h4>Missing customer inputs</h4>
+              <ul id="set-integration-readiness-missing-inputs">
+                <li>Select an operational API key profile.</li>
+                <li>Provide sandbox API documentation or integration reference.</li>
+                <li>Confirm customer-side technical contact and review path.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Missing security controls</h4>
+              <ul id="set-integration-readiness-missing-controls">
+                <li>Confirm sandbox-before-production approval.</li>
+                <li>Confirm supervisor review for write or restricted scopes.</li>
+                <li>Keep raw credentials outside Maestro requests.</li>
+              </ul>
+            </div>
+          </div>
+
+          <p id="set-integration-readiness-next-action" class="muted">
+            Next action: select an operational profile and submit an integration key request for supervisor review.
+          </p>
+
+          <p id="set-integration-readiness-safety" class="muted">
+            Safety: no raw secrets, no customer credentials, no external HTTP calls, no runtime connector,
+            and no production connector approval are enabled from this surface.
+          </p>
+        </section>
 </body>
 </html>

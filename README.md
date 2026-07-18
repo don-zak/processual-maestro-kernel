@@ -111,6 +111,91 @@ Never commit `.env` files or real provider API keys to GitHub.
 ---
 
 
+### Production environment template
+
+For production deployment, use:
+
+```bash
+cp .env.production.example .env
+```
+
+Then replace all placeholder values before starting the server.
+
+The production template includes:
+
+```text
+ENVIRONMENT=production
+APP_ENV=production
+API_DEBUG=false
+JWT_SECRET
+API_KEYS
+PROCESSUAL_CRYPTO_KEY_B64
+CORS_ORIGINS
+DATABASE_URL
+POSTGRES_PASSWORD
+REDIS_URL
+REDIS_PASSWORD
+GRAFANA_ADMIN_PASSWORD
+```
+
+It also documents optional production integrations:
+
+```text
+SENTRY_DSN
+SENTRY_ENVIRONMENT
+DISCORD_WEBHOOK_URL
+DISCORD_ADMIN_WEBHOOK_URL
+LEMONSQUEEZY_API_KEY
+LEMONSQUEEZY_STORE_ID
+LEMONSQUEEZY_WEBHOOK_SECRET
+OPENROUTER_API_KEY
+OPENCODE_API_URL
+GENERIC_OPENAI_API_URL
+```
+
+Provider keys are customer-owned. Processual Maestro does not ship real OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, OpenCode, Ollama, vLLM, LM Studio, or generic OpenAI-compatible credentials. Each deploying organization must configure its own provider keys and endpoints.
+
+
+
+### Extended production environment variables
+
+The deployment must be aligned with `.env.production.example`.
+
+In addition to the core values, production deployments must review the following variables:
+
+| Variable                            |           Required | Purpose                                                                               |
+| ----------------------------------- | -----------------: | ------------------------------------------------------------------------------------- |
+| `ENVIRONMENT`                       |                Yes | Must be `production` for production startup validation.                               |
+| `APP_ENV`                           |                Yes | Must be `production` to disable development-only API key fallback behavior.           |
+| `API_DEBUG`                         |                Yes | Must be `false` in production.                                                        |
+| `PROCESSUAL_CRYPTO_KEY_B64`         |                Yes | Base64-encoded 32-byte encryption key for stored sensitive provider/API-key material. |
+| `SENTRY_DSN`                        |                 No | Enables Sentry error reporting.                                                       |
+| `SENTRY_ENVIRONMENT`                |                 No | Should be `production` for production Sentry events.                                  |
+| `SENTRY_TRACES_SAMPLE_RATE`         |                 No | Controls Sentry tracing sample rate.                                                  |
+| `DISCORD_WEBHOOK_URL`               |                 No | Optional client-facing Discord notification webhook.                                  |
+| `DISCORD_ADMIN_WEBHOOK_URL`         |                 No | Optional admin/operations Discord notification webhook.                               |
+| `DISCORD_RATE_LIMIT_SECONDS`        |                 No | Minimum interval between Discord notifications.                                       |
+| `LEMONSQUEEZY_API_KEY`              | If billing enabled | Lemon Squeezy API key.                                                                |
+| `LEMONSQUEEZY_STORE_ID`             | If billing enabled | Lemon Squeezy store ID.                                                               |
+| `LEMONSQUEEZY_WEBHOOK_SECRET`       | If billing enabled | Webhook signing secret.                                                               |
+| `LEMONSQUEEZY_CHECKOUT_SUCCESS_URL` | If billing enabled | Production checkout success URL.                                                      |
+| `LEMONSQUEEZY_CHECKOUT_CANCEL_URL`  | If billing enabled | Production checkout cancel URL.                                                       |
+| `OPENROUTER_API_KEY`                |            If used | Customer-owned OpenRouter API key.                                                    |
+| `OPENROUTER_API_URL`                |            If used | OpenRouter-compatible API base URL.                                                   |
+| `OPENCODE_API_URL`                  |            If used | Local or private OpenCode/Ollama-compatible endpoint.                                 |
+| `OPENCODE_API_KEY`                  |            If used | Customer-owned OpenCode-compatible API key or local placeholder where appropriate.    |
+| `GENERIC_OPENAI_API_KEY`            |            If used | Customer-owned key for a generic OpenAI-compatible provider.                          |
+| `GENERIC_OPENAI_API_URL`            |            If used | Generic OpenAI-compatible endpoint.                                                   |
+
+Provider credentials are not bundled with Processual Maestro. The deploying customer or organization is responsible for its own provider keys, endpoints, billing, usage limits, and third-party provider availability.
+
+Do not use documentation sample values in production. Replace every placeholder in `.env.production.example` and store real secrets through `.env`, Docker secrets, Kubernetes secrets, Google Secret Manager, or an equivalent secret-management system.
+
+
+
+
+
+
 
 **Processual Maestro** is an adaptive governance middleware for AI agent workflows. It sits above any agent runtime (LangGraph, CrewAI, AutoGen, OpenAI Agents SDK) and provides CGT v2 evaluation, safety guardrails, audit trails, and certifiable orchestration.
 
@@ -250,3 +335,93 @@ kubectl apply -k ops/k8s/overlays/dev/
 ## License
 
 MIT
+
+## Cloud Run readiness
+
+The container is Cloud Run ready: it binds Uvicorn to `${PORT:-8000}`, keeps the live health check on `/health/live`, and exposes readiness through `/health/ready`.
+
+Required production environment values remain explicit and must not use local defaults:
+
+- `JWT_SECRET`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `MAESTRO_ADMIN_EMAIL`
+- `MAESTRO_ADMIN_PASSWORD`
+
+Billing remains BYOK: provider costs are not included in Processual Maestro pricing.
+
+## Cloud Run deploy contract
+
+Processual Maestro is Cloud Run-ready, but deployment is intentionally an explicit operator step. The repository-level Cloud Build contract builds and publishes the container image; it does not deploy the service automatically.
+
+Build the image with Cloud Build:
+
+```powershell
+gcloud builds submit --config cloudbuild.yaml --substitutions _REGION=us-central1,_REPOSITORY=processual-maestro,_SERVICE=processual-maestro-api
+```
+
+Deploy the already-built image only after production secrets and environment variables are configured:
+
+```powershell
+gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production,APP_ENV=production,API_DEBUG=false --set-secrets JWT_SECRET=JWT_SECRET:latest,API_KEYS=API_KEYS:latest,PROCESSUAL_CRYPTO_KEY_B64=PROCESSUAL_CRYPTO_KEY_B64:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest,POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,GRAFANA_ADMIN_PASSWORD=GRAFANA_ADMIN_PASSWORD:latest
+```
+
+Cloud Run provides the runtime `PORT` value. The container keeps the default fallback `${PORT:-8000}` for local compatibility.
+
+Live health check:
+
+```text
+/health/live
+```
+
+Readiness check:
+
+```text
+/health/ready
+```
+
+### Required production environment matrix
+
+| Variable | Required for Cloud Run | Delivery | Notes |
+| --- | --- | --- | --- |
+| `ENVIRONMENT` | Yes | env var | Set to `production` for production deployment checks. |
+| `JWT_SECRET` | Yes | Secret Manager | Must be strong and unique. Never use `CHANGE_ME_IN_PRODUCTION`. |
+| `API_KEYS` | Yes | Secret Manager | Strong service/API bootstrap key. Do not use development fallback keys. |
+| `PROCESSUAL_CRYPTO_KEY_B64` | Yes | Secret Manager | Base64-encoded 32-byte encryption key for protected secrets. |
+| `DATABASE_URL` | Yes | Secret Manager | Production database connection string. |
+| `REDIS_URL` | Yes | Secret Manager | Production Redis connection string. |
+| `MAESTRO_ADMIN_EMAIL` | Yes | Secret Manager | Initial admin login identity. |
+| `MAESTRO_ADMIN_PASSWORD` | Yes | Secret Manager | Initial admin login secret. |
+| `POSTGRES_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; use a strong value even when the database provider is external. |
+| `REDIS_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; keep aligned with the deployed Redis provider. |
+| `GRAFANA_ADMIN_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; keep a strong secret even for API-only deployments. |
+
+Billing remains BYOK: provider costs are not included in Maestro usage pricing, and plan allowances must come from the pricing catalog rather than deployment configuration.
+
+### Production secrets contract
+
+The Cloud Run deploy command must map every production secret through Secret Manager. Do not place real secret values in `cloudbuild.yaml`, README examples, static assets, tests, or committed `.env` files.
+
+The canonical production secret names are maintained in `processual_api/settings.py` as `PRODUCTION_SECRET_ENV_VARS`; documentation and regression tests must stay aligned with that contract.
+
+## Subscription pricing catalog
+
+Processual Maestro currently uses a draft subscription pricing catalog.
+
+- Pricing status: draft.
+- Billing policy: BYOK.
+- Provider costs are not included.
+- Monthly Maestro unit allowances are resolved from the usage pricing catalog.
+- Lemon Squeezy checkout is not considered production-ready until approved plan prices and variant IDs are mapped to the subscription catalog.
+
+## Versioned offer price book
+
+Processual Maestro now keeps subscription plans separate from draft commercial offers.
+
+- Offer price book status: draft_review.
+- Prices are pending review and no production amounts are published.
+- Currency and amount fields remain null until pricing is approved.
+- Trial duration, monthly pricing, yearly pricing, setup fees, commits, and overage rules are not finalized.
+- Checkout remains disabled for all offers.
+- Monthly Maestro unit allowances are still resolved from `usage_pricing.py`, not from payment-provider payloads.
+- Lemon Squeezy variant mapping must not be enabled until offer prices, intervals, and variant IDs are approved.

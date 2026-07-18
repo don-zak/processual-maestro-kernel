@@ -4,6 +4,19 @@ import os
 import warnings
 from dataclasses import dataclass, field
 
+PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
+    "JWT_SECRET",
+    "API_KEYS",
+    "PROCESSUAL_CRYPTO_KEY_B64",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "MAESTRO_ADMIN_EMAIL",
+    "MAESTRO_ADMIN_PASSWORD",
+    "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
+    "GRAFANA_ADMIN_PASSWORD",
+)
+
 
 @dataclass
 class APISettings:
@@ -23,12 +36,26 @@ class APISettings:
     )
 
     # --- CORS ---
-    cors_origins: list[str] = field(default_factory=lambda: os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","))
+    cors_origins: list[str] = field(
+        default_factory=lambda: os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+    )
 
     # --- JWT Authentication ---
     jwt_secret: str = field(default_factory=lambda: os.environ.get("JWT_SECRET", "CHANGE_ME_IN_PRODUCTION"))
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = field(default_factory=lambda: int(os.environ.get("JWT_EXPIRE_MINUTES", "60")))
+
+    # --- Maestro Admin Login ---
+    maestro_admin_email: str = field(
+        default_factory=lambda: os.environ.get(
+            "MAESTRO_ADMIN_EMAIL", ""
+        ).strip()
+    )
+    maestro_admin_password: str = field(
+        default_factory=lambda: os.environ.get(
+            "MAESTRO_ADMIN_PASSWORD", ""
+        )
+    )
 
     # --- API Key Authentication ---
     api_keys: list[str] = field(
@@ -59,11 +86,27 @@ class APISettings:
     # --- Environment ---
     environment: str = field(default_factory=lambda: os.environ.get("ENVIRONMENT", "development"))
 
-    _WEAK_SECRETS = {"", "change_me", "admin", "password", "processual", "test", "dev", "changeme", "default", "secret", "123456"}
+    _WEAK_SECRETS = {
+        "",
+        "change_me",
+        "admin",
+        "password",
+        "processual",
+        "test",
+        "dev",
+        "changeme",
+        "default",
+        "secret",
+        "123456",
+    }
 
     def _reject_weak(self, field_name: str, value: str | None, label: str) -> None:
         if not value or value.strip().lower() in self._WEAK_SECRETS:
-            detail = f"{label} is missing or set to a weak value. Set a strong, unique {field_name} environment variable before deploying to production."
+            detail = (
+                f"{label} is missing or set to a weak value. "
+                f"Set a strong, unique {field_name} environment variable "
+                "before deploying to production."
+            )
             if self.is_production:
                 raise RuntimeError(detail)
             warnings.warn(detail, stacklevel=2)
@@ -74,6 +117,31 @@ class APISettings:
                 "CORS_ORIGINS contains wildcard '*' in production. "
                 "Set explicit allowed origins for production deployments."
             )
+
+    def _reject_missing_admin_credentials(self) -> None:
+        has_admin_email = bool(self.maestro_admin_email.strip())
+        has_admin_password = bool(self.maestro_admin_password)
+
+        if has_admin_email and has_admin_password:
+            self._reject_weak(
+                "MAESTRO_ADMIN_PASSWORD",
+                self.maestro_admin_password,
+                "MAESTRO_ADMIN_PASSWORD",
+            )
+            return
+
+        detail = (
+            "MAESTRO_ADMIN_EMAIL and MAESTRO_ADMIN_PASSWORD must be set "
+            "before deploying to production."
+        )
+        if self.is_production:
+            raise RuntimeError(detail)
+
+        warnings.warn(
+            "MAESTRO_ADMIN_EMAIL or MAESTRO_ADMIN_PASSWORD is missing. "
+            "Using development-only admin/admin fallback.",
+            stacklevel=2,
+        )
 
     def __post_init__(self) -> None:
         if self.is_production:
@@ -94,6 +162,7 @@ class APISettings:
 
         self._reject_weak("JWT_SECRET", self.jwt_secret, "JWT_SECRET")
         self._reject_wildcard_cors()
+        self._reject_missing_admin_credentials()
 
         api_keys_str = ",".join(self.api_keys) if self.api_keys else ""
         self._reject_weak("API_KEYS", api_keys_str if api_keys_str else None, "API_KEYS")

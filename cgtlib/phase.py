@@ -15,7 +15,9 @@ def compute_phase_mass(probabilities: list[float]) -> float:
     return math.fsum(probabilities)
 
 
-def compute_self_potential(phase_mass: float, mean_retention: float, harmony: float, fatigue: float, omega: float) -> float:
+def compute_self_potential(
+    phase_mass: float, mean_retention: float, harmony: float, fatigue: float, omega: float
+) -> float:
     if phase_mass < 0:
         raise ValidationError("phase_mass must be non-negative")
     if not (0.0 <= mean_retention <= 1.0):

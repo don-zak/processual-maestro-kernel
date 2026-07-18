@@ -3,20 +3,26 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from ..admin_audit_log import append_admin_audit_event
+from ..services.api_key_store import verify_dynamic_api_key
 from ..settings import settings
+from ..supervisor_session_keys import validate_supervisor_session_key
 
 try:
-    from jose import JWTError, jwt
+    import jwt
+    from jwt import PyJWTError
 except ImportError:
     jwt: Any = None  # type: ignore[no-redef]
-    JWTError: type[Exception] = Exception  # type: ignore[no-redef]
+    PyJWTError: type[Exception] = Exception  # type: ignore[no-redef]
 
 class _PBKDF2CompatBcrypt:
     """Tiny bcrypt-compatible fallback for minimal local/test environments.
@@ -45,7 +51,128 @@ except ImportError:
     _bcrypt_lib = _PBKDF2CompatBcrypt()  # type: ignore[assignment]
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_supervisor_session_key_header = APIKeyHeader(name="X-Supervisor-Session-Key", auto_error=False)
 _bearer = HTTPBearer(auto_error=False)
+
+
+def _supervisor_session_key_store_path() -> Path:
+    configured = os.environ.get("PMK_SUPERVISOR_SESSION_KEYS_PATH", "").strip()
+    if configured:
+        return Path(configured)
+    return Path("data") / "supervisor_session_keys.json"
+
+
+def _auth_admin_audit_path() -> Path:
+    configured = os.environ.get("PMK_ADMIN_AUDIT_LOG_PATH", "").strip()
+    if configured:
+        return Path(configured)
+    return Path("data") / "admin_audit.jsonl"
+
+
+def _supervisor_actor_level_for_audit(user: dict[str, Any]) -> str:
+    return str(
+        user.get("supervision_level")
+        or user.get("supervisor_level")
+        or "legacy_admin"
+    )
+
+
+def _supervisor_session_key_denial_reason(exc: PermissionError) -> str:
+    detail = str(exc).lower()
+    if "expired" in detail:
+        return "expired_supervisor_session_key"
+    if "revoked" in detail:
+        return "revoked_supervisor_session_key"
+    return "invalid_supervisor_session_key"
+
+
+def _record_supervisor_session_key_denied(
+    *,
+    request: Request,
+    user: dict[str, Any],
+    reason: str,
+) -> None:
+    append_admin_audit_event(
+        audit_path=_auth_admin_audit_path(),
+        actor=str(user.get("email") or user.get("sub") or user.get("user_id") or "admin"),
+        actor_level=_supervisor_actor_level_for_audit(user),
+        action="supervisor_session_key_denied",
+        target_type="supervisor_session",
+        target_id=str(user.get("session_key_id") or "unknown"),
+        source="auth",
+        result="denied",
+        reason=reason,
+        request_path=str(request.url.path),
+    )
+
+
+def _merge_supervisor_session_user(
+    user: dict[str, Any],
+    session: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(user)
+    session_key_id = str(session.get("session_key_id") or "")
+    level = str(session.get("level") or "")
+
+    merged["supervision_level"] = level
+    merged["session_key_id"] = session_key_id
+    merged["supervisor_session_key_id"] = session_key_id
+    merged["supervisor_session_validated"] = True
+
+    session_scopes = [
+        str(scope)
+        for scope in session.get("scopes") or []
+        if str(scope or "").strip()
+    ]
+    merged["supervision_scopes"] = session_scopes
+
+    existing_scopes = [
+        str(scope)
+        for scope in merged.get("scopes") or []
+        if str(scope or "").strip()
+    ]
+    merged["scopes"] = sorted({*existing_scopes, *session_scopes})
+
+    issued_to = str(session.get("issued_to") or "").strip()
+    if issued_to:
+        merged["supervisor_session_issued_to"] = issued_to
+
+    session_label = str(session.get("session_label") or "").strip()
+    if session_label:
+        merged["supervisor_session_label"] = session_label
+
+    return merged
+
+
+def _apply_supervisor_session_header(
+    *,
+    request: Request,
+    user: dict[str, Any],
+    raw_supervisor_session_key: str | None,
+) -> dict[str, Any]:
+    raw_key = str(raw_supervisor_session_key or "").strip()
+    if not raw_key:
+        return user
+
+    try:
+        session = validate_supervisor_session_key(
+            _supervisor_session_key_store_path(),
+            raw_key,
+        )
+    except PermissionError as exc:
+        reason = _supervisor_session_key_denial_reason(exc)
+        _record_supervisor_session_key_denied(
+            request=request,
+            user=user,
+            reason=reason,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Supervisor session key denied.",
+        ) from exc
+
+    return _merge_supervisor_session_user(user, session)
+
 
 
 def _get_jwt_secret() -> str:
@@ -56,23 +183,42 @@ def _get_jwt_algorithm() -> str:
     return settings.jwt_algorithm
 
 
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    subject: str,
+    expires_delta: timedelta | None = None,
+    *,
+    role: str = "client",
+    client_id: str | None = None,
+    session_type: str = "jwt",
+    scopes: list[str] | None = None,
+) -> str:
     if jwt is None:
-        raise RuntimeError("python-jose is not installed. Install with: pip install python-jose[cryptography]")
-    expire = datetime.now(UTC) + (
+        raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
+    now = datetime.now(UTC)
+    expire = now + (
         expires_delta if expires_delta is not None else timedelta(minutes=settings.jwt_expire_minutes)
     )
-    payload = {"sub": subject, "exp": expire, "iat": datetime.now(UTC)}
+    payload = {
+        "sub": subject,
+        "exp": expire,
+        "iat": now,
+        "role": role,
+        "client_id": client_id or subject,
+        "session_type": session_type,
+        "scopes": scopes or [],
+    }
     return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
+
+
 
 
 def verify_access_token(token: str) -> dict:
     if jwt is None:
-        raise RuntimeError("python-jose is not installed. Install with: pip install python-jose[cryptography]")
+        raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
     try:
         payload = jwt.decode(token, _get_jwt_secret(), algorithms=[_get_jwt_algorithm()])
         return payload
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 
@@ -124,18 +270,135 @@ def generate_api_key() -> str:
 
 
 async def get_current_user(
+    request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(_bearer),
     api_key: str | None = Depends(_api_key_header),
+    supervisor_session_key: str | None = Depends(_supervisor_session_key_header),
 ) -> dict:
     if bearer:
         payload = verify_access_token(bearer.credentials)
-        return {"sub": payload.get("sub", "unknown"), "auth_method": "jwt"}
+        subject = payload.get("sub", "unknown")
+        user = {
+            "sub": subject,
+            "user_id": subject,
+            "client_id": payload.get("client_id", subject),
+            "role": payload.get("role", "client"),
+            "auth_method": "jwt",
+            "session_type": payload.get("session_type", "jwt"),
+            "scopes": payload.get("scopes", []),
+        }
+        user = _apply_supervisor_session_header(
+            request=request,
+            user=user,
+            raw_supervisor_session_key=supervisor_session_key,
+        )
+        request.state.current_user = user
+        return user
+
     if api_key:
-        for stored_key in settings.api_keys:
-            if secrets.compare_digest(api_key, stored_key):
-                return {"sub": "api_key_user", "auth_method": "api_key"}
+        dynamic_user = verify_dynamic_api_key(api_key)
+        if dynamic_user:
+            request.state.current_user = dynamic_user
+            return dynamic_user
+
+        app_env = os.environ.get("APP_ENV", settings.environment).lower()
+        runtime_env = os.environ.get("ENVIRONMENT", settings.environment).lower()
+        allow_env_fallback = (
+            app_env in {"dev", "development", "local", "test"}
+            and runtime_env not in {"production", "prod"}
+            and not settings.is_production
+        )
+
+
+        if allow_env_fallback:
+            for stored_key in settings.api_keys:
+                if secrets.compare_digest(api_key, stored_key):
+                    user = {
+                        "sub": "api_key_user",
+                        "user_id": "api_key_user",
+                        "client_id": "dev",
+                        "role": "dev",
+                        "auth_method": "api_key",
+                        "session_type": "api_key_env_fallback",
+                        "api_key_id": "env",
+                        "api_key_prefix": "env",
+                        "scopes": ["*"],
+                    }
+                    request.state.current_user = user
+                    return user
+
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
+
+def require_scope(required_scope: str):
+    async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
+        scopes = current_user.get("scopes", [])
+
+        if "*" in scopes:
+            return current_user
+
+        if required_scope in scopes:
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing required scope: {required_scope}",
+        )
+
+    return _scope_dependency
+
+def require_quota(quota_scope: str = "evaluation"):
+    async def _quota_dependency(
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        from ..billing.usage_pricing import pricing_decision
+        from ..services.quota_store import consume_quota
+
+        pricing_item_count = getattr(request.state, "pricing_item_count", None)
+        if not isinstance(pricing_item_count, int):
+            pricing_item_count = None
+
+        pricing = pricing_decision(
+            request.url.path,
+            item_count=pricing_item_count,
+        )
+        request.state.pricing_decision = pricing
+        request.state.pricing_units_charged = pricing.units_charged
+
+        try:
+            checked_user = consume_quota(
+                current_user,
+                method=request.method,
+                endpoint=request.url.path,
+                quota_scope=quota_scope,
+                amount=pricing.units_charged,
+            )
+        except HTTPException as exc:
+            detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
+            if detail.get("error") == "quota_exceeded":
+                rejected_user = dict(current_user)
+                rejected_user["quota_rejected"] = True
+                rejected_user["quota"] = {
+                    "scope": detail.get("quota_scope", quota_scope),
+                    "plan_id": detail.get("plan_id", current_user.get("plan_id", "")),
+                    "limit": detail.get("quota_limit"),
+                    "used": detail.get("quota_used"),
+                    "requested": detail.get(
+                        "quota_requested",
+                        pricing.units_charged,
+                    ),
+                    "remaining": detail.get("quota_remaining"),
+                    "rejected": True,
+                }
+                request.state.current_user = rejected_user
+            raise
+
+        request.state.current_user = checked_user
+        return checked_user
+
+    return _quota_dependency

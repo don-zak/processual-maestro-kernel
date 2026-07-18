@@ -19,7 +19,7 @@ import io
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -49,12 +49,33 @@ CLIENT_QUERIES = [
 ]
 
 AGENT_MODES: list[dict[str, str]] = [
-    {"agent_id": "pilot-planner", "name": "Pilot Planner", "role": "planner",
-     "system_prompt": "You are a meticulous planner. Break down every task step by step. Provide structured, detailed plans with clear sections."},
-    {"agent_id": "pilot-concise", "name": "Pilot Concise", "role": "concise",
-     "system_prompt": "You are a concise assistant. Give brief, direct, and practical answers. Use bullet points where helpful."},
-    {"agent_id": "pilot-critical", "name": "Pilot Critical", "role": "critical",
-     "system_prompt": "You are a critical analyst. Focus on risks, gaps, and weaknesses. Provide constructive criticism."},
+    {
+        "agent_id": "pilot-planner",
+        "name": "Pilot Planner",
+        "role": "planner",
+        "system_prompt": (
+            "You are a planner. Break down every task step by step. "
+            "Provide structured, detailed plans with clear sections."
+        ),
+    },
+    {
+        "agent_id": "pilot-concise",
+        "name": "Pilot Concise",
+        "role": "concise",
+        "system_prompt": (
+            "You are a concise assistant. Give brief, direct, and practical answers. "
+            "Use bullet points where helpful."
+        ),
+    },
+    {
+        "agent_id": "pilot-critical",
+        "name": "Pilot Critical",
+        "role": "critical",
+        "system_prompt": (
+            "You are a critical analyst. Focus on risks, gaps, and weaknesses. "
+            "Provide constructive criticism."
+        ),
+    },
 ]
 
 
@@ -102,13 +123,19 @@ def call_ollama(system_prompt: str, user_query: str) -> str:
 
 def evaluate_via_gateway(agent_id: str, role: str, query: str, answer: str) -> dict[str, Any]:
     payload = {
-        "agent_id": agent_id, "client_query": query, "agent_response": answer,
-        "run_id": RUN_ID, "scenario_id": "pilot",
-        "tags": [role, "pilot"], "repair_round": 0,
+        "agent_id": agent_id,
+        "client_query": query,
+        "agent_response": answer,
+        "run_id": RUN_ID,
+        "scenario_id": "pilot",
+        "tags": [role, "pilot"],
+        "repair_round": 0,
     }
     resp = requests.post(
         f"{MAESTRO_URL}/cgt/govern/gateway/evaluate",
-        json=payload, headers=HEADERS, timeout=30,
+        json=payload,
+        headers=HEADERS,
+        timeout=30,
     )
     resp.raise_for_status()
     return resp.json()
@@ -116,13 +143,20 @@ def evaluate_via_gateway(agent_id: str, role: str, query: str, answer: str) -> d
 
 def register_agent(agent_id: str, name: str, role: str) -> None:
     payload = {
-        "agent_id": agent_id, "name": name, "role": role,
-        "adapter_name": "ollama", "model": MODEL,
-        "tags": [role, "pilot"], "priority": 1, "risk_level": "medium",
+        "agent_id": agent_id,
+        "name": name,
+        "role": role,
+        "adapter_name": "ollama",
+        "model": MODEL,
+        "tags": [role, "pilot"],
+        "priority": 1,
+        "risk_level": "medium",
     }
     resp = requests.post(
         f"{MAESTRO_URL}/cgt/govern/gateway/agents",
-        json=payload, headers=HEADERS, timeout=10,
+        json=payload,
+        headers=HEADERS,
+        timeout=10,
     )
     if resp.status_code not in (200, 409):
         resp.raise_for_status()
@@ -188,8 +222,9 @@ def build_pdf_report(results: list[PilotResult], elapsed: float) -> bytes:
         return b""
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm,
-                            leftMargin=15*mm, rightMargin=15*mm)
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4, topMargin=20 * mm, bottomMargin=20 * mm, leftMargin=15 * mm, rightMargin=15 * mm
+    )
     doc.title = "External Pilot Report"
     doc.author = "Processual Maestro Kernel v2.0.0"
     doc.subject = f"External Pilot — {len(AGENT_MODES)} agents × {len(CLIENT_QUERIES)} queries"
@@ -203,9 +238,16 @@ def build_pdf_report(results: list[PilotResult], elapsed: float) -> bytes:
     elements = []
     ts_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     elements.append(Paragraph("External Pilot Report", title_style))
-    elements.append(Spacer(1, 4*mm))
-    elements.append(Paragraph(f"Model: {MODEL} &nbsp;|&nbsp; Queries: {len(CLIENT_QUERIES)} &nbsp;|&nbsp; Agents: {len(AGENT_MODES)} &nbsp;|&nbsp; Duration: {elapsed:.1f}s &nbsp;|&nbsp; {ts_str}", label_style))
-    elements.append(Spacer(1, 4*mm))
+    elements.append(Spacer(1, 4 * mm))
+    elements.append(
+        Paragraph(
+            "External Pilot &nbsp;|&nbsp; "
+            f"Agents: {len(AGENT_MODES)} &nbsp;|&nbsp; "
+            f"Duration: {elapsed:.1f}s &nbsp;|&nbsp; {ts_str}",
+            label_style,
+        )
+    )
+    elements.append(Spacer(1, 4 * mm))
 
     for mode in AGENT_MODES:
         agent_results = [r for r in results if r.agent_id == mode["agent_id"]]
@@ -214,36 +256,57 @@ def build_pdf_report(results: list[PilotResult], elapsed: float) -> bytes:
             continue
         avg_r = sum(v.reward for v in valid) / len(valid)
         pass_ct = sum(1 for v in valid if v.rank in ("flourishing", "stable"))
-        elements.append(Paragraph(f"{mode['name']} — Pass: {pass_ct}/{len(valid)} &nbsp; Avg Reward: {avg_r:.4f}", heading_style))
+        elements.append(
+            f"{mode['name']} — Pass: {pass_ct}/{len(valid)} &nbsp; "
+            f"Avg Reward: {avg_r:.4f}",
+        )
         dist: dict[str, int] = {}
         for v in valid:
             dist[v.rank] = dist.get(v.rank, 0) + 1
         tbl_data = [[Paragraph("<b>Rank</b>", label_style), Paragraph("<b>Count</b>", label_style)]]
         for rk, cnt in sorted(dist.items()):
             tbl_data.append([Paragraph(rk, normal_style), str(cnt)])
-        tbl = Table(tbl_data, colWidths=[80*mm, 80*mm])
-        tbl.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#cccccc")),
-                                 ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f0f5")),
-                                 ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                                 ("TOPPADDING", (0,0), (-1,-1), 2),
-                                 ("BOTTOMPADDING", (0,0), (-1,-1), 2)]))
+        tbl = Table(tbl_data, colWidths=[80 * mm, 80 * mm])
+        tbl.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f5")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ]
+            )
+        )
         elements.append(tbl)
-        elements.append(Spacer(1, 3*mm))
+        elements.append(Spacer(1, 3 * mm))
 
-    elements.append(Spacer(1, 4*mm))
+    elements.append(Spacer(1, 4 * mm))
     elements.append(Paragraph("Detailed Results", heading_style))
-    det_data = [[Paragraph("<b>#</b>", label_style), Paragraph("<b>Agent</b>", label_style),
-                 Paragraph("<b>Rank</b>", label_style), Paragraph("<b>Reward</b>", label_style)]]
+    det_data = [
+        [
+            Paragraph("<b>#</b>", label_style),
+            Paragraph("<b>Agent</b>", label_style),
+            Paragraph("<b>Rank</b>", label_style),
+            Paragraph("<b>Reward</b>", label_style),
+        ]
+    ]
     for i, r in enumerate(results):
         rew = f"{r.reward:+.4f}" if r.error is None else "ERROR"
         det_data.append([str(i), r.agent_id, r.rank if r.error is None else "ERROR", rew])
-    det_tbl = Table(det_data, colWidths=[10*mm, 55*mm, 45*mm, 30*mm])
-    det_tbl.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#cccccc")),
-                                 ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f0f5")),
-                                 ("FONTSIZE", (0,0), (-1,-1), 8),
-                                 ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                                 ("TOPPADDING", (0,0), (-1,-1), 2),
-                                 ("BOTTOMPADDING", (0,0), (-1,-1), 2)]))
+    det_tbl = Table(det_data, colWidths=[10 * mm, 55 * mm, 45 * mm, 30 * mm])
+    det_tbl.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f5")),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
     elements.append(det_tbl)
 
     doc.build(elements)
@@ -277,35 +340,69 @@ def main() -> None:
                 decision = evaluate_via_gateway(agent_id, mode["role"], query, answer)
                 lat = int((time.monotonic() - t0) * 1000)
                 decision["eval_id"] = decision.get("eval_id", "")
-                results.append(PilotResult(
-                    agent_id=agent_id, name=mode["name"], role=mode["role"],
-                    query_idx=qi, query=query, answer=answer[:200],
-                    rank=decision.get("rank", "?"), reward=decision.get("reward", 0),
-                    policy=decision.get("policy", ""), action=decision.get("action", ""),
-                    agent_state=decision.get("agent_state", ""), latency_ms=lat,
-                ))
+                results.append(
+                    PilotResult(
+                        agent_id=agent_id,
+                        name=mode["name"],
+                        role=mode["role"],
+                        query_idx=qi,
+                        query=query,
+                        answer=answer[:200],
+                        rank=decision.get("rank", "?"),
+                        reward=decision.get("reward", 0),
+                        policy=decision.get("policy", ""),
+                        action=decision.get("action", ""),
+                        agent_state=decision.get("agent_state", ""),
+                        latency_ms=lat,
+                    )
+                )
                 print(f"rank={decision.get('rank', '?')} reward={decision.get('reward', 0):.4f}")
             except Exception as e:
                 lat = int((time.monotonic() - t0) * 1000)
-                results.append(PilotResult(
-                    agent_id=agent_id, name=mode["name"], role=mode["role"],
-                    query_idx=qi, query=query, answer="", rank="ERROR", reward=0,
-                    policy="", action="error", agent_state="", latency_ms=lat, error=str(e),
-                ))
+                results.append(
+                    PilotResult(
+                        agent_id=agent_id,
+                        name=mode["name"],
+                        role=mode["role"],
+                        query_idx=qi,
+                        query=query,
+                        answer="",
+                        rank="ERROR",
+                        reward=0,
+                        policy="",
+                        action="error",
+                        agent_state="",
+                        latency_ms=lat,
+                        error=str(e),
+                    )
+                )
                 print(f"ERROR: {e}")
 
     elapsed = time.monotonic() - t_start
     text_report = build_text_report(results, elapsed)
     pdf_bytes = build_pdf_report(results, elapsed)
     json_data = {
-        "run_id": RUN_ID, "model": MODEL, "timestamp": datetime.now(UTC).isoformat(),
-        "duration_s": round(elapsed, 2), "agents": len(AGENT_MODES), "queries": len(CLIENT_QUERIES),
+        "run_id": RUN_ID,
+        "model": MODEL,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "duration_s": round(elapsed, 2),
+        "agents": len(AGENT_MODES),
+        "queries": len(CLIENT_QUERIES),
         "results": [
             {
-                "agent_id": r.agent_id, "name": r.name, "role": r.role,
-                "query_idx": r.query_idx, "query": r.query, "answer": r.answer,
-                "rank": r.rank, "reward": r.reward, "policy": r.policy, "action": r.action,
-                "agent_state": r.agent_state, "latency_ms": r.latency_ms, "error": r.error,
+                "agent_id": r.agent_id,
+                "name": r.name,
+                "role": r.role,
+                "query_idx": r.query_idx,
+                "query": r.query,
+                "answer": r.answer,
+                "rank": r.rank,
+                "reward": r.reward,
+                "policy": r.policy,
+                "action": r.action,
+                "agent_state": r.agent_state,
+                "latency_ms": r.latency_ms,
+                "error": r.error,
             }
             for r in results
         ],

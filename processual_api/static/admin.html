@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJQcm9jZXNzdWFsIE1hZXN0cm8iPgogIDxyZWN0IHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgcng9IjE2IiBmaWxsPSIjMGYxNzJhIi8+CiAgPHBhdGggZD0iTTE3IDQzVjIxaDEyYzUuMyAwIDguOCAzLjIgOC44IDhzLTMuNSA4LTguOCA4aC01djZoLTd6bTctMTJoNC40YzEuOSAwIDMuMS0uOCAzLjEtMnMtMS4yLTItMy4xLTJIMjR2NHoiIGZpbGw9IiNmNTllMGIiLz4KICA8cGF0aCBkPSJNMzggNDNWMjFoN2w1IDguNyA1LTguN2g3djIyaC03VjMyLjhsLTMuNSA2aC0zbC0zLjUtNlY0M2gtN3oiIGZpbGw9IiM5M2M1ZmQiLz4KPC9zdmc+Cg=="/>
+
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Maestro Kernel - Admin Area</title>
+<link rel="stylesheet" href="/console/css/console.css">
+<style id="admin-nav-style">
+  .admin-page { display: none; }
+  .admin-page.active { display: block; }
+</style>
+<style id="admin-subscription-analytics-style">
+  #admin-subscription-analytics-host {
+    margin: 0 0 1.25rem;
+  }
+
+  .admin-subscription-analytics-card {
+    border: 1px solid rgba(126, 166, 255, 0.28);
+    border-radius: 18px;
+    padding: 1.2rem;
+    background:
+      linear-gradient(135deg, rgba(21, 35, 62, 0.92), rgba(7, 12, 22, 0.94)),
+      rgba(12, 18, 32, 0.92);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    color: #dbe7ff;
+  }
+
+  .admin-subscription-analytics-card .admin-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .admin-subscription-analytics-card .admin-eyebrow {
+    margin: 0 0 0.25rem;
+    color: #8fb3ff;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .admin-subscription-analytics-card h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .admin-subscription-analytics-card h3 {
+    margin: 0 0 0.7rem;
+    font-size: 0.95rem;
+    color: #ffffff;
+  }
+
+  .admin-subscription-analytics-card code {
+    color: #b9d0ff;
+  }
+
+  .admin-subscription-analytics-card button[data-admin-subscription-refresh] {
+    border: 1px solid rgba(126, 166, 255, 0.38);
+    border-radius: 999px;
+    padding: 0.45rem 0.85rem;
+    background: rgba(91, 132, 255, 0.14);
+    color: #e9f0ff;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .admin-subscription-analytics-card button[data-admin-subscription-refresh]:hover {
+    background: rgba(91, 132, 255, 0.24);
+  }
+
+  .admin-subscription-analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.7rem;
+    margin: 1rem 0 0.95rem;
+  }
+
+  .admin-subscription-analytics-pill {
+    border: 1px solid rgba(126, 166, 255, 0.2);
+    border-radius: 14px;
+    padding: 0.75rem 0.85rem;
+    background: rgba(91, 132, 255, 0.08);
+  }
+
+  .admin-subscription-analytics-pill span {
+    display: block;
+    color: #aebddb;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .admin-subscription-analytics-pill strong {
+    display: block;
+    margin-top: 0.25rem;
+    color: #ffffff;
+    font-size: 1.35rem;
+  }
+
+  .admin-subscription-analytics-grid,
+  .admin-subscription-analytics-plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.85rem;
+    margin-top: 0.9rem;
+  }
+
+  .admin-subscription-analytics-grid > div,
+  .admin-subscription-analytics-plans,
+  .admin-subscription-analytics-risks {
+    border: 1px solid rgba(126, 166, 255, 0.18);
+    border-radius: 14px;
+    padding: 0.9rem;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .admin-subscription-analytics-metric {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.38rem 0;
+    padding: 0.46rem 0.55rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .admin-subscription-analytics-label {
+    color: #aebddb;
+    font-size: 0.86rem;
+  }
+
+  .admin-subscription-analytics-metric strong {
+    color: #ffffff;
+    font-size: 1rem;
+  }
+
+  .admin-subscription-analytics-value {
+    display: grid;
+    justify-items: end;
+    gap: 0.1rem;
+  }
+
+  .admin-subscription-analytics-value small {
+    color: #ffd166;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .admin-subscription-analytics-metric[data-state="not-wired"] {
+    border: 1px solid rgba(255, 209, 102, 0.32);
+    background: rgba(255, 209, 102, 0.07);
+  }
+
+  .admin-subscription-analytics-note {
+    margin-top: 0.65rem;
+    border-radius: 12px;
+    padding: 0.7rem 0.75rem;
+    color: #aebddb;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .admin-subscription-analytics-note[data-state="not-wired"] {
+    border: 1px solid rgba(255, 209, 102, 0.26);
+    color: #ffe3a0;
+    background: rgba(255, 209, 102, 0.07);
+  }
+
+
+  .admin-subscription-analytics-risks {
+    margin-top: 0.9rem;
+  }
+
+  .admin-subscription-analytics-risks ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .admin-subscription-analytics-risk {
+    display: grid;
+    gap: 0.2rem;
+    border-left: 3px solid #8fb3ff;
+    border-radius: 10px;
+    padding: 0.55rem 0.65rem;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .admin-subscription-analytics-risk[data-severity="warning"] {
+    border-left-color: #ffd166;
+  }
+
+  .admin-subscription-analytics-risk[data-severity="danger"] {
+    border-left-color: #ff5f7a;
+  }
+
+  .admin-subscription-analytics-risk span,
+  .admin-subscription-analytics-risk small,
+  .admin-subscription-analytics-empty,
+  .admin-subscription-analytics-card .admin-muted {
+    color: #aebddb;
+  }
+</style>
+<link rel="stylesheet" href="/console/css/admin_ui_hardening_13c.css?v=adminui13c-13eh3r2toggle">
+  <link rel="stylesheet" href="/console/css/admin_operator_pilot_handoff.css?v=operatorhandoff14eprogress">
+  <link rel="stylesheet" href="/console/css/admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r5">
+</head>
+<body>
+<div id="bg-grid"></div>
+<div id="layout">
+  <aside id="sidebar">
+    <div id="brand">
+      <div id="brand-mark">M</div>
+      <div>
+        <div id="brand-title">MAESTRO ADMIN</div>
+        <div id="brand-sub">Kernel Control Area</div>
+      </div>
+    </div>
+    <div id="nav">
+      <button class="nav-btn active" data-admin-page="home" type="button"><span class="nav-ind"></span><span class="nav-ico">A</span><span>Admin Home</span></button>
+      <button class="nav-btn" data-admin-page="adapters" type="button"><span class="nav-ind"></span><span class="nav-ico">P</span><span>Adapters</span></button>
+      <button class="nav-btn" data-admin-page="api-keys" type="button"><span class="nav-ind"></span><span class="nav-ico">K</span><span>API Keys</span></button>
+      <button class="nav-btn" data-admin-page="operator-pilot-handoff" type="button"><span class="nav-ind"></span><span class="nav-ico">O</span><span>Pilot Handoff</span></button>
+      <button class="nav-btn" type="button" data-admin-page="clients"><span class="nav-ind"></span><span class="nav-ico">C</span><span>Clients</span></button>
+      <button class="nav-btn" type="button" data-admin-page="usage"><span class="nav-ind"></span><span class="nav-ico">U</span><span>Usage Monitor</span></button>
+      <button class="nav-btn" type="button" data-admin-page="program-progress"><span class="nav-ind"></span><span class="nav-ico">R</span><span>Program Progress</span></button>
+      <button class="nav-btn" type="button" data-admin-page="system-health"><span class="nav-ind"></span><span class="nav-ico">H</span><span>System Health</span></button>
+      <button class="nav-btn" data-admin-page="system-settings" type="button"><span class="nav-ind"></span><span class="nav-ico">S</span><span>System Settings</span></button>
+    </div>
+    <div id="sidebar-footer">
+      <div class="v">v2.0.0 - admin</div>
+      <div class="c">Admin-only shell</div>
+    </div>
+  </aside>
+
+  <main id="main">
+<div id="page-admin-home" class="admin-page active">
+    <header id="topbar">
+      <div>
+        <div id="page-title">Admin Area</div>
+        <div id="page-sub">Supervisor workspace for clients, usage, providers, API keys, and system readiness</div>
+      </div>
+      <div class="flex-gap">
+        <a id="admin-client-console-btn" class="btn sm" href="/console">Client Console</a>
+        <a id="admin-logout-btn" class="btn sm" href="/login?mode=admin">Logout</a>
+      </div>
+    </header>
+
+    <section class="page active">
+      <div class="grid-2-eq">
+        <div class="card">
+          <div class="sec-hdr">
+            <div class="sh-title">ADMIN OPERATIONS OVERVIEW</div>
+            <div class="sh-sub">Admin sessions now land outside the client console</div>
+          </div>
+          <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Admin overview aligned with the productization plan: monitor customers and pilots, track Maestro usage, review provider readiness, manage API keys, and follow deployment progress.</div>
+        </div>
+
+        <div class="card">
+          <div class="sec-hdr">
+            <div class="sh-title">Protected Area</div>
+            <div class="sh-sub">Backend scopes remain the authority</div>
+          </div>
+          <div id="admin-session-status" class="mono-block" style="font-size:11px;white-space:pre-wrap">Checking admin session...</div>
+          <div id="admin-supervisor-session-card" class="mono-block" style="font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)">
+            <strong>Supervisor Session</strong>
+            <div id="admin-supervisor-session-status">Supervisor session: checking...</div>
+            <div id="admin-supervisor-session-level">Level: unknown</div>
+            <div id="admin-supervisor-session-scopes">Scopes: unavailable</div>
+            <button id="admin-supervisor-session-clear-key" class="btn secondary sm" type="button">Clear supervisor session key</button>
+            <div class="muted">Backend enforcement remains authoritative.</div>
+          </div>
+        </div>
+      </div>
+
+
+        <div id="admin-supervisor-home-console" class="card" style="margin-top:var(--s-5)">
+          <div class="sec-hdr">
+            <div class="sh-title">Supervisor Operations Center</div>
+            <div class="sh-sub">visibility hub for supervisor operations - no policy changes</div>
+          </div>
+          <div class="admin-note">
+            Use this home console to jump to the current supervisor visibility surfaces:
+            <a href="#admin-program-supervision-readiness">Program &amp; Supervision Readiness</a>, <a href="#admin-supervisor-overview-counters">Supervisor Overview</a>, <a href="#admin-supervisor-audit-summary">Recent Supervisor Audit</a>, and <a href="#admin-api-key-lifecycle-summary">API Key Lifecycle Summary</a>.
+          </div>
+          <div class="muted" style="margin-top:var(--s-3)">
+            Backend enforcement remains authoritative. This is a visibility-only home surface with no raw keys or provider secrets.
+          </div>
+        </div>
+
+
+        <div id="admin-program-supervision-readiness" class="card" style="margin-top:var(--s-5)">
+          <div class="sec-hdr">
+            <div class="sh-title">Program &amp; Supervision Readiness</div>
+            <div class="sh-sub">program runtime and supervision readiness - visibility only</div>
+          </div>
+          <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Loading program and supervision readiness...</div>
+        </div>
+
+<div id="admin-supervisor-overview-counters" class="card" style="margin-top:var(--s-5)">
+          <div class="sec-hdr">
+            <div class="sh-title">Supervisor Overview</div>
+            <div class="sh-sub">requests by status - visibility only</div>
+          </div>
+          <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Loading supervisor overview...</div>
+        </div>
+</section>
+</div>
+  <!-- ===== ADMIN PAGE: Adapters ===== -->
+<div id="page-admin-adapters" class="admin-page">
+<div>
+  <div class="sec-hdr"><div class="sh-title">Adapter Manager</div><div class="sh-sub">Provider configuration and testing</div></div>
+  <div id="adp-grid" class="grid-3" style="margin-bottom:var(--s-5)"></div>
+
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Configure Provider</div></div>
+      <div class="flex-gap" style="flex-wrap:wrap;gap:6px">
+        <select id="adp-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
+        <input id="adp-api-key" class="inp" type="password" placeholder="API Key" style="width:160px;font-size:11px">
+<input id="adp-model" class="inp" placeholder="Model (optional)" style="width:120px;font-size:11px">
+        <input id="adp-base-url" class="inp" placeholder="Base URL (optional)" style="width:140px;font-size:11px">
+        <button id="adp-configure-btn" class="btn accent sm">Configure</button>
+      </div>
+      <div id="adp-config-result"></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><div class="sh-title">Test Connection</div></div>
+      <div class="flex-gap">
+        <select id="adp-test-provider" class="inp-sel" style="font-size:11px"><option>opencode</option><option>openai</option><option>anthropic</option><option>gemini</option><option>deepseek</option></select>
+        <button id="adp-test-btn" class="btn accent sm">Test</button>
+      </div>
+      <div id="adp-test-result"></div>
+    </div>
+  </div>
+</div>
+</div>
+<!-- ===== ADMIN PAGE: API Keys ===== -->
+<div id="page-admin-api-keys" class="admin-page">
+  <div>
+    <div class="sec-hdr">
+      <div class="sh-title">API Keys</div>
+      <div class="sh-sub">Admin-only key creation and lifecycle controls</div>
+    </div>
+
+    <div class="grid-2-eq">
+      <div class="card">
+        <div class="sec-hdr">
+          <div class="sh-title">Generate New Key</div>
+          <div class="sh-sub">Creates a server-side dynamic API key</div>
+        </div>
+        <button id="admin-api-key-static-generate-btn" class="btn accent sm">Generate New Key</button>
+        <div id="admin-api-key-static-create-result" class="mono-block" style="margin-top:var(--s-3);font-size:11px;white-space:pre-wrap"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec-hdr">
+          <div class="sh-title">Existing Keys</div>
+          <div class="sh-sub">Refresh current key metadata</div>
+        </div>
+        <button id="admin-api-key-static-refresh-btn" class="btn sm">Refresh Keys</button>
+        <div id="admin-api-key-list" class="mono-block" style="margin-top:var(--s-3);font-size:11px;white-space:pre-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+
+        <div id="admin-supervisor-audit-summary" class="card" style="margin-top:var(--s-5)">
+          <div class="sec-hdr">
+            <div class="sh-title">Recent Supervisor Audit</div>
+            <div class="sh-sub">latest admin/supervisor audit events - visibility only</div>
+          </div>
+          <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Loading recent supervisor audit...</div>
+        </div>
+<div id="admin-api-key-lifecycle-summary" class="card" style="margin-top:var(--s-5)">
+      <div class="sec-hdr">
+        <div class="sh-title">API Key Lifecycle Summary</div>
+        <div class="sh-sub">standard API keys and supervisor session keys - visibility only</div>
+      </div>
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Loading API key lifecycle summary...</div>
+    </div>
+</div>
+<!-- ===== ADMIN PAGE: System Settings ===== -->
+<div id="page-admin-system-settings" class="admin-page">
+  <div>
+    <div class="sec-hdr">
+      <div class="sh-title">System Settings</div>
+      <div class="sh-sub">Admin-only system controls placeholder</div>
+    </div>
+    <div class="card">
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">System-level provider settings, notifications, and deployment controls will be moved here in a later admin phase.</div>
+    </div>
+  </div>
+</div>
+<!-- ===== ADMIN PAGE: Clients ===== -->
+<div id="page-admin-clients" class="admin-page">
+  <div>
+    <div id="admin-client-requests-host" style="margin-bottom:var(--s-5)"></div>
+    <div class="sec-hdr">
+      <div class="sh-title">Clients</div>
+      <div class="sh-sub">Customers, pilots, access state, and supervisor bridge</div>
+    </div>
+    <div class="card">
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Planned supervisor controls: Pending Applications, Approved Applications, Active Pilots, Clients, subscriptions, and Bridge to Client Console. Backend data wiring will follow after the admin shell is stable.</div>
+    </div>
+  </div>
+</div>
+<!-- ===== ADMIN PAGE: Usage Monitor ===== -->
+<div id="page-admin-usage" class="admin-page">
+<section class="admin-panel" aria-label="Subscription and usage analytics">
+  <div id="admin-subscription-analytics-host"></div>
+</section>
+
+  <div>
+    <div class="sec-hdr">
+      <div class="sh-title">Usage Monitor</div>
+      <div class="sh-sub">Usage, quota, requests, reports, errors, and latency</div>
+    </div>
+    <div class="card">
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Planned usage view: evaluations used, evaluations remaining, requests today, requests this month, reports generated, errors, average latency, API key last used, and provider connection status.</div>
+    </div>
+  </div>
+</div>
+<!-- ===== ADMIN PAGE: Program Progress ===== -->
+<div id="page-admin-program-progress" class="admin-page">
+  <div>
+    <div class="sec-hdr">
+      <div class="sh-title">Program Progress</div>
+      <div class="sh-sub">Productization readiness and deployment progress</div>
+    </div>
+    <div class="card">
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Tracks the program readiness path: admin/client separation, onboarding, API keys, quota, provider configuration, support workflow, security review, and Cloud Run readiness.</div>
+    </div>
+  </div>
+</div>
+<!-- ===== ADMIN PAGE: System Health ===== -->
+<div id="page-admin-system-health" class="admin-page">
+  <div>
+    <div class="sec-hdr">
+      <div class="sh-title">System Health</div>
+      <div class="sh-sub">Health, readiness, telemetry, and operational checks</div>
+    </div>
+    <div class="card">
+      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Planned system view: health/live, health/ready, provider readiness, telemetry state, usage logging state, audit storage, backup state, and production warning status.</div>
+    </div>
+  </div>
+</div>
+  <section
+    id="admin-integration-readiness-tracking-summary-host"
+    class="admin-card settings-card"
+    data-phase="INTEGRATION-READINESS-11P"
+    data-cache-marker="admintrackingroute11p-visiblehost"
+    aria-label="Visible admin integration readiness tracking host"
+  >
+    <div class="settings-card-header">
+      <div>
+        <p class="eyebrow">Readiness tracking</p>
+        <h2>Integration readiness tracking</h2>
+      </div>
+      <span class="status-pill">Route-backed</span>
+    </div>
+    <p class="muted">
+      Loading safe readiness tracking counters from the admin tracking route.
+    </p>
+  </section>
+<!-- BEGIN INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_HOST -->
+
+<section
+  class="admin-card"
+  id="admin-integration-readiness-operator-package-host"
+  data-admin-integration-readiness-operator-package-host="12c"
+  aria-label="Operator readiness package and pilot handoff"
+>
+  <h2>Operator Readiness Package</h2>
+  <p>
+    Safe package for operator integration supervisors. No production connector,
+    customer endpoint, credential, or external HTTP execution is enabled.
+  </p>
+  <div
+    id="admin-integration-readiness-operator-package-body"
+    data-admin-integration-readiness-operator-package-body="12c"
+  >
+    Loading operator readiness package...
+  </div>
+</section>
+<!-- END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_HOST -->
+
+    <section
+      id="page-operator-pilot-handoff"
+      class="admin-page admin-operator-pilot-handoff-page"
+      aria-label="Operator pilot handoff"
+    >
+      <div
+        id="operator-pilot-handoff-root"
+        data-phase="operator-pilot-handoff-14a"
+      ></div>
+    </section>
+</main>
+</div>
+<script id="admin-nav-click-fallback">
+(function () {
+  const pageIds = {
+    home: 'page-admin-home',
+    adapters: 'page-admin-adapters',
+    'api-keys': 'page-admin-api-keys',
+    'operator-pilot-handoff': 'page-operator-pilot-handoff',
+    clients: 'page-admin-clients',
+    usage: 'page-admin-usage',
+    'program-progress': 'page-admin-program-progress',
+    'system-health': 'page-admin-system-health',
+    'system-settings': 'page-admin-system-settings',
+  };
+
+  const labelToPage = {
+    'admin home': 'home',
+    home: 'home',
+    adapters: 'adapters',
+    'api keys': 'api-keys',
+    clients: 'clients',
+    'usage monitor': 'usage',
+    usage: 'usage',
+    'program progress': 'program-progress',
+    'system health': 'system-health',
+    'system settings': 'system-settings',
+  };
+
+  function normalizeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
+  function pageFromButton(button) {
+    if (button.dataset.adminPage && pageIds[button.dataset.adminPage]) {
+      return button.dataset.adminPage;
+    }
+
+    const text = normalizeText(button.textContent);
+
+    if (labelToPage[text]) return labelToPage[text];
+    if (text.includes('admin home')) return 'home';
+    if (text.includes('adapters')) return 'adapters';
+    if (text.includes('api keys')) return 'api-keys';
+    if (text.includes('clients')) return 'clients';
+    if (text.includes('usage')) return 'usage';
+    if (text.includes('program progress')) return 'program-progress';
+    if (text.includes('system health')) return 'system-health';
+    if (text.includes('system settings')) return 'system-settings';
+
+    return '';
+  }
+
+  function setActivePage(page) {
+    const activePage = pageIds[page] ? page : 'home';
+    document.body.dataset.adminActivePage = activePage;
+
+    Object.entries(pageIds).forEach(([name, id]) => {
+      const pageEl = document.getElementById(id);
+      if (!pageEl) return;
+
+      const isActive = name === activePage;
+      pageEl.classList.add('admin-page');
+      pageEl.classList.toggle('active', isActive);
+      pageEl.style.display = isActive ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('[data-admin-page], .nav-btn').forEach((button) => {
+      const buttonPage = pageFromButton(button);
+      if (!buttonPage) return;
+
+      button.dataset.adminPage = buttonPage;
+      button.classList.toggle('active', buttonPage === activePage);
+    });
+
+    const nextHash = '#' + activePage;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', nextHash);
+    }
+  }
+
+  function bindButtons() {
+    document.querySelectorAll('.nav-btn').forEach((button) => {
+      const page = pageFromButton(button);
+      if (!page) return;
+
+      button.dataset.adminPage = page;
+      button.setAttribute('type', 'button');
+
+      button.onclick = function (event) {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+
+        setActivePage(page);
+        return false;
+      };
+    });
+  }
+
+  document.addEventListener(
+    'click',
+    function (event) {
+      const button = event.target.closest('[data-admin-page], .nav-btn');
+      if (!button) return;
+
+      const page = pageFromButton(button);
+      if (!page) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      setActivePage(page);
+    },
+    true
+  );
+
+  document.addEventListener('DOMContentLoaded', function () {
+    bindButtons();
+    setActivePage(window.location.hash.replace('#', '') || 'home');
+  });
+
+  window.PMK_ADMIN_NAV_INLINE = {
+    setActivePage: setActivePage,
+    bindButtons: bindButtons,
+    pageIds: pageIds,
+    labelToPage: labelToPage,
+  };
+})();
+</script>
+<script id="admin-top-actions-fallback">
+(function () {
+  function clearAuthState() {
+    const keys = [
+      'token',
+      'access_token',
+      'auth_token',
+      'maestro_token',
+      'maestro_auth_token',
+      'pmk_token',
+      'pmk_auth_token',
+      'user',
+      'role'
+    ];
+
+    keys.forEach(function (key) {
+      try { localStorage.removeItem(key); } catch (error) {}
+      try { sessionStorage.removeItem(key); } catch (error) {}
+    });
+
+    try {
+      document.cookie.split(';').forEach(function (cookie) {
+        const name = cookie.split('=')[0].trim();
+        if (!name) return;
+        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+      });
+    } catch (error) {}
+  }
+
+  function bindTopActions() {
+    const clientButton = document.getElementById('admin-client-console-btn');
+    const logoutButton = document.getElementById('admin-logout-btn');
+
+    if (clientButton) {
+      clientButton.onclick = function (event) {
+        event.preventDefault();
+        window.location.assign('/console');
+        return false;
+      };
+    }
+
+    if (logoutButton) {
+      logoutButton.onclick = function (event) {
+        event.preventDefault();
+        clearAuthState();
+        window.location.replace('/login?mode=admin');
+        return false;
+      };
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindTopActions);
+  } else {
+    bindTopActions();
+  }
+
+  window.PMK_ADMIN_TOP_ACTIONS_INLINE = {
+    bindTopActions: bindTopActions,
+    clearAuthState: clearAuthState
+  };
+})();
+</script>
+<script src="/console/js/client.js?v=adminruntime05"></script>
+<script src="/console/js/admin_auth_bridge.js?v=adminruntime05"></script>
+<script src="/console/js/adapters/adapters.js?v=adminruntime05"></script>
+<script src="/console/js/admin_adapters.js?v=adminruntime05"></script>
+<script src="/console/js/admin_api_keys.js?v=adminapikeys13eh2"></script>
+<script src="/console/js/admin_nav.js?v=adminnav14ar1"></script>
+<script src="/console/js/admin_session.js?v=adminruntime05"></script>
+<script src="/console/js/admin_actions.js?v=adminruntime05"></script>
+<script src="/console/js/admin_dashboard.js?v=adminruntime05"></script>
+<script src="/console/js/admin_runtime.js?v=adminruntime05"></script>
+<script src="/console/js/admin_layout_cleanup.js?v=adminruntime05"></script>
+<script src="/console/js/admin_runtime_fixups.js?v=adminruntime05"></script>
+<script src="/console/js/admin_home_layout.js?v=adminruntime05"></script>
+<script src="/console/js/admin_supervisor_audit_summary.js?v=adminsuperaudit01"></script>\n<script src="/console/js/admin_api_key_summary.js?v=adminapikeysummary01"></script>
+<script src="/console/js/admin_supervisor_readiness_summary.js?v=adminsuperreadiness06"></script>\n
+<script src="/console/js/admin_supervisor_stats.js?v=adminsuperstats01"></script>
+<script src="/console/js/admin_client_requests.js?v=admindirectplan07-adminclientreqbridge11f-adminreadiness11kr1-adminreadinessworkflow11m-admintracking11o-admincase12a-summarycompat"></script>
+<script src="/console/js/admin_subscription_analytics.js?v=adminsubscriptions01f"></script>
+<!-- BEGIN INTEGRATION_READINESS_12A_CASE_MANAGEMENT_HOST -->
+
+<section
+  id="admin-integration-readiness-case-management-host"
+  data-admin-integration-readiness-case-management="12a"
+  aria-label="Integration readiness case management"
+  class="admin-card admin-integration-readiness-case-management"
+>
+  <h2>Integration readiness case management</h2>
+  <p class="admin-muted">
+    Supervisor-safe case tracking for external integration readiness.
+  </p>
+  <div
+    data-admin-integration-readiness-case-table
+    data-admincase12a="case-table"
+  >
+    Loading integration readiness cases…
+  </div>
+  <div
+    data-admin-integration-readiness-case-detail
+    data-admincase12a="case-detail"
+  >
+    Select a readiness case to review required inputs, controls, and timeline.
+  </div>
+</section>
+<!-- END INTEGRATION_READINESS_12A_CASE_MANAGEMENT_HOST -->
+
+
+<section id="admin-integration-claim-keys-host" class="admin-card" aria-label="Integration claim keys">
+  <h2>Integration Claim Keys</h2>
+  <p>
+    Supervisor-issued onboarding keys for operator integration officers.
+    These keys open onboarding only and do not enable runtime or production access.
+  </p>
+  <div id="admin-integration-claim-keys-body" data-state="idle">
+    <p>Loading integration claim keys…</p>
+  </div>
+</section>
+  <script src="/console/js/admin_integration_pilot_controls_13b.js?v=adminpilot13b-session-storage-r1"></script>
+    <script src="/console/js/admin_ui_hardening_13c.js?v=adminui13c-r3"></script>
+  <script src="/console/js/admin_operator_pilot_handoff.js?v=operatorhandoff14eprogress"></script>
+<script src="/console/js/admin_operator_pilot_handoff_17c.js?v=pilothandoff17cr1r5"></script>
+  <!-- 15A legacy static compatibility markers: admin-api-key-generate-btn admin-api-key-refresh-btn admin_api_keys.js?v=adminsuperkeysux02 admin_api_keys.js?v=adminsuperkeysux02-adminkeysbridge11f admin_api_keys.js?v=adminapikeys13ed2 admin_api_keys.js?v=adminapikeys13eh2 -->
+</body>
+</html>

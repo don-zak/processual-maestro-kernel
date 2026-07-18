@@ -4,10 +4,9 @@ import datetime
 import hashlib
 import json
 import logging
-import os
 from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 logger = logging.getLogger("processual_api.cgt_governor.data.storage")
 
@@ -58,12 +57,12 @@ class JsonlEvaluationStore:
         now = datetime.datetime.now(datetime.UTC)
         ts = now.strftime("%Y%m%d_%H%M%S")
         seed = f"{now.timestamp()}-{id(now)}"
-        suffix = hashlib.md5(seed.encode()).hexdigest()[:6]
+        suffix = hashlib.md5(seed.encode(), usedforsecurity=False).hexdigest()[:6]
         return f"eval_{ts}_{suffix}"
 
     def append(self, entry: dict | str) -> None:
         if isinstance(entry, str):
-            entry = json.loads(entry)
+            entry = cast(dict, json.loads(entry))
         if "eval_id" not in entry:
             entry["eval_id"] = self._generate_eval_id()
         self._buffer.append(entry)

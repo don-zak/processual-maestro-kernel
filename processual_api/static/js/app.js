@@ -9,7 +9,7 @@ const pageMeta = {
   gateway:    { title: 'Gateway Dashboard', sub: 'Agent registry, evaluation, lifecycle management' },
   simulation: { title: 'Supervision Simulation', sub: 'Virtual agent governance pipeline' },
   adapters:   { title: 'Adapter Manager', sub: 'Provider configuration and testing' },
-  settings:   { title: 'Settings', sub: 'System configuration' },
+  settings:   { title: 'Client Settings', sub: 'Account, preferences, plan, and support' },
 };
 
 const APP = (() => {
@@ -82,6 +82,7 @@ const APP = (() => {
     if (tt && pageMeta[pg]) tt.textContent = pageMeta[pg].title;
     if (ts && pageMeta[pg]) ts.textContent = pageMeta[pg].sub;
     window.location.hash = 'page-' + pg;
+    if (pg === 'settings') { PAGES.settings?.init?.(); }
     if (pg === 'gateway') {
       PAGES.gateway?.refresh();
       setTimeout(() => {
@@ -176,7 +177,16 @@ const APP = (() => {
   }
 
   /* ─── Init ─── */
+  function hasDescentGateSession() {
+    return sessionStorage.getItem('maestro_descent_gate_seen') === '1';
+  }
+
   function init() {
+    if (!hasDescentGateSession()) {
+      window.location.replace('/');
+      return;
+    }
+
     AUTH.init();
     tickClock(); setInterval(tickClock, 1000);
     initNav();
@@ -187,7 +197,7 @@ const APP = (() => {
     if (lt) lt.textContent = I18N.lang() === 'ar' ? 'EN' : 'AR';
 
     if (!AUTH.isLoggedIn()) {
-      window.location.href = '/login';
+      window.location.replace('/login');
       return;
     }
     checkSubscription();

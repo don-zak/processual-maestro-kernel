@@ -1,0 +1,889 @@
+/* ADMIN_UI_HARDENING_13C_R1: presentation-only admin layout hardening. */
+
+body {
+  max-width: 1480px;
+  margin-left: auto;
+  margin-right: auto;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+section,
+.admin-card,
+.pmk-admin-card,
+[data-admin-integration-activation-license-panel],
+[data-admin-integration-pilot-tracking-panel] {
+  max-width: 100%;
+}
+
+.pmk-admin-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: rgba(15, 23, 42, 0.70);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.16);
+}
+
+.pmk-admin-card > h2,
+.pmk-admin-card > h3,
+.pmk-admin-card > h4 {
+  margin-top: 0;
+}
+
+.pmk-admin-table-frame {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  margin: 0.75rem 0 1rem;
+}
+
+.pmk-admin-table-frame table {
+  margin: 0;
+  min-width: max-content;
+}
+
+table {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.55rem 0.65rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.pmk-admin-actions-row,
+.pmk-admin-button-row,
+.pmk-13b-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.pmk-admin-actions-row button,
+.pmk-admin-button-row button,
+.pmk-13b-actions button {
+  margin: 0;
+}
+
+.pmk-admin-boolean-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fed7aa;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pmk-admin-boolean-chip[data-value="true"] {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
+.pmk-admin-json-details {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  margin: 0.75rem 0;
+}
+
+.pmk-admin-json-details > summary {
+  cursor: pointer;
+  padding: 0.7rem 0.85rem;
+  font-weight: 700;
+}
+
+.pmk-admin-json-details pre {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.85rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  white-space: pre-wrap;
+}
+
+.pmk-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.pmk-admin-form-grid label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+[data-admin-pilot-license-output],
+[data-admin-pilot-track-status],
+[data-admin-pilot-track-feedback] {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 0.7rem;
+  margin: 0.65rem 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  body {
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+
+  .pmk-admin-card {
+    padding: 0.8rem;
+  }
+
+  .pmk-admin-actions-row button,
+  .pmk-admin-button-row button,
+  .pmk-13b-actions button {
+    flex: 1 1 9rem;
+  }
+}
+
+/* 13C-R2 button contrast fix */
+button,
+input[type="button"],
+input[type="submit"] {
+  color: #eaf2ff;
+}
+
+[data-admin-integration-activation-license-panel] button,
+[data-admin-integration-pilot-tracking-panel] button,
+.pmk-13b-actions button,
+.pmk-admin-actions-row button,
+.pmk-admin-button-row button {
+  color: #f8fbff;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.95), rgba(29, 78, 216, 0.92));
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  font-weight: 700;
+}
+
+[data-admin-integration-activation-license-panel] button:hover,
+[data-admin-integration-pilot-tracking-panel] button:hover,
+.pmk-13b-actions button:hover,
+.pmk-admin-actions-row button:hover,
+.pmk-admin-button-row button:hover {
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 1), rgba(37, 99, 235, 0.96));
+  border-color: rgba(191, 219, 254, 0.55);
+}
+
+[data-admin-integration-activation-license-panel] button:focus,
+[data-admin-integration-pilot-tracking-panel] button:focus,
+.pmk-13b-actions button:focus,
+.pmk-admin-actions-row button:focus,
+.pmk-admin-button-row button:focus {
+  outline: 2px solid rgba(191, 219, 254, 0.95);
+  outline-offset: 2px;
+}
+
+[data-admin-integration-activation-license-panel] button:disabled,
+[data-admin-integration-pilot-tracking-panel] button:disabled,
+.pmk-13b-actions button:disabled,
+.pmk-admin-actions-row button:disabled,
+.pmk-admin-button-row button:disabled {
+  color: rgba(226, 232, 240, 0.85);
+  background: rgba(71, 85, 105, 0.75);
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 13C-R2: explicit button contrast and labelled guardrail chips */
+[data-admin-integration-activation-license-panel] button,
+[data-admin-integration-pilot-tracking-panel] button,
+.pmk-13b-actions button,
+.pmk-admin-actions-row button,
+.pmk-admin-button-row button {
+  color: #f8fbff !important;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.98), rgba(29, 78, 216, 0.94)) !important;
+  border: 1px solid rgba(147, 197, 253, 0.48) !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22) !important;
+  font-weight: 800 !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
+}
+
+[data-admin-integration-activation-license-panel] button:hover,
+[data-admin-integration-pilot-tracking-panel] button:hover,
+.pmk-13b-actions button:hover,
+.pmk-admin-actions-row button:hover,
+.pmk-admin-button-row button:hover {
+  color: #ffffff !important;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 1), rgba(37, 99, 235, 0.98)) !important;
+  border-color: rgba(191, 219, 254, 0.72) !important;
+}
+
+.pmk-admin-guardrail-caption {
+  margin-top: 0.85rem;
+  margin-bottom: 0.35rem;
+  color: #cbd5e1;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pmk-admin-boolean-chip[data-guardrail-label] {
+  margin: 0.18rem 0.25rem 0.18rem 0;
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.pmk-admin-boolean-chip[data-guardrail-label][data-value="false"] {
+  color: #fed7aa;
+  background: rgba(124, 45, 18, 0.42);
+  border-color: rgba(251, 146, 60, 0.58);
+}
+
+.pmk-admin-boolean-chip[data-guardrail-label][data-value="true"] {
+  color: #bbf7d0;
+  background: rgba(20, 83, 45, 0.42);
+  border-color: rgba(74, 222, 128, 0.58);
+}
+
+/* 13C-R2 compatibility contract for action cells */
+.pmk-admin-actions-cell {
+  min-width: 12rem;
+}
+
+.pmk-admin-actions-cell .pmk-admin-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+
+/* 13C-R3 phosphor-white text for integration pilot cards */
+[data-admin-integration-activation-license-panel],
+[data-admin-integration-pilot-tracking-panel],
+[data-admin-integration-activation-license-panel] *,
+[data-admin-integration-pilot-tracking-panel] * {
+  color: #f8fbff !important;
+}
+
+[data-admin-integration-activation-license-panel] h1,
+[data-admin-integration-activation-license-panel] h2,
+[data-admin-integration-activation-license-panel] h3,
+[data-admin-integration-activation-license-panel] h4,
+[data-admin-integration-pilot-tracking-panel] h1,
+[data-admin-integration-pilot-tracking-panel] h2,
+[data-admin-integration-pilot-tracking-panel] h3,
+[data-admin-integration-pilot-tracking-panel] h4 {
+  color: #ffffff !important;
+  text-shadow: 0 0 10px rgba(248, 251, 255, 0.18);
+}
+
+[data-admin-integration-activation-license-panel] p,
+[data-admin-integration-pilot-tracking-panel] p,
+[data-admin-integration-activation-license-panel] label,
+[data-admin-integration-pilot-tracking-panel] label,
+[data-admin-integration-activation-license-panel] strong,
+[data-admin-integration-pilot-tracking-panel] strong {
+  color: #eaf6ff !important;
+}
+
+[data-admin-integration-activation-license-panel] input,
+[data-admin-integration-pilot-tracking-panel] input,
+[data-admin-integration-activation-license-panel] textarea,
+[data-admin-integration-pilot-tracking-panel] textarea,
+[data-admin-integration-activation-license-panel] select,
+[data-admin-integration-pilot-tracking-panel] select {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: rgba(203, 213, 225, 0.34) !important;
+}
+
+[data-admin-integration-activation-license-panel] input::placeholder,
+[data-admin-integration-pilot-tracking-panel] input::placeholder,
+[data-admin-integration-activation-license-panel] textarea::placeholder,
+[data-admin-integration-pilot-tracking-panel] textarea::placeholder {
+  color: rgba(226, 242, 255, 0.72) !important;
+  -webkit-text-fill-color: rgba(226, 242, 255, 0.72) !important;
+}
+
+[data-admin-integration-activation-license-panel] button,
+[data-admin-integration-pilot-tracking-panel] button,
+[data-admin-integration-activation-license-panel] button *,
+[data-admin-integration-pilot-tracking-panel] button * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38);
+}
+
+[data-admin-integration-activation-license-panel] table,
+[data-admin-integration-pilot-tracking-panel] table,
+[data-admin-integration-activation-license-panel] th,
+[data-admin-integration-pilot-tracking-panel] th,
+[data-admin-integration-activation-license-panel] td,
+[data-admin-integration-pilot-tracking-panel] td {
+  color: #f8fbff !important;
+}
+
+[data-admin-integration-activation-license-panel] code,
+[data-admin-integration-pilot-tracking-panel] code,
+[data-admin-integration-activation-license-panel] pre,
+[data-admin-integration-pilot-tracking-panel] pre,
+[data-admin-integration-activation-license-panel] [data-admin-pilot-license-output],
+[data-admin-integration-pilot-tracking-panel] [data-admin-pilot-track-status],
+[data-admin-integration-pilot-tracking-panel] [data-admin-pilot-track-feedback] {
+  color: #f4f8ff !important;
+  -webkit-text-fill-color: #f4f8ff !important;
+}
+
+[data-admin-integration-activation-license-panel] .pmk-admin-boolean-chip,
+[data-admin-integration-pilot-tracking-panel] .pmk-admin-boolean-chip {
+  color: #fff7ed !important;
+  -webkit-text-fill-color: #fff7ed !important;
+  font-weight: 800 !important;
+}
+/* admin-ui-hardening-13c-r4-supervisor-card-clarity */
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-activation-license-panel],
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-pilot-tracking-panel] {
+  border: 1px solid rgba(148, 163, 184, 0.42) !important;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.72),
+    0 18px 50px rgba(0, 0, 0, 0.34) !important;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.93)) !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel h2,
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel h3,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card h2,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card h3,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-activation-license-panel] h3,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-pilot-tracking-panel] h3 {
+  color: #eaf2ff !important;
+  letter-spacing: -0.015em !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.24) !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel .admin-note,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card .admin-note,
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel .text-muted,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card .text-muted {
+  color: #b9c9e6 !important;
+  opacity: 1 !important;
+  line-height: 1.65 !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel label,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card label {
+  color: #dbeafe !important;
+  font-weight: 700 !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel input,
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel select,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card input,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card select,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card textarea {
+  min-height: 2.35rem !important;
+  border: 1px solid rgba(191, 219, 254, 0.58) !important;
+  border-radius: 0.55rem !important;
+  background: #f8fbff !important;
+  color: #0f172a !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel input::placeholder,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card input::placeholder,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel button,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card button,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-activation-license-panel] button,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-pilot-tracking-panel] button {
+  border: 1px solid rgba(191, 219, 254, 0.72) !important;
+  border-radius: 0.75rem !important;
+  background: linear-gradient(180deg, #eaf2ff, #cfe3ff) !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28) !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel button:hover,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card button:hover,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-activation-license-panel] button:hover,
+body[data-admin-ui-hardening-13c="ready"] [data-admin-integration-pilot-tracking-panel] button:hover {
+  filter: brightness(1.04) !important;
+  transform: translateY(-1px) !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-session-key-panel button:disabled,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-card button:disabled {
+  background: rgba(148, 163, 184, 0.26) !important;
+  color: rgba(226, 232, 240, 0.78) !important;
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-key-table,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table {
+  margin-top: 1rem !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-key-table table,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  min-width: 960px !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-key-table th,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table th {
+  background: rgba(30, 41, 59, 0.98) !important;
+  color: #eaf2ff !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.44) !important;
+  font-weight: 800 !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-key-table td,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table td {
+  color: #f8fbff !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22) !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+}
+
+body[data-admin-ui-hardening-13c="ready"] #admin-supervisor-key-table tr:hover td,
+body[data-admin-ui-hardening-13c="ready"] #admin-api-key-table tr:hover td {
+  background: rgba(30, 64, 175, 0.28) !important;
+}
+/* admin-ui-hardening-13c-r5-direct-supervisor-clarity */
+/* Direct selectors: do not depend on body data attribute. */
+#admin-supervisor-session-key-panel {
+  padding: 1.65rem !important;
+  border: 1px solid rgba(191, 219, 254, 0.48) !important;
+  border-radius: 1.15rem !important;
+  background: linear-gradient(180deg, #111c31 0%, #0d1729 100%) !important;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.92),
+    0 18px 44px rgba(0, 0, 0, 0.38) !important;
+}
+
+#admin-supervisor-session-key-panel h2,
+#admin-supervisor-session-key-panel h3 {
+  color: #f3f7ff !important;
+  opacity: 1 !important;
+  margin-bottom: 1rem !important;
+}
+
+#admin-supervisor-session-key-panel .admin-note,
+#admin-supervisor-session-key-panel .text-muted,
+#admin-supervisor-session-key-panel p {
+  color: #c7d7f2 !important;
+  opacity: 1 !important;
+  line-height: 1.65 !important;
+}
+
+#admin-supervisor-session-key-panel label {
+  color: #f3f7ff !important;
+  font-weight: 800 !important;
+}
+
+#admin-supervisor-session-key-panel input,
+#admin-supervisor-session-key-panel select,
+#admin-supervisor-session-key-panel textarea {
+  min-height: 2.35rem !important;
+  border: 1px solid #b9c9e6 !important;
+  border-radius: 0.55rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.16) !important;
+}
+
+#admin-supervisor-session-key-panel input::placeholder,
+#admin-supervisor-session-key-panel textarea::placeholder {
+  color: #475569 !important;
+  opacity: 1 !important;
+}
+
+#admin-supervisor-session-key-panel button {
+  min-height: 2.55rem !important;
+  padding: 0.55rem 1rem !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 0.72rem !important;
+  background: linear-gradient(180deg, #f8fbff 0%, #dbeafe 100%) !important;
+  color: #0f172a !important;
+  font-weight: 900 !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26) !important;
+}
+
+#admin-supervisor-session-key-panel button:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #eaf2ff 100%) !important;
+  color: #020617 !important;
+}
+
+#admin-supervisor-session-key-panel button:disabled,
+#admin-supervisor-session-key-panel button[disabled] {
+  background: #d7dee9 !important;
+  color: #334155 !important;
+  border-color: #94a3b8 !important;
+  opacity: 0.9 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+#admin-supervisor-key-table {
+  margin-top: 1rem !important;
+  border: 1px solid rgba(191, 219, 254, 0.34) !important;
+  border-radius: 0.95rem !important;
+  overflow: auto !important;
+  background: rgba(15, 23, 42, 0.78) !important;
+}
+
+#admin-supervisor-key-table table {
+  min-width: 980px !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+#admin-supervisor-key-table th {
+  background: #1e293b !important;
+  color: #f3f7ff !important;
+  border-bottom: 1px solid rgba(191, 219, 254, 0.35) !important;
+  font-weight: 900 !important;
+}
+
+#admin-supervisor-key-table td {
+  background: #111c31 !important;
+  color: #eef6ff !important;
+  border-bottom: 1px solid rgba(191, 219, 254, 0.18) !important;
+}
+
+#admin-supervisor-key-table tr:hover td {
+  background: #172554 !important;
+}
+
+#admin-supervisor-session-key-panel .mono-block {
+  color: #f8fbff !important;
+  background: #020617 !important;
+  border: 1px solid rgba(191, 219, 254, 0.34) !important;
+}
+
+/* Keep integration pilot controls readable too. */
+[data-admin-integration-activation-license-panel] button,
+[data-admin-integration-pilot-tracking-panel] button {
+  background: linear-gradient(180deg, #f8fbff 0%, #dbeafe 100%) !important;
+  color: #0f172a !important;
+  border-color: #bfdbfe !important;
+  font-weight: 900 !important;
+  text-shadow: none !important;
+}
+/* admin-ui-hardening-13c-r6-supervisor-layout-readability */
+/* Structural readability: stop table word-breaking and make the supervisor panel usable. */
+
+#admin-supervisor-session-key-panel {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+#admin-supervisor-session-key-panel label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  margin: 0.35rem 0.35rem 0.35rem 0 !important;
+  white-space: nowrap !important;
+}
+
+#admin-supervisor-session-key-panel input,
+#admin-supervisor-session-key-panel select {
+  width: auto !important;
+  max-width: 18rem !important;
+  margin: 0.15rem 0.35rem 0.15rem 0 !important;
+}
+
+#admin-supervisor-session-key-panel button {
+  margin: 0.3rem 0.25rem 0.3rem 0 !important;
+  background-color: #dbeafe !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  border: 1px solid #93c5fd !important;
+}
+
+#admin-supervisor-session-key-panel button:disabled,
+#admin-supervisor-session-key-panel button[disabled] {
+  background-color: #cbd5e1 !important;
+  background-image: none !important;
+  color: #334155 !important;
+  opacity: 0.86 !important;
+}
+
+#admin-supervisor-key-table,
+#admin-api-key-table {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  border-radius: 1rem !important;
+}
+
+#admin-supervisor-key-table .pmk-admin-table-frame,
+#admin-api-key-table .pmk-admin-table-frame {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+#admin-supervisor-key-table table,
+#admin-api-key-table table {
+  width: max-content !important;
+  min-width: 1100px !important;
+  table-layout: auto !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+#admin-supervisor-key-table th,
+#admin-supervisor-key-table td,
+#admin-api-key-table th,
+#admin-api-key-table td {
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  hyphens: none !important;
+  vertical-align: top !important;
+  padding: 0.75rem 0.95rem !important;
+  line-height: 1.45 !important;
+  font-size: 0.92rem !important;
+}
+
+#admin-supervisor-key-table th,
+#admin-api-key-table th {
+  min-width: 8rem !important;
+}
+
+#admin-supervisor-key-table th:first-child,
+#admin-supervisor-key-table td:first-child {
+  min-width: 15rem !important;
+}
+
+#admin-supervisor-key-table th:nth-child(3),
+#admin-supervisor-key-table td:nth-child(3) {
+  min-width: 15rem !important;
+}
+
+#admin-supervisor-key-table th:nth-child(10),
+#admin-supervisor-key-table td:nth-child(10) {
+  min-width: 16rem !important;
+}
+
+#admin-supervisor-key-table th:last-child,
+#admin-supervisor-key-table td:last-child {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 2 !important;
+  background: #111c31 !important;
+  min-width: 8rem !important;
+}
+
+#admin-supervisor-key-table th:last-child {
+  background: #1e293b !important;
+}
+
+#admin-supervisor-key-table td button,
+#admin-api-key-table td button {
+  white-space: nowrap !important;
+  min-width: max-content !important;
+}
+
+/* Make failure text readable until error formatting gets its own patch. */
+#admin-supervisor-key-create-result,
+#admin-supervisor-key-use-status {
+  color: #ffd7d7 !important;
+  font-weight: 700 !important;
+  margin-top: 0.55rem !important;
+}
+/* 13E-H1 admin scrollbar hardening */
+#main,
+.admin-page,
+.card,
+.mono-block,
+.admin-table-wrap {
+  scrollbar-width: auto;
+}
+
+#main::-webkit-scrollbar,
+.admin-page::-webkit-scrollbar,
+.card::-webkit-scrollbar,
+.mono-block::-webkit-scrollbar,
+.admin-table-wrap::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+#main::-webkit-scrollbar-thumb,
+.admin-page::-webkit-scrollbar-thumb,
+.card::-webkit-scrollbar-thumb,
+.mono-block::-webkit-scrollbar-thumb,
+.admin-table-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+#main::-webkit-scrollbar-track,
+.admin-page::-webkit-scrollbar-track,
+.card::-webkit-scrollbar-track,
+.mono-block::-webkit-scrollbar-track,
+.admin-table-wrap::-webkit-scrollbar-track {
+  border-radius: 999px;
+}
+
+/* 13E-H3 API key metadata card readability */
+#page-admin-api-keys .admin-api-key-metadata-card-list {
+  display: grid;
+  gap: var(--s-3, 0.75rem);
+  margin-top: var(--s-3, 0.75rem);
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-body {
+  padding: 0 1rem 1rem;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-row strong,
+#page-admin-api-keys .admin-api-key-metadata-card-row span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  #page-admin-api-keys .admin-api-key-metadata-card-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
+/* 13E-H3-R1 force metadata cards collapsed by default */
+#page-admin-api-keys .admin-api-key-metadata-card:not([open]) .admin-api-key-metadata-card-body {
+  display: none !important;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-body {
+  display: block;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card > summary::after {
+  content: " Expand";
+  float: right;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] > summary::after {
+  content: " Collapse";
+}
+
+/* 13E-H3-R2 visible metadata card toggle */
+#page-admin-api-keys .admin-api-key-metadata-card > summary::after {
+  content: none !important;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-summary {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  padding: 0.24rem 0.58rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card-toggle-close {
+  display: none;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-toggle-open {
+  display: none;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-toggle-close {
+  display: inline;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card:not([open]) .admin-api-key-metadata-card-body {
+  display: none !important;
+}
+
+#page-admin-api-keys .admin-api-key-metadata-card[open] .admin-api-key-metadata-card-body {
+  display: block;
+}

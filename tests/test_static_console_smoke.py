@@ -1,0 +1,329 @@
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+STATIC_ROOT = ROOT / "processual_api" / "static"
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_static_console_core_files_exist():
+    required_paths = [
+        STATIC_ROOT,
+        STATIC_ROOT / "index.html",
+        STATIC_ROOT / "login.html",
+        STATIC_ROOT / "splash.html",
+        STATIC_ROOT / "css" / "console.css",
+        STATIC_ROOT / "css" / "tour.css",
+        STATIC_ROOT / "js" / "app.js",
+        STATIC_ROOT / "js" / "auth.js",
+        STATIC_ROOT / "js" / "charts.js",
+        STATIC_ROOT / "js" / "client.js",
+        STATIC_ROOT / "js" / "i18n.js",
+        STATIC_ROOT / "js" / "adapters",
+        STATIC_ROOT / "js" / "pages",
+        STATIC_ROOT / "js" / "tour",
+    ]
+
+    missing = [str(path.relative_to(ROOT)) for path in required_paths if not path.exists()]
+    assert not missing, f"Missing static console core files: {missing}"
+
+
+def test_static_console_page_modules_exist():
+    required_pages = [
+        "overview.js",
+        "cgt.js",
+        "workflows.js",
+        "governance.js",
+        "telemetry.js",
+        "reports.js",
+        "governor.js",
+        "gateway.js",
+        "simulation.js",
+        "adapters.js",
+        "settings.js",
+    ]
+
+    missing = [
+        name for name in required_pages
+        if not (STATIC_ROOT / "js" / "pages" / name).is_file()
+    ]
+    assert not missing, f"Missing static console page modules: {missing}"
+
+
+def test_static_console_api_adapter_modules_exist():
+    required_adapters = [
+        "adapters.js",
+        "cgt.js",
+        "gateway.js",
+        "governance.js",
+        "governor.js",
+        "health.js",
+        "reports.js",
+        "simulation.js",
+        "telemetry.js",
+        "workflows.js",
+    ]
+
+    missing = [
+        name for name in required_adapters
+        if not (STATIC_ROOT / "js" / "adapters" / name).is_file()
+    ]
+    assert not missing, f"Missing static console API adapter modules: {missing}"
+
+
+def test_static_console_tour_files_exist():
+    required_tour_files = [
+        STATIC_ROOT / "js" / "tour" / "tour-engine.js",
+        STATIC_ROOT / "js" / "tour" / "tour-steps.js",
+        STATIC_ROOT / "css" / "tour.css",
+    ]
+
+    missing = [str(path.relative_to(ROOT)) for path in required_tour_files if not path.is_file()]
+    assert not missing, f"Missing static console tour files: {missing}"
+
+
+def test_main_serves_static_console_login_and_splash_pages():
+    source = read_text(ROOT / "processual_api" / "main.py")
+
+    required_markers = [
+        "from fastapi.responses import HTMLResponse",
+        "from fastapi.staticfiles import StaticFiles",
+        '_static_dir = Path(__file__).resolve().parent / "static"',
+        'app.mount("/console", StaticFiles(directory=str(_static_dir), html=True), name="console")',
+        'static" / "splash.html"',
+        'static" / "login.html"',
+        "async def splash_page(",
+        '@app.get("/login", response_class=HTMLResponse',
+        "async def login_page(",
+    ]
+
+    missing = [marker for marker in required_markers if marker not in source]
+    assert not missing, f"Missing main.py static serving markers: {missing}"
+
+def test_static_login_and_splash_preserve_descent_gate_markers():
+    splash_source = read_text(STATIC_ROOT / "splash.html")
+    login_source = read_text(STATIC_ROOT / "login.html")
+
+    splash_markers = [
+        "maestro_descent_gate_seen",
+        "maestro_descent_gate_seen_at",
+        "sessionStorage.setItem",
+        "window.location.href = '/login'",
+    ]
+
+    login_markers = [
+        "DESCENT_GATE_KEY",
+        "ENTRY_MODE_KEY",
+        "maestro_descent_gate_seen",
+        "maestro_entry_mode",
+        "window.location.replace('/')",
+        "setEntryMode(currentRole)",
+        "maestro_ui_session_started_at",
+    ]
+
+    missing_splash = [
+        marker for marker in splash_markers
+        if marker not in splash_source
+    ]
+    missing_login = [
+        marker for marker in login_markers
+        if marker not in login_source
+    ]
+
+    assert not missing_splash, f"Missing splash descent gate markers: {missing_splash}"
+    assert not missing_login, f"Missing login entry mode markers: {missing_login}"
+
+
+def test_static_console_auth_uses_session_storage_for_ui_session():
+    login_source = read_text(STATIC_ROOT / "login.html")
+    auth_source = read_text(STATIC_ROOT / "js" / "auth.js")
+
+    login_markers = [
+        "sessionStorage.setItem('maestro_token', data.access_token)",
+        "sessionStorage.setItem('maestro_role', currentRole)",
+        "localStorage.removeItem('maestro_token')",
+        "localStorage.removeItem('maestro_role')",
+    ]
+
+    auth_markers = [
+        "sessionStorage.getItem(STORAGE_KEY)",
+        "sessionStorage.setItem(STORAGE_KEY, token)",
+        "sessionStorage.removeItem(STORAGE_KEY)",
+        "sessionStorage.removeItem('maestro_role')",
+        "localStorage.removeItem(STORAGE_KEY)",
+        "localStorage.removeItem('maestro_role')",
+    ]
+
+    forbidden_auth_markers = [
+        "localStorage.getItem(STORAGE_KEY)",
+        "localStorage.setItem(STORAGE_KEY, token)",
+    ]
+
+    missing_login = [
+        marker for marker in login_markers
+        if marker not in login_source
+    ]
+    missing_auth = [
+        marker for marker in auth_markers
+        if marker not in auth_source
+    ]
+    forbidden_auth = [
+        marker for marker in forbidden_auth_markers
+        if marker in auth_source
+    ]
+
+    assert not missing_login, f"Missing login session storage markers: {missing_login}"
+    assert not missing_auth, f"Missing auth session storage markers: {missing_auth}"
+    assert not forbidden_auth, f"Forbidden auth localStorage markers found: {forbidden_auth}"
+
+def test_static_console_app_guards_direct_console_entry():
+    app_source = read_text(STATIC_ROOT / "js" / "app.js")
+
+    required_markers = [
+        "function hasDescentGateSession()",
+        "sessionStorage.getItem('maestro_descent_gate_seen') === '1'",
+        "if (!hasDescentGateSession())",
+        "window.location.replace('/')",
+        "window.location.replace('/login')",
+        "AUTH.init()",
+    ]
+
+    missing = [
+        marker for marker in required_markers
+        if marker not in app_source
+    ]
+
+    assert not missing, f"Missing console direct entry guard markers: {missing}"
+
+
+def test_static_console_app_shell_keeps_navigation_and_subscription_markers():
+    source = read_text(STATIC_ROOT / "js" / "app.js")
+
+    required_markers = [
+        "overview",
+        "cgt",
+        "workflows",
+        "governance",
+        "telemetry",
+        "reports",
+        "governor",
+        "gateway",
+        "simulation",
+        "adapters",
+        "settings",
+        "checkSubscription",
+        "CLIENT.get('/settings/subscription')",
+        "/billing/portal",
+        "/login",
+    ]
+
+    missing = [marker for marker in required_markers if marker not in source]
+    assert not missing, f"Missing app shell markers: {missing}"
+
+
+def test_static_console_client_and_auth_keep_fetch_and_login_markers():
+    client_source = read_text(STATIC_ROOT / "js" / "client.js")
+    auth_source = read_text(STATIC_ROOT / "js" / "auth.js")
+
+    client_markers = [
+        "async function fetchJSON",
+        "fetch(BASE + path, opts)",
+        "get:",
+        "post:",
+        "put:",
+        "del:",
+    ]
+
+    auth_markers = [
+        "async function login",
+        "logout",
+        "isLoggedIn",
+        "currentUser",
+        "me",
+    ]
+
+    missing_client = [marker for marker in client_markers if marker not in client_source]
+    missing_auth = [marker for marker in auth_markers if marker not in auth_source]
+
+    assert not missing_client, f"Missing client.js markers: {missing_client}"
+    assert not missing_auth, f"Missing auth.js markers: {missing_auth}"
+
+
+def test_static_console_settings_and_adapter_pages_keep_api_markers():
+    settings_source = read_text(STATIC_ROOT / "js" / "pages" / "settings.js")
+    adapters_source = read_text(STATIC_ROOT / "js" / "pages" / "adapters.js")
+    adapter_api_source = read_text(STATIC_ROOT / "js" / "adapters" / "adapters.js")
+
+    settings_markers = [
+        "settings",
+        "client",
+        "preferences",
+        "subscription",
+    ]
+
+    adapters_markers = [
+        "adapters",
+        "provider",
+        "model",
+    ]
+
+    adapter_api_markers = [
+        "adapters",
+    ]
+
+    missing_settings = [
+        marker for marker in settings_markers
+        if marker.lower() not in settings_source.lower()
+    ]
+    missing_adapters = [
+        marker for marker in adapters_markers
+        if marker.lower() not in adapters_source.lower()
+    ]
+    missing_adapter_api = [
+        marker for marker in adapter_api_markers
+        if marker.lower() not in adapter_api_source.lower()
+    ]
+
+    assert not missing_settings, f"Missing settings page markers: {missing_settings}"
+    assert not missing_adapters, f"Missing adapters page markers: {missing_adapters}"
+    assert not missing_adapter_api, f"Missing adapter API markers: {missing_adapter_api}"
+
+
+def test_static_html_local_asset_references_exist():
+    html_files = [
+        STATIC_ROOT / "index.html",
+        STATIC_ROOT / "login.html",
+        STATIC_ROOT / "splash.html",
+    ]
+
+    missing_assets = []
+
+    for html_file in html_files:
+        html = read_text(html_file)
+        refs = re.findall(r'''(?:src|href)=["']([^"']+)["']''', html)
+
+        for ref in refs:
+            if not ref or ref.startswith(("http://", "https://", "data:", "#", "mailto:")):
+                continue
+
+            clean = ref.split("?", 1)[0].split("#", 1)[0]
+
+            if clean == "/console/favicon.svg":
+
+                continue
+            if clean.startswith("/console/"):
+                candidate = STATIC_ROOT / clean.removeprefix("/console/")
+            elif clean.startswith("/"):
+                continue
+            else:
+                candidate = html_file.parent / clean
+
+            if not candidate.exists():
+                missing_assets.append(
+                    f"{html_file.relative_to(ROOT)} -> {ref}"
+                )
+
+    assert not missing_assets, f"Missing local static asset references: {missing_assets}"

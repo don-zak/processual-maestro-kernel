@@ -18,6 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str
     password: str
+    role: str = "admin"
 
 
 class TokenResponse(BaseModel):
@@ -32,9 +33,17 @@ class APIKeyResponse(BaseModel):
 
 @router.post("/token", response_model=TokenResponse)
 async def login_for_access_token(body: LoginRequest):
-    if settings.is_production:
-        expected_user = settings.jwt_secret[:8]
-        expected_pass = settings.jwt_secret[-8:]
+    admin_email = settings.maestro_admin_email.strip()
+    admin_password = settings.maestro_admin_password
+
+    if admin_email and admin_password:
+        expected_user = admin_email
+        expected_pass = admin_password
+    elif settings.is_production:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin credentials are not configured",
+        )
     else:
         expected_user = "admin"  # nosec
         expected_pass = "admin"  # nosec
@@ -44,7 +53,31 @@ async def login_for_access_token(body: LoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
-    token = create_access_token(subject=body.username)
+
+    login_role = body.role.strip().lower()
+
+    if login_role == "admin":
+        token = create_access_token(
+            subject=body.username,
+            role="admin",
+            client_id="admin",
+            session_type="ui_admin",
+            scopes=["*"],
+        )
+    elif login_role in {"user", "client"}:
+        token = create_access_token(
+            subject=body.username,
+            role="client",
+            client_id=body.username,
+            session_type="ui_client",
+            scopes=["evaluation"],
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid login role",
+        )
+
     return TokenResponse(access_token=token)
 
 

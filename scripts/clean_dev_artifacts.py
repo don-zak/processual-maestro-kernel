@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -72,7 +71,7 @@ def clean_data(dry_run: bool) -> int:
         _rm(entry, dry_run)
         count += 1
     if count == 0 and not dry_run:
-        print(f"  OK    data/ already clean")
+        print("  OK    data/ already clean")
     return count
 
 
@@ -144,9 +143,9 @@ def main() -> None:
     print(f"  root report files:   {c4}")
 
     if args.dry_run:
-        print(f"\nRun without --dry-run to apply.")
+        print("\nRun without --dry-run to apply.")
     else:
-        print(f"\nDevelopment tree clean.")
+        print("\nDevelopment tree clean.")
 
 
 if __name__ == "__main__":
