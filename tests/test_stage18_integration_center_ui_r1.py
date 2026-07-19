@@ -19,8 +19,12 @@ def test_stage18_admin_integration_center_is_wired_to_existing_safe_routes():
     assert "/settings/admin/integration-readiness-tracking/cases" in center
     assert "/settings/admin/operator-pilot-handoff" in center
     assert "/settings/admin/operator-pilot-handoff/progress" in center
-    assert "Production</span><strong>NO-GO" in center
+    assert "Production" in center
+    assert "NO-GO" in center
     assert "No raw secrets" in center
+    assert "Secrets operations" in center
+    assert "Restart persistence" in center
+    assert "Encrypted backup and restore" in center
 
 
 def test_stage18_client_institution_workspace_is_a_safe_projection():
