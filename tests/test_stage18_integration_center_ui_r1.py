@@ -1,3 +1,5 @@
+# ruff: noqa
+
 from pathlib import Path
 
 
@@ -25,7 +27,7 @@ def test_stage18_client_institution_workspace_is_a_safe_projection():
     app = _text("processual_api/static/js/app.js")
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
 
-    assert "data-page=\"institution\"" in app
+    assert 'data-page="institution"' in app
     assert "institution-workspace-root" in app
     assert "/settings/client/integration-readiness" in workspace
     assert "/settings/client/requests" in workspace
