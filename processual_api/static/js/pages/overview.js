@@ -7,7 +7,7 @@ PAGES.overview = (() => {
       const [live, govStatus, metrics] = await Promise.all([
         HEALTH_ADAPTER.live().catch(() => ({ status: 'unknown', service: 'maestro', version: '?' })),
         GOVERNANCE_ADAPTER.status().catch(() => ({ mode: 'unknown', active_policies: [], drift_monitoring: false, certification_level: 'unknown' })),
-        fetch('/cgt/govern/metrics').then(r => r.json()).catch(() => null)
+        CLIENT.get('/cgt/govern/metrics').catch(() => null)
       ]);
 
       document.getElementById('gov-mode').textContent = (govStatus.mode || '').replace(/_/g, ' ');
@@ -20,7 +20,6 @@ PAGES.overview = (() => {
         '<span class="tag" style="background:rgba(138,163,200,0.094);color:var(--soft);border:1px solid rgba(138,163,200,0.188)">' + p + '</span>'
       ).join('');
 
-      // Real metrics
       if (metrics) {
         document.getElementById('ov-total-evals').textContent = metrics.total_evaluations || 0;
         document.getElementById('ov-avg-reward-all').textContent = metrics.avg_reward ? metrics.avg_reward.toFixed(4) : '—';
@@ -29,7 +28,6 @@ PAGES.overview = (() => {
         document.getElementById('ov-agent-avg-reward').textContent = metrics.agent_avg_reward ? metrics.agent_avg_reward.toFixed(4) : '—';
         document.getElementById('ov-policy-actions').textContent = metrics.policy_action_count || 0;
 
-        // Rank distribution
         const dist = metrics.rank_distribution || {};
         const distHtml = Object.entries(dist).map(([k, v]) =>
           '<span class="tag" style="background:rgba(138,163,200,0.094);color:var(--soft);border:1px solid rgba(138,163,200,0.188)">' + k + ': ' + v + '</span>'
@@ -37,7 +35,6 @@ PAGES.overview = (() => {
         const distEl = document.getElementById('ov-rank-dist');
         if (distEl) distEl.innerHTML = distHtml || '—';
 
-        // PSI chart from real evaluation history
         const psiHistory = (metrics.psi_history || []).map((e, i) => ({
           t: '#' + e.index,
           psi: e.reward,
@@ -56,7 +53,6 @@ PAGES.overview = (() => {
         }
       }
 
-      // Dependencies from health/ready
       try {
         const ready = await HEALTH_ADAPTER.ready();
         const deps = ready.dependencies || {};
@@ -65,7 +61,6 @@ PAGES.overview = (() => {
         ).join('');
       } catch (_) {}
 
-      // Certification ladder
       const certLevels = ['blocked', 'observe_only', 'recommend_ready', 'controlled_ready', 'restricted_critical_ready'];
       const certColors = { blocked: '#f87171', observe_only: '#fbbf24', recommend_ready: '#60a5fa', controlled_ready: '#22d3a0', restricted_critical_ready: '#f5a623' };
       const certStrip = document.getElementById('cert-strip');
@@ -83,7 +78,6 @@ PAGES.overview = (() => {
         });
       }
 
-      // Gateway agents
       try {
         const gwData = await GATEWAY_ADAPTER.listAgents();
         const agents = gwData.agents || [];
@@ -124,7 +118,6 @@ PAGES.overview = (() => {
     });
   }
 
-  // Animated PSI indicator (uses real latest reward if available)
   setInterval(() => {
     ovTick++;
     const latestEntry = document.getElementById('ov-avg-reward-all');
