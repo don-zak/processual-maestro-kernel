@@ -22,72 +22,55 @@ def test_stage18_admin_integration_center_is_wired_to_existing_safe_routes():
     assert "Production" in center
     assert "NO-GO" in center
     assert "No raw secrets" in center
-    assert "Secrets operations" in center
-    assert "Restart persistence" in center
-    assert "Encrypted backup and restore" in center
 
 
-def test_stage18_client_institution_workspace_is_a_safe_projection():
+def test_enterprise_workspace_is_bootstrapped_without_internal_stage_labels():
     app = _text("processual_api/static/js/app.js")
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
 
     assert 'data-page="institution"' in app
+    assert "Enterprise Workspace" in app
+    assert ">Enterprise<" in app
     assert "institution-workspace-root" in app
-    assert "/settings/client-requests" in workspace
-    assert "/settings/client/integration-readiness" not in workspace
-    assert "/settings/client/requests" not in workspace
-    assert "Credential values are never displayed here" in workspace
+    assert "Enterprise workspace" in workspace
+    assert "Stage 18 R3" not in workspace
     assert "Production blocked" in workspace
 
 
-def test_stage18_institution_workspace_exposes_standard_specific_operations():
+def test_enterprise_workspace_exposes_operational_tracks_and_tasks():
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
 
     assert "CAMARA / GSMA Open Gateway" in workspace
     assert "TM Forum Open APIs" in workspace
     assert "Operator-specific integration" in workspace
-    assert "Capability profile selection" in workspace
-    assert "Consent and authorization references" in workspace
-    assert "Open API version mapping" in workspace
-    assert "CTK evidence attachment" in workspace
-    assert "DNS and TLS reference package" in workspace
-    assert "OAuth / OIDC profile review" in workspace
-    assert "Sandbox endpoint qualification" in workspace
-    assert "no runtime activation from this page" in workspace
+    assert "Create operational case" in workspace
+    assert "Save task" in workspace
+    assert "Run automated validation" in workspace
+    assert "progress_percent" in workspace
+    assert "ready_for_review" in workspace
 
 
-def test_stage18_institution_tracks_create_persisted_client_cases():
+def test_enterprise_workspace_uses_formal_case_routes_not_support_messages():
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
 
     assert "createTrackCase" in workspace
-    assert "CLIENT.post('/settings/client-request'" in workspace
-    assert "[STAGE18_INTEGRATION_CASE]" in workspace
-    assert "integration_track=" in workspace
-    assert "requested_phase=supervisor_review" in workspace
-    assert "sandbox_requested=true" in workspace
-    assert "production_allowed=false" in workspace
-    assert "runtime_connector_approved=false" in workspace
-    assert "Active case exists" in workspace
-    assert "Case ID:" in workspace
+    assert "CLIENT.post('/settings/client/integration-cases'" in workspace
+    assert "/settings/client/integration-cases/${encodeURIComponent(caseId)}/tasks/" in workspace
+    assert "/settings/client/integration-cases/${encodeURIComponent(caseId)}/validate" in workspace
+    assert "CLIENT.patch" in workspace
+    assert "CLIENT.post('/settings/client-request'" not in workspace
+    assert "requested_phase=supervisor_review" not in workspace
 
 
-def test_stage18_r3_projects_explicit_case_contract_fields():
+def test_enterprise_workspace_limits_supervisor_to_decision_gate():
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
 
-    assert "Stage 18 R3" in workspace
-    assert "normalizeCase" in workspace
-    assert "camara_integration_case" in workspace
-    assert "tmforum_integration_case" in workspace
-    assert "operator_integration_case" in workspace
-    assert "case_type" in workspace
-    assert "integration_track" in workspace
-    assert "requested_phase" in workspace
-    assert "sandbox_requested" in workspace
-    assert "production_allowed: false" in workspace
-    assert "runtime_connector_approved: false" in workspace
-    assert "raw_secret_visible: false" in workspace
-    assert "Institution case registry" in workspace
-    assert "source_request_type" in workspace
+    assert "Supervisor involvement begins only after automated validation passes." in workspace
+    assert "Self-service" in workspace
+    assert "Supervisor decision" in workspace
+    assert "production_allowed=false" in workspace
+    assert "runtime_connector_approved=false" in workspace
+    assert "raw_secret_visible=false" in workspace
 
 
 def test_stage18_new_ui_does_not_embed_secret_material():
