@@ -42,6 +42,9 @@
   }
 
   function keyRows() {
+    if (state.integration?.enabled !== true) {
+      return '<div class="sops-note">Sandbox API self-service is unavailable for the current plan. Upgrade or activate Enterprise Integration before issuing client-managed keys.</div>';
+    }
     const keys = activeKeys();
     if (!keys.length) {
       return '<div class="sops-note">No self-service sandbox keys exist yet. Choose a read-only operational profile and create one.</div>';
@@ -95,14 +98,14 @@
         <section class="sops-card" style="grid-column:1/-1">
           <h2>Sandbox API access</h2>
           <small>Create, rotate, and revoke read-only client sandbox keys. Raw key material is shown once and never returned again.</small>
-          <div class="sops-status"><strong>${integrationEnabled ? 'Self-service available' : 'Locked by plan'}</strong><span>${keyCount} / ${esc(state.sandboxKeys?.max_active_keys || 3)} active keys</span></div>
+          <div class="sops-status"><strong>${integrationEnabled ? 'Self-service available' : 'Locked by current plan'}</strong><span>${integrationEnabled ? `${keyCount} / ${esc(state.sandboxKeys?.max_active_keys || 3)} active keys` : esc(state.integration?.plan_id || 'Enterprise Integration required')}</span></div>
           <div class="sops-form">
             <select id="sops-profile" class="sops-select" ${integrationEnabled ? '' : 'disabled'}>
               <option value="">Choose a read-only operational profile</option>
               ${profileOptions()}
             </select>
-            <input id="sops-label" class="sops-input" value="Institution sandbox" maxlength="120" placeholder="Key label">
-            <select id="sops-expiry" class="sops-select"><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option></select>
+            <input id="sops-label" class="sops-input" value="Institution sandbox" maxlength="120" placeholder="Key label" ${integrationEnabled ? '' : 'disabled'}>
+            <select id="sops-expiry" class="sops-select" ${integrationEnabled ? '' : 'disabled'}><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option></select>
           </div>
           <div class="sops-actions"><button class="sops-btn" data-sops-create ${integrationEnabled ? '' : 'disabled'}>Create sandbox key</button><button class="sops-btn ghost" data-sops-refresh>Refresh</button></div>
           ${state.secretOnce ? `<div class="sops-secret"><strong>Copy this key now — it will not be shown again.</strong><code>${esc(state.secretOnce)}</code><div class="sops-actions"><button class="sops-btn" data-sops-copy>Copy key</button><button class="sops-btn ghost" data-sops-hide-secret>Hide</button></div></div>` : ''}
@@ -122,17 +125,35 @@
     state.loading = true;
     state.error = '';
     try {
-      const results = await Promise.allSettled([
+      const primaryResults = await Promise.allSettled([
         CLIENT.get('/settings/api-key-integration'),
         CLIENT.get('/settings/client/provider-connection'),
-        CLIENT.get('/settings/client/api-keys'),
       ]);
-      state.integration = results[0].status === 'fulfilled' ? results[0].value : null;
-      state.provider = results[1].status === 'fulfilled' ? results[1].value : null;
-      state.sandboxKeys = results[2].status === 'fulfilled' ? results[2].value : { keys: [], max_active_keys: 3 };
-      const failures = results.filter((item) => item.status === 'rejected');
-      if (failures.length && state.integration?.enabled === true) {
-        state.error = failures.map((item) => item.reason?.detail || item.reason?.message || 'Unavailable').join(' · ');
+      state.integration = primaryResults[0].status === 'fulfilled' ? primaryResults[0].value : null;
+      state.provider = primaryResults[1].status === 'fulfilled' ? primaryResults[1].value : null;
+
+      const primaryFailures = primaryResults.filter((item) => item.status === 'rejected');
+      if (primaryFailures.length) {
+        state.error = primaryFailures.map((item) => item.reason?.detail || item.reason?.message || 'Unavailable').join(' · ');
+      }
+
+      if (state.integration?.enabled === true) {
+        try {
+          state.sandboxKeys = await CLIENT.get('/settings/client/api-keys');
+        } catch (error) {
+          state.sandboxKeys = { keys: [], max_active_keys: 3 };
+          state.error = error?.detail || error?.message || 'Sandbox API key status unavailable.';
+        }
+      } else {
+        state.sandboxKeys = {
+          status: 'locked',
+          keys: [],
+          key_count: 0,
+          max_active_keys: 3,
+          production_allowed: false,
+          runtime_connector_approved: false,
+          raw_secret_visible: false,
+        };
       }
     } finally {
       state.loading = false;
