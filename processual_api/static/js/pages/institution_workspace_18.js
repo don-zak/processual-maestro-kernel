@@ -64,6 +64,46 @@ PAGES.institution = (() => {
     return `<span class="iw18-pill ${tone || ''}">${esc(text)}</span>`;
   }
 
+  function deriveClientSafeReadiness(subscription, requestPayload) {
+    const plan = String(subscription?.plan || subscription?.plan_id || '').toLowerCase();
+    const enterpriseEligible = plan.includes('enterprise');
+    const requestCount = Number(requestPayload?.request_count || 0);
+    const latest = arr(requestPayload?.latest_requests);
+    const hasIntegrationRequest = latest.some((item) => String(item.request_type || '').includes('integration'));
+    const statusCounts = requestPayload?.status_counts || {};
+    const approved = Number(statusCounts.approved || statusCounts.completed || 0) > 0;
+
+    const missingCustomerInputs = [];
+    if (!enterpriseEligible) missingCustomerInputs.push('Enterprise integration eligibility review');
+    if (!hasIntegrationRequest) missingCustomerInputs.push('Submit a standards or operator integration request');
+    missingCustomerInputs.push('Provide client-safe API, DNS, TLS and technical contact references');
+
+    const missingSecurityControls = [
+      'Confirm sandbox-before-production review',
+      'Confirm supervisor approval for write or restricted scopes',
+      'Keep raw credentials outside client requests',
+    ];
+
+    let completeness = 25;
+    if (enterpriseEligible) completeness += 20;
+    if (requestCount > 0) completeness += 20;
+    if (hasIntegrationRequest) completeness += 15;
+    if (approved) completeness += 10;
+
+    return {
+      surface: 'client_safe_derived_projection',
+      completeness_percent: Math.min(90, completeness),
+      missing_customer_inputs: missingCustomerInputs,
+      missing_security_controls: missingSecurityControls,
+      sandbox_ready: approved,
+      pilot_ready: approved,
+      production_allowed: false,
+      runtime_connector_approved: false,
+      raw_secret_visible: false,
+      source_routes: ['/settings/subscription', '/settings/client-requests'],
+    };
+  }
+
   async function load() {
     state.loading = true;
     render();
@@ -71,16 +111,20 @@ PAGES.institution = (() => {
     const results = await Promise.allSettled([
       CLIENT.get('/auth/me'),
       CLIENT.get('/settings/subscription'),
-      CLIENT.get('/settings/client/integration-readiness'),
-      CLIENT.get('/settings/client/requests'),
+      CLIENT.get('/settings/client-requests'),
     ]);
 
     state.account = results[0].status === 'fulfilled' ? results[0].value : null;
     state.subscription = results[1].status === 'fulfilled' ? results[1].value : null;
-    state.readiness = results[2].status === 'fulfilled' ? results[2].value : null;
 
-    const requestPayload = results[3].status === 'fulfilled' ? results[3].value : [];
-    state.requests = arr(requestPayload.requests || requestPayload.items || requestPayload);
+    const requestPayload = results[2].status === 'fulfilled' ? results[2].value : {};
+    state.requests = arr(
+      requestPayload.latest_requests
+      || requestPayload.requests
+      || requestPayload.items
+      || requestPayload
+    );
+    state.readiness = deriveClientSafeReadiness(state.subscription, requestPayload);
     state.error = results
       .filter((result) => result.status === 'rejected')
       .map((result) => result.reason?.message || 'unavailable')
@@ -144,7 +188,7 @@ PAGES.institution = (() => {
   function latestRequest() {
     const request = state.requests[0];
     if (!request) return 'No integration request submitted yet.';
-    return `${request.type || request.request_type || 'Integration request'} · ${request.status || 'submitted'}`;
+    return `${request.request_type_label || request.type || request.request_type || 'Integration request'} · ${request.status || 'submitted'}`;
   }
 
   function trackStatus(trackKey) {
