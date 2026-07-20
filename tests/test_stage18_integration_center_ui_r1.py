@@ -71,6 +71,25 @@ def test_stage18_institution_tracks_create_persisted_client_cases():
     assert "Case ID:" in workspace
 
 
+def test_stage18_r3_projects_explicit_case_contract_fields():
+    workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
+
+    assert "Stage 18 R3" in workspace
+    assert "normalizeCase" in workspace
+    assert "camara_integration_case" in workspace
+    assert "tmforum_integration_case" in workspace
+    assert "operator_integration_case" in workspace
+    assert "case_type" in workspace
+    assert "integration_track" in workspace
+    assert "requested_phase" in workspace
+    assert "sandbox_requested" in workspace
+    assert "production_allowed: false" in workspace
+    assert "runtime_connector_approved: false" in workspace
+    assert "raw_secret_visible: false" in workspace
+    assert "Institution case registry" in workspace
+    assert "source_request_type" in workspace
+
+
 def test_stage18_new_ui_does_not_embed_secret_material():
     combined = "\n".join(
         [
