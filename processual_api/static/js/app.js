@@ -9,7 +9,7 @@ const pageMeta = {
   gateway:    { title: 'Gateway Dashboard', sub: 'Agent registry, evaluation, lifecycle management' },
   simulation: { title: 'Supervision Simulation', sub: 'Virtual agent governance pipeline' },
   adapters:   { title: 'Adapter Manager', sub: 'Provider configuration and testing' },
-  settings:   { title: 'Client Settings', sub: 'Account, preferences, plan, and operations' },
+  settings:   { title: 'Client Settings', sub: 'Account, provider, plan, integration, and precise escalations' },
 };
 
 const APP = (() => {
@@ -80,6 +80,7 @@ const APP = (() => {
     if (pg === 'settings') {
       PAGES.settings?.init?.();
       window.PMK_SETTINGS_OPERATIONS_18?.init?.();
+      setTimeout(() => window.PMK_SETTINGS_LAYOUT_18?.init?.(), 0);
     }
     if (pg === 'institution') { PAGES.institution?.init?.(); }
     if (pg === 'gateway') {
@@ -141,9 +142,6 @@ const APP = (() => {
     try {
       const sub = await CLIENT.get('/settings/subscription');
       const stage = sub.stage || 'active';
-      const plan = sub.plan || '—';
-      const status = sub.status || 'active';
-      void plan; void status;
       if (stage === 'active') {
         banner.style.display = 'none';
         return;
@@ -212,8 +210,8 @@ const APP = (() => {
 
 (function bootstrapInstitutionWorkspace18() {
   pageMeta.institution = {
-    title: 'Institution Workspace',
-    sub: 'Integration requirements, submissions, actions, sandbox progress, and credential status',
+    title: 'Enterprise Workspace',
+    sub: 'Technical intake, task execution, automated validation, and approval gates',
   };
   const navWrap = document.getElementById('nav-wrap');
   if (navWrap && !navWrap.querySelector('[data-page="institution"]')) {
@@ -221,7 +219,7 @@ const APP = (() => {
     const button = document.createElement('button');
     button.className = 'nav-btn';
     button.dataset.page = 'institution';
-    button.innerHTML = '<span class="nav-ind"></span><span class="nav-ico">◇</span><span>Institution</span>';
+    button.innerHTML = '<span class="nav-ind"></span><span class="nav-ico">◇</span><span>Enterprise</span>';
     navWrap.insertBefore(button, settingsButton || null);
   }
   const content = document.getElementById('content');
@@ -229,19 +227,19 @@ const APP = (() => {
     const page = document.createElement('div');
     page.className = 'page';
     page.id = 'page-institution';
-    page.innerHTML = '<div id="institution-workspace-root"><div class="iw18-empty">Loading institution workspace…</div></div>';
+    page.innerHTML = '<div id="institution-workspace-root"><div class="iw18-empty">Loading enterprise integration workspace…</div></div>';
     content.appendChild(page);
   }
   if (!document.querySelector('link[data-iw18-style]')) {
     const style = document.createElement('link');
     style.rel = 'stylesheet';
-    style.href = 'css/institution_workspace_18.css?v=stage18r1';
+    style.href = 'css/institution_workspace_18.css?v=enterpriseops2';
     style.dataset.iw18Style = 'true';
     document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-iw18-script]')) {
     const script = document.createElement('script');
-    script.src = 'js/pages/institution_workspace_18.js?v=stage18r1';
+    script.src = 'js/pages/institution_workspace_18.js?v=enterpriseops2';
     script.dataset.iw18Script = 'true';
     document.body.appendChild(script);
   }
@@ -251,14 +249,30 @@ const APP = (() => {
   if (!document.querySelector('link[data-sops18-style]')) {
     const style = document.createElement('link');
     style.rel = 'stylesheet';
-    style.href = 'css/settings_operations_18.css?v=stage18ops1';
+    style.href = 'css/settings_operations_18.css?v=settingsops2';
     style.dataset.sops18Style = 'true';
     document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-sops18-script]')) {
     const script = document.createElement('script');
-    script.src = 'js/settings_operations_18.js?v=stage18ops1';
+    script.src = 'js/settings_operations_18.js?v=settingsops2';
     script.dataset.sops18Script = 'true';
+    document.body.appendChild(script);
+  }
+})();
+
+(function bootstrapSettingsLayout18() {
+  if (!document.querySelector('link[data-sl18-style]')) {
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.href = 'css/settings_layout_18.css?v=settingslayout1';
+    style.dataset.sl18Style = 'true';
+    document.head.appendChild(style);
+  }
+  if (!document.querySelector('script[data-sl18-script]')) {
+    const script = document.createElement('script');
+    script.src = 'js/settings_layout_18.js?v=settingslayout1';
+    script.dataset.sl18Script = 'true';
     document.body.appendChild(script);
   }
 })();
