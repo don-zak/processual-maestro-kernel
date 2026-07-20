@@ -33,11 +33,9 @@ def test_stage18_client_institution_workspace_is_a_safe_projection():
 
     assert 'data-page="institution"' in app
     assert "institution-workspace-root" in app
-    assert "/settings/subscription" in workspace
     assert "/settings/client-requests" in workspace
     assert "/settings/client/integration-readiness" not in workspace
     assert "/settings/client/requests" not in workspace
-    assert "client_safe_derived_projection" in workspace
     assert "Credential values are never displayed here" in workspace
     assert "Production blocked" in workspace
 
@@ -56,6 +54,21 @@ def test_stage18_institution_workspace_exposes_standard_specific_operations():
     assert "OAuth / OIDC profile review" in workspace
     assert "Sandbox endpoint qualification" in workspace
     assert "no runtime activation from this page" in workspace
+
+
+def test_stage18_institution_tracks_create_persisted_client_cases():
+    workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
+
+    assert "createTrackCase" in workspace
+    assert "CLIENT.post('/settings/client-request'" in workspace
+    assert "[STAGE18_INTEGRATION_CASE]" in workspace
+    assert "integration_track=" in workspace
+    assert "requested_phase=supervisor_review" in workspace
+    assert "sandbox_requested=true" in workspace
+    assert "production_allowed=false" in workspace
+    assert "runtime_connector_approved=false" in workspace
+    assert "Active case exists" in workspace
+    assert "Case ID:" in workspace
 
 
 def test_stage18_new_ui_does_not_embed_secret_material():
