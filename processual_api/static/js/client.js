@@ -47,6 +47,7 @@ const CLIENT = (() => {
     get:   (p)      => fetchJSON('GET', p),
     post:  (p, b)   => fetchJSON('POST', p, b),
     put:   (p, b)   => fetchJSON('PUT', p, b),
+    patch: (p, b)   => fetchJSON('PATCH', p, b),
     del:   (p)      => fetchJSON('DELETE', p),
   };
 })();
