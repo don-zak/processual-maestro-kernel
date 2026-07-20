@@ -6,48 +6,30 @@ PAGES.institution = (() => {
       key: 'camara',
       caseType: 'camara_integration_case',
       title: 'CAMARA / GSMA Open Gateway',
-      subtitle: 'Telecom capability exposure and operator API alignment',
-      operations: [
-        'Capability profile selection',
-        'Consent and authorization references',
-        'Sandbox endpoint qualification',
-        'Conformance evidence package',
-      ],
+      subtitle: 'Capability exposure, consent references, sandbox endpoints, and conformance evidence.',
     },
     {
       key: 'tmforum',
       caseType: 'tmforum_integration_case',
       title: 'TM Forum Open APIs',
-      subtitle: 'Standardized telecom business and operational API contracts',
-      operations: [
-        'Open API version mapping',
-        'Contract and payload review',
-        'CTK evidence attachment',
-        'Operator-specific deviation record',
-      ],
+      subtitle: 'Open API versions, schemas, CTK evidence, and operator deviations.',
     },
     {
       key: 'operator',
       caseType: 'operator_integration_case',
       title: 'Operator-specific integration',
-      subtitle: 'Institution and operator requirements outside common standards',
-      operations: [
-        'DNS and TLS reference package',
-        'OAuth / OIDC profile review',
-        'Network allowlist and callback review',
-        'Sandbox scope and escalation contacts',
-      ],
+      subtitle: 'DNS, TLS, OAuth/OIDC, callbacks, allowlists, and sandbox scope.',
     },
   ];
 
   const state = {
     account: null,
     subscription: null,
-    requests: [],
     cases: [],
+    legacyRequests: [],
     loading: true,
-    creatingTrack: '',
-    actionMessage: '',
+    busy: '',
+    message: '',
     error: '',
   };
 
@@ -59,52 +41,11 @@ PAGES.institution = (() => {
 
   function arr(value) { return Array.isArray(value) ? value : []; }
   function pill(text, tone) { return `<span class="iw18-pill ${tone || ''}">${esc(text)}</span>`; }
+  function trackDef(key) { return TRACKS.find((track) => track.key === key); }
+  function caseForTrack(key) { return state.cases.find((item) => item.integration_track === key) || null; }
 
-  function markerValue(preview, key) {
-    const match = String(preview || '').match(new RegExp(`(?:^|\\n)${key}=([^\\n]+)`));
-    return match ? match[1].trim() : '';
-  }
-
-  function normalizeCase(request) {
-    const preview = String(request?.message_preview || '');
-    if (!preview.includes('[STAGE18_INTEGRATION_CASE]')) return null;
-    const integrationTrack = markerValue(preview, 'integration_track');
-    const track = TRACKS.find((item) => item.key === integrationTrack);
-    if (!track) return null;
-    return {
-      id: request.request_id || request.id || '',
-      short_id: request.short_id || '',
-      case_type: track.caseType,
-      case_label: track.title,
-      integration_track: track.key,
-      requested_phase: markerValue(preview, 'requested_phase') || 'supervisor_review',
-      sandbox_requested: markerValue(preview, 'sandbox_requested') !== 'false',
-      production_allowed: false,
-      runtime_connector_approved: false,
-      raw_secret_visible: false,
-      status: request.status || 'pending',
-      created_at: request.created_at || '',
-      source_request_type: request.request_type || 'general_support',
-    };
-  }
-
-  function activeCase(trackKey) {
-    return state.cases.find((item) => item.integration_track === trackKey && ['pending', 'reviewed', 'approved'].includes(String(item.status).toLowerCase())) || null;
-  }
-
-  function caseMessage(track) {
-    return [
-      '[STAGE18_INTEGRATION_CASE]',
-      `case_type=${track.caseType}`,
-      `integration_track=${track.key}`,
-      `integration_standard=${track.title}`,
-      'requested_phase=supervisor_review',
-      'sandbox_requested=true',
-      'production_allowed=false',
-      'runtime_connector_approved=false',
-      'raw_secret_visible=false',
-      'No raw secrets are included. Create a client-safe supervisor review case and return the evidence checklist.',
-    ].join('\n');
+  function legacyCount() {
+    return state.legacyRequests.filter((request) => String(request.message_preview || '').includes('[STAGE18_INTEGRATION_CASE]')).length;
   }
 
   async function load() {
@@ -114,135 +55,204 @@ PAGES.institution = (() => {
     const results = await Promise.allSettled([
       CLIENT.get('/auth/me'),
       CLIENT.get('/settings/subscription'),
+      CLIENT.get('/settings/client/integration-cases'),
       CLIENT.get('/settings/client-requests'),
     ]);
     state.account = results[0].status === 'fulfilled' ? results[0].value : null;
     state.subscription = results[1].status === 'fulfilled' ? results[1].value : null;
-    const payload = results[2].status === 'fulfilled' ? results[2].value : {};
-    state.requests = arr(payload.latest_requests || payload.requests || payload.items || payload);
-    state.cases = state.requests.map(normalizeCase).filter(Boolean);
+    state.cases = results[2].status === 'fulfilled' ? arr(results[2].value?.cases) : [];
+    state.legacyRequests = results[3].status === 'fulfilled' ? arr(results[3].value?.latest_requests) : [];
     state.error = results.filter((item) => item.status === 'rejected')
-      .map((item) => item.reason?.detail || item.reason?.message || 'unavailable').join(', ');
+      .map((item) => item.reason?.detail || item.reason?.message || 'Unavailable').join(' · ');
     state.loading = false;
-    state.creatingTrack = '';
+    state.busy = '';
     render();
   }
 
   async function createTrackCase(trackKey) {
-    const track = TRACKS.find((item) => item.key === trackKey);
-    if (!track || state.creatingTrack) return;
-    const existing = activeCase(trackKey);
-    if (existing) {
-      state.actionMessage = `${track.title} already has active case ${existing.short_id || existing.id}.`;
-      render();
-      return;
-    }
-    state.creatingTrack = trackKey;
-    state.actionMessage = `Creating ${track.title} case…`;
+    const track = trackDef(trackKey);
+    if (!track || state.busy) return;
+    state.busy = `create:${trackKey}`;
+    state.message = `Creating ${track.title} workspace…`;
+    state.error = '';
     render();
     try {
-      const result = await CLIENT.post('/settings/client-request', {
-        request_type: 'general_support',
-        requested_plan: 'enterprise_integration',
-        message: caseMessage(track),
+      const result = await CLIENT.post('/settings/client/integration-cases', {
+        integration_track: trackKey,
+        title: track.title,
       });
-      const created = result?.request || {};
-      state.actionMessage = `${track.caseType} created: ${created.short_id || created.request_id || 'submitted'}.`;
+      state.message = result.status === 'existing'
+        ? `${track.title} already has an active operational case.`
+        : `${track.title} operational case created.`;
       await load();
     } catch (error) {
-      state.creatingTrack = '';
-      state.actionMessage = `Case creation failed: ${error?.detail || error?.message || 'unavailable'}`;
+      state.busy = '';
+      state.message = '';
+      state.error = error?.detail || error?.message || 'Case creation failed.';
       render();
     }
   }
 
-  function progress() {
-    const plan = String(state.subscription?.plan || state.subscription?.plan_id || '').toLowerCase();
-    const base = plan.includes('enterprise') ? 42 : 25;
-    return Math.min(85, base + state.cases.length * 12);
+  async function saveTask(caseId, taskId) {
+    const reference = document.querySelector(`[data-task-reference="${caseId}:${taskId}"]`)?.value.trim() || '';
+    const status = document.querySelector(`[data-task-status="${caseId}:${taskId}"]`)?.value || 'in_progress';
+    state.busy = `task:${caseId}:${taskId}`;
+    state.message = 'Saving task progress…';
+    state.error = '';
+    render();
+    try {
+      await CLIENT.patch(
+        `/settings/client/integration-cases/${encodeURIComponent(caseId)}/tasks/${encodeURIComponent(taskId)}`,
+        { status, reference, note: '' }
+      );
+      state.message = 'Task progress saved.';
+      await load();
+    } catch (error) {
+      state.busy = '';
+      state.message = '';
+      state.error = error?.detail || error?.message || 'Task update failed.';
+      render();
+    }
   }
 
-  function caseContract(item) {
-    if (!item) return '';
-    return `<div class="iw18-empty" style="margin-top:.8rem">
-      <strong>Case ID: ${esc(item.id || item.short_id)}</strong><br>
-      Type: ${esc(item.case_type)} · Track: ${esc(item.integration_track)} · Status: ${esc(item.status)}<br>
-      Phase: ${esc(item.requested_phase)} · Sandbox requested: ${esc(item.sandbox_requested)}<br>
-      Production allowed: false · Runtime connector approved: false · Raw secrets visible: false
-    </div>`;
+  async function validateCase(caseId) {
+    state.busy = `validate:${caseId}`;
+    state.message = 'Running automated validation…';
+    state.error = '';
+    render();
+    try {
+      const result = await CLIENT.post(`/settings/client/integration-cases/${encodeURIComponent(caseId)}/validate`, {});
+      state.message = result.status === 'passed'
+        ? 'Validation passed. The case is ready for the precise supervisor decision gate.'
+        : `Validation blocked: ${(result.blockers || []).join(' · ')}`;
+      await load();
+    } catch (error) {
+      state.busy = '';
+      state.message = '';
+      state.error = error?.detail || error?.message || 'Validation failed.';
+      render();
+    }
   }
 
-  function trackCards() {
-    return `<div class="iw18-grid">${TRACKS.map((track) => {
-      const item = activeCase(track.key) || state.cases.find((entry) => entry.integration_track === track.key);
-      const busy = state.creatingTrack === track.key;
-      const active = Boolean(activeCase(track.key));
-      const status = item ? `${item.short_id || 'Case'} · ${item.status}` : 'Available for request';
-      return `<section class="iw18-panel" data-integration-track="${track.key}">
-        <div class="iw18-status" style="justify-content:space-between;align-items:flex-start">
-          <div><h2>${esc(track.title)}</h2><small>${esc(track.subtitle)}</small></div>
-          ${pill(status, active ? 'warn' : item ? 'good' : 'warn')}
+  function taskStatusTone(status) {
+    if (status === 'completed') return 'good';
+    if (status === 'blocked') return 'bad';
+    return 'warn';
+  }
+
+  function taskRows(item) {
+    return `<div class="iw18-task-list">${arr(item.tasks).map((task) => {
+      const key = `${item.case_id}:${task.task_id}`;
+      const busy = state.busy === `task:${key}`;
+      const placeholder = task.input_kind === 'url' ? 'https://sandbox.example/reference' : 'Client-safe reference or document ID';
+      return `<div class="iw18-task">
+        <div class="iw18-task-head"><strong>${esc(task.label)}</strong>${pill(task.status, taskStatusTone(task.status))}</div>
+        <div class="iw18-task-grid">
+          <input class="iw18-input" data-task-reference="${esc(key)}" value="${esc(task.reference || '')}" placeholder="${esc(placeholder)}" autocomplete="off">
+          <select class="iw18-select" data-task-status="${esc(key)}">
+            ${['not_started', 'in_progress', 'completed', 'blocked'].map((status) => `<option value="${status}" ${task.status === status ? 'selected' : ''}>${status.replaceAll('_', ' ')}</option>`).join('')}
+          </select>
         </div>
-        <div style="margin-top:.9rem">${track.operations.map((operation, index) => `
-          <div class="iw18-action"><strong>${String(index + 1).padStart(2, '0')} · ${esc(operation)}</strong>
-          <span>Reference submission and supervisor review only; no runtime activation from this page.</span></div>`).join('')}</div>
-        ${caseContract(item)}
-        <div style="margin-top:.9rem"><button class="iw18-button ghost" data-create-track="${track.key}" ${active || busy ? 'disabled' : ''}>
-          ${busy ? 'Creating case…' : active ? 'Active case exists' : `Create ${esc(track.caseType)}`}
-        </button></div>
-      </section>`;
+        <div class="iw18-task-actions">
+          <button class="iw18-button ghost" data-save-task="${esc(key)}" ${busy ? 'disabled' : ''}>${busy ? 'Saving…' : 'Save task'}</button>
+          <span class="iw18-validation ${esc(task.validation || '')}">Validation: ${esc(task.validation || 'not checked')}</span>
+        </div>
+      </div>`;
     }).join('')}</div>`;
   }
 
+  function trackCard(track) {
+    const item = caseForTrack(track.key);
+    if (!item) {
+      return `<section class="iw18-panel" data-integration-track="${track.key}">
+        <h2>${esc(track.title)}</h2><small>${esc(track.subtitle)}</small>
+        <div class="iw18-empty" style="margin-top:.85rem">No operational case yet. Create one to begin technical intake and automated validation.</div>
+        <div class="iw18-toolbar"><button class="iw18-button" data-create-track="${track.key}" ${state.busy ? 'disabled' : ''}>Create operational case</button></div>
+      </section>`;
+    }
+
+    const validateBusy = state.busy === `validate:${item.case_id}`;
+    return `<section class="iw18-panel" data-integration-track="${track.key}">
+      <div class="iw18-task-head"><div><h2>${esc(track.title)}</h2><small>${esc(track.subtitle)}</small></div>${pill(item.status, item.status === 'ready_for_review' ? 'good' : 'warn')}</div>
+      <div class="iw18-case-meta">${pill(item.phase, 'warn')}${pill(`${item.progress_percent}% complete`, item.progress_percent === 100 ? 'good' : 'warn')}</div>
+      <div class="iw18-case-id">Case ID: ${esc(item.case_id)}</div>
+      <div class="iw18-progress"><span style="width:${Number(item.progress_percent || 0)}%"></span></div>
+      ${taskRows(item)}
+      <div class="iw18-toolbar">
+        <button class="iw18-button" data-validate-case="${esc(item.case_id)}" ${validateBusy ? 'disabled' : ''}>${validateBusy ? 'Validating…' : 'Run automated validation'}</button>
+      </div>
+    </section>`;
+  }
+
   function registry() {
-    if (!state.cases.length) return '<div class="iw18-empty">No Stage 18 integration cases have been created.</div>';
+    if (!state.cases.length) return '<div class="iw18-empty">No operational integration cases have been created.</div>';
     return `<div class="iw18-timeline">${state.cases.map((item, index) => `
       <div class="iw18-step"><b>${index + 1}</b><div><strong>${esc(item.case_type)}</strong>
-      <span>${esc(item.short_id || item.id)} · ${esc(item.integration_track)} · ${esc(item.requested_phase)}</span></div>
-      ${pill(item.status, ['completed', 'approved'].includes(String(item.status).toLowerCase()) ? 'good' : 'warn')}</div>`).join('')}</div>`;
+      <span>${esc(item.case_id)} · ${esc(item.phase)} · ${esc(item.progress_percent)}%</span></div>
+      ${pill(item.status, item.status === 'ready_for_review' ? 'good' : 'warn')}</div>`).join('')}</div>`;
+  }
+
+  function summary() {
+    const total = state.cases.length;
+    const ready = state.cases.filter((item) => item.status === 'ready_for_review').length;
+    const blocked = state.cases.filter((item) => String(item.status).includes('blocked')).length;
+    const average = total ? Math.round(state.cases.reduce((sum, item) => sum + Number(item.progress_percent || 0), 0) / total) : 0;
+    return `<div class="iw18-summary-grid">
+      <div class="iw18-summary"><span>Operational cases</span><strong>${total}</strong></div>
+      <div class="iw18-summary"><span>Average progress</span><strong>${average}%</strong></div>
+      <div class="iw18-summary"><span>Ready for decision</span><strong>${ready}</strong></div>
+      <div class="iw18-summary"><span>Blocked</span><strong>${blocked}</strong></div>
+    </div>`;
   }
 
   function render() {
     const root = document.getElementById('institution-workspace-root');
     if (!root) return;
     if (state.loading) {
-      root.innerHTML = '<div class="iw18-empty">Loading institution workspace…</div>';
+      root.innerHTML = '<div class="iw18-empty">Loading enterprise integration workspace…</div>';
       return;
     }
-    const eligible = /enterprise/.test(String(state.subscription?.plan || state.subscription?.plan_id || '').toLowerCase());
-    const pct = progress();
+    const plan = String(state.subscription?.plan || state.subscription?.plan_id || 'starter');
+    const eligible = /enterprise/.test(plan.toLowerCase());
     root.innerHTML = `<div class="iw18-shell">
       <section class="iw18-hero">
-        <div class="iw18-eyebrow">Institution workspace · Stage 18 R3</div>
-        <h1>${esc(state.account?.organization_name || 'Your institution integration workspace')}</h1>
-        <p>Create standards-specific integration cases with explicit client-safe contracts and supervisor-controlled qualification.</p>
-        <div class="iw18-status">${pill(eligible ? 'Enterprise eligible' : 'Enterprise review required', eligible ? 'good' : 'warn')}
-          ${pill('Explicit case contracts', 'good')}${pill('No raw secrets', 'good')}${pill('Production blocked', 'warn')}</div>
+        <div class="iw18-eyebrow">Enterprise workspace</div>
+        <h1>${esc(state.account?.organization_name || 'Enterprise integration operations')}</h1>
+        <p>Complete technical intake, save client-safe references, and run automated validation before any supervisor decision. Routine preparation remains self-service.</p>
+        <div class="iw18-status">${pill(eligible ? 'Enterprise eligible' : `Current plan: ${plan}`, eligible ? 'good' : 'warn')}${pill('Operational task tracking', 'good')}${pill('No raw secrets', 'good')}${pill('Production blocked', 'warn')}</div>
+        ${summary()}
       </section>
-      <section class="iw18-panel"><h2>Integration standards and operations</h2>
-        <small>Each case exposes its type, track, phase and safety guardrails directly. Storage remains compatible with existing client requests.</small>
-        ${state.actionMessage ? `<div class="iw18-empty" style="margin-top:.8rem">${esc(state.actionMessage)}</div>` : ''}
+
+      ${state.message ? `<div class="iw18-empty">${esc(state.message)}</div>` : ''}
+      ${state.error ? `<div class="iw18-empty" style="color:#fca5a5">${esc(state.error)}</div>` : ''}
+
+      <section class="iw18-panel">
+        <h2>Execution tracks</h2>
+        <small>Create only the tracks your institution needs. Each task is persisted and validated independently.</small>
+        ${legacyCount() ? `<div class="iw18-empty" style="margin-top:.8rem">${legacyCount()} earlier request-based case(s) remain in history. New work uses the operational case workflow below.</div>` : ''}
       </section>
-      ${trackCards()}
+
+      <div class="iw18-track-grid">${TRACKS.map(trackCard).join('')}</div>
+
       <div class="iw18-grid">
-        <section class="iw18-panel"><h2>Institution case registry</h2><small>Client-safe projection of persisted Stage 18 cases.</small>${registry()}</section>
-        <section class="iw18-panel"><h2>Integration readiness</h2><small>Supervisor review remains mandatory.</small>
-          <div class="iw18-progress"><span style="width:${pct}%"></span></div><div class="iw18-muted">${pct}% readiness</div>
-          <div class="iw18-status" style="margin-top:1rem">${pill('Sandbox requested, not granted', 'warn')}${pill('Runtime disabled', 'warn')}${pill('Vault references only', 'good')}</div>
+        <section class="iw18-panel"><h2>Case registry</h2><small>Formal operational cases and their real progress.</small>${registry()}</section>
+        <section class="iw18-panel"><h2>Approval boundary</h2><small>Supervisor involvement begins only after automated validation passes.</small>
+          <div class="iw18-action"><strong>Self-service</strong><span>Create case, complete tasks, save references, and run validation.</span></div>
+          <div class="iw18-action"><strong>Supervisor decision</strong><span>Write scopes, security exceptions, sandbox approval, and production activation.</span></div>
+          <div class="iw18-status">${pill('production_allowed=false', 'warn')}${pill('runtime_connector_approved=false', 'warn')}${pill('raw_secret_visible=false', 'good')}</div>
+          <div class="iw18-toolbar"><button class="iw18-button ghost" data-open-settings>Open Settings operations</button></div>
         </section>
       </div>
-      <div class="iw18-grid">
-        <section class="iw18-panel"><h2>Next actions</h2><div class="iw18-action"><strong>01 · Supervisor evidence review</strong><span>Review API, DNS, TLS, consent and contact references.</span></div>
-          <div class="iw18-action"><strong>02 · Sandbox qualification</strong><span>Run contract and behavioral checks only after approval.</span></div>
-          <button class="iw18-button" data-open-settings>Open integration settings</button></section>
-        <section class="iw18-panel"><h2>Credential and runtime status</h2><p class="iw18-muted">Credential values are never displayed here.</p>
-          <div class="iw18-status">${pill('production_allowed=false', 'warn')}${pill('runtime_connector_approved=false', 'warn')}${pill('raw_secret_visible=false', 'good')}</div></section>
-      </div>
-      ${state.error ? `<div class="iw18-empty">Some client-safe data could not be loaded: ${esc(state.error)}</div>` : ''}
     </div>`;
+
     root.querySelectorAll('[data-create-track]').forEach((button) => button.addEventListener('click', () => createTrackCase(button.dataset.createTrack)));
+    root.querySelectorAll('[data-save-task]').forEach((button) => {
+      const [caseId, taskId] = button.dataset.saveTask.split(':');
+      button.addEventListener('click', () => saveTask(caseId, taskId));
+    });
+    root.querySelectorAll('[data-validate-case]').forEach((button) => button.addEventListener('click', () => validateCase(button.dataset.validateCase)));
     root.querySelectorAll('[data-open-settings]').forEach((button) => button.addEventListener('click', () => document.querySelector('.nav-btn[data-page="settings"]')?.click()));
   }
 
-  return { init: load, refresh: load, createTrackCase, normalizeCase };
+  return { init: load, refresh: load, createTrackCase, saveTask, validateCase };
 })();
