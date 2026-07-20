@@ -39,6 +39,22 @@ def test_stage18_client_institution_workspace_is_a_safe_projection():
     assert "Production blocked" in workspace
 
 
+def test_stage18_institution_workspace_exposes_standard_specific_operations():
+    workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
+
+    assert "CAMARA / GSMA Open Gateway" in workspace
+    assert "TM Forum Open APIs" in workspace
+    assert "Operator-specific integration" in workspace
+    assert "Capability profile selection" in workspace
+    assert "Consent and authorization references" in workspace
+    assert "Open API version mapping" in workspace
+    assert "CTK evidence attachment" in workspace
+    assert "DNS and TLS reference package" in workspace
+    assert "OAuth / OIDC profile review" in workspace
+    assert "Sandbox endpoint qualification" in workspace
+    assert "no runtime activation from this page" in workspace
+
+
 def test_stage18_new_ui_does_not_embed_secret_material():
     combined = "\n".join(
         [
