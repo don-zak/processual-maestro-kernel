@@ -8,6 +8,8 @@ PAGES.institution = (() => {
     requests: [],
     loading: true,
     error: '',
+    creatingTrack: '',
+    actionMessage: '',
   };
 
   const INTEGRATION_TRACKS = [
@@ -64,48 +66,32 @@ PAGES.institution = (() => {
     return `<span class="iw18-pill ${tone || ''}">${esc(text)}</span>`;
   }
 
-  function deriveClientSafeReadiness(subscription, requestPayload) {
+  function buildReadiness(account, subscription, requests) {
     const plan = String(subscription?.plan || subscription?.plan_id || '').toLowerCase();
     const enterpriseEligible = plan.includes('enterprise');
-    const requestCount = Number(requestPayload?.request_count || 0);
-    const latest = arr(requestPayload?.latest_requests);
-    const hasIntegrationRequest = latest.some((item) => String(item.request_type || '').includes('integration'));
-    const statusCounts = requestPayload?.status_counts || {};
-    const approved = Number(statusCounts.approved || statusCounts.completed || 0) > 0;
-
-    const missingCustomerInputs = [];
-    if (!enterpriseEligible) missingCustomerInputs.push('Enterprise integration eligibility review');
-    if (!hasIntegrationRequest) missingCustomerInputs.push('Submit a standards or operator integration request');
-    missingCustomerInputs.push('Provide client-safe API, DNS, TLS and technical contact references');
-
-    const missingSecurityControls = [
-      'Confirm sandbox-before-production review',
-      'Confirm supervisor approval for write or restricted scopes',
-      'Keep raw credentials outside client requests',
-    ];
-
-    let completeness = 25;
-    if (enterpriseEligible) completeness += 20;
-    if (requestCount > 0) completeness += 20;
-    if (hasIntegrationRequest) completeness += 15;
-    if (approved) completeness += 10;
-
+    const requestCount = requests.length;
     return {
-      surface: 'client_safe_derived_projection',
-      completeness_percent: Math.min(90, completeness),
-      missing_customer_inputs: missingCustomerInputs,
-      missing_security_controls: missingSecurityControls,
-      sandbox_ready: approved,
-      pilot_ready: approved,
+      completeness_percent: enterpriseEligible ? Math.min(80, 42 + requestCount * 8) : Math.min(55, 25 + requestCount * 6),
+      missing_customer_inputs: [
+        'Select CAMARA, TM Forum or operator-specific integration path',
+        'Provide client-safe API, DNS, TLS and technical contact references',
+      ],
+      missing_security_controls: [
+        'Complete supervisor evidence review before sandbox qualification',
+        'Keep credentials in the approved secure intake only',
+      ],
+      standard_profile: '',
+      sandbox_ready: false,
       production_allowed: false,
       runtime_connector_approved: false,
       raw_secret_visible: false,
-      source_routes: ['/settings/subscription', '/settings/client-requests'],
+      organization_name: account?.organization_name || '',
     };
   }
 
   async function load() {
     state.loading = true;
+    state.error = '';
     render();
 
     const results = await Promise.allSettled([
@@ -118,16 +104,11 @@ PAGES.institution = (() => {
     state.subscription = results[1].status === 'fulfilled' ? results[1].value : null;
 
     const requestPayload = results[2].status === 'fulfilled' ? results[2].value : {};
-    state.requests = arr(
-      requestPayload.latest_requests
-      || requestPayload.requests
-      || requestPayload.items
-      || requestPayload
-    );
-    state.readiness = deriveClientSafeReadiness(state.subscription, requestPayload);
+    state.requests = arr(requestPayload.latest_requests || requestPayload.requests || requestPayload.items || requestPayload);
+    state.readiness = buildReadiness(state.account, state.subscription, state.requests);
     state.error = results
       .filter((result) => result.status === 'rejected')
-      .map((result) => result.reason?.message || 'unavailable')
+      .map((result) => result.reason?.detail || result.reason?.message || 'unavailable')
       .join(', ');
 
     state.loading = false;
@@ -139,10 +120,7 @@ PAGES.institution = (() => {
     if (Number.isFinite(Number(readiness.completeness_percent))) {
       return Math.max(0, Math.min(100, Number(readiness.completeness_percent)));
     }
-
-    const missing = arr(readiness.missing_customer_inputs).length
-      + arr(readiness.missing_security_controls).length;
-    return missing ? Math.max(15, 100 - missing * 12) : 35;
+    return 25;
   }
 
   function actionRows() {
@@ -185,29 +163,87 @@ PAGES.institution = (() => {
       </div>`).join('')}</div>`;
   }
 
+  function requestTrack(request) {
+    const preview = String(request?.message_preview || '').toLowerCase();
+    for (const track of INTEGRATION_TRACKS) {
+      if (preview.includes(`integration_track=${track.key}`)) return track.key;
+    }
+    return '';
+  }
+
+  function requestForTrack(trackKey) {
+    return state.requests.find((request) => requestTrack(request) === trackKey) || null;
+  }
+
+  function isActiveStatus(status) {
+    return ['pending', 'reviewed', 'approved'].includes(String(status || '').toLowerCase());
+  }
+
   function latestRequest() {
     const request = state.requests[0];
     if (!request) return 'No integration request submitted yet.';
-    return `${request.request_type_label || request.type || request.request_type || 'Integration request'} · ${request.status || 'submitted'}`;
+    return `${request.request_type_label || request.request_type || 'Integration request'} · ${request.short_id || request.request_id || 'case'} · ${request.status || 'submitted'}`;
   }
 
   function trackStatus(trackKey) {
-    const readiness = state.readiness || {};
-    const selected = String(
-      readiness.standard_profile
-      || readiness.integration_standard
-      || readiness.platform
-      || ''
-    ).toLowerCase();
-
-    if (selected.includes(trackKey)) return ['Selected', 'good'];
-    if (selected && trackKey === 'operator') return ['Operator profile', 'warn'];
+    const request = requestForTrack(trackKey);
+    if (request) {
+      const status = String(request.status || 'pending');
+      return [`${request.short_id || 'Case'} · ${status}`, isActiveStatus(status) ? 'warn' : 'good'];
+    }
     return ['Available for request', 'warn'];
+  }
+
+  function caseMessage(track) {
+    return [
+      '[STAGE18_INTEGRATION_CASE]',
+      `integration_track=${track.key}`,
+      `integration_standard=${track.title}`,
+      'requested_phase=supervisor_review',
+      'sandbox_requested=true',
+      'production_allowed=false',
+      'runtime_connector_approved=false',
+      'No raw secrets are included. Please create a client-safe integration case and return the required evidence checklist.',
+    ].join('\n');
+  }
+
+  async function createTrackCase(trackKey) {
+    const track = INTEGRATION_TRACKS.find((item) => item.key === trackKey);
+    if (!track || state.creatingTrack) return;
+
+    const existing = requestForTrack(trackKey);
+    if (existing && isActiveStatus(existing.status)) {
+      state.actionMessage = `${track.title} already has an active case: ${existing.short_id || existing.request_id}.`;
+      render();
+      return;
+    }
+
+    state.creatingTrack = trackKey;
+    state.actionMessage = `Creating ${track.title} case…`;
+    render();
+
+    try {
+      const result = await CLIENT.post('/settings/client-request', {
+        request_type: 'general_support',
+        requested_plan: 'enterprise_integration',
+        message: caseMessage(track),
+      });
+      const created = result?.request || {};
+      state.actionMessage = `${track.title} case created: ${created.short_id || created.request_id || 'submitted'}.`;
+      await load();
+    } catch (error) {
+      state.actionMessage = `Case creation failed: ${error?.detail || error?.message || 'unavailable'}`;
+      state.creatingTrack = '';
+      render();
+    }
   }
 
   function integrationTracks() {
     return `<div class="iw18-grid">${INTEGRATION_TRACKS.map((track) => {
+      const request = requestForTrack(track.key);
       const [status, tone] = trackStatus(track.key);
+      const active = request && isActiveStatus(request.status);
+      const busy = state.creatingTrack === track.key;
       return `<section class="iw18-panel" data-integration-track="${track.key}">
         <div class="iw18-status" style="justify-content:space-between;align-items:flex-start">
           <div>
@@ -221,8 +257,9 @@ PAGES.institution = (() => {
             <strong>${String(index + 1).padStart(2, '0')} · ${esc(operation)}</strong>
             <span>Reference submission and supervisor review only; no runtime activation from this page.</span>
           </div>`).join('')}</div>
+        ${request ? `<div class="iw18-empty" style="margin-top:.8rem">Case ID: ${esc(request.request_id || request.short_id || '—')} · Status: ${esc(request.status || 'pending')}</div>` : ''}
         <div style="margin-top:.9rem">
-          <button class="iw18-button ghost" data-request-track="${track.key}">Prepare ${esc(track.title)} request</button>
+          <button class="iw18-button ghost" data-create-track="${track.key}" ${active || busy ? 'disabled' : ''}>${busy ? 'Creating case…' : active ? 'Active case exists' : `Create ${esc(track.title)} case`}</button>
         </div>
       </section>`;
     }).join('')}</div>`;
@@ -244,20 +281,21 @@ PAGES.institution = (() => {
 
     root.innerHTML = `<div class="iw18-shell">
       <section class="iw18-hero">
-        <div class="iw18-eyebrow">Institution workspace · Stage 18</div>
+        <div class="iw18-eyebrow">Institution workspace · Stage 18 R2</div>
         <h1>${esc(state.account?.organization_name || 'Your institution integration workspace')}</h1>
-        <p>Choose the relevant standards path, submit client-safe technical references, follow supervisor review and prepare sandbox qualification without exposing credentials or internal risk notes.</p>
+        <p>Choose the relevant standards path, create a persisted integration case, submit client-safe technical references and follow supervisor review without exposing credentials or internal risk notes.</p>
         <div class="iw18-status">
           ${pill(eligible ? 'Enterprise eligible' : 'Enterprise review required', eligible ? 'good' : 'warn')}
-          ${pill('CAMARA / TM Forum ready path', 'good')}
+          ${pill('CAMARA / TM Forum case workflow', 'good')}
           ${pill('No raw secrets', 'good')}
-          ${pill(readiness.production_allowed ? 'Production review' : 'Production blocked', 'warn')}
+          ${pill('Production blocked', 'warn')}
         </div>
       </section>
 
       <section class="iw18-panel">
         <h2>Integration standards and operations</h2>
-        <small>Select the path that matches your institution, operator and target capability. Standards alignment does not grant runtime or production access.</small>
+        <small>Create one persisted case per standards path. Case creation requests supervisor review only and never grants runtime or production access.</small>
+        ${state.actionMessage ? `<div class="iw18-empty" style="margin-top:.8rem">${esc(state.actionMessage)}</div>` : ''}
       </section>
 
       ${integrationTracks()}
@@ -300,12 +338,13 @@ PAGES.institution = (() => {
       ${state.error ? `<div class="iw18-empty">Some client-safe data could not be loaded: ${esc(state.error)}</div>` : ''}
     </div>`;
 
-    root.querySelectorAll('[data-open-settings], [data-request-track]').forEach((button) => {
-      button.addEventListener('click', () => {
-        document.querySelector('.nav-btn[data-page="settings"]')?.click();
-      });
+    root.querySelectorAll('[data-open-settings]').forEach((button) => {
+      button.addEventListener('click', () => document.querySelector('.nav-btn[data-page="settings"]')?.click());
+    });
+    root.querySelectorAll('[data-create-track]').forEach((button) => {
+      button.addEventListener('click', () => createTrackCase(button.dataset.createTrack));
     });
   }
 
-  return { init: load, refresh: load };
+  return { init: load, refresh: load, createTrackCase };
 })();
