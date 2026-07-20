@@ -1,5 +1,6 @@
 # ruff: noqa
 
+import re
 from pathlib import Path
 
 
@@ -85,9 +86,12 @@ def test_stage18_new_ui_does_not_embed_secret_material():
         "client_secret=",
         "access_token=",
         "authorization: bearer ",
-        "sk-",
         "private_key=",
         "password=",
     )
     for marker in forbidden:
         assert marker not in combined
+
+    # Reject realistic embedded secret values while allowing ordinary UI
+    # identifiers such as task-status, task-list, and data-save-task.
+    assert re.search(r"(?<![a-z0-9_-])sk-[a-z0-9_-]{16,}", combined) is None
