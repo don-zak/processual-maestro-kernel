@@ -33,8 +33,11 @@ def test_stage18_client_institution_workspace_is_a_safe_projection():
 
     assert 'data-page="institution"' in app
     assert "institution-workspace-root" in app
-    assert "/settings/client/integration-readiness" in workspace
-    assert "/settings/client/requests" in workspace
+    assert "/settings/subscription" in workspace
+    assert "/settings/client-requests" in workspace
+    assert "/settings/client/integration-readiness" not in workspace
+    assert "/settings/client/requests" not in workspace
+    assert "client_safe_derived_projection" in workspace
     assert "Credential values are never displayed here" in workspace
     assert "Production blocked" in workspace
 
