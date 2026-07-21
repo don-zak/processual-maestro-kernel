@@ -165,7 +165,7 @@ def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
         """
     )
     result = subprocess.run(
-        [sys.executable, "-I", "-c", probe, str(stripped_root)],
+        [sys.executable, "-I", "-S", "-c", probe, str(stripped_root)],
         check=True,
         capture_output=True,
         text=True,

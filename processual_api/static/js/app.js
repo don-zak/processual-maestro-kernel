@@ -9,11 +9,10 @@ const pageMeta = {
   gateway:    { title: 'Gateway Dashboard', sub: 'Agent registry, evaluation, lifecycle management' },
   simulation: { title: 'Supervision Simulation', sub: 'Virtual agent governance pipeline' },
   adapters:   { title: 'Adapter Manager', sub: 'Provider configuration and testing' },
-  settings:   { title: 'Client Settings', sub: 'Account, preferences, plan, and support' },
+  settings:   { title: 'Client Settings', sub: 'Account, provider, plan, integration, and precise escalations' },
 };
 
 const APP = (() => {
-  /* ─── Shared State ─── */
   const gwAgents = [];
   const gwDecisionFeed = [];
   const rankColors = {
@@ -30,7 +29,6 @@ const APP = (() => {
     return m[action] || '#8aa3c8';
   }
 
-  /* ─── Toast System ─── */
   function showToast(msg, type) {
     type = type || 'info';
     const container = document.getElementById('toast-container');
@@ -43,7 +41,6 @@ const APP = (() => {
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
   }
 
-  /* ─── Loading Spinner ─── */
   function showLoading(btnId, text) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -59,7 +56,6 @@ const APP = (() => {
     btn.innerHTML = btn._origText || btn.innerHTML;
   }
 
-  /* ─── Clock ─── */
   function tickClock() {
     const n = new Date();
     const tc = document.getElementById('clock-t');
@@ -68,7 +64,6 @@ const APP = (() => {
     if (td) td.textContent = n.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
-  /* ─── Navigation ─── */
   function navigateTo(pg) {
     const btn = document.querySelector('.nav-btn[data-page="' + pg + '"]');
     if (!btn) return;
@@ -82,7 +77,12 @@ const APP = (() => {
     if (tt && pageMeta[pg]) tt.textContent = pageMeta[pg].title;
     if (ts && pageMeta[pg]) ts.textContent = pageMeta[pg].sub;
     window.location.hash = 'page-' + pg;
-    if (pg === 'settings') { PAGES.settings?.init?.(); }
+    if (pg === 'settings') {
+      PAGES.settings?.init?.();
+      window.PMK_SETTINGS_OPERATIONS_18?.init?.();
+      setTimeout(() => window.PMK_SETTINGS_LAYOUT_18?.init?.(), 0);
+    }
+    if (pg === 'institution') { PAGES.institution?.init?.(); }
     if (pg === 'gateway') {
       PAGES.gateway?.refresh();
       setTimeout(() => {
@@ -105,7 +105,6 @@ const APP = (() => {
     });
   }
 
-  /* ─── Keyboard Shortcuts ─── */
   function initKeyboard() {
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -126,7 +125,6 @@ const APP = (() => {
     });
   }
 
-  /* ─── RTL Toggle ─── */
   function initRtlToggle() {
     const btn = document.getElementById('lang-toggle');
     if (!btn) return;
@@ -138,23 +136,17 @@ const APP = (() => {
     });
   }
 
-  /* ─── Subscription Banner ─── */
   async function checkSubscription() {
     const banner = document.getElementById('sub-banner');
     if (!banner) return;
     try {
       const sub = await CLIENT.get('/settings/subscription');
       const stage = sub.stage || 'active';
-      const plan = sub.plan || '—';
-      const status = sub.status || 'active';
-
       if (stage === 'active') {
         banner.style.display = 'none';
         return;
       }
-
       banner.style.display = 'block';
-
       if (stage === 'grace') {
         banner.style.backgroundColor = 'rgba(251,191,36,0.1)';
         banner.style.borderColor = 'rgba(251,191,36,0.3)';
@@ -172,11 +164,10 @@ const APP = (() => {
         banner.innerHTML = '✖ Subscription expired — please <a href="/pricing" style="color:#ef4444;text-decoration:underline">re-subscribe</a>.';
       }
     } catch (e) {
-      // silently ignore — banner just won't show
+      // Banner remains hidden when subscription status is unavailable.
     }
   }
 
-  /* ─── Init ─── */
   function hasDescentGateSession() {
     return sessionStorage.getItem('maestro_descent_gate_seen') === '1';
   }
@@ -186,16 +177,13 @@ const APP = (() => {
       window.location.replace('/');
       return;
     }
-
     AUTH.init();
     tickClock(); setInterval(tickClock, 1000);
     initNav();
     initKeyboard();
     initRtlToggle();
-
     const lt = document.getElementById('lang-toggle');
     if (lt) lt.textContent = I18N.lang() === 'ar' ? 'EN' : 'AR';
-
     if (!AUTH.isLoggedIn()) {
       window.location.replace('/login');
       return;
@@ -218,4 +206,73 @@ const APP = (() => {
     showToast, showLoading, hideLoading,
     init
   };
+})();
+
+(function bootstrapInstitutionWorkspace18() {
+  pageMeta.institution = {
+    title: 'Enterprise Workspace',
+    sub: 'Technical intake, task execution, automated validation, and approval gates',
+  };
+  const navWrap = document.getElementById('nav-wrap');
+  if (navWrap && !navWrap.querySelector('[data-page="institution"]')) {
+    const settingsButton = navWrap.querySelector('[data-page="settings"]');
+    const button = document.createElement('button');
+    button.className = 'nav-btn';
+    button.dataset.page = 'institution';
+    button.innerHTML = '<span class="nav-ind"></span><span class="nav-ico">◇</span><span>Enterprise</span>';
+    navWrap.insertBefore(button, settingsButton || null);
+  }
+  const content = document.getElementById('content');
+  if (content && !document.getElementById('page-institution')) {
+    const page = document.createElement('div');
+    page.className = 'page';
+    page.id = 'page-institution';
+    page.innerHTML = '<div id="institution-workspace-root"><div class="iw18-empty">Loading enterprise integration workspace…</div></div>';
+    content.appendChild(page);
+  }
+  if (!document.querySelector('link[data-iw18-style]')) {
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.href = 'css/institution_workspace_18.css?v=enterpriseops2';
+    style.dataset.iw18Style = 'true';
+    document.head.appendChild(style);
+  }
+  if (!document.querySelector('script[data-iw18-script]')) {
+    const script = document.createElement('script');
+    script.src = 'js/pages/institution_workspace_18.js?v=enterpriseops2';
+    script.dataset.iw18Script = 'true';
+    document.body.appendChild(script);
+  }
+})();
+
+(function bootstrapSettingsOperations18() {
+  if (!document.querySelector('link[data-sops18-style]')) {
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.href = 'css/settings_operations_18.css?v=settingsops2';
+    style.dataset.sops18Style = 'true';
+    document.head.appendChild(style);
+  }
+  if (!document.querySelector('script[data-sops18-script]')) {
+    const script = document.createElement('script');
+    script.src = 'js/settings_operations_18.js?v=settingsops2';
+    script.dataset.sops18Script = 'true';
+    document.body.appendChild(script);
+  }
+})();
+
+(function bootstrapSettingsLayout18() {
+  if (!document.querySelector('link[data-sl18-style]')) {
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.href = 'css/settings_layout_18.css?v=settingslayout1';
+    style.dataset.sl18Style = 'true';
+    document.head.appendChild(style);
+  }
+  if (!document.querySelector('script[data-sl18-script]')) {
+    const script = document.createElement('script');
+    script.src = 'js/settings_layout_18.js?v=settingslayout1';
+    script.dataset.sl18Script = 'true';
+    document.body.appendChild(script);
+  }
 })();

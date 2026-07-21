@@ -47,6 +47,10 @@ AUDIT_EXPORT_SCOPE = "admin:audit:export"
 RBAC_READ_SCOPE = "admin:rbac:read"
 RBAC_WRITE_SCOPE = "admin:rbac:write"
 
+QUALIFICATION_READ_SCOPE = "admin:integration:qualification:read"
+QUALIFICATION_REVIEW_SCOPE = "admin:integration:qualification:review"
+QUALIFICATION_APPROVE_SCOPE = "admin:integration:qualification:approve"
+
 
 _OWNER_SCOPES = frozenset(
     {
@@ -75,6 +79,9 @@ _OWNER_SCOPES = frozenset(
         AUDIT_EXPORT_SCOPE,
         RBAC_READ_SCOPE,
         RBAC_WRITE_SCOPE,
+        QUALIFICATION_READ_SCOPE,
+        QUALIFICATION_REVIEW_SCOPE,
+        QUALIFICATION_APPROVE_SCOPE,
     }
 )
 
@@ -93,6 +100,9 @@ _OPERATIONS_SCOPES = frozenset(
         API_KEYS_READ_SCOPE,
         SYSTEM_READ_SCOPE,
         AUDIT_READ_SCOPE,
+        QUALIFICATION_READ_SCOPE,
+        QUALIFICATION_REVIEW_SCOPE,
+        QUALIFICATION_APPROVE_SCOPE,
     }
 )
 
@@ -105,6 +115,8 @@ _REVIEW_SCOPES = frozenset(
         USAGE_READ_SCOPE,
         QUOTA_READ_SCOPE,
         AUDIT_READ_SCOPE,
+        QUALIFICATION_READ_SCOPE,
+        QUALIFICATION_REVIEW_SCOPE,
     }
 )
 

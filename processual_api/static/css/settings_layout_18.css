@@ -1,0 +1,156 @@
+.sl18-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  margin: 0 0 18px;
+  border: 1px solid rgba(138, 163, 200, .16);
+  border-radius: 16px;
+  background: rgba(8, 15, 27, .92);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .18);
+}
+
+.sl18-tab {
+  flex: 1;
+  min-width: 110px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 700 10px/1 "Space Mono", monospace;
+  cursor: pointer;
+  transition:
+    background .18s ease,
+    border-color .18s ease,
+    color .18s ease;
+}
+
+.sl18-tab:hover,
+.sl18-tab:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, .045);
+  outline: none;
+}
+
+.sl18-tab.active {
+  border-color: rgba(245, 166, 35, .42);
+  background: rgba(245, 166, 35, .12);
+  color: var(--amber);
+}
+
+.sl18-panels {
+  display: block;
+  min-width: 0;
+}
+
+.sl18-panel {
+  display: none;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sl18-panel[hidden] {
+  display: none !important;
+}
+
+.sl18-panel.active {
+  display: flex;
+}
+
+.sl18-panel > .card,
+.sl18-panel > .settings-card {
+  width: 100%;
+  margin: 0;
+}
+
+.sl18-panel .sec-hdr {
+  margin-bottom: 14px;
+}
+
+.sl18-panel .mono-block {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 12px;
+}
+
+.sl18-panel[data-sl18-panel="support"] {
+  opacity: .96;
+}
+
+.sl18-panel[data-sl18-panel="support"]::before {
+  content: "Escalations only";
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid rgba(245, 166, 35, .22);
+  border-radius: 14px;
+  background: rgba(245, 166, 35, .055);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sl18-escalation-card {
+  border-color: rgba(245, 166, 35, .18) !important;
+}
+
+.sl18-escalation-subsection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(138, 163, 200, .18);
+}
+
+.sl18-escalation-subsection > .sec-hdr {
+  margin-bottom: 16px;
+}
+
+.sl18-hidden {
+  display: none !important;
+}
+
+.sl18-provider-direct {
+  border-color: rgba(34, 211, 160, .18) !important;
+}
+
+.sl18-provider-direct .sec-hdr .sh-sub::after {
+  content: " \00B7 direct self-service";
+  color: var(--ok);
+}
+
+.sl18-compact .mono-block {
+  font-size: 10px !important;
+  line-height: 1.55;
+}
+
+.sl18-compact .settings-grid {
+  gap: 12px;
+}
+
+.sl18-section-note {
+  padding: 11px 13px;
+  border: 1px solid rgba(34, 211, 160, .16);
+  border-radius: 12px;
+  background: rgba(34, 211, 160, .055);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .sl18-tabs {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .sl18-tab {
+    flex: 0 0 auto;
+  }
+
+  .sl18-panel .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}

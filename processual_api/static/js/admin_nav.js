@@ -286,3 +286,60 @@
     boot();
   }
 })();
+
+(function bootstrapIntegrationCenter18() {
+  function install() {
+    const api = window.PMK_ADMIN_NAV;
+    if (!api) return;
+
+    api.pageIds['integration-center'] = 'page-admin-integration-center';
+    api.labelToPage['integration center'] = 'integration-center';
+
+    const nav = document.getElementById('nav');
+    if (nav && !nav.querySelector('[data-admin-page="integration-center"]')) {
+      const pilot = nav.querySelector('[data-admin-page="operator-pilot-handoff"]');
+      const button = document.createElement('button');
+      button.className = 'nav-btn';
+      button.type = 'button';
+      button.dataset.adminPage = 'integration-center';
+      button.innerHTML = '<span class="nav-ind"></span><span class="nav-ico">I</span><span>Integration Center</span>';
+      nav.insertBefore(button, pilot || null);
+    }
+
+    const main = document.querySelector('main');
+    if (main && !document.getElementById('page-admin-integration-center')) {
+      const page = document.createElement('div');
+      page.id = 'page-admin-integration-center';
+      page.className = 'admin-page';
+      page.innerHTML = '<div id="admin-integration-center-root"><div class="ic18-empty">Loading integration center…</div></div>';
+      const pilotPage = document.getElementById('page-operator-pilot-handoff');
+      main.insertBefore(page, pilotPage || null);
+    }
+
+    if (!document.querySelector('link[data-ic18-style]')) {
+      const style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = '/console/css/admin_integration_center_18.css?v=stage18r1';
+      style.dataset.ic18Style = 'true';
+      document.head.appendChild(style);
+    }
+
+    if (!document.querySelector('script[data-ic18-script]')) {
+      const script = document.createElement('script');
+      script.src = '/console/js/admin_integration_center_18.js?v=stage18r1';
+      script.dataset.ic18Script = 'true';
+      document.body.appendChild(script);
+    }
+
+    api.bindNavButtons();
+    if (window.location.hash === '#integration-center') {
+      api.setActivePage('integration-center');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install);
+  } else {
+    install();
+  }
+})();
