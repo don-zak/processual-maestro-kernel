@@ -201,6 +201,43 @@ API_KEY_OPERATIONAL_PROFILES: tuple[dict[str, object], ...] = (
         "runtime_connector_approved": False,
         "next_action": "Use this profile for discovery before scoped integration work.",
     },
+    {
+        "profile_id": "enterprise_telecom_conformance_read",
+        "display_name": "Enterprise Telecom Conformance Read",
+        "base_key_profile": "service_integration",
+        "client_visible": True,
+        "environment": "sandbox",
+        "allowed_scopes": (
+            "crm:read",
+            "ticket:read",
+            "helpdesk:read",
+            "order:preview",
+            "network:read",
+            "network:diagnostics_read",
+        ),
+        "forbidden_scopes": (
+            "customer:update",
+            "ticket:create",
+            "ticket:update",
+            "order:create_with_approval",
+            "order:execute",
+            "network:write",
+            "production_write",
+            "connector_runtime:execute",
+        ),
+        "read_only": True,
+        "write_allowed": False,
+        "restricted_allowed": False,
+        "requires_enterprise_plan": True,
+        "requires_integration_readiness": True,
+        "requires_supervisor_for_write": True,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "next_action": (
+            "Complete supervisor-approved sandbox conformance "
+            "qualification before task-scoped key issuance."
+        ),
+    },
 )
 
 
