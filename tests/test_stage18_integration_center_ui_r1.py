@@ -38,6 +38,25 @@ def test_enterprise_workspace_is_bootstrapped_without_internal_stage_labels():
     assert "Production blocked" in workspace
 
 
+def test_stage18_workspace_styles_are_loaded_and_responsive():
+    app = _text("processual_api/static/js/app.js")
+    nav = _text("processual_api/static/js/admin_nav.js")
+    institution_css = _text(
+        "processual_api/static/css/institution_workspace_18.css"
+    )
+    integration_center_css = _text(
+        "processual_api/static/css/admin_integration_center_18.css"
+    )
+
+    assert "css/institution_workspace_18.css" in app
+    assert "/console/css/admin_integration_center_18.css" in nav
+    assert ".iw18-track-grid" in institution_css
+    assert ".iw18-task-grid" in institution_css
+    assert "@media(max-width:620px)" in institution_css
+    assert ".ic18-metrics" in integration_center_css
+    assert ".ic18-rail" in integration_center_css
+    assert "@media(max-width:640px)" in integration_center_css
+
 def test_enterprise_workspace_exposes_operational_tracks_and_tasks():
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
 

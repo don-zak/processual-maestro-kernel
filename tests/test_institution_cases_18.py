@@ -9,7 +9,6 @@ from fastapi.routing import APIRoute
 from processual_api.routers import institution_cases_18 as routes
 from processual_api.routers import settings as settings_router
 
-
 CLIENT = {
     "sub": "client-a",
     "user_id": "client-a",

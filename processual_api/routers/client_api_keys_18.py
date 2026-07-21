@@ -39,11 +39,7 @@ class ClientSandboxKeyRotate(BaseModel):
 
 
 def _identity(current_user: dict) -> tuple[str, str]:
-    user_id = str(
-        current_user.get("user_id")
-        or current_user.get("sub")
-        or "default"
-    )
+    user_id = str(current_user.get("user_id") or current_user.get("sub") or "default")
     client_id = str(current_user.get("client_id") or user_id)
     return user_id, client_id
 
@@ -131,7 +127,17 @@ def _safe_key(key: dict) -> dict:
     }
 
 
-def _issue(raw: dict, *, client_id: str, user_id: str, plan_id: str, profile: dict, label: str, purpose: str, expires_in_days: int) -> tuple[dict, str]:
+def _issue(
+    raw: dict,
+    *,
+    client_id: str,
+    user_id: str,
+    plan_id: str,
+    profile: dict,
+    label: str,
+    purpose: str,
+    expires_in_days: int,
+) -> tuple[dict, str]:
     active = _active_self_service_keys(raw, client_id)
     if len(active) >= 3:
         raise HTTPException(

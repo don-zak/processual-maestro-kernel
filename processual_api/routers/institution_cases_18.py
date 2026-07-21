@@ -14,13 +14,20 @@ from processual_api.auth.security import get_current_user
 
 from . import settings as settings_module
 
-
 TRACK_TASKS: dict[str, tuple[dict[str, str], ...]] = {
     "camara": (
         {"task_id": "capability_profile", "label": "Select capability profile", "input_kind": "reference"},
-        {"task_id": "consent_reference", "label": "Register consent and authorization reference", "input_kind": "reference"},
+        {
+            "task_id": "consent_reference",
+            "label": "Register consent and authorization reference",
+            "input_kind": "reference",
+        },
         {"task_id": "sandbox_endpoint", "label": "Register sandbox endpoint", "input_kind": "url"},
-        {"task_id": "conformance_evidence", "label": "Attach conformance evidence reference", "input_kind": "reference"},
+        {
+            "task_id": "conformance_evidence",
+            "label": "Attach conformance evidence reference",
+            "input_kind": "reference",
+        },
     ),
     "tmforum": (
         {"task_id": "api_version", "label": "Select TM Forum Open API and version", "input_kind": "reference"},
@@ -32,7 +39,11 @@ TRACK_TASKS: dict[str, tuple[dict[str, str], ...]] = {
         {"task_id": "dns_tls_reference", "label": "Register DNS and TLS reference package", "input_kind": "reference"},
         {"task_id": "oauth_profile", "label": "Register OAuth or OIDC profile", "input_kind": "reference"},
         {"task_id": "callback_reference", "label": "Register callback and allowlist references", "input_kind": "url"},
-        {"task_id": "sandbox_scope", "label": "Define sandbox scope and escalation contacts", "input_kind": "reference"},
+        {
+            "task_id": "sandbox_scope",
+            "label": "Define sandbox scope and escalation contacts",
+            "input_kind": "reference",
+        },
     ),
 }
 
@@ -226,13 +237,15 @@ async def update_institution_case_task(
         raise HTTPException(status_code=422, detail="A client-safe reference is required before completing this task.")
 
     now = datetime.now(UTC).isoformat()
-    task.update({
-        "status": body.status,
-        "reference": reference,
-        "note": _safe_reference(body.note),
-        "updated_at": now,
-        "validation": "pending" if reference else "not_checked",
-    })
+    task.update(
+        {
+            "status": body.status,
+            "reference": reference,
+            "note": _safe_reference(body.note),
+            "updated_at": now,
+            "validation": "pending" if reference else "not_checked",
+        }
+    )
     case["status"] = "in_progress"
     case["updated_at"] = now
     if _progress(case) == 100:

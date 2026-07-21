@@ -631,4 +631,3 @@ def activate_enterprise_qualification(
         "external_http_allowed": False,
         "raw_secret_visible": False,
     }
-

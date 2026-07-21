@@ -4,6 +4,7 @@ import asyncio
 
 from fastapi.routing import APIRoute
 
+from processual_api.routers import client_provider_alias_18
 from processual_api.routers import settings as settings_router
 
 
@@ -16,6 +17,56 @@ def test_provider_connection_route_is_registered() -> None:
 
     assert "/settings/provider-connection" in paths
 
+
+def test_client_provider_connection_compatibility_alias_is_registered() -> None:
+    paths = {
+        route.path
+        for route in settings_router.router.routes
+        if isinstance(route, APIRoute)
+    }
+
+    assert "/settings/client/provider-connection" in paths
+
+
+def test_client_provider_connection_alias_preserves_authenticated_identity(
+    monkeypatch,
+) -> None:
+    captured: dict[str, dict] = {}
+
+    async def fake_provider_connection(current_user: dict) -> dict:
+        captured["current_user"] = current_user
+        return {
+            "configured": False,
+            "status": "not_configured",
+            "provider_cost_included": False,
+            "billing_policy": "byok",
+        }
+
+    monkeypatch.setattr(
+        client_provider_alias_18.settings_module,
+        "get_provider_connection",
+        fake_provider_connection,
+    )
+    current_user = {
+        "sub": "client-a",
+        "user_id": "client-a",
+        "client_id": "client-a",
+        "role": "client",
+    }
+
+    result = asyncio.run(
+        client_provider_alias_18.get_client_provider_connection_alias(
+            current_user,
+        )
+    )
+
+    assert captured["current_user"] is current_user
+    assert result == {
+        "configured": False,
+        "status": "not_configured",
+        "provider_cost_included": False,
+        "billing_policy": "byok",
+    }
 
 def test_provider_connection_returns_client_safe_empty_status(monkeypatch) -> None:
     monkeypatch.setattr(settings_router, "provider_ids", lambda: ["openai", "opencode"])
