@@ -50,9 +50,7 @@ PUBLIC_SELF_SERVICE_MODES = (
     RegistrationMode.ORGANIZATION,
 )
 
-REVIEW_REQUIRED_MODES = (
-    RegistrationMode.ENTERPRISE_APPLICATION,
-)
+REVIEW_REQUIRED_MODES = (RegistrationMode.ENTERPRISE_APPLICATION,)
 
 INVITABLE_ORGANIZATION_ROLES = (
     MembershipRole.ORGANIZATION_ADMIN,
@@ -77,9 +75,7 @@ class IndividualRegistrationRequestContract(_StrictContractModel):
     accepted_terms_version: str = Field(min_length=1, max_length=64)
 
 
-class OrganizationRegistrationRequestContract(
-    IndividualRegistrationRequestContract
-):
+class OrganizationRegistrationRequestContract(IndividualRegistrationRequestContract):
     organization_name: str = Field(min_length=2, max_length=200)
 
 
@@ -96,32 +92,34 @@ class RegistrationAcceptedResponseContract(_StrictContractModel):
 @dataclass(frozen=True, slots=True)
 class IdentityRegistrationSecurityContract:
     contract_id: str = "identity_registration_r1"
-    public_self_service_modes: tuple[RegistrationMode, ...] = (
-        PUBLIC_SELF_SERVICE_MODES
-    )
-    review_required_modes: tuple[RegistrationMode, ...] = (
-        REVIEW_REQUIRED_MODES
-    )
-    invitable_roles: tuple[MembershipRole, ...] = (
-        INVITABLE_ORGANIZATION_ROLES
-    )
+    public_self_service_modes: tuple[RegistrationMode, ...] = PUBLIC_SELF_SERVICE_MODES
+    review_required_modes: tuple[RegistrationMode, ...] = REVIEW_REQUIRED_MODES
+    invitable_roles: tuple[MembershipRole, ...] = INVITABLE_ORGANIZATION_ROLES
     password_hash_algorithm: str = "argon2id"
     access_token_storage: str = "memory"
     refresh_token_storage: str = "http_only_cookie"
     session_source_of_truth: str = "postgresql"
     rate_limit_store: str = "redis"
+    mfa_primary_method: str = "totp"
     email_verification_required: bool = True
     refresh_token_rotation_required: bool = True
     refresh_token_reuse_detection_required: bool = True
     csrf_protection_required: bool = True
     tenant_context_server_derived: bool = True
     role_context_server_derived: bool = True
+    privileged_mfa_required: bool = True
+    mfa_secret_encrypted: bool = True
+    mfa_recovery_codes_hashed: bool = True
+    mfa_replay_protection_required: bool = True
     platform_admin_public_registration: bool = False
     client_selected_role_allowed: bool = False
     client_selected_plan_allowed: bool = False
     raw_password_persisted: bool = False
     raw_action_token_persisted: bool = False
     raw_refresh_token_persisted: bool = False
+    raw_mfa_secret_persisted: bool = False
+    raw_recovery_code_persisted: bool = False
+    sms_authentication_factor_allowed: bool = False
     redis_is_session_authority: bool = False
 
     def __post_init__(self) -> None:
@@ -137,69 +135,53 @@ class IdentityRegistrationSecurityContract:
             raise ValueError("PostgreSQL must remain the session authority.")
         if self.rate_limit_store != "redis":
             raise ValueError("Redis is required only for rate-limit state.")
+        if self.mfa_primary_method != "totp":
+            raise ValueError("The initial second factor must be TOTP.")
 
         required_true = {
             "email_verification_required": self.email_verification_required,
-            "refresh_token_rotation_required": (
-                self.refresh_token_rotation_required
-            ),
-            "refresh_token_reuse_detection_required": (
-                self.refresh_token_reuse_detection_required
-            ),
+            "refresh_token_rotation_required": (self.refresh_token_rotation_required),
+            "refresh_token_reuse_detection_required": (self.refresh_token_reuse_detection_required),
             "csrf_protection_required": self.csrf_protection_required,
-            "tenant_context_server_derived": (
-                self.tenant_context_server_derived
-            ),
+            "tenant_context_server_derived": (self.tenant_context_server_derived),
             "role_context_server_derived": self.role_context_server_derived,
+            "privileged_mfa_required": self.privileged_mfa_required,
+            "mfa_secret_encrypted": self.mfa_secret_encrypted,
+            "mfa_recovery_codes_hashed": self.mfa_recovery_codes_hashed,
+            "mfa_replay_protection_required": (self.mfa_replay_protection_required),
         }
         for field_name, enabled in required_true.items():
             if enabled is not True:
                 raise ValueError(f"{field_name} must remain enabled.")
 
         required_false = {
-            "platform_admin_public_registration": (
-                self.platform_admin_public_registration
-            ),
-            "client_selected_role_allowed": (
-                self.client_selected_role_allowed
-            ),
-            "client_selected_plan_allowed": (
-                self.client_selected_plan_allowed
-            ),
+            "platform_admin_public_registration": (self.platform_admin_public_registration),
+            "client_selected_role_allowed": (self.client_selected_role_allowed),
+            "client_selected_plan_allowed": (self.client_selected_plan_allowed),
             "raw_password_persisted": self.raw_password_persisted,
-            "raw_action_token_persisted": (
-                self.raw_action_token_persisted
-            ),
-            "raw_refresh_token_persisted": (
-                self.raw_refresh_token_persisted
-            ),
+            "raw_action_token_persisted": (self.raw_action_token_persisted),
+            "raw_refresh_token_persisted": (self.raw_refresh_token_persisted),
+            "raw_mfa_secret_persisted": self.raw_mfa_secret_persisted,
+            "raw_recovery_code_persisted": (self.raw_recovery_code_persisted),
+            "sms_authentication_factor_allowed": (self.sms_authentication_factor_allowed),
             "redis_is_session_authority": self.redis_is_session_authority,
         }
         for field_name, enabled in required_false.items():
             if enabled is not False:
                 raise ValueError(f"{field_name} must remain disabled.")
 
-        if RegistrationMode.PLATFORM_ADMIN_BOOTSTRAP in (
-            self.public_self_service_modes
-        ):
-            raise ValueError(
-                "Platform-admin bootstrap cannot be public self-service."
-            )
+        if RegistrationMode.PLATFORM_ADMIN_BOOTSTRAP in (self.public_self_service_modes):
+            raise ValueError("Platform-admin bootstrap cannot be public self-service.")
         if MembershipRole.PLATFORM_ADMIN in self.invitable_roles:
             raise ValueError("Platform admin cannot be granted by invitation.")
         if MembershipRole.ORGANIZATION_OWNER in self.invitable_roles:
-            raise ValueError(
-                "Organization ownership requires an explicit transfer flow."
-            )
+            raise ValueError("Organization ownership requires an explicit transfer flow.")
 
 
-IDENTITY_REGISTRATION_SECURITY_CONTRACT = (
-    IdentityRegistrationSecurityContract()
-)
+IDENTITY_REGISTRATION_SECURITY_CONTRACT = IdentityRegistrationSecurityContract()
 
 
-def get_identity_registration_security_contract(
-) -> IdentityRegistrationSecurityContract:
+def get_identity_registration_security_contract() -> IdentityRegistrationSecurityContract:
     return IDENTITY_REGISTRATION_SECURITY_CONTRACT
 
 
