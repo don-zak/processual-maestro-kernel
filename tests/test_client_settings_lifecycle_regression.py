@@ -8,7 +8,11 @@ def test_app_initializes_settings_page_on_navigation() -> None:
     js = APP_JS.read_text(encoding="utf-8")
 
     assert "function navigateTo(pg)" in js
-    assert "if (pg === 'settings') { PAGES.settings?.init?.(); }" in js
+    # Settings Stage 18 uses modular bootstrap loaders.
+    assert "function bootstrapSettingsOperations18()" in js
+    assert "js/settings_operations_18.js?v=settingsops2" in js
+    assert "function bootstrapSettingsLayout18()" in js
+    assert "js/settings_layout_18.js?v=settingslayout1" in js
     assert "window.location.hash = 'page-' + pg;" in js
     assert "navigateTo(hash);" in js
 
