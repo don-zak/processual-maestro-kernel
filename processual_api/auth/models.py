@@ -72,6 +72,10 @@ class IdentityUser(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    terms_acceptances: Mapped[list[IdentityTermsAcceptance]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class IdentityOrganization(Base):
@@ -94,6 +98,28 @@ class IdentityOrganization(Base):
         back_populates="organization",
         cascade="all, delete-orphan",
     )
+
+
+class IdentityTermsAcceptance(Base):
+    __tablename__ = "identity_terms_acceptances"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "terms_version",
+            name="uq_identity_terms_acceptance_user_version",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    terms_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    user: Mapped[IdentityUser] = relationship(back_populates="terms_acceptances")
 
 
 class OrganizationMembership(Base):
@@ -289,6 +315,7 @@ class AuthMfaChallenge(Base):
 IDENTITY_AUTH_MODELS = (
     IdentityUser,
     IdentityOrganization,
+    IdentityTermsAcceptance,
     OrganizationMembership,
     AuthSession,
     AuthRefreshToken,

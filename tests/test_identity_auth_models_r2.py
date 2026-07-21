@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "identity_users",
     "identity_organizations",
     "identity_memberships",
+    "identity_terms_acceptances",
     "auth_sessions",
     "auth_refresh_tokens",
     "auth_action_tokens",
@@ -38,7 +39,7 @@ def _column_names(model: type[Base]) -> set[str]:
 
 
 def test_identity_auth_metadata_has_the_exact_r2_table_catalog() -> None:
-    assert len(IDENTITY_AUTH_MODELS) == 9
+    assert len(IDENTITY_AUTH_MODELS) == 10
     assert {model.__tablename__ for model in IDENTITY_AUTH_MODELS} == EXPECTED_TABLES
     assert EXPECTED_TABLES.issubset(Base.metadata.tables)
 
