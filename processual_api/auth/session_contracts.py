@@ -18,6 +18,7 @@ class AccessTokenResponseContract(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    mfa_required: bool | None = None
 
 
 class SessionProcessedResponseContract(BaseModel):
@@ -44,6 +45,7 @@ class IssuedSession:
     refresh_expires_in: int
     csrf_token: str
     session_id: uuid.UUID
+    mfa_required: bool = False
 
 
 @dataclass(frozen=True, slots=True)

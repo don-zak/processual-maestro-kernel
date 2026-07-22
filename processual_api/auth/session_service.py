@@ -70,6 +70,7 @@ class SessionService:
         session_id: uuid.UUID,
         organization_id: uuid.UUID | None,
         session_expires_at: datetime,
+        mfa_required: bool = False,
     ) -> tuple[str, int]:
         remaining = int((session_expires_at - self._now()).total_seconds())
         expires_in = min(self._access_token_seconds, remaining)
@@ -82,7 +83,7 @@ class SessionService:
                 role="client",
                 client_id=str(organization_id or user_id),
                 session_type="identity_user",
-                scopes=["evaluation"],
+                scopes=["auth:mfa"] if mfa_required else ["evaluation"],
                 session_id=str(session_id),
                 organization_id=str(organization_id) if organization_id else None,
             ),
@@ -128,6 +129,7 @@ class SessionService:
             user.failed_login_count = 0
             user.locked_until = None
             organization_id = await repository.active_organization_id(user.id)
+            mfa_required = await repository.requires_mfa(user.id)
             session_id = uuid.uuid4()
             family_id = uuid.uuid4()
             refresh_id = uuid.uuid4()
@@ -142,6 +144,7 @@ class SessionService:
                 refresh_token_hash=refresh.digest,
                 authenticated_at=now,
                 expires_at=session_expires_at,
+                mfa_satisfied_at=None,
             )
             await uow.commit()
 
@@ -150,6 +153,7 @@ class SessionService:
             session_id=session_id,
             organization_id=organization_id,
             session_expires_at=session_expires_at,
+            mfa_required=mfa_required,
         )
         return IssuedSession(
             access_token=access_token,
@@ -158,6 +162,7 @@ class SessionService:
             refresh_expires_in=int(self._refresh_token_ttl.total_seconds()),
             csrf_token=self._csrf_token(),
             session_id=session_id,
+            mfa_required=mfa_required,
         )
 
     async def refresh(self, raw_refresh_token: str) -> IssuedSession:

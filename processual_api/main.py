@@ -73,6 +73,7 @@ from processual_api.services.integration_claim_keys import (
     revoke_integration_claim_key as pmk13a_revoke_integration_claim_key,
 )
 
+from .auth.mfa_router import router as mfa_router
 from .auth.registration_router import router as registration_router
 from .auth.router import router as auth_router
 from .auth.security import require_scope
@@ -136,6 +137,7 @@ app.include_router(health.router)
 app.include_router(auth_router)
 app.include_router(registration_router)
 app.include_router(session_router)
+app.include_router(mfa_router)
 app.include_router(cgt.router)
 app.include_router(workflows.router)
 app.include_router(governance.router)

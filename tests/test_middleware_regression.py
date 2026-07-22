@@ -109,6 +109,17 @@ def test_email_verification_routes_are_public_subscription_paths():
     }.issubset(subscription_module._PUBLIC_PATHS)
 
 
+def test_mfa_routes_bypass_subscription_state_but_still_require_identity_auth():
+    assert {
+        "/auth/mfa/status",
+        "/auth/mfa/totp/enroll",
+        "/auth/mfa/totp/confirm",
+        "/auth/mfa/verify",
+        "/auth/mfa/recovery-codes/regenerate",
+        "/auth/mfa/disable",
+    }.issubset(subscription_module._PUBLIC_PATHS)
+
+
 def test_rate_limit_middleware_uses_redis_counter_and_returns_429(monkeypatch):
     class FakeRedis:
         def __init__(self):

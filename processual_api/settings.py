@@ -19,6 +19,7 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "AUTH_RATE_LIMIT_PEPPER",
     "AUTH_DELIVERY_KEY_RING_JSON",
     "AUTH_DELIVERY_PROVIDER_TOKEN",
+    "AUTH_MFA_KEY_RING_JSON",
 )
 
 
@@ -128,6 +129,21 @@ class APISettings:
     )
     auth_login_min_response_ms: int = field(
         default_factory=lambda: int(os.environ.get("AUTH_LOGIN_MIN_RESPONSE_MS", "350"))
+    )
+    auth_mfa_key_ring_json: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_MFA_KEY_RING_JSON")
+    )
+    auth_mfa_current_key_version: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_MFA_CURRENT_KEY_VERSION")
+    )
+    auth_mfa_issuer: str = field(
+        default_factory=lambda: os.environ.get("AUTH_MFA_ISSUER", "Processual Maestro")
+    )
+    auth_mfa_recovery_code_count: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_MFA_RECOVERY_CODE_COUNT", "10"))
+    )
+    auth_mfa_step_up_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "300"))
     )
 
     # --- Rate Limiting ---

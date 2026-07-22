@@ -363,7 +363,7 @@ gcloud builds submit --config cloudbuild.yaml --substitutions _REGION=us-central
 Deploy the already-built image only after production secrets and environment variables are configured:
 
 ```powershell
-gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production,APP_ENV=production,API_DEBUG=false --set-secrets JWT_SECRET=JWT_SECRET:latest,API_KEYS=API_KEYS:latest,PROCESSUAL_CRYPTO_KEY_B64=PROCESSUAL_CRYPTO_KEY_B64:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest,POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,GRAFANA_ADMIN_PASSWORD=GRAFANA_ADMIN_PASSWORD:latest,AUTH_TOKEN_PEPPER=AUTH_TOKEN_PEPPER:latest,AUTH_RATE_LIMIT_PEPPER=AUTH_RATE_LIMIT_PEPPER:latest,AUTH_DELIVERY_KEY_RING_JSON=AUTH_DELIVERY_KEY_RING_JSON:latest,AUTH_DELIVERY_PROVIDER_TOKEN=AUTH_DELIVERY_PROVIDER_TOKEN:latest
+gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production,APP_ENV=production,API_DEBUG=false --set-secrets JWT_SECRET=JWT_SECRET:latest,API_KEYS=API_KEYS:latest,PROCESSUAL_CRYPTO_KEY_B64=PROCESSUAL_CRYPTO_KEY_B64:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest,POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,GRAFANA_ADMIN_PASSWORD=GRAFANA_ADMIN_PASSWORD:latest,AUTH_TOKEN_PEPPER=AUTH_TOKEN_PEPPER:latest,AUTH_RATE_LIMIT_PEPPER=AUTH_RATE_LIMIT_PEPPER:latest,AUTH_DELIVERY_KEY_RING_JSON=AUTH_DELIVERY_KEY_RING_JSON:latest,AUTH_DELIVERY_PROVIDER_TOKEN=AUTH_DELIVERY_PROVIDER_TOKEN:latest,AUTH_MFA_KEY_RING_JSON=AUTH_MFA_KEY_RING_JSON:latest
 ```
 
 Cloud Run provides the runtime `PORT` value. The container keeps the default fallback `${PORT:-8000}` for local compatibility.
@@ -399,6 +399,7 @@ Readiness check:
 | `AUTH_RATE_LIMIT_PEPPER` | Yes for identity | Secret Manager | HMAC authority for Redis rate-limit dimensions. |
 | `AUTH_DELIVERY_KEY_RING_JSON` | Yes for identity | Secret Manager | Versioned AES-256 delivery key ring. |
 | `AUTH_DELIVERY_PROVIDER_TOKEN` | Yes for the delivery worker | Secret Manager | Provider bearer credential; never commit or log it. |
+| `AUTH_MFA_KEY_RING_JSON` | Yes for MFA | Secret Manager | Versioned AES-256 key ring for TOTP seeds; keep it independent from delivery keys. |
 
 Billing remains BYOK: provider costs are not included in Maestro usage pricing, and plan allowances must come from the pricing catalog rather than deployment configuration.
 

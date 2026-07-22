@@ -168,7 +168,11 @@ def _refresh_credentials(request: Request, csrf_header: str | None) -> tuple[str
     return refresh_token, csrf_cookie
 
 
-@router.post("/login", response_model=AccessTokenResponseContract)
+@router.post(
+    "/login",
+    response_model=AccessTokenResponseContract,
+    response_model_exclude_none=True,
+)
 async def login(
     body: LoginRequestContract,
     request: Request,
@@ -206,10 +210,15 @@ async def login(
     return AccessTokenResponseContract(
         access_token=issued.access_token,
         expires_in=issued.access_expires_in,
+        mfa_required=True if issued.mfa_required else None,
     )
 
 
-@router.post("/session/refresh", response_model=AccessTokenResponseContract)
+@router.post(
+    "/session/refresh",
+    response_model=AccessTokenResponseContract,
+    response_model_exclude_none=True,
+)
 async def refresh_session(
     request: Request,
     response: Response,

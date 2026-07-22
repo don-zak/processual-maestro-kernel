@@ -32,7 +32,7 @@ class FakePasswordService:
 
 
 class FakeRepository:
-    def __init__(self, *, user=None, principals=None) -> None:
+    def __init__(self, *, user=None, principals=None, mfa_required=False) -> None:
         self.user = user
         self.principals = principals
         self.added_session = None
@@ -41,6 +41,7 @@ class FakeRepository:
         self.revoked_all = []
         self.sessions = ()
         self.owned_session = None
+        self.mfa_required = mfa_required
 
     async def user_for_login(self, email):
         self.login_email = email
@@ -48,6 +49,9 @@ class FakeRepository:
 
     async def active_organization_id(self, user_id):
         return getattr(self.user, "organization_id", None)
+
+    async def requires_mfa(self, user_id):
+        return self.mfa_required
 
     def add_session(self, **values):
         self.added_session = values
@@ -142,6 +146,24 @@ def test_login_creates_authoritative_session_and_never_returns_password(monkeypa
     assert issued.access_token.startswith("access:")
     assert "correct" not in repr(issued)
     assert uows[0].commits == 1
+
+
+def test_login_marks_second_factor_required_without_granting_evaluation_scope(monkeypatch):
+    now = datetime(2026, 7, 22, 17, tzinfo=UTC)
+    repository = FakeRepository(user=_user(now), mfa_required=True)
+    captured = {}
+    service, _ = _service(monkeypatch, repository, now=now)
+    monkeypatch.setattr(
+        service_module,
+        "create_access_token",
+        lambda **values: captured.update(values) or "pending-mfa-access",
+    )
+
+    issued = asyncio.run(service.login(email="person@example.com", password="correct"))
+
+    assert issued.mfa_required is True
+    assert captured["scopes"] == ["auth:mfa"]
+    assert repository.added_session["mfa_satisfied_at"] is None
 
 
 def test_unknown_login_runs_dummy_password_verification(monkeypatch):

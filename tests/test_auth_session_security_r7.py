@@ -23,8 +23,9 @@ class FakeResult:
 
 
 class FakeDatabaseSession:
-    def __init__(self, row) -> None:
+    def __init__(self, row, scalar_values=()) -> None:
         self.row = row
+        self.scalar_values = list(scalar_values)
 
     async def __aenter__(self):
         return self
@@ -34,6 +35,9 @@ class FakeDatabaseSession:
 
     async def execute(self, statement):
         return FakeResult(self.row)
+
+    async def scalar(self, statement):
+        return self.scalar_values.pop(0) if self.scalar_values else None
 
 
 def _request():
@@ -71,6 +75,7 @@ def test_identity_bearer_rechecks_postgresql_and_ignores_elevated_claims(monkeyp
         organization_id=None,
         expires_at=now + timedelta(hours=1),
         revoked_at=None,
+        mfa_satisfied_at=None,
     )
     user = SimpleNamespace(id=user_id, status="active")
     monkeypatch.setattr(
@@ -98,6 +103,46 @@ def test_identity_bearer_rechecks_postgresql_and_ignores_elevated_claims(monkeyp
     assert current_user["scopes"] == ["evaluation"]
 
 
+def test_identity_bearer_is_limited_to_mfa_scope_until_second_factor(monkeypatch):
+    now = datetime.now(UTC)
+    user_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    auth_session = SimpleNamespace(
+        id=session_id,
+        user_id=user_id,
+        organization_id=None,
+        expires_at=now + timedelta(hours=1),
+        revoked_at=None,
+        mfa_satisfied_at=None,
+    )
+    user = SimpleNamespace(id=user_id, status="active")
+    monkeypatch.setattr(
+        db_session_module,
+        "get_session_factory",
+        lambda: lambda: FakeDatabaseSession(
+            (auth_session, user),
+            scalar_values=(uuid.uuid4(), None),
+        ),
+    )
+    monkeypatch.setattr(
+        security_module,
+        "verify_access_token",
+        lambda token: _identity_payload(user_id, session_id),
+    )
+
+    current_user = asyncio.run(
+        security_module.get_current_user(
+            _request(),
+            bearer=HTTPAuthorizationCredentials(scheme="Bearer", credentials="signed-token"),
+            api_key=None,
+            supervisor_session_key=None,
+        )
+    )
+
+    assert current_user["mfa_pending"] is True
+    assert current_user["scopes"] == ["auth:mfa"]
+
+
 def test_revoked_database_session_invalidates_unexpired_bearer(monkeypatch):
     now = datetime.now(UTC)
     user_id = uuid.uuid4()
@@ -108,6 +153,7 @@ def test_revoked_database_session_invalidates_unexpired_bearer(monkeypatch):
         organization_id=None,
         expires_at=now + timedelta(hours=1),
         revoked_at=now,
+        mfa_satisfied_at=None,
     )
     user = SimpleNamespace(id=user_id, status="active")
     monkeypatch.setattr(
