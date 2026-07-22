@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from processual_api.auth.rate_limit import TrustedProxyPolicy
@@ -71,6 +71,12 @@ def _client():
         minimum_response_seconds=0,
     )
     app = FastAPI()
+
+    @app.middleware("http")
+    async def fixed_peer(request: Request, call_next):
+        request.scope["client"] = ("198.51.100.48", 47004)
+        return await call_next(request)
+
     app.include_router(router)
     app.dependency_overrides[get_session_runtime] = lambda: runtime
     app.dependency_overrides[get_identity_user] = lambda: {
