@@ -64,6 +64,11 @@ class IdentityUser(Base):
         cascade="all, delete-orphan",
         foreign_keys="OrganizationMembership.user_id",
     )
+    platform_authorities: Mapped[list[IdentityPlatformAuthority]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="IdentityPlatformAuthority.user_id",
+    )
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -163,6 +168,80 @@ class OrganizationMembership(Base):
         foreign_keys=[user_id],
     )
     organization: Mapped[IdentityOrganization] = relationship(back_populates="memberships")
+
+
+class IdentityPlatformAuthority(Base):
+    """A platform-level authority assigned independently of organization membership."""
+
+    __tablename__ = "identity_platform_authorities"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "authority",
+            name="uq_identity_platform_authority_user_authority",
+        ),
+        CheckConstraint(
+            "authority IN ('platform_admin')",
+            name="authority_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'revoked')",
+            name="status_allowed",
+        ),
+        Index(
+            "ix_identity_platform_authorities_authority_status",
+            "authority",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    authority: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="platform_admin",
+    )
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="active",
+    )
+    granted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    grant_reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(String(500))
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+    user: Mapped[IdentityUser] = relationship(
+        back_populates="platform_authorities",
+        foreign_keys=[user_id],
+    )
+    granted_by_user: Mapped[IdentityUser | None] = relationship(
+        foreign_keys=[granted_by_user_id],
+    )
+    revoked_by_user: Mapped[IdentityUser | None] = relationship(
+        foreign_keys=[revoked_by_user_id],
+    )
 
 
 class AuthSession(Base):
