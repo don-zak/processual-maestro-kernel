@@ -74,6 +74,11 @@ SESSION_REFRESH_RULES = (
     AuthRateLimitRule("token_window", "token", 10, 15 * 60),
 )
 
+MFA_VERIFICATION_RULES = (
+    AuthRateLimitRule("ip_window", "ip", 20, 15 * 60),
+    AuthRateLimitRule("user_window", "user", 8, 15 * 60),
+)
+
 
 _MULTI_WINDOW_SCRIPT = """
 local rejected = 0
@@ -220,6 +225,7 @@ __all__ = [
     "EMAIL_VERIFICATION_RESEND_RULES",
     "EMAIL_VERIFICATION_RULES",
     "LOGIN_RULES",
+    "MFA_VERIFICATION_RULES",
     "ORGANIZATION_REGISTRATION_RULES",
     "REGISTRATION_RULES",
     "SESSION_REFRESH_RULES",

@@ -281,10 +281,15 @@ async def _validate_identity_session(
     subject: str,
     session_id: str,
     organization_id: str | None,
-) -> tuple[str, str | None]:
+) -> tuple[str, str | None, bool]:
     from sqlalchemy import select
 
-    from processual_api.auth.models import AuthSession, IdentityUser
+    from processual_api.auth.models import (
+        AuthMfaFactor,
+        AuthSession,
+        IdentityUser,
+        OrganizationMembership,
+    )
     from processual_api.db.session import get_session_factory
 
     try:
@@ -308,6 +313,23 @@ async def _validate_identity_session(
                     )
                 )
             ).one_or_none()
+            active_mfa_factor_id = await db_session.scalar(
+                select(AuthMfaFactor.id)
+                .where(
+                    AuthMfaFactor.user_id == user_uuid,
+                    AuthMfaFactor.status == "active",
+                )
+                .limit(1)
+            )
+            privileged_membership_id = await db_session.scalar(
+                select(OrganizationMembership.id)
+                .where(
+                    OrganizationMembership.user_id == user_uuid,
+                    OrganizationMembership.status == "active",
+                    OrganizationMembership.role.in_(("organization_owner", "organization_admin")),
+                )
+                .limit(1)
+            )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -327,7 +349,9 @@ async def _validate_identity_session(
         or organization_id != authoritative_organization
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-    return str(user.id), authoritative_organization
+    mfa_required = active_mfa_factor_id is not None or privileged_membership_id is not None
+    mfa_pending = mfa_required and auth_session.mfa_satisfied_at is None
+    return str(user.id), authoritative_organization, mfa_pending
 
 
 async def get_current_user(
@@ -347,7 +371,7 @@ async def get_current_user(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or expired token",
                 )
-            subject, organization_id = await _validate_identity_session(
+            subject, organization_id, mfa_pending = await _validate_identity_session(
                 subject=str(subject),
                 session_id=session_id,
                 organization_id=payload.get("organization_id"),
@@ -361,7 +385,11 @@ async def get_current_user(
                 "auth_method": "jwt",
                 "session_type": "identity_user",
                 "session_id": session_id,
-                "scopes": ["evaluation"],
+                "scopes": ["auth:mfa"] if mfa_pending else ["evaluation"],
+                "mfa_pending": mfa_pending,
+                "mfa_satisfied_at": (
+                    None if mfa_pending else payload.get("mfa_satisfied_at")
+                ),
             }
             request.state.current_user = user
             return user
@@ -437,6 +465,52 @@ def require_scope(required_scope: str):
         )
 
     return _scope_dependency
+
+
+def require_recent_mfa(max_age_seconds: int = 300):
+    if max_age_seconds < 60 or max_age_seconds > 1800:
+        raise ValueError("MFA step-up lifetime is outside its safe range.")
+
+    async def _recent_mfa_dependency(current_user: dict = Depends(get_current_user)) -> dict:
+        if current_user.get("session_type") != "identity_user":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Identity session required.")
+        try:
+            session_id = uuid.UUID(str(current_user["session_id"]))
+            user_id = uuid.UUID(str(current_user["user_id"]))
+            from sqlalchemy import select
+
+            from processual_api.auth.models import AuthSession
+            from processual_api.db.session import get_session_factory
+
+            async with get_session_factory()() as db_session:
+                auth_session = await db_session.scalar(
+                    select(AuthSession).where(
+                        AuthSession.id == session_id,
+                        AuthSession.user_id == user_id,
+                    )
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Session authority unavailable",
+            ) from exc
+        now = datetime.now(UTC)
+        if (
+            auth_session is None
+            or auth_session.revoked_at is not None
+            or auth_session.expires_at <= now
+            or auth_session.mfa_satisfied_at is None
+            or auth_session.mfa_satisfied_at < now - timedelta(seconds=max_age_seconds)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Recent MFA verification required.",
+            )
+        return current_user
+
+    return _recent_mfa_dependency
 
 def require_quota(quota_scope: str = "evaluation"):
     async def _quota_dependency(

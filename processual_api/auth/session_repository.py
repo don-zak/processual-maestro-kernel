@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.auth.models import (
+    AuthMfaFactor,
     AuthRefreshToken,
     AuthSession,
     IdentityUser,
@@ -38,6 +39,23 @@ class SqlAlchemySessionRepository:
             .limit(1)
         )
 
+    async def requires_mfa(self, user_id: uuid.UUID) -> bool:
+        factor_id = await self._session.scalar(
+            select(AuthMfaFactor.id)
+            .where(AuthMfaFactor.user_id == user_id, AuthMfaFactor.status == "active")
+            .limit(1)
+        )
+        privileged_membership_id = await self._session.scalar(
+            select(OrganizationMembership.id)
+            .where(
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.status == "active",
+                OrganizationMembership.role.in_(("organization_owner", "organization_admin")),
+            )
+            .limit(1)
+        )
+        return factor_id is not None or privileged_membership_id is not None
+
     def add_session(
         self,
         *,
@@ -49,6 +67,7 @@ class SqlAlchemySessionRepository:
         refresh_token_hash: str,
         authenticated_at: datetime,
         expires_at: datetime,
+        mfa_satisfied_at: datetime | None = None,
     ) -> None:
         auth_session = AuthSession(
             id=session_id,
@@ -58,6 +77,7 @@ class SqlAlchemySessionRepository:
             authenticated_at=authenticated_at,
             last_seen_at=authenticated_at,
             expires_at=expires_at,
+            mfa_satisfied_at=mfa_satisfied_at,
         )
         self._session.add(auth_session)
         self._session.add(
