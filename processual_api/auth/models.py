@@ -239,6 +239,7 @@ class AuthActionToken(Base):
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
 
     user: Mapped[IdentityUser] = relationship()

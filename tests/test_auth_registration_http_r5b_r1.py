@@ -43,6 +43,23 @@ class FakeService:
             raise RuntimeError("database detail must stay private")
 
 
+@dataclass
+class FakeVerificationService:
+    verified: list[str] = field(default_factory=list)
+    resent: list[str] = field(default_factory=list)
+    unavailable: bool = False
+
+    async def verify(self, token):
+        self.verified.append(token)
+        if self.unavailable:
+            raise RuntimeError("verification detail must stay private")
+
+    async def resend(self, email):
+        self.resent.append(email)
+        if self.unavailable:
+            raise RuntimeError("resend detail must stay private")
+
+
 def _client(runtime: RegistrationRuntime) -> TestClient:
     app = FastAPI()
 
@@ -57,12 +74,13 @@ def _client(runtime: RegistrationRuntime) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def _runtime(*, limiter=None, service=None, floor=0.0) -> RegistrationRuntime:
+def _runtime(*, limiter=None, service=None, verification_service=None, floor=0.0) -> RegistrationRuntime:
     return RegistrationRuntime(
         service=service or FakeService(),
         rate_limiter=limiter or FakeLimiter(),
         proxy_policy=TrustedProxyPolicy(),
         minimum_response_seconds=floor,
+        email_verification_service=verification_service or FakeVerificationService(),
     )
 
 
@@ -214,3 +232,71 @@ def test_generic_202_paths_apply_the_same_response_time_floor():
     assert accepted_response.json() == limited_response.json()
     assert accepted_elapsed >= floor * 0.9
     assert limited_elapsed >= floor * 0.9
+
+
+def test_verify_email_is_rate_limited_and_returns_only_generic_processed():
+    limiter = FakeLimiter()
+    verification = FakeVerificationService()
+    response = _client(
+        _runtime(limiter=limiter, verification_service=verification)
+    ).post("/auth/verify-email", json={"token": "raw-secret-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "processed"}
+    assert verification.verified == ["raw-secret-token"]
+    assert tuple(limiter.calls[0]["subjects"]) == ("ip", "token")
+
+
+def test_verify_email_replay_throttling_is_429_without_service_call():
+    limiter = FakeLimiter(decisions=[AuthRateLimitDecision(False, 91, 0)])
+    verification = FakeVerificationService()
+    response = _client(
+        _runtime(limiter=limiter, verification_service=verification)
+    ).post("/auth/verify-email", json={"token": "raw-secret-token"})
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "91"
+    assert verification.verified == []
+    assert "raw-secret-token" not in response.text
+
+
+def test_resend_is_ip_then_normalized_email_and_generic_202():
+    limiter = FakeLimiter()
+    verification = FakeVerificationService()
+    response = _client(
+        _runtime(limiter=limiter, verification_service=verification)
+    ).post("/auth/verification/resend", json={"email": " Person@Example.COM "})
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "accepted", "next_action": "check_email"}
+    assert verification.resent == ["person@example.com"]
+    assert [tuple(call["subjects"]) for call in limiter.calls] == [("ip",), ("email",)]
+
+
+def test_resend_email_limit_is_generic_202_without_service_call():
+    limiter = FakeLimiter(
+        decisions=[
+            AuthRateLimitDecision(True, 0, 3),
+            AuthRateLimitDecision(False, 3600, 0),
+        ]
+    )
+    verification = FakeVerificationService()
+    response = _client(
+        _runtime(limiter=limiter, verification_service=verification)
+    ).post("/auth/verification/resend", json={"email": "person@example.com"})
+
+    assert response.status_code == 202
+    assert "Retry-After" not in response.headers
+    assert verification.resent == []
+
+
+def test_verification_validation_does_not_reflect_token_or_authority_fields():
+    response = _client(_runtime()).post(
+        "/auth/verify-email",
+        json={"token": "raw-secret-token", "role": "platform_admin"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid registration request."}
+    assert "raw-secret-token" not in response.text
+    assert "platform_admin" not in response.text

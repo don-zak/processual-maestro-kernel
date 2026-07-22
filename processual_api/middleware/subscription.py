@@ -29,6 +29,8 @@ _PUBLIC_PATHS = {
     "/auth/registration/config",
     "/auth/register",
     "/auth/register/organization",
+    "/auth/verify-email",
+    "/auth/verification/resend",
     "/applications/demo/check",
     "/billing/webhook",
     "/docs",

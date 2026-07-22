@@ -45,6 +45,7 @@ async def test_runtime_wires_all_required_authorities(monkeypatch):
     assert runtime.minimum_response_seconds == 0.35
     assert runtime.proxy_policy.max_forwarded_hops == 4
     assert runtime.service is not None
+    assert runtime.email_verification_service is not None
     assert runtime.rate_limiter is not None
 
 

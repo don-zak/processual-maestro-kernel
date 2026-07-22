@@ -97,6 +97,41 @@ def test_repository_adds_ciphertext_only_delivery_outbox() -> None:
     assert not hasattr(queued, "raw_action_token")
 
 
+def test_repository_adds_resend_token_and_encrypted_outbox_for_existing_user() -> None:
+    session = Mock()
+    repository = SqlAlchemyRegistrationRepository(session)
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    user = IdentityUser(
+        id=uuid.uuid4(),
+        email_normalized="pending@example.com",
+        display_name="Pending",
+        password_hash="$argon2id$encoded",
+        status="pending_verification",
+    )
+    action_token_id = uuid.uuid4()
+
+    repository.add_verification_delivery(
+        user=user,
+        action_token_id=action_token_id,
+        action_token_hash="b" * 64,
+        action_token_expires_at=now + timedelta(hours=24),
+        outbox_id=uuid.uuid4(),
+        payload_ciphertext=b"replacement-encrypted-payload",
+        payload_key_version="delivery-v2",
+        available_at=now,
+    )
+
+    added = [call.args[0] for call in session.add.call_args_list]
+    action_token = next(item for item in added if isinstance(item, AuthActionToken))
+    queued = next(item for item in added if isinstance(item, AuthDeliveryOutbox))
+    assert action_token.user is user
+    assert action_token.invalidated_at is None
+    assert queued.user is user
+    assert queued.action_token is action_token
+    assert queued.payload_ciphertext == b"replacement-encrypted-payload"
+    assert not hasattr(queued, "raw_action_token")
+
+
 @pytest.mark.asyncio
 async def test_unit_of_work_maps_integrity_race_and_rolls_back() -> None:
     session = AsyncMock()

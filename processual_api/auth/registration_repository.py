@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,104 @@ class SqlAlchemyRegistrationRepository:
     async def email_exists(self, email_normalized: str) -> bool:
         statement = select(IdentityUser.id).where(IdentityUser.email_normalized == email_normalized)
         return (await self._session.scalar(statement)) is not None
+
+    async def verification_principals_for_update(
+        self,
+        token_hash: str,
+    ) -> tuple[AuthActionToken, IdentityUser] | None:
+        statement = (
+            select(AuthActionToken, IdentityUser)
+            .join(IdentityUser, IdentityUser.id == AuthActionToken.user_id)
+            .where(
+                AuthActionToken.token_hash == token_hash,
+                AuthActionToken.purpose == "verify_email",
+            )
+            .with_for_update()
+        )
+        row = (await self._session.execute(statement)).one_or_none()
+        return None if row is None else (row[0], row[1])
+
+    async def pending_user_for_update(self, email_normalized: str) -> IdentityUser | None:
+        statement = (
+            select(IdentityUser)
+            .where(
+                IdentityUser.email_normalized == email_normalized,
+                IdentityUser.status == "pending_verification",
+            )
+            .with_for_update()
+        )
+        return await self._session.scalar(statement)
+
+    async def latest_active_verification_token(
+        self,
+        user_id: uuid.UUID,
+    ) -> AuthActionToken | None:
+        statement = (
+            select(AuthActionToken)
+            .where(
+                AuthActionToken.user_id == user_id,
+                AuthActionToken.purpose == "verify_email",
+                AuthActionToken.consumed_at.is_(None),
+                AuthActionToken.invalidated_at.is_(None),
+            )
+            .order_by(AuthActionToken.created_at.desc())
+            .limit(1)
+        )
+        return await self._session.scalar(statement)
+
+    async def invalidate_active_verification_tokens(
+        self,
+        user_id: uuid.UUID,
+        *,
+        invalidated_at: datetime,
+    ) -> None:
+        statement = (
+            update(AuthActionToken)
+            .where(
+                AuthActionToken.user_id == user_id,
+                AuthActionToken.purpose == "verify_email",
+                AuthActionToken.consumed_at.is_(None),
+                AuthActionToken.invalidated_at.is_(None),
+            )
+            .values(invalidated_at=invalidated_at)
+        )
+        await self._session.execute(statement)
+
+    def add_verification_delivery(
+        self,
+        *,
+        user: IdentityUser,
+        action_token_id: uuid.UUID,
+        action_token_hash: str,
+        action_token_expires_at: datetime,
+        outbox_id: uuid.UUID,
+        payload_ciphertext: bytes,
+        payload_key_version: str,
+        available_at: datetime,
+    ) -> None:
+        action_token = AuthActionToken(
+            id=action_token_id,
+            user_id=user.id,
+            purpose="verify_email",
+            token_hash=action_token_hash,
+            expires_at=action_token_expires_at,
+            user=user,
+        )
+        self._session.add(action_token)
+        self._session.add(
+            AuthDeliveryOutbox(
+                id=outbox_id,
+                user_id=user.id,
+                action_token_id=action_token_id,
+                event_type="verify_email",
+                payload_ciphertext=payload_ciphertext,
+                payload_key_version=payload_key_version,
+                available_at=available_at,
+                attempt_count=0,
+                user=user,
+                action_token=action_token,
+            )
+        )
 
     def add_registration(
         self,
