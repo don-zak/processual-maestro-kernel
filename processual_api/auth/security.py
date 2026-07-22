@@ -194,6 +194,7 @@ def create_access_token(
     scopes: list[str] | None = None,
     session_id: str | None = None,
     organization_id: str | None = None,
+    platform_authorities: tuple[str, ...] = (),
 ) -> str:
     if jwt is None:
         raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
@@ -209,6 +210,7 @@ def create_access_token(
         "client_id": client_id or subject,
         "session_type": session_type,
         "scopes": scopes or [],
+        "platform_authorities": list(platform_authorities),
     }
     if session_id is not None:
         payload["sid"] = session_id
