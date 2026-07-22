@@ -89,6 +89,13 @@ class RegistrationAcceptedResponseContract(_StrictContractModel):
     next_action: str = "check_email"
 
 
+class RegistrationConfigResponseContract(_StrictContractModel):
+    registration_modes: tuple[RegistrationMode, ...] = PUBLIC_SELF_SERVICE_MODES
+    password_min_length: int = 12
+    password_max_length: int = 1024
+    email_verification_required: bool = True
+
+
 @dataclass(frozen=True, slots=True)
 class IdentityRegistrationSecurityContract:
     contract_id: str = "identity_registration_r1"
@@ -198,6 +205,7 @@ __all__ = [
     "PUBLIC_SELF_SERVICE_MODES",
     "REVIEW_REQUIRED_MODES",
     "RegistrationAcceptedResponseContract",
+    "RegistrationConfigResponseContract",
     "RegistrationMode",
     "get_identity_registration_security_contract",
 ]

@@ -241,6 +241,8 @@ class AuthActionToken(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
 
+    user: Mapped[IdentityUser] = relationship()
+
 
 class AuthDeliveryOutbox(Base):
     __tablename__ = "auth_delivery_outbox"
@@ -271,6 +273,9 @@ class AuthDeliveryOutbox(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error_code: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = _created_at_column()
+
+    user: Mapped[IdentityUser] = relationship()
+    action_token: Mapped[AuthActionToken] = relationship()
 
 
 class AuthMfaFactor(Base):

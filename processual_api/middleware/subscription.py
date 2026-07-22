@@ -22,9 +22,21 @@ _GRACE_DAYS = 7
 _SUSPENSION_DAYS = 90
 
 _PUBLIC_PATHS = {
-    "/login", "/auth/token", "/health/live", "/health/ready",
-    "/applications/demo/check", "/billing/webhook", "/docs", "/redoc",
-    "/metrics", "/openapi.json", "/", "/favicon.ico",
+    "/login",
+    "/auth/token",
+    "/health/live",
+    "/health/ready",
+    "/auth/registration/config",
+    "/auth/register",
+    "/auth/register/organization",
+    "/applications/demo/check",
+    "/billing/webhook",
+    "/docs",
+    "/redoc",
+    "/metrics",
+    "/openapi.json",
+    "/",
+    "/favicon.ico",
 }
 
 _SUSPENSION_ALLOWED_PREFIXES = {"/billing"}
@@ -40,7 +52,7 @@ def _load_subscriptions() -> list[dict]:
     if path.exists():
         try:
             return json.loads(path.read_text("utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             pass
     return []
 
@@ -54,11 +66,13 @@ def _extract_user_id(request: Request) -> str | None:
     jwt_secret = _JWT_SECRET
     if jwt_secret is None:
         from ..settings import settings as _s
+
         globals()["_JWT_SECRET"] = _s.jwt_secret
         jwt_secret = _s.jwt_secret
 
     try:
         import jwt
+
         payload = jwt.decode(token, jwt_secret, algorithms=[_JWT_ALGORITHM])
         return payload.get("sub")
     except Exception:
@@ -75,7 +89,7 @@ def _compute_stage(sub: dict) -> str:
     created_str = sub.get("suspended_at") or sub.get("created_at", "")
     try:
         suspended_at = datetime.fromisoformat(created_str)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return "grace"
 
     now = datetime.now(UTC)
@@ -121,13 +135,14 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             if request.method not in _READ_ONLY_METHODS:
                 return Response(
                     status_code=403,
-                    content=json.dumps({
-                        "detail": (
-                            "Payment overdue - service is in read-only mode."
-                            " Update billing to restore full access."
-                        ),
-                        "subscription_stage": "grace",
-                    }),
+                    content=json.dumps(
+                        {
+                            "detail": (
+                                "Payment overdue - service is in read-only mode. Update billing to restore full access."
+                            ),
+                            "subscription_stage": "grace",
+                        }
+                    ),
                     media_type="application/json",
                 )
             return await call_next(request)
@@ -136,10 +151,12 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             if not any(path.startswith(p) for p in _SUSPENSION_ALLOWED_PREFIXES):
                 return Response(
                     status_code=403,
-                    content=json.dumps({
-                        "detail": "Subscription suspended. Visit Billing to reactivate.",
-                        "subscription_stage": "suspended",
-                    }),
+                    content=json.dumps(
+                        {
+                            "detail": "Subscription suspended. Visit Billing to reactivate.",
+                            "subscription_stage": "suspended",
+                        }
+                    ),
                     media_type="application/json",
                 )
             return await call_next(request)
@@ -147,10 +164,12 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
         if stage == "expired":
             return Response(
                 status_code=403,
-                content=json.dumps({
-                    "detail": "Subscription expired after 90 days - please re-subscribe.",
-                    "subscription_stage": "expired",
-                }),
+                content=json.dumps(
+                    {
+                        "detail": "Subscription expired after 90 days - please re-subscribe.",
+                        "subscription_stage": "expired",
+                    }
+                ),
                 media_type="application/json",
             )
 
