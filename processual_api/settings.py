@@ -15,6 +15,9 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "POSTGRES_PASSWORD",
     "REDIS_PASSWORD",
     "GRAFANA_ADMIN_PASSWORD",
+    "AUTH_TOKEN_PEPPER",
+    "AUTH_RATE_LIMIT_PEPPER",
+    "AUTH_DELIVERY_KEY_RING_JSON",
     "AUTH_DELIVERY_PROVIDER_TOKEN",
 )
 
@@ -110,6 +113,21 @@ class APISettings:
     )
     auth_delivery_request_timeout_seconds: float = field(
         default_factory=lambda: float(os.environ.get("AUTH_DELIVERY_REQUEST_TIMEOUT_SECONDS", "10"))
+    )
+    auth_access_token_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_ACCESS_TOKEN_SECONDS", "900"))
+    )
+    auth_refresh_token_days: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_REFRESH_TOKEN_DAYS", "30"))
+    )
+    auth_failed_login_limit: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_FAILED_LOGIN_LIMIT", "5"))
+    )
+    auth_login_lockout_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_LOGIN_LOCKOUT_SECONDS", "900"))
+    )
+    auth_login_min_response_ms: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_LOGIN_MIN_RESPONSE_MS", "350"))
     )
 
     # --- Rate Limiting ---

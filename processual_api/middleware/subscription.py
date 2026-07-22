@@ -24,6 +24,10 @@ _SUSPENSION_DAYS = 90
 _PUBLIC_PATHS = {
     "/login",
     "/auth/token",
+    "/auth/login",
+    "/auth/session/refresh",
+    "/auth/session/logout",
+    "/auth/session/logout-all",
     "/health/live",
     "/health/ready",
     "/auth/registration/config",

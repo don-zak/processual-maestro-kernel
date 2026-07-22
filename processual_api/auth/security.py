@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -191,6 +192,8 @@ def create_access_token(
     client_id: str | None = None,
     session_type: str = "jwt",
     scopes: list[str] | None = None,
+    session_id: str | None = None,
+    organization_id: str | None = None,
 ) -> str:
     if jwt is None:
         raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
@@ -207,6 +210,10 @@ def create_access_token(
         "session_type": session_type,
         "scopes": scopes or [],
     }
+    if session_id is not None:
+        payload["sid"] = session_id
+    if organization_id is not None:
+        payload["organization_id"] = organization_id
     return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
 
 
@@ -269,6 +276,60 @@ def generate_api_key() -> str:
     return f"pmk_{secrets.token_urlsafe(32)}"
 
 
+async def _validate_identity_session(
+    *,
+    subject: str,
+    session_id: str,
+    organization_id: str | None,
+) -> tuple[str, str | None]:
+    from sqlalchemy import select
+
+    from processual_api.auth.models import AuthSession, IdentityUser
+    from processual_api.db.session import get_session_factory
+
+    try:
+        user_uuid = uuid.UUID(subject)
+        session_uuid = uuid.UUID(session_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        ) from exc
+    try:
+        session_factory = get_session_factory()
+        async with session_factory() as db_session:
+            row = (
+                await db_session.execute(
+                    select(AuthSession, IdentityUser)
+                    .join(IdentityUser, IdentityUser.id == AuthSession.user_id)
+                    .where(
+                        AuthSession.id == session_uuid,
+                        AuthSession.user_id == user_uuid,
+                    )
+                )
+            ).one_or_none()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session authority unavailable",
+        ) from exc
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    auth_session, user = row
+    now = datetime.now(UTC)
+    authoritative_organization = (
+        str(auth_session.organization_id) if auth_session.organization_id is not None else None
+    )
+    if (
+        auth_session.revoked_at is not None
+        or auth_session.expires_at <= now
+        or user.status != "active"
+        or organization_id != authoritative_organization
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    return str(user.id), authoritative_organization
+
+
 async def get_current_user(
     request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -278,13 +339,39 @@ async def get_current_user(
     if bearer:
         payload = verify_access_token(bearer.credentials)
         subject = payload.get("sub", "unknown")
+        session_type = payload.get("session_type", "jwt")
+        if session_type == "identity_user":
+            session_id = payload.get("sid")
+            if not isinstance(session_id, str):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired token",
+                )
+            subject, organization_id = await _validate_identity_session(
+                subject=str(subject),
+                session_id=session_id,
+                organization_id=payload.get("organization_id"),
+            )
+            user = {
+                "sub": subject,
+                "user_id": subject,
+                "client_id": organization_id or subject,
+                "organization_id": organization_id,
+                "role": "client",
+                "auth_method": "jwt",
+                "session_type": "identity_user",
+                "session_id": session_id,
+                "scopes": ["evaluation"],
+            }
+            request.state.current_user = user
+            return user
         user = {
             "sub": subject,
             "user_id": subject,
             "client_id": payload.get("client_id", subject),
             "role": payload.get("role", "client"),
             "auth_method": "jwt",
-            "session_type": payload.get("session_type", "jwt"),
+            "session_type": session_type,
             "scopes": payload.get("scopes", []),
         }
         user = _apply_supervisor_session_header(
