@@ -21,6 +21,7 @@ def test_settings_exposes_canonical_production_secret_contract() -> None:
         "POSTGRES_PASSWORD",
         "REDIS_PASSWORD",
         "GRAFANA_ADMIN_PASSWORD",
+        "AUTH_DELIVERY_PROVIDER_TOKEN",
     }
 
     assert set(PRODUCTION_SECRET_ENV_VARS) == expected
@@ -63,3 +64,4 @@ def test_production_env_template_covers_canonical_secret_contract() -> None:
 
     for name in PRODUCTION_SECRET_ENV_VARS:
         assert f"{name}=" in text
+
