@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 
 from processual_api.auth.delivery_crypto import DeliveryPayloadCipher
+from processual_api.auth.email_verification_service import EmailVerificationService
 from processual_api.auth.passwords import PasswordService
 from processual_api.auth.rate_limit import RedisAuthRateLimiter, TrustedProxyPolicy
 from processual_api.auth.registration_repository import SqlAlchemyRegistrationUnitOfWork
@@ -26,6 +27,7 @@ class RegistrationRuntime:
     rate_limiter: RedisAuthRateLimiter
     proxy_policy: TrustedProxyPolicy
     minimum_response_seconds: float
+    email_verification_service: EmailVerificationService | None = None
 
 
 def _required_secret(value: str | None, *, label: str) -> bytes:
@@ -89,11 +91,19 @@ async def build_registration_runtime(config: APISettings = settings) -> Registra
     except (RuntimeError, ValueError) as exc:
         raise RegistrationRuntimeUnavailableError("Registration authority is unavailable.") from exc
 
+    def unit_of_work_factory() -> SqlAlchemyRegistrationUnitOfWork:
+        return SqlAlchemyRegistrationUnitOfWork(session_factory)
+    token_digester = TokenDigester(token_pepper)
     return RegistrationRuntime(
         service=RegistrationService(
-            unit_of_work_factory=lambda: SqlAlchemyRegistrationUnitOfWork(session_factory),
+            unit_of_work_factory=unit_of_work_factory,
             password_service=PasswordService(),
-            token_digester=TokenDigester(token_pepper),
+            token_digester=token_digester,
+            delivery_cipher=delivery_cipher,
+        ),
+        email_verification_service=EmailVerificationService(
+            unit_of_work_factory=unit_of_work_factory,
+            token_digester=token_digester,
             delivery_cipher=delivery_cipher,
         ),
         rate_limiter=RedisAuthRateLimiter(redis, pepper=rate_limit_pepper),

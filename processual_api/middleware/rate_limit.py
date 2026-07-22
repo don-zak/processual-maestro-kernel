@@ -12,6 +12,8 @@ from ..settings import settings
 _AUTHORITATIVE_IDENTITY_PATHS = {
     "/auth/register",
     "/auth/register/organization",
+    "/auth/verify-email",
+    "/auth/verification/resend",
 }
 
 

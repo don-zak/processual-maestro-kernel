@@ -96,6 +96,23 @@ class RegistrationConfigResponseContract(_StrictContractModel):
     email_verification_required: bool = True
 
 
+class EmailVerificationRequestContract(_StrictContractModel):
+    token: str = Field(min_length=1, max_length=2048)
+
+
+class EmailVerificationResendRequestContract(_StrictContractModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class EmailVerificationProcessedResponseContract(_StrictContractModel):
+    status: str = "processed"
+
+
+class EmailVerificationResendAcceptedResponseContract(_StrictContractModel):
+    status: str = "accepted"
+    next_action: str = "check_email"
+
+
 @dataclass(frozen=True, slots=True)
 class IdentityRegistrationSecurityContract:
     contract_id: str = "identity_registration_r1"
@@ -195,6 +212,10 @@ def get_identity_registration_security_contract() -> IdentityRegistrationSecurit
 __all__ = [
     "AccountStatus",
     "AuthActionPurpose",
+    "EmailVerificationProcessedResponseContract",
+    "EmailVerificationRequestContract",
+    "EmailVerificationResendAcceptedResponseContract",
+    "EmailVerificationResendRequestContract",
     "IDENTITY_REGISTRATION_SECURITY_CONTRACT",
     "INVITABLE_ORGANIZATION_ROLES",
     "IdentityRegistrationSecurityContract",

@@ -88,12 +88,25 @@ def test_registration_routes_bypass_legacy_rate_limit_middleware(monkeypatch):
 
     monkeypatch.setattr(rate_module, "get_redis", fake_get_redis)
     monkeypatch.setattr(rate_module.settings, "rate_limit_enabled", True)
-    app = _app_with_route("/auth/register")
-    app.add_middleware(rate_module.RateLimitMiddleware)
+    for path in (
+        "/auth/register",
+        "/auth/register/organization",
+        "/auth/verify-email",
+        "/auth/verification/resend",
+    ):
+        app = _app_with_route(path)
+        app.add_middleware(rate_module.RateLimitMiddleware)
 
-    response = TestClient(app).get("/auth/register")
+        response = TestClient(app).get(path)
 
-    assert response.status_code == 200
+        assert response.status_code == 200
+
+
+def test_email_verification_routes_are_public_subscription_paths():
+    assert {
+        "/auth/verify-email",
+        "/auth/verification/resend",
+    }.issubset(subscription_module._PUBLIC_PATHS)
 
 
 def test_rate_limit_middleware_uses_redis_counter_and_returns_429(monkeypatch):
