@@ -289,6 +289,7 @@ async def _validate_identity_session(
     from processual_api.auth.models import (
         AuthMfaFactor,
         AuthSession,
+        IdentityPlatformAuthority,
         IdentityUser,
         OrganizationMembership,
     )
@@ -332,6 +333,15 @@ async def _validate_identity_session(
                 )
                 .limit(1)
             )
+            active_platform_admin_authority_id = await db_session.scalar(
+                select(IdentityPlatformAuthority.id)
+                .where(
+                    IdentityPlatformAuthority.user_id == user_uuid,
+                    IdentityPlatformAuthority.authority == "platform_admin",
+                    IdentityPlatformAuthority.status == "active",
+                )
+                .limit(1)
+            )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -351,7 +361,11 @@ async def _validate_identity_session(
         or organization_id != authoritative_organization
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-    mfa_required = active_mfa_factor_id is not None or privileged_membership_id is not None
+    mfa_required = (
+        active_mfa_factor_id is not None
+        or privileged_membership_id is not None
+        or active_platform_admin_authority_id is not None
+    )
     mfa_pending = mfa_required and auth_session.mfa_satisfied_at is None
     return str(user.id), authoritative_organization, mfa_pending
 

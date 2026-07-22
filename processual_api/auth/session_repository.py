@@ -71,7 +71,20 @@ class SqlAlchemySessionRepository:
             )
             .limit(1)
         )
-        return factor_id is not None or privileged_membership_id is not None
+        active_platform_admin_authority_id = await self._session.scalar(
+            select(IdentityPlatformAuthority.id)
+            .where(
+                IdentityPlatformAuthority.user_id == user_id,
+                IdentityPlatformAuthority.authority == "platform_admin",
+                IdentityPlatformAuthority.status == "active",
+            )
+            .limit(1)
+        )
+        return (
+            factor_id is not None
+            or privileged_membership_id is not None
+            or active_platform_admin_authority_id is not None
+        )
 
     def add_session(
         self,
