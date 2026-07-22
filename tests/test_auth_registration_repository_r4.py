@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from processual_api.auth.models import (
     AuthActionToken,
+    AuthDeliveryOutbox,
     IdentityOrganization,
     IdentityTermsAcceptance,
     IdentityUser,
@@ -49,6 +50,32 @@ def test_repository_adds_user_terms_token_and_server_owned_membership() -> None:
     membership = next(item for item in added if isinstance(item, OrganizationMembership))
     assert membership.role == "organization_owner"
     assert membership.status == "active"
+
+
+def test_repository_adds_ciphertext_only_delivery_outbox() -> None:
+    session = Mock()
+    repository = SqlAlchemyRegistrationRepository(session)
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+    action_token_id = uuid.uuid4()
+
+    repository.add_delivery_outbox(
+        outbox_id=uuid.uuid4(),
+        user_id=user_id,
+        action_token_id=action_token_id,
+        event_type="verify_email",
+        payload_ciphertext=b"nonce-and-authenticated-ciphertext",
+        payload_key_version="delivery-v1",
+        available_at=now,
+    )
+
+    queued = session.add.call_args.args[0]
+    assert isinstance(queued, AuthDeliveryOutbox)
+    assert queued.user_id == user_id
+    assert queued.action_token_id == action_token_id
+    assert queued.payload_ciphertext == b"nonce-and-authenticated-ciphertext"
+    assert queued.payload_key_version == "delivery-v1"
+    assert not hasattr(queued, "raw_action_token")
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,10 @@ from datetime import UTC, datetime
 
 import pytest
 
+from processual_api.auth.delivery_crypto import (
+    DeliveryPayloadCipher,
+    EncryptedDeliveryPayload,
+)
 from processual_api.auth.registration_contracts import RegistrationMode
 from processual_api.auth.registration_repository import RegistrationConflictError
 from processual_api.auth.registration_service import (
@@ -30,6 +34,7 @@ class FakeRepository:
         self.exists = exists
         self.lookups: list[str] = []
         self.added: list[dict] = []
+        self.outbox: list[dict] = []
 
     async def email_exists(self, email_normalized: str) -> bool:
         self.lookups.append(email_normalized)
@@ -37,6 +42,9 @@ class FakeRepository:
 
     def add_registration(self, **values) -> None:
         self.added.append(values)
+
+    def add_delivery_outbox(self, **values) -> None:
+        self.outbox.append(values)
 
 
 class FakeUnitOfWork:
@@ -53,6 +61,8 @@ class FakeUnitOfWork:
 
     async def commit(self) -> None:
         if self.conflict:
+            self.repository.added.clear()
+            self.repository.outbox.clear()
             raise RegistrationConflictError("duplicate")
         self.committed = True
 
@@ -64,6 +74,10 @@ def _service(repository: FakeRepository, *, conflict: bool = False):
         unit_of_work_factory=lambda: unit,
         password_service=password_service,
         token_digester=TokenDigester(b"p" * 32),
+        delivery_cipher=DeliveryPayloadCipher(
+            current_key_version="delivery-v1",
+            keys={"delivery-v1": b"d" * 32},
+        ),
         clock=lambda: NOW,
         slug_suffix_factory=lambda: "a1b2c3d4",
     )
@@ -88,13 +102,33 @@ async def test_individual_registration_is_atomic_and_hash_only() -> None:
     assert unit.committed is True
     assert password_service.seen == ["a sufficiently long password"]
     assert asdict(outcome.receipt) == {"status": "accepted", "next_action": "check_email"}
-    assert outcome.delivery is not None
-    assert outcome.delivery.email_normalized == "user@example.com"
     persisted = repository.added[0]
     assert persisted["password_hash"].startswith("$argon2id$")
-    assert persisted["action_token_hash"] != outcome.delivery.raw_action_token
     assert len(persisted["action_token_hash"]) == 64
     assert persisted["organization_id"] is None
+    queued = repository.outbox[0]
+    assert queued["user_id"] == persisted["user_id"]
+    assert queued["action_token_id"] == persisted["action_token_id"]
+    assert queued["event_type"] == "verify_email"
+    raw_token = DeliveryPayloadCipher(
+        current_key_version="delivery-v1",
+        keys={"delivery-v1": b"d" * 32},
+    ).decrypt(
+        EncryptedDeliveryPayload(
+            ciphertext=queued["payload_ciphertext"],
+            key_version=queued["payload_key_version"],
+        ),
+        outbox_id=str(queued["outbox_id"]),
+        user_id=str(queued["user_id"]),
+        action_token_id=str(queued["action_token_id"]),
+        purpose="verify_email",
+    )
+    assert TokenDigester(b"p" * 32).matches(
+        raw_token,
+        persisted["action_token_hash"],
+        purpose="verify_email",
+    )
+    assert raw_token.encode() not in queued["payload_ciphertext"]
 
 
 @pytest.mark.asyncio
@@ -114,7 +148,7 @@ async def test_organization_owner_authority_is_server_derived() -> None:
     )
 
     assert unit.committed is True
-    assert outcome.delivery is not None
+    assert asdict(outcome.receipt) == {"status": "accepted", "next_action": "check_email"}
     persisted = repository.added[0]
     assert persisted["organization_name"] == "Example Telecom"
     assert persisted["organization_slug"] == "example-telecom-a1b2c3d4"
@@ -138,7 +172,7 @@ async def test_existing_email_and_uniqueness_race_return_same_generic_receipt(co
     )
 
     assert asdict(outcome.receipt) == {"status": "accepted", "next_action": "check_email"}
-    assert outcome.delivery is None
+    assert repository.outbox == []
     assert password_service.seen == ["a sufficiently long password"]
 
 

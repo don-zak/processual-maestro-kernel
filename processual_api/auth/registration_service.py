@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from processual_api.auth.delivery_crypto import DeliveryPayloadCipher
 from processual_api.auth.normalization import (
     normalize_display_name,
     normalize_email,
@@ -26,6 +27,8 @@ class RegistrationRepository(Protocol):
     async def email_exists(self, email_normalized: str) -> bool: ...
 
     def add_registration(self, **values) -> None: ...
+
+    def add_delivery_outbox(self, **values) -> None: ...
 
 
 class RegistrationUnitOfWork(Protocol):
@@ -55,16 +58,8 @@ class RegistrationReceipt:
 
 
 @dataclass(frozen=True, slots=True)
-class VerificationDelivery:
-    email_normalized: str
-    raw_action_token: str
-    expires_at: datetime
-
-
-@dataclass(frozen=True, slots=True)
 class RegistrationOutcome:
     receipt: RegistrationReceipt
-    delivery: VerificationDelivery | None = None
 
 
 class RegistrationService:
@@ -74,12 +69,14 @@ class RegistrationService:
         unit_of_work_factory: Callable[[], RegistrationUnitOfWork],
         password_service: PasswordService,
         token_digester: TokenDigester,
+        delivery_cipher: DeliveryPayloadCipher,
         clock: Callable[[], datetime] | None = None,
         slug_suffix_factory: Callable[[], str] | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._password_service = password_service
         self._token_digester = token_digester
+        self._delivery_cipher = delivery_cipher
         self._clock = clock or (lambda: datetime.now(UTC))
         self._slug_suffix_factory = slug_suffix_factory or (lambda: secrets.token_hex(4))
 
@@ -113,37 +110,49 @@ class RegistrationService:
             raise ValueError("Registration clock must be timezone-aware.")
         expires_at = now + EMAIL_VERIFICATION_TTL
         receipt = RegistrationReceipt()
+        user_id = uuid.uuid4()
+        action_token_id = uuid.uuid4()
+        outbox_id = uuid.uuid4()
+        encrypted_delivery = self._delivery_cipher.encrypt(
+            verification.raw,
+            outbox_id=str(outbox_id),
+            user_id=str(user_id),
+            action_token_id=str(action_token_id),
+            purpose="verify_email",
+        )
 
         try:
             async with self._unit_of_work_factory() as unit_of_work:
                 if await unit_of_work.repository.email_exists(email):
                     return RegistrationOutcome(receipt=receipt)
                 unit_of_work.repository.add_registration(
-                    user_id=uuid.uuid4(),
+                    user_id=user_id,
                     email_normalized=email,
                     display_name=display_name,
                     password_hash=password_hash,
                     terms_version=terms_version,
                     accepted_at=now,
-                    action_token_id=uuid.uuid4(),
+                    action_token_id=action_token_id,
                     action_token_hash=verification.digest,
                     action_token_expires_at=expires_at,
                     organization_id=organization_id,
                     organization_slug=slug,
                     organization_name=organization_name,
                 )
+                unit_of_work.repository.add_delivery_outbox(
+                    outbox_id=outbox_id,
+                    user_id=user_id,
+                    action_token_id=action_token_id,
+                    event_type="verify_email",
+                    payload_ciphertext=encrypted_delivery.ciphertext,
+                    payload_key_version=encrypted_delivery.key_version,
+                    available_at=now,
+                )
                 await unit_of_work.commit()
         except RegistrationConflictError:
             return RegistrationOutcome(receipt=receipt)
 
-        return RegistrationOutcome(
-            receipt=receipt,
-            delivery=VerificationDelivery(
-                email_normalized=email,
-                raw_action_token=verification.raw,
-                expires_at=expires_at,
-            ),
-        )
+        return RegistrationOutcome(receipt=receipt)
 
 
 __all__ = [
@@ -152,5 +161,4 @@ __all__ = [
     "RegistrationReceipt",
     "RegistrationService",
     "RegistrationUnitOfWork",
-    "VerificationDelivery",
 ]
