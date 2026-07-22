@@ -20,7 +20,7 @@ def test_delivery_outbox_migration_is_the_single_head() -> None:
         text=True,
         env=_alembic_environment(),
     )
-    assert "20260722_0003 (head)" in result.stdout
+    assert "20260722_0004 (head)" in result.stdout
     assert result.stdout.count("(head)") == 1
 
 
@@ -58,3 +58,11 @@ def test_delivery_outbox_revision_has_expected_parent() -> None:
     source = Path("alembic/versions/20260722_0003_auth_delivery_outbox.py").read_text(encoding="utf-8")
     assert 'revision: str = "20260722_0003"' in source
     assert 'down_revision: str | none = "20260722_0002"' in source.lower()
+
+
+def test_email_verification_revision_extends_delivery_outbox_head() -> None:
+    source = Path(
+        "alembic/versions/20260722_0004_auth_email_verification_lifecycle.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "20260722_0004"' in source
+    assert 'down_revision: str | none = "20260722_0003"' in source.lower()
