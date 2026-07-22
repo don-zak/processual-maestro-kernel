@@ -64,6 +64,16 @@ EMAIL_VERIFICATION_RULES = (
     AuthRateLimitRule("token_window", "token", 5, 15 * 60),
 )
 
+LOGIN_RULES = (
+    AuthRateLimitRule("ip_window", "ip", 10, 15 * 60),
+    AuthRateLimitRule("email_window", "email", 5, 15 * 60),
+)
+
+SESSION_REFRESH_RULES = (
+    AuthRateLimitRule("ip_window", "ip", 60, 15 * 60),
+    AuthRateLimitRule("token_window", "token", 10, 15 * 60),
+)
+
 
 _MULTI_WINDOW_SCRIPT = """
 local rejected = 0
@@ -209,8 +219,10 @@ def resolve_client_ip(
 __all__ = [
     "EMAIL_VERIFICATION_RESEND_RULES",
     "EMAIL_VERIFICATION_RULES",
+    "LOGIN_RULES",
     "ORGANIZATION_REGISTRATION_RULES",
     "REGISTRATION_RULES",
+    "SESSION_REFRESH_RULES",
     "AuthRateLimitDecision",
     "AuthRateLimitRule",
     "AuthRateLimitUnavailableError",

@@ -64,7 +64,7 @@ async def login_for_access_token(body: LoginRequest):
             session_type="ui_admin",
             scopes=["*"],
         )
-    elif login_role in {"user", "client"}:
+    elif login_role in {"user", "client"} and not settings.is_production:
         token = create_access_token(
             subject=body.username,
             role="client",

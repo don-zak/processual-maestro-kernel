@@ -14,6 +14,11 @@ _AUTHORITATIVE_IDENTITY_PATHS = {
     "/auth/register/organization",
     "/auth/verify-email",
     "/auth/verification/resend",
+    "/auth/login",
+    "/auth/session/refresh",
+    "/auth/session/logout",
+    "/auth/session/logout-all",
+    "/auth/sessions",
 }
 
 
@@ -27,7 +32,7 @@ def _parse_rate_limit(limit_str: str) -> tuple[int, int]:
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        if request.url.path in _AUTHORITATIVE_IDENTITY_PATHS:
+        if request.url.path in _AUTHORITATIVE_IDENTITY_PATHS or request.url.path.startswith("/auth/sessions/"):
             return await call_next(request)
         if not settings.rate_limit_enabled:
             return await call_next(request)
