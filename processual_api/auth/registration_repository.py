@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.auth.models import (
     AuthActionToken,
+    AuthDeliveryOutbox,
     IdentityOrganization,
     IdentityTermsAcceptance,
     IdentityUser,
@@ -91,6 +92,30 @@ class SqlAlchemyRegistrationRepository:
                     joined_at=accepted_at,
                 )
             )
+
+    def add_delivery_outbox(
+        self,
+        *,
+        outbox_id: uuid.UUID,
+        user_id: uuid.UUID,
+        action_token_id: uuid.UUID,
+        event_type: str,
+        payload_ciphertext: bytes,
+        payload_key_version: str,
+        available_at: datetime,
+    ) -> None:
+        self._session.add(
+            AuthDeliveryOutbox(
+                id=outbox_id,
+                user_id=user_id,
+                action_token_id=action_token_id,
+                event_type=event_type,
+                payload_ciphertext=payload_ciphertext,
+                payload_key_version=payload_key_version,
+                available_at=available_at,
+                attempt_count=0,
+            )
+        )
 
 
 class SqlAlchemyRegistrationUnitOfWork:

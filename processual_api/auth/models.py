@@ -242,6 +242,37 @@ class AuthActionToken(Base):
     created_at: Mapped[datetime] = _created_at_column()
 
 
+class AuthDeliveryOutbox(Base):
+    __tablename__ = "auth_delivery_outbox"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('verify_email')", name="event_type_allowed"),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        Index("ix_auth_delivery_outbox_pending", "delivered_at", "available_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    action_token_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("auth_action_tokens.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    payload_key_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = _created_at_column()
+
+
 class AuthMfaFactor(Base):
     __tablename__ = "auth_mfa_factors"
     __table_args__ = (
@@ -326,4 +357,7 @@ IDENTITY_AUTH_MODELS = (
 )
 
 
-__all__ = [model.__name__ for model in IDENTITY_AUTH_MODELS]
+__all__ = [
+    *[model.__name__ for model in IDENTITY_AUTH_MODELS],
+    "AuthDeliveryOutbox",
+]
