@@ -15,8 +15,8 @@ from processual_api.auth.normalization import normalize_email
 from processual_api.auth.rate_limit import (
     LOGIN_RULES,
     SESSION_REFRESH_RULES,
-    AuthRateLimitUnavailableError,
     AuthRateLimitRule,
+    AuthRateLimitUnavailableError,
     resolve_client_ip,
 )
 from processual_api.auth.security import get_current_user
