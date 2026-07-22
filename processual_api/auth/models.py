@@ -250,7 +250,13 @@ class AuthDeliveryOutbox(Base):
     __table_args__ = (
         CheckConstraint("event_type IN ('verify_email')", name="event_type_allowed"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
-        Index("ix_auth_delivery_outbox_pending", "delivered_at", "available_at"),
+        Index(
+            "ix_auth_delivery_outbox_dispatch",
+            "delivered_at",
+            "dead_lettered_at",
+            "available_at",
+            "claimed_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _uuid_column()
@@ -270,8 +276,10 @@ class AuthDeliveryOutbox(Base):
     payload_key_version: Mapped[str] = mapped_column(String(40), nullable=False)
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error_code: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = _created_at_column()
 
