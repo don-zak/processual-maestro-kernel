@@ -45,11 +45,17 @@ def test_repository_adds_user_terms_token_and_server_owned_membership() -> None:
     added = [call.args[0] for call in session.add.call_args_list]
     assert any(isinstance(item, IdentityUser) for item in added)
     assert any(isinstance(item, IdentityTermsAcceptance) for item in added)
-    assert any(isinstance(item, AuthActionToken) for item in added)
-    assert any(isinstance(item, IdentityOrganization) for item in added)
+    terms = next(item for item in added if isinstance(item, IdentityTermsAcceptance))
+    action_token = next(item for item in added if isinstance(item, AuthActionToken))
+    organization = next(item for item in added if isinstance(item, IdentityOrganization))
     membership = next(item for item in added if isinstance(item, OrganizationMembership))
+    user = next(item for item in added if isinstance(item, IdentityUser))
+    assert terms.user is user
+    assert action_token.user is user
     assert membership.role == "organization_owner"
     assert membership.status == "active"
+    assert membership.user is user
+    assert membership.organization is organization
 
 
 def test_repository_adds_ciphertext_only_delivery_outbox() -> None:
@@ -59,6 +65,17 @@ def test_repository_adds_ciphertext_only_delivery_outbox() -> None:
     user_id = uuid.uuid4()
     action_token_id = uuid.uuid4()
 
+    repository.add_registration(
+        user_id=user_id,
+        email_normalized="delivery@example.com",
+        display_name="Delivery",
+        password_hash="$argon2id$encoded",
+        terms_version="2026-07",
+        accepted_at=now,
+        action_token_id=action_token_id,
+        action_token_hash="a" * 64,
+        action_token_expires_at=now + timedelta(hours=24),
+    )
     repository.add_delivery_outbox(
         outbox_id=uuid.uuid4(),
         user_id=user_id,
@@ -69,12 +86,14 @@ def test_repository_adds_ciphertext_only_delivery_outbox() -> None:
         available_at=now,
     )
 
-    queued = session.add.call_args.args[0]
+    queued = next(call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], AuthDeliveryOutbox))
     assert isinstance(queued, AuthDeliveryOutbox)
     assert queued.user_id == user_id
     assert queued.action_token_id == action_token_id
     assert queued.payload_ciphertext == b"nonce-and-authenticated-ciphertext"
     assert queued.payload_key_version == "delivery-v1"
+    assert queued.user.id == user_id
+    assert queued.action_token.id == action_token_id
     assert not hasattr(queued, "raw_action_token")
 
 

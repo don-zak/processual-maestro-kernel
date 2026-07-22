@@ -16,6 +16,12 @@ _engine = None
 _session_factory = None
 
 
+def get_session_factory():
+    if _session_factory is None:
+        raise RuntimeError("Database not initialized. Set DATABASE_URL and call init_db().")
+    return _session_factory
+
+
 def _get_database_url() -> str:
     url = settings.database_url
     if not url:

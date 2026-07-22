@@ -9,6 +9,11 @@ from starlette.responses import JSONResponse, Response
 from ..cache.redis import get_redis, rate_limit_key
 from ..settings import settings
 
+_AUTHORITATIVE_IDENTITY_PATHS = {
+    "/auth/register",
+    "/auth/register/organization",
+}
+
 
 def _parse_rate_limit(limit_str: str) -> tuple[int, int]:
     parts = limit_str.strip().split("/")
@@ -20,6 +25,8 @@ def _parse_rate_limit(limit_str: str) -> tuple[int, int]:
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if request.url.path in _AUTHORITATIVE_IDENTITY_PATHS:
+            return await call_next(request)
         if not settings.rate_limit_enabled:
             return await call_next(request)
 
@@ -36,9 +43,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         auth_header = request.headers.get("Authorization", "")
         limit_str = (
-            settings.rate_limit_authenticated
-            if auth_header.startswith("Bearer ")
-            else settings.rate_limit_default
+            settings.rate_limit_authenticated if auth_header.startswith("Bearer ") else settings.rate_limit_default
         )
 
         max_requests, window = _parse_rate_limit(limit_str)

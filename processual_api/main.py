@@ -73,6 +73,7 @@ from processual_api.services.integration_claim_keys import (
     revoke_integration_claim_key as pmk13a_revoke_integration_claim_key,
 )
 
+from .auth.registration_router import router as registration_router
 from .auth.router import router as auth_router
 from .auth.security import require_scope
 from .billing.router import router as billing_router
@@ -132,6 +133,7 @@ app.middleware("http")(error_handler_middleware)
 
 app.include_router(health.router)
 app.include_router(auth_router)
+app.include_router(registration_router)
 app.include_router(cgt.router)
 app.include_router(workflows.router)
 app.include_router(governance.router)
@@ -150,11 +152,14 @@ app.include_router(institution_qualification_18_router)
 # Static smoke marker: from fastapi.responses import HTMLResponse
 # Serve the Maestro Console frontend (single-page app)
 _static_dir = Path(__file__).resolve().parent / "static"
+
+
 @app.get("/pricing", include_in_schema=False)
 @app.get("/pricing.html", include_in_schema=False)
 async def pricing_page() -> FileResponse:
     """Serve the public-safe pricing/subscriptions page."""
     return FileResponse(_static_dir / "pricing.html")
+
 
 if _static_dir.exists():
     app.mount("/console", StaticFiles(directory=str(_static_dir), html=True), name="console")
@@ -179,10 +184,11 @@ async def login_page():
     return HTMLResponse(content=_login_html)
 
 
-
 @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
 async def admin_page():
     return HTMLResponse(content=_admin_html)
+
+
 @app.get("/metrics")
 async def metrics_endpoint():
     try:
@@ -191,6 +197,7 @@ async def metrics_endpoint():
         return Response(content=generate_latest(), media_type="text/plain")
     except Exception:
         return PlainTextResponse("# Prometheus metrics not available\n")
+
 
 # INTEGRATION_READINESS_TRACKING_11P_MAIN_ROUTE_MARKER
 @app.get("/settings/admin/integration-readiness-tracking")
@@ -240,7 +247,9 @@ async def admin_update_integration_readiness_tracking_case_item_11p(
             "raw_secret_visible": False,
         }
 
+
 # BEGIN INTEGRATION_READINESS_12A_CASE_MANAGEMENT_ROUTES
+
 
 @app.get("/settings/admin/integration-readiness-tracking/cases")
 def admin_integration_readiness_tracking_cases_12a():
@@ -310,9 +319,12 @@ def admin_integration_readiness_tracking_case_item_action_12a(
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 # END INTEGRATION_READINESS_12A_CASE_MANAGEMENT_ROUTES
 
 # BEGIN INTEGRATION_READINESS_12A_SUMMARY_ROUTE_REBIND
+
 
 def _admin_integration_readiness_tracking_summary_12a_compat():
     from processual_api.services.integration_readiness_tracking_store import (
@@ -345,9 +357,7 @@ _INTEGRATION_READINESS_WRITE_PATHS_12B = {
     "/settings/admin/integration-readiness-tracking/cases",
     "/settings/admin/integration-readiness-tracking/case-item-action",
 }
-_INTEGRATION_READINESS_WRITE_PREFIX_12B = (
-    "/settings/admin/integration-readiness-tracking/cases/"
-)
+_INTEGRATION_READINESS_WRITE_PREFIX_12B = "/settings/admin/integration-readiness-tracking/cases/"
 _INTEGRATION_READINESS_ALLOWED_SCOPES_12B = {
     "admin:clients:status_decide",
     "admin:clients:review",
@@ -410,21 +420,13 @@ def _append_integration_readiness_audit_12b(
         "case_id": str(payload.get("case_id") or ""),
         "item_key": str(payload.get("item_key") or ""),
         "status": str(payload.get("status") or ""),
-        "supervisor_session_present": bool(
-            safe_supervisor.get("session_present")
-        ),
-        "supervisor_session_validated": bool(
-            safe_supervisor.get("session_validated")
-        ),
+        "supervisor_session_present": bool(safe_supervisor.get("session_present")),
+        "supervisor_session_validated": bool(safe_supervisor.get("session_validated")),
         "session_key_id": str(safe_supervisor.get("session_key_id") or ""),
         "supervisor_scope": ",".join(
-            str(scope)
-            for scope in safe_supervisor.get("provided_scopes", [])
-            if str(scope or "").strip()
+            str(scope) for scope in safe_supervisor.get("provided_scopes", []) if str(scope or "").strip()
         ),
-        "at": datetime_module.datetime.now(datetime_module.UTC)
-        .replace(microsecond=0)
-        .isoformat(),
+        "at": datetime_module.datetime.now(datetime_module.UTC).replace(microsecond=0).isoformat(),
         "production_allowed": False,
         "runtime_connector_approved": False,
         "external_http_enabled": False,
@@ -493,9 +495,12 @@ async def integration_readiness_supervisor_scope_audit_12b(request, call_next):
         supervisor_session=safe_supervisor,
     )
     return response
+
+
 # END INTEGRATION_READINESS_12B_SUPERVISOR_SCOPE_AUDIT
 
 # BEGIN INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_ROUTES
+
 
 @app.get("/settings/admin/integration-readiness-operator-package")
 def admin_integration_readiness_operator_package_12c():
@@ -518,6 +523,8 @@ def admin_integration_readiness_operator_package_export_12c():
         render_operator_readiness_markdown_12c(),
         media_type="text/markdown; charset=utf-8",
     )
+
+
 # END INTEGRATION_READINESS_12C_OPERATOR_PACKAGE_ROUTES
 
 # PMK INTEGRATION CLAIM KEYS 13A START
@@ -530,8 +537,8 @@ PMK13A_ALLOWED_SUPERVISOR_SCOPES = {
 }
 
 
-
 # BEGIN INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
+
 
 @app.get("/settings/admin/operator-pilot-handoff")
 def admin_operator_pilot_handoff_package_14b():
@@ -559,23 +566,18 @@ def admin_operator_pilot_handoff_export_14b():
     return PlainTextResponse(
         markdown,
         media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": (
-                'attachment; filename="operator-pilot-handoff-14b.md"'
-            )
-        },
+        headers={"Content-Disposition": ('attachment; filename="operator-pilot-handoff-14b.md"')},
     )
 
 
 # END INTEGRATION_ONBOARDING_14B_OPERATOR_PILOT_HANDOFF_ROUTES
 
+
 # BEGIN PILOT_HANDOFF_17C_R1_INTAKE_PREVIEW_ROUTE
 @app.post("/settings/admin/operator-pilot-handoff/intake-preview")
 def admin_operator_pilot_handoff_intake_preview_17c_r1(
     payload: dict[str, object] = Body(...),
-    _current_user: dict = Depends(
-        require_scope("admin:integration_readiness:review")
-    ),
+    _current_user: dict = Depends(require_scope("admin:integration_readiness:review")),
 ) -> dict[str, object]:
     """Assess a reference-only sandbox manifest without persisting it."""
     from processual_api.services.operator_pilot_handoff_intake_preview import (
@@ -587,6 +589,8 @@ def admin_operator_pilot_handoff_intake_preview_17c_r1(
         return build_operator_pilot_handoff_intake_preview(payload)
     except IntakePreviewValidationError as exc:
         raise PMK13AHTTPException(status_code=422, detail=str(exc)) from exc
+
+
 # END PILOT_HANDOFF_17C_R1_INTAKE_PREVIEW_ROUTE
 
 
@@ -745,9 +749,7 @@ def _pmk13b_model_payload(payload: BaseModel) -> dict[str, object]:
 @app.post("/settings/admin/integration-tasks")
 async def pmk13b_admin_create_integration_task(
     request: PMK13ARequest,
-    payload: PMK13BIntegrationTaskCreateRequest = Body(
-        default_factory=PMK13BIntegrationTaskCreateRequest
-    ),
+    payload: PMK13BIntegrationTaskCreateRequest = Body(default_factory=PMK13BIntegrationTaskCreateRequest),
 ):
     from processual_api.services.integration_pilot_controls import create_integration_task
 
@@ -761,9 +763,7 @@ async def pmk13b_admin_create_integration_task(
 async def pmk13b_admin_suspend_integration_task(
     task_id: str,
     request: PMK13ARequest,
-    payload: PMK13BIntegrationTaskControlRequest = Body(
-        default_factory=PMK13BIntegrationTaskControlRequest
-    ),
+    payload: PMK13BIntegrationTaskControlRequest = Body(default_factory=PMK13BIntegrationTaskControlRequest),
 ):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
@@ -782,9 +782,7 @@ async def pmk13b_admin_suspend_integration_task(
 async def pmk13b_admin_resume_integration_task(
     task_id: str,
     request: PMK13ARequest,
-    payload: PMK13BIntegrationTaskControlRequest = Body(
-        default_factory=PMK13BIntegrationTaskControlRequest
-    ),
+    payload: PMK13BIntegrationTaskControlRequest = Body(default_factory=PMK13BIntegrationTaskControlRequest),
 ):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
@@ -803,9 +801,7 @@ async def pmk13b_admin_resume_integration_task(
 async def pmk13b_admin_revoke_integration_task(
     task_id: str,
     request: PMK13ARequest,
-    payload: PMK13BIntegrationTaskControlRequest = Body(
-        default_factory=PMK13BIntegrationTaskControlRequest
-    ),
+    payload: PMK13BIntegrationTaskControlRequest = Body(default_factory=PMK13BIntegrationTaskControlRequest),
 ):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
@@ -824,9 +820,7 @@ async def pmk13b_admin_revoke_integration_task(
 async def pmk13b_admin_cancel_integration_task(
     task_id: str,
     request: PMK13ARequest,
-    payload: PMK13BIntegrationTaskControlRequest = Body(
-        default_factory=PMK13BIntegrationTaskControlRequest
-    ),
+    payload: PMK13BIntegrationTaskControlRequest = Body(default_factory=PMK13BIntegrationTaskControlRequest),
 ):
     from processual_api.services.integration_pilot_controls import control_integration_task
 
@@ -864,6 +858,7 @@ async def pmk13b_admin_issue_activation_permission_key(
 
 
 # PMK INTEGRATION PILOT CONTROLS 13B END
+
 
 # PMK OPERATOR PILOT HANDOFF ACTIONS 14D START
 @app.get("/settings/admin/operator-pilot-handoff/actions-preview")
@@ -932,6 +927,7 @@ def _pmk14e_require_supervisor_write(
 
     return str(safe_supervisor["session_key_id"])
 
+
 @app.get("/settings/admin/operator-pilot-handoff/progress")
 def admin_operator_pilot_handoff_progress_14e() -> dict[str, object]:
     """Return safe local progress for operator pilot handoff actions."""
@@ -942,9 +938,7 @@ def admin_operator_pilot_handoff_progress_14e() -> dict[str, object]:
     return build_operator_pilot_handoff_progress_payload()
 
 
-@app.post(
-    "/settings/admin/operator-pilot-handoff/progress/actions/{action_id}"
-)
+@app.post("/settings/admin/operator-pilot-handoff/progress/actions/{action_id}")
 async def admin_update_operator_pilot_handoff_progress_14e(
     action_id: str,
     request: PMK13ARequest,
@@ -1003,11 +997,7 @@ _PMK_R9_ALLOWED_SUPERVISOR_SCOPES = {
 
 
 def _pmk_r9_now() -> str:
-    return (
-        datetime.now(UTC)
-        .replace(microsecond=0)
-        .isoformat()
-    )
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _pmk_r9_guardrails() -> dict[str, bool]:
@@ -1046,9 +1036,7 @@ def _pmk_r9_write_actor_or_denial(
                 "message": exc.detail,
                 "required_scopes": exc.required_scopes,
                 "supervisor_session_present": exc.session_present,
-                "supervisor_session_validated": (
-                    exc.session_validated
-                ),
+                "supervisor_session_validated": (exc.session_validated),
                 "session_key_id": exc.session_key_id,
                 "provided_scopes": exc.provided_scopes,
                 **_pmk_r9_guardrails(),
@@ -1100,10 +1088,7 @@ def _pmk_r9_service_error_response(
     response_model=list[ExternalConnectivityCaseResponse],
 )
 def pmk_r9_list_external_connectivity_cases():
-    return [
-        external_connectivity_case_response_from_contract(case)
-        for case in list_external_connectivity_cases()
-    ]
+    return [external_connectivity_case_response_from_contract(case) for case in list_external_connectivity_cases()]
 
 
 @app.post(
@@ -1115,9 +1100,7 @@ def pmk_r9_create_external_connectivity_case(
     request: PMK13ARequest,
     payload: ExternalConnectivityCaseCreateRequest,
 ):
-    actor, denial = _pmk_r9_write_actor_or_denial(
-        request
-    )
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
 
     if denial is not None:
         return denial
@@ -1132,9 +1115,7 @@ def pmk_r9_create_external_connectivity_case(
     except ExternalConnectivityIntakeError as exc:
         return _pmk_r9_service_error_response(exc)
 
-    return external_connectivity_case_response_from_contract(
-        case
-    )
+    return external_connectivity_case_response_from_contract(case)
 
 
 @app.get(
@@ -1149,9 +1130,7 @@ def pmk_r9_get_external_connectivity_case(
     except ExternalConnectivityIntakeError as exc:
         return _pmk_r9_service_error_response(exc)
 
-    return external_connectivity_case_response_from_contract(
-        case
-    )
+    return external_connectivity_case_response_from_contract(case)
 
 
 @app.post(
@@ -1161,12 +1140,7 @@ def pmk_r9_get_external_connectivity_case(
         "requestBody": {
             "required": True,
             "content": {
-                "application/json": {
-                    "schema": (
-                        CustomerReferencePackageSubmissionRequest
-                        .model_json_schema()
-                    )
-                }
+                "application/json": {"schema": (CustomerReferencePackageSubmissionRequest.model_json_schema())}
             },
         }
     },
@@ -1179,16 +1153,12 @@ def pmk_r9_submit_reference_package(
 ):
     from starlette.responses import JSONResponse
 
-    actor, denial = _pmk_r9_write_actor_or_denial(
-        request
-    )
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
 
     if denial is not None:
         return denial
 
-    prohibited = find_prohibited_customer_fields(
-        payload
-    )
+    prohibited = find_prohibited_customer_fields(payload)
 
     if prohibited:
         return JSONResponse(
@@ -1201,37 +1171,28 @@ def pmk_r9_submit_reference_package(
         )
 
     try:
-        validated_payload = (
-            CustomerReferencePackageSubmissionRequest
-            .model_validate(payload)
-        )
+        validated_payload = CustomerReferencePackageSubmissionRequest.model_validate(payload)
     except ValidationError:
         return JSONResponse(
             {
-                "error": (
-                    "customer_reference_package_invalid"
-                ),
+                "error": ("customer_reference_package_invalid"),
                 **_pmk_r9_guardrails(),
             },
             status_code=422,
         )
 
     try:
-        case = (
-            submit_external_connectivity_reference_package(
-                case_id,
-                validated_payload,
-                expected_revision=expected_revision,
-                actor=actor,
-                occurred_at=_pmk_r9_now(),
-            )
+        case = submit_external_connectivity_reference_package(
+            case_id,
+            validated_payload,
+            expected_revision=expected_revision,
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
         )
     except ExternalConnectivityIntakeError as exc:
         return _pmk_r9_service_error_response(exc)
 
-    return external_connectivity_case_response_from_contract(
-        case
-    )
+    return external_connectivity_case_response_from_contract(case)
 
 
 @app.post(
@@ -1243,117 +1204,71 @@ def pmk_r9_review_reference_package(
     request: PMK13ARequest,
     payload: ExternalConnectivityReadinessReviewRequest,
 ):
-    actor, denial = _pmk_r9_write_actor_or_denial(
-        request
-    )
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
 
     if denial is not None:
         return denial
 
     try:
-        assessment = (
-            review_external_connectivity_reference_package(
-                case_id,
-                assessment_id=(
-                    f"ecassessment_{uuid4().hex}"
-                ),
-                expected_revision=(
-                    payload.expected_revision
-                ),
-                actor=actor,
-                occurred_at=_pmk_r9_now(),
-            )
+        assessment = review_external_connectivity_reference_package(
+            case_id,
+            assessment_id=(f"ecassessment_{uuid4().hex}"),
+            expected_revision=(payload.expected_revision),
+            actor=actor,
+            occurred_at=_pmk_r9_now(),
         )
         case = get_external_connectivity_case(case_id)
     except ExternalConnectivityIntakeError as exc:
         return _pmk_r9_service_error_response(exc)
 
     return ExternalConnectivityReviewResultResponse(
-        case=(
-            external_connectivity_case_response_from_contract(
-                case
-            )
-        ),
-        assessment=(
-            external_connectivity_assessment_response_from_contract(
-                assessment
-            )
-        ),
+        case=(external_connectivity_case_response_from_contract(case)),
+        assessment=(external_connectivity_assessment_response_from_contract(assessment)),
     )
 
 
 @app.post(
     f"{_PMK_R9_BASE_PATH}/{{case_id}}/supervisor-decision",
-    response_model=(
-        ExternalConnectivitySupervisorDecisionResultResponse
-    ),
+    response_model=(ExternalConnectivitySupervisorDecisionResultResponse),
 )
 def pmk_r9_record_supervisor_decision(
     case_id: str,
     request: PMK13ARequest,
     payload: ExternalConnectivitySupervisorDecisionRequest,
 ):
-    actor, denial = _pmk_r9_write_actor_or_denial(
-        request
-    )
+    actor, denial = _pmk_r9_write_actor_or_denial(request)
 
     if denial is not None:
         return denial
 
     try:
-        attestation = (
-            record_external_connectivity_supervisor_decision(
-                case_id,
-                decision=SupervisorReadinessDecision(
-                    payload.decision
-                ),
-                attestation_id=(
-                    f"ecattestation_{uuid4().hex}"
-                ),
-                expected_revision=(
-                    payload.expected_revision
-                ),
-                expected_package_fingerprint=(
-                    payload.expected_package_fingerprint
-                ),
-                actor=actor,
-                reason_code=payload.reason_code,
-                occurred_at=_pmk_r9_now(),
-                expires_at=payload.expires_at,
-            )
+        attestation = record_external_connectivity_supervisor_decision(
+            case_id,
+            decision=SupervisorReadinessDecision(payload.decision),
+            attestation_id=(f"ecattestation_{uuid4().hex}"),
+            expected_revision=(payload.expected_revision),
+            expected_package_fingerprint=(payload.expected_package_fingerprint),
+            actor=actor,
+            reason_code=payload.reason_code,
+            occurred_at=_pmk_r9_now(),
+            expires_at=payload.expires_at,
         )
         case = get_external_connectivity_case(case_id)
     except ExternalConnectivityIntakeError as exc:
         return _pmk_r9_service_error_response(exc)
     except ValueError:
-        return _pmk_r9_service_error_response(
-            ExternalConnectivityIntakeError(
-                "supervisor_attestation_invalid"
-            )
-        )
+        return _pmk_r9_service_error_response(ExternalConnectivityIntakeError("supervisor_attestation_invalid"))
 
-    return (
-        ExternalConnectivitySupervisorDecisionResultResponse(
-            case=(
-                external_connectivity_case_response_from_contract(
-                    case
-                )
-            ),
-            attestation=(
-                supervisor_readiness_attestation_response_from_contract(
-                    attestation
-                )
-            ),
-        )
+    return ExternalConnectivitySupervisorDecisionResultResponse(
+        case=(external_connectivity_case_response_from_contract(case)),
+        attestation=(supervisor_readiness_attestation_response_from_contract(attestation)),
     )
 
 
 # END EXTERNAL_CONNECTIVITY_R9_ROUTES
 # BEGIN EXTERNAL_CONNECTIVITY_R10_KEY_ROUTES
 
-_PMK_R10_CLIENT_REDEEM_PATH = (
-    "/settings/client/external-connectivity/qualification/redeem"
-)
+_PMK_R10_CLIENT_REDEEM_PATH = "/settings/client/external-connectivity/qualification/redeem"
 
 
 def _pmk_r10_error_response(
@@ -1392,27 +1307,19 @@ def _pmk_r10_response_payload(
     result: dict[str, object],
 ) -> dict[str, object]:
     payload = dict(result)
-    payload["case"] = (
-        external_connectivity_case_response_from_contract(
-            result["case"]
-        )
-    )
+    payload["case"] = external_connectivity_case_response_from_contract(result["case"])
     return payload
 
 
 def _pmk_r10_mutation_response(
     result: dict[str, object],
 ) -> ExternalConnectivityKeyMutationResponse:
-    return ExternalConnectivityKeyMutationResponse.model_validate(
-        _pmk_r10_response_payload(result)
-    )
+    return ExternalConnectivityKeyMutationResponse.model_validate(_pmk_r10_response_payload(result))
 
 
 @app.post(
     f"{_PMK_R9_BASE_PATH}/{{case_id}}/qualification-key",
-    response_model=(
-        ExternalConnectivityQualificationKeyIssueResponse
-    ),
+    response_model=(ExternalConnectivityQualificationKeyIssueResponse),
     status_code=201,
 )
 def pmk_r10_issue_qualification_key(
@@ -1437,12 +1344,7 @@ def pmk_r10_issue_qualification_key(
     except ExternalConnectivityQualificationError as exc:
         return _pmk_r10_error_response(exc)
 
-    return (
-        ExternalConnectivityQualificationKeyIssueResponse
-        .model_validate(
-            _pmk_r10_response_payload(result)
-        )
-    )
+    return ExternalConnectivityQualificationKeyIssueResponse.model_validate(_pmk_r10_response_payload(result))
 
 
 @app.post(
@@ -1467,10 +1369,7 @@ def pmk_r10_redeem_qualification_key(
 
 
 @app.post(
-    (
-        f"{_PMK_R9_BASE_PATH}/{{case_id}}/qualification-key/"
-        "{qualification_key_id}/revoke"
-    ),
+    (f"{_PMK_R9_BASE_PATH}/{{case_id}}/qualification-key/{{qualification_key_id}}/revoke"),
     response_model=ExternalConnectivityKeyMutationResponse,
 )
 def pmk_r10_revoke_qualification_key(
@@ -1527,23 +1426,13 @@ def pmk_r10_issue_sandbox_api_key(
         ExternalConnectivityQualificationError,
         ValueError,
     ) as exc:
-        return _pmk_r10_error_response(
-            ExternalConnectivityQualificationError(str(exc))
-        )
+        return _pmk_r10_error_response(ExternalConnectivityQualificationError(str(exc)))
 
-    return (
-        ExternalConnectivitySandboxApiKeyIssueResponse
-        .model_validate(
-            _pmk_r10_response_payload(result)
-        )
-    )
+    return ExternalConnectivitySandboxApiKeyIssueResponse.model_validate(_pmk_r10_response_payload(result))
 
 
 @app.post(
-    (
-        f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key/"
-        "{sandbox_api_key_id}/suspend"
-    ),
+    (f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key/{{sandbox_api_key_id}}/suspend"),
     response_model=ExternalConnectivityKeyMutationResponse,
 )
 def pmk_r10_suspend_sandbox_api_key(
@@ -1572,10 +1461,7 @@ def pmk_r10_suspend_sandbox_api_key(
 
 
 @app.post(
-    (
-        f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key/"
-        "{sandbox_api_key_id}/revoke"
-    ),
+    (f"{_PMK_R9_BASE_PATH}/{{case_id}}/sandbox-api-key/{{sandbox_api_key_id}}/revoke"),
     response_model=ExternalConnectivityKeyMutationResponse,
 )
 def pmk_r10_revoke_sandbox_api_key(

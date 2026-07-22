@@ -46,16 +46,8 @@ class APISettings:
     jwt_expire_minutes: int = field(default_factory=lambda: int(os.environ.get("JWT_EXPIRE_MINUTES", "60")))
 
     # --- Maestro Admin Login ---
-    maestro_admin_email: str = field(
-        default_factory=lambda: os.environ.get(
-            "MAESTRO_ADMIN_EMAIL", ""
-        ).strip()
-    )
-    maestro_admin_password: str = field(
-        default_factory=lambda: os.environ.get(
-            "MAESTRO_ADMIN_PASSWORD", ""
-        )
-    )
+    maestro_admin_email: str = field(default_factory=lambda: os.environ.get("MAESTRO_ADMIN_EMAIL", "").strip())
+    maestro_admin_password: str = field(default_factory=lambda: os.environ.get("MAESTRO_ADMIN_PASSWORD", ""))
 
     # --- API Key Authentication ---
     api_keys: list[str] = field(
@@ -70,6 +62,27 @@ class APISettings:
     # --- Cache (Redis) ---
     redis_url: str | None = field(default_factory=lambda: os.environ.get("REDIS_URL"))
     redis_rate_limit_prefix: str = "rl:"
+
+    # --- Identity registration authority (fail-closed when incomplete) ---
+    auth_token_pepper: str | None = field(default_factory=lambda: os.environ.get("AUTH_TOKEN_PEPPER"))
+    auth_rate_limit_pepper: str | None = field(default_factory=lambda: os.environ.get("AUTH_RATE_LIMIT_PEPPER"))
+    auth_delivery_key_ring_json: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_DELIVERY_KEY_RING_JSON")
+    )
+    auth_delivery_current_key_version: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_DELIVERY_CURRENT_KEY_VERSION")
+    )
+    auth_trusted_proxy_cidrs: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            value.strip() for value in os.environ.get("AUTH_TRUSTED_PROXY_CIDRS", "").split(",") if value.strip()
+        )
+    )
+    auth_trusted_proxy_max_hops: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_TRUSTED_PROXY_MAX_HOPS", "8"))
+    )
+    auth_registration_min_response_ms: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_REGISTRATION_MIN_RESPONSE_MS", "350"))
+    )
 
     # --- Rate Limiting ---
     rate_limit_enabled: bool = field(
@@ -130,16 +143,12 @@ class APISettings:
             )
             return
 
-        detail = (
-            "MAESTRO_ADMIN_EMAIL and MAESTRO_ADMIN_PASSWORD must be set "
-            "before deploying to production."
-        )
+        detail = "MAESTRO_ADMIN_EMAIL and MAESTRO_ADMIN_PASSWORD must be set before deploying to production."
         if self.is_production:
             raise RuntimeError(detail)
 
         warnings.warn(
-            "MAESTRO_ADMIN_EMAIL or MAESTRO_ADMIN_PASSWORD is missing. "
-            "Using development-only admin/admin fallback.",
+            "MAESTRO_ADMIN_EMAIL or MAESTRO_ADMIN_PASSWORD is missing. Using development-only admin/admin fallback.",
             stacklevel=2,
         )
 

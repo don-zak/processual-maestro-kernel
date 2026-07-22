@@ -55,9 +55,7 @@ def test_request_id_and_security_headers_are_added():
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["x-xss-protection"] == "1; mode=block"
-    assert response.headers["strict-transport-security"] == (
-        "max-age=31536000; includeSubDomains"
-    )
+    assert response.headers["strict-transport-security"] == ("max-age=31536000; includeSubDomains")
 
 
 def test_error_handler_returns_generic_500_response():
@@ -67,9 +65,7 @@ def test_error_handler_returns_generic_500_response():
     response = asyncio.run(error_handler_middleware(_request(), failing_call_next))
 
     assert response.status_code == 500
-    assert json.loads(response.body.decode("utf-8")) == {
-        "detail": "Internal server error"
-    }
+    assert json.loads(response.body.decode("utf-8")) == {"detail": "Internal server error"}
     assert "sensitive internal failure" not in response.body.decode("utf-8")
 
 
@@ -80,6 +76,24 @@ def test_parse_rate_limit_accepts_known_and_default_windows():
     assert rate_module._parse_rate_limit("40/day") == (40, 86400)
     assert rate_module._parse_rate_limit("5/custom") == (5, 60)
     assert rate_module._parse_rate_limit("7") == (7, 60)
+
+
+def test_registration_routes_bypass_legacy_rate_limit_middleware(monkeypatch):
+    class FailingRedis:
+        async def incr(self, key):
+            raise AssertionError("legacy limiter must not inspect registration")
+
+    async def fake_get_redis():
+        return FailingRedis()
+
+    monkeypatch.setattr(rate_module, "get_redis", fake_get_redis)
+    monkeypatch.setattr(rate_module.settings, "rate_limit_enabled", True)
+    app = _app_with_route("/auth/register")
+    app.add_middleware(rate_module.RateLimitMiddleware)
+
+    response = TestClient(app).get("/auth/register")
+
+    assert response.status_code == 200
 
 
 def test_rate_limit_middleware_uses_redis_counter_and_returns_429(monkeypatch):
@@ -210,20 +224,22 @@ def test_usage_log_store_sanitizes_raw_api_key_in_endpoint(tmp_path, monkeypatch
     monkeypatch.setattr(usage_log_store, "_USAGE_LOG_PATH", log_path)
 
     raw_api_key = "pmk_secretRawKeyShouldNotLeak123"
-    usage_log_store.append_usage_log({
-        "request_id": "usage-sanitize-01",
-        "client_id": "client_1",
-        "user_id": "user_1",
-        "api_key_id": "key_1",
-        "api_key_prefix": "pmk_secret...",
-        "auth_method": "api_key",
-        "session_type": "api_key",
-        "method": "PATCH",
-        "endpoint": f"/settings/api-keys/{raw_api_key}/plan",
-        "status_code": 404,
-        "latency_ms": 1.25,
-        "role": "client",
-    })
+    usage_log_store.append_usage_log(
+        {
+            "request_id": "usage-sanitize-01",
+            "client_id": "client_1",
+            "user_id": "user_1",
+            "api_key_id": "key_1",
+            "api_key_prefix": "pmk_secret...",
+            "auth_method": "api_key",
+            "session_type": "api_key",
+            "method": "PATCH",
+            "endpoint": f"/settings/api-keys/{raw_api_key}/plan",
+            "status_code": 404,
+            "latency_ms": 1.25,
+            "role": "client",
+        }
+    )
 
     record = json.loads(log_path.read_text(encoding="utf-8").strip())
 
