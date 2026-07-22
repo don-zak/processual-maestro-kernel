@@ -15,6 +15,7 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "POSTGRES_PASSWORD",
     "REDIS_PASSWORD",
     "GRAFANA_ADMIN_PASSWORD",
+    "AUTH_DELIVERY_PROVIDER_TOKEN",
 )
 
 
@@ -82,6 +83,33 @@ class APISettings:
     )
     auth_registration_min_response_ms: int = field(
         default_factory=lambda: int(os.environ.get("AUTH_REGISTRATION_MIN_RESPONSE_MS", "350"))
+    )
+    auth_delivery_provider_url: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_URL")
+    )
+    auth_delivery_provider_token: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_TOKEN")
+    )
+    auth_public_base_url: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_PUBLIC_BASE_URL")
+    )
+    auth_delivery_batch_size: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_DELIVERY_BATCH_SIZE", "25"))
+    )
+    auth_delivery_lease_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_DELIVERY_LEASE_SECONDS", "300"))
+    )
+    auth_delivery_max_attempts: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_DELIVERY_MAX_ATTEMPTS", "8"))
+    )
+    auth_delivery_retry_base_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_DELIVERY_RETRY_BASE_SECONDS", "30"))
+    )
+    auth_delivery_retry_max_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("AUTH_DELIVERY_RETRY_MAX_SECONDS", "3600"))
+    )
+    auth_delivery_request_timeout_seconds: float = field(
+        default_factory=lambda: float(os.environ.get("AUTH_DELIVERY_REQUEST_TIMEOUT_SECONDS", "10"))
     )
 
     # --- Rate Limiting ---

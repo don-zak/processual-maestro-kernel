@@ -363,7 +363,7 @@ gcloud builds submit --config cloudbuild.yaml --substitutions _REGION=us-central
 Deploy the already-built image only after production secrets and environment variables are configured:
 
 ```powershell
-gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production,APP_ENV=production,API_DEBUG=false --set-secrets JWT_SECRET=JWT_SECRET:latest,API_KEYS=API_KEYS:latest,PROCESSUAL_CRYPTO_KEY_B64=PROCESSUAL_CRYPTO_KEY_B64:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest,POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,GRAFANA_ADMIN_PASSWORD=GRAFANA_ADMIN_PASSWORD:latest
+gcloud run deploy processual-maestro-api --image us-central1-docker.pkg.dev/PROJECT_ID/processual-maestro/processual-maestro-api:latest --region us-central1 --platform managed --allow-unauthenticated --port 8000 --set-env-vars ENVIRONMENT=production,APP_ENV=production,API_DEBUG=false --set-secrets JWT_SECRET=JWT_SECRET:latest,API_KEYS=API_KEYS:latest,PROCESSUAL_CRYPTO_KEY_B64=PROCESSUAL_CRYPTO_KEY_B64:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,MAESTRO_ADMIN_EMAIL=MAESTRO_ADMIN_EMAIL:latest,MAESTRO_ADMIN_PASSWORD=MAESTRO_ADMIN_PASSWORD:latest,POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,GRAFANA_ADMIN_PASSWORD=GRAFANA_ADMIN_PASSWORD:latest,AUTH_DELIVERY_PROVIDER_TOKEN=AUTH_DELIVERY_PROVIDER_TOKEN:latest
 ```
 
 Cloud Run provides the runtime `PORT` value. The container keeps the default fallback `${PORT:-8000}` for local compatibility.
@@ -395,6 +395,7 @@ Readiness check:
 | `POSTGRES_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; use a strong value even when the database provider is external. |
 | `REDIS_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; keep aligned with the deployed Redis provider. |
 | `GRAFANA_ADMIN_PASSWORD` | Yes | Secret Manager | Required by the current production startup gate; keep a strong secret even for API-only deployments. |
+| `AUTH_DELIVERY_PROVIDER_TOKEN` | Yes for the delivery worker | Secret Manager | Provider bearer credential; never commit or log it. |
 
 Billing remains BYOK: provider costs are not included in Maestro usage pricing, and plan allowances must come from the pricing catalog rather than deployment configuration.
 
@@ -425,3 +426,4 @@ Processual Maestro now keeps subscription plans separate from draft commercial o
 - Checkout remains disabled for all offers.
 - Monthly Maestro unit allowances are still resolved from `usage_pricing.py`, not from payment-provider payloads.
 - Lemon Squeezy variant mapping must not be enabled until offer prices, intervals, and variant IDs are approved.
+

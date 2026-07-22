@@ -20,7 +20,7 @@ def test_delivery_outbox_migration_is_the_single_head() -> None:
         text=True,
         env=_alembic_environment(),
     )
-    assert "20260722_0004 (head)" in result.stdout
+    assert "20260722_0005 (head)" in result.stdout
     assert result.stdout.count("(head)") == 1
 
 
