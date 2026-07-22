@@ -528,6 +528,99 @@ def require_recent_mfa(max_age_seconds: int = 300):
 
     return _recent_mfa_dependency
 
+def require_platform_admin_step_up(
+    max_age_seconds: int | None = None,
+):
+    effective_max_age = (
+        settings.auth_mfa_step_up_seconds
+        if max_age_seconds is None
+        else max_age_seconds
+    )
+    if effective_max_age < 60 or effective_max_age > 1800:
+        raise ValueError(
+            "Platform-admin step-up lifetime is outside its safe range."
+        )
+
+    async def _platform_admin_step_up_dependency(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        if current_user.get("session_type") != "identity_user":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Identity session required.",
+            )
+        try:
+            session_id = uuid.UUID(str(current_user["session_id"]))
+            user_id = uuid.UUID(str(current_user["user_id"]))
+
+            from sqlalchemy import select
+
+            from processual_api.auth.models import (
+                AuthSession,
+                IdentityPlatformAuthority,
+            )
+            from processual_api.db.session import get_session_factory
+
+            async with get_session_factory()() as db_session:
+                row = (
+                    await db_session.execute(
+                        select(
+                            AuthSession,
+                            IdentityPlatformAuthority,
+                        )
+                        .join(
+                            IdentityPlatformAuthority,
+                            IdentityPlatformAuthority.user_id
+                            == AuthSession.user_id,
+                        )
+                        .where(
+                            AuthSession.id == session_id,
+                            AuthSession.user_id == user_id,
+                            IdentityPlatformAuthority.authority
+                            == "platform_admin",
+                            IdentityPlatformAuthority.status == "active",
+                        )
+                    )
+                ).one_or_none()
+        except HTTPException:
+            raise
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Platform administrator step-up required.",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Session authority unavailable",
+            ) from exc
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Active platform administrator authority required.",
+            )
+
+        auth_session, _platform_authority = row
+        now = datetime.now(UTC)
+
+        if (
+            auth_session.revoked_at is not None
+            or auth_session.expires_at <= now
+            or auth_session.mfa_satisfied_at is None
+            or auth_session.mfa_satisfied_at
+            < now - timedelta(seconds=effective_max_age)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Recent MFA verification required.",
+            )
+
+        return current_user
+
+    return _platform_admin_step_up_dependency
+
+
 def require_quota(quota_scope: str = "evaluation"):
     async def _quota_dependency(
         request: Request,
