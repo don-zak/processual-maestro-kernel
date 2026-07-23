@@ -69,6 +69,11 @@ class IdentityUser(Base):
         cascade="all, delete-orphan",
         foreign_keys="IdentityPlatformAuthority.user_id",
     )
+    email_addresses: Mapped[list[IdentityUserEmailAddress]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="IdentityUserEmailAddress.user_id",
+    )
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -181,7 +186,7 @@ class IdentityPlatformAuthority(Base):
             name="uq_identity_platform_authority_user_authority",
         ),
         CheckConstraint(
-            "authority IN ('platform_admin')",
+            "authority IN ('platform_admin', 'platform_supervisor')",
             name="authority_allowed",
         ),
         CheckConstraint(
@@ -241,6 +246,55 @@ class IdentityPlatformAuthority(Base):
     )
     revoked_by_user: Mapped[IdentityUser | None] = relationship(
         foreign_keys=[revoked_by_user_id],
+    )
+
+
+class IdentityUserEmailAddress(Base):
+    """A governed non-primary email address owned by an identity user."""
+
+    __tablename__ = "identity_user_email_addresses"
+    __table_args__ = (
+        UniqueConstraint(
+            "email_normalized",
+            name="uq_identity_user_email_address_email",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "purpose",
+            name="uq_identity_user_email_address_user_purpose",
+        ),
+        CheckConstraint(
+            "purpose IN ('recovery')",
+            name="purpose_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'verified', 'revoked')",
+            name="status_allowed",
+        ),
+        Index(
+            "ix_identity_user_email_addresses_user_status",
+            "user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    email_normalized: Mapped[str] = mapped_column(String(320), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False, default="recovery")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+    user: Mapped[IdentityUser] = relationship(
+        back_populates="email_addresses",
+        foreign_keys=[user_id],
     )
 
 

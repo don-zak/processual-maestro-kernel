@@ -50,10 +50,13 @@ def test_platform_authority_is_independent_from_organization_membership() -> Non
     assert "status" in table.columns
 
 
-def test_platform_authority_allows_only_governed_platform_admin() -> None:
+def test_platform_authority_allows_only_governed_admin_and_supervisor() -> None:
     constraints = _check_constraint_texts()
 
-    assert "authority IN ('platform_admin')" in constraints
+    assert (
+        "authority IN ('platform_admin', 'platform_supervisor')"
+        in constraints
+    )
     assert "status IN ('active', 'revoked')" in constraints
 
 
@@ -129,3 +132,14 @@ def test_platform_authority_migration_extends_current_head() -> None:
     assert migration.down_revision == "20260722_0005"
     assert callable(migration.upgrade)
     assert callable(migration.downgrade)
+
+
+
+def test_platform_supervisor_is_not_platform_admin() -> None:
+    constraints = _check_constraint_texts()
+    authority_constraint = next(
+        text for text in constraints if text.startswith("authority IN")
+    )
+    assert "'platform_admin'" in authority_constraint
+    assert "'platform_supervisor'" in authority_constraint
+    assert "platform_supervisor" != "platform_admin"
