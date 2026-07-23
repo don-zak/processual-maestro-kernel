@@ -5,6 +5,13 @@ from urllib.parse import urlsplit
 
 import httpx
 
+ALLOWED_VERIFICATION_TEMPLATES = frozenset(
+    {
+        "verify_email",
+        "verify_recovery_email",
+    }
+)
+
 
 class DeliveryProviderError(RuntimeError):
     def __init__(self, error_code: str) -> None:
@@ -16,15 +23,21 @@ class DeliveryProvider(Protocol):
     async def send_verification_email(
         self,
         *,
+        template: str,
         recipient: str,
         verification_url: str,
         idempotency_key: str,
     ) -> None: ...
 
 
-def validate_https_endpoint(value: str, *, label: str) -> str:
+def validate_https_endpoint(
+    value: str,
+    *,
+    label: str,
+) -> str:
     normalized = value.strip().rstrip("/")
     parsed = urlsplit(normalized)
+
     if (
         parsed.scheme != "https"
         or not parsed.hostname
@@ -33,7 +46,11 @@ def validate_https_endpoint(value: str, *, label: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise ValueError(f"{label} must be an HTTPS URL without credentials, query, or fragment.")
+        raise ValueError(
+            f"{label} must be an HTTPS URL without "
+            "credentials, query, or fragment."
+        )
+
     return normalized
 
 
@@ -45,21 +62,39 @@ class HttpEmailDeliveryProvider:
         bearer_token: str,
         timeout_seconds: float,
     ) -> None:
-        self._endpoint = validate_https_endpoint(endpoint, label="Delivery provider URL")
+        self._endpoint = validate_https_endpoint(
+            endpoint,
+            label="Delivery provider URL",
+        )
+
         if len(bearer_token.encode()) < 32:
-            raise ValueError("Delivery provider token must contain at least 32 bytes.")
+            raise ValueError(
+                "Delivery provider token must contain "
+                "at least 32 bytes."
+            )
+
         if timeout_seconds <= 0 or timeout_seconds > 60:
-            raise ValueError("Delivery provider timeout is outside its safe range.")
+            raise ValueError(
+                "Delivery provider timeout is outside "
+                "its safe range."
+            )
+
         self._bearer_token = bearer_token
         self._timeout_seconds = timeout_seconds
 
     async def send_verification_email(
         self,
         *,
+        template: str,
         recipient: str,
         verification_url: str,
         idempotency_key: str,
     ) -> None:
+        if template not in ALLOWED_VERIFICATION_TEMPLATES:
+            raise ValueError(
+                "Delivery verification template is invalid."
+            )
+
         try:
             async with httpx.AsyncClient(
                 timeout=self._timeout_seconds,
@@ -68,27 +103,37 @@ class HttpEmailDeliveryProvider:
                 response = await client.post(
                     self._endpoint,
                     headers={
-                        "Authorization": f"Bearer {self._bearer_token}",
+                        "Authorization": (
+                            f"Bearer {self._bearer_token}"
+                        ),
                         "Idempotency-Key": idempotency_key,
                     },
                     json={
-                        "template": "verify_email",
+                        "template": template,
                         "recipient": recipient,
                         "verification_url": verification_url,
                     },
                 )
         except httpx.TimeoutException as exc:
-            raise DeliveryProviderError("provider_timeout") from exc
+            raise DeliveryProviderError(
+                "provider_timeout"
+            ) from exc
         except httpx.RequestError as exc:
-            raise DeliveryProviderError("provider_network") from exc
+            raise DeliveryProviderError(
+                "provider_network"
+            ) from exc
+
         if 200 <= response.status_code < 300:
             return
+
         if response.status_code >= 500:
             raise DeliveryProviderError("provider_5xx")
+
         raise DeliveryProviderError("provider_4xx")
 
 
 __all__ = [
+    "ALLOWED_VERIFICATION_TEMPLATES",
     "DeliveryProvider",
     "DeliveryProviderError",
     "HttpEmailDeliveryProvider",
