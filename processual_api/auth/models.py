@@ -64,6 +64,16 @@ class IdentityUser(Base):
         cascade="all, delete-orphan",
         foreign_keys="OrganizationMembership.user_id",
     )
+    platform_authorities: Mapped[list[IdentityPlatformAuthority]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="IdentityPlatformAuthority.user_id",
+    )
+    email_addresses: Mapped[list[IdentityUserEmailAddress]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="IdentityUserEmailAddress.user_id",
+    )
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -165,6 +175,129 @@ class OrganizationMembership(Base):
     organization: Mapped[IdentityOrganization] = relationship(back_populates="memberships")
 
 
+class IdentityPlatformAuthority(Base):
+    """A platform-level authority assigned independently of organization membership."""
+
+    __tablename__ = "identity_platform_authorities"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "authority",
+            name="uq_identity_platform_authority_user_authority",
+        ),
+        CheckConstraint(
+            "authority IN ('platform_admin', 'platform_supervisor')",
+            name="authority_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'revoked')",
+            name="status_allowed",
+        ),
+        Index(
+            "ix_identity_platform_authorities_authority_status",
+            "authority",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    authority: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="platform_admin",
+    )
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="active",
+    )
+    granted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    grant_reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(String(500))
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+    user: Mapped[IdentityUser] = relationship(
+        back_populates="platform_authorities",
+        foreign_keys=[user_id],
+    )
+    granted_by_user: Mapped[IdentityUser | None] = relationship(
+        foreign_keys=[granted_by_user_id],
+    )
+    revoked_by_user: Mapped[IdentityUser | None] = relationship(
+        foreign_keys=[revoked_by_user_id],
+    )
+
+
+class IdentityUserEmailAddress(Base):
+    """A governed non-primary email address owned by an identity user."""
+
+    __tablename__ = "identity_user_email_addresses"
+    __table_args__ = (
+        UniqueConstraint(
+            "email_normalized",
+            name="uq_identity_user_email_address_email",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "purpose",
+            name="uq_identity_user_email_address_user_purpose",
+        ),
+        CheckConstraint(
+            "purpose IN ('recovery')",
+            name="purpose_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'verified', 'revoked')",
+            name="status_allowed",
+        ),
+        Index(
+            "ix_identity_user_email_addresses_user_status",
+            "user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    email_normalized: Mapped[str] = mapped_column(String(320), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False, default="recovery")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+    user: Mapped[IdentityUser] = relationship(
+        back_populates="email_addresses",
+        foreign_keys=[user_id],
+    )
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
     __table_args__ = (Index("ix_auth_sessions_user_active", "user_id", "revoked_at", "expires_at"),)
@@ -223,7 +356,13 @@ class AuthActionToken(Base):
     __tablename__ = "auth_action_tokens"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('verify_email', 'reset_password', 'change_email', 'accept_invitation')",
+            "purpose IN ("
+            "'verify_email', "
+            "'verify_recovery_email', "
+            "'reset_password', "
+            "'change_email', "
+            "'accept_invitation'"
+            ")",
             name="purpose_allowed",
         ),
         Index("ix_auth_action_tokens_user_purpose", "user_id", "purpose", "expires_at"),
@@ -248,7 +387,7 @@ class AuthActionToken(Base):
 class AuthDeliveryOutbox(Base):
     __tablename__ = "auth_delivery_outbox"
     __table_args__ = (
-        CheckConstraint("event_type IN ('verify_email')", name="event_type_allowed"),
+        CheckConstraint("event_type IN ('verify_email', 'verify_recovery_email')", name="event_type_allowed"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
         Index(
             "ix_auth_delivery_outbox_dispatch",

@@ -11,7 +11,7 @@ class DeliveryClaim:
     user_id: uuid.UUID
     action_token_id: uuid.UUID
     claim_id: uuid.UUID
-    recipient_email: str
+    recipient_email: str | None
     user_status: str
     event_type: str
     payload_ciphertext: bytes

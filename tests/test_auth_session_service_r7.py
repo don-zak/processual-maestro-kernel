@@ -32,9 +32,17 @@ class FakePasswordService:
 
 
 class FakeRepository:
-    def __init__(self, *, user=None, principals=None, mfa_required=False) -> None:
+    def __init__(
+        self,
+        *,
+        user=None,
+        principals=None,
+        mfa_required=False,
+        platform_authorities=(),
+    ) -> None:
         self.user = user
         self.principals = principals
+        self.platform_authorities = platform_authorities
         self.added_session = None
         self.rotated = None
         self.revocations = []
@@ -49,6 +57,10 @@ class FakeRepository:
 
     async def active_organization_id(self, user_id):
         return getattr(self.user, "organization_id", None)
+
+    async def active_platform_authorities(self, user_id):
+        self.authority_user_id = user_id
+        return self.platform_authorities
 
     async def requires_mfa(self, user_id):
         return self.mfa_required

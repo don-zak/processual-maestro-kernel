@@ -71,6 +71,7 @@ class SessionService:
         organization_id: uuid.UUID | None,
         session_expires_at: datetime,
         mfa_required: bool = False,
+        platform_authorities: tuple[str, ...] = (),
     ) -> tuple[str, int]:
         remaining = int((session_expires_at - self._now()).total_seconds())
         expires_in = min(self._access_token_seconds, remaining)
@@ -86,6 +87,7 @@ class SessionService:
                 scopes=["auth:mfa"] if mfa_required else ["evaluation"],
                 session_id=str(session_id),
                 organization_id=str(organization_id) if organization_id else None,
+                platform_authorities=platform_authorities,
             ),
             expires_in,
         )
@@ -129,6 +131,9 @@ class SessionService:
             user.failed_login_count = 0
             user.locked_until = None
             organization_id = await repository.active_organization_id(user.id)
+            platform_authorities = (
+                await repository.active_platform_authorities(user.id)
+            )
             mfa_required = await repository.requires_mfa(user.id)
             session_id = uuid.uuid4()
             family_id = uuid.uuid4()
@@ -154,6 +159,7 @@ class SessionService:
             organization_id=organization_id,
             session_expires_at=session_expires_at,
             mfa_required=mfa_required,
+            platform_authorities=platform_authorities,
         )
         return IssuedSession(
             access_token=access_token,
@@ -212,6 +218,9 @@ class SessionService:
                 expires_at=auth_session.expires_at,
             )
             auth_session.last_seen_at = now
+            platform_authorities = (
+                await repository.active_platform_authorities(user.id)
+            )
             await uow.commit()
 
         access_token, expires_in = self._issue_access_token(
@@ -219,6 +228,7 @@ class SessionService:
             session_id=auth_session.id,
             organization_id=auth_session.organization_id,
             session_expires_at=auth_session.expires_at,
+            platform_authorities=platform_authorities,
         )
         return IssuedSession(
             access_token=access_token,

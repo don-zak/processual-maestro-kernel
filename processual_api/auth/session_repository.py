@@ -11,6 +11,7 @@ from processual_api.auth.models import (
     AuthMfaFactor,
     AuthRefreshToken,
     AuthSession,
+    IdentityPlatformAuthority,
     IdentityUser,
     OrganizationMembership,
 )
@@ -39,6 +40,22 @@ class SqlAlchemySessionRepository:
             .limit(1)
         )
 
+    async def active_platform_authorities(
+        self,
+        user_id: uuid.UUID,
+    ) -> tuple[str, ...]:
+        result = await self._session.scalars(
+            select(IdentityPlatformAuthority.authority)
+            .where(
+                IdentityPlatformAuthority.user_id == user_id,
+                IdentityPlatformAuthority.status == "active",
+            )
+            .order_by(
+                IdentityPlatformAuthority.authority,
+                IdentityPlatformAuthority.created_at,
+            )
+        )
+        return tuple(result.all())
     async def requires_mfa(self, user_id: uuid.UUID) -> bool:
         factor_id = await self._session.scalar(
             select(AuthMfaFactor.id)
@@ -54,7 +71,20 @@ class SqlAlchemySessionRepository:
             )
             .limit(1)
         )
-        return factor_id is not None or privileged_membership_id is not None
+        active_platform_admin_authority_id = await self._session.scalar(
+            select(IdentityPlatformAuthority.id)
+            .where(
+                IdentityPlatformAuthority.user_id == user_id,
+                IdentityPlatformAuthority.authority == "platform_admin",
+                IdentityPlatformAuthority.status == "active",
+            )
+            .limit(1)
+        )
+        return (
+            factor_id is not None
+            or privileged_membership_id is not None
+            or active_platform_admin_authority_id is not None
+        )
 
     def add_session(
         self,

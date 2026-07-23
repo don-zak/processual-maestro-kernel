@@ -59,6 +59,37 @@ EMAIL_VERIFICATION_RESEND_RULES = (
     AuthRateLimitRule("email_daily", "email", 5, 24 * 60 * 60),
 )
 
+RECOVERY_EMAIL_ISSUE_RULES = (
+    AuthRateLimitRule(
+        "recovery_email_issue_ip",
+        "ip",
+        10,
+        3600,
+    ),
+    AuthRateLimitRule(
+        "recovery_email_issue_user",
+        "user",
+        5,
+        3600,
+    ),
+)
+
+RECOVERY_EMAIL_VERIFY_RULES = (
+    AuthRateLimitRule(
+        "recovery_email_verify_ip",
+        "ip",
+        30,
+        3600,
+    ),
+    AuthRateLimitRule(
+        "recovery_email_verify_token",
+        "token",
+        10,
+        3600,
+    ),
+)
+
+
 EMAIL_VERIFICATION_RULES = (
     AuthRateLimitRule("ip_window", "ip", 30, 15 * 60),
     AuthRateLimitRule("token_window", "token", 5, 15 * 60),
@@ -227,6 +258,8 @@ __all__ = [
     "LOGIN_RULES",
     "MFA_VERIFICATION_RULES",
     "ORGANIZATION_REGISTRATION_RULES",
+    "RECOVERY_EMAIL_ISSUE_RULES",
+    "RECOVERY_EMAIL_VERIFY_RULES",
     "REGISTRATION_RULES",
     "SESSION_REFRESH_RULES",
     "AuthRateLimitDecision",
