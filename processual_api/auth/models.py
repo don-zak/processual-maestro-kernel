@@ -484,7 +484,20 @@ class AuthAccountRecoveryRequest(Base):
 class AuthDeliveryOutbox(Base):
     __tablename__ = "auth_delivery_outbox"
     __table_args__ = (
-        CheckConstraint("event_type IN ('verify_email', 'verify_recovery_email')", name="event_type_allowed"),
+        CheckConstraint(
+            "event_type IN ('verify_email', 'verify_recovery_email', 'account_recovery_verification')",
+            name="event_type_allowed",
+        ),
+        CheckConstraint(
+            "("
+            "action_token_id IS NOT NULL "
+            "AND account_recovery_request_id IS NULL"
+            ") OR ("
+            "action_token_id IS NULL "
+            "AND account_recovery_request_id IS NOT NULL"
+            ")",
+            name="exactly_one_authority",
+        ),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
         Index(
             "ix_auth_delivery_outbox_dispatch",
@@ -501,10 +514,19 @@ class AuthDeliveryOutbox(Base):
         ForeignKey("identity_users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    action_token_id: Mapped[uuid.UUID] = mapped_column(
+    action_token_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("auth_action_tokens.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        unique=True,
+    )
+    account_recovery_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "auth_account_recovery_requests.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
         unique=True,
     )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -520,7 +542,8 @@ class AuthDeliveryOutbox(Base):
     created_at: Mapped[datetime] = _created_at_column()
 
     user: Mapped[IdentityUser] = relationship()
-    action_token: Mapped[AuthActionToken] = relationship()
+    action_token: Mapped[AuthActionToken | None] = relationship()
+    account_recovery_request: Mapped[AuthAccountRecoveryRequest | None] = relationship()
 
 
 class AuthMfaFactor(Base):

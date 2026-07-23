@@ -19,30 +19,71 @@ class EncryptedDeliveryPayload:
 
 
 class DeliveryPayloadCipher:
-    def __init__(self, *, current_key_version: str, keys: Mapping[str, bytes]) -> None:
+    def __init__(
+        self,
+        *,
+        current_key_version: str,
+        keys: Mapping[str, bytes],
+    ) -> None:
         if not current_key_version.strip():
             raise ValueError("current_key_version must not be empty.")
+
         copied = dict(keys)
+
         if current_key_version not in copied:
             raise ValueError("The current delivery key version is unavailable.")
+
         for version, key in copied.items():
             if not version.strip() or not isinstance(key, bytes) or len(key) != AES_256_KEY_BYTES:
                 raise ValueError("Every delivery encryption key must be a named 32-byte key.")
+
         self.current_key_version = current_key_version
         self._keys = MappingProxyType(copied)
 
     @staticmethod
+    def _authority_id(
+        *,
+        action_token_id: str | None,
+        account_recovery_request_id: str | None,
+    ) -> str:
+        authorities = (
+            action_token_id,
+            account_recovery_request_id,
+        )
+
+        selected = [value for value in authorities if value is not None and value.strip()]
+
+        if len(selected) != 1:
+            raise ValueError("Exactly one delivery authority identifier is required.")
+
+        return selected[0]
+
+    @classmethod
     def _aad(
+        cls,
         *,
         outbox_id: str,
         user_id: str,
-        action_token_id: str,
         purpose: str,
+        action_token_id: str | None = None,
+        account_recovery_request_id: str | None = None,
     ) -> bytes:
-        values = (outbox_id, user_id, action_token_id, purpose)
+        authority_id = cls._authority_id(
+            action_token_id=action_token_id,
+            account_recovery_request_id=(account_recovery_request_id),
+        )
+
+        values = (
+            outbox_id,
+            user_id,
+            authority_id,
+            purpose,
+        )
+
         if any(not value.strip() for value in values):
             raise ValueError("Delivery encryption authority identifiers are required.")
-        return (f"pmk-auth-delivery-v1:{outbox_id}:{user_id}:{action_token_id}:{purpose}").encode()
+
+        return (f"pmk-auth-delivery-v1:{outbox_id}:{user_id}:{authority_id}:{purpose}").encode()
 
     def encrypt(
         self,
@@ -50,20 +91,31 @@ class DeliveryPayloadCipher:
         *,
         outbox_id: str,
         user_id: str,
-        action_token_id: str,
         purpose: str,
+        action_token_id: str | None = None,
+        account_recovery_request_id: str | None = None,
     ) -> EncryptedDeliveryPayload:
         if not isinstance(raw_action_token, str) or not raw_action_token:
             raise ValueError("raw_action_token must be a non-empty string.")
+
         nonce = os.urandom(NONCE_BYTES)
+
         aad = self._aad(
             outbox_id=outbox_id,
             user_id=user_id,
-            action_token_id=action_token_id,
             purpose=purpose,
+            action_token_id=action_token_id,
+            account_recovery_request_id=(account_recovery_request_id),
         )
+
         key = self._keys[self.current_key_version]
-        ciphertext = nonce + AESGCM(key).encrypt(nonce, raw_action_token.encode(), aad)
+
+        ciphertext = nonce + AESGCM(key).encrypt(
+            nonce,
+            raw_action_token.encode(),
+            aad,
+        )
+
         return EncryptedDeliveryPayload(
             ciphertext=ciphertext,
             key_version=self.current_key_version,
@@ -75,30 +127,45 @@ class DeliveryPayloadCipher:
         *,
         outbox_id: str,
         user_id: str,
-        action_token_id: str,
         purpose: str,
+        action_token_id: str | None = None,
+        account_recovery_request_id: str | None = None,
     ) -> str:
         key = self._keys.get(encrypted.key_version)
+
         if key is None:
             raise ValueError("Delivery encryption key version is unavailable.")
+
         if len(encrypted.ciphertext) <= NONCE_BYTES:
             raise ValueError("Delivery ciphertext is truncated.")
+
         nonce = encrypted.ciphertext[:NONCE_BYTES]
         payload = encrypted.ciphertext[NONCE_BYTES:]
+
         aad = self._aad(
             outbox_id=outbox_id,
             user_id=user_id,
-            action_token_id=action_token_id,
             purpose=purpose,
+            action_token_id=action_token_id,
+            account_recovery_request_id=(account_recovery_request_id),
         )
+
         try:
-            plaintext = AESGCM(key).decrypt(nonce, payload, aad)
+            plaintext = AESGCM(key).decrypt(
+                nonce,
+                payload,
+                aad,
+            )
         except InvalidTag as exc:
             raise ValueError("Delivery ciphertext authentication failed.") from exc
+
         try:
             return plaintext.decode()
         except UnicodeDecodeError as exc:
             raise ValueError("Delivery plaintext encoding is invalid.") from exc
 
 
-__all__ = ["DeliveryPayloadCipher", "EncryptedDeliveryPayload"]
+__all__ = [
+    "DeliveryPayloadCipher",
+    "EncryptedDeliveryPayload",
+]
