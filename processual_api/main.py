@@ -74,6 +74,7 @@ from processual_api.services.integration_claim_keys import (
 )
 
 from .auth.mfa_router import router as mfa_router
+from .auth.recovery_email_router import router as recovery_email_router
 from .auth.registration_router import router as registration_router
 from .auth.router import router as auth_router
 from .auth.security import require_scope
@@ -136,6 +137,7 @@ app.middleware("http")(error_handler_middleware)
 app.include_router(health.router)
 app.include_router(auth_router)
 app.include_router(registration_router)
+app.include_router(recovery_email_router)
 app.include_router(session_router)
 app.include_router(mfa_router)
 app.include_router(cgt.router)
