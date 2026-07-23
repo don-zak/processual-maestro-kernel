@@ -356,7 +356,13 @@ class AuthActionToken(Base):
     __tablename__ = "auth_action_tokens"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('verify_email', 'reset_password', 'change_email', 'accept_invitation')",
+            "purpose IN ("
+            "'verify_email', "
+            "'verify_recovery_email', "
+            "'reset_password', "
+            "'change_email', "
+            "'accept_invitation'"
+            ")",
             name="purpose_allowed",
         ),
         Index("ix_auth_action_tokens_user_purpose", "user_id", "purpose", "expires_at"),
@@ -381,7 +387,7 @@ class AuthActionToken(Base):
 class AuthDeliveryOutbox(Base):
     __tablename__ = "auth_delivery_outbox"
     __table_args__ = (
-        CheckConstraint("event_type IN ('verify_email')", name="event_type_allowed"),
+        CheckConstraint("event_type IN ('verify_email', 'verify_recovery_email')", name="event_type_allowed"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
         Index(
             "ix_auth_delivery_outbox_dispatch",
