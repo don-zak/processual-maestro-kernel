@@ -179,8 +179,14 @@ class DeliveryDispatcher:
         *,
         raw_token: str,
         profile: DeliveryEventProfile,
+        claim: DeliveryClaim,
     ) -> str:
-        query = urlencode({"token": raw_token})
+        query_values = {"token": raw_token}
+
+        if claim.account_recovery_request_id is not None:
+            query_values["request_id"] = str(claim.account_recovery_request_id)
+
+        query = urlencode(query_values)
 
         return f"{self._config.public_base_url}{profile.verification_path}?{query}"
 
@@ -326,6 +332,7 @@ class DeliveryDispatcher:
                         self._verification_url(
                             raw_token=raw_token,
                             profile=profile,
+                            claim=claim,
                         )
                     ),
                     idempotency_key=(self._idempotency_key(claim)),
