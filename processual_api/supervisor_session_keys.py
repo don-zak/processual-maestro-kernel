@@ -5,8 +5,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import importlib
 import json
 import secrets
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -38,34 +40,102 @@ def _parse_dt(value: object) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def _load_store(path: Path) -> dict[str, list[dict[str, Any]]]:
+def _file_lock(path: Path):
+    """Resolve the shared file lock lazily.
+
+    Lazy resolution avoids the auth.security -> supervisor store ->
+    dependencies -> auth.security import cycle during application startup.
+    """
+
+    dependencies = importlib.import_module("processual_api.dependencies")
+    return dependencies.file_lock(path)
+
+
+def _load_store_unlocked(
+    path: Path,
+) -> dict[str, list[dict[str, Any]]]:
     if not path.exists():
         return {"supervisor_session_keys": []}
 
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return {"supervisor_session_keys": []}
 
     if not isinstance(raw, dict):
         return {"supervisor_session_keys": []}
 
     keys = raw.get("supervisor_session_keys")
+
     if not isinstance(keys, list):
         raw["supervisor_session_keys"] = []
 
     return raw
 
 
-def _save_store(path: Path, raw: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(raw, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+def _load_store(
+    path: Path,
+) -> dict[str, list[dict[str, Any]]]:
+    with _file_lock(path):
+        return _load_store_unlocked(path)
+
+
+def _save_store_unlocked(
+    path: Path,
+    raw: dict[str, Any],
+) -> None:
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
     )
+
+    payload = (
+        json.dumps(
+            raw,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    backup_path = path.with_suffix(path.suffix + ".bak")
+
+    try:
+        temporary_path.write_text(
+            payload,
+            encoding="utf-8",
+        )
+
+        if path.exists():
+            shutil.copy2(
+                path,
+                backup_path,
+            )
+
+        temporary_path.replace(path)
+    finally:
+        if temporary_path.exists():
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+
+
+def _save_store(
+    path: Path,
+    raw: dict[str, Any],
+) -> None:
+    with _file_lock(path):
+        _save_store_unlocked(
+            path,
+            raw,
+        )
 
 
 def _actor_email(actor: dict[str, Any]) -> str:
+
     return str(actor.get("email") or actor.get("sub") or actor.get("user_id") or "").strip()
 
 
@@ -105,7 +175,7 @@ def _verify_key(raw_key: str, encoded_hash: str) -> bool:
         iterations = int(iterations_raw)
         salt = base64.urlsafe_b64decode(salt_raw.encode("ascii"))
         expected = base64.urlsafe_b64decode(digest_raw.encode("ascii"))
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return False
 
     digest = hashlib.pbkdf2_hmac(
@@ -195,11 +265,7 @@ def list_supervisor_session_keys(
     _require_owner(actor)
 
     raw = _load_store(path)
-    return [
-        _safe_record(record)
-        for record in raw.get("supervisor_session_keys", [])
-        if isinstance(record, dict)
-    ]
+    return [_safe_record(record) for record in raw.get("supervisor_session_keys", []) if isinstance(record, dict)]
 
 
 def validate_supervisor_session_key(path: Path, raw_key: str) -> dict[str, Any]:
@@ -224,6 +290,88 @@ def validate_supervisor_session_key(path: Path, raw_key: str) -> dict[str, Any]:
         return _safe_record(record)
 
     raise PermissionError("Invalid supervisor session key.")
+
+
+def revoke_supervisor_session_keys_for_identity(
+    path: Path,
+    identities: tuple[str, ...],
+    *,
+    revoked_by: str,
+    reason: str,
+    revoked_at: datetime | None = None,
+) -> int:
+    """Idempotently revoke active keys issued to an identity."""
+
+    normalized_identities = {
+        str(identity or "").strip().casefold() for identity in identities if str(identity or "").strip()
+    }
+
+    if not normalized_identities:
+        raise ValueError("At least one supervisor-session identity is required.")
+
+    safe_revoked_by = str(revoked_by or "").strip()
+
+    if not safe_revoked_by:
+        raise ValueError("Supervisor-session revocation authority is required.")
+
+    safe_reason = str(reason or "").strip()
+
+    if not safe_reason:
+        raise ValueError("Supervisor-session revocation reason is required.")
+
+    effective_revoked_at = revoked_at or datetime.now(UTC)
+
+    if effective_revoked_at.tzinfo is None:
+        raise ValueError("Supervisor-session revocation time must be timezone-aware.")
+
+    revoked_at_iso = effective_revoked_at.astimezone(UTC).isoformat()
+
+    with _file_lock(path):
+        if not path.exists():
+            return 0
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (
+            OSError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise RuntimeError("Supervisor session key authority is unavailable.") from exc
+
+        if not isinstance(raw, dict):
+            raise RuntimeError("Supervisor session key authority is invalid.")
+
+        records = raw.get("supervisor_session_keys")
+
+        if not isinstance(records, list):
+            raise RuntimeError("Supervisor session key authority is invalid.")
+
+        revoked_count = 0
+
+        for record in records:
+            if not isinstance(record, dict):
+                raise RuntimeError("Supervisor session key authority is invalid.")
+
+            issued_to = str(record.get("issued_to") or "").strip().casefold()
+
+            if issued_to not in normalized_identities:
+                continue
+
+            if record.get("revoked_at"):
+                continue
+
+            record["revoked_at"] = revoked_at_iso
+            record["revoked_by"] = safe_revoked_by
+            record["revocation_reason"] = safe_reason
+            revoked_count += 1
+
+        if revoked_count:
+            _save_store_unlocked(
+                path,
+                raw,
+            )
+
+        return revoked_count
 
 
 def revoke_supervisor_session_key(

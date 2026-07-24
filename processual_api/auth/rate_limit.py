@@ -90,6 +90,38 @@ RECOVERY_EMAIL_VERIFY_RULES = (
 )
 
 
+ACCOUNT_RECOVERY_START_RULES = (
+    AuthRateLimitRule(
+        "account_recovery_start_ip",
+        "ip",
+        10,
+        3600,
+    ),
+    AuthRateLimitRule(
+        "account_recovery_start_login",
+        "login",
+        5,
+        3600,
+    ),
+)
+
+
+ACCOUNT_RECOVERY_VERIFY_RULES = (
+    AuthRateLimitRule(
+        "account_recovery_verify_ip",
+        "ip",
+        30,
+        3600,
+    ),
+    AuthRateLimitRule(
+        "account_recovery_verify_token",
+        "token",
+        10,
+        3600,
+    ),
+)
+
+
 EMAIL_VERIFICATION_RULES = (
     AuthRateLimitRule("ip_window", "ip", 30, 15 * 60),
     AuthRateLimitRule("token_window", "token", 5, 15 * 60),
@@ -253,6 +285,8 @@ def resolve_client_ip(
 
 
 __all__ = [
+    "ACCOUNT_RECOVERY_START_RULES",
+    "ACCOUNT_RECOVERY_VERIFY_RULES",
     "EMAIL_VERIFICATION_RESEND_RULES",
     "EMAIL_VERIFICATION_RULES",
     "LOGIN_RULES",

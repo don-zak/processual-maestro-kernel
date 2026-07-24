@@ -12,7 +12,7 @@ def _alembic_environment() -> dict[str, str]:
     return environment
 
 
-def test_delivery_outbox_migration_is_the_single_head() -> None:
+def test_auth_migration_chain_has_the_current_single_head() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "heads"],
         check=True,
@@ -20,7 +20,7 @@ def test_delivery_outbox_migration_is_the_single_head() -> None:
         text=True,
         env=_alembic_environment(),
     )
-    assert "20260723_0008 (head)" in result.stdout
+    assert result.stdout.strip() == "20260723_0010 (head)"
     assert result.stdout.count("(head)") == 1
 
 
@@ -61,8 +61,6 @@ def test_delivery_outbox_revision_has_expected_parent() -> None:
 
 
 def test_email_verification_revision_extends_delivery_outbox_head() -> None:
-    source = Path(
-        "alembic/versions/20260722_0004_auth_email_verification_lifecycle.py"
-    ).read_text(encoding="utf-8")
+    source = Path("alembic/versions/20260722_0004_auth_email_verification_lifecycle.py").read_text(encoding="utf-8")
     assert 'revision: str = "20260722_0004"' in source
     assert 'down_revision: str | none = "20260722_0003"' in source.lower()

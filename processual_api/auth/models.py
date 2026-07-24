@@ -74,6 +74,11 @@ class IdentityUser(Base):
         cascade="all, delete-orphan",
         foreign_keys="IdentityUserEmailAddress.user_id",
     )
+    account_recovery_requests: Mapped[list[AuthAccountRecoveryRequest]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="AuthAccountRecoveryRequest.user_id",
+    )
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -384,10 +389,115 @@ class AuthActionToken(Base):
     user: Mapped[IdentityUser] = relationship()
 
 
+class AuthAccountRecoveryRequest(Base):
+    """Persistent, hash-only account recovery lifecycle."""
+
+    __tablename__ = "auth_account_recovery_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('platform_account_recovery')",
+            name="purpose_allowed",
+        ),
+        CheckConstraint(
+            "state IN ('pending', 'verified', 'completed', 'expired', 'revoked')",
+            name="state_allowed",
+        ),
+        CheckConstraint(
+            "attempt_count >= 0",
+            name="attempt_count_nonnegative",
+        ),
+        Index(
+            "ix_auth_account_recovery_user_state",
+            "user_id",
+            "state",
+            "expires_at",
+        ),
+        Index(
+            "ix_auth_account_recovery_expiry",
+            "state",
+            "expires_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recovery_email_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "identity_user_email_addresses.id",
+            ondelete="SET NULL",
+        ),
+    )
+    purpose: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="platform_account_recovery",
+    )
+    state: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="pending",
+    )
+    verification_token_hash: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        unique=True,
+    )
+    completion_token_hash: Mapped[str | None] = mapped_column(
+        String(128),
+        unique=True,
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+    user: Mapped[IdentityUser] = relationship(
+        back_populates="account_recovery_requests",
+        foreign_keys=[user_id],
+    )
+    recovery_email: Mapped[IdentityUserEmailAddress | None] = relationship(
+        foreign_keys=[recovery_email_id],
+    )
+
+
 class AuthDeliveryOutbox(Base):
     __tablename__ = "auth_delivery_outbox"
     __table_args__ = (
-        CheckConstraint("event_type IN ('verify_email', 'verify_recovery_email')", name="event_type_allowed"),
+        CheckConstraint(
+            "event_type IN ('verify_email', 'verify_recovery_email', 'account_recovery_verification')",
+            name="event_type_allowed",
+        ),
+        CheckConstraint(
+            "("
+            "action_token_id IS NOT NULL "
+            "AND account_recovery_request_id IS NULL"
+            ") OR ("
+            "action_token_id IS NULL "
+            "AND account_recovery_request_id IS NOT NULL"
+            ")",
+            name="exactly_one_authority",
+        ),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
         Index(
             "ix_auth_delivery_outbox_dispatch",
@@ -404,10 +514,19 @@ class AuthDeliveryOutbox(Base):
         ForeignKey("identity_users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    action_token_id: Mapped[uuid.UUID] = mapped_column(
+    action_token_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("auth_action_tokens.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        unique=True,
+    )
+    account_recovery_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "auth_account_recovery_requests.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
         unique=True,
     )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -423,7 +542,8 @@ class AuthDeliveryOutbox(Base):
     created_at: Mapped[datetime] = _created_at_column()
 
     user: Mapped[IdentityUser] = relationship()
-    action_token: Mapped[AuthActionToken] = relationship()
+    action_token: Mapped[AuthActionToken | None] = relationship()
+    account_recovery_request: Mapped[AuthAccountRecoveryRequest | None] = relationship()
 
 
 class AuthMfaFactor(Base):
@@ -512,5 +632,6 @@ IDENTITY_AUTH_MODELS = (
 
 __all__ = [
     *[model.__name__ for model in IDENTITY_AUTH_MODELS],
+    "AuthAccountRecoveryRequest",
     "AuthDeliveryOutbox",
 ]
