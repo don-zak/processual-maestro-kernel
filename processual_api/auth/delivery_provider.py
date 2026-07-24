@@ -15,9 +15,15 @@ ALLOWED_VERIFICATION_TEMPLATES = frozenset(
 
 
 class DeliveryProviderError(RuntimeError):
-    def __init__(self, error_code: str) -> None:
+    def __init__(
+        self,
+        error_code: str,
+        *,
+        retryable: bool = True,
+    ) -> None:
         super().__init__("Delivery provider request failed.")
         self.error_code = error_code
+        self.retryable = retryable
 
 
 class DeliveryProvider(Protocol):
@@ -103,17 +109,41 @@ class HttpEmailDeliveryProvider:
                     },
                 )
         except httpx.TimeoutException as exc:
-            raise DeliveryProviderError("provider_timeout") from exc
+            raise DeliveryProviderError(
+                "provider_timeout",
+                retryable=True,
+            ) from exc
         except httpx.RequestError as exc:
-            raise DeliveryProviderError("provider_network") from exc
+            raise DeliveryProviderError(
+                "provider_network",
+                retryable=True,
+            ) from exc
 
         if 200 <= response.status_code < 300:
             return
 
-        if response.status_code >= 500:
-            raise DeliveryProviderError("provider_5xx")
+        if response.status_code == 408:
+            raise DeliveryProviderError(
+                "provider_timeout",
+                retryable=True,
+            )
 
-        raise DeliveryProviderError("provider_4xx")
+        if response.status_code == 429:
+            raise DeliveryProviderError(
+                "provider_rate_limited",
+                retryable=True,
+            )
+
+        if response.status_code >= 500:
+            raise DeliveryProviderError(
+                "provider_5xx",
+                retryable=True,
+            )
+
+        raise DeliveryProviderError(
+            "provider_4xx",
+            retryable=False,
+        )
 
 
 __all__ = [

@@ -59,6 +59,66 @@ services:
       db:
         condition: service_healthy
 
+  auth-delivery-worker:
+    build:
+      context: .
+      target: public
+    container_name: processual-auth-delivery-worker
+    command:
+      - python
+      - -m
+      - processual_api.auth.delivery_worker
+      - --continuous
+      - --poll-interval-seconds
+      - ${AUTH_DELIVERY_POLL_INTERVAL_SECONDS:-1}
+    environment:
+      - ENVIRONMENT=production
+      - PROCESSUAL_CRYPTO_KEY_B64=${PROCESSUAL_CRYPTO_KEY_B64:?PROCESSUAL_CRYPTO_KEY_B64 is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - API_KEYS=${API_KEYS:?API_KEYS is required}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - MAESTRO_ADMIN_EMAIL=${MAESTRO_ADMIN_EMAIL:?MAESTRO_ADMIN_EMAIL is required}
+      - MAESTRO_ADMIN_PASSWORD=${MAESTRO_ADMIN_PASSWORD:?MAESTRO_ADMIN_PASSWORD is required}
+      - AUTH_TOKEN_PEPPER=${AUTH_TOKEN_PEPPER:?AUTH_TOKEN_PEPPER is required}
+      - AUTH_RATE_LIMIT_PEPPER=${AUTH_RATE_LIMIT_PEPPER:?AUTH_RATE_LIMIT_PEPPER is required}
+      - AUTH_DELIVERY_KEY_RING_JSON=${AUTH_DELIVERY_KEY_RING_JSON:?AUTH_DELIVERY_KEY_RING_JSON is required}
+      - AUTH_DELIVERY_CURRENT_KEY_VERSION=${AUTH_DELIVERY_CURRENT_KEY_VERSION:?AUTH_DELIVERY_CURRENT_KEY_VERSION is required}
+      - AUTH_DELIVERY_PROVIDER_URL=${AUTH_DELIVERY_PROVIDER_URL:?AUTH_DELIVERY_PROVIDER_URL is required}
+      - AUTH_DELIVERY_PROVIDER_TOKEN=${AUTH_DELIVERY_PROVIDER_TOKEN:?AUTH_DELIVERY_PROVIDER_TOKEN is required}
+      - AUTH_PUBLIC_BASE_URL=${AUTH_PUBLIC_BASE_URL:?AUTH_PUBLIC_BASE_URL is required}
+      - AUTH_DELIVERY_BATCH_SIZE=${AUTH_DELIVERY_BATCH_SIZE:-25}
+      - AUTH_DELIVERY_LEASE_SECONDS=${AUTH_DELIVERY_LEASE_SECONDS:-300}
+      - AUTH_DELIVERY_MAX_ATTEMPTS=${AUTH_DELIVERY_MAX_ATTEMPTS:-8}
+      - AUTH_DELIVERY_RETRY_BASE_SECONDS=${AUTH_DELIVERY_RETRY_BASE_SECONDS:-30}
+      - AUTH_DELIVERY_RETRY_MAX_SECONDS=${AUTH_DELIVERY_RETRY_MAX_SECONDS:-3600}
+      - AUTH_DELIVERY_REQUEST_TIMEOUT_SECONDS=${AUTH_DELIVERY_REQUEST_TIMEOUT_SECONDS:-10}
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     container_name: processual-redis
