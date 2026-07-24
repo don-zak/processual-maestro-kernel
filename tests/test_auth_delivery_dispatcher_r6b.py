@@ -40,14 +40,42 @@ class FakeRepository:
 
 
 class FakeProvider:
-    def __init__(self, error_code=None) -> None:
+    def __init__(
+        self,
+        error_code=None,
+        *,
+        retryable=True,
+    ) -> None:
         self.error_code = error_code
+        self.retryable = retryable
         self.calls = []
 
     async def send_verification_email(self, **values):
         self.calls.append(values)
         if self.error_code:
-            raise DeliveryProviderError(self.error_code)
+            raise DeliveryProviderError(
+                self.error_code,
+                retryable=self.retryable,
+            )
+
+
+class SequencedProvider:
+    def __init__(self, outcomes) -> None:
+        self.outcomes = list(outcomes)
+        self.calls = []
+
+    async def send_verification_email(self, **values):
+        self.calls.append(values)
+
+        if not self.outcomes:
+            raise AssertionError(
+                "Provider received more calls than expected."
+            )
+
+        outcome = self.outcomes.pop(0)
+
+        if isinstance(outcome, Exception):
+            raise outcome
 
 
 def _cipher():
@@ -302,6 +330,110 @@ def test_provider_failure_schedules_bounded_retry_without_exposing_payload():
     assert failure["dead_lettered_at"] is None
     assert now + timedelta(seconds=30) <= failure["available_at"] <= now + timedelta(seconds=38)
     assert "raw-verification-token" not in repr(result)
+
+
+def test_unexpected_provider_crash_is_retried_and_batch_continues(
+    caplog,
+):
+    now = datetime(2026, 7, 24, 16, tzinfo=UTC)
+    first_claim = _claim(now=now, attempt_count=1)
+    second_claim = _claim(now=now, attempt_count=1)
+
+    repository = FakeRepository(
+        [
+            first_claim,
+            second_claim,
+        ]
+    )
+
+    sensitive_failure_text = (
+        "provider crashed with "
+        "raw-verification-token "
+        "person@example.com"
+    )
+
+    provider = SequencedProvider(
+        [
+            RuntimeError(sensitive_failure_text),
+            None,
+        ]
+    )
+
+    result = asyncio.run(
+        _dispatcher(
+            repository,
+            provider,
+            now=now,
+        ).dispatch_once()
+    )
+
+    assert result.claimed == 2
+    assert result.delivered == 1
+    assert result.retry_scheduled == 1
+    assert result.dead_lettered == 0
+    assert result.stale_finalization == 0
+
+    assert len(provider.calls) == 2
+    assert len(repository.failed) == 1
+    assert len(repository.delivered) == 1
+
+    assert repository.failed[0]["outbox_id"] == (
+        first_claim.outbox_id
+    )
+    assert repository.failed[0]["error_code"] == (
+        "provider_unexpected"
+    )
+    assert repository.failed[0]["dead_lettered_at"] is None
+
+    assert repository.delivered[0]["outbox_id"] == (
+        second_claim.outbox_id
+    )
+
+    log_text = caplog.text
+
+    assert (
+        "identity_delivery_provider_unexpected_failure"
+        in log_text
+    )
+
+    unexpected_records = [
+        record
+        for record in caplog.records
+        if record.getMessage()
+        == "identity_delivery_provider_unexpected_failure"
+    ]
+
+    assert len(unexpected_records) == 1
+    assert unexpected_records[0].exception_type == "RuntimeError"
+
+    assert sensitive_failure_text not in log_text
+    assert "raw-verification-token" not in log_text
+    assert "person@example.com" not in log_text
+
+
+def test_permanent_provider_failure_is_dead_lettered_immediately():
+    now = datetime(2026, 7, 24, 16, tzinfo=UTC)
+    claim = _claim(now=now, attempt_count=1)
+    repository = FakeRepository([claim])
+    provider = FakeProvider(
+        "provider_4xx",
+        retryable=False,
+    )
+
+    result = asyncio.run(
+        _dispatcher(
+            repository,
+            provider,
+            now=now,
+        ).dispatch_once()
+    )
+
+    assert result.retry_scheduled == 0
+    assert result.dead_lettered == 1
+    assert result.delivered == 0
+    assert repository.failed[0]["error_code"] == "provider_4xx"
+    assert repository.failed[0]["available_at"] == now
+    assert repository.failed[0]["dead_lettered_at"] == now
 
 
 def test_max_attempt_failure_moves_claim_to_dead_letter():

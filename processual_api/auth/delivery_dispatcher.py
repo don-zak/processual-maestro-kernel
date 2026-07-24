@@ -325,23 +325,39 @@ class DeliveryDispatcher:
                     purpose=profile.purpose,
                 )
 
-                await self._provider.send_verification_email(
-                    template=profile.template,
-                    recipient=claim.recipient_email,
-                    verification_url=(
-                        self._verification_url(
-                            raw_token=raw_token,
-                            profile=profile,
-                            claim=claim,
-                        )
-                    ),
-                    idempotency_key=(self._idempotency_key(claim)),
-                )
+                try:
+                    await self._provider.send_verification_email(
+                        template=profile.template,
+                        recipient=claim.recipient_email,
+                        verification_url=(
+                            self._verification_url(
+                                raw_token=raw_token,
+                                profile=profile,
+                                claim=claim,
+                            )
+                        ),
+                        idempotency_key=(
+                            self._idempotency_key(claim)
+                        ),
+                    )
+                except DeliveryProviderError:
+                    raise
+                except Exception as exc:
+                    logger.warning(
+                        "identity_delivery_provider_unexpected_failure",
+                        extra={
+                            "exception_type": type(exc).__name__,
+                        },
+                    )
+                    raise DeliveryProviderError(
+                        "provider_unexpected",
+                        retryable=True,
+                    ) from exc
             except DeliveryProviderError as exc:
                 retry, dead, stale = await self._fail(
                     claim,
                     error_code=exc.error_code,
-                    terminal=False,
+                    terminal=(not exc.retryable),
                 )
                 retry_scheduled += retry
                 dead_lettered += dead
