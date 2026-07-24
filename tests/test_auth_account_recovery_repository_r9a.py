@@ -102,3 +102,79 @@ async def test_unit_of_work_commit_preserves_transaction() -> None:
     assert session.committed is True
     assert session.rolled_back is False
     assert session.closed is True
+
+
+class RowCountResult:
+    def __init__(
+        self,
+        rowcount: int,
+    ) -> None:
+        self.rowcount = rowcount
+
+
+class CompletionRecordingSession:
+    def __init__(
+        self,
+        rowcounts: list[int],
+    ) -> None:
+        self.rowcounts = list(rowcounts)
+        self.statements = []
+
+    async def execute(
+        self,
+        statement,
+    ):
+        self.statements.append(statement)
+
+        return RowCountResult(self.rowcounts.pop(0))
+
+
+@pytest.mark.asyncio
+async def test_repository_completion_mutations_return_counts() -> None:
+    session = CompletionRecordingSession(
+        [
+            4,
+            2,
+            3,
+            1,
+            6,
+        ]
+    )
+    repository = SqlAlchemyAccountRecoveryRepository(session)
+    user_id = uuid.uuid4()
+
+    refresh_count = await repository.revoke_refresh_tokens(
+        user_id=user_id,
+        revoked_at=NOW,
+    )
+    session_count = await repository.revoke_sessions(
+        user_id=user_id,
+        revoked_at=NOW,
+        reason="account_recovery_completed",
+    )
+    action_count = await repository.invalidate_action_tokens(
+        user_id=user_id,
+        invalidated_at=NOW,
+    )
+    factor_count = await repository.disable_mfa_factors(
+        user_id=user_id,
+        disabled_at=NOW,
+    )
+    recovery_code_count = await repository.delete_mfa_recovery_codes(
+        user_id=user_id,
+    )
+
+    assert refresh_count == 4
+    assert session_count == 2
+    assert action_count == 3
+    assert factor_count == 1
+    assert recovery_code_count == 6
+    assert len(session.statements) == 5
+
+    rendered = [str(statement) for statement in session.statements]
+
+    assert "auth_refresh_tokens" in rendered[0]
+    assert "auth_sessions" in rendered[1]
+    assert "auth_action_tokens" in rendered[2]
+    assert "auth_mfa_factors" in rendered[3]
+    assert "auth_mfa_recovery_codes" in rendered[4]

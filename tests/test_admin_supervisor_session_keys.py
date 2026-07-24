@@ -167,3 +167,30 @@ def test_review_supervisor_key_gets_review_only_scopes(tmp_path: Path) -> None:
     assert "admin:clients:respond" not in scopes
     assert "admin:clients:status_decide" not in scopes
     assert "admin:supervisor_sessions:issue" not in scopes
+
+
+def test_supervisor_session_store_uses_atomic_replacement(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "supervisor_sessions.json"
+
+    actor = {
+        "email": "owner@example.test",
+        "supervision_level": ("owner_supervisor"),
+    }
+
+    issued = issue_supervisor_session_key(
+        path,
+        actor,
+        {
+            "level": "operations_supervisor",
+            "issued_to": "operator@example.test",
+            "session_label": "Atomic storage",
+            "reason": "Regression",
+            "expires_at": "",
+        },
+    )
+
+    assert path.exists()
+    assert not path.with_suffix(path.suffix + ".tmp").exists()
+    assert issued["record"]["issued_to"] == "operator@example.test"

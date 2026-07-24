@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import base64
 import binascii
+import importlib
 import json
 from dataclasses import dataclass
 
+from processual_api.auth.account_recovery_external_revocation import (
+    AccountRecoveryExternalAuthorityRevoker,
+)
 from processual_api.auth.account_recovery_repository import (
     SqlAlchemyAccountRecoveryUnitOfWork,
 )
@@ -106,6 +110,29 @@ def _proxy_policy(
     return policy
 
 
+def _build_external_authority_revoker() -> AccountRecoveryExternalAuthorityRevoker:
+    try:
+        settings_module = importlib.import_module("processual_api.routers.settings")
+
+        supervisor_store_path = settings_module._supervisor_session_key_store_path()
+        settings_loader = settings_module._load_raw
+        settings_saver = settings_module._save_raw
+    except (
+        AttributeError,
+        ImportError,
+        OSError,
+        RuntimeError,
+        ValueError,
+    ) as exc:
+        raise AccountRecoveryRuntimeUnavailableError("External recovery authority is unavailable.") from exc
+
+    return AccountRecoveryExternalAuthorityRevoker(
+        supervisor_store_path=supervisor_store_path,
+        settings_loader=settings_loader,
+        settings_saver=settings_saver,
+    )
+
+
 async def build_account_recovery_runtime(
     config: APISettings = settings,
 ) -> AccountRecoveryRuntime:
@@ -137,6 +164,7 @@ async def build_account_recovery_runtime(
             raise ValueError("Account-recovery response floor is outside its safe range.")
 
         proxy_policy = _proxy_policy(config)
+        external_authority_revoker = _build_external_authority_revoker()
     except AccountRecoveryRuntimeUnavailableError:
         raise
     except (RuntimeError, ValueError) as exc:
@@ -150,6 +178,7 @@ async def build_account_recovery_runtime(
             unit_of_work_factory=unit_of_work_factory,
             token_digester=TokenDigester(token_pepper),
             delivery_cipher=delivery_cipher,
+            external_authority_revoker=(external_authority_revoker),
         ),
         rate_limiter=RedisAuthRateLimiter(
             redis,

@@ -15,6 +15,9 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from processual_api.auth.account_recovery_http_contracts import (
+    AccountRecoveryCompletedResponseContract,
+    AccountRecoveryCompleteRequestContract,
+    AccountRecoveryRevocationResponseContract,
     AccountRecoveryStartAcceptedResponseContract,
     AccountRecoveryStartRequestContract,
     AccountRecoveryVerifiedResponseContract,
@@ -41,6 +44,7 @@ logger = logging.getLogger(__name__)
 GENERIC_UNAVAILABLE = "Account recovery service temporarily unavailable."
 GENERIC_INVALID = "Invalid account recovery request."
 GENERIC_DENIED = "Account recovery verification is unavailable."
+GENERIC_COMPLETION_DENIED = "Account recovery completion is unavailable."
 GENERIC_LIMITED = "Account recovery request rate limit exceeded."
 
 
@@ -308,6 +312,112 @@ async def verify_account_recovery(
         session_created=receipt.session_created,
         access_token_issued=(receipt.access_token_issued),
         refresh_token_issued=(receipt.refresh_token_issued),
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content=response.model_dump(mode="json"),
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+@router.post(
+    "/complete",
+    status_code=200,
+    response_model=(AccountRecoveryCompletedResponseContract),
+)
+async def complete_account_recovery(
+    request: Request,
+    payload: AccountRecoveryCompleteRequestContract,
+    runtime: AccountRecoveryRuntime = Depends(get_account_recovery_runtime),
+) -> JSONResponse:
+    started_at = time.perf_counter()
+
+    limited = await _consume(
+        runtime=runtime,
+        action="account_recovery_complete",
+        subjects={
+            "ip": _client_ip(request, runtime),
+            "token": payload.completion_token,
+        },
+        rules=ACCOUNT_RECOVERY_VERIFY_RULES,
+    )
+
+    if limited is not None:
+        await _response_floor(
+            started_at,
+            runtime.minimum_response_seconds,
+        )
+        return limited
+
+    try:
+        receipt = await runtime.service.complete(
+            request_id=payload.request_id,
+            raw_completion_token=(payload.completion_token),
+            new_password=payload.new_password,
+        )
+    except AccountRecoveryDeniedError:
+        await _response_floor(
+            started_at,
+            runtime.minimum_response_seconds,
+        )
+
+        return JSONResponse(
+            status_code=400,
+            content={"detail": GENERIC_COMPLETION_DENIED},
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
+        )
+    except Exception:
+        logger.exception(
+            "identity_account_recovery_complete_failed",
+            extra={
+                "request_id": getattr(
+                    request.state,
+                    "request_id",
+                    "unavailable",
+                )
+            },
+        )
+
+        return JSONResponse(
+            status_code=503,
+            content={"detail": GENERIC_UNAVAILABLE},
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
+        )
+
+    await _response_floor(
+        started_at,
+        runtime.minimum_response_seconds,
+    )
+
+    response = AccountRecoveryCompletedResponseContract(
+        request_id=receipt.request_id,
+        completed_at=receipt.completed_at,
+        password_changed=receipt.password_changed,
+        mfa_reenrollment_required=(receipt.mfa_reenrollment_required),
+        revocations=(
+            AccountRecoveryRevocationResponseContract(
+                sessions_revoked=(receipt.sessions_revoked),
+                refresh_tokens_revoked=(receipt.refresh_tokens_revoked),
+                action_tokens_revoked=(receipt.action_tokens_revoked),
+                supervisor_session_keys_revoked=(receipt.supervisor_session_keys_revoked),
+                api_keys_revoked=(receipt.api_keys_revoked),
+            )
+        ),
+        session_created=receipt.session_created,
+        access_token_issued=(receipt.access_token_issued),
+        refresh_token_issued=(receipt.refresh_token_issued),
+        api_key_issued=receipt.api_key_issued,
+        authority_granted=receipt.authority_granted,
     )
 
     return JSONResponse(

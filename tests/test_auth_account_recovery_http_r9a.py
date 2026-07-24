@@ -56,12 +56,15 @@ class FakeService:
         self,
         *,
         deny_verify=False,
+        deny_complete=False,
         fail=False,
     ) -> None:
         self.deny_verify = deny_verify
+        self.deny_complete = deny_complete
         self.fail = fail
         self.start_calls = []
         self.verify_calls = []
+        self.complete_calls = []
 
     async def start(self, **values):
         self.start_calls.append(values)
@@ -100,6 +103,39 @@ class FakeService:
             session_created=False,
             access_token_issued=False,
             refresh_token_issued=False,
+        )
+
+    async def complete(self, **values):
+        self.complete_calls.append(values)
+
+        if self.deny_complete:
+            raise AccountRecoveryDeniedError("private completion detail")
+
+        if self.fail:
+            raise RuntimeError("private database detail")
+
+        return SimpleNamespace(
+            request_id=values["request_id"],
+            completed_at=datetime(
+                2026,
+                7,
+                24,
+                11,
+                30,
+                tzinfo=UTC,
+            ),
+            password_changed=True,
+            mfa_reenrollment_required=True,
+            sessions_revoked=2,
+            refresh_tokens_revoked=4,
+            action_tokens_revoked=3,
+            supervisor_session_keys_revoked=1,
+            api_keys_revoked=5,
+            session_created=False,
+            access_token_issued=False,
+            refresh_token_issued=False,
+            api_key_issued=False,
+            authority_granted=False,
         )
 
 
@@ -311,3 +347,122 @@ def test_verify_validation_hides_token_and_role():
     assert response.json() == {"detail": "Invalid account recovery request."}
     assert "raw-secret-token" not in response.text
     assert "platform_admin" not in response.text
+
+
+def test_complete_returns_revocation_receipt_without_login():
+    request_id = uuid.uuid4()
+    client, service, limiter = _client()
+
+    response = client.post(
+        "/auth/account-recovery/complete",
+        json={
+            "request_id": str(request_id),
+            "completion_token": ("c" * 48),
+            "new_password": "New-Password-2026!",
+            "confirm_password": "New-Password-2026!",
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "completed"
+    assert body["request_id"] == str(request_id)
+    assert body["password_changed"] is True
+    assert body["mfa_reenrollment_required"] is True
+    assert body["revocations"] == {
+        "sessions_revoked": 2,
+        "refresh_tokens_revoked": 4,
+        "action_tokens_revoked": 3,
+        "supervisor_session_keys_revoked": 1,
+        "api_keys_revoked": 5,
+    }
+    assert body["session_created"] is False
+    assert body["access_token_issued"] is False
+    assert body["refresh_token_issued"] is False
+    assert body["api_key_issued"] is False
+    assert body["authority_granted"] is False
+
+    assert response.headers["Cache-Control"] == "no-store"
+
+    assert service.complete_calls == [
+        {
+            "request_id": request_id,
+            "raw_completion_token": "c" * 48,
+            "new_password": "New-Password-2026!",
+        }
+    ]
+
+    assert tuple(limiter.calls[0]["subjects"]) == (
+        "ip",
+        "token",
+    )
+
+
+def test_complete_denial_is_generic_and_hides_secrets():
+    request_id = uuid.uuid4()
+    secret = "x" * 48
+    password = "Private-Password-2026!"
+    service = FakeService(deny_complete=True)
+
+    response = _client(service=service)[0].post(
+        "/auth/account-recovery/complete",
+        json={
+            "request_id": str(request_id),
+            "completion_token": secret,
+            "new_password": password,
+            "confirm_password": password,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": ("Account recovery completion is unavailable.")}
+    assert "private" not in response.text
+    assert secret not in response.text
+    assert password not in response.text
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_complete_validation_hides_password_token_and_role():
+    secret = "z" * 48
+    password = "Private-Password-2026!"
+
+    response = _client()[0].post(
+        "/auth/account-recovery/complete",
+        json={
+            "request_id": "not-a-uuid",
+            "completion_token": secret,
+            "new_password": password,
+            "confirm_password": "different-password",
+            "role": "platform_admin",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid account recovery request."}
+    assert secret not in response.text
+    assert password not in response.text
+    assert "platform_admin" not in response.text
+
+
+def test_complete_runtime_failure_is_generic():
+    request_id = uuid.uuid4()
+    secret = "q" * 48
+    password = "Private-Password-2026!"
+
+    response = _client(service=FakeService(fail=True))[0].post(
+        "/auth/account-recovery/complete",
+        json={
+            "request_id": str(request_id),
+            "completion_token": secret,
+            "new_password": password,
+            "confirm_password": password,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": ("Account recovery service temporarily unavailable.")}
+    assert secret not in response.text
+    assert password not in response.text
+    assert response.headers["Cache-Control"] == "no-store"

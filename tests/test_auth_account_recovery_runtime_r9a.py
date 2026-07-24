@@ -55,10 +55,17 @@ async def test_runtime_wires_recovery_authorities(
         "get_session_factory",
         lambda: object(),
     )
+    external_revoker = object()
+    monkeypatch.setattr(
+        runtime_module,
+        "_build_external_authority_revoker",
+        lambda: external_revoker,
+    )
 
     runtime = await build_account_recovery_runtime(_config())
 
     assert runtime.service is not None
+    assert runtime.service._external_authority_revoker is external_revoker
     assert runtime.rate_limiter is not None
     assert runtime.proxy_policy.max_forwarded_hops == 4
     assert runtime.minimum_response_seconds == 0.35
@@ -93,6 +100,11 @@ async def test_runtime_fails_closed(
         "get_session_factory",
         lambda: object(),
     )
+    monkeypatch.setattr(
+        runtime_module,
+        "_build_external_authority_revoker",
+        lambda: object(),
+    )
 
     with pytest.raises(AccountRecoveryRuntimeUnavailableError):
         await build_account_recovery_runtime(_config(**updates))
@@ -109,6 +121,37 @@ async def test_runtime_fails_closed_without_redis(
         runtime_module,
         "get_redis",
         missing_redis,
+    )
+
+    with pytest.raises(AccountRecoveryRuntimeUnavailableError):
+        await build_account_recovery_runtime(_config())
+
+
+@pytest.mark.asyncio
+async def test_runtime_fails_closed_without_external_authority(
+    monkeypatch,
+):
+    async def fake_get_redis():
+        return FakeRedis()
+
+    monkeypatch.setattr(
+        runtime_module,
+        "get_redis",
+        fake_get_redis,
+    )
+    monkeypatch.setattr(
+        runtime_module,
+        "get_session_factory",
+        lambda: object(),
+    )
+
+    def unavailable_revoker():
+        raise AccountRecoveryRuntimeUnavailableError("external authority unavailable")
+
+    monkeypatch.setattr(
+        runtime_module,
+        "_build_external_authority_revoker",
+        unavailable_revoker,
     )
 
     with pytest.raises(AccountRecoveryRuntimeUnavailableError):

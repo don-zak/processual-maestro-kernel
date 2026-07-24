@@ -7,6 +7,9 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from processual_api.auth.account_recovery_external_revocation import (
+    ExternalAuthorityRevocationReceipt,
+)
 from processual_api.auth.account_recovery_service import (
     ACCOUNT_RECOVERY_COMPLETION_TOKEN_PURPOSE,
     ACCOUNT_RECOVERY_MAX_ATTEMPTS,
@@ -82,6 +85,8 @@ class FakeRepository:
         self.invalidations: list[dict[str, object]] = []
         self.requests: list[SimpleNamespace] = []
         self.outboxes: list[SimpleNamespace] = []
+        self.user = None
+        self.completion_calls: list[tuple[str, object]] = []
 
     async def eligible_principal_by_login(
         self,
@@ -147,6 +152,89 @@ class FakeRepository:
     ):
         self.requested_id = request_id
         return self.request
+
+    async def user_for_update(
+        self,
+        *,
+        user_id,
+    ):
+        self.completion_calls.append(
+            (
+                "user_for_update",
+                user_id,
+            )
+        )
+        return self.user
+
+    async def revoke_refresh_tokens(
+        self,
+        *,
+        user_id,
+        revoked_at,
+    ) -> int:
+        self.completion_calls.append(
+            (
+                "revoke_refresh_tokens",
+                user_id,
+            )
+        )
+        return 4
+
+    async def revoke_sessions(
+        self,
+        *,
+        user_id,
+        revoked_at,
+        reason,
+    ) -> int:
+        self.completion_calls.append(
+            (
+                "revoke_sessions",
+                reason,
+            )
+        )
+        return 2
+
+    async def invalidate_action_tokens(
+        self,
+        *,
+        user_id,
+        invalidated_at,
+    ) -> int:
+        self.completion_calls.append(
+            (
+                "invalidate_action_tokens",
+                user_id,
+            )
+        )
+        return 3
+
+    async def disable_mfa_factors(
+        self,
+        *,
+        user_id,
+        disabled_at,
+    ) -> int:
+        self.completion_calls.append(
+            (
+                "disable_mfa_factors",
+                user_id,
+            )
+        )
+        return 1
+
+    async def delete_mfa_recovery_codes(
+        self,
+        *,
+        user_id,
+    ) -> int:
+        self.completion_calls.append(
+            (
+                "delete_mfa_recovery_codes",
+                user_id,
+            )
+        )
+        return 6
 
 
 class FakeUnitOfWork:
@@ -218,11 +306,56 @@ def _request(
     )
 
 
+class FakePasswordService:
+    def __init__(self) -> None:
+        self.passwords: list[str] = []
+
+    def hash_password(
+        self,
+        password: str,
+    ) -> str:
+        self.passwords.append(password)
+        return "$argon2id$recovery-hash"
+
+
+class FakeExternalAuthorityRevoker:
+    def __init__(
+        self,
+        *,
+        fail: bool = False,
+    ) -> None:
+        self.fail = fail
+        self.calls: list[dict[str, object]] = []
+
+    def revoke(
+        self,
+        *,
+        user_id: str,
+        identity_aliases: tuple[str, ...],
+    ) -> ExternalAuthorityRevocationReceipt:
+        self.calls.append(
+            {
+                "user_id": user_id,
+                "identity_aliases": identity_aliases,
+            }
+        )
+
+        if self.fail:
+            raise RuntimeError("external authority unavailable")
+
+        return ExternalAuthorityRevocationReceipt(
+            supervisor_session_keys_revoked=2,
+            api_keys_revoked=5,
+        )
+
+
 def _service(
     repository: FakeRepository,
     *,
     digester: FakeTokenDigester | None = None,
     max_attempts: int = ACCOUNT_RECOVERY_MAX_ATTEMPTS,
+    password_service=None,
+    external_revoker=None,
 ):
     unit = FakeUnitOfWork(repository)
     token_digester = digester or FakeTokenDigester()
@@ -235,6 +368,8 @@ def _service(
         unit_of_work_factory=lambda: unit,
         token_digester=token_digester,
         delivery_cipher=delivery_cipher,
+        password_service=password_service,
+        external_authority_revoker=(external_revoker),
         clock=lambda: NOW,
         max_attempts=max_attempts,
     )
@@ -585,3 +720,199 @@ def test_request_identifier_type_is_uuid() -> None:
     request_id = uuid4()
 
     assert isinstance(request_id, UUID)
+
+
+def _verified_completion_request(
+    *,
+    expires_at: datetime | None = None,
+):
+    request = _request(
+        state="verified",
+        expires_at=(expires_at or (NOW + timedelta(minutes=15))),
+    )
+    request.verified_at = NOW
+    request.completion_token_hash = ACCOUNT_RECOVERY_COMPLETION_TOKEN_PURPOSE + "-digest-from-valid-completion"
+    return request
+
+
+def _active_completion_user():
+    return SimpleNamespace(
+        id=uuid4(),
+        email_normalized="person@example.test",
+        status="active",
+        password_hash="old-password-hash",
+        password_changed_at=None,
+        failed_login_count=4,
+        locked_until=NOW,
+        updated_at=NOW,
+    )
+
+
+@pytest.mark.asyncio
+async def test_complete_changes_password_and_revokes_authorities() -> None:
+    request = _verified_completion_request()
+    repository = FakeRepository(
+        request=request,
+    )
+    user = _active_completion_user()
+    request.user_id = user.id
+    repository.user = user
+
+    password_service = FakePasswordService()
+    external_revoker = FakeExternalAuthorityRevoker()
+
+    service, unit, _, _ = _service(
+        repository,
+        password_service=password_service,
+        external_revoker=external_revoker,
+    )
+
+    receipt = await service.complete(
+        request_id=request.id,
+        raw_completion_token="valid-completion",
+        new_password="New-Password-2026!",
+    )
+
+    assert unit.commit_count == 1
+    assert password_service.passwords == ["New-Password-2026!"]
+    assert user.password_hash == ("$argon2id$recovery-hash")
+    assert user.password_changed_at == NOW
+    assert user.failed_login_count == 0
+    assert user.locked_until is None
+
+    assert request.state == "completed"
+    assert request.completed_at == NOW
+    assert request.completion_token_hash is None
+
+    assert receipt.sessions_revoked == 2
+    assert receipt.refresh_tokens_revoked == 4
+    assert receipt.action_tokens_revoked == 3
+    assert receipt.supervisor_session_keys_revoked == 2
+    assert receipt.api_keys_revoked == 5
+    assert receipt.password_changed is True
+    assert receipt.mfa_reenrollment_required is True
+    assert receipt.session_created is False
+    assert receipt.access_token_issued is False
+    assert receipt.refresh_token_issued is False
+    assert receipt.api_key_issued is False
+    assert receipt.authority_granted is False
+
+    assert external_revoker.calls == [
+        {
+            "user_id": str(user.id),
+            "identity_aliases": ("person@example.test",),
+        }
+    ]
+
+    assert [call[0] for call in repository.completion_calls] == [
+        "user_for_update",
+        "revoke_refresh_tokens",
+        "revoke_sessions",
+        "invalidate_action_tokens",
+        "disable_mfa_factors",
+        "delete_mfa_recovery_codes",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_complete_rejects_replay_without_mutation() -> None:
+    request = _verified_completion_request()
+    request.state = "completed"
+    request.completed_at = NOW
+
+    repository = FakeRepository(
+        request=request,
+    )
+    repository.user = _active_completion_user()
+
+    external_revoker = FakeExternalAuthorityRevoker()
+
+    service, unit, _, _ = _service(
+        repository,
+        password_service=FakePasswordService(),
+        external_revoker=external_revoker,
+    )
+
+    with pytest.raises(
+        AccountRecoveryDeniedError,
+        match="unavailable",
+    ):
+        await service.complete(
+            request_id=request.id,
+            raw_completion_token="valid-completion",
+            new_password="New-Password-2026!",
+        )
+
+    assert unit.commit_count == 0
+    assert repository.completion_calls == []
+    assert external_revoker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_complete_expires_request_without_password_change() -> None:
+    request = _verified_completion_request(
+        expires_at=NOW,
+    )
+    repository = FakeRepository(
+        request=request,
+    )
+    repository.user = _active_completion_user()
+
+    external_revoker = FakeExternalAuthorityRevoker()
+
+    service, unit, _, _ = _service(
+        repository,
+        password_service=FakePasswordService(),
+        external_revoker=external_revoker,
+    )
+
+    with pytest.raises(
+        AccountRecoveryDeniedError,
+        match="unavailable",
+    ):
+        await service.complete(
+            request_id=request.id,
+            raw_completion_token="valid-completion",
+            new_password="New-Password-2026!",
+        )
+
+    assert request.state == "expired"
+    assert unit.commit_count == 1
+    assert repository.completion_calls == []
+    assert external_revoker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_complete_fails_closed_when_external_revocation_fails() -> None:
+    request = _verified_completion_request()
+    repository = FakeRepository(
+        request=request,
+    )
+    user = _active_completion_user()
+    request.user_id = user.id
+    repository.user = user
+
+    service, unit, _, _ = _service(
+        repository,
+        password_service=FakePasswordService(),
+        external_revoker=FakeExternalAuthorityRevoker(
+            fail=True,
+        ),
+    )
+
+    with pytest.raises(
+        AccountRecoveryDeniedError,
+        match="unavailable",
+    ):
+        await service.complete(
+            request_id=request.id,
+            raw_completion_token="valid-completion",
+            new_password="New-Password-2026!",
+        )
+
+    assert unit.commit_count == 0
+    assert [call[0] for call in repository.completion_calls] == [
+        "user_for_update",
+    ]
+    assert request.state == "verified"
+    assert user.password_hash == "old-password-hash"

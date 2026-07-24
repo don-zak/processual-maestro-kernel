@@ -7,9 +7,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from processual_api.auth.account_recovery_external_revocation import (
+    AccountRecoveryExternalAuthorityRevoker,
+)
 from processual_api.auth.delivery_crypto import (
     DeliveryPayloadCipher,
 )
+from processual_api.auth.passwords import PasswordService
 from processual_api.auth.token_material import TokenDigester
 
 ACCOUNT_RECOVERY_VERIFICATION_TTL = timedelta(minutes=30)
@@ -49,6 +53,47 @@ class AccountRecoveryRepository(Protocol):
         request_id: uuid.UUID,
     ): ...
 
+    async def user_for_update(
+        self,
+        *,
+        user_id: uuid.UUID,
+    ): ...
+
+    async def revoke_refresh_tokens(
+        self,
+        *,
+        user_id: uuid.UUID,
+        revoked_at: datetime,
+    ) -> int: ...
+
+    async def revoke_sessions(
+        self,
+        *,
+        user_id: uuid.UUID,
+        revoked_at: datetime,
+        reason: str,
+    ) -> int: ...
+
+    async def invalidate_action_tokens(
+        self,
+        *,
+        user_id: uuid.UUID,
+        invalidated_at: datetime,
+    ) -> int: ...
+
+    async def disable_mfa_factors(
+        self,
+        *,
+        user_id: uuid.UUID,
+        disabled_at: datetime,
+    ) -> int: ...
+
+    async def delete_mfa_recovery_codes(
+        self,
+        *,
+        user_id: uuid.UUID,
+    ) -> int: ...
+
 
 class AccountRecoveryUnitOfWork(Protocol):
     repository: AccountRecoveryRepository
@@ -86,6 +131,24 @@ class AccountRecoveryVerificationReceipt:
     mfa_reenrollment_required: bool
 
 
+@dataclass(frozen=True, slots=True)
+class AccountRecoveryCompletionReceipt:
+    request_id: uuid.UUID
+    completed_at: datetime
+    password_changed: bool
+    mfa_reenrollment_required: bool
+    sessions_revoked: int
+    refresh_tokens_revoked: int
+    action_tokens_revoked: int
+    supervisor_session_keys_revoked: int
+    api_keys_revoked: int
+    session_created: bool
+    access_token_issued: bool
+    refresh_token_issued: bool
+    api_key_issued: bool
+    authority_granted: bool
+
+
 class AccountRecoveryService:
     def __init__(
         self,
@@ -96,6 +159,8 @@ class AccountRecoveryService:
         ],
         token_digester: TokenDigester,
         delivery_cipher: DeliveryPayloadCipher,
+        password_service: PasswordService | None = None,
+        external_authority_revoker: (AccountRecoveryExternalAuthorityRevoker | None) = None,
         clock: Callable[[], datetime] | None = None,
         verification_ttl: timedelta = (ACCOUNT_RECOVERY_VERIFICATION_TTL),
         completion_ttl: timedelta = (ACCOUNT_RECOVERY_COMPLETION_TTL),
@@ -113,6 +178,8 @@ class AccountRecoveryService:
         self._unit_of_work_factory = unit_of_work_factory
         self._token_digester = token_digester
         self._delivery_cipher = delivery_cipher
+        self._password_service = password_service or PasswordService()
+        self._external_authority_revoker = external_authority_revoker
         self._clock = clock or (lambda: datetime.now(UTC))
         self._verification_ttl = verification_ttl
         self._completion_ttl = completion_ttl
@@ -317,6 +384,137 @@ class AccountRecoveryService:
                 mfa_reenrollment_required=True,
             )
 
+    async def complete(
+        self,
+        *,
+        request_id: uuid.UUID,
+        raw_completion_token: str,
+        new_password: str,
+    ) -> AccountRecoveryCompletionReceipt:
+        now = self._now()
+
+        try:
+            provided_hash = self._token_digester.digest(
+                raw_completion_token,
+                purpose=(ACCOUNT_RECOVERY_COMPLETION_TOKEN_PURPOSE),
+            )
+            new_password_hash = self._password_service.hash_password(new_password)
+        except (
+            RuntimeError,
+            ValueError,
+        ) as exc:
+            raise AccountRecoveryDeniedError("Account recovery completion is unavailable.") from exc
+
+        if self._external_authority_revoker is None:
+            raise AccountRecoveryDeniedError("Account recovery completion is unavailable.")
+
+        async with self._unit_of_work_factory() as unit:
+            repository = unit.repository
+
+            request = await repository.request_for_update(
+                request_id=request_id,
+            )
+
+            if request is None:
+                raise AccountRecoveryDeniedError("Account recovery completion is unavailable.")
+
+            if (
+                request.purpose != ACCOUNT_RECOVERY_PURPOSE
+                or request.state != "verified"
+                or request.verified_at is None
+                or request.completed_at is not None
+                or request.revoked_at is not None
+                or not request.completion_token_hash
+            ):
+                raise AccountRecoveryDeniedError("Account recovery completion is unavailable.")
+
+            if request.expires_at <= now:
+                request.state = "expired"
+                request.updated_at = now
+
+                await unit.commit()
+
+                raise AccountRecoveryDeniedError("Account recovery completion is unavailable.")
+
+            if not hmac.compare_digest(
+                request.completion_token_hash,
+                provided_hash,
+            ):
+                raise AccountRecoveryDeniedError("Account recovery completion is unavailable.")
+
+            user = await repository.user_for_update(
+                user_id=request.user_id,
+            )
+
+            if user is None or getattr(user, "status", None) != "active":
+                raise AccountRecoveryDeniedError("Account recovery completion is unavailable.")
+
+            try:
+                external_receipt = self._external_authority_revoker.revoke(
+                    user_id=str(user.id),
+                    identity_aliases=(str(user.email_normalized),),
+                )
+            except (
+                RuntimeError,
+                ValueError,
+            ) as exc:
+                raise AccountRecoveryDeniedError("Account recovery completion is unavailable.") from exc
+
+            refresh_tokens_revoked = await repository.revoke_refresh_tokens(
+                user_id=user.id,
+                revoked_at=now,
+            )
+
+            sessions_revoked = await repository.revoke_sessions(
+                user_id=user.id,
+                revoked_at=now,
+                reason=("account_recovery_completed"),
+            )
+
+            action_tokens_revoked = await repository.invalidate_action_tokens(
+                user_id=user.id,
+                invalidated_at=now,
+            )
+
+            await repository.disable_mfa_factors(
+                user_id=user.id,
+                disabled_at=now,
+            )
+
+            await repository.delete_mfa_recovery_codes(
+                user_id=user.id,
+            )
+
+            user.password_hash = new_password_hash
+            user.password_changed_at = now
+            user.failed_login_count = 0
+            user.locked_until = None
+            user.updated_at = now
+
+            request.state = "completed"
+            request.completed_at = now
+            request.completion_token_hash = None
+            request.updated_at = now
+
+            await unit.commit()
+
+            return AccountRecoveryCompletionReceipt(
+                request_id=request.id,
+                completed_at=now,
+                password_changed=True,
+                mfa_reenrollment_required=True,
+                sessions_revoked=sessions_revoked,
+                refresh_tokens_revoked=(refresh_tokens_revoked),
+                action_tokens_revoked=(action_tokens_revoked),
+                supervisor_session_keys_revoked=(external_receipt.supervisor_session_keys_revoked),
+                api_keys_revoked=(external_receipt.api_keys_revoked),
+                session_created=False,
+                access_token_issued=False,
+                refresh_token_issued=False,
+                api_key_issued=False,
+                authority_granted=False,
+            )
+
 
 __all__ = [
     "ACCOUNT_RECOVERY_COMPLETION_TOKEN_PURPOSE",
@@ -325,6 +523,7 @@ __all__ = [
     "ACCOUNT_RECOVERY_PURPOSE",
     "ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE",
     "ACCOUNT_RECOVERY_VERIFICATION_TTL",
+    "AccountRecoveryCompletionReceipt",
     "AccountRecoveryDeniedError",
     "AccountRecoveryService",
     "AccountRecoveryStartReceipt",
