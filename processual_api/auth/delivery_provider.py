@@ -9,6 +9,7 @@ ALLOWED_VERIFICATION_TEMPLATES = frozenset(
     {
         "verify_email",
         "verify_recovery_email",
+        "account_recovery_verification",
     }
 )
 
@@ -46,10 +47,7 @@ def validate_https_endpoint(
         or parsed.query
         or parsed.fragment
     ):
-        raise ValueError(
-            f"{label} must be an HTTPS URL without "
-            "credentials, query, or fragment."
-        )
+        raise ValueError(f"{label} must be an HTTPS URL without credentials, query, or fragment.")
 
     return normalized
 
@@ -68,16 +66,10 @@ class HttpEmailDeliveryProvider:
         )
 
         if len(bearer_token.encode()) < 32:
-            raise ValueError(
-                "Delivery provider token must contain "
-                "at least 32 bytes."
-            )
+            raise ValueError("Delivery provider token must contain at least 32 bytes.")
 
         if timeout_seconds <= 0 or timeout_seconds > 60:
-            raise ValueError(
-                "Delivery provider timeout is outside "
-                "its safe range."
-            )
+            raise ValueError("Delivery provider timeout is outside its safe range.")
 
         self._bearer_token = bearer_token
         self._timeout_seconds = timeout_seconds
@@ -91,9 +83,7 @@ class HttpEmailDeliveryProvider:
         idempotency_key: str,
     ) -> None:
         if template not in ALLOWED_VERIFICATION_TEMPLATES:
-            raise ValueError(
-                "Delivery verification template is invalid."
-            )
+            raise ValueError("Delivery verification template is invalid.")
 
         try:
             async with httpx.AsyncClient(
@@ -103,9 +93,7 @@ class HttpEmailDeliveryProvider:
                 response = await client.post(
                     self._endpoint,
                     headers={
-                        "Authorization": (
-                            f"Bearer {self._bearer_token}"
-                        ),
+                        "Authorization": (f"Bearer {self._bearer_token}"),
                         "Idempotency-Key": idempotency_key,
                     },
                     json={
@@ -115,13 +103,9 @@ class HttpEmailDeliveryProvider:
                     },
                 )
         except httpx.TimeoutException as exc:
-            raise DeliveryProviderError(
-                "provider_timeout"
-            ) from exc
+            raise DeliveryProviderError("provider_timeout") from exc
         except httpx.RequestError as exc:
-            raise DeliveryProviderError(
-                "provider_network"
-            ) from exc
+            raise DeliveryProviderError("provider_network") from exc
 
         if 200 <= response.status_code < 300:
             return

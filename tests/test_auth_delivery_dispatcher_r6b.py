@@ -83,6 +83,49 @@ def _claim(*, now, attempt_count=1, user_status="pending_verification", consumed
     )
 
 
+def _recovery_claim(
+    *,
+    now,
+    attempt_count=1,
+    user_status="active",
+    state="pending",
+    revoked_at=None,
+    expires_at=None,
+):
+    cipher = _cipher()
+    outbox_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    recovery_request_id = uuid.uuid4()
+
+    encrypted = cipher.encrypt(
+        "raw-account-recovery-token",
+        outbox_id=str(outbox_id),
+        user_id=str(user_id),
+        account_recovery_request_id=(str(recovery_request_id)),
+        purpose="account_recovery_verification",
+    )
+
+    return DeliveryClaim(
+        outbox_id=outbox_id,
+        user_id=user_id,
+        action_token_id=None,
+        claim_id=uuid.uuid4(),
+        recipient_email="recovery@example.com",
+        user_status=user_status,
+        event_type="account_recovery_verification",
+        payload_ciphertext=encrypted.ciphertext,
+        payload_key_version=encrypted.key_version,
+        action_token_expires_at=None,
+        action_token_consumed_at=None,
+        action_token_invalidated_at=None,
+        attempt_count=attempt_count,
+        account_recovery_request_id=(recovery_request_id),
+        account_recovery_expires_at=(expires_at or now + timedelta(minutes=30)),
+        account_recovery_state=state,
+        account_recovery_revoked_at=revoked_at,
+    )
+
+
 def _dispatcher(repository, provider, *, now, max_attempts=3):
     return DeliveryDispatcher(
         repository=repository,
@@ -111,11 +154,137 @@ def test_dispatch_success_uses_stable_idempotency_and_marks_claim_delivered():
     assert result.claimed == result.delivered == 1
     assert result.retry_scheduled == result.dead_lettered == result.stale_finalization == 0
     assert provider.calls[0]["recipient"] == "person@example.com"
-    assert provider.calls[0]["verification_url"].startswith(
-        "https://accounts.example.test/verify-email?token="
-    )
+    assert provider.calls[0]["verification_url"].startswith("https://accounts.example.test/verify-email?token=")
     assert provider.calls[0]["idempotency_key"] == f"pmk-auth-delivery-v1:{claim.outbox_id}"
     assert repository.delivered[0]["claim_id"] == claim.claim_id
+
+
+def test_account_recovery_dispatch_uses_recovery_authority_and_template():
+    now = datetime(2026, 7, 24, 8, tzinfo=UTC)
+    claim = _recovery_claim(now=now)
+    repository = FakeRepository([claim])
+    provider = FakeProvider()
+
+    result = asyncio.run(
+        _dispatcher(
+            repository,
+            provider,
+            now=now,
+        ).dispatch_once()
+    )
+
+    assert result.claimed == 1
+    assert result.delivered == 1
+    assert result.retry_scheduled == 0
+    assert result.dead_lettered == 0
+
+    call = provider.calls[0]
+
+    assert call["template"] == ("account_recovery_verification")
+    assert call["recipient"] == ("recovery@example.com")
+    assert call["verification_url"].startswith("https://accounts.example.test/auth/account-recovery/verify?token=")
+    assert "raw-account-recovery-token" in (call["verification_url"])
+    assert repository.delivered[0]["claim_id"] == (claim.claim_id)
+
+
+@pytest.mark.parametrize(
+    ("values", "error_code"),
+    (
+        (
+            {
+                "expires_at": datetime(
+                    2026,
+                    7,
+                    24,
+                    8,
+                    tzinfo=UTC,
+                )
+            },
+            "account_recovery_expired",
+        ),
+        (
+            {"state": "verified"},
+            "account_recovery_ineligible",
+        ),
+        (
+            {
+                "revoked_at": datetime(
+                    2026,
+                    7,
+                    24,
+                    7,
+                    59,
+                    tzinfo=UTC,
+                )
+            },
+            "account_recovery_revoked",
+        ),
+    ),
+)
+def test_ineligible_account_recovery_is_terminal(
+    values,
+    error_code,
+):
+    now = datetime(2026, 7, 24, 8, tzinfo=UTC)
+    claim = _recovery_claim(
+        now=now,
+        **values,
+    )
+    repository = FakeRepository([claim])
+    provider = FakeProvider()
+
+    result = asyncio.run(
+        _dispatcher(
+            repository,
+            provider,
+            now=now,
+        ).dispatch_once()
+    )
+
+    assert result.dead_lettered == 1
+    assert result.delivered == 0
+    assert provider.calls == []
+    assert repository.failed[0]["error_code"] == (error_code)
+
+
+def test_claim_requires_exactly_one_delivery_authority():
+    now = datetime(2026, 7, 24, 8, tzinfo=UTC)
+    recovery_claim = _recovery_claim(now=now)
+
+    invalid_claim = DeliveryClaim(
+        outbox_id=recovery_claim.outbox_id,
+        user_id=recovery_claim.user_id,
+        action_token_id=uuid.uuid4(),
+        claim_id=recovery_claim.claim_id,
+        recipient_email=(recovery_claim.recipient_email),
+        user_status=recovery_claim.user_status,
+        event_type=recovery_claim.event_type,
+        payload_ciphertext=(recovery_claim.payload_ciphertext),
+        payload_key_version=(recovery_claim.payload_key_version),
+        action_token_expires_at=(now + timedelta(minutes=30)),
+        action_token_consumed_at=None,
+        action_token_invalidated_at=None,
+        attempt_count=1,
+        account_recovery_request_id=(recovery_claim.account_recovery_request_id),
+        account_recovery_expires_at=(recovery_claim.account_recovery_expires_at),
+        account_recovery_state="pending",
+        account_recovery_revoked_at=None,
+    )
+
+    repository = FakeRepository([invalid_claim])
+    provider = FakeProvider()
+
+    result = asyncio.run(
+        _dispatcher(
+            repository,
+            provider,
+            now=now,
+        ).dispatch_once()
+    )
+
+    assert result.dead_lettered == 1
+    assert provider.calls == []
+    assert repository.failed[0]["error_code"] == ("delivery_authority_invalid")
 
 
 def test_provider_failure_schedules_bounded_retry_without_exposing_payload():
