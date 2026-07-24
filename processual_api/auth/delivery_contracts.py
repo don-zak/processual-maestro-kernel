@@ -40,4 +40,25 @@ class DeliveryClaim:
         return self.account_recovery_expires_at
 
 
-__all__ = ["DeliveryClaim"]
+@dataclass(frozen=True, slots=True)
+class DeliveryOperationalMetrics:
+    pending_count: int
+    retry_scheduled_count: int
+    leased_count: int
+    dead_letter_count: int
+    delivered_count: int
+    oldest_pending_age_seconds: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryRedriveResult:
+    outbox_id: uuid.UUID
+    available_at: datetime
+    preserved_attempt_count: int
+
+
+__all__ = [
+    "DeliveryClaim",
+    "DeliveryOperationalMetrics",
+    "DeliveryRedriveResult",
+]

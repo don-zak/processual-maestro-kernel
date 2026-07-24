@@ -76,6 +76,9 @@ from processual_api.services.integration_claim_keys import (
 from .auth.account_recovery_router import (
     router as account_recovery_router,
 )
+from .auth.delivery_operations_router import (
+    router as delivery_operations_router,
+)
 from .auth.mfa_router import router as mfa_router
 from .auth.recovery_email_router import router as recovery_email_router
 from .auth.registration_router import router as registration_router
@@ -142,6 +145,7 @@ app.include_router(auth_router)
 app.include_router(registration_router)
 app.include_router(recovery_email_router)
 app.include_router(account_recovery_router)
+app.include_router(delivery_operations_router)
 app.include_router(session_router)
 app.include_router(mfa_router)
 app.include_router(cgt.router)
