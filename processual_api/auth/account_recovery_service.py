@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from processual_api.auth.delivery_crypto import (
+    DeliveryPayloadCipher,
+)
 from processual_api.auth.token_material import TokenDigester
 
 ACCOUNT_RECOVERY_VERIFICATION_TTL = timedelta(minutes=30)
@@ -35,7 +38,7 @@ class AccountRecoveryRepository(Protocol):
         invalidated_at: datetime,
     ) -> int: ...
 
-    def add_request(
+    def add_request_with_delivery(
         self,
         **values,
     ): ...
@@ -60,18 +63,6 @@ class AccountRecoveryUnitOfWork(Protocol):
     ): ...
 
     async def commit(self) -> None: ...
-
-
-class AccountRecoveryDeliverySink(Protocol):
-    async def deliver_verification(
-        self,
-        *,
-        request_id: uuid.UUID,
-        user_id: uuid.UUID,
-        recovery_email_normalized: str,
-        raw_token: str,
-        expires_at: datetime,
-    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +95,7 @@ class AccountRecoveryService:
             AccountRecoveryUnitOfWork,
         ],
         token_digester: TokenDigester,
-        delivery_sink: AccountRecoveryDeliverySink,
+        delivery_cipher: DeliveryPayloadCipher,
         clock: Callable[[], datetime] | None = None,
         verification_ttl: timedelta = (ACCOUNT_RECOVERY_VERIFICATION_TTL),
         completion_ttl: timedelta = (ACCOUNT_RECOVERY_COMPLETION_TTL),
@@ -121,7 +112,7 @@ class AccountRecoveryService:
 
         self._unit_of_work_factory = unit_of_work_factory
         self._token_digester = token_digester
-        self._delivery_sink = delivery_sink
+        self._delivery_cipher = delivery_cipher
         self._clock = clock or (lambda: datetime.now(UTC))
         self._verification_ttl = verification_ttl
         self._completion_ttl = completion_ttl
@@ -165,22 +156,6 @@ class AccountRecoveryService:
         login_normalized = self._normalize_login(login)
         now = self._now()
 
-        request_id = uuid.uuid4()
-        verification_expires_at = now + self._verification_ttl
-
-        verification = self._token_digester.generate_token(purpose=(ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE))
-
-        delivery_values: (
-            tuple[
-                uuid.UUID,
-                uuid.UUID,
-                str,
-                str,
-                datetime,
-            ]
-            | None
-        ) = None
-
         async with self._unit_of_work_factory() as unit:
             repository = unit.repository
 
@@ -193,20 +168,55 @@ class AccountRecoveryService:
 
             if (
                 getattr(user, "status", None) != "active"
-                or getattr(recovery_email, "purpose", None) != "recovery"
-                or getattr(recovery_email, "status", None) != "verified"
-                or getattr(recovery_email, "verified_at", None) is None
-                or getattr(recovery_email, "revoked_at", None) is not None
+                or getattr(
+                    recovery_email,
+                    "purpose",
+                    None,
+                )
+                != "recovery"
+                or getattr(
+                    recovery_email,
+                    "status",
+                    None,
+                )
+                != "verified"
+                or getattr(
+                    recovery_email,
+                    "verified_at",
+                    None,
+                )
+                is None
+                or getattr(
+                    recovery_email,
+                    "revoked_at",
+                    None,
+                )
+                is not None
             ):
                 return self._generic_start_receipt()
+
+            request_id = uuid.uuid4()
+            outbox_id = uuid.uuid4()
+            verification_expires_at = now + self._verification_ttl
+
+            verification = self._token_digester.generate_token(purpose=(ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE))
 
             await repository.invalidate_active_requests(
                 user_id=user.id,
                 invalidated_at=now,
             )
 
-            repository.add_request(
+            encrypted = self._delivery_cipher.encrypt(
+                verification.raw,
+                outbox_id=str(outbox_id),
+                user_id=str(user.id),
+                account_recovery_request_id=str(request_id),
+                purpose=(ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE),
+            )
+
+            repository.add_request_with_delivery(
                 request_id=request_id,
+                outbox_id=outbox_id,
                 user_id=user.id,
                 recovery_email_id=recovery_email.id,
                 purpose=ACCOUNT_RECOVERY_PURPOSE,
@@ -220,34 +230,12 @@ class AccountRecoveryService:
                 revoked_at=None,
                 created_at=now,
                 updated_at=now,
+                payload_ciphertext=encrypted.ciphertext,
+                payload_key_version=encrypted.key_version,
+                available_at=now,
             )
 
             await unit.commit()
-
-            delivery_values = (
-                request_id,
-                user.id,
-                recovery_email.email_normalized,
-                verification.raw,
-                verification_expires_at,
-            )
-
-        if delivery_values is not None:
-            (
-                delivery_request_id,
-                delivery_user_id,
-                delivery_email,
-                delivery_token,
-                delivery_expires_at,
-            ) = delivery_values
-
-            await self._delivery_sink.deliver_verification(
-                request_id=delivery_request_id,
-                user_id=delivery_user_id,
-                recovery_email_normalized=delivery_email,
-                raw_token=delivery_token,
-                expires_at=delivery_expires_at,
-            )
 
         return self._generic_start_receipt()
 
@@ -321,7 +309,7 @@ class AccountRecoveryService:
             return AccountRecoveryVerificationReceipt(
                 request_id=request.id,
                 completion_token=completion.raw,
-                completion_expires_at=completion_expires_at,
+                completion_expires_at=(completion_expires_at),
                 session_created=False,
                 access_token_issued=False,
                 refresh_token_issued=False,

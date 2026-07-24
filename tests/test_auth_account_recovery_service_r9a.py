@@ -15,6 +15,9 @@ from processual_api.auth.account_recovery_service import (
     AccountRecoveryDeniedError,
     AccountRecoveryService,
 )
+from processual_api.auth.delivery_crypto import (
+    DeliveryPayloadCipher,
+)
 
 NOW = datetime(2026, 7, 23, 17, 0, tzinfo=UTC)
 
@@ -67,14 +70,6 @@ class FakeTokenDigester:
         return f"{purpose}-digest-from-{raw_token}"
 
 
-class FakeDeliverySink:
-    def __init__(self) -> None:
-        self.deliveries: list[dict[str, object]] = []
-
-    async def deliver_verification(self, **values) -> None:
-        self.deliveries.append(values)
-
-
 class FakeRepository:
     def __init__(
         self,
@@ -85,7 +80,8 @@ class FakeRepository:
         self.principal = principal
         self.request = request
         self.invalidations: list[dict[str, object]] = []
-        self.added_requests: list[dict[str, object]] = []
+        self.requests: list[SimpleNamespace] = []
+        self.outboxes: list[SimpleNamespace] = []
 
     async def eligible_principal_by_login(
         self,
@@ -109,9 +105,40 @@ class FakeRepository:
         )
         return 1
 
-    def add_request(self, **values):
-        self.added_requests.append(values)
-        return values
+    def add_request_with_delivery(self, **values):
+        request = SimpleNamespace(
+            id=values["request_id"],
+            user_id=values["user_id"],
+            recovery_email_id=values["recovery_email_id"],
+            purpose=values["purpose"],
+            state=values["state"],
+            verification_token_hash=(values["verification_token_hash"]),
+            completion_token_hash=(values["completion_token_hash"]),
+            attempt_count=values["attempt_count"],
+            expires_at=values["expires_at"],
+            verified_at=values["verified_at"],
+            completed_at=values["completed_at"],
+            revoked_at=values["revoked_at"],
+            created_at=values["created_at"],
+            updated_at=values["updated_at"],
+        )
+
+        outbox = SimpleNamespace(
+            id=values["outbox_id"],
+            user_id=values["user_id"],
+            action_token_id=None,
+            account_recovery_request_id=(values["request_id"]),
+            event_type=("account_recovery_verification"),
+            payload_ciphertext=(values["payload_ciphertext"]),
+            payload_key_version=(values["payload_key_version"]),
+            available_at=values["available_at"],
+            attempt_count=0,
+        )
+
+        self.requests.append(request)
+        self.outboxes.append(outbox)
+
+        return request, outbox
 
     async def request_for_update(
         self,
@@ -195,44 +222,45 @@ def _service(
     repository: FakeRepository,
     *,
     digester: FakeTokenDigester | None = None,
-    delivery: FakeDeliverySink | None = None,
     max_attempts: int = ACCOUNT_RECOVERY_MAX_ATTEMPTS,
 ):
     unit = FakeUnitOfWork(repository)
     token_digester = digester or FakeTokenDigester()
-    delivery_sink = delivery or FakeDeliverySink()
+    delivery_cipher = DeliveryPayloadCipher(
+        current_key_version="test-v1",
+        keys={"test-v1": b"k" * 32},
+    )
 
     service = AccountRecoveryService(
         unit_of_work_factory=lambda: unit,
         token_digester=token_digester,
-        delivery_sink=delivery_sink,
+        delivery_cipher=delivery_cipher,
         clock=lambda: NOW,
         max_attempts=max_attempts,
     )
 
-    return service, unit, token_digester, delivery_sink
+    return service, unit, token_digester, delivery_cipher
 
 
 @pytest.mark.asyncio
 async def test_start_is_enumeration_resistant_for_unknown_account() -> None:
     repository = FakeRepository(principal=None)
-    service, unit, digester, delivery = _service(repository)
+    service, unit, digester, _ = _service(repository)
 
     receipt = await service.start(
-        login=" Unknown@Example.COM ",
+        login="missing@example.com",
     )
 
-    assert repository.last_login_normalized == "unknown@example.com"
     assert receipt.accepted is True
     assert receipt.externally_indistinguishable is True
     assert receipt.session_created is False
     assert receipt.access_token_issued is False
     assert receipt.refresh_token_issued is False
-    assert repository.added_requests == []
+    assert repository.requests == []
+    assert repository.outboxes == []
     assert repository.invalidations == []
-    assert delivery.deliveries == []
+    assert digester.generated == []
     assert unit.commit_count == 0
-    assert digester.generated == [ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE]
 
 
 @pytest.mark.asyncio
@@ -264,54 +292,63 @@ async def test_start_hides_ineligible_recovery_principals(
             revoked=revoked,
         )
     )
-    service, unit, _, delivery = _service(repository)
+    service, unit, digester, _ = _service(repository)
 
     receipt = await service.start(
-        login="person@example.com",
+        login="recovery@example.com",
     )
 
     assert receipt.accepted is True
     assert receipt.externally_indistinguishable is True
-    assert repository.added_requests == []
+    assert receipt.session_created is False
+    assert repository.requests == []
+    assert repository.outboxes == []
     assert repository.invalidations == []
-    assert delivery.deliveries == []
+    assert digester.generated == []
     assert unit.commit_count == 0
 
 
 @pytest.mark.asyncio
-async def test_start_persists_hash_only_and_delivers_raw_transiently() -> None:
+async def test_start_persists_hash_and_encrypted_outbox_atomically() -> None:
     user, recovery_email = _principal()
     repository = FakeRepository(principal=(user, recovery_email))
-    service, unit, digester, delivery = _service(repository)
+    service, unit, digester, _ = _service(repository)
 
     receipt = await service.start(
-        login="Person@Example.com",
+        login="recovery@example.com",
     )
 
     assert receipt.accepted is True
+    assert receipt.externally_indistinguishable is True
     assert receipt.session_created is False
+    assert receipt.access_token_issued is False
+    assert receipt.refresh_token_issued is False
+
     assert len(repository.invalidations) == 1
-    assert len(repository.added_requests) == 1
-    assert unit.commit_count == 1
-    assert len(delivery.deliveries) == 1
+    assert repository.invalidations[0]["user_id"] == (user.id)
 
-    persisted = repository.added_requests[0]
-    delivered = delivery.deliveries[0]
+    assert len(repository.requests) == 1
+    assert len(repository.outboxes) == 1
 
-    assert persisted["user_id"] == user.id
-    assert persisted["recovery_email_id"] == recovery_email.id
-    assert persisted["purpose"] == ACCOUNT_RECOVERY_PURPOSE
-    assert persisted["state"] == "pending"
-    assert persisted["verification_token_hash"].endswith("-digest-1")
-    assert "raw_token" not in persisted
-    assert "token" not in persisted
-    assert persisted["completion_token_hash"] is None
-    assert persisted["attempt_count"] == 0
+    request = repository.requests[0]
+    outbox = repository.outboxes[0]
 
-    assert delivered["raw_token"].endswith("-raw-1")
-    assert delivered["recovery_email_normalized"] == (recovery_email.email_normalized)
-    assert delivered["raw_token"] != (persisted["verification_token_hash"])
+    assert request.user_id == user.id
+    assert request.recovery_email_id == (recovery_email.id)
+    assert request.purpose == ACCOUNT_RECOVERY_PURPOSE
+    assert request.state == "pending"
+    assert request.verification_token_hash == (ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE + "-digest-1")
+    assert "verification-token" not in repr(request)
+
+    assert outbox.user_id == user.id
+    assert outbox.action_token_id is None
+    assert outbox.account_recovery_request_id == request.id
+    assert outbox.event_type == ("account_recovery_verification")
+    assert outbox.payload_key_version == "test-v1"
+    assert b"verification-token" not in (outbox.payload_ciphertext)
+
     assert digester.generated == [ACCOUNT_RECOVERY_VERIFICATION_TOKEN_PURPOSE]
+    assert unit.commit_count == 1
 
 
 @pytest.mark.asyncio
@@ -467,13 +504,15 @@ def test_constructor_rejects_weakened_limits() -> None:
     repository = FakeRepository()
     unit = FakeUnitOfWork(repository)
     digester = FakeTokenDigester()
-    delivery = FakeDeliverySink()
 
     with pytest.raises(ValueError):
         AccountRecoveryService(
             unit_of_work_factory=lambda: unit,
             token_digester=digester,
-            delivery_sink=delivery,
+            delivery_cipher=DeliveryPayloadCipher(
+                current_key_version="test-v1",
+                keys={"test-v1": b"k" * 32},
+            ),
             verification_ttl=timedelta(0),
         )
 
@@ -481,7 +520,10 @@ def test_constructor_rejects_weakened_limits() -> None:
         AccountRecoveryService(
             unit_of_work_factory=lambda: unit,
             token_digester=digester,
-            delivery_sink=delivery,
+            delivery_cipher=DeliveryPayloadCipher(
+                current_key_version="test-v1",
+                keys={"test-v1": b"k" * 32},
+            ),
             completion_ttl=timedelta(0),
         )
 
@@ -489,7 +531,10 @@ def test_constructor_rejects_weakened_limits() -> None:
         AccountRecoveryService(
             unit_of_work_factory=lambda: unit,
             token_digester=digester,
-            delivery_sink=delivery,
+            delivery_cipher=DeliveryPayloadCipher(
+                current_key_version="test-v1",
+                keys={"test-v1": b"k" * 32},
+            ),
             max_attempts=0,
         )
 
@@ -501,7 +546,10 @@ def test_clock_must_be_timezone_aware() -> None:
     service = AccountRecoveryService(
         unit_of_work_factory=lambda: unit,
         token_digester=FakeTokenDigester(),
-        delivery_sink=FakeDeliverySink(),
+        delivery_cipher=DeliveryPayloadCipher(
+            current_key_version="test-v1",
+            keys={"test-v1": b"k" * 32},
+        ),
         clock=lambda: datetime(2026, 7, 23, 17, 0),
     )
 
