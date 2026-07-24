@@ -4,11 +4,15 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from processual_api.auth.delivery_contracts import DeliveryClaim
+from processual_api.auth.delivery_contracts import (
+    DeliveryClaim,
+    DeliveryOperationalMetrics,
+    DeliveryRedriveResult,
+)
 from processual_api.auth.models import (
     AuthAccountRecoveryRequest,
     AuthActionToken,
@@ -213,6 +217,139 @@ class SqlAlchemyDeliveryRepository:
                 )
 
             return result.rowcount == 1
+
+    async def redrive_dead_letter(
+        self,
+        *,
+        outbox_id: uuid.UUID,
+        available_at: datetime,
+    ) -> DeliveryRedriveResult | None:
+        if available_at.tzinfo is None:
+            raise ValueError(
+                "Delivery redrive availability must be timezone-aware."
+            )
+
+        async with self._session_factory() as session:
+            async with session.begin():
+                statement = (
+                    update(AuthDeliveryOutbox)
+                    .where(
+                        AuthDeliveryOutbox.id == outbox_id,
+                        AuthDeliveryOutbox.delivered_at.is_(None),
+                        AuthDeliveryOutbox.dead_lettered_at.is_not(None),
+                        AuthDeliveryOutbox.claim_id.is_(None),
+                        AuthDeliveryOutbox.claimed_at.is_(None),
+                    )
+                    .values(
+                        available_at=available_at,
+                        dead_lettered_at=None,
+                        claim_id=None,
+                        claimed_at=None,
+                        last_error_code=None,
+                    )
+                    .returning(
+                        AuthDeliveryOutbox.id,
+                        AuthDeliveryOutbox.available_at,
+                        AuthDeliveryOutbox.attempt_count,
+                    )
+                )
+                row = (await session.execute(statement)).one_or_none()
+
+        if row is None:
+            return None
+
+        return DeliveryRedriveResult(
+            outbox_id=row.id,
+            available_at=row.available_at,
+            preserved_attempt_count=row.attempt_count,
+        )
+
+    async def operational_metrics(
+        self,
+        *,
+        now: datetime,
+    ) -> DeliveryOperationalMetrics:
+        if now.tzinfo is None:
+            raise ValueError(
+                "Delivery metrics clock must be timezone-aware."
+            )
+
+        pending_condition = and_(
+            AuthDeliveryOutbox.delivered_at.is_(None),
+            AuthDeliveryOutbox.dead_lettered_at.is_(None),
+            AuthDeliveryOutbox.claimed_at.is_(None),
+            AuthDeliveryOutbox.available_at <= now,
+        )
+        retry_scheduled_condition = and_(
+            AuthDeliveryOutbox.delivered_at.is_(None),
+            AuthDeliveryOutbox.dead_lettered_at.is_(None),
+            AuthDeliveryOutbox.claimed_at.is_(None),
+            AuthDeliveryOutbox.available_at > now,
+        )
+        leased_condition = and_(
+            AuthDeliveryOutbox.delivered_at.is_(None),
+            AuthDeliveryOutbox.dead_lettered_at.is_(None),
+            AuthDeliveryOutbox.claimed_at.is_not(None),
+        )
+        dead_letter_condition = (
+            AuthDeliveryOutbox.dead_lettered_at.is_not(None)
+        )
+        delivered_condition = (
+            AuthDeliveryOutbox.delivered_at.is_not(None)
+        )
+
+        statement = select(
+            func.count(
+                case((pending_condition, 1))
+            ).label("pending_count"),
+            func.count(
+                case((retry_scheduled_condition, 1))
+            ).label("retry_scheduled_count"),
+            func.count(
+                case((leased_condition, 1))
+            ).label("leased_count"),
+            func.count(
+                case((dead_letter_condition, 1))
+            ).label("dead_letter_count"),
+            func.count(
+                case((delivered_condition, 1))
+            ).label("delivered_count"),
+            func.min(
+                case(
+                    (
+                        pending_condition,
+                        AuthDeliveryOutbox.created_at,
+                    )
+                )
+            ).label("oldest_pending_created_at"),
+        )
+
+        async with self._session_factory() as session:
+            row = (await session.execute(statement)).one()
+
+        oldest_pending_age_seconds: int | None = None
+        if row.oldest_pending_created_at is not None:
+            age_seconds = int(
+                (
+                    now - row.oldest_pending_created_at
+                ).total_seconds()
+            )
+            oldest_pending_age_seconds = max(0, age_seconds)
+
+        return DeliveryOperationalMetrics(
+            pending_count=int(row.pending_count or 0),
+            retry_scheduled_count=int(
+                row.retry_scheduled_count or 0
+            ),
+            leased_count=int(row.leased_count or 0),
+            dead_letter_count=int(
+                row.dead_letter_count or 0
+            ),
+            delivered_count=int(row.delivered_count or 0),
+            oldest_pending_age_seconds=(
+                oldest_pending_age_seconds
+            ),
+        )
 
 
 __all__ = ["SqlAlchemyDeliveryRepository"]
