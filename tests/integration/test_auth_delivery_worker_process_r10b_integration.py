@@ -169,6 +169,32 @@ def test_real_process_finishes_active_batch_after_sigterm(
         {
             "MAESTRO_ADMIN_EMAIL": ("auth-r10b-admin@example.test"),
             "MAESTRO_ADMIN_PASSWORD": ("Auth-R10B-Test-Password-9f2d7a4c1e8b6f3d"),
+            "JWT_SECRET": (
+                "auth-r10b-test-jwt-secret-"
+                "7c7e8c06d1464f318d9d875504af8979"
+            ),
+            "API_KEYS": (
+                "auth-r10b-test-api-key-"
+                "97b19e4a802648ee902bac98926657dd"
+            ),
+            "DATABASE_URL": (
+                "postgresql+asyncpg://processual_r10b:"
+                "Auth-R10B-Postgres-Password-"
+                "952d4f7bc03c47a5b8062c4465394401"
+                "@127.0.0.1:5432/processual_auth_r10b"
+            ),
+            "POSTGRES_PASSWORD": (
+                "Auth-R10B-Postgres-Password-"
+                "952d4f7bc03c47a5b8062c4465394401"
+            ),
+            "REDIS_PASSWORD": (
+                "Auth-R10B-Redis-Password-"
+                "4af93a7c49ee440fb65df9bc27d59141"
+            ),
+            "GRAFANA_ADMIN_PASSWORD": (
+                "Auth-R10B-Grafana-Password-"
+                "4e1f910fa93c4593a8a862a39c8b017f"
+            ),
             "REDIS_URL": ("redis://auth-r10b:5d8c1f4a9e2b7d6c@127.0.0.1:6379/15"),
         }
     )
