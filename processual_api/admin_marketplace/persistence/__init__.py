@@ -21,6 +21,11 @@ from processual_api.admin_marketplace.persistence.protocols import (
     SubscriptionRepository,
     TrialRepository,
 )
+from processual_api.admin_marketplace.persistence.repositories import (
+    SqlAlchemyCommercialAuditRepository,
+    SqlAlchemyOfferRepository,
+    SqlAlchemyPlanRepository,
+)
 
 __all__ = [
     "AdminMarketplaceConcurrencyError",
@@ -40,6 +45,9 @@ __all__ = [
     "OrderRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
+    "SqlAlchemyCommercialAuditRepository",
+    "SqlAlchemyOfferRepository",
+    "SqlAlchemyPlanRepository",
     "SubscriptionRepository",
     "TrialRepository",
 ]
