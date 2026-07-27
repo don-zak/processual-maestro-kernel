@@ -22,7 +22,6 @@ from processual_api.admin_marketplace.models import (
 )
 from processual_api.db.base import Base
 
-
 EXPECTED_TABLES = {
     "admin_market_plans",
     "admin_market_offers",
@@ -40,31 +39,21 @@ EXPECTED_TABLES = {
 
 
 def _column_names(model: type[Base]) -> set[str]:
-    return {
-        column.name
-        for column in model.__table__.columns
-    }
+    return {column.name for column in model.__table__.columns}
 
 
 def _check_sql(model: type[Base]) -> set[str]:
     return {
-        str(constraint.sqltext)
-        for constraint in model.__table__.constraints
-        if isinstance(constraint, CheckConstraint)
+        str(constraint.sqltext) for constraint in model.__table__.constraints if isinstance(constraint, CheckConstraint)
     }
 
 
 def test_admin_market_metadata_catalog_is_exact() -> None:
     assert len(ADMIN_MARKET_MODELS) == 12
 
-    assert {
-        model.__tablename__
-        for model in ADMIN_MARKET_MODELS
-    } == EXPECTED_TABLES
+    assert {model.__tablename__ for model in ADMIN_MARKET_MODELS} == EXPECTED_TABLES
 
-    assert EXPECTED_TABLES.issubset(
-        Base.metadata.tables
-    )
+    assert EXPECTED_TABLES.issubset(Base.metadata.tables)
 
 
 def test_offer_persistence_matches_r1_contract() -> None:
@@ -85,49 +74,28 @@ def test_offer_persistence_matches_r1_contract() -> None:
 
     check_sql = _check_sql(AdminMarketOffer)
 
-    assert any(
-        "published" in expression
-        for expression in check_sql
-    )
+    assert any("published" in expression for expression in check_sql)
 
-    assert any(
-        "amount >= 0" in expression
-        for expression in check_sql
-    )
+    assert any("amount >= 0" in expression for expression in check_sql)
 
-    assert any(
-        "expires_at > effective_at" in expression
-        for expression in check_sql
-    )
+    assert any("expires_at > effective_at" in expression for expression in check_sql)
 
 
 def test_subscription_and_order_status_are_constrained() -> None:
-    subscription_checks = _check_sql(
-        AdminMarketSubscription
-    )
+    subscription_checks = _check_sql(AdminMarketSubscription)
 
-    order_checks = _check_sql(
-        AdminMarketOrder
-    )
+    order_checks = _check_sql(AdminMarketOrder)
 
     assert any(
-        "active" in expression
-        and "cancelled" in expression
-        and "expired" in expression
+        "active" in expression and "cancelled" in expression and "expired" in expression
         for expression in subscription_checks
     )
 
     assert any(
-        "awaiting_payment_verification" in expression
-        and "fulfilled" in expression
-        for expression in order_checks
+        "awaiting_payment_verification" in expression and "fulfilled" in expression for expression in order_checks
     )
 
-    assert any(
-        "maestro_direct" in expression
-        and "lemon_squeezy" in expression
-        for expression in order_checks
-    )
+    assert any("maestro_direct" in expression and "lemon_squeezy" in expression for expression in order_checks)
 
 
 def test_commercial_amounts_are_fixed_precision() -> None:
@@ -140,16 +108,11 @@ def test_commercial_amounts_are_fixed_precision() -> None:
         assert amount.type.precision == 18
         assert amount.type.scale == 2
 
-        assert any(
-            "amount >= 0" in expression
-            for expression in _check_sql(model)
-        )
+        assert any("amount >= 0" in expression for expression in _check_sql(model))
 
 
 def test_payment_verification_has_no_raw_evidence() -> None:
-    columns = _column_names(
-        AdminMarketPaymentVerification
-    )
+    columns = _column_names(AdminMarketPaymentVerification)
 
     forbidden = {
         "payment_evidence",
@@ -167,9 +130,7 @@ def test_payment_verification_has_no_raw_evidence() -> None:
 
 
 def test_channel_policy_is_preserved_in_database_constraints() -> None:
-    check_sql = _check_sql(
-        AdminMarketChannelEligibility
-    )
+    check_sql = _check_sql(AdminMarketChannelEligibility)
 
     assert any(
         "maestro_direct_status" in expression
@@ -179,49 +140,32 @@ def test_channel_policy_is_preserved_in_database_constraints() -> None:
     )
 
     assert any(
-        "admin_review_required" in expression
-        and "automatic_activation_allowed" in expression
+        "admin_review_required" in expression and "automatic_activation_allowed" in expression
         for expression in check_sql
     )
 
-    assert any(
-        "restriction_reason" in expression
-        and "ineligible" in expression
-        for expression in check_sql
-    )
+    assert any("restriction_reason" in expression and "ineligible" in expression for expression in check_sql)
 
 
 def test_entitlement_activation_defaults_fail_closed() -> None:
-    column = (
-        AdminMarketEntitlementActivation
-        .__table__
-        .columns["automatic_activation_allowed"]
-    )
+    column = AdminMarketEntitlementActivation.__table__.columns["automatic_activation_allowed"]
 
     assert column.default is not None
     assert column.default.arg is False
 
 
 def test_audit_table_is_append_only_and_authority_locked() -> None:
-    columns = _column_names(
-        AdminMarketAuditRecord
-    )
+    columns = _column_names(AdminMarketAuditRecord)
 
     assert "created_at" in columns
     assert "updated_at" not in columns
 
-    check_sql = _check_sql(
-        AdminMarketAuditRecord
-    )
+    check_sql = _check_sql(AdminMarketAuditRecord)
+
+    assert any("platform_admin" in expression for expression in check_sql)
 
     assert any(
-        "platform_admin" in expression
-        for expression in check_sql
-    )
-
-    assert any(
-        "authority_checked" in expression
-        and "subscription_activation_decided" in expression
+        "authority_checked" in expression and "subscription_activation_decided" in expression
         for expression in check_sql
     )
 
@@ -283,14 +227,7 @@ def test_internal_foreign_key_delete_policies_are_explicit() -> None:
         model,
         column_name,
     ), expected_value in expected.items():
-        foreign_key: ForeignKey = next(
-            iter(
-                model
-                .__table__
-                .columns[column_name]
-                .foreign_keys
-            )
-        )
+        foreign_key: ForeignKey = next(iter(model.__table__.columns[column_name].foreign_keys))
 
         assert (
             foreign_key.target_fullname,
@@ -300,21 +237,14 @@ def test_internal_foreign_key_delete_policies_are_explicit() -> None:
 
 def test_required_unique_constraints_and_indexes_exist() -> None:
     offer_unique = {
-        tuple(
-            column.name
-            for column in constraint.columns
-        )
+        tuple(column.name for column in constraint.columns)
         for constraint in AdminMarketOffer.__table__.constraints
         if isinstance(constraint, UniqueConstraint)
     }
 
     assert ("offer_code",) in offer_unique
 
-    audit_indexes = {
-        index.name
-        for index in AdminMarketAuditRecord.__table__.indexes
-        if isinstance(index, Index)
-    }
+    audit_indexes = {index.name for index in AdminMarketAuditRecord.__table__.indexes if isinstance(index, Index)}
 
     assert audit_indexes == {
         "ix_admin_market_audit_correlation",
@@ -323,30 +253,18 @@ def test_required_unique_constraints_and_indexes_exist() -> None:
 
 
 def test_metadata_can_create_and_drop_with_foreign_keys() -> None:
-    engine = create_engine(
-        "sqlite:///:memory:"
-    )
+    engine = create_engine("sqlite:///:memory:")
 
     with engine.connect() as connection:
-        connection.exec_driver_sql(
-            "PRAGMA foreign_keys=ON"
-        )
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
 
-        Base.metadata.create_all(
-            connection
-        )
+        Base.metadata.create_all(connection)
 
-        assert EXPECTED_TABLES.issubset(
-            inspect(connection).get_table_names()
-        )
+        assert EXPECTED_TABLES.issubset(inspect(connection).get_table_names())
 
-        Base.metadata.drop_all(
-            connection
-        )
+        Base.metadata.drop_all(connection)
 
-        assert EXPECTED_TABLES.isdisjoint(
-            inspect(connection).get_table_names()
-        )
+        assert EXPECTED_TABLES.isdisjoint(inspect(connection).get_table_names())
 
 
 def test_postgresql_identifiers_compile_safely() -> None:
@@ -358,19 +276,11 @@ def test_postgresql_identifiers_compile_safely() -> None:
     for model in ADMIN_MARKET_MODELS:
         table = model.__table__
 
-        table_sql = str(
-            CreateTable(table).compile(
-                dialect=dialect
-            )
-        )
+        table_sql = str(CreateTable(table).compile(dialect=dialect))
 
         assert f"CREATE TABLE {table.name}" in table_sql
 
         for index in table.indexes:
-            index_sql = str(
-                CreateIndex(index).compile(
-                    dialect=dialect
-                )
-            )
+            index_sql = str(CreateIndex(index).compile(dialect=dialect))
 
             assert "CREATE INDEX" in index_sql

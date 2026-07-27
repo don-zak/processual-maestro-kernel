@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Add Admin Marketplace persistence foundation.
 
 Revision ID: 20260727_0011

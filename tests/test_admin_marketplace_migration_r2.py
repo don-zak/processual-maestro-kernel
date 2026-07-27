@@ -5,15 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
-MIGRATION = (
-    ROOT
-    / "alembic"
-    / "versions"
-    / "20260727_0011_admin_marketplace_persistence.py"
-)
+MIGRATION = ROOT / "alembic" / "versions" / "20260727_0011_admin_marketplace_persistence.py"
 
 ALEMBIC_INI = ROOT / "alembic.ini"
 
@@ -38,10 +32,7 @@ def _alembic_environment() -> dict[str, str]:
 
     environment.setdefault(
         "DATABASE_URL",
-        (
-            "postgresql+asyncpg://"
-            "user:password@localhost:5432/maestro"
-        ),
+        ("postgresql+asyncpg://user:password@localhost:5432/maestro"),
     )
 
     return environment
@@ -72,9 +63,7 @@ def test_migration_metadata_is_linear_and_exact() -> None:
 
     exec(
         compile(
-            MIGRATION.read_text(
-                encoding="utf-8"
-            ),
+            MIGRATION.read_text(encoding="utf-8"),
             MIGRATION,
             "exec",
         ),
@@ -95,10 +84,7 @@ def test_offline_upgrade_creates_exact_table_catalog() -> None:
     )
 
     for table_name in EXPECTED_TABLES:
-        assert (
-            f"create table {table_name}"
-            in sql
-        )
+        assert f"create table {table_name}" in sql
 
 
 def test_offline_upgrade_preserves_commercial_constraints() -> None:
@@ -159,16 +145,11 @@ def test_offline_downgrade_removes_exact_table_catalog() -> None:
     )
 
     for table_name in EXPECTED_TABLES:
-        assert (
-            f"drop table {table_name}"
-            in sql
-        )
+        assert f"drop table {table_name}" in sql
 
 
 def test_migration_contains_no_runtime_or_secret_operations() -> None:
-    source = MIGRATION.read_text(
-        encoding="utf-8"
-    ).lower()
+    source = MIGRATION.read_text(encoding="utf-8").lower()
 
     forbidden_runtime = (
         "requests.",

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Mapping
 
 from processual_api.admin_marketplace.errors import AdminMarketplaceError
 
@@ -70,9 +70,7 @@ def _enum_member(
     field_name: str,
 ) -> StrEnum:
     if not isinstance(value, enum_type):
-        raise AdminMarketplaceError(
-            f"{field_name} must be a valid {enum_type.__name__}."
-        )
+        raise AdminMarketplaceError(f"{field_name} must be a valid {enum_type.__name__}.")
     return value
 
 
@@ -82,17 +80,11 @@ def _finite_amount(
     field_name: str = "amount",
 ) -> Decimal:
     if not isinstance(value, Decimal):
-        raise AdminMarketplaceError(
-            f"{field_name} must be a Decimal."
-        )
+        raise AdminMarketplaceError(f"{field_name} must be a Decimal.")
     if not value.is_finite():
-        raise AdminMarketplaceError(
-            f"{field_name} must be finite."
-        )
+        raise AdminMarketplaceError(f"{field_name} must be finite.")
     if value < Decimal("0"):
-        raise AdminMarketplaceError(
-            f"{field_name} must not be negative."
-        )
+        raise AdminMarketplaceError(f"{field_name} must not be negative.")
     return value
 
 
@@ -168,8 +160,14 @@ class CommercialPlanContract:
     def __post_init__(self) -> None:
         object.__setattr__(self, "plan_code", _required_code(self.plan_code, field_name="plan_code"))
         object.__setattr__(self, "display_name", _required_text(self.display_name, field_name="display_name"))
-        object.__setattr__(self, "entitlement_profile_ref", _required_code(self.entitlement_profile_ref, field_name="entitlement_profile_ref"))
-        object.__setattr__(self, "quota_profile_ref", _required_code(self.quota_profile_ref, field_name="quota_profile_ref"))
+        object.__setattr__(
+            self,
+            "entitlement_profile_ref",
+            _required_code(self.entitlement_profile_ref, field_name="entitlement_profile_ref"),
+        )
+        object.__setattr__(
+            self, "quota_profile_ref", _required_code(self.quota_profile_ref, field_name="quota_profile_ref")
+        )
         object.__setattr__(self, "metadata", _immutable_mapping(self.metadata))
 
 
@@ -329,7 +327,11 @@ class EntitlementActivationContract:
         object.__setattr__(self, "activation_id", _required_code(self.activation_id, field_name="activation_id"))
         object.__setattr__(self, "customer_id", _required_code(self.customer_id, field_name="customer_id"))
         object.__setattr__(self, "subscription_id", _required_code(self.subscription_id, field_name="subscription_id"))
-        object.__setattr__(self, "entitlement_profile_ref", _required_code(self.entitlement_profile_ref, field_name="entitlement_profile_ref"))
+        object.__setattr__(
+            self,
+            "entitlement_profile_ref",
+            _required_code(self.entitlement_profile_ref, field_name="entitlement_profile_ref"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,7 +357,9 @@ class SalesChannelEligibilityContract:
             field_name="lemon_squeezy_status",
         )
         if self.restriction_reason is not None:
-            object.__setattr__(self, "restriction_reason", _required_text(self.restriction_reason, field_name="restriction_reason"))
+            object.__setattr__(
+                self, "restriction_reason", _required_text(self.restriction_reason, field_name="restriction_reason")
+            )
 
         restricted = ChannelEligibilityStatus.INELIGIBLE in {
             self.maestro_direct_status,
@@ -397,14 +401,8 @@ class CustomerChannelSelectionContract:
         )
 
         normalized_channels = frozenset(self.eligible_channels)
-        if not all(
-            isinstance(channel, SalesChannel)
-            for channel in normalized_channels
-        ):
-            raise AdminMarketplaceError(
-                "eligible_channels must contain only valid "
-                "SalesChannel values."
-            )
+        if not all(isinstance(channel, SalesChannel) for channel in normalized_channels):
+            raise AdminMarketplaceError("eligible_channels must contain only valid SalesChannel values.")
 
         object.__setattr__(
             self,
@@ -417,7 +415,11 @@ class CustomerChannelSelectionContract:
         if not self.customer_consented and not self.administrator_override_reason:
             raise AdminMarketplaceError("a documented administrator override is required without customer consent.")
         if self.administrator_override_reason is not None:
-            object.__setattr__(self, "administrator_override_reason", _required_text(self.administrator_override_reason, field_name="administrator_override_reason"))
+            object.__setattr__(
+                self,
+                "administrator_override_reason",
+                _required_text(self.administrator_override_reason, field_name="administrator_override_reason"),
+            )
 
 
 @dataclass(frozen=True, slots=True)

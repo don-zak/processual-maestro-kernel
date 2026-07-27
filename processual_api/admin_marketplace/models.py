@@ -5,12 +5,12 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
-    JSON,
     Numeric,
     String,
     UniqueConstraint,
@@ -395,10 +395,7 @@ class AdminMarketPaymentVerification(Base):
         ),
         UniqueConstraint(
             "verification_ref",
-            name=(
-                "uq_admin_market_payment_verifications_"
-                "verification_ref"
-            ),
+            name=("uq_admin_market_payment_verifications_verification_ref"),
         ),
         Index(
             "ix_admin_market_payment_verifications_order_status",
@@ -483,10 +480,7 @@ class AdminMarketEntitlementActivation(Base):
     __table_args__ = (
         UniqueConstraint(
             "activation_ref",
-            name=(
-                "uq_admin_market_entitlement_activations_"
-                "activation_ref"
-            ),
+            name=("uq_admin_market_entitlement_activations_activation_ref"),
         ),
         Index(
             "ix_admin_market_entitlement_subscription",
@@ -580,10 +574,7 @@ class AdminMarketChannelEligibility(Base):
         ),
         UniqueConstraint(
             "customer_ref",
-            name=(
-                "uq_admin_market_channel_eligibilities_"
-                "customer_ref"
-            ),
+            name=("uq_admin_market_channel_eligibilities_customer_ref"),
         ),
     )
 
@@ -690,10 +681,7 @@ class AdminMarketCommercialDecision(Base):
         ),
         UniqueConstraint(
             "decision_ref",
-            name=(
-                "uq_admin_market_commercial_decisions_"
-                "decision_ref"
-            ),
+            name=("uq_admin_market_commercial_decisions_decision_ref"),
         ),
         Index(
             "ix_admin_market_decisions_resource",
