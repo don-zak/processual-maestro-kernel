@@ -178,9 +178,15 @@ customer-facing checkout pages.
 
 - Define offers, plans, subscriptions, trials, orders, payments, invoices,
   activations and commercial decisions.
-- Define platform-administrator and delegated-supervisor permissions.
+- Define exclusive super-administrator permissions and explicit delegated-
+  supervisor denial.
 - Enforce default deny.
 - Prohibit wildcard commercial authority.
+- Restrict Admin Marketplace access and all commercial decisions exclusively to
+  the first platform administrator acting as super administrator.
+- Explicitly deny delegated supervisors, ordinary administrators, customers,
+  institutions and unauthenticated actors.
+- Require step-up MFA for sensitive commercial operations.
 - Define immutable audit records.
 
 ## ADMIN-MARKET-R2 — Persistence and migrations
@@ -194,30 +200,54 @@ customer-facing checkout pages.
 - Add commercial audit linkage.
 - Provide reversible Alembic migrations.
 
-## ADMIN-MARKET-R3 — Tunisia sales-channel authority
+## ADMIN-MARKET-R3 — Tunisia sales-channel governance and customer choice
 
 Approved policy:
 
-- Sales governed as Tunisian sales use Maestro direct sales.
-- Tunisian customers must not create Lemon Squeezy checkout.
-- Lemon Squeezy is reserved for eligible sales outside Tunisia.
+- The Admin Marketplace is a private page available only to the first
+  platform administrator acting as super administrator, for managing and
+  selling software usage rights.
+- Maestro direct sales must be available for supported Tunisian sales.
+- Eligible Tunisian customers and institutions may also choose Lemon Squeezy
+  when that channel is commercially, legally and operationally available.
+- Tunisian residency, organization country or billing country must not
+  automatically prohibit Lemon Squeezy checkout.
+- Customers retain freedom to choose among the sales channels for which they
+  are eligible.
+- Channel eligibility must be based on documented commercial, legal, provider,
+  security and operational rules.
 - Country governance must not depend only on IP address.
-- Relevant signals include authoritative customer/institution country,
-  billing address, verified organization data, telephone-country signal,
-  tax identity where applicable and administrator review.
-- Ambiguous or conflicting country evidence must fail closed for external
-  checkout and require administrator review.
+- Relevant signals may include authoritative customer or institution country,
+  billing address, verified organization data, telephone-country signal, tax
+  identity where applicable and administrator review.
+- Ambiguous or conflicting evidence must fail closed for automatic activation
+  and require administrator review, without silently forcing a different sales
+  channel.
+- A selected channel must not be changed after checkout or order initiation
+  without customer consent or a documented, auditable restriction.
+- Every channel-eligibility, restriction, customer-selection and administrator-
+  override decision must be recorded in the immutable commercial audit trail.
 
 Required decision examples:
 
 Country=TN
-SalesChannel=MAESTRO_DIRECT
+MaestroDirectAllowed=True
+LemonSqueezyCheckoutAllowed=True
+CustomerChannelChoiceAllowed=True
+AdminReviewRequired=False
+
+Country=TN
+MaestroDirectAllowed=True
 LemonSqueezyCheckoutAllowed=False
+CustomerChannelChoiceAllowed=False
 AdminReviewRequired=True
+RestrictionReason=DOCUMENTED_PROVIDER_LEGAL_SECURITY_OR_OPERATIONAL_RESTRICTION
 
 EligibleCountryOutsideTunisia=True
-SalesChannel=LEMON_SQUEEZY
+MaestroDirectAllowed=POLICY_DEPENDENT
 LemonSqueezyCheckoutAllowed=True
+CustomerChannelChoiceAllowed=True
+AdminReviewRequired=False
 
 ## ADMIN-MARKET-R4 — Offer management
 
@@ -270,17 +300,19 @@ production-approved until separately qualified.
 ## ADMIN-MARKET-R8 — Lemon Squeezy boundary
 
 - Server-side checkout authorization.
-- Tunisian checkout denial.
-- Variant mapping for approved international offers only.
+- Server-side enforcement of documented channel-eligibility and restriction
+  decisions.
+- Variant mapping only for approved offers and eligible customers or
+  institutions.
 - Webhook authenticity and replay prevention.
 - Idempotent order reconciliation.
 - No activation from an unverified webhook.
-- Country-policy revalidation before activation.
+- Channel-eligibility and customer-selection revalidation before activation.
 - Safe handling of refunds, disputes and subscription changes.
 
 ## ADMIN-MARKET-R9 — Administrator user interface
 
-Dedicated administrator page containing:
+Dedicated super-administrator-only page containing:
 
 - Offer management.
 - Customer and institution sales.
@@ -292,17 +324,19 @@ Dedicated administrator page containing:
 - Usage versus quotas.
 - Revenue and commercial summaries.
 - Audit trail.
-- Tunisia/direct and international/Lemon channel indicators.
+- Maestro Direct and Lemon Squeezy eligibility, selection and restriction
+  indicators.
 
 The page must follow the existing Maestro UI system, responsive behavior,
 accessibility rules and Arabic/English direction handling.
 
 ## ADMIN-MARKET-R10 — Commercial security and closure
 
-- Permission and step-up MFA tests.
+- Exclusive super-administrator permission, delegated-supervisor denial and
+  step-up MFA tests.
 - Payment-evidence access controls.
 - Webhook security tests.
-- Country-routing bypass tests.
+- Channel-eligibility, customer-choice and restriction-bypass tests.
 - Concurrent activation tests.
 - Idempotency and replay tests.
 - Browser tests.
