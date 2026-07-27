@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from processual_api.auth import models as identity_auth_models  # noqa: F401
+from processual_api.admin_marketplace import models as admin_marketplace_models  # noqa: F401
 from processual_api.db.base import Base
 
 config = context.config
