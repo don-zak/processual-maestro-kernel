@@ -22,7 +22,10 @@ from processual_api.admin_marketplace.persistence.protocols import (
     TrialRepository,
 )
 from processual_api.admin_marketplace.persistence.repositories import (
+    SqlAlchemyChannelEligibilityRepository,
+    SqlAlchemyChannelSelectionRepository,
     SqlAlchemyCommercialAuditRepository,
+    SqlAlchemyCommercialDecisionRepository,
     SqlAlchemyEntitlementActivationRepository,
     SqlAlchemyInvoiceRepository,
     SqlAlchemyOfferRepository,
@@ -51,7 +54,10 @@ __all__ = [
     "OrderRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
+    "SqlAlchemyChannelEligibilityRepository",
+    "SqlAlchemyChannelSelectionRepository",
     "SqlAlchemyCommercialAuditRepository",
+    "SqlAlchemyCommercialDecisionRepository",
     "SqlAlchemyEntitlementActivationRepository",
     "SqlAlchemyInvoiceRepository",
     "SqlAlchemyOfferRepository",

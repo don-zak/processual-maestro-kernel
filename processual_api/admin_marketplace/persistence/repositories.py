@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
+    AdminMarketChannelEligibility,
+    AdminMarketChannelSelection,
+    AdminMarketCommercialDecision,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
     AdminMarketOffer,
@@ -237,6 +240,90 @@ class SqlAlchemyEntitlementActivationRepository:
         self._session.add(activation)
 
 
+class SqlAlchemyChannelEligibilityRepository:
+    """Persistence operations for sales-channel eligibility decisions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        eligibility_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketChannelEligibility | None:
+        statement = select(AdminMarketChannelEligibility).where(
+            AdminMarketChannelEligibility.id == eligibility_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        eligibility: AdminMarketChannelEligibility,
+    ) -> None:
+        self._session.add(eligibility)
+
+
+class SqlAlchemyChannelSelectionRepository:
+    """Persistence operations for explicit channel selections."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        selection_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketChannelSelection | None:
+        statement = select(AdminMarketChannelSelection).where(
+            AdminMarketChannelSelection.id == selection_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        selection: AdminMarketChannelSelection,
+    ) -> None:
+        self._session.add(selection)
+
+
+class SqlAlchemyCommercialDecisionRepository:
+    """Persistence operations for explicit commercial decisions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        decision_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketCommercialDecision | None:
+        statement = select(AdminMarketCommercialDecision).where(
+            AdminMarketCommercialDecision.id == decision_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        decision: AdminMarketCommercialDecision,
+    ) -> None:
+        self._session.add(decision)
+
+
 class SqlAlchemyCommercialAuditRepository:
     """Append-only SQLAlchemy repository for commercial audit records."""
 
@@ -281,7 +368,10 @@ class SqlAlchemyCommercialAuditRepository:
 
 
 __all__ = [
+    "SqlAlchemyChannelEligibilityRepository",
+    "SqlAlchemyChannelSelectionRepository",
     "SqlAlchemyCommercialAuditRepository",
+    "SqlAlchemyCommercialDecisionRepository",
     "SqlAlchemyEntitlementActivationRepository",
     "SqlAlchemyInvoiceRepository",
     "SqlAlchemyOfferRepository",
