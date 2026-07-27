@@ -29,7 +29,12 @@ def test_mfa_secret_cipher_rejects_tampering_and_unknown_key_versions():
         factor_id="factor-1",
         user_id="user-1",
     )
-    tampered = EncryptedMfaSecret(encrypted.ciphertext[:-1] + b"x", encrypted.key_version)
+    tampered_ciphertext = bytearray(encrypted.ciphertext)
+    tampered_ciphertext[len(tampered_ciphertext) // 2] ^= 0x01
+    tampered = EncryptedMfaSecret(
+        bytes(tampered_ciphertext),
+        encrypted.key_version,
+    )
 
     with pytest.raises(ValueError):
         cipher.decrypt(tampered, factor_id="factor-1", user_id="user-1")
