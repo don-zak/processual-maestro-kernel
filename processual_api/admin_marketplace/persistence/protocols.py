@@ -153,6 +153,7 @@ class ChannelEligibilityRepository(Protocol):
         *,
         for_update: bool = False,
     ) -> AdminMarketChannelEligibility | None: ...
+
     def add(
         self,
         eligibility: AdminMarketChannelEligibility,
