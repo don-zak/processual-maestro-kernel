@@ -8,8 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
+    AdminMarketEntitlementActivation,
+    AdminMarketInvoice,
     AdminMarketOffer,
     AdminMarketOrder,
+    AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
     AdminMarketTrial,
@@ -150,6 +153,90 @@ class SqlAlchemyOrderRepository:
         self._session.add(order)
 
 
+class SqlAlchemyPaymentVerificationRepository:
+    """Persistence operations for payment-verification decisions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        verification_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentVerification | None:
+        statement = select(AdminMarketPaymentVerification).where(
+            AdminMarketPaymentVerification.id == verification_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        verification: AdminMarketPaymentVerification,
+    ) -> None:
+        self._session.add(verification)
+
+
+class SqlAlchemyInvoiceRepository:
+    """SQLAlchemy persistence operations for marketplace invoices."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        invoice_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketInvoice | None:
+        statement = select(AdminMarketInvoice).where(
+            AdminMarketInvoice.id == invoice_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        invoice: AdminMarketInvoice,
+    ) -> None:
+        self._session.add(invoice)
+
+
+class SqlAlchemyEntitlementActivationRepository:
+    """Persistence for explicit entitlement-activation decisions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        activation_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None:
+        statement = select(AdminMarketEntitlementActivation).where(
+            AdminMarketEntitlementActivation.id == activation_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        activation: AdminMarketEntitlementActivation,
+    ) -> None:
+        self._session.add(activation)
+
+
 class SqlAlchemyCommercialAuditRepository:
     """Append-only SQLAlchemy repository for commercial audit records."""
 
@@ -195,8 +282,11 @@ class SqlAlchemyCommercialAuditRepository:
 
 __all__ = [
     "SqlAlchemyCommercialAuditRepository",
+    "SqlAlchemyEntitlementActivationRepository",
+    "SqlAlchemyInvoiceRepository",
     "SqlAlchemyOfferRepository",
     "SqlAlchemyOrderRepository",
+    "SqlAlchemyPaymentVerificationRepository",
     "SqlAlchemyPlanRepository",
     "SqlAlchemySubscriptionRepository",
     "SqlAlchemyTrialRepository",
