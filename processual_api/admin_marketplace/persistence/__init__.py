@@ -35,6 +35,9 @@ from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemySubscriptionRepository,
     SqlAlchemyTrialRepository,
 )
+from processual_api.admin_marketplace.persistence.unit_of_work import (
+    SqlAlchemyAdminMarketplaceUnitOfWork,
+)
 
 __all__ = [
     "AdminMarketplaceConcurrencyError",
@@ -54,6 +57,7 @@ __all__ = [
     "OrderRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
+    "SqlAlchemyAdminMarketplaceUnitOfWork",
     "SqlAlchemyChannelEligibilityRepository",
     "SqlAlchemyChannelSelectionRepository",
     "SqlAlchemyCommercialAuditRepository",
