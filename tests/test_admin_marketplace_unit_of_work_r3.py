@@ -213,7 +213,7 @@ async def test_integrity_error_is_translated() -> None:
 
     with pytest.raises(
         AdminMarketplaceConflictError,
-        match="Admin Marketplace persistence conflict",
+        match="Admin Marketplace integrity conflict",
     ):
         async with unit_of_work:
             await unit_of_work.commit()
@@ -298,3 +298,83 @@ async def test_active_unit_of_work_matches_protocol() -> None:
             unit_of_work,
             AdminMarketplaceUnitOfWork,
         )
+
+
+class FakeDiagnostic:
+    def __init__(
+        self,
+        constraint_name: str | None = None,
+    ) -> None:
+        self.constraint_name = constraint_name
+
+
+class FakePostgresError(Exception):
+    def __init__(
+        self,
+        *,
+        sqlstate: str,
+        constraint_name: str | None = None,
+    ) -> None:
+        super().__init__("database failure")
+        self.sqlstate = sqlstate
+        self.diag = FakeDiagnostic(constraint_name)
+
+
+@pytest.mark.asyncio
+async def test_unit_of_work_maps_unique_violation() -> None:
+    from processual_api.admin_marketplace.persistence.errors import (
+        AdminMarketplaceDuplicateReferenceError,
+    )
+
+    session = FakeAsyncSession()
+    session.commit_error = IntegrityError(
+        statement="INSERT",
+        params={},
+        orig=FakePostgresError(
+            sqlstate="23505",
+            constraint_name=("uq_admin_market_orders_order_ref"),
+        ),
+    )
+
+    unit_of_work = SqlAlchemyAdminMarketplaceUnitOfWork(
+        lambda: session,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(
+        AdminMarketplaceDuplicateReferenceError,
+    ):
+        async with unit_of_work:
+            await unit_of_work.commit()
+
+    assert session.rollback_calls == 2
+    assert session.close_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_unit_of_work_maps_serialization_failure() -> None:
+    from sqlalchemy.exc import DBAPIError
+
+    from processual_api.admin_marketplace.persistence.errors import (
+        AdminMarketplaceConcurrencyError,
+    )
+
+    session = FakeAsyncSession()
+    session.commit_error = DBAPIError(
+        statement="UPDATE",
+        params={},
+        orig=FakePostgresError(sqlstate="40001"),
+        connection_invalidated=False,
+    )
+
+    unit_of_work = SqlAlchemyAdminMarketplaceUnitOfWork(
+        lambda: session,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(
+        AdminMarketplaceConcurrencyError,
+    ):
+        async with unit_of_work:
+            await unit_of_work.commit()
+
+    assert session.rollback_calls == 2
+    assert session.close_calls == 1

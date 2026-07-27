@@ -6,6 +6,11 @@ from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceNotFoundError,
     AdminMarketplacePersistenceError,
 )
+from processual_api.admin_marketplace.persistence.integrity import (
+    extract_constraint_name,
+    extract_sqlstate,
+    translate_database_error,
+)
 from processual_api.admin_marketplace.persistence.protocols import (
     AdminMarketplaceUnitOfWork,
     ChannelEligibilityRepository,
@@ -72,4 +77,7 @@ __all__ = [
     "SqlAlchemyTrialRepository",
     "SubscriptionRepository",
     "TrialRepository",
+    "extract_constraint_name",
+    "extract_sqlstate",
+    "translate_database_error",
 ]

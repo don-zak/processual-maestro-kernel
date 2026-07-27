@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from types import TracebackType
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from processual_api.admin_marketplace.persistence.errors import (
-    AdminMarketplaceConflictError,
+from processual_api.admin_marketplace.persistence.integrity import (
+    translate_database_error,
 )
 from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyChannelEligibilityRepository,
@@ -79,9 +79,9 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
 
         try:
             await session.commit()
-        except IntegrityError as exc:
+        except DBAPIError as exc:
             await session.rollback()
-            raise AdminMarketplaceConflictError("Admin Marketplace persistence conflict.") from exc
+            raise translate_database_error(exc) from exc
 
         self._committed = True
 
