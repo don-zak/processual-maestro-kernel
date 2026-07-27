@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Mapping
 
 from processual_api.admin_marketplace.errors import AdminMarketplaceAuditSafetyError
 
@@ -101,20 +101,16 @@ class CommercialAuditRecord:
         if self.occurred_at.tzinfo is None:
             raise AdminMarketplaceAuditSafetyError("occurred_at must be timezone-aware.")
         if not isinstance(self.action, CommercialAuditAction):
-            raise AdminMarketplaceAuditSafetyError(
-                "action must be a valid CommercialAuditAction."
-            )
+            raise AdminMarketplaceAuditSafetyError("action must be a valid CommercialAuditAction.")
         if not isinstance(self.resource_type, CommercialResourceType):
-            raise AdminMarketplaceAuditSafetyError(
-                "resource_type must be a valid CommercialResourceType."
-            )
+            raise AdminMarketplaceAuditSafetyError("resource_type must be a valid CommercialResourceType.")
         if not isinstance(self.outcome, CommercialAuditOutcome):
-            raise AdminMarketplaceAuditSafetyError(
-                "outcome must be a valid CommercialAuditOutcome."
-            )
+            raise AdminMarketplaceAuditSafetyError("outcome must be a valid CommercialAuditOutcome.")
         if self.platform_authority != "platform_admin":
             raise AdminMarketplaceAuditSafetyError("Commercial audit actor must use platform_admin authority.")
-        object.__setattr__(self, "previous_state_digest", _digest(self.previous_state_digest, field_name="previous_state_digest"))
+        object.__setattr__(
+            self, "previous_state_digest", _digest(self.previous_state_digest, field_name="previous_state_digest")
+        )
         object.__setattr__(self, "new_state_digest", _digest(self.new_state_digest, field_name="new_state_digest"))
         object.__setattr__(self, "metadata", _safe_metadata(self.metadata))
 

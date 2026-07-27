@@ -1,0 +1,1039 @@
+# ruff: noqa: E501
+"""Add Admin Marketplace persistence foundation.
+
+Revision ID: 20260727_0011
+Revises: 20260723_0010
+"""
+
+import sqlalchemy as sa
+
+from alembic import op
+
+revision = "20260727_0011"
+down_revision = "20260723_0010"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        'admin_market_plans',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'plan_code',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'display_name',
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column(
+            'entitlement_profile_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'quota_profile_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'metadata_json',
+            sa.JSON(),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_plans',
+        ),
+        sa.UniqueConstraint(
+            'plan_code',
+            name='uq_admin_market_plans_plan_code',
+        ),
+    )
+
+    op.create_table(
+        'admin_market_offers',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'offer_code',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'plan_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'display_name',
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column(
+            'currency',
+            sa.String(length=3),
+            nullable=False,
+        ),
+        sa.Column(
+            'amount',
+            sa.Numeric(precision=18, scale=2),
+            nullable=False,
+        ),
+        sa.Column(
+            'status',
+            sa.String(length=32),
+            nullable=False,
+        ),
+        sa.Column(
+            'effective_at',
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            'expires_at',
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            'customer_specific',
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            'amount >= 0',
+            name='ck_admin_market_offers_amount_nonnegative',
+        ),
+        sa.CheckConstraint(
+            'length(currency) = 3',
+            name='ck_admin_market_offers_currency_length',
+        ),
+        sa.CheckConstraint(
+            '\n            expires_at IS NULL\n            OR effective_at IS NULL\n            OR expires_at > effective_at\n            ',
+            name='ck_admin_market_offers_effective_window_valid',
+        ),
+        sa.CheckConstraint(
+            "\n            status IN (\n                'draft',\n                'under_review',\n                'approved',\n                'published',\n                'suspended',\n                'retired'\n            )\n            ",
+            name='ck_admin_market_offers_status_allowed',
+        ),
+        sa.ForeignKeyConstraint(
+            ['plan_id'],
+            ['admin_market_plans.id'],
+            name='fk_admin_market_offers_plan_id_admin_market_plans',
+            ondelete='RESTRICT',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_offers',
+        ),
+        sa.UniqueConstraint(
+            'offer_code',
+            name='uq_admin_market_offers_offer_code',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_offers_plan_status',
+        'admin_market_offers',
+        ['plan_id', 'status'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_subscriptions',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'subscription_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'offer_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'plan_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'status',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'starts_at',
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            'ends_at',
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            '\n            ends_at IS NULL\n            OR starts_at IS NULL\n            OR ends_at > starts_at\n            ',
+            name='ck_admin_market_subscriptions_active_window_valid',
+        ),
+        sa.CheckConstraint(
+            "\n            status IN (\n                'pending',\n                'active',\n                'suspended',\n                'cancelled',\n                'expired'\n            )\n            ",
+            name='ck_admin_market_subscriptions_status_allowed',
+        ),
+        sa.ForeignKeyConstraint(
+            ['offer_id'],
+            ['admin_market_offers.id'],
+            name='fk_admin_market_subscriptions_offer_id_admin_market_offers',
+            ondelete='RESTRICT',
+        ),
+        sa.ForeignKeyConstraint(
+            ['plan_id'],
+            ['admin_market_plans.id'],
+            name='fk_admin_market_subscriptions_plan_id_admin_market_plans',
+            ondelete='RESTRICT',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_subscriptions',
+        ),
+        sa.UniqueConstraint(
+            'subscription_ref',
+            name='uq_admin_market_subscriptions_subscription_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_subscriptions_customer_status',
+        'admin_market_subscriptions',
+        ['customer_ref', 'status'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_trials',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'trial_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'plan_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'status',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'starts_at',
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            'ends_at',
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            '\n            ends_at IS NULL\n            OR starts_at IS NULL\n            OR ends_at > starts_at\n            ',
+            name='ck_admin_market_trials_active_window_valid',
+        ),
+        sa.CheckConstraint(
+            "\n            status IN (\n                'pending',\n                'approved',\n                'active',\n                'suspended',\n                'converted',\n                'expired',\n                'rejected'\n            )\n            ",
+            name='ck_admin_market_trials_status_allowed',
+        ),
+        sa.ForeignKeyConstraint(
+            ['plan_id'],
+            ['admin_market_plans.id'],
+            name='fk_admin_market_trials_plan_id_admin_market_plans',
+            ondelete='RESTRICT',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_trials',
+        ),
+        sa.UniqueConstraint(
+            'trial_ref',
+            name='uq_admin_market_trials_trial_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_trials_customer_status',
+        'admin_market_trials',
+        ['customer_ref', 'status'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_orders',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'order_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'offer_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'selected_channel',
+            sa.String(length=32),
+            nullable=False,
+        ),
+        sa.Column(
+            'status',
+            sa.String(length=40),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "\n            selected_channel IN (\n                'maestro_direct',\n                'lemon_squeezy'\n            )\n            ",
+            name='ck_admin_market_orders_selected_channel_allowed',
+        ),
+        sa.CheckConstraint(
+            "\n            status IN (\n                'draft',\n                'submitted',\n                'awaiting_payment_verification',\n                'approved',\n                'rejected',\n                'cancelled',\n                'fulfilled'\n            )\n            ",
+            name='ck_admin_market_orders_status_allowed',
+        ),
+        sa.ForeignKeyConstraint(
+            ['offer_id'],
+            ['admin_market_offers.id'],
+            name='fk_admin_market_orders_offer_id_admin_market_offers',
+            ondelete='RESTRICT',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_orders',
+        ),
+        sa.UniqueConstraint(
+            'order_ref',
+            name='uq_admin_market_orders_order_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_orders_customer_status',
+        'admin_market_orders',
+        ['customer_ref', 'status'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_payment_verifications',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'verification_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'order_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'status',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'safe_reference',
+            sa.String(length=255),
+            nullable=True,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "\n            status IN (\n                'pending',\n                'verified',\n                'rejected',\n                'requires_review'\n            )\n            ",
+            name='ck_admin_market_payment_verifications_status_allowed',
+        ),
+        sa.ForeignKeyConstraint(
+            ['order_id'],
+            ['admin_market_orders.id'],
+            name='fk_admin_market_payment_verification_order',
+            ondelete='CASCADE',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_payment_verifications',
+        ),
+        sa.UniqueConstraint(
+            'verification_ref',
+            name='uq_admin_market_payment_verifications_verification_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_payment_verifications_order_status',
+        'admin_market_payment_verifications',
+        ['order_id', 'status'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_invoices',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'invoice_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'order_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'currency',
+            sa.String(length=3),
+            nullable=False,
+        ),
+        sa.Column(
+            'amount',
+            sa.Numeric(precision=18, scale=2),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            'amount >= 0',
+            name='ck_admin_market_invoices_amount_nonnegative',
+        ),
+        sa.CheckConstraint(
+            'length(currency) = 3',
+            name='ck_admin_market_invoices_currency_length',
+        ),
+        sa.ForeignKeyConstraint(
+            ['order_id'],
+            ['admin_market_orders.id'],
+            name='fk_admin_market_invoices_order_id_admin_market_orders',
+            ondelete='RESTRICT',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_invoices',
+        ),
+        sa.UniqueConstraint(
+            'invoice_ref',
+            name='uq_admin_market_invoices_invoice_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_invoices_order',
+        'admin_market_invoices',
+        ['order_id'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_entitlement_activations',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'activation_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'subscription_id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'entitlement_profile_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'automatic_activation_allowed',
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ['subscription_id'],
+            ['admin_market_subscriptions.id'],
+            name='fk_admin_market_entitlement_subscription',
+            ondelete='CASCADE',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_entitlement_activations',
+        ),
+        sa.UniqueConstraint(
+            'activation_ref',
+            name='uq_admin_market_entitlement_activations_activation_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_entitlement_subscription',
+        'admin_market_entitlement_activations',
+        ['subscription_id'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_channel_eligibilities',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'country_code',
+            sa.String(length=2),
+            nullable=True,
+        ),
+        sa.Column(
+            'maestro_direct_status',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'lemon_squeezy_status',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_choice_allowed',
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            'admin_review_required',
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            'restriction_reason',
+            sa.String(length=500),
+            nullable=True,
+        ),
+        sa.Column(
+            'automatic_activation_allowed',
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            'updated_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            'country_code IS NULL OR length(country_code) = 2',
+            name='ck_admin_market_channel_eligibilities_country_code_length',
+        ),
+        sa.CheckConstraint(
+            "\n            NOT customer_choice_allowed\n            OR (\n                maestro_direct_status = 'eligible'\n                AND lemon_squeezy_status = 'eligible'\n            )\n            ",
+            name='ck_admin_market_channel_eligibilities_customer_choice_requires_both_channels',
+        ),
+        sa.CheckConstraint(
+            "\n            (\n                maestro_direct_status != 'ineligible'\n                AND lemon_squeezy_status != 'ineligible'\n            )\n            OR restriction_reason IS NOT NULL\n            ",
+            name='ck_admin_market_channel_eligibilities_ineligible_requires_reason',
+        ),
+        sa.CheckConstraint(
+            "\n            lemon_squeezy_status IN (\n                'eligible',\n                'ineligible',\n                'requires_review'\n            )\n            ",
+            name='ck_admin_market_channel_eligibilities_lemon_squeezy_status_allowed',
+        ),
+        sa.CheckConstraint(
+            "\n            maestro_direct_status IN (\n                'eligible',\n                'ineligible',\n                'requires_review'\n            )\n            ",
+            name='ck_admin_market_channel_eligibilities_maestro_direct_status_allowed',
+        ),
+        sa.CheckConstraint(
+            '\n            NOT admin_review_required\n            OR NOT automatic_activation_allowed\n            ',
+            name='ck_admin_market_channel_eligibilities_review_blocks_automatic_activation',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_channel_eligibilities',
+        ),
+        sa.UniqueConstraint(
+            'customer_ref',
+            name='uq_admin_market_channel_eligibilities_customer_ref',
+        ),
+    )
+
+    op.create_table(
+        'admin_market_channel_selections',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'selected_channel',
+            sa.String(length=32),
+            nullable=False,
+        ),
+        sa.Column(
+            'eligible_channels_json',
+            sa.JSON(),
+            nullable=False,
+        ),
+        sa.Column(
+            'customer_consented',
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            'administrator_override_reason',
+            sa.String(length=500),
+            nullable=True,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            '\n            customer_consented\n            OR administrator_override_reason IS NOT NULL\n            ',
+            name='ck_admin_market_channel_selections_consent_or_override_required',
+        ),
+        sa.CheckConstraint(
+            "\n            selected_channel IN (\n                'maestro_direct',\n                'lemon_squeezy'\n            )\n            ",
+            name='ck_admin_market_channel_selections_selected_channel_allowed',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_channel_selections',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_channel_selections_customer',
+        'admin_market_channel_selections',
+        ['customer_ref', 'created_at'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_commercial_decisions',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'decision_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'action',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'resource_type',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'resource_id',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'outcome',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'reason_code',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "\n            outcome IN (\n                'approved',\n                'denied',\n                'requires_review'\n            )\n            ",
+            name='ck_admin_market_commercial_decisions_outcome_allowed',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_commercial_decisions',
+        ),
+        sa.UniqueConstraint(
+            'decision_ref',
+            name='uq_admin_market_commercial_decisions_decision_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_decisions_resource',
+        'admin_market_commercial_decisions',
+        ['resource_type', 'resource_id', 'created_at'],
+        unique=False,
+    )
+
+    op.create_table(
+        'admin_market_audit_records',
+        sa.Column(
+            'id',
+            sa.Uuid(),
+            nullable=False,
+        ),
+        sa.Column(
+            'event_ref',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'occurred_at',
+            sa.DateTime(timezone=True),
+            nullable=False,
+        ),
+        sa.Column(
+            'actor_user_id',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'actor_session_id',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'platform_authority',
+            sa.String(length=40),
+            nullable=False,
+        ),
+        sa.Column(
+            'action',
+            sa.String(length=64),
+            nullable=False,
+        ),
+        sa.Column(
+            'resource_type',
+            sa.String(length=64),
+            nullable=False,
+        ),
+        sa.Column(
+            'resource_id',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'outcome',
+            sa.String(length=24),
+            nullable=False,
+        ),
+        sa.Column(
+            'reason_code',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'correlation_id',
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            'previous_state_digest',
+            sa.String(length=64),
+            nullable=True,
+        ),
+        sa.Column(
+            'new_state_digest',
+            sa.String(length=64),
+            nullable=True,
+        ),
+        sa.Column(
+            'metadata_json',
+            sa.JSON(),
+            nullable=False,
+        ),
+        sa.Column(
+            'created_at',
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "\n            action IN (\n                'authority_checked',\n                'offer_decided',\n                'channel_eligibility_decided',\n                'channel_selected',\n                'payment_verification_decided',\n                'subscription_activation_decided'\n            )\n            ",
+            name='ck_admin_market_audit_records_action_allowed',
+        ),
+        sa.CheckConstraint(
+            '\n            new_state_digest IS NULL\n            OR length(new_state_digest) = 64\n            ',
+            name='ck_admin_market_audit_records_new_digest_length',
+        ),
+        sa.CheckConstraint(
+            "\n            outcome IN (\n                'allowed',\n                'denied',\n                'requires_review'\n            )\n            ",
+            name='ck_admin_market_audit_records_outcome_allowed',
+        ),
+        sa.CheckConstraint(
+            "platform_authority = 'platform_admin'",
+            name='ck_admin_market_audit_records_platform_authority_exact',
+        ),
+        sa.CheckConstraint(
+            '\n            previous_state_digest IS NULL\n            OR length(previous_state_digest) = 64\n            ',
+            name='ck_admin_market_audit_records_previous_digest_length',
+        ),
+        sa.CheckConstraint(
+            "\n            resource_type IN (\n                'offer',\n                'plan',\n                'order',\n                'payment_verification',\n                'subscription',\n                'trial',\n                'sales_channel_eligibility'\n            )\n            ",
+            name='ck_admin_market_audit_records_resource_type_allowed',
+        ),
+        sa.PrimaryKeyConstraint(
+            'id',
+            name='pk_admin_market_audit_records',
+        ),
+        sa.UniqueConstraint(
+            'event_ref',
+            name='uq_admin_market_audit_records_event_ref',
+        ),
+    )
+
+    op.create_index(
+        'ix_admin_market_audit_correlation',
+        'admin_market_audit_records',
+        ['correlation_id', 'occurred_at'],
+        unique=False,
+    )
+
+    op.create_index(
+        'ix_admin_market_audit_resource_time',
+        'admin_market_audit_records',
+        ['resource_type', 'resource_id', 'occurred_at'],
+        unique=False,
+    )
+
+
+def downgrade() -> None:
+    op.drop_index(
+        'ix_admin_market_audit_resource_time',
+        table_name='admin_market_audit_records',
+    )
+
+    op.drop_index(
+        'ix_admin_market_audit_correlation',
+        table_name='admin_market_audit_records',
+    )
+
+    op.drop_table('admin_market_audit_records')
+
+    op.drop_index(
+        'ix_admin_market_decisions_resource',
+        table_name='admin_market_commercial_decisions',
+    )
+
+    op.drop_table('admin_market_commercial_decisions')
+
+    op.drop_index(
+        'ix_admin_market_channel_selections_customer',
+        table_name='admin_market_channel_selections',
+    )
+
+    op.drop_table('admin_market_channel_selections')
+
+    op.drop_table('admin_market_channel_eligibilities')
+
+    op.drop_index(
+        'ix_admin_market_entitlement_subscription',
+        table_name='admin_market_entitlement_activations',
+    )
+
+    op.drop_table('admin_market_entitlement_activations')
+
+    op.drop_index(
+        'ix_admin_market_invoices_order',
+        table_name='admin_market_invoices',
+    )
+
+    op.drop_table('admin_market_invoices')
+
+    op.drop_index(
+        'ix_admin_market_payment_verifications_order_status',
+        table_name='admin_market_payment_verifications',
+    )
+
+    op.drop_table('admin_market_payment_verifications')
+
+    op.drop_index(
+        'ix_admin_market_orders_customer_status',
+        table_name='admin_market_orders',
+    )
+
+    op.drop_table('admin_market_orders')
+
+    op.drop_index(
+        'ix_admin_market_trials_customer_status',
+        table_name='admin_market_trials',
+    )
+
+    op.drop_table('admin_market_trials')
+
+    op.drop_index(
+        'ix_admin_market_subscriptions_customer_status',
+        table_name='admin_market_subscriptions',
+    )
+
+    op.drop_table('admin_market_subscriptions')
+
+    op.drop_index(
+        'ix_admin_market_offers_plan_status',
+        table_name='admin_market_offers',
+    )
+
+    op.drop_table('admin_market_offers')
+
+    op.drop_table('admin_market_plans')

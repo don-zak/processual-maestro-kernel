@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 from processual_api.admin_marketplace.audit_contracts import (
     CommercialAuditAction,
     CommercialAuditOutcome,
