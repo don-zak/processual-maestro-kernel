@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
     AdminMarketOffer,
+    AdminMarketOrder,
     AdminMarketPlan,
+    AdminMarketSubscription,
+    AdminMarketTrial,
 )
 
 
@@ -63,6 +66,90 @@ class SqlAlchemyOfferRepository:
         self._session.add(offer)
 
 
+class SqlAlchemySubscriptionRepository:
+    """SQLAlchemy persistence operations for marketplace subscriptions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None:
+        statement = select(AdminMarketSubscription).where(
+            AdminMarketSubscription.id == subscription_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        subscription: AdminMarketSubscription,
+    ) -> None:
+        self._session.add(subscription)
+
+
+class SqlAlchemyTrialRepository:
+    """SQLAlchemy persistence operations for marketplace trials."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        trial_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketTrial | None:
+        statement = select(AdminMarketTrial).where(
+            AdminMarketTrial.id == trial_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        trial: AdminMarketTrial,
+    ) -> None:
+        self._session.add(trial)
+
+
+class SqlAlchemyOrderRepository:
+    """SQLAlchemy persistence operations for marketplace orders."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None:
+        statement = select(AdminMarketOrder).where(
+            AdminMarketOrder.id == order_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        order: AdminMarketOrder,
+    ) -> None:
+        self._session.add(order)
+
+
 class SqlAlchemyCommercialAuditRepository:
     """Append-only SQLAlchemy repository for commercial audit records."""
 
@@ -109,5 +196,8 @@ class SqlAlchemyCommercialAuditRepository:
 __all__ = [
     "SqlAlchemyCommercialAuditRepository",
     "SqlAlchemyOfferRepository",
+    "SqlAlchemyOrderRepository",
     "SqlAlchemyPlanRepository",
+    "SqlAlchemySubscriptionRepository",
+    "SqlAlchemyTrialRepository",
 ]
