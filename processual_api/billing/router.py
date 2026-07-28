@@ -6,16 +6,26 @@ import hashlib
 import hmac
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from processual_api.billing.checkout_channels import resolve_checkout_channel_options
+from processual_api.billing.checkout_channels import (
+    resolve_checkout_channel_options_for_country,
+)
+from processual_api.billing.contracts import (
+    BillingProfileResponse,
+    BillingProfileUpsertRequest,
+)
 from processual_api.billing.offer_pricebook import public_offer_pricebook
+from processual_api.billing.repository import BillingProfileRepository
 from processual_api.billing.subscription_catalog import public_subscription_catalog
 from processual_api.billing.unit_cost_assumptions import get_unit_cost_assumptions as build_unit_cost_assumptions
+from processual_api.db import get_session
 
 from ..auth.security import get_current_user
 from ..services.discord_service import DiscordService
@@ -26,6 +36,41 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 # ─── Helpers ───
+
+
+def _billing_identity_context(
+    current_user: dict,
+) -> tuple[uuid.UUID, uuid.UUID | None]:
+    """Derive billing ownership from an authenticated identity session."""
+
+    if current_user.get("session_type") != "identity_user":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="billing_profile_requires_identity_session",
+        )
+
+    try:
+        user_id = uuid.UUID(str(current_user["user_id"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_billing_identity_context",
+        ) from exc
+
+    raw_organization_id = current_user.get("organization_id")
+    if raw_organization_id is None:
+        organization_id = None
+    else:
+        try:
+            organization_id = uuid.UUID(str(raw_organization_id))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid_billing_identity_context",
+            ) from exc
+
+    return user_id, organization_id
+
 
 def _get_api_key() -> str:
     return os.environ.get("LEMONSQUEEZY_API_KEY", "")
@@ -103,16 +148,95 @@ _VARIANTS = {
 
 # ─── Endpoints ───
 
+@router.get(
+    "/profile",
+    response_model=BillingProfileResponse,
+)
+async def get_billing_profile(
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> BillingProfileResponse:
+    """Return the authenticated customer's billing profile."""
+
+    user_id, organization_id = _billing_identity_context(current_user)
+    profile = await BillingProfileRepository(session).get_for_context(
+        user_id=user_id,
+        organization_id=organization_id,
+    )
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="billing_profile_not_found",
+        )
+
+    return BillingProfileResponse.model_validate(profile)
+
+
+@router.put(
+    "/profile",
+    response_model=BillingProfileResponse,
+)
+async def upsert_billing_profile(
+    body: BillingProfileUpsertRequest,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> BillingProfileResponse:
+    """Create or update the authenticated customer's billing profile."""
+
+    user_id, organization_id = _billing_identity_context(current_user)
+
+    try:
+        profile = await BillingProfileRepository(session).upsert_for_context(
+            user_id=user_id,
+            organization_id=organization_id,
+            country_code=body.country_code,
+            region=body.region,
+            city=body.city,
+            postal_code=body.postal_code,
+            address_line_1=body.address_line_1,
+            address_line_2=body.address_line_2,
+        )
+        await session.commit()
+        await session.refresh(profile)
+    except Exception:
+        await session.rollback()
+        raise
+
+    return BillingProfileResponse.model_validate(profile)
+
+
 @router.get("/checkout/options", response_model=dict)
 async def get_checkout_options(
     current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
-    """Return server-derived checkout channels for the authenticated customer."""
-    options = resolve_checkout_channel_options(
-        current_user=current_user,
-        maestro_direct_enabled=_maestro_direct_checkout_enabled(),
+    """Return channels derived from the persisted billing profile."""
+
+    user_id, organization_id = _billing_identity_context(current_user)
+    profile = await BillingProfileRepository(session).get_for_context(
+        user_id=user_id,
+        organization_id=organization_id,
     )
-    return options.as_public_dict()
+
+    country_code = None if profile is None else profile.country_code
+    profile_status = None if profile is None else profile.status
+
+    options = resolve_checkout_channel_options_for_country(
+        billing_country_code=country_code,
+        maestro_direct_enabled=_maestro_direct_checkout_enabled(),
+        admin_review_required=(
+            profile is not None and profile.status != "active"
+        ),
+    )
+
+    payload = options.as_public_dict()
+    payload.update(
+        {
+            "billing_profile_exists": profile is not None,
+            "billing_profile_status": profile_status,
+        }
+    )
+    return payload
 
 
 @router.post("/checkout", response_model=dict)
