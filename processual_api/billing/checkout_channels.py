@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final, Mapping
+from typing import Final
 
 TUNISIA_COUNTRY_CODE: Final = "TN"
 MAESTRO_DIRECT_CHANNEL: Final = "maestro_direct"
@@ -59,22 +60,25 @@ def authoritative_billing_country(current_user: Mapping[str, object]) -> str | N
     return normalize_country_code(current_user.get("billing_country_code") or current_user.get("address_country_code"))
 
 
-def resolve_checkout_channel_options(
+def resolve_checkout_channel_options_for_country(
     *,
-    current_user: Mapping[str, object],
+    billing_country_code: object,
     maestro_direct_enabled: bool,
     admin_review_required: bool = False,
 ) -> CheckoutChannelOptions:
-    """Resolve public checkout channels using the authoritative billing address."""
+    """Resolve channels from a server-loaded authoritative billing country."""
 
-    country_code = authoritative_billing_country(current_user)
+    country_code = normalize_country_code(billing_country_code)
 
     tunisian_local_payment_allowed = (
         country_code == TUNISIA_COUNTRY_CODE and maestro_direct_enabled and not admin_review_required
     )
 
     if tunisian_local_payment_allowed:
-        channels = (MAESTRO_DIRECT_CHANNEL, LEMON_SQUEEZY_CHANNEL)
+        channels = (
+            MAESTRO_DIRECT_CHANNEL,
+            LEMON_SQUEEZY_CHANNEL,
+        )
     else:
         channels = (LEMON_SQUEEZY_CHANNEL,)
 
@@ -84,6 +88,21 @@ def resolve_checkout_channel_options(
         show_tunisia_payment_option=tunisian_local_payment_allowed,
         customer_choice_allowed=tunisian_local_payment_allowed,
         address_required=country_code is None,
+    )
+
+
+def resolve_checkout_channel_options(
+    *,
+    current_user: Mapping[str, object],
+    maestro_direct_enabled: bool,
+    admin_review_required: bool = False,
+) -> CheckoutChannelOptions:
+    """Resolve public checkout channels using authenticated legacy claims."""
+
+    return resolve_checkout_channel_options_for_country(
+        billing_country_code=authoritative_billing_country(current_user),
+        maestro_direct_enabled=maestro_direct_enabled,
+        admin_review_required=admin_review_required,
     )
 
 

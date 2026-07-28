@@ -139,3 +139,36 @@ def test_direct_tunisia_flow_accepts_tunisian_address() -> None:
     )
 
     assert options.show_tunisia_payment_option is True
+
+
+def test_authoritative_country_resolver_supports_database_country() -> None:
+    from processual_api.billing.checkout_channels import (
+        resolve_checkout_channel_options_for_country,
+    )
+
+    options = resolve_checkout_channel_options_for_country(
+        billing_country_code="tn",
+        maestro_direct_enabled=True,
+    )
+
+    assert options.address_country_code == "TN"
+    assert options.eligible_channels == (
+        MAESTRO_DIRECT_CHANNEL,
+        LEMON_SQUEEZY_CHANNEL,
+    )
+    assert options.show_tunisia_payment_option is True
+
+
+def test_authoritative_country_resolver_hides_tunisia_for_other_country() -> None:
+    from processual_api.billing.checkout_channels import (
+        resolve_checkout_channel_options_for_country,
+    )
+
+    options = resolve_checkout_channel_options_for_country(
+        billing_country_code="FR",
+        maestro_direct_enabled=True,
+    )
+
+    assert options.address_country_code == "FR"
+    assert options.eligible_channels == (LEMON_SQUEEZY_CHANNEL,)
+    assert options.show_tunisia_payment_option is False
