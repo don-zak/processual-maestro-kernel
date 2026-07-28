@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from processual_api.billing.checkout_channels import resolve_checkout_channel_options
 from processual_api.billing.offer_pricebook import public_offer_pricebook
 from processual_api.billing.subscription_catalog import public_subscription_catalog
 from processual_api.billing.unit_cost_assumptions import get_unit_cost_assumptions as build_unit_cost_assumptions
@@ -40,6 +41,14 @@ def _get_webhook_secret() -> str:
 
 def _get_success_url() -> str:
     return os.environ.get("LEMONSQUEEZY_CHECKOUT_SUCCESS_URL", "https://yourdomain.com/console")
+
+
+def _maestro_direct_checkout_enabled() -> bool:
+    """Return whether the Tunisia checkout channel is operationally enabled."""
+    return os.environ.get(
+        "MAESTRO_DIRECT_CHECKOUT_ENABLED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _get_cancel_url() -> str:
@@ -93,6 +102,18 @@ _VARIANTS = {
 
 
 # ─── Endpoints ───
+
+@router.get("/checkout/options", response_model=dict)
+async def get_checkout_options(
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, object]:
+    """Return server-derived checkout channels for the authenticated customer."""
+    options = resolve_checkout_channel_options(
+        current_user=current_user,
+        maestro_direct_enabled=_maestro_direct_checkout_enabled(),
+    )
+    return options.as_public_dict()
+
 
 @router.post("/checkout", response_model=dict)
 async def create_checkout(body: dict, current_user: dict = Depends(get_current_user)):
