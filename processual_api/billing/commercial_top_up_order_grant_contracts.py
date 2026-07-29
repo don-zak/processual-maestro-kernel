@@ -145,6 +145,7 @@ def decide_unit_grant(
     order: TopUpOrderContract,
     payment: PaymentVerificationContract,
     previously_granted_idempotency_keys: frozenset[str],
+    execution_enabled: bool = UNIT_GRANT_EXECUTION_ENABLED,
 ) -> UnitGrantDecision:
     grant_key = f"top-up-grant:{order.order_id}:{order.idempotency_key}"
 
@@ -193,7 +194,7 @@ def decide_unit_grant(
             reason="verified amount does not match order",
         )
 
-    if not UNIT_GRANT_EXECUTION_ENABLED:
+    if not execution_enabled:
         return UnitGrantDecision(
             order_id=order.order_id,
             outcome=UnitGrantOutcome.BLOCKED,
