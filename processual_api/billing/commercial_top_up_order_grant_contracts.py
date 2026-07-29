@@ -7,11 +7,17 @@ orders, verify real payments, or mutate entitlement balances.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Final
 from uuid import UUID
 
+from processual_api.billing.commercial_currency_settlement_contracts import (
+    AUTHORITATIVE_PRICING_CURRENCY,
+    ExchangeRateQuote,
+    validate_channel_settlement,
+)
 from processual_api.billing.commercial_settings_top_up_checkout_contracts import (
     TopUpCheckoutChannel,
 )
@@ -70,6 +76,13 @@ class TopUpOrderContract:
     confirmed: bool
     payment_verified: bool
     units_granted: bool
+    settlement_currency: str | None = None
+    settlement_amount: Decimal | None = None
+    exchange_rate_usd_tnd: Decimal | None = None
+    exchange_rate_source: str | None = None
+    exchange_rate_reference: str | None = None
+    exchange_rate_observed_at: datetime | None = None
+    exchange_rate_expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not self.plan_code.strip():
@@ -80,10 +93,60 @@ class TopUpOrderContract:
             raise ValueError("bundle_count must be positive")
         if self.total_price_usd <= 0:
             raise ValueError("total_price_usd must be positive")
+
+        if self.settlement_currency is None:
+            object.__setattr__(
+                self,
+                "settlement_currency",
+                AUTHORITATIVE_PRICING_CURRENCY,
+            )
+
+        if self.settlement_amount is None:
+            object.__setattr__(
+                self,
+                "settlement_amount",
+                self.total_price_usd,
+            )
+
+        quote = self.exchange_rate_quote
+        validate_channel_settlement(
+            channel=self.channel,
+            total_price_usd=self.total_price_usd,
+            settlement_currency=self.settlement_currency,
+            settlement_amount=self.settlement_amount,
+            exchange_rate_quote=quote,
+        )
+
         if not self.idempotency_key.strip():
             raise ValueError("idempotency_key must not be blank")
         if self.units_granted and not self.payment_verified:
             raise ValueError("units cannot be granted before payment verification")
+
+    @property
+    def exchange_rate_quote(self) -> ExchangeRateQuote | None:
+        values = (
+            self.exchange_rate_usd_tnd,
+            self.exchange_rate_source,
+            self.exchange_rate_reference,
+            self.exchange_rate_observed_at,
+            self.exchange_rate_expires_at,
+        )
+
+        if all(value is None for value in values):
+            return None
+
+        if any(value is None for value in values):
+            raise ValueError("exchange-rate metadata must be complete")
+
+        return ExchangeRateQuote(
+            base_currency=AUTHORITATIVE_PRICING_CURRENCY,
+            settlement_currency=self.settlement_currency,
+            rate=self.exchange_rate_usd_tnd,
+            source=self.exchange_rate_source,
+            reference=self.exchange_rate_reference,
+            observed_at=self.exchange_rate_observed_at,
+            expires_at=self.exchange_rate_expires_at,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -93,6 +156,10 @@ class TopUpOrderContract:
         payload["channel"] = self.channel.value
         payload["state"] = self.state.value
         payload["total_price_usd"] = str(self.total_price_usd)
+        payload["settlement_amount"] = str(self.settlement_amount)
+        payload["settlement_currency"] = self.settlement_currency.strip().upper()
+        if self.exchange_rate_usd_tnd is not None:
+            payload["exchange_rate_usd_tnd"] = str(self.exchange_rate_usd_tnd)
         return payload
 
 
@@ -101,24 +168,24 @@ class PaymentVerificationContract:
     order_id: UUID
     provider_reference: str
     outcome: PaymentVerificationOutcome
-    verified_amount_usd: Decimal | None
+    verified_amount: Decimal | None
     verified_currency: str | None
     immutable_evidence_reference: str | None
 
     def __post_init__(self) -> None:
         if not self.provider_reference.strip():
             raise ValueError("provider_reference must not be blank")
-        if self.verified_amount_usd is not None and self.verified_amount_usd <= 0:
-            raise ValueError("verified_amount_usd must be positive")
+        if self.verified_amount is not None and self.verified_amount <= 0:
+            raise ValueError("verified_amount must be positive")
         if self.verified_currency is not None:
             normalized = self.verified_currency.strip().upper()
             if len(normalized) != 3:
                 raise ValueError("verified_currency must be ISO-4217")
         if self.outcome is PaymentVerificationOutcome.VERIFIED:
-            if self.verified_amount_usd is None:
+            if self.verified_amount is None:
                 raise ValueError("verified payment requires amount")
-            if self.verified_currency != "USD":
-                raise ValueError("verified payment currency must be USD")
+            if self.verified_currency is None:
+                raise ValueError("verified payment requires currency")
             if not self.immutable_evidence_reference:
                 raise ValueError("verified payment requires immutable evidence")
 
@@ -185,13 +252,25 @@ def decide_unit_grant(
             reason="payment is not verified",
         )
 
-    if payment.verified_amount_usd != order.total_price_usd:
+    expected_currency = order.settlement_currency.strip().upper()
+    expected_amount = order.settlement_amount
+
+    if payment.verified_currency != expected_currency:
         return UnitGrantDecision(
             order_id=order.order_id,
             outcome=UnitGrantOutcome.BLOCKED,
             units=order.requested_units,
             grant_idempotency_key=grant_key,
-            reason="verified amount does not match order",
+            reason=("verified currency does not match order settlement"),
+        )
+
+    if payment.verified_amount != expected_amount:
+        return UnitGrantDecision(
+            order_id=order.order_id,
+            outcome=UnitGrantOutcome.BLOCKED,
+            units=order.requested_units,
+            grant_idempotency_key=grant_key,
+            reason=("verified amount does not match order settlement"),
         )
 
     if not execution_enabled:

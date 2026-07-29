@@ -95,8 +95,29 @@ class CreateTopUpOrderCommand:
     idempotency_key: str
     actor_reference: str
     evidence_reference: str
+    settlement_currency: str | None = None
+    settlement_amount: Decimal | None = None
+    exchange_rate_usd_tnd: Decimal | None = None
+    exchange_rate_source: str | None = None
+    exchange_rate_reference: str | None = None
+    exchange_rate_observed_at: datetime | None = None
+    exchange_rate_expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
+        if self.settlement_currency is None:
+            object.__setattr__(
+                self,
+                "settlement_currency",
+                "USD",
+            )
+
+        if self.settlement_amount is None:
+            object.__setattr__(
+                self,
+                "settlement_amount",
+                self.total_price_usd,
+            )
+
         if not self.plan_code.strip():
             raise ValueError("plan_code must not be blank")
         if self.requested_units <= 0:
@@ -117,7 +138,7 @@ class CreateTopUpOrderCommand:
 class RecordPaymentAndGrantCommand:
     order_id: uuid.UUID
     provider_reference: str
-    verified_amount_usd: Decimal
+    verified_amount: Decimal
     verified_currency: str
     immutable_evidence_reference: str
     actor_reference: str
@@ -125,10 +146,11 @@ class RecordPaymentAndGrantCommand:
     def __post_init__(self) -> None:
         if not self.provider_reference.strip():
             raise ValueError("provider_reference must not be blank")
-        if self.verified_amount_usd <= 0:
-            raise ValueError("verified_amount_usd must be positive")
-        if self.verified_currency.strip().upper() != "USD":
-            raise ValueError("verified_currency must be USD")
+        if self.verified_amount <= 0:
+            raise ValueError("verified_amount must be positive")
+        normalized_currency = self.verified_currency.strip().upper()
+        if len(normalized_currency) != 3:
+            raise ValueError("verified_currency must be ISO-4217")
         if not self.immutable_evidence_reference.strip():
             raise ValueError("immutable_evidence_reference must not be blank")
         if not self.actor_reference.strip():
@@ -268,6 +290,13 @@ class CommercialTopUpApplicationService:
                 requested_units=command.requested_units,
                 bundle_count=command.bundle_count,
                 total_price_usd=command.total_price_usd,
+                settlement_currency=(command.settlement_currency.strip().upper()),
+                settlement_amount=command.settlement_amount,
+                exchange_rate_usd_tnd=(command.exchange_rate_usd_tnd),
+                exchange_rate_source=(command.exchange_rate_source),
+                exchange_rate_reference=(command.exchange_rate_reference),
+                exchange_rate_observed_at=(command.exchange_rate_observed_at),
+                exchange_rate_expires_at=(command.exchange_rate_expires_at),
                 channel=command.channel.value,
                 idempotency_key=command.idempotency_key,
                 state=TopUpOrderState.AWAITING_PAYMENT.value,
@@ -354,7 +383,7 @@ class CommercialTopUpApplicationService:
                 order_id=command.order_id,
                 provider_reference=command.provider_reference,
                 outcome=PaymentVerificationOutcome.VERIFIED,
-                verified_amount_usd=command.verified_amount_usd,
+                verified_amount=command.verified_amount,
                 verified_currency=command.verified_currency.strip().upper(),
                 immutable_evidence_reference=(command.immutable_evidence_reference),
             )
@@ -379,7 +408,7 @@ class CommercialTopUpApplicationService:
                 order_id=command.order_id,
                 provider_reference=command.provider_reference,
                 outcome=payment_contract.outcome.value,
-                verified_amount_usd=payment_contract.verified_amount_usd,
+                verified_amount=payment_contract.verified_amount,
                 verified_currency=payment_contract.verified_currency,
                 immutable_evidence_reference=(payment_contract.immutable_evidence_reference),
             )
@@ -402,8 +431,8 @@ class CommercialTopUpApplicationService:
                     evidence_reference=(command.immutable_evidence_reference),
                     payload={
                         "provider_reference": command.provider_reference,
-                        "verified_amount_usd": str(command.verified_amount_usd),
-                        "verified_currency": "USD",
+                        "verified_amount": str(command.verified_amount),
+                        "verified_currency": (command.verified_currency.strip().upper()),
                     },
                 )
             )
@@ -476,6 +505,13 @@ def _same_order(
         and existing.requested_units == command.requested_units
         and existing.bundle_count == command.bundle_count
         and existing.total_price_usd == command.total_price_usd
+        and existing.settlement_currency == command.settlement_currency.strip().upper()
+        and existing.settlement_amount == command.settlement_amount
+        and existing.exchange_rate_usd_tnd == command.exchange_rate_usd_tnd
+        and existing.exchange_rate_source == command.exchange_rate_source
+        and existing.exchange_rate_reference == command.exchange_rate_reference
+        and existing.exchange_rate_observed_at == command.exchange_rate_observed_at
+        and existing.exchange_rate_expires_at == command.exchange_rate_expires_at
         and existing.channel == command.channel.value
     )
 
@@ -498,6 +534,13 @@ def _to_order_contract(
         requested_units=order.requested_units,
         bundle_count=order.bundle_count,
         total_price_usd=order.total_price_usd,
+        settlement_currency=order.settlement_currency,
+        settlement_amount=order.settlement_amount,
+        exchange_rate_usd_tnd=order.exchange_rate_usd_tnd,
+        exchange_rate_source=order.exchange_rate_source,
+        exchange_rate_reference=order.exchange_rate_reference,
+        exchange_rate_observed_at=(order.exchange_rate_observed_at),
+        exchange_rate_expires_at=(order.exchange_rate_expires_at),
         channel=TopUpCheckoutChannel(order.channel),
         idempotency_key=order.idempotency_key,
         state=state,

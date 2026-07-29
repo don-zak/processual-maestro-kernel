@@ -56,7 +56,7 @@ def _payment(order: TopUpOrderContract) -> PaymentVerificationContract:
         order_id=order.order_id,
         provider_reference="payment-001",
         outcome=PaymentVerificationOutcome.VERIFIED,
-        verified_amount_usd=Decimal("118.00"),
+        verified_amount=Decimal("118.00"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/001",
     )

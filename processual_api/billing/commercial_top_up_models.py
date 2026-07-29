@@ -48,6 +48,44 @@ class CommercialTopUpOrder(Base):
             name="channel_allowed",
         ),
         CheckConstraint(
+            "settlement_currency IN ('USD', 'TND')",
+            name="settlement_currency_allowed",
+        ),
+        CheckConstraint(
+            "settlement_amount > 0",
+            name="settlement_amount_positive",
+        ),
+        CheckConstraint(
+            """
+            (
+                channel = 'lemon_squeezy'
+                AND settlement_currency = 'USD'
+                AND settlement_amount = total_price_usd
+                AND exchange_rate_usd_tnd IS NULL
+                AND exchange_rate_source IS NULL
+                AND exchange_rate_reference IS NULL
+                AND exchange_rate_observed_at IS NULL
+                AND exchange_rate_expires_at IS NULL
+            )
+            OR
+            (
+                channel = 'local_tunisia'
+                AND settlement_currency = 'TND'
+                AND exchange_rate_usd_tnd IS NOT NULL
+                AND exchange_rate_usd_tnd > 0
+                AND exchange_rate_source IS NOT NULL
+                AND length(trim(exchange_rate_source)) > 0
+                AND exchange_rate_reference IS NOT NULL
+                AND length(trim(exchange_rate_reference)) > 0
+                AND exchange_rate_observed_at IS NOT NULL
+                AND exchange_rate_expires_at IS NOT NULL
+                AND exchange_rate_expires_at
+                    > exchange_rate_observed_at
+            )
+            """,
+            name="channel_settlement_consistent",
+        ),
+        CheckConstraint(
             """
             state IN (
                 'draft',
@@ -91,6 +129,29 @@ class CommercialTopUpOrder(Base):
         Numeric(18, 2),
         nullable=False,
     )
+    settlement_currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+    )
+    settlement_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 3),
+        nullable=False,
+    )
+    exchange_rate_usd_tnd: Mapped[Decimal | None] = mapped_column(
+        Numeric(18, 6),
+    )
+    exchange_rate_source: Mapped[str | None] = mapped_column(
+        String(255),
+    )
+    exchange_rate_reference: Mapped[str | None] = mapped_column(
+        String(255),
+    )
+    exchange_rate_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    exchange_rate_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     state: Mapped[str] = mapped_column(
@@ -109,7 +170,7 @@ class CommercialTopUpPaymentEvidence(Base):
             name="outcome_allowed",
         ),
         CheckConstraint(
-            "verified_amount_usd IS NULL OR verified_amount_usd > 0",
+            "verified_amount IS NULL OR verified_amount > 0",
             name="verified_amount_positive",
         ),
         CheckConstraint(
@@ -138,8 +199,8 @@ class CommercialTopUpPaymentEvidence(Base):
         nullable=False,
     )
     outcome: Mapped[str] = mapped_column(String(24), nullable=False)
-    verified_amount_usd: Mapped[Decimal | None] = mapped_column(
-        Numeric(18, 2),
+    verified_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(18, 3),
     )
     verified_currency: Mapped[str | None] = mapped_column(String(3))
     immutable_evidence_reference: Mapped[str | None] = mapped_column(

@@ -184,7 +184,7 @@ def payment_command(order_id: uuid.UUID) -> RecordPaymentAndGrantCommand:
     return RecordPaymentAndGrantCommand(
         order_id=order_id,
         provider_reference="provider-payment-001",
-        verified_amount_usd=Decimal("118.00"),
+        verified_amount=Decimal("118.00"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/001",
         actor_reference="payment-verifier:test",
@@ -338,7 +338,7 @@ async def test_amount_mismatch_rolls_back_without_partial_records() -> None:
     mismatch = RecordPaymentAndGrantCommand(
         order_id=command.order_id,
         provider_reference="provider-payment-mismatch",
-        verified_amount_usd=Decimal("117.99"),
+        verified_amount=Decimal("117.99"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/mismatch",
         actor_reference="payment-verifier:test",
