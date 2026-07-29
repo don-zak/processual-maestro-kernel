@@ -152,7 +152,7 @@ def upgrade() -> None:
     )
 
     op.drop_constraint(
-        PAYMENT_AMOUNT_CHECK,
+        op.f(PAYMENT_AMOUNT_CHECK),
         PAYMENT_TABLE,
         type_="check",
     )
@@ -165,7 +165,7 @@ def upgrade() -> None:
         existing_nullable=True,
     )
     op.create_check_constraint(
-        PAYMENT_AMOUNT_CHECK,
+        op.f(PAYMENT_AMOUNT_CHECK),
         PAYMENT_TABLE,
         "verified_amount IS NULL OR verified_amount > 0",
     )
@@ -173,7 +173,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        PAYMENT_AMOUNT_CHECK,
+        op.f(PAYMENT_AMOUNT_CHECK),
         PAYMENT_TABLE,
         type_="check",
     )
@@ -186,7 +186,7 @@ def downgrade() -> None:
         existing_nullable=True,
     )
     op.create_check_constraint(
-        PAYMENT_AMOUNT_CHECK,
+        op.f(PAYMENT_AMOUNT_CHECK),
         PAYMENT_TABLE,
         "verified_amount_usd IS NULL OR verified_amount_usd > 0",
     )
