@@ -45,21 +45,21 @@ def _payment(order: TopUpOrderContract) -> PaymentVerificationContract:
         order_id=order.order_id,
         provider_reference="provider-payment-001",
         outcome=PaymentVerificationOutcome.VERIFIED,
-        verified_amount_usd=Decimal("118.00"),
+        verified_amount=Decimal("118.00"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/001",
     )
 
 
-def test_verified_payment_requires_evidence_and_exact_currency() -> None:
+def test_verified_payment_requires_evidence_and_iso_currency() -> None:
     order = _order()
     with pytest.raises(ValueError):
         PaymentVerificationContract(
             order_id=order.order_id,
             provider_reference="provider-payment-001",
             outcome=PaymentVerificationOutcome.VERIFIED,
-            verified_amount_usd=Decimal("118.00"),
-            verified_currency="EUR",
+            verified_amount=Decimal("118.00"),
+            verified_currency="US",
             immutable_evidence_reference="audit://payment/001",
         )
 
@@ -81,7 +81,7 @@ def test_mismatched_payment_is_blocked() -> None:
         order_id=uuid4(),
         provider_reference="provider-payment-002",
         outcome=PaymentVerificationOutcome.VERIFIED,
-        verified_amount_usd=Decimal("118.00"),
+        verified_amount=Decimal("118.00"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/002",
     )
@@ -100,7 +100,7 @@ def test_amount_mismatch_is_blocked() -> None:
         order_id=order.order_id,
         provider_reference="provider-payment-003",
         outcome=PaymentVerificationOutcome.VERIFIED,
-        verified_amount_usd=Decimal("117.99"),
+        verified_amount=Decimal("117.99"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/003",
     )
@@ -110,7 +110,7 @@ def test_amount_mismatch_is_blocked() -> None:
         previously_granted_idempotency_keys=frozenset(),
     )
     assert decision.outcome is UnitGrantOutcome.BLOCKED
-    assert decision.reason == "verified amount does not match order"
+    assert decision.reason == "verified amount does not match order settlement"
 
 
 def test_duplicate_grant_is_idempotent() -> None:

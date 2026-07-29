@@ -42,7 +42,7 @@ def test_model_instances_accept_valid_values() -> None:
         order_id=order_id,
         provider_reference="provider-001",
         outcome="verified",
-        verified_amount_usd=Decimal("118.00"),
+        verified_amount=Decimal("118.00"),
         verified_currency="USD",
         immutable_evidence_reference="audit://payment/001",
     )
