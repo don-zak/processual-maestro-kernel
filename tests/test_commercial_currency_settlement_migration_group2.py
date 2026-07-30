@@ -79,3 +79,11 @@ def test_migration_downgrade_restores_original_shape() -> None:
     assert 'new_column_name="verified_amount_usd"' in source
     assert 'op.drop_column(ORDER_TABLE, "settlement_currency")' in source
     assert 'op.drop_column(ORDER_TABLE, "settlement_amount")' in source
+
+
+def test_payment_amount_constraint_uses_final_database_name() -> None:
+    source = _source()
+
+    assert source.count("op.f(PAYMENT_AMOUNT_CHECK)") == 4
+    assert source.count("op.drop_constraint(\n        PAYMENT_AMOUNT_CHECK,") == 0
+    assert source.count("op.create_check_constraint(\n        PAYMENT_AMOUNT_CHECK,") == 0
