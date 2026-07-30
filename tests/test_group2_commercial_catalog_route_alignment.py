@@ -38,3 +38,23 @@ def test_login_baseline_markers_and_alignment_assets_coexist() -> None:
     assert "Ã" not in text
     assert "Â" not in text
     assert "â€" not in text
+
+
+def test_group2_single_plan_catalog_route_is_fail_closed() -> None:
+    response = client.get("/billing/commercial-pricing-catalog/starter")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["plan"]["plan_id"] == "starter"
+    assert payload["checkout_enabled"] is False
+    assert payload["plan"]["purchasable"] is False
+
+
+def test_group2_single_plan_catalog_route_returns_404() -> None:
+    response = client.get("/billing/commercial-pricing-catalog/not-a-plan")
+    assert response.status_code == 404
+
+
+def test_plan_detail_page_route_is_available() -> None:
+    response = client.get("/plans/starter")
+    assert response.status_code == 200
+    assert 'id="plan-content"' in response.text

@@ -175,6 +175,12 @@ async def pricing_page() -> FileResponse:
     return FileResponse(_static_dir / "pricing.html")
 
 
+@app.get("/plans/{plan_slug}", include_in_schema=False)
+async def plan_detail_page(plan_slug: str) -> FileResponse:
+    # The dynamic page validates the canonical plan identifier through the API.
+    return FileResponse(_static_dir / "plan_detail.html")
+
+
 if _static_dir.exists():
     app.mount("/console", StaticFiles(directory=str(_static_dir), html=True), name="console")
 

@@ -40,3 +40,19 @@ def test_public_catalog_preserves_byok() -> None:
     assert payload["billing_policy"] == "byok"
     assert payload["provider_cost_included"] is False
     assert all(plan["billing_policy"] == "byok" for plan in payload["plans"])
+
+
+def test_public_plan_detail_returns_one_listed_plan() -> None:
+    from processual_api.billing.commercial_public_catalog import public_commercial_plan_detail
+
+    payload = public_commercial_plan_detail("starter")
+    assert payload is not None
+    assert payload["plan"]["plan_id"] == "starter"
+    assert payload["checkout_enabled"] is False
+    assert payload["quota_enforcement_enabled"] is False
+
+
+def test_public_plan_detail_rejects_unknown_plan() -> None:
+    from processual_api.billing.commercial_public_catalog import public_commercial_plan_detail
+
+    assert public_commercial_plan_detail("unknown-plan") is None

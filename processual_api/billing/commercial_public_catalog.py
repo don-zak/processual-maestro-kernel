@@ -112,7 +112,27 @@ def public_commercial_subscription_catalog() -> dict[str, Any]:
     }
 
 
+def public_commercial_plan_detail(plan_id: str) -> dict[str, Any] | None:
+    """Return one public-safe governed plan without enabling runtime actions."""
+
+    catalog = public_commercial_subscription_catalog()
+    for plan in catalog["plans"]:
+        if plan["plan_id"] == plan_id and plan["commercially_listed"] is True:
+            return {
+                "catalog_version": catalog["catalog_version"],
+                "pricing_version": catalog["pricing_version"],
+                "pricing_status": catalog["pricing_status"],
+                "billing_policy": catalog["billing_policy"],
+                "provider_cost_included": catalog["provider_cost_included"],
+                "checkout_enabled": catalog["checkout_enabled"],
+                "quota_enforcement_enabled": catalog["quota_enforcement_enabled"],
+                "plan": plan,
+            }
+    return None
+
+
 __all__ = [
     "PUBLIC_COMMERCIAL_CATALOG_VERSION",
+    "public_commercial_plan_detail",
     "public_commercial_subscription_catalog",
 ]

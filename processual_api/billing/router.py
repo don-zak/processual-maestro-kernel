@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from processual_api.billing.commercial_public_catalog import (
+    public_commercial_plan_detail,
     public_commercial_subscription_catalog,
 )
 from processual_api.billing.offer_pricebook import public_offer_pricebook
@@ -372,6 +373,17 @@ async def get_pricing_catalog() -> dict[str, object]:
 def get_commercial_pricing_catalog() -> dict[str, object]:
     # Selected Group 2 pricing with runtime actions disabled.
     return public_commercial_subscription_catalog()
+
+
+@router.get(
+    "/commercial-pricing-catalog/{plan_id}",
+    summary="Get one governed Group 2 plan for its dedicated detail surface",
+)
+def get_commercial_plan_detail(plan_id: str) -> dict[str, object]:
+    plan = public_commercial_plan_detail(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Commercial plan not found")
+    return plan
 
 
 @router.get("/offer-pricebook")
