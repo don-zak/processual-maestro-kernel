@@ -13,12 +13,7 @@ from processual_api.billing.commercial_entitlement_ledger_schema_contracts impor
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION_PATH = (
-    ROOT
-    / "alembic"
-    / "versions"
-    / "20260730_0015_commercial_entitlement_ledger.py"
-)
+MIGRATION_PATH = ROOT / "alembic" / "versions" / "20260730_0015_commercial_entitlement_ledger.py"
 ALEMBIC_ENV_PATH = ROOT / "alembic" / "env.py"
 
 
@@ -49,9 +44,7 @@ def test_migration_declares_canonical_tables() -> None:
 
     assert migration.LEDGER_TABLE == LEDGER_ENTRIES_TABLE
     assert migration.BALANCE_TABLE == BALANCES_TABLE
-    assert migration.RESERVATION_LOCK_TABLE == (
-        RESERVATION_LOCKS_TABLE
-    )
+    assert migration.RESERVATION_LOCK_TABLE == (RESERVATION_LOCKS_TABLE)
 
 
 def test_upgrade_and_downgrade_are_callable() -> None:
@@ -76,16 +69,11 @@ def test_source_creates_and_drops_three_tables() -> None:
 
 
 def test_source_contains_all_constraint_names() -> None:
-    source = MIGRATION_PATH.read_text(
-        encoding="utf-8-sig"
-    )
+    source = MIGRATION_PATH.read_text(encoding="utf-8-sig")
     tree = ast.parse(source)
 
     string_literals = {
-        node.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
+        node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)
     }
 
     for table in build_entitlement_schema_contracts():
@@ -104,15 +92,9 @@ def test_source_contains_all_index_names() -> None:
 def test_downgrade_uses_reverse_dependency_order() -> None:
     source = MIGRATION_PATH.read_text(encoding="utf-8")
 
-    lock_position = source.rfind(
-        "op.drop_table(RESERVATION_LOCK_TABLE)"
-    )
-    balance_position = source.rfind(
-        "op.drop_table(BALANCE_TABLE)"
-    )
-    ledger_position = source.rfind(
-        "op.drop_table(LEDGER_TABLE)"
-    )
+    lock_position = source.rfind("op.drop_table(RESERVATION_LOCK_TABLE)")
+    balance_position = source.rfind("op.drop_table(BALANCE_TABLE)")
+    ledger_position = source.rfind("op.drop_table(LEDGER_TABLE)")
 
     assert -1 not in (
         lock_position,
@@ -131,9 +113,7 @@ def test_partial_postgresql_indexes_are_preserved() -> None:
 
 
 def test_related_entry_foreign_key_is_restrictive() -> None:
-    source = MIGRATION_PATH.read_text(
-        encoding="utf-8-sig"
-    )
+    source = MIGRATION_PATH.read_text(encoding="utf-8-sig")
     tree = ast.parse(source)
 
     foreign_key_calls = [
@@ -147,42 +127,30 @@ def test_related_entry_foreign_key_is_restrictive() -> None:
     assert len(foreign_key_calls) == 1
 
     call = foreign_key_calls[0]
-    keyword_values = {
-        keyword.arg: keyword.value
-        for keyword in call.keywords
-        if keyword.arg is not None
-    }
+    keyword_values = {keyword.arg: keyword.value for keyword in call.keywords if keyword.arg is not None}
 
     name_value = keyword_values["name"]
     ondelete_value = keyword_values["ondelete"]
 
     assert isinstance(name_value, ast.Constant)
-    assert name_value.value == (
-        "fk_commercial_entitlement_ledger_entries_"
-        "related_entry"
-    )
+    assert name_value.value == ("fk_commercial_entitlement_ledger_entries_related_entry")
 
     assert isinstance(ondelete_value, ast.Constant)
     assert ondelete_value.value == "RESTRICT"
 
 
 def test_alembic_env_registers_billing_models() -> None:
-    source = ALEMBIC_ENV_PATH.read_text(
-        encoding="utf-8-sig"
-    )
+    source = ALEMBIC_ENV_PATH.read_text(encoding="utf-8-sig")
     tree = ast.parse(source)
 
     billing_imports = {
         alias.name
         for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
-        and node.module == "processual_api.billing"
+        if isinstance(node, ast.ImportFrom) and node.module == "processual_api.billing"
         for alias in node.names
     }
 
-    assert "commercial_entitlement_ledger_models" in (
-        billing_imports
-    )
+    assert "commercial_entitlement_ledger_models" in (billing_imports)
     assert "commercial_top_up_models" in billing_imports
 
 
@@ -191,16 +159,7 @@ def test_migration_identifiers_fit_postgresql_limit() -> None:
 
     for table in build_entitlement_schema_contracts():
         names.append(table.name)
-        names.extend(
-            constraint.name
-            for constraint in table.constraints
-        )
-        names.extend(
-            index.name
-            for index in table.indexes
-        )
+        names.extend(constraint.name for constraint in table.constraints)
+        names.extend(index.name for index in table.indexes)
 
-    assert all(
-        len(name) <= 63
-        for name in names
-    )
+    assert all(len(name) <= 63 for name in names)

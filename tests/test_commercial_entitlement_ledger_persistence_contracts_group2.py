@@ -1,4 +1,4 @@
-﻿from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -30,13 +30,9 @@ from processual_api.billing.commercial_entitlement_ledger_persistence_contracts 
 )
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
-SUBSCRIPTION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
+SUBSCRIPTION_ID = UUID("22222222-2222-2222-2222-222222222222")
 ENTRY_ID = UUID("33333333-3333-3333-3333-333333333333")
-RESERVATION_ID = UUID(
-    "44444444-4444-4444-4444-444444444444"
-)
+RESERVATION_ID = UUID("44444444-4444-4444-4444-444444444444")
 NOW = datetime(2026, 7, 30, 10, 30, tzinfo=UTC)
 
 
@@ -74,9 +70,7 @@ class FakeLedgerRepository:
             entry_id=request.entry.entry_id,
             appended=True,
             duplicate=False,
-            resulting_balance_version=(
-                request.expected_balance_version + 1
-            ),
+            resulting_balance_version=(request.expected_balance_version + 1),
         )
 
     async def list_for_subscription(
@@ -135,9 +129,7 @@ class FakeReservationRepository:
             reservation_id=request.reservation_id,
             owner_token=request.owner_token,
             acquired=True,
-            expires_at=NOW + timedelta(
-                seconds=request.lease_seconds
-            ),
+            expires_at=NOW + timedelta(seconds=request.lease_seconds),
         )
 
     async def release_lock(

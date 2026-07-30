@@ -1,4 +1,4 @@
-﻿"""Review-only entitlement-ledger contracts for Group 2.
+"""Review-only entitlement-ledger contracts for Group 2.
 
 These contracts define immutable Maestro Unit movements and reservation
 lifecycles. They do not persist entries, mutate production balances, or enable
@@ -13,9 +13,7 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
-ENTITLEMENT_LEDGER_VERSION: Final = (
-    "2026-07-group2-entitlement-ledger-v1"
-)
+ENTITLEMENT_LEDGER_VERSION: Final = "2026-07-group2-entitlement-ledger-v1"
 ENTITLEMENT_LEDGER_STATUS: Final = "draft_review"
 
 ENTITLEMENT_LEDGER_ENABLED: Final = False
@@ -95,51 +93,43 @@ class EntitlementLedgerEntry:
         if self.occurred_at.tzinfo is None:
             raise ValueError("occurred_at must be timezone-aware")
 
-        if self.entry_type in {
-            LedgerEntryType.USAGE_RESERVE,
-            LedgerEntryType.USAGE_COMMIT,
-            LedgerEntryType.USAGE_RELEASE,
-            LedgerEntryType.USAGE_REVERSAL,
-        } and self.reservation_id is None:
-            raise ValueError(
-                "usage lifecycle entries require reservation_id"
-            )
+        if (
+            self.entry_type
+            in {
+                LedgerEntryType.USAGE_RESERVE,
+                LedgerEntryType.USAGE_COMMIT,
+                LedgerEntryType.USAGE_RELEASE,
+                LedgerEntryType.USAGE_REVERSAL,
+            }
+            and self.reservation_id is None
+        ):
+            raise ValueError("usage lifecycle entries require reservation_id")
 
         if self.entry_type is LedgerEntryType.ADMIN_ADJUSTMENT:
             if self.adjustment_units is None:
-                raise ValueError(
-                    "admin adjustment requires adjustment_units"
-                )
+                raise ValueError("admin adjustment requires adjustment_units")
             if self.adjustment_units == 0:
-                raise ValueError(
-                    "admin adjustment must not be zero"
-                )
+                raise ValueError("admin adjustment must not be zero")
             if not self.reason or not self.reason.strip():
-                raise ValueError(
-                    "admin adjustment requires an audit reason"
-                )
+                raise ValueError("admin adjustment requires an audit reason")
         elif self.adjustment_units is not None:
-            raise ValueError(
-                "adjustment_units are valid only for admin adjustment"
-            )
+            raise ValueError("adjustment_units are valid only for admin adjustment")
 
-        if self.entry_type in {
-            LedgerEntryType.USAGE_REVERSAL,
-            LedgerEntryType.REFUND_REVERSAL,
-        } and self.related_entry_id is None:
-            raise ValueError(
-                "reversal entries require related_entry_id"
-            )
+        if (
+            self.entry_type
+            in {
+                LedgerEntryType.USAGE_REVERSAL,
+                LedgerEntryType.REFUND_REVERSAL,
+            }
+            and self.related_entry_id is None
+        ):
+            raise ValueError("reversal entries require related_entry_id")
 
     @property
     def direction(self) -> LedgerDirection:
         if self.entry_type is LedgerEntryType.ADMIN_ADJUSTMENT:
             assert self.adjustment_units is not None
-            return (
-                LedgerDirection.CREDIT
-                if self.adjustment_units > 0
-                else LedgerDirection.DEBIT
-            )
+            return LedgerDirection.CREDIT if self.adjustment_units > 0 else LedgerDirection.DEBIT
         return _ENTRY_DIRECTIONS[self.entry_type]
 
     @property
@@ -162,19 +152,9 @@ class EntitlementLedgerEntry:
         payload["entry_type"] = self.entry_type.value
         payload["direction"] = self.direction.value
         payload["signed_units"] = self.signed_units
-        payload["occurred_at"] = self.occurred_at.astimezone(
-            UTC
-        ).isoformat()
-        payload["reservation_id"] = (
-            None
-            if self.reservation_id is None
-            else str(self.reservation_id)
-        )
-        payload["related_entry_id"] = (
-            None
-            if self.related_entry_id is None
-            else str(self.related_entry_id)
-        )
+        payload["occurred_at"] = self.occurred_at.astimezone(UTC).isoformat()
+        payload["reservation_id"] = None if self.reservation_id is None else str(self.reservation_id)
+        payload["related_entry_id"] = None if self.related_entry_id is None else str(self.related_entry_id)
         return payload
 
 
@@ -194,13 +174,9 @@ class EntitlementBalanceSnapshot:
             self.committed_units,
         )
         if any(value < 0 for value in values):
-            raise ValueError(
-                "balance snapshot values must not be negative"
-            )
+            raise ValueError("balance snapshot values must not be negative")
         if self.calculated_at.tzinfo is None:
-            raise ValueError(
-                "calculated_at must be timezone-aware"
-            )
+            raise ValueError("calculated_at must be timezone-aware")
 
     def can_reserve(
         self,
@@ -209,17 +185,11 @@ class EntitlementBalanceSnapshot:
         contracted_overage_units: int = 0,
     ) -> bool:
         if requested_units <= 0:
-            raise ValueError(
-                "requested_units must be positive"
-            )
+            raise ValueError("requested_units must be positive")
         if contracted_overage_units < 0:
-            raise ValueError(
-                "contracted_overage_units must not be negative"
-            )
+            raise ValueError("contracted_overage_units must not be negative")
 
-        spendable = (
-            self.available_units + contracted_overage_units
-        )
+        spendable = self.available_units + contracted_overage_units
         return requested_units <= spendable
 
 
@@ -231,27 +201,17 @@ class UsageReservationDecision:
     available_units: int
     contracted_overage_units: int
     reason: str
-    ledger_write_enabled: bool = (
-        USAGE_RESERVATION_LEDGER_WRITE_ENABLED
-    )
+    ledger_write_enabled: bool = USAGE_RESERVATION_LEDGER_WRITE_ENABLED
 
     def __post_init__(self) -> None:
         if self.requested_units <= 0:
-            raise ValueError(
-                "requested_units must be positive"
-            )
+            raise ValueError("requested_units must be positive")
         if self.available_units < 0:
-            raise ValueError(
-                "available_units must not be negative"
-            )
+            raise ValueError("available_units must not be negative")
         if self.contracted_overage_units < 0:
-            raise ValueError(
-                "contracted_overage_units must not be negative"
-            )
+            raise ValueError("contracted_overage_units must not be negative")
         if self.ledger_write_enabled:
-            raise ValueError(
-                "ledger writes must remain disabled in draft review"
-            )
+            raise ValueError("ledger writes must remain disabled in draft review")
 
 
 def decide_usage_reservation(
@@ -292,19 +252,12 @@ def calculate_balance_from_entries(
 
     for entry in entries:
         if entry.idempotency_key in seen_idempotency_keys:
-            raise ValueError(
-                "duplicate ledger idempotency key"
-            )
+            raise ValueError("duplicate ledger idempotency key")
         seen_idempotency_keys.add(entry.idempotency_key)
         balance += entry.signed_units
 
-    if (
-        balance < 0
-        and not NEGATIVE_BALANCE_ALLOWED_BY_DEFAULT
-    ):
-        raise ValueError(
-            "ledger entries produce a negative balance"
-        )
+    if balance < 0 and not NEGATIVE_BALANCE_ALLOWED_BY_DEFAULT:
+        raise ValueError("ledger entries produce a negative balance")
 
     return balance
 
@@ -314,38 +267,18 @@ def entitlement_ledger_review_payload() -> dict[str, object]:
         "version": ENTITLEMENT_LEDGER_VERSION,
         "status": ENTITLEMENT_LEDGER_STATUS,
         "enabled": ENTITLEMENT_LEDGER_ENABLED,
-        "persistence_enabled": (
-            ENTITLEMENT_LEDGER_PERSISTENCE_ENABLED
-        ),
-        "monthly_grant_write_enabled": (
-            MONTHLY_GRANT_LEDGER_WRITE_ENABLED
-        ),
-        "top_up_grant_write_enabled": (
-            TOP_UP_GRANT_LEDGER_WRITE_ENABLED
-        ),
-        "usage_reservation_write_enabled": (
-            USAGE_RESERVATION_LEDGER_WRITE_ENABLED
-        ),
-        "usage_commit_write_enabled": (
-            USAGE_COMMIT_LEDGER_WRITE_ENABLED
-        ),
-        "usage_release_write_enabled": (
-            USAGE_RELEASE_LEDGER_WRITE_ENABLED
-        ),
-        "usage_reversal_write_enabled": (
-            USAGE_REVERSAL_LEDGER_WRITE_ENABLED
-        ),
-        "admin_adjustment_write_enabled": (
-            ADMIN_ADJUSTMENT_LEDGER_WRITE_ENABLED
-        ),
+        "persistence_enabled": (ENTITLEMENT_LEDGER_PERSISTENCE_ENABLED),
+        "monthly_grant_write_enabled": (MONTHLY_GRANT_LEDGER_WRITE_ENABLED),
+        "top_up_grant_write_enabled": (TOP_UP_GRANT_LEDGER_WRITE_ENABLED),
+        "usage_reservation_write_enabled": (USAGE_RESERVATION_LEDGER_WRITE_ENABLED),
+        "usage_commit_write_enabled": (USAGE_COMMIT_LEDGER_WRITE_ENABLED),
+        "usage_release_write_enabled": (USAGE_RELEASE_LEDGER_WRITE_ENABLED),
+        "usage_reversal_write_enabled": (USAGE_REVERSAL_LEDGER_WRITE_ENABLED),
+        "admin_adjustment_write_enabled": (ADMIN_ADJUSTMENT_LEDGER_WRITE_ENABLED),
         "idempotency_required": IDEMPOTENCY_REQUIRED,
         "immutable_ledger_required": IMMUTABLE_LEDGER_REQUIRED,
-        "atomic_reservation_required": (
-            ATOMIC_RESERVATION_REQUIRED
-        ),
-        "negative_balance_allowed_by_default": (
-            NEGATIVE_BALANCE_ALLOWED_BY_DEFAULT
-        ),
+        "atomic_reservation_required": (ATOMIC_RESERVATION_REQUIRED),
+        "negative_balance_allowed_by_default": (NEGATIVE_BALANCE_ALLOWED_BY_DEFAULT),
     }
 
 

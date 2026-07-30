@@ -19,9 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 LEDGER_TABLE = "commercial_entitlement_ledger_entries"
 BALANCE_TABLE = "commercial_entitlement_balances"
-RESERVATION_LOCK_TABLE = (
-    "commercial_entitlement_reservation_locks"
-)
+RESERVATION_LOCK_TABLE = "commercial_entitlement_reservation_locks"
 
 
 def upgrade() -> None:
@@ -81,28 +79,16 @@ def upgrade() -> None:
             "tenant_id",
             "subscription_id",
             "idempotency_key",
-            name=(
-                "uq_commercial_entitlement_ledger_entries_"
-                "scope_idempotency"
-            ),
+            name=("uq_commercial_entitlement_ledger_entries_scope_idempotency"),
         ),
         sa.CheckConstraint(
             "units > 0",
-            name=(
-                "ck_commercial_entitlement_ledger_entries_"
-                "units_positive"
-            ),
+            name=("ck_commercial_entitlement_ledger_entries_units_positive"),
         ),
         sa.ForeignKeyConstraint(
             ("related_entry_id",),
-            (
-                "commercial_entitlement_ledger_entries."
-                "entry_id",
-            ),
-            name=(
-                "fk_commercial_entitlement_ledger_entries_"
-                "related_entry"
-            ),
+            ("commercial_entitlement_ledger_entries.entry_id",),
+            name=("fk_commercial_entitlement_ledger_entries_related_entry"),
             ondelete="RESTRICT",
         ),
     )
@@ -126,18 +112,14 @@ def upgrade() -> None:
             "reservation_id",
         ),
         unique=False,
-        postgresql_where=sa.text(
-            "reservation_id IS NOT NULL"
-        ),
+        postgresql_where=sa.text("reservation_id IS NOT NULL"),
     )
     op.create_index(
         "ix_commercial_entitlement_ledger_entries_related_entry",
         LEDGER_TABLE,
         ("related_entry_id",),
         unique=False,
-        postgresql_where=sa.text(
-            "related_entry_id IS NOT NULL"
-        ),
+        postgresql_where=sa.text("related_entry_id IS NOT NULL"),
     )
 
     op.create_table(
@@ -186,31 +168,19 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "available_units >= 0",
-            name=(
-                "ck_commercial_entitlement_balances_"
-                "available_nonnegative"
-            ),
+            name=("ck_commercial_entitlement_balances_available_nonnegative"),
         ),
         sa.CheckConstraint(
             "reserved_units >= 0",
-            name=(
-                "ck_commercial_entitlement_balances_"
-                "reserved_nonnegative"
-            ),
+            name=("ck_commercial_entitlement_balances_reserved_nonnegative"),
         ),
         sa.CheckConstraint(
             "committed_units >= 0",
-            name=(
-                "ck_commercial_entitlement_balances_"
-                "committed_nonnegative"
-            ),
+            name=("ck_commercial_entitlement_balances_committed_nonnegative"),
         ),
         sa.CheckConstraint(
             "version >= 0",
-            name=(
-                "ck_commercial_entitlement_balances_"
-                "version_nonnegative"
-            ),
+            name=("ck_commercial_entitlement_balances_version_nonnegative"),
         ),
     )
 
@@ -252,16 +222,11 @@ def upgrade() -> None:
             "tenant_id",
             "subscription_id",
             "reservation_id",
-            name=(
-                "pk_commercial_entitlement_reservation_locks"
-            ),
+            name=("pk_commercial_entitlement_reservation_locks"),
         ),
         sa.CheckConstraint(
             "length(trim(owner_token)) > 0",
-            name=(
-                "ck_commercial_entitlement_reservation_locks_"
-                "owner_nonblank"
-            ),
+            name=("ck_commercial_entitlement_reservation_locks_owner_nonblank"),
         ),
     )
 

@@ -1,4 +1,4 @@
-﻿"""SQLAlchemy persistence adapters for the commercial entitlement ledger.
+"""SQLAlchemy persistence adapters for the commercial entitlement ledger.
 
 The adapters implement the reviewed persistence ports. They are not wired into
 commercial execution or runtime charging.
@@ -109,12 +109,9 @@ class SqlAlchemyEntitlementLedgerRepository:
     ) -> EntitlementLedgerEntry | None:
         model = await self._session.scalar(
             select(CommercialEntitlementLedgerEntry).where(
-                CommercialEntitlementLedgerEntry.tenant_id
-                == tenant_id,
-                CommercialEntitlementLedgerEntry.subscription_id
-                == subscription_id,
-                CommercialEntitlementLedgerEntry.idempotency_key
-                == idempotency_key,
+                CommercialEntitlementLedgerEntry.tenant_id == tenant_id,
+                CommercialEntitlementLedgerEntry.subscription_id == subscription_id,
+                CommercialEntitlementLedgerEntry.idempotency_key == idempotency_key,
             )
         )
 
@@ -138,18 +135,12 @@ class SqlAlchemyEntitlementLedgerRepository:
         current_version = await self._session.scalar(
             select(CommercialEntitlementBalance.version)
             .where(
-                CommercialEntitlementBalance.tenant_id
-                == entry.tenant_id,
-                CommercialEntitlementBalance.subscription_id
-                == entry.subscription_id,
+                CommercialEntitlementBalance.tenant_id == entry.tenant_id,
+                CommercialEntitlementBalance.subscription_id == entry.subscription_id,
             )
             .with_for_update()
         )
-        normalized_version = (
-            0
-            if current_version is None
-            else int(current_version)
-        )
+        normalized_version = 0 if current_version is None else int(current_version)
 
         if existing is not None:
             return LedgerAppendResult(
@@ -159,13 +150,9 @@ class SqlAlchemyEntitlementLedgerRepository:
                 resulting_balance_version=normalized_version,
             )
 
-        if (
-            normalized_version
-            != request.expected_balance_version
-        ):
+        if normalized_version != request.expected_balance_version:
             raise EntitlementLedgerPersistenceConflictError(
-                "ledger append expected balance version does not "
-                "match persisted balance version"
+                "ledger append expected balance version does not match persisted balance version"
             )
 
         self._session.add(_entry_to_model(entry))
@@ -189,37 +176,27 @@ class SqlAlchemyEntitlementLedgerRepository:
         if limit <= 0:
             raise ValueError("limit must be positive")
 
-        statement = select(
-            CommercialEntitlementLedgerEntry
-        ).where(
-            CommercialEntitlementLedgerEntry.tenant_id
-            == tenant_id,
-            CommercialEntitlementLedgerEntry.subscription_id
-            == subscription_id,
+        statement = select(CommercialEntitlementLedgerEntry).where(
+            CommercialEntitlementLedgerEntry.tenant_id == tenant_id,
+            CommercialEntitlementLedgerEntry.subscription_id == subscription_id,
         )
 
         if after_entry_id is not None:
             anchor = await self._session.scalar(
                 select(CommercialEntitlementLedgerEntry).where(
-                    CommercialEntitlementLedgerEntry.entry_id
-                    == after_entry_id,
-                    CommercialEntitlementLedgerEntry.tenant_id
-                    == tenant_id,
-                    CommercialEntitlementLedgerEntry.subscription_id
-                    == subscription_id,
+                    CommercialEntitlementLedgerEntry.entry_id == after_entry_id,
+                    CommercialEntitlementLedgerEntry.tenant_id == tenant_id,
+                    CommercialEntitlementLedgerEntry.subscription_id == subscription_id,
                 )
             )
 
             if anchor is not None:
                 statement = statement.where(
                     or_(
-                        CommercialEntitlementLedgerEntry.occurred_at
-                        > anchor.occurred_at,
+                        CommercialEntitlementLedgerEntry.occurred_at > anchor.occurred_at,
                         and_(
-                            CommercialEntitlementLedgerEntry.occurred_at
-                            == anchor.occurred_at,
-                            CommercialEntitlementLedgerEntry.entry_id
-                            > anchor.entry_id,
+                            CommercialEntitlementLedgerEntry.occurred_at == anchor.occurred_at,
+                            CommercialEntitlementLedgerEntry.entry_id > anchor.entry_id,
                         ),
                     )
                 )
@@ -231,10 +208,7 @@ class SqlAlchemyEntitlementLedgerRepository:
             ).limit(limit)
         )
 
-        return tuple(
-            _entry_from_model(model)
-            for model in result.all()
-        )
+        return tuple(_entry_from_model(model) for model in result.all())
 
 
 class SqlAlchemyEntitlementBalanceRepository:
@@ -249,10 +223,8 @@ class SqlAlchemyEntitlementBalanceRepository:
     ) -> tuple[EntitlementBalanceSnapshot, int] | None:
         model = await self._session.scalar(
             select(CommercialEntitlementBalance).where(
-                CommercialEntitlementBalance.tenant_id
-                == tenant_id,
-                CommercialEntitlementBalance.subscription_id
-                == subscription_id,
+                CommercialEntitlementBalance.tenant_id == tenant_id,
+                CommercialEntitlementBalance.subscription_id == subscription_id,
             )
         )
 
@@ -270,12 +242,9 @@ class SqlAlchemyEntitlementBalanceRepository:
         result = await self._session.execute(
             update(CommercialEntitlementBalance)
             .where(
-                CommercialEntitlementBalance.tenant_id
-                == request.tenant_id,
-                CommercialEntitlementBalance.subscription_id
-                == request.subscription_id,
-                CommercialEntitlementBalance.version
-                == request.expected_version,
+                CommercialEntitlementBalance.tenant_id == request.tenant_id,
+                CommercialEntitlementBalance.subscription_id == request.subscription_id,
+                CommercialEntitlementBalance.version == request.expected_version,
             )
             .values(
                 available_units=request.available_units,
@@ -297,18 +266,13 @@ class SqlAlchemyEntitlementBalanceRepository:
         current_version = await self._session.scalar(
             select(CommercialEntitlementBalance.version)
             .where(
-                CommercialEntitlementBalance.tenant_id
-                == request.tenant_id,
-                CommercialEntitlementBalance.subscription_id
-                == request.subscription_id,
+                CommercialEntitlementBalance.tenant_id == request.tenant_id,
+                CommercialEntitlementBalance.subscription_id == request.subscription_id,
             )
             .with_for_update()
         )
 
-        if (
-            current_version is None
-            and request.expected_version == 0
-        ):
+        if current_version is None and request.expected_version == 0:
             self._session.add(
                 CommercialEntitlementBalance(
                     tenant_id=request.tenant_id,
@@ -329,11 +293,7 @@ class SqlAlchemyEntitlementBalanceRepository:
                 resulting_version=1,
             )
 
-        normalized_version = (
-            request.expected_version
-            if current_version is None
-            else int(current_version)
-        )
+        normalized_version = request.expected_version if current_version is None else int(current_version)
 
         return BalanceCompareAndSwapResult(
             updated=False,
@@ -350,9 +310,7 @@ class SqlAlchemyEntitlementReservationRepository:
         now_provider: Callable[[], datetime] | None = None,
     ) -> None:
         self._session = session
-        self._now_provider = now_provider or (
-            lambda: datetime.now(UTC)
-        )
+        self._now_provider = now_provider or (lambda: datetime.now(UTC))
 
     async def acquire_lock(
         self,
@@ -363,21 +321,14 @@ class SqlAlchemyEntitlementReservationRepository:
         model = await self._session.scalar(
             select(CommercialEntitlementReservationLock)
             .where(
-                CommercialEntitlementReservationLock.tenant_id
-                == request.tenant_id,
-                CommercialEntitlementReservationLock.subscription_id
-                == request.subscription_id,
-                CommercialEntitlementReservationLock.reservation_id
-                == request.reservation_id,
+                CommercialEntitlementReservationLock.tenant_id == request.tenant_id,
+                CommercialEntitlementReservationLock.subscription_id == request.subscription_id,
+                CommercialEntitlementReservationLock.reservation_id == request.reservation_id,
             )
             .with_for_update()
         )
 
-        if (
-            model is not None
-            and model.expires_at > now
-            and model.owner_token != request.owner_token
-        ):
+        if model is not None and model.expires_at > now and model.owner_token != request.owner_token:
             return ReservationLock(
                 tenant_id=request.tenant_id,
                 subscription_id=request.subscription_id,
@@ -387,9 +338,7 @@ class SqlAlchemyEntitlementReservationRepository:
                 expires_at=model.expires_at,
             )
 
-        expires_at = now + timedelta(
-            seconds=request.lease_seconds
-        )
+        expires_at = now + timedelta(seconds=request.lease_seconds)
 
         if model is None:
             model = CommercialEntitlementReservationLock(
@@ -425,12 +374,9 @@ class SqlAlchemyEntitlementReservationRepository:
         model = await self._session.scalar(
             select(CommercialEntitlementReservationLock)
             .where(
-                CommercialEntitlementReservationLock.tenant_id
-                == lock.tenant_id,
-                CommercialEntitlementReservationLock.subscription_id
-                == lock.subscription_id,
-                CommercialEntitlementReservationLock.reservation_id
-                == lock.reservation_id,
+                CommercialEntitlementReservationLock.tenant_id == lock.tenant_id,
+                CommercialEntitlementReservationLock.subscription_id == lock.subscription_id,
+                CommercialEntitlementReservationLock.reservation_id == lock.reservation_id,
             )
             .with_for_update()
         )
@@ -439,9 +385,7 @@ class SqlAlchemyEntitlementReservationRepository:
             return
 
         if model.owner_token != lock.owner_token:
-            raise EntitlementReservationLockOwnershipError(
-                "reservation lock may be released only by its owner"
-            )
+            raise EntitlementReservationLockOwnershipError("reservation lock may be released only by its owner")
 
         await self._session.delete(model)
         await self._session.flush()
@@ -456,12 +400,9 @@ class SqlAlchemyEntitlementReservationRepository:
         result = await self._session.scalars(
             select(CommercialEntitlementLedgerEntry)
             .where(
-                CommercialEntitlementLedgerEntry.tenant_id
-                == tenant_id,
-                CommercialEntitlementLedgerEntry.subscription_id
-                == subscription_id,
-                CommercialEntitlementLedgerEntry.reservation_id
-                == reservation_id,
+                CommercialEntitlementLedgerEntry.tenant_id == tenant_id,
+                CommercialEntitlementLedgerEntry.subscription_id == subscription_id,
+                CommercialEntitlementLedgerEntry.reservation_id == reservation_id,
             )
             .order_by(
                 CommercialEntitlementLedgerEntry.occurred_at,
@@ -469,10 +410,7 @@ class SqlAlchemyEntitlementReservationRepository:
             )
         )
 
-        return tuple(
-            _entry_from_model(model)
-            for model in result.all()
-        )
+        return tuple(_entry_from_model(model) for model in result.all())
 
 
 __all__ = [

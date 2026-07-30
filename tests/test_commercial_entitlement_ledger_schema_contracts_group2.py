@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from processual_api.billing.commercial_entitlement_ledger_schema_contracts import (
     BALANCES_TABLE,
@@ -26,28 +26,19 @@ from processual_api.billing.commercial_entitlement_ledger_schema_contracts impor
 def column_names(
     table: TableContract,
 ) -> set[str]:
-    return {
-        column.name
-        for column in table.columns
-    }
+    return {column.name for column in table.columns}
 
 
 def constraint_names(
     table: TableContract,
 ) -> set[str]:
-    return {
-        constraint.name
-        for constraint in table.constraints
-    }
+    return {constraint.name for constraint in table.constraints}
 
 
 def index_names(
     table: TableContract,
 ) -> set[str]:
-    return {
-        index.name
-        for index in table.indexes
-    }
+    return {index.name for index in table.indexes}
 
 
 def test_schema_creation_remains_disabled() -> None:
@@ -68,10 +59,7 @@ def test_schema_creation_remains_disabled() -> None:
 def test_schema_contains_three_canonical_tables() -> None:
     tables = build_entitlement_schema_contracts()
 
-    assert tuple(
-        table.name
-        for table in tables
-    ) == (
+    assert tuple(table.name for table in tables) == (
         LEDGER_ENTRIES_TABLE,
         BALANCES_TABLE,
         RESERVATION_LOCKS_TABLE,
@@ -81,23 +69,11 @@ def test_schema_contains_three_canonical_tables() -> None:
 def test_all_constraint_and_index_names_are_globally_unique() -> None:
     tables = build_entitlement_schema_contracts()
 
-    all_constraint_names = [
-        constraint.name
-        for table in tables
-        for constraint in table.constraints
-    ]
-    all_index_names = [
-        index.name
-        for table in tables
-        for index in table.indexes
-    ]
+    all_constraint_names = [constraint.name for table in tables for constraint in table.constraints]
+    all_index_names = [index.name for table in tables for index in table.indexes]
 
-    assert len(all_constraint_names) == len(
-        set(all_constraint_names)
-    )
-    assert len(all_index_names) == len(
-        set(all_index_names)
-    )
+    assert len(all_constraint_names) == len(set(all_constraint_names))
+    assert len(all_index_names) == len(set(all_index_names))
 
 
 def test_ledger_entry_table_has_required_identity_columns() -> None:
@@ -118,11 +94,7 @@ def test_ledger_entry_table_has_required_identity_columns() -> None:
 def test_ledger_idempotency_is_scoped_by_tenant_and_subscription() -> None:
     table = build_ledger_entries_table_contract()
 
-    unique_constraints = [
-        constraint
-        for constraint in table.constraints
-        if constraint.kind is ConstraintKind.UNIQUE
-    ]
+    unique_constraints = [constraint for constraint in table.constraints if constraint.kind is ConstraintKind.UNIQUE]
 
     assert any(
         constraint.columns
@@ -148,42 +120,26 @@ def test_ledger_units_must_be_positive() -> None:
 def test_related_entry_foreign_key_is_explicitly_named() -> None:
     table = build_ledger_entries_table_contract()
 
-    foreign_keys = [
-        constraint
-        for constraint in table.constraints
-        if constraint.kind is ConstraintKind.FOREIGN_KEY
-    ]
+    foreign_keys = [constraint for constraint in table.constraints if constraint.kind is ConstraintKind.FOREIGN_KEY]
 
     assert len(foreign_keys) == 1
     assert foreign_keys[0].columns == ("related_entry_id",)
-    assert foreign_keys[0].references == (
-        "commercial_entitlement_ledger_entries.entry_id"
-    )
+    assert foreign_keys[0].references == ("commercial_entitlement_ledger_entries.entry_id")
 
 
 def test_reservation_index_is_partial() -> None:
     table = build_ledger_entries_table_contract()
 
-    reservation_indexes = [
-        index
-        for index in table.indexes
-        if "reservation" in index.name
-    ]
+    reservation_indexes = [index for index in table.indexes if "reservation" in index.name]
 
     assert len(reservation_indexes) == 1
-    assert reservation_indexes[0].predicate == (
-        "reservation_id IS NOT NULL"
-    )
+    assert reservation_indexes[0].predicate == ("reservation_id IS NOT NULL")
 
 
 def test_balance_table_uses_composite_scope_primary_key() -> None:
     table = build_balances_table_contract()
 
-    primary_keys = [
-        constraint
-        for constraint in table.constraints
-        if constraint.kind is ConstraintKind.PRIMARY_KEY
-    ]
+    primary_keys = [constraint for constraint in table.constraints if constraint.kind is ConstraintKind.PRIMARY_KEY]
 
     assert len(primary_keys) == 1
     assert primary_keys[0].columns == (
@@ -195,11 +151,7 @@ def test_balance_table_uses_composite_scope_primary_key() -> None:
 def test_balance_values_and_version_are_nonnegative() -> None:
     table = build_balances_table_contract()
 
-    expressions = {
-        constraint.expression
-        for constraint in table.constraints
-        if constraint.kind is ConstraintKind.CHECK
-    }
+    expressions = {constraint.expression for constraint in table.constraints if constraint.kind is ConstraintKind.CHECK}
 
     assert {
         "available_units >= 0",
@@ -212,11 +164,7 @@ def test_balance_values_and_version_are_nonnegative() -> None:
 def test_balance_version_defaults_to_zero() -> None:
     table = build_balances_table_contract()
 
-    version = next(
-        column
-        for column in table.columns
-        if column.name == "version"
-    )
+    version = next(column for column in table.columns if column.name == "version")
 
     assert version.server_default == "0"
     assert version.nullability is ColumnNullability.REQUIRED
@@ -225,11 +173,7 @@ def test_balance_version_defaults_to_zero() -> None:
 def test_reservation_lock_uses_composite_scope_primary_key() -> None:
     table = build_reservation_locks_table_contract()
 
-    primary_key = next(
-        constraint
-        for constraint in table.constraints
-        if constraint.kind is ConstraintKind.PRIMARY_KEY
-    )
+    primary_key = next(constraint for constraint in table.constraints if constraint.kind is ConstraintKind.PRIMARY_KEY)
 
     assert primary_key.columns == (
         "tenant_id",
@@ -242,8 +186,7 @@ def test_reservation_lock_owner_must_be_nonblank() -> None:
     table = build_reservation_locks_table_contract()
 
     assert any(
-        constraint.expression
-        == "length(trim(owner_token)) > 0"
+        constraint.expression == "length(trim(owner_token)) > 0"
         for constraint in table.constraints
         if constraint.kind is ConstraintKind.CHECK
     )
@@ -252,18 +195,10 @@ def test_reservation_lock_owner_must_be_nonblank() -> None:
 def test_timestamps_are_timezone_aware() -> None:
     tables = build_entitlement_schema_contracts()
 
-    timestamp_columns = [
-        column
-        for table in tables
-        for column in table.columns
-        if column.name.endswith("_at")
-    ]
+    timestamp_columns = [column for table in tables for column in table.columns if column.name.endswith("_at")]
 
     assert timestamp_columns
-    assert all(
-        column.sql_type == "TIMESTAMP WITH TIME ZONE"
-        for column in timestamp_columns
-    )
+    assert all(column.sql_type == "TIMESTAMP WITH TIME ZONE" for column in timestamp_columns)
 
 
 def test_table_contract_rejects_duplicate_columns() -> None:
@@ -361,29 +296,11 @@ def test_foreign_key_requires_reference() -> None:
 def test_all_schema_names_fit_postgresql_identifier_limit() -> None:
     tables = build_entitlement_schema_contracts()
 
-    names = [
-        table.name
-        for table in tables
-    ]
-    names.extend(
-        constraint.name
-        for table in tables
-        for constraint in table.constraints
-    )
-    names.extend(
-        index.name
-        for table in tables
-        for index in table.indexes
-    )
+    names = [table.name for table in tables]
+    names.extend(constraint.name for table in tables for constraint in table.constraints)
+    names.extend(index.name for table in tables for index in table.indexes)
 
-    assert all(
-        len(name) <= 63
-        for name in names
-    ), [
-        name
-        for name in names
-        if len(name) > 63
-    ]
+    assert all(len(name) <= 63 for name in names), [name for name in names if len(name) > 63]
 
 
 def test_contract_name_helpers_return_expected_names() -> None:

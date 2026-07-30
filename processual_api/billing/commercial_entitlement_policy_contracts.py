@@ -1,4 +1,4 @@
-﻿"""Commercial entitlement and rollover policy contracts for Group 2.
+"""Commercial entitlement and rollover policy contracts for Group 2.
 
 This module defines review-only entitlement policy. It does not grant units,
 mutate balances, activate quota enforcement, or replace the runtime ledger.
@@ -35,9 +35,7 @@ BALANCE_MAXIMUM_UNITS: Final[int | None] = None
 class MonthlyRolloverPolicy(StrEnum):
     """Lifecycle of unused monthly units."""
 
-    PERMANENT_WHILE_SUBSCRIPTION_ACTIVE = (
-        "permanent_while_subscription_active"
-    )
+    PERMANENT_WHILE_SUBSCRIPTION_ACTIVE = "permanent_while_subscription_active"
 
 
 class PurchasedUnitsRolloverPolicy(StrEnum):
@@ -78,13 +76,9 @@ class PlanEntitlementPolicy:
         if self.monthly_included_units <= 0:
             raise ValueError("monthly_included_units must be positive")
         if self.monthly_consumption_multiplier < Decimal("1"):
-            raise ValueError(
-                "monthly_consumption_multiplier must be at least one"
-            )
+            raise ValueError("monthly_consumption_multiplier must be at least one")
         if self.monthly_consumption_cap < self.monthly_included_units:
-            raise ValueError(
-                "monthly_consumption_cap must not be below included units"
-            )
+            raise ValueError("monthly_consumption_cap must not be below included units")
 
         positive_fields = (
             self.daily_consumption_cap,
@@ -96,29 +90,17 @@ class PlanEntitlementPolicy:
         if any(value <= 0 for value in positive_fields):
             raise ValueError("operational limits must be positive")
         if self.maximum_elastic_concurrency < self.guaranteed_concurrency:
-            raise ValueError(
-                "maximum_elastic_concurrency must be at least guaranteed"
-            )
+            raise ValueError("maximum_elastic_concurrency must be at least guaranteed")
         if self.maximum_balance_units is not None:
-            raise ValueError(
-                "maximum_balance_units must remain unlimited in this policy"
-            )
+            raise ValueError("maximum_balance_units must remain unlimited in this policy")
         if self.runtime_enabled:
-            raise ValueError(
-                "entitlement runtime must remain disabled during draft review"
-            )
+            raise ValueError("entitlement runtime must remain disabled during draft review")
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
-        payload["monthly_consumption_multiplier"] = str(
-            self.monthly_consumption_multiplier
-        )
-        payload["monthly_rollover_policy"] = (
-            self.monthly_rollover_policy.value
-        )
-        payload["purchased_units_rollover_policy"] = (
-            self.purchased_units_rollover_policy.value
-        )
+        payload["monthly_consumption_multiplier"] = str(self.monthly_consumption_multiplier)
+        payload["monthly_rollover_policy"] = self.monthly_rollover_policy.value
+        payload["purchased_units_rollover_policy"] = self.purchased_units_rollover_policy.value
         payload["overage_policy"] = self.overage_policy.value
         return payload
 
@@ -224,10 +206,7 @@ def build_plan_entitlement_policies() -> tuple[PlanEntitlementPolicy, ...]:
     if catalog_codes != policy_codes:
         missing = sorted(catalog_codes - policy_codes)
         unexpected = sorted(policy_codes - catalog_codes)
-        raise ValueError(
-            "entitlement policy and catalog plans differ: "
-            f"missing={missing}, unexpected={unexpected}"
-        )
+        raise ValueError(f"entitlement policy and catalog plans differ: missing={missing}, unexpected={unexpected}")
 
     policies: list[PlanEntitlementPolicy] = []
 
@@ -242,9 +221,7 @@ def build_plan_entitlement_policies() -> tuple[PlanEntitlementPolicy, ...]:
             overage_policy,
         ) = _PLAN_OPERATIONAL_POLICY[plan.plan_code]
 
-        monthly_cap = int(
-            Decimal(plan.included_maestro_units) * multiplier
-        )
+        monthly_cap = int(Decimal(plan.included_maestro_units) * multiplier)
 
         policies.append(
             PlanEntitlementPolicy(
@@ -256,17 +233,9 @@ def build_plan_entitlement_policies() -> tuple[PlanEntitlementPolicy, ...]:
                 hourly_consumption_cap=hourly_cap,
                 per_job_unit_cap=per_job_cap,
                 guaranteed_concurrency=guaranteed_concurrency,
-                maximum_elastic_concurrency=(
-                    maximum_elastic_concurrency
-                ),
-                monthly_rollover_policy=(
-                    MonthlyRolloverPolicy
-                    .PERMANENT_WHILE_SUBSCRIPTION_ACTIVE
-                ),
-                purchased_units_rollover_policy=(
-                    PurchasedUnitsRolloverPolicy
-                    .NON_EXPIRING_USAGE_RIGHT
-                ),
+                maximum_elastic_concurrency=(maximum_elastic_concurrency),
+                monthly_rollover_policy=(MonthlyRolloverPolicy.PERMANENT_WHILE_SUBSCRIPTION_ACTIVE),
+                purchased_units_rollover_policy=(PurchasedUnitsRolloverPolicy.NON_EXPIRING_USAGE_RIGHT),
                 overage_policy=overage_policy,
             )
         )
@@ -283,21 +252,15 @@ def entitlement_policy_review_payload() -> dict[str, object]:
         "version": ENTITLEMENT_POLICY_VERSION,
         "status": ENTITLEMENT_POLICY_STATUS,
         "entitlement_runtime_enabled": ENTITLEMENT_RUNTIME_ENABLED,
-        "monthly_grant_execution_enabled": (
-            MONTHLY_GRANT_EXECUTION_ENABLED
-        ),
+        "monthly_grant_execution_enabled": (MONTHLY_GRANT_EXECUTION_ENABLED),
         "rollover_enforcement_enabled": ROLLOVER_ENFORCEMENT_ENABLED,
         "balance_mutation_enabled": BALANCE_MUTATION_ENABLED,
         "ledger_persistence_enabled": LEDGER_PERSISTENCE_ENABLED,
         "usage_reservation_enabled": USAGE_RESERVATION_ENABLED,
         "usage_commit_enabled": USAGE_COMMIT_ENABLED,
         "units_are_cash_equivalent": UNITS_ARE_CASH_EQUIVALENT,
-        "units_offset_subscription_fees": (
-            UNITS_OFFSET_SUBSCRIPTION_FEES
-        ),
-        "seat_based_enterprise_quotas": (
-            SEAT_BASED_ENTERPRISE_QUOTAS
-        ),
+        "units_offset_subscription_fees": (UNITS_OFFSET_SUBSCRIPTION_FEES),
+        "seat_based_enterprise_quotas": (SEAT_BASED_ENTERPRISE_QUOTAS),
         "maximum_balance_units": BALANCE_MAXIMUM_UNITS,
         "plans": [policy.to_dict() for policy in policies],
     }

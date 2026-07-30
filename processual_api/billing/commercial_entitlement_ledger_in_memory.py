@@ -27,9 +27,7 @@ from processual_api.billing.commercial_entitlement_ledger_persistence_contracts 
     ReservationLockRequest,
 )
 
-IN_MEMORY_ENTITLEMENT_REFERENCE_VERSION: Final = (
-    "2026-07-group2-entitlement-in-memory-v1"
-)
+IN_MEMORY_ENTITLEMENT_REFERENCE_VERSION: Final = "2026-07-group2-entitlement-in-memory-v1"
 IN_MEMORY_ENTITLEMENT_REFERENCE_STATUS: Final = "test_reference"
 
 IN_MEMORY_ENTITLEMENT_RUNTIME_ENABLED: Final = False
@@ -40,15 +38,11 @@ class InMemoryEntitlementPersistenceError(RuntimeError):
     """Base error for the in-memory reference implementation."""
 
 
-class InMemoryEntitlementVersionConflictError(
-    InMemoryEntitlementPersistenceError
-):
+class InMemoryEntitlementVersionConflictError(InMemoryEntitlementPersistenceError):
     """Raised when an append uses an outdated balance version."""
 
 
-class InMemoryEntitlementLockOwnershipError(
-    InMemoryEntitlementPersistenceError
-):
+class InMemoryEntitlementLockOwnershipError(InMemoryEntitlementPersistenceError):
     """Raised when a caller releases a lock owned by another token."""
 
 
@@ -128,9 +122,7 @@ class InMemoryEntitlementLedgerRepository:
             entry.idempotency_key,
         )
 
-        existing = self._state.entries_by_idempotency.get(
-            idempotency_identity
-        )
+        existing = self._state.entries_by_idempotency.get(idempotency_identity)
         current_version = self._state.versions.get(scope, 0)
 
         if existing is not None:
@@ -143,14 +135,11 @@ class InMemoryEntitlementLedgerRepository:
 
         if request.expected_balance_version != current_version:
             raise InMemoryEntitlementVersionConflictError(
-                "ledger append expected balance version does not match "
-                "the current version"
+                "ledger append expected balance version does not match the current version"
             )
 
         self._state.entries.setdefault(scope, []).append(entry)
-        self._state.entries_by_idempotency[
-            idempotency_identity
-        ] = entry
+        self._state.entries_by_idempotency[idempotency_identity] = entry
 
         return LedgerAppendResult(
             entry_id=entry.entry_id,
@@ -183,9 +172,7 @@ class InMemoryEntitlementLedgerRepository:
                     start_index = index + 1
                     break
 
-        return tuple(
-            entries[start_index : start_index + limit]
-        )
+        return tuple(entries[start_index : start_index + limit])
 
 
 class InMemoryEntitlementBalanceRepository:
@@ -253,9 +240,7 @@ class InMemoryEntitlementReservationRepository:
         now_provider: Callable[[], datetime] | None = None,
     ) -> None:
         self._state = state
-        self._now_provider = now_provider or (
-            lambda: datetime.now(UTC)
-        )
+        self._now_provider = now_provider or (lambda: datetime.now(UTC))
 
     async def acquire_lock(
         self,
@@ -291,8 +276,7 @@ class InMemoryEntitlementReservationRepository:
             reservation_id=request.reservation_id,
             owner_token=request.owner_token,
             acquired=True,
-            expires_at=now
-            + timedelta(seconds=request.lease_seconds),
+            expires_at=now + timedelta(seconds=request.lease_seconds),
         )
         self._state.locks[key] = lock
         return lock
@@ -312,9 +296,7 @@ class InMemoryEntitlementReservationRepository:
             return
 
         if existing.owner_token != lock.owner_token:
-            raise InMemoryEntitlementLockOwnershipError(
-                "reservation lock may be released only by its owner"
-            )
+            raise InMemoryEntitlementLockOwnershipError("reservation lock may be released only by its owner")
 
         self._state.locks.pop(key, None)
 
@@ -330,11 +312,7 @@ class InMemoryEntitlementReservationRepository:
             [],
         )
 
-        return tuple(
-            entry
-            for entry in entries
-            if entry.reservation_id == reservation_id
-        )
+        return tuple(entry for entry in entries if entry.reservation_id == reservation_id)
 
 
 class InMemoryEntitlementLedgerUnitOfWork:
@@ -350,17 +328,11 @@ class InMemoryEntitlementLedgerUnitOfWork:
         self._committed = False
         self._entered = False
 
-        self.ledger = InMemoryEntitlementLedgerRepository(
-            self._state
-        )
-        self.balances = InMemoryEntitlementBalanceRepository(
-            self._state
-        )
-        self.reservations = (
-            InMemoryEntitlementReservationRepository(
-                self._state,
-                now_provider=now_provider,
-            )
+        self.ledger = InMemoryEntitlementLedgerRepository(self._state)
+        self.balances = InMemoryEntitlementBalanceRepository(self._state)
+        self.reservations = InMemoryEntitlementReservationRepository(
+            self._state,
+            now_provider=now_provider,
         )
 
     @property
@@ -371,9 +343,7 @@ class InMemoryEntitlementLedgerUnitOfWork:
         self,
     ) -> InMemoryEntitlementLedgerUnitOfWork:
         if self._entered:
-            raise InMemoryEntitlementPersistenceError(
-                "unit of work is already entered"
-            )
+            raise InMemoryEntitlementPersistenceError("unit of work is already entered")
 
         self._entered = True
         self._committed = False
@@ -398,9 +368,7 @@ class InMemoryEntitlementLedgerUnitOfWork:
 
     async def commit(self) -> None:
         if not self._entered:
-            raise InMemoryEntitlementPersistenceError(
-                "unit of work must be entered before commit"
-            )
+            raise InMemoryEntitlementPersistenceError("unit of work must be entered before commit")
 
         self._committed = True
 
@@ -408,21 +376,11 @@ class InMemoryEntitlementLedgerUnitOfWork:
         if self._backup is None:
             return
 
-        self._state.entries = deepcopy(
-            self._backup.entries
-        )
-        self._state.entries_by_idempotency = deepcopy(
-            self._backup.entries_by_idempotency
-        )
-        self._state.snapshots = deepcopy(
-            self._backup.snapshots
-        )
-        self._state.versions = deepcopy(
-            self._backup.versions
-        )
-        self._state.locks = deepcopy(
-            self._backup.locks
-        )
+        self._state.entries = deepcopy(self._backup.entries)
+        self._state.entries_by_idempotency = deepcopy(self._backup.entries_by_idempotency)
+        self._state.snapshots = deepcopy(self._backup.snapshots)
+        self._state.versions = deepcopy(self._backup.versions)
+        self._state.locks = deepcopy(self._backup.locks)
         self._committed = False
 
 
@@ -431,9 +389,7 @@ def in_memory_entitlement_reference_payload() -> dict[str, object]:
         "version": IN_MEMORY_ENTITLEMENT_REFERENCE_VERSION,
         "status": IN_MEMORY_ENTITLEMENT_REFERENCE_STATUS,
         "runtime_enabled": IN_MEMORY_ENTITLEMENT_RUNTIME_ENABLED,
-        "production_use_allowed": (
-            IN_MEMORY_ENTITLEMENT_PRODUCTION_USE_ALLOWED
-        ),
+        "production_use_allowed": (IN_MEMORY_ENTITLEMENT_PRODUCTION_USE_ALLOWED),
         "supports_idempotency": True,
         "supports_balance_compare_and_swap": True,
         "supports_reservation_locking": True,

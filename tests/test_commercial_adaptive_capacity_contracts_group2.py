@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from processual_api.billing.commercial_adaptive_capacity_contracts import (
     ADAPTIVE_CAPACITY_ENABLED,
@@ -64,24 +64,15 @@ def test_platform_load_state_is_progressive(
     utilization: float,
     expected: PlatformLoadState,
 ) -> None:
-    assert (
-        classify_platform_load(snapshot(utilization=utilization))
-        is expected
-    )
+    assert classify_platform_load(snapshot(utilization=utilization)) is expected
 
 
 def test_emergency_running_job_limit_is_recognized() -> None:
-    assert (
-        classify_platform_load(snapshot(running_jobs=120))
-        is PlatformLoadState.EMERGENCY
-    )
+    assert classify_platform_load(snapshot(running_jobs=120)) is PlatformLoadState.EMERGENCY
 
 
 def test_emergency_hourly_unit_limit_is_recognized() -> None:
-    assert (
-        classify_platform_load(snapshot(units_per_hour=600_000))
-        is PlatformLoadState.EMERGENCY
-    )
+    assert classify_platform_load(snapshot(units_per_hour=600_000)) is PlatformLoadState.EMERGENCY
 
 
 def test_open_state_exposes_maximum_elastic_headroom() -> None:
@@ -107,9 +98,7 @@ def test_protective_state_returns_to_guaranteed_concurrency() -> None:
 
 
 def test_observe_only_decision_does_not_enforce_rejection() -> None:
-    decision = decide_adaptive_capacity(
-        snapshot(utilization=0.85)
-    )
+    decision = decide_adaptive_capacity(snapshot(utilization=0.85))
 
     assert decision.state is PlatformLoadState.PROTECTIVE
     assert decision.queue_new_work is True

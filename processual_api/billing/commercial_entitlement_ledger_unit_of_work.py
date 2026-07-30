@@ -1,4 +1,4 @@
-﻿"""SQLAlchemy unit of work for entitlement-ledger persistence."""
+"""SQLAlchemy unit of work for entitlement-ledger persistence."""
 
 from __future__ import annotations
 
@@ -34,24 +34,16 @@ class SqlAlchemyEntitlementLedgerUnitOfWork:
         self,
     ) -> SqlAlchemyEntitlementLedgerUnitOfWork:
         if self._session is not None:
-            raise RuntimeError(
-                "entitlement ledger unit of work is already active"
-            )
+            raise RuntimeError("entitlement ledger unit of work is already active")
 
         self._session = self._session_factory()
         self._committed = False
 
-        self.ledger = SqlAlchemyEntitlementLedgerRepository(
-            self._session
-        )
-        self.balances = SqlAlchemyEntitlementBalanceRepository(
-            self._session
-        )
-        self.reservations = (
-            SqlAlchemyEntitlementReservationRepository(
-                self._session,
-                now_provider=self._now_provider,
-            )
+        self.ledger = SqlAlchemyEntitlementLedgerRepository(self._session)
+        self.balances = SqlAlchemyEntitlementBalanceRepository(self._session)
+        self.reservations = SqlAlchemyEntitlementReservationRepository(
+            self._session,
+            now_provider=self._now_provider,
         )
 
         return self
@@ -88,9 +80,7 @@ class SqlAlchemyEntitlementLedgerUnitOfWork:
 
     def _require_active_session(self) -> AsyncSession:
         if self._session is None:
-            raise RuntimeError(
-                "entitlement ledger unit of work is not active"
-            )
+            raise RuntimeError("entitlement ledger unit of work is not active")
 
         return self._session
 

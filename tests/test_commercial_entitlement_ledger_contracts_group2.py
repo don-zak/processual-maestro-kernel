@@ -1,4 +1,4 @@
-﻿from datetime import UTC, datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -16,16 +16,10 @@ from processual_api.billing.commercial_entitlement_ledger_contracts import (
 )
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
-SUBSCRIPTION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
+SUBSCRIPTION_ID = UUID("22222222-2222-2222-2222-222222222222")
 ENTRY_ID = UUID("33333333-3333-3333-3333-333333333333")
-RESERVATION_ID = UUID(
-    "44444444-4444-4444-4444-444444444444"
-)
-RELATED_ENTRY_ID = UUID(
-    "55555555-5555-5555-5555-555555555555"
-)
+RESERVATION_ID = UUID("44444444-4444-4444-4444-444444444444")
+RELATED_ENTRY_ID = UUID("55555555-5555-5555-5555-555555555555")
 NOW = datetime(2026, 7, 30, 8, 30, tzinfo=UTC)
 
 
@@ -81,9 +75,7 @@ def test_monthly_and_top_up_grants_credit_balance() -> None:
 
     assert monthly.direction is LedgerDirection.CREDIT
     assert top_up.direction is LedgerDirection.CREDIT
-    assert calculate_balance_from_entries(
-        (monthly, top_up)
-    ) == 15_000
+    assert calculate_balance_from_entries((monthly, top_up)) == 15_000
 
 
 def test_reservation_does_not_reduce_balance_before_commit() -> None:
@@ -101,9 +93,7 @@ def test_reservation_does_not_reduce_balance_before_commit() -> None:
     )
 
     assert reservation.signed_units == 0
-    assert calculate_balance_from_entries(
-        (grant, reservation)
-    ) == 10_000
+    assert calculate_balance_from_entries((grant, reservation)) == 10_000
 
 
 def test_commit_debits_only_after_reservation() -> None:
@@ -120,18 +110,14 @@ def test_commit_debits_only_after_reservation() -> None:
         reservation_id=RESERVATION_ID,
     )
     commit = entry(
-        entry_id=UUID(
-            "66666666-6666-6666-6666-666666666666"
-        ),
+        entry_id=UUID("66666666-6666-6666-6666-666666666666"),
         entry_type=LedgerEntryType.USAGE_COMMIT,
         units=2_000,
         idempotency_key="commit:job-1",
         reservation_id=RESERVATION_ID,
     )
 
-    assert calculate_balance_from_entries(
-        (grant, reservation, commit)
-    ) == 8_000
+    assert calculate_balance_from_entries((grant, reservation, commit)) == 8_000
 
 
 def test_release_does_not_charge_failed_or_cancelled_work() -> None:
@@ -148,18 +134,14 @@ def test_release_does_not_charge_failed_or_cancelled_work() -> None:
         reservation_id=RESERVATION_ID,
     )
     release = entry(
-        entry_id=UUID(
-            "77777777-7777-7777-7777-777777777777"
-        ),
+        entry_id=UUID("77777777-7777-7777-7777-777777777777"),
         entry_type=LedgerEntryType.USAGE_RELEASE,
         units=2_000,
         idempotency_key="release:job-1",
         reservation_id=RESERVATION_ID,
     )
 
-    assert calculate_balance_from_entries(
-        (grant, reservation, release)
-    ) == 10_000
+    assert calculate_balance_from_entries((grant, reservation, release)) == 10_000
 
 
 def test_duplicate_idempotency_key_is_rejected() -> None:

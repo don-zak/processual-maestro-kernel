@@ -1,4 +1,4 @@
-﻿"""Atomic review-only service for entitlement reservation lifecycle.
+"""Atomic review-only service for entitlement reservation lifecycle.
 
 The service coordinates reservation locks, immutable ledger appends, balance
 compare-and-swap updates, and unit-of-work transactions. It is not wired into
@@ -26,9 +26,7 @@ from processual_api.billing.commercial_entitlement_ledger_persistence_contracts 
     ReservationLockRequest,
 )
 
-ENTITLEMENT_RESERVATION_SERVICE_VERSION: Final = (
-    "2026-07-group2-entitlement-reservation-service-v1"
-)
+ENTITLEMENT_RESERVATION_SERVICE_VERSION: Final = "2026-07-group2-entitlement-reservation-service-v1"
 ENTITLEMENT_RESERVATION_SERVICE_STATUS: Final = "draft_review"
 
 ENTITLEMENT_RESERVATION_SERVICE_ENABLED: Final = False
@@ -43,27 +41,19 @@ class EntitlementReservationServiceError(RuntimeError):
     """Base error for reservation lifecycle operations."""
 
 
-class EntitlementReservationLockUnavailableError(
-    EntitlementReservationServiceError
-):
+class EntitlementReservationLockUnavailableError(EntitlementReservationServiceError):
     """Raised when another owner currently holds the reservation lock."""
 
 
-class EntitlementInsufficientBalanceError(
-    EntitlementReservationServiceError
-):
+class EntitlementInsufficientBalanceError(EntitlementReservationServiceError):
     """Raised when requested units exceed the owned available balance."""
 
 
-class EntitlementReservationLifecycleError(
-    EntitlementReservationServiceError
-):
+class EntitlementReservationLifecycleError(EntitlementReservationServiceError):
     """Raised when the requested lifecycle transition is invalid."""
 
 
-class EntitlementBalanceConflictError(
-    EntitlementReservationServiceError
-):
+class EntitlementBalanceConflictError(EntitlementReservationServiceError):
     """Raised when the balance compare-and-swap operation fails."""
 
 
@@ -219,9 +209,7 @@ class EntitlementReservationService:
                     reservation_id=command.reservation_id,
                 )
                 if lifecycle:
-                    raise EntitlementReservationLifecycleError(
-                        "reservation already has lifecycle entries"
-                    )
+                    raise EntitlementReservationLifecycleError("reservation already has lifecycle entries")
 
                 snapshot, version = await self._load_balance(
                     unit=unit,
@@ -231,9 +219,7 @@ class EntitlementReservationService:
                 )
 
                 if snapshot.available_units < command.units:
-                    raise EntitlementInsufficientBalanceError(
-                        "requested units exceed available entitlement balance"
-                    )
+                    raise EntitlementInsufficientBalanceError("requested units exceed available entitlement balance")
 
                 entry = self._entry(
                     command=command,
@@ -251,12 +237,8 @@ class EntitlementReservationService:
                     unit=unit,
                     snapshot=snapshot,
                     expected_version=version,
-                    available_units=(
-                        snapshot.available_units - command.units
-                    ),
-                    reserved_units=(
-                        snapshot.reserved_units + command.units
-                    ),
+                    available_units=(snapshot.available_units - command.units),
+                    reserved_units=(snapshot.reserved_units + command.units),
                     committed_units=snapshot.committed_units,
                     calculated_at=command.occurred_at,
                 )
@@ -272,12 +254,8 @@ class EntitlementReservationService:
                     duplicate=append_result.duplicate,
                     previous_balance_version=version,
                     resulting_balance_version=updated,
-                    available_units=(
-                        snapshot.available_units - command.units
-                    ),
-                    reserved_units=(
-                        snapshot.reserved_units + command.units
-                    ),
+                    available_units=(snapshot.available_units - command.units),
+                    reserved_units=(snapshot.reserved_units + command.units),
                     committed_units=snapshot.committed_units,
                 )
             except BaseException:
@@ -305,8 +283,7 @@ class EntitlementReservationService:
     async def _finalize_reservation(
         self,
         *,
-        command: CommitReservationCommand
-        | ReleaseReservationCommand,
+        command: CommitReservationCommand | ReleaseReservationCommand,
         entry_type: LedgerEntryType,
     ) -> EntitlementReservationOperationResult:
         async with self._unit_of_work_factory() as unit:
@@ -352,9 +329,7 @@ class EntitlementReservationService:
                 )
 
                 if snapshot.reserved_units < command.units:
-                    raise EntitlementReservationLifecycleError(
-                        "reserved balance is lower than requested finalization"
-                    )
+                    raise EntitlementReservationLifecycleError("reserved balance is lower than requested finalization")
 
                 entry = self._entry(
                     command=command,
@@ -371,19 +346,11 @@ class EntitlementReservationService:
 
                 if entry_type is LedgerEntryType.USAGE_COMMIT:
                     available_units = snapshot.available_units
-                    reserved_units = (
-                        snapshot.reserved_units - command.units
-                    )
-                    committed_units = (
-                        snapshot.committed_units + command.units
-                    )
+                    reserved_units = snapshot.reserved_units - command.units
+                    committed_units = snapshot.committed_units + command.units
                 else:
-                    available_units = (
-                        snapshot.available_units + command.units
-                    )
-                    reserved_units = (
-                        snapshot.reserved_units - command.units
-                    )
+                    available_units = snapshot.available_units + command.units
+                    reserved_units = snapshot.reserved_units - command.units
                     committed_units = snapshot.committed_units
 
                 updated = await self._swap_balance(
@@ -436,9 +403,7 @@ class EntitlementReservationService:
         )
 
         if not lock.acquired:
-            raise EntitlementReservationLockUnavailableError(
-                "reservation lifecycle lock is held by another owner"
-            )
+            raise EntitlementReservationLockUnavailableError("reservation lifecycle lock is held by another owner")
 
         return lock
 
@@ -494,9 +459,7 @@ class EntitlementReservationService:
         )
 
         if not result.updated:
-            raise EntitlementBalanceConflictError(
-                "entitlement balance compare-and-swap conflict"
-            )
+            raise EntitlementBalanceConflictError("entitlement balance compare-and-swap conflict")
 
         return result.resulting_version
 
@@ -513,9 +476,7 @@ class EntitlementReservationService:
         )
 
         if stored is None:
-            raise EntitlementReservationLifecycleError(
-                "duplicate ledger entry has no persisted balance"
-            )
+            raise EntitlementReservationLifecycleError("duplicate ledger entry has no persisted balance")
 
         snapshot, version = stored
         await unit.reservations.release_lock(lock)
@@ -537,9 +498,7 @@ class EntitlementReservationService:
     def _entry(
         self,
         *,
-        command: ReserveUnitsCommand
-        | CommitReservationCommand
-        | ReleaseReservationCommand,
+        command: ReserveUnitsCommand | CommitReservationCommand | ReleaseReservationCommand,
         entry_type: LedgerEntryType,
         related_entry_id: UUID | None = None,
     ) -> EntitlementLedgerEntry:
@@ -563,45 +522,25 @@ class EntitlementReservationService:
         entry_type: LedgerEntryType,
         units: int,
     ) -> EntitlementLedgerEntry:
-        reservations = tuple(
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_RESERVE
-        )
-        commits = tuple(
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_COMMIT
-        )
-        releases = tuple(
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_RELEASE
-        )
+        reservations = tuple(entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_RESERVE)
+        commits = tuple(entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_COMMIT)
+        releases = tuple(entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_RELEASE)
 
         if len(reservations) != 1:
-            raise EntitlementReservationLifecycleError(
-                "reservation finalization requires one reserve entry"
-            )
+            raise EntitlementReservationLifecycleError("reservation finalization requires one reserve entry")
 
         if commits or releases:
-            raise EntitlementReservationLifecycleError(
-                "reservation is already finalized"
-            )
+            raise EntitlementReservationLifecycleError("reservation is already finalized")
 
         reservation = reservations[0]
         if reservation.units != units:
-            raise EntitlementReservationLifecycleError(
-                "finalization units must equal reserved units"
-            )
+            raise EntitlementReservationLifecycleError("finalization units must equal reserved units")
 
         if entry_type not in {
             LedgerEntryType.USAGE_COMMIT,
             LedgerEntryType.USAGE_RELEASE,
         }:
-            raise EntitlementReservationLifecycleError(
-                "unsupported reservation finalization type"
-            )
+            raise EntitlementReservationLifecycleError("unsupported reservation finalization type")
 
         return reservation
 
@@ -612,12 +551,8 @@ def entitlement_reservation_service_review_payload() -> dict[str, object]:
         "status": ENTITLEMENT_RESERVATION_SERVICE_STATUS,
         "enabled": ENTITLEMENT_RESERVATION_SERVICE_ENABLED,
         "writes_enabled": ENTITLEMENT_RESERVATION_WRITES_ENABLED,
-        "runtime_wiring_enabled": (
-            ENTITLEMENT_RESERVATION_RUNTIME_WIRING_ENABLED
-        ),
-        "commercial_enforcement_enabled": (
-            ENTITLEMENT_RESERVATION_COMMERCIAL_ENFORCEMENT_ENABLED
-        ),
+        "runtime_wiring_enabled": (ENTITLEMENT_RESERVATION_RUNTIME_WIRING_ENABLED),
+        "commercial_enforcement_enabled": (ENTITLEMENT_RESERVATION_COMMERCIAL_ENFORCEMENT_ENABLED),
         "reserve_operation_defined": True,
         "commit_operation_defined": True,
         "release_operation_defined": True,

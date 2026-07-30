@@ -1,4 +1,4 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 
 from processual_api.billing.commercial_entitlement_policy_contracts import (
     BALANCE_MAXIMUM_UNITS,
@@ -55,38 +55,22 @@ def test_all_canonical_plans_have_entitlement_policy() -> None:
 
 def test_rollover_policy_preserves_unused_and_purchased_units() -> None:
     for policy in build_plan_entitlement_policies():
-        assert (
-            policy.monthly_rollover_policy
-            is MonthlyRolloverPolicy
-            .PERMANENT_WHILE_SUBSCRIPTION_ACTIVE
-        )
-        assert (
-            policy.purchased_units_rollover_policy
-            is PurchasedUnitsRolloverPolicy.NON_EXPIRING_USAGE_RIGHT
-        )
+        assert policy.monthly_rollover_policy is MonthlyRolloverPolicy.PERMANENT_WHILE_SUBSCRIPTION_ACTIVE
+        assert policy.purchased_units_rollover_policy is PurchasedUnitsRolloverPolicy.NON_EXPIRING_USAGE_RIGHT
         assert policy.maximum_balance_units is None
 
 
 def test_consumption_caps_do_not_delete_owned_balance() -> None:
     for policy in build_plan_entitlement_policies():
-        expected_cap = int(
-            Decimal(policy.monthly_included_units)
-            * policy.monthly_consumption_multiplier
-        )
+        expected_cap = int(Decimal(policy.monthly_included_units) * policy.monthly_consumption_multiplier)
 
         assert policy.monthly_consumption_cap == expected_cap
-        assert (
-            policy.monthly_consumption_cap
-            >= policy.monthly_included_units
-        )
+        assert policy.monthly_consumption_cap >= policy.monthly_included_units
         assert policy.maximum_balance_units is None
 
 
 def test_enterprise_overage_requires_contract() -> None:
-    policies = {
-        policy.plan_code: policy
-        for policy in build_plan_entitlement_policies()
-    }
+    policies = {policy.plan_code: policy for policy in build_plan_entitlement_policies()}
 
     for code in (
         "academic",
@@ -94,10 +78,7 @@ def test_enterprise_overage_requires_contract() -> None:
         "enterprise_integration_starter",
         "business",
     ):
-        assert (
-            policies[code].overage_policy
-            is OveragePolicy.PREPAID_TOP_UP_ONLY
-        )
+        assert policies[code].overage_policy is OveragePolicy.PREPAID_TOP_UP_ONLY
 
     for code in (
         "enterprise_pilot",
@@ -105,15 +86,9 @@ def test_enterprise_overage_requires_contract() -> None:
         "enterprise_scale",
         "enterprise_strategic",
     ):
-        assert (
-            policies[code].overage_policy
-            is OveragePolicy.CONTRACTED_ENTERPRISE_OVERAGE
-        )
+        assert policies[code].overage_policy is OveragePolicy.CONTRACTED_ENTERPRISE_OVERAGE
 
 
 def test_elastic_concurrency_never_below_guaranteed() -> None:
     for policy in build_plan_entitlement_policies():
-        assert (
-            policy.maximum_elastic_concurrency
-            >= policy.guaranteed_concurrency
-        )
+        assert policy.maximum_elastic_concurrency >= policy.guaranteed_concurrency

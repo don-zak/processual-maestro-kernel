@@ -15,18 +15,10 @@ from processual_api.billing.commercial_entitlement_ledger_contracts import (
 )
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
-OTHER_TENANT_ID = UUID(
-    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-)
-SUBSCRIPTION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
-OTHER_SUBSCRIPTION_ID = UUID(
-    "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
-)
-RESERVATION_ID = UUID(
-    "33333333-3333-3333-3333-333333333333"
-)
+OTHER_TENANT_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+SUBSCRIPTION_ID = UUID("22222222-2222-2222-2222-222222222222")
+OTHER_SUBSCRIPTION_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+RESERVATION_ID = UUID("33333333-3333-3333-3333-333333333333")
 NOW = datetime(2026, 7, 30, 9, 0, tzinfo=UTC)
 
 
@@ -116,9 +108,7 @@ def test_boundaries_remain_review_only() -> None:
 
 
 def test_valid_reserve_and_commit_sequence() -> None:
-    result = validate_ledger_sequence(
-        (reserve(), commit())
-    )
+    result = validate_ledger_sequence((reserve(), commit()))
 
     assert result.valid is True
     assert result.reservation_count == 1
@@ -146,9 +136,7 @@ def test_commit_and_release_are_mutually_exclusive() -> None:
         LedgerBoundaryViolationError,
         match="both committed and released",
     ):
-        validate_ledger_sequence(
-            (reserve(), commit(), release())
-        )
+        validate_ledger_sequence((reserve(), commit(), release()))
 
 
 def test_duplicate_commit_is_rejected() -> None:
@@ -165,9 +153,7 @@ def test_duplicate_commit_is_rejected() -> None:
         LedgerBoundaryViolationError,
         match="committed more than once",
     ):
-        validate_ledger_sequence(
-            (reserve(), commit(), second_commit)
-        )
+        validate_ledger_sequence((reserve(), commit(), second_commit))
 
 
 def test_commit_must_not_exceed_reserved_units() -> None:
@@ -175,9 +161,7 @@ def test_commit_must_not_exceed_reserved_units() -> None:
         LedgerBoundaryViolationError,
         match="must not exceed reserved units",
     ):
-        validate_ledger_sequence(
-            (reserve(units=4_000), commit(units=5_000))
-        )
+        validate_ledger_sequence((reserve(units=4_000), commit(units=5_000)))
 
 
 def test_cross_tenant_commit_is_rejected() -> None:
@@ -201,9 +185,7 @@ def test_cross_subscription_commit_is_rejected() -> None:
         validate_ledger_sequence(
             (
                 reserve(),
-                commit(
-                    subscription_id=OTHER_SUBSCRIPTION_ID
-                ),
+                commit(subscription_id=OTHER_SUBSCRIPTION_ID),
             )
         )
 
@@ -216,9 +198,7 @@ def test_reversal_requires_commit() -> None:
         idempotency_key="reversal:job-1",
         source_reference="usage-job:job-1",
         reservation_id=RESERVATION_ID,
-        related_entry_id=UUID(
-            "55555555-5555-5555-5555-555555555555"
-        ),
+        related_entry_id=UUID("55555555-5555-5555-5555-555555555555"),
     )
 
     with pytest.raises(
@@ -236,18 +216,14 @@ def test_reversal_must_reference_commit() -> None:
         idempotency_key="reversal:job-1",
         source_reference="usage-job:job-1",
         reservation_id=RESERVATION_ID,
-        related_entry_id=UUID(
-            "99999999-9999-9999-9999-999999999999"
-        ),
+        related_entry_id=UUID("99999999-9999-9999-9999-999999999999"),
     )
 
     with pytest.raises(
         LedgerBoundaryViolationError,
         match="must reference its usage commit",
     ):
-        validate_ledger_sequence(
-            (reserve(), commit(), reversal)
-        )
+        validate_ledger_sequence((reserve(), commit(), reversal))
 
 
 def test_reversal_must_not_exceed_commit() -> None:
@@ -266,9 +242,7 @@ def test_reversal_must_not_exceed_commit() -> None:
         LedgerBoundaryViolationError,
         match="must not exceed committed units",
     ):
-        validate_ledger_sequence(
-            (reserve(), committed, reversal)
-        )
+        validate_ledger_sequence((reserve(), committed, reversal))
 
 
 def test_duplicate_monthly_grant_cycle_is_rejected() -> None:

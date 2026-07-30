@@ -1,4 +1,4 @@
-﻿"""Review-only persistence ports for the entitlement ledger.
+"""Review-only persistence ports for the entitlement ledger.
 
 The contracts in this module describe repository and unit-of-work boundaries.
 They do not provide SQLAlchemy models, database migrations, concrete storage,
@@ -17,9 +17,7 @@ from processual_api.billing.commercial_entitlement_ledger_contracts import (
     EntitlementLedgerEntry,
 )
 
-ENTITLEMENT_LEDGER_PERSISTENCE_VERSION: Final = (
-    "2026-07-group2-entitlement-ledger-persistence-v1"
-)
+ENTITLEMENT_LEDGER_PERSISTENCE_VERSION: Final = "2026-07-group2-entitlement-ledger-persistence-v1"
 ENTITLEMENT_LEDGER_PERSISTENCE_STATUS: Final = "draft_review"
 
 ENTITLEMENT_LEDGER_REPOSITORIES_ENABLED: Final = False
@@ -47,9 +45,7 @@ class LedgerAppendRequest:
 
     def __post_init__(self) -> None:
         if self.expected_balance_version < 0:
-            raise EntitlementPersistenceContractError(
-                "expected_balance_version must not be negative"
-            )
+            raise EntitlementPersistenceContractError("expected_balance_version must not be negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,19 +57,13 @@ class LedgerAppendResult:
 
     def __post_init__(self) -> None:
         if self.appended and self.duplicate:
-            raise EntitlementPersistenceContractError(
-                "append result cannot be appended and duplicate"
-            )
+            raise EntitlementPersistenceContractError("append result cannot be appended and duplicate")
 
         if not self.appended and not self.duplicate:
-            raise EntitlementPersistenceContractError(
-                "append result must be appended or duplicate"
-            )
+            raise EntitlementPersistenceContractError("append result must be appended or duplicate")
 
         if self.resulting_balance_version < 0:
-            raise EntitlementPersistenceContractError(
-                "resulting_balance_version must not be negative"
-            )
+            raise EntitlementPersistenceContractError("resulting_balance_version must not be negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,9 +78,7 @@ class BalanceCompareAndSwapRequest:
 
     def __post_init__(self) -> None:
         if self.expected_version < 0:
-            raise EntitlementPersistenceContractError(
-                "expected_version must not be negative"
-            )
+            raise EntitlementPersistenceContractError("expected_version must not be negative")
 
         values = (
             self.available_units,
@@ -99,14 +87,10 @@ class BalanceCompareAndSwapRequest:
         )
 
         if any(value < 0 for value in values):
-            raise EntitlementPersistenceContractError(
-                "balance values must not be negative"
-            )
+            raise EntitlementPersistenceContractError("balance values must not be negative")
 
         if self.calculated_at.tzinfo is None:
-            raise EntitlementPersistenceContractError(
-                "calculated_at must be timezone-aware"
-            )
+            raise EntitlementPersistenceContractError("calculated_at must be timezone-aware")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,24 +101,16 @@ class BalanceCompareAndSwapResult:
 
     def __post_init__(self) -> None:
         if self.previous_version < 0:
-            raise EntitlementPersistenceContractError(
-                "previous_version must not be negative"
-            )
+            raise EntitlementPersistenceContractError("previous_version must not be negative")
 
         if self.resulting_version < 0:
-            raise EntitlementPersistenceContractError(
-                "resulting_version must not be negative"
-            )
+            raise EntitlementPersistenceContractError("resulting_version must not be negative")
 
         if self.updated:
             if self.resulting_version != self.previous_version + 1:
-                raise EntitlementPersistenceContractError(
-                    "successful compare-and-swap must increment version once"
-                )
+                raise EntitlementPersistenceContractError("successful compare-and-swap must increment version once")
         elif self.resulting_version != self.previous_version:
-            raise EntitlementPersistenceContractError(
-                "failed compare-and-swap must preserve version"
-            )
+            raise EntitlementPersistenceContractError("failed compare-and-swap must preserve version")
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,14 +123,10 @@ class ReservationLockRequest:
 
     def __post_init__(self) -> None:
         if not self.owner_token.strip():
-            raise EntitlementPersistenceContractError(
-                "owner_token must not be blank"
-            )
+            raise EntitlementPersistenceContractError("owner_token must not be blank")
 
         if self.lease_seconds <= 0:
-            raise EntitlementPersistenceContractError(
-                "lease_seconds must be positive"
-            )
+            raise EntitlementPersistenceContractError("lease_seconds must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,19 +140,13 @@ class ReservationLock:
 
     def __post_init__(self) -> None:
         if not self.owner_token.strip():
-            raise EntitlementPersistenceContractError(
-                "owner_token must not be blank"
-            )
+            raise EntitlementPersistenceContractError("owner_token must not be blank")
 
         if self.acquired and self.expires_at is None:
-            raise EntitlementPersistenceContractError(
-                "acquired reservation lock requires expires_at"
-            )
+            raise EntitlementPersistenceContractError("acquired reservation lock requires expires_at")
 
         if self.expires_at is not None and self.expires_at.tzinfo is None:
-            raise EntitlementPersistenceContractError(
-                "expires_at must be timezone-aware"
-            )
+            raise EntitlementPersistenceContractError("expires_at must be timezone-aware")
 
 
 @runtime_checkable
@@ -270,22 +236,12 @@ def entitlement_ledger_persistence_review_payload() -> dict[str, object]:
     return {
         "version": ENTITLEMENT_LEDGER_PERSISTENCE_VERSION,
         "status": ENTITLEMENT_LEDGER_PERSISTENCE_STATUS,
-        "repositories_enabled": (
-            ENTITLEMENT_LEDGER_REPOSITORIES_ENABLED
-        ),
+        "repositories_enabled": (ENTITLEMENT_LEDGER_REPOSITORIES_ENABLED),
         "unit_of_work_enabled": ENTITLEMENT_LEDGER_UOW_ENABLED,
-        "database_writes_enabled": (
-            ENTITLEMENT_LEDGER_DATABASE_WRITES_ENABLED
-        ),
-        "balance_compare_and_swap_enabled": (
-            ENTITLEMENT_BALANCE_CAS_ENABLED
-        ),
-        "reservation_locking_enabled": (
-            ENTITLEMENT_RESERVATION_LOCKING_ENABLED
-        ),
-        "runtime_integration_enabled": (
-            ENTITLEMENT_LEDGER_RUNTIME_INTEGRATION_ENABLED
-        ),
+        "database_writes_enabled": (ENTITLEMENT_LEDGER_DATABASE_WRITES_ENABLED),
+        "balance_compare_and_swap_enabled": (ENTITLEMENT_BALANCE_CAS_ENABLED),
+        "reservation_locking_enabled": (ENTITLEMENT_RESERVATION_LOCKING_ENABLED),
+        "runtime_integration_enabled": (ENTITLEMENT_LEDGER_RUNTIME_INTEGRATION_ENABLED),
         "atomic_append_required": ATOMIC_APPEND_REQUIRED,
         "idempotency_lookup_required": IDEMPOTENCY_LOOKUP_REQUIRED,
         "balance_version_required": BALANCE_VERSION_REQUIRED,

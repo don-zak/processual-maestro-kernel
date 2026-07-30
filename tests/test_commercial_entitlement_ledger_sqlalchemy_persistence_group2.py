@@ -42,13 +42,9 @@ from processual_api.billing.commercial_entitlement_ledger_unit_of_work import (
 )
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
-SUBSCRIPTION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
+SUBSCRIPTION_ID = UUID("22222222-2222-2222-2222-222222222222")
 ENTRY_ID = UUID("33333333-3333-3333-3333-333333333333")
-RESERVATION_ID = UUID(
-    "44444444-4444-4444-4444-444444444444"
-)
+RESERVATION_ID = UUID("44444444-4444-4444-4444-444444444444")
 NOW = datetime(2026, 7, 30, 11, 30, tzinfo=UTC)
 
 
@@ -69,9 +65,7 @@ class FakeAsyncSession:
         rowcounts: list[int] | None = None,
     ) -> None:
         self.scalar_values = list(scalar_values or [])
-        self.scalar_collections = list(
-            scalar_collections or []
-        )
+        self.scalar_collections = list(scalar_collections or [])
         self.rowcounts = list(rowcounts or [])
         self.added: list[object] = []
         self.deleted: list[object] = []
@@ -90,15 +84,11 @@ class FakeAsyncSession:
         statement: object,
     ) -> ScalarCollection:
         self.statements.append(statement)
-        return ScalarCollection(
-            self.scalar_collections.pop(0)
-        )
+        return ScalarCollection(self.scalar_collections.pop(0))
 
     async def execute(self, statement: object) -> object:
         self.statements.append(statement)
-        return SimpleNamespace(
-            rowcount=self.rowcounts.pop(0)
-        )
+        return SimpleNamespace(rowcount=self.rowcounts.pop(0))
 
     def add(self, model: object) -> None:
         self.added.append(model)
@@ -185,9 +175,7 @@ def test_repositories_satisfy_protocols() -> None:
 @pytest.mark.asyncio
 async def test_active_uow_satisfies_protocol() -> None:
     session = FakeAsyncSession()
-    uow = SqlAlchemyEntitlementLedgerUnitOfWork(
-        lambda: session
-    )
+    uow = SqlAlchemyEntitlementLedgerUnitOfWork(lambda: session)
 
     async with uow:
         assert isinstance(
@@ -199,12 +187,8 @@ async def test_active_uow_satisfies_protocol() -> None:
 
 @pytest.mark.asyncio
 async def test_idempotency_lookup_maps_model_to_domain() -> None:
-    session = FakeAsyncSession(
-        scalar_values=[ledger_model()]
-    )
-    repository = SqlAlchemyEntitlementLedgerRepository(
-        session
-    )
+    session = FakeAsyncSession(scalar_values=[ledger_model()])
+    repository = SqlAlchemyEntitlementLedgerRepository(session)
 
     result = await repository.get_by_idempotency_key(
         tenant_id=TENANT_ID,
@@ -217,12 +201,8 @@ async def test_idempotency_lookup_maps_model_to_domain() -> None:
 
 @pytest.mark.asyncio
 async def test_append_adds_new_entry_after_version_check() -> None:
-    session = FakeAsyncSession(
-        scalar_values=[None, 0]
-    )
-    repository = SqlAlchemyEntitlementLedgerRepository(
-        session
-    )
+    session = FakeAsyncSession(scalar_values=[None, 0])
+    repository = SqlAlchemyEntitlementLedgerRepository(session)
 
     result = await repository.append(
         LedgerAppendRequest(
@@ -243,12 +223,8 @@ async def test_append_adds_new_entry_after_version_check() -> None:
 
 @pytest.mark.asyncio
 async def test_append_returns_duplicate_without_writing() -> None:
-    session = FakeAsyncSession(
-        scalar_values=[ledger_model(), 4]
-    )
-    repository = SqlAlchemyEntitlementLedgerRepository(
-        session
-    )
+    session = FakeAsyncSession(scalar_values=[ledger_model(), 4])
+    repository = SqlAlchemyEntitlementLedgerRepository(session)
 
     result = await repository.append(
         LedgerAppendRequest(
@@ -266,12 +242,8 @@ async def test_append_returns_duplicate_without_writing() -> None:
 
 @pytest.mark.asyncio
 async def test_append_rejects_version_conflict() -> None:
-    session = FakeAsyncSession(
-        scalar_values=[None, 5]
-    )
-    repository = SqlAlchemyEntitlementLedgerRepository(
-        session
-    )
+    session = FakeAsyncSession(scalar_values=[None, 5])
+    repository = SqlAlchemyEntitlementLedgerRepository(session)
 
     with pytest.raises(
         EntitlementLedgerPersistenceConflictError,
@@ -288,9 +260,7 @@ async def test_append_rejects_version_conflict() -> None:
 @pytest.mark.asyncio
 async def test_compare_and_swap_updates_matching_row() -> None:
     session = FakeAsyncSession(rowcounts=[1])
-    repository = SqlAlchemyEntitlementBalanceRepository(
-        session
-    )
+    repository = SqlAlchemyEntitlementBalanceRepository(session)
 
     result = await repository.compare_and_swap(
         BalanceCompareAndSwapRequest(
@@ -315,9 +285,7 @@ async def test_compare_and_swap_reports_mismatch() -> None:
         scalar_values=[5],
         rowcounts=[0],
     )
-    repository = SqlAlchemyEntitlementBalanceRepository(
-        session
-    )
+    repository = SqlAlchemyEntitlementBalanceRepository(session)
 
     result = await repository.compare_and_swap(
         BalanceCompareAndSwapRequest(
@@ -342,9 +310,7 @@ async def test_compare_and_swap_inserts_initial_balance() -> None:
         scalar_values=[None],
         rowcounts=[0],
     )
-    repository = SqlAlchemyEntitlementBalanceRepository(
-        session
-    )
+    repository = SqlAlchemyEntitlementBalanceRepository(session)
 
     result = await repository.compare_and_swap(
         BalanceCompareAndSwapRequest(
@@ -379,17 +345,13 @@ async def test_active_lock_blocks_other_owner() -> None:
         created_at=NOW,
         updated_at=NOW,
     )
-    session = FakeAsyncSession(
-        scalar_values=[existing]
-    )
+    session = FakeAsyncSession(scalar_values=[existing])
     repository = SqlAlchemyEntitlementReservationRepository(
         session,
         now_provider=lambda: NOW,
     )
 
-    result = await repository.acquire_lock(
-        lock_request("worker-2")
-    )
+    result = await repository.acquire_lock(lock_request("worker-2"))
 
     assert result.acquired is False
     assert session.flush_count == 0
@@ -406,17 +368,13 @@ async def test_expired_lock_is_reassigned() -> None:
         created_at=NOW - timedelta(seconds=60),
         updated_at=NOW - timedelta(seconds=60),
     )
-    session = FakeAsyncSession(
-        scalar_values=[existing]
-    )
+    session = FakeAsyncSession(scalar_values=[existing])
     repository = SqlAlchemyEntitlementReservationRepository(
         session,
         now_provider=lambda: NOW,
     )
 
-    result = await repository.acquire_lock(
-        lock_request("worker-2")
-    )
+    result = await repository.acquire_lock(lock_request("worker-2"))
 
     assert result.acquired is True
     assert existing.owner_token == "worker-2"
@@ -434,12 +392,8 @@ async def test_foreign_owner_cannot_release_lock() -> None:
         created_at=NOW,
         updated_at=NOW,
     )
-    session = FakeAsyncSession(
-        scalar_values=[existing]
-    )
-    repository = SqlAlchemyEntitlementReservationRepository(
-        session
-    )
+    session = FakeAsyncSession(scalar_values=[existing])
+    repository = SqlAlchemyEntitlementReservationRepository(session)
 
     with pytest.raises(
         EntitlementReservationLockOwnershipError,
@@ -468,12 +422,8 @@ async def test_owner_releases_lock() -> None:
         created_at=NOW,
         updated_at=NOW,
     )
-    session = FakeAsyncSession(
-        scalar_values=[existing]
-    )
-    repository = SqlAlchemyEntitlementReservationRepository(
-        session
-    )
+    session = FakeAsyncSession(scalar_values=[existing])
+    repository = SqlAlchemyEntitlementReservationRepository(session)
 
     await repository.release_lock(
         ReservationLock(
@@ -509,9 +459,7 @@ async def test_uow_commit_and_close() -> None:
 @pytest.mark.asyncio
 async def test_uow_rolls_back_without_commit() -> None:
     session = FakeAsyncSession()
-    uow = SqlAlchemyEntitlementLedgerUnitOfWork(
-        lambda: session
-    )
+    uow = SqlAlchemyEntitlementLedgerUnitOfWork(lambda: session)
 
     async with uow:
         pass
@@ -524,9 +472,7 @@ async def test_uow_rolls_back_without_commit() -> None:
 @pytest.mark.asyncio
 async def test_uow_rolls_back_on_exception() -> None:
     session = FakeAsyncSession()
-    uow = SqlAlchemyEntitlementLedgerUnitOfWork(
-        lambda: session
-    )
+    uow = SqlAlchemyEntitlementLedgerUnitOfWork(lambda: session)
 
     with pytest.raises(RuntimeError, match="forced failure"):
         async with uow:

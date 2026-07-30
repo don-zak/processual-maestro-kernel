@@ -16,9 +16,7 @@ from processual_api.billing.commercial_entitlement_ledger_contracts import (
     LedgerEntryType,
 )
 
-ENTITLEMENT_LEDGER_BOUNDARIES_VERSION: Final = (
-    "2026-07-group2-entitlement-ledger-boundaries-v1"
-)
+ENTITLEMENT_LEDGER_BOUNDARIES_VERSION: Final = "2026-07-group2-entitlement-ledger-boundaries-v1"
 ENTITLEMENT_LEDGER_BOUNDARIES_STATUS: Final = "draft_review"
 ENTITLEMENT_LEDGER_BOUNDARIES_ENFORCEMENT_ENABLED: Final = False
 
@@ -34,9 +32,7 @@ class LedgerSequenceValidation:
     reservation_count: int
     monthly_grant_count: int
     top_up_grant_count: int
-    enforcement_enabled: bool = (
-        ENTITLEMENT_LEDGER_BOUNDARIES_ENFORCEMENT_ENABLED
-    )
+    enforcement_enabled: bool = ENTITLEMENT_LEDGER_BOUNDARIES_ENFORCEMENT_ENABLED
 
 
 def _require_same_commercial_scope(
@@ -45,22 +41,16 @@ def _require_same_commercial_scope(
     second: EntitlementLedgerEntry,
 ) -> None:
     if first.tenant_id != second.tenant_id:
-        raise LedgerBoundaryViolationError(
-            "related ledger entries must use the same tenant"
-        )
+        raise LedgerBoundaryViolationError("related ledger entries must use the same tenant")
 
     if first.subscription_id != second.subscription_id:
-        raise LedgerBoundaryViolationError(
-            "related ledger entries must use the same subscription"
-        )
+        raise LedgerBoundaryViolationError("related ledger entries must use the same subscription")
 
 
 def _validate_monthly_grants(
     entries: tuple[EntitlementLedgerEntry, ...],
 ) -> int:
-    seen_cycles: set[
-        tuple[UUID, UUID, str]
-    ] = set()
+    seen_cycles: set[tuple[UUID, UUID, str]] = set()
     count = 0
 
     for entry in entries:
@@ -74,9 +64,7 @@ def _validate_monthly_grants(
         )
 
         if identity in seen_cycles:
-            raise LedgerBoundaryViolationError(
-                "duplicate monthly grant for the same billing cycle"
-            )
+            raise LedgerBoundaryViolationError("duplicate monthly grant for the same billing cycle")
 
         seen_cycles.add(identity)
         count += 1
@@ -87,9 +75,7 @@ def _validate_monthly_grants(
 def _validate_top_up_grants(
     entries: tuple[EntitlementLedgerEntry, ...],
 ) -> int:
-    seen_sources: set[
-        tuple[UUID, UUID, str]
-    ] = set()
+    seen_sources: set[tuple[UUID, UUID, str]] = set()
     count = 0
 
     for entry in entries:
@@ -103,16 +89,10 @@ def _validate_top_up_grants(
         )
 
         if identity in seen_sources:
-            raise LedgerBoundaryViolationError(
-                "duplicate top-up grant source reference"
-            )
+            raise LedgerBoundaryViolationError("duplicate top-up grant source reference")
 
-        if not entry.source_reference.startswith(
-            ("top-up-order:", "top-up-grant:")
-        ):
-            raise LedgerBoundaryViolationError(
-                "top-up grant requires an approved grant source reference"
-            )
+        if not entry.source_reference.startswith(("top-up-order:", "top-up-grant:")):
+            raise LedgerBoundaryViolationError("top-up grant requires an approved grant source reference")
 
         seen_sources.add(identity)
         count += 1
@@ -130,36 +110,16 @@ def _validate_reservation_sequences(
 
     for entry in entries:
         if entry.reservation_id is not None:
-            reservation_entries[
-                entry.reservation_id
-            ].append(entry)
+            reservation_entries[entry.reservation_id].append(entry)
 
     for reservation_id, lifecycle in reservation_entries.items():
-        reserves = [
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_RESERVE
-        ]
-        commits = [
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_COMMIT
-        ]
-        releases = [
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_RELEASE
-        ]
-        reversals = [
-            entry
-            for entry in lifecycle
-            if entry.entry_type is LedgerEntryType.USAGE_REVERSAL
-        ]
+        reserves = [entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_RESERVE]
+        commits = [entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_COMMIT]
+        releases = [entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_RELEASE]
+        reversals = [entry for entry in lifecycle if entry.entry_type is LedgerEntryType.USAGE_REVERSAL]
 
         if len(reserves) != 1:
-            raise LedgerBoundaryViolationError(
-                "reservation lifecycle requires exactly one reserve entry"
-            )
+            raise LedgerBoundaryViolationError("reservation lifecycle requires exactly one reserve entry")
 
         reserve = reserves[0]
 
@@ -170,56 +130,38 @@ def _validate_reservation_sequences(
             )
 
         if len(commits) > 1:
-            raise LedgerBoundaryViolationError(
-                "reservation must not be committed more than once"
-            )
+            raise LedgerBoundaryViolationError("reservation must not be committed more than once")
 
         if len(releases) > 1:
-            raise LedgerBoundaryViolationError(
-                "reservation must not be released more than once"
-            )
+            raise LedgerBoundaryViolationError("reservation must not be released more than once")
 
         if commits and releases:
-            raise LedgerBoundaryViolationError(
-                "reservation must not be both committed and released"
-            )
+            raise LedgerBoundaryViolationError("reservation must not be both committed and released")
 
         if reversals and not commits:
-            raise LedgerBoundaryViolationError(
-                "usage reversal requires an earlier usage commit"
-            )
+            raise LedgerBoundaryViolationError("usage reversal requires an earlier usage commit")
 
         if len(reversals) > 1:
-            raise LedgerBoundaryViolationError(
-                "usage commit must not be reversed more than once"
-            )
+            raise LedgerBoundaryViolationError("usage commit must not be reversed more than once")
 
         if commits:
             commit = commits[0]
 
             if commit.units > reserve.units:
-                raise LedgerBoundaryViolationError(
-                    "usage commit must not exceed reserved units"
-                )
+                raise LedgerBoundaryViolationError("usage commit must not exceed reserved units")
 
             for reversal in reversals:
                 if reversal.related_entry_id != commit.entry_id:
-                    raise LedgerBoundaryViolationError(
-                        "usage reversal must reference its usage commit"
-                    )
+                    raise LedgerBoundaryViolationError("usage reversal must reference its usage commit")
 
                 if reversal.units > commit.units:
-                    raise LedgerBoundaryViolationError(
-                        "usage reversal must not exceed committed units"
-                    )
+                    raise LedgerBoundaryViolationError("usage reversal must not exceed committed units")
 
         if releases:
             release = releases[0]
 
             if release.units > reserve.units:
-                raise LedgerBoundaryViolationError(
-                    "usage release must not exceed reserved units"
-                )
+                raise LedgerBoundaryViolationError("usage release must not exceed reserved units")
 
     return len(reservation_entries)
 
@@ -227,10 +169,7 @@ def _validate_reservation_sequences(
 def _validate_refund_reversals(
     entries: tuple[EntitlementLedgerEntry, ...],
 ) -> None:
-    entries_by_id = {
-        entry.entry_id: entry
-        for entry in entries
-    }
+    entries_by_id = {entry.entry_id: entry for entry in entries}
 
     for entry in entries:
         if entry.entry_type is not LedgerEntryType.REFUND_REVERSAL:
@@ -240,17 +179,13 @@ def _validate_refund_reversals(
         related = entries_by_id.get(entry.related_entry_id)
 
         if related is None:
-            raise LedgerBoundaryViolationError(
-                "refund reversal requires its related grant entry"
-            )
+            raise LedgerBoundaryViolationError("refund reversal requires its related grant entry")
 
         if related.entry_type not in {
             LedgerEntryType.MONTHLY_GRANT,
             LedgerEntryType.TOP_UP_GRANT,
         }:
-            raise LedgerBoundaryViolationError(
-                "refund reversal may reference only a grant entry"
-            )
+            raise LedgerBoundaryViolationError("refund reversal may reference only a grant entry")
 
         _require_same_commercial_scope(
             first=related,
@@ -258,9 +193,7 @@ def _validate_refund_reversals(
         )
 
         if entry.units > related.units:
-            raise LedgerBoundaryViolationError(
-                "refund reversal must not exceed granted units"
-            )
+            raise LedgerBoundaryViolationError("refund reversal must not exceed granted units")
 
 
 def _validate_admin_adjustments(
@@ -270,12 +203,8 @@ def _validate_admin_adjustments(
         if entry.entry_type is not LedgerEntryType.ADMIN_ADJUSTMENT:
             continue
 
-        if not entry.source_reference.startswith(
-            "platform-admin:"
-        ):
-            raise LedgerBoundaryViolationError(
-                "admin adjustment requires platform-admin authority reference"
-            )
+        if not entry.source_reference.startswith("platform-admin:"):
+            raise LedgerBoundaryViolationError("admin adjustment requires platform-admin authority reference")
 
 
 def validate_ledger_sequence(
@@ -288,14 +217,10 @@ def validate_ledger_sequence(
 
     for entry in entries:
         if entry.entry_id in seen_entry_ids:
-            raise LedgerBoundaryViolationError(
-                "duplicate ledger entry id"
-            )
+            raise LedgerBoundaryViolationError("duplicate ledger entry id")
 
         if entry.idempotency_key in seen_idempotency_keys:
-            raise LedgerBoundaryViolationError(
-                "duplicate ledger idempotency key"
-            )
+            raise LedgerBoundaryViolationError("duplicate ledger idempotency key")
 
         seen_entry_ids.add(entry.entry_id)
         seen_idempotency_keys.add(entry.idempotency_key)
@@ -319,9 +244,7 @@ def entitlement_ledger_boundaries_review_payload() -> dict[str, object]:
     return {
         "version": ENTITLEMENT_LEDGER_BOUNDARIES_VERSION,
         "status": ENTITLEMENT_LEDGER_BOUNDARIES_STATUS,
-        "enforcement_enabled": (
-            ENTITLEMENT_LEDGER_BOUNDARIES_ENFORCEMENT_ENABLED
-        ),
+        "enforcement_enabled": (ENTITLEMENT_LEDGER_BOUNDARIES_ENFORCEMENT_ENABLED),
         "commit_requires_reserve": True,
         "release_requires_reserve": True,
         "commit_and_release_mutually_exclusive": True,

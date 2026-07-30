@@ -1,4 +1,4 @@
-﻿"""Adaptive commercial-capacity contracts for Group 2.
+"""Adaptive commercial-capacity contracts for Group 2.
 
 The policy is review-only. It calculates load state and available elastic
 headroom but does not enforce limits, reject work, or mutate quota balances.
@@ -10,9 +10,7 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Final
 
-ADAPTIVE_CAPACITY_VERSION: Final = (
-    "2026-07-group2-adaptive-capacity-v1"
-)
+ADAPTIVE_CAPACITY_VERSION: Final = "2026-07-group2-adaptive-capacity-v1"
 ADAPTIVE_CAPACITY_STATUS: Final = "draft_review"
 
 ADAPTIVE_CAPACITY_ENABLED: Final = False
@@ -112,13 +110,9 @@ class AdaptiveCapacityDecision:
         if self.governing_load_ratio < 0:
             raise ValueError("governing_load_ratio must not be negative")
         if not 0 <= self.shared_headroom_factor <= 1:
-            raise ValueError(
-                "shared_headroom_factor must be between zero and one"
-            )
+            raise ValueError("shared_headroom_factor must be between zero and one")
         if self.enforcement_enabled:
-            raise ValueError(
-                "adaptive capacity enforcement must remain disabled"
-            )
+            raise ValueError("adaptive capacity enforcement must remain disabled")
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -164,8 +158,7 @@ def classify_platform_load(
 
     if (
         snapshot.running_jobs >= GLOBAL_RUNNING_JOBS_EMERGENCY_LIMIT
-        or snapshot.units_per_hour
-        >= GLOBAL_UNITS_PER_HOUR_EMERGENCY_LIMIT
+        or snapshot.units_per_hour >= GLOBAL_UNITS_PER_HOUR_EMERGENCY_LIMIT
         or ratio > PROTECTIVE_MAXIMUM_LOAD_RATIO
     ):
         return PlatformLoadState.EMERGENCY
@@ -201,9 +194,7 @@ def decide_adaptive_capacity(
         PlatformLoadState.EMERGENCY,
     }
 
-    accepts_new_noncritical_work = (
-        state is not PlatformLoadState.EMERGENCY
-    )
+    accepts_new_noncritical_work = state is not PlatformLoadState.EMERGENCY
 
     return AdaptiveCapacityDecision(
         state=state,
@@ -212,10 +203,7 @@ def decide_adaptive_capacity(
         accepts_new_noncritical_work=accepts_new_noncritical_work,
         queue_new_work=queue_new_work,
         enforcement_enabled=ADAPTIVE_CAPACITY_ENABLED,
-        reason=(
-            "observe-only adaptive capacity decision; "
-            "no runtime rejection authority is enabled"
-        ),
+        reason=("observe-only adaptive capacity decision; no runtime rejection authority is enabled"),
     )
 
 
@@ -230,16 +218,10 @@ def effective_concurrency_limit(
     if guaranteed_concurrency <= 0:
         raise ValueError("guaranteed_concurrency must be positive")
     if maximum_elastic_concurrency < guaranteed_concurrency:
-        raise ValueError(
-            "maximum_elastic_concurrency must be at least guaranteed"
-        )
+        raise ValueError("maximum_elastic_concurrency must be at least guaranteed")
 
-    elastic_range = (
-        maximum_elastic_concurrency - guaranteed_concurrency
-    )
-    elastic_allowance = int(
-        elastic_range * shared_headroom_factor(state)
-    )
+    elastic_range = maximum_elastic_concurrency - guaranteed_concurrency
+    elastic_allowance = int(elastic_range * shared_headroom_factor(state))
     return guaranteed_concurrency + elastic_allowance
 
 
@@ -249,15 +231,9 @@ def adaptive_capacity_review_payload() -> dict[str, object]:
         "status": ADAPTIVE_CAPACITY_STATUS,
         "enabled": ADAPTIVE_CAPACITY_ENABLED,
         "mode": ADAPTIVE_CAPACITY_MODE,
-        "soft_limit_enforcement_enabled": (
-            SOFT_LIMIT_ENFORCEMENT_ENABLED
-        ),
-        "hard_limit_enforcement_enabled": (
-            HARD_LIMIT_ENFORCEMENT_ENABLED
-        ),
-        "emergency_load_shedding_enabled": (
-            EMERGENCY_LOAD_SHEDDING_ENABLED
-        ),
+        "soft_limit_enforcement_enabled": (SOFT_LIMIT_ENFORCEMENT_ENABLED),
+        "hard_limit_enforcement_enabled": (HARD_LIMIT_ENFORCEMENT_ENABLED),
+        "emergency_load_shedding_enabled": (EMERGENCY_LOAD_SHEDDING_ENABLED),
         "running_jobs": {
             "soft": GLOBAL_RUNNING_JOBS_SOFT_LIMIT,
             "hard": GLOBAL_RUNNING_JOBS_HARD_LIMIT,

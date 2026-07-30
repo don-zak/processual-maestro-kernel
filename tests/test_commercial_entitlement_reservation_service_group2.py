@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -32,18 +32,10 @@ from processual_api.billing.commercial_entitlement_reservation_service import (
 )
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
-SUBSCRIPTION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
-RESERVATION_ID = UUID(
-    "33333333-3333-3333-3333-333333333333"
-)
-RESERVE_ENTRY_ID = UUID(
-    "44444444-4444-4444-4444-444444444444"
-)
-FINAL_ENTRY_ID = UUID(
-    "55555555-5555-5555-5555-555555555555"
-)
+SUBSCRIPTION_ID = UUID("22222222-2222-2222-2222-222222222222")
+RESERVATION_ID = UUID("33333333-3333-3333-3333-333333333333")
+RESERVE_ENTRY_ID = UUID("44444444-4444-4444-4444-444444444444")
+FINAL_ENTRY_ID = UUID("55555555-5555-5555-5555-555555555555")
 NOW = datetime(2026, 7, 30, 11, 45, tzinfo=UTC)
 
 
@@ -94,9 +86,7 @@ class FakeLedgerRepository:
             entry_id=request.entry.entry_id,
             appended=True,
             duplicate=False,
-            resulting_balance_version=(
-                request.expected_balance_version
-            ),
+            resulting_balance_version=(request.expected_balance_version),
         )
 
 
@@ -141,9 +131,7 @@ class FakeReservationRepository:
             owner_token=request.owner_token,
             acquired=self.lock_acquired,
             expires_at=(
-                NOW + timedelta(seconds=request.lease_seconds)
-                if self.lock_acquired
-                else NOW + timedelta(seconds=30)
+                NOW + timedelta(seconds=request.lease_seconds) if self.lock_acquired else NOW + timedelta(seconds=30)
             ),
         )
 
@@ -247,10 +235,7 @@ def test_service_remains_disabled() -> None:
     assert ENTITLEMENT_RESERVATION_SERVICE_ENABLED is False
     assert ENTITLEMENT_RESERVATION_WRITES_ENABLED is False
     assert ENTITLEMENT_RESERVATION_RUNTIME_WIRING_ENABLED is False
-    assert (
-        ENTITLEMENT_RESERVATION_COMMERCIAL_ENFORCEMENT_ENABLED
-        is False
-    )
+    assert ENTITLEMENT_RESERVATION_COMMERCIAL_ENFORCEMENT_ENABLED is False
     assert payload["atomic_uow_required"] is True
 
 
@@ -258,9 +243,7 @@ def test_service_remains_disabled() -> None:
 async def test_reserve_moves_available_to_reserved() -> None:
     unit = FakeUnitOfWork((snapshot(), 3))
 
-    result = await service_with(unit).reserve_units(
-        reserve_command()
-    )
+    result = await service_with(unit).reserve_units(reserve_command())
 
     request = unit.balances.requests[0]
     assert request.expected_version == 3
@@ -280,9 +263,7 @@ async def test_reserve_rejects_insufficient_balance() -> None:
         EntitlementInsufficientBalanceError,
         match="exceed available",
     ):
-        await service_with(unit).reserve_units(
-            reserve_command(units=2_000)
-        )
+        await service_with(unit).reserve_units(reserve_command(units=2_000))
 
     assert unit.rollback_count == 1
     assert unit.commit_count == 0
@@ -297,9 +278,7 @@ async def test_reserve_rejects_existing_lifecycle() -> None:
         EntitlementReservationLifecycleError,
         match="already has lifecycle",
     ):
-        await service_with(unit).reserve_units(
-            reserve_command()
-        )
+        await service_with(unit).reserve_units(reserve_command())
 
 
 @pytest.mark.asyncio
@@ -311,9 +290,7 @@ async def test_lock_contention_fails_closed() -> None:
         EntitlementReservationLockUnavailableError,
         match="another owner",
     ):
-        await service_with(unit).reserve_units(
-            reserve_command()
-        )
+        await service_with(unit).reserve_units(reserve_command())
 
 
 @pytest.mark.asyncio
@@ -329,9 +306,7 @@ async def test_commit_moves_reserved_to_committed() -> None:
     )
     unit.reservations.lifecycle = (reserve_entry(),)
 
-    result = await service_with(unit).commit_reservation(
-        commit_command()
-    )
+    result = await service_with(unit).commit_reservation(commit_command())
 
     request = unit.balances.requests[0]
     assert request.available_units == 8_000
@@ -354,9 +329,7 @@ async def test_release_restores_available_units() -> None:
     )
     unit.reservations.lifecycle = (reserve_entry(),)
 
-    result = await service_with(unit).release_reservation(
-        release_command()
-    )
+    result = await service_with(unit).release_reservation(release_command())
 
     request = unit.balances.requests[0]
     assert request.available_units == 10_000
@@ -381,9 +354,7 @@ async def test_commit_requires_reserve_entry() -> None:
         EntitlementReservationLifecycleError,
         match="requires one reserve",
     ):
-        await service_with(unit).commit_reservation(
-            commit_command()
-        )
+        await service_with(unit).commit_reservation(commit_command())
 
 
 @pytest.mark.asyncio
@@ -397,17 +368,13 @@ async def test_finalization_rejects_different_units() -> None:
             4,
         )
     )
-    unit.reservations.lifecycle = (
-        reserve_entry(units=2_000),
-    )
+    unit.reservations.lifecycle = (reserve_entry(units=2_000),)
 
     with pytest.raises(
         EntitlementReservationLifecycleError,
         match="must equal reserved",
     ):
-        await service_with(unit).commit_reservation(
-            commit_command(units=1_000)
-        )
+        await service_with(unit).commit_reservation(commit_command(units=1_000))
 
 
 @pytest.mark.asyncio
@@ -441,9 +408,7 @@ async def test_finalization_rejects_second_terminal_entry() -> None:
         EntitlementReservationLifecycleError,
         match="already finalized",
     ):
-        await service_with(unit).release_reservation(
-            release_command()
-        )
+        await service_with(unit).release_reservation(release_command())
 
 
 @pytest.mark.asyncio
@@ -455,9 +420,7 @@ async def test_balance_cas_conflict_rolls_back() -> None:
         EntitlementBalanceConflictError,
         match="compare-and-swap",
     ):
-        await service_with(unit).reserve_units(
-            reserve_command()
-        )
+        await service_with(unit).reserve_units(reserve_command())
 
     assert unit.rollback_count == 1
     assert unit.commit_count == 0
@@ -476,9 +439,7 @@ async def test_duplicate_returns_persisted_balance_without_append() -> None:
     )
     unit.ledger.duplicate = reserve_entry()
 
-    result = await service_with(unit).reserve_units(
-        reserve_command()
-    )
+    result = await service_with(unit).reserve_units(reserve_command())
 
     assert result.duplicate is True
     assert result.entry_id == RESERVE_ENTRY_ID

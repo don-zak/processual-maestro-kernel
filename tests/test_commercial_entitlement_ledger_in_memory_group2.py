@@ -1,4 +1,4 @@
-﻿from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -25,12 +25,8 @@ from processual_api.billing.commercial_entitlement_ledger_persistence_contracts 
 )
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
-SUBSCRIPTION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
-RESERVATION_ID = UUID(
-    "33333333-3333-3333-3333-333333333333"
-)
+SUBSCRIPTION_ID = UUID("22222222-2222-2222-2222-222222222222")
+RESERVATION_ID = UUID("33333333-3333-3333-3333-333333333333")
 NOW = datetime(2026, 7, 30, 10, 45, tzinfo=UTC)
 
 
@@ -153,9 +149,7 @@ async def test_append_rejects_outdated_balance_version() -> None:
     uow = InMemoryEntitlementLedgerUnitOfWork()
 
     async with uow:
-        updated = await uow.balances.compare_and_swap(
-            balance_request(expected_version=0)
-        )
+        updated = await uow.balances.compare_and_swap(balance_request(expected_version=0))
         assert updated.updated is True
 
         with pytest.raises(
@@ -165,9 +159,7 @@ async def test_append_rejects_outdated_balance_version() -> None:
             await uow.ledger.append(
                 LedgerAppendRequest(
                     entry=entry(
-                        entry_id=(
-                            "44444444-4444-4444-4444-444444444444"
-                        ),
+                        entry_id=("44444444-4444-4444-4444-444444444444"),
                         idempotency_key="monthly:stale",
                     ),
                     expected_balance_version=0,
@@ -180,9 +172,7 @@ async def test_compare_and_swap_updates_snapshot_once() -> None:
     uow = InMemoryEntitlementLedgerUnitOfWork()
 
     async with uow:
-        first = await uow.balances.compare_and_swap(
-            balance_request(expected_version=0)
-        )
+        first = await uow.balances.compare_and_swap(balance_request(expected_version=0))
         second = await uow.balances.compare_and_swap(
             balance_request(
                 expected_version=0,
@@ -205,9 +195,7 @@ async def test_committed_uow_preserves_state() -> None:
     uow = InMemoryEntitlementLedgerUnitOfWork(state)
 
     async with uow:
-        await uow.balances.compare_and_swap(
-            balance_request(expected_version=0)
-        )
+        await uow.balances.compare_and_swap(balance_request(expected_version=0))
         await uow.commit()
 
     reader = InMemoryEntitlementLedgerUnitOfWork(state)
@@ -230,9 +218,7 @@ async def test_uncommitted_uow_rolls_back() -> None:
     uow = InMemoryEntitlementLedgerUnitOfWork(state)
 
     async with uow:
-        await uow.balances.compare_and_swap(
-            balance_request(expected_version=0)
-        )
+        await uow.balances.compare_and_swap(balance_request(expected_version=0))
 
     reader = InMemoryEntitlementLedgerUnitOfWork(state)
 
@@ -255,9 +241,7 @@ async def test_exception_rolls_back_ledger_append() -> None:
             await uow.ledger.append(
                 LedgerAppendRequest(
                     entry=entry(
-                        entry_id=(
-                            "44444444-4444-4444-4444-444444444444"
-                        ),
+                        entry_id=("44444444-4444-4444-4444-444444444444"),
                         idempotency_key="monthly:rollback",
                     ),
                     expected_balance_version=0,
@@ -278,17 +262,11 @@ async def test_exception_rolls_back_ledger_append() -> None:
 
 @pytest.mark.asyncio
 async def test_active_lock_rejects_other_owner() -> None:
-    uow = InMemoryEntitlementLedgerUnitOfWork(
-        now_provider=lambda: NOW
-    )
+    uow = InMemoryEntitlementLedgerUnitOfWork(now_provider=lambda: NOW)
 
     async with uow:
-        first = await uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-1")
-        )
-        second = await uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-2")
-        )
+        first = await uow.reservations.acquire_lock(lock_request(owner_token="worker-1"))
+        second = await uow.reservations.acquire_lock(lock_request(owner_token="worker-2"))
         await uow.commit()
 
     assert first.acquired is True
@@ -298,14 +276,10 @@ async def test_active_lock_rejects_other_owner() -> None:
 
 @pytest.mark.asyncio
 async def test_same_owner_can_refresh_lock() -> None:
-    uow = InMemoryEntitlementLedgerUnitOfWork(
-        now_provider=lambda: NOW
-    )
+    uow = InMemoryEntitlementLedgerUnitOfWork(now_provider=lambda: NOW)
 
     async with uow:
-        first = await uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-1")
-        )
+        first = await uow.reservations.acquire_lock(lock_request(owner_token="worker-1"))
         refreshed = await uow.reservations.acquire_lock(
             lock_request(
                 owner_token="worker-1",
@@ -351,9 +325,7 @@ async def test_expired_lock_can_be_reacquired() -> None:
     )
 
     async with second_uow:
-        second = await second_uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-2")
-        )
+        second = await second_uow.reservations.acquire_lock(lock_request(owner_token="worker-2"))
         await second_uow.commit()
 
     assert second.acquired is True
@@ -362,14 +334,10 @@ async def test_expired_lock_can_be_reacquired() -> None:
 
 @pytest.mark.asyncio
 async def test_lock_may_be_released_only_by_owner() -> None:
-    uow = InMemoryEntitlementLedgerUnitOfWork(
-        now_provider=lambda: NOW
-    )
+    uow = InMemoryEntitlementLedgerUnitOfWork(now_provider=lambda: NOW)
 
     async with uow:
-        lock = await uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-1")
-        )
+        lock = await uow.reservations.acquire_lock(lock_request(owner_token="worker-1"))
 
         foreign_lock = ReservationLock(
             tenant_id=lock.tenant_id,
@@ -384,26 +352,18 @@ async def test_lock_may_be_released_only_by_owner() -> None:
             InMemoryEntitlementLockOwnershipError,
             match="only by its owner",
         ):
-            await uow.reservations.release_lock(
-                foreign_lock
-            )
+            await uow.reservations.release_lock(foreign_lock)
 
 
 @pytest.mark.asyncio
 async def test_owner_can_release_and_another_owner_can_acquire() -> None:
-    uow = InMemoryEntitlementLedgerUnitOfWork(
-        now_provider=lambda: NOW
-    )
+    uow = InMemoryEntitlementLedgerUnitOfWork(now_provider=lambda: NOW)
 
     async with uow:
-        first = await uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-1")
-        )
+        first = await uow.reservations.acquire_lock(lock_request(owner_token="worker-1"))
         await uow.reservations.release_lock(first)
 
-        second = await uow.reservations.acquire_lock(
-            lock_request(owner_token="worker-2")
-        )
+        second = await uow.reservations.acquire_lock(lock_request(owner_token="worker-2"))
         await uow.commit()
 
     assert second.acquired is True
@@ -427,12 +387,10 @@ async def test_reservation_repository_lists_lifecycle_entries() -> None:
                 expected_balance_version=0,
             )
         )
-        lifecycle = (
-            await uow.reservations.list_lifecycle_entries(
-                tenant_id=TENANT_ID,
-                subscription_id=SUBSCRIPTION_ID,
-                reservation_id=RESERVATION_ID,
-            )
+        lifecycle = await uow.reservations.list_lifecycle_entries(
+            tenant_id=TENANT_ID,
+            subscription_id=SUBSCRIPTION_ID,
+            reservation_id=RESERVATION_ID,
         )
         await uow.commit()
 

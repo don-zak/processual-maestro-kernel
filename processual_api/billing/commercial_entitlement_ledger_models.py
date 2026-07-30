@@ -54,10 +54,7 @@ class CommercialEntitlementLedgerEntry(Base):
             "tenant_id",
             "subscription_id",
             "idempotency_key",
-            name=(
-                "uq_commercial_entitlement_ledger_entries_"
-                "scope_idempotency"
-            ),
+            name=("uq_commercial_entitlement_ledger_entries_scope_idempotency"),
         ),
         Index(
             "ix_commercial_entitlement_ledger_entries_scope_occurred",
@@ -70,16 +67,12 @@ class CommercialEntitlementLedgerEntry(Base):
             "tenant_id",
             "subscription_id",
             "reservation_id",
-            postgresql_where=text(
-                "reservation_id IS NOT NULL"
-            ),
+            postgresql_where=text("reservation_id IS NOT NULL"),
         ),
         Index(
             "ix_commercial_entitlement_ledger_entries_related_entry",
             "related_entry_id",
-            postgresql_where=text(
-                "related_entry_id IS NOT NULL"
-            ),
+            postgresql_where=text("related_entry_id IS NOT NULL"),
         ),
     )
 
@@ -117,14 +110,8 @@ class CommercialEntitlementLedgerEntry(Base):
     related_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
-            (
-                "commercial_entitlement_ledger_entries."
-                "entry_id"
-            ),
-            name=(
-                "fk_commercial_entitlement_ledger_entries_"
-                "related_entry"
-            ),
+            ("commercial_entitlement_ledger_entries.entry_id"),
+            name=("fk_commercial_entitlement_ledger_entries_related_entry"),
             ondelete="RESTRICT",
         ),
     )
@@ -216,9 +203,7 @@ class CommercialEntitlementReservationLock(Base):
             "tenant_id",
             "subscription_id",
             "reservation_id",
-            name=(
-                "pk_commercial_entitlement_reservation_locks"
-            ),
+            name=("pk_commercial_entitlement_reservation_locks"),
         ),
         CheckConstraint(
             "length(trim(owner_token)) > 0",
@@ -264,9 +249,7 @@ class CommercialEntitlementReservationLock(Base):
     "before_update",
 )
 def _reject_ledger_entry_update(*_: object) -> None:
-    raise ValueError(
-        "commercial entitlement ledger entries are append-only"
-    )
+    raise ValueError("commercial entitlement ledger entries are append-only")
 
 
 @event.listens_for(
@@ -274,9 +257,7 @@ def _reject_ledger_entry_update(*_: object) -> None:
     "before_delete",
 )
 def _reject_ledger_entry_delete(*_: object) -> None:
-    raise ValueError(
-        "commercial entitlement ledger entries are append-only"
-    )
+    raise ValueError("commercial entitlement ledger entries are append-only")
 
 
 COMMERCIAL_ENTITLEMENT_LEDGER_MODELS = (
@@ -290,8 +271,5 @@ __all__ = [
     "COMMERCIAL_ENTITLEMENT_LEDGER_MODELS",
     "ENTITLEMENT_LEDGER_SQLALCHEMY_MODELS_ENABLED",
     "ENTITLEMENT_LEDGER_SQLALCHEMY_RUNTIME_ENABLED",
-    *[
-        model.__name__
-        for model in COMMERCIAL_ENTITLEMENT_LEDGER_MODELS
-    ],
+    *[model.__name__ for model in COMMERCIAL_ENTITLEMENT_LEDGER_MODELS],
 ]
