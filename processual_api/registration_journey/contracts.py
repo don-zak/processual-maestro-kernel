@@ -67,3 +67,15 @@ class IntentView(BaseModel):
 class ResumeView(BaseModel):
     intent: IntentView
     resume_url: str
+
+
+class IntentClaim(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_token: str = Field(min_length=32, max_length=256)
+    version: int = Field(ge=0)
+
+
+class IntentRegistrationAccepted(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_token: str = Field(min_length=32, max_length=256)
+    version: int = Field(ge=0)

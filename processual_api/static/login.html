@@ -335,6 +335,24 @@ async function doLogin() {
     sessionStorage.setItem('maestro_token', data.access_token);
     sessionStorage.setItem('maestro_role', currentRole);
     sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
+    const journeyIntent = sessionStorage.getItem('pmk.registrationJourney.intentId');
+    const journeyToken = sessionStorage.getItem('pmk.registrationJourney.sessionToken');
+    const journeyVersion = Number(sessionStorage.getItem('pmk.registrationJourney.intentVersion') || '0');
+    if (journeyIntent && journeyToken && currentRole === 'user') {
+      const claim = await fetch(`/registration/intents/${journeyIntent}/claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.access_token}`,
+        },
+        body: JSON.stringify({session_token: journeyToken, version: journeyVersion}),
+      });
+      if (claim.ok) {
+        const journey = await claim.json();
+        sessionStorage.setItem('pmk.registrationJourney.intentVersion', String(journey.version));
+        sessionStorage.setItem('pmk.registrationJourney.status', journey.state);
+      }
+    }
     localStorage.removeItem('maestro_token');
     localStorage.removeItem('maestro_role');
     window.location.href = currentRole === 'admin' ? '/admin' : '/console';

@@ -42,6 +42,7 @@
       if (!response.ok) throw new Error(`Unable to start journey (${response.status}).`);
       const intent = await response.json();
       sessionStorage.setItem("pmk.registrationJourney.intentId", intent.intent_id);
+      sessionStorage.setItem("pmk.registrationJourney.intentVersion", String(intent.version));
       const target = new URL("/register", window.location.origin);
       target.searchParams.set("plan", planId);
       target.searchParams.set("source", "plan_detail");

@@ -456,6 +456,21 @@
             throw new Error(detail);
           }
 
+          const journeyIntent = sessionStorage.getItem("pmk.registrationJourney.intentId");
+          const journeyToken = sessionStorage.getItem("pmk.registrationJourney.sessionToken");
+          const journeyVersion = Number(sessionStorage.getItem("pmk.registrationJourney.intentVersion") || "0");
+          if (journeyIntent && journeyToken) {
+            const journeyResponse = await fetch(`/registration/intents/${journeyIntent}/registration-accepted`, {
+              method: "POST",
+              headers: {"Content-Type": "application/json", Accept: "application/json"},
+              body: JSON.stringify({session_token: journeyToken, version: journeyVersion}),
+            });
+            if (journeyResponse.ok) {
+              const journey = await journeyResponse.json();
+              sessionStorage.setItem("pmk.registrationJourney.intentVersion", String(journey.version));
+              sessionStorage.setItem("pmk.registrationJourney.status", "check_email");
+            }
+          }
           form.reset();
           setMode("individual");
           success.classList.add("show");
