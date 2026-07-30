@@ -1,0 +1,23 @@
+{
+    "version":  "2026-07-group2-auth-subscription-ui-alignment-v3",
+    "generated_at_utc":  "2026-07-30T18:05:56Z",
+    "branch":  "feature/group2-entitlements-adaptive-commercial-runtime",
+    "base_commit":  "cdac7ea48f85db08206b7b2e2339e5b6c586be4e",
+    "alembic_head":  "20260730_0016",
+    "full_python_suite_passed":  true,
+    "package_status":  "qualified_fail_closed",
+    "legacy_pricing_catalog_preserved":  true,
+    "legacy_pricing_fallback_present":  true,
+    "group2_catalog_route":  "/billing/commercial-pricing-catalog",
+    "group2_catalog_is_primary_for_ui":  true,
+    "login_utf8_restored":  true,
+    "academic_plan_visible_first":  true,
+    "governed_plan_count":  8,
+    "registration_page_present":  true,
+    "password_visibility_enabled":  true,
+    "checkout_runtime_enabled":  false,
+    "provider_runtime_enabled":  false,
+    "automatic_activation_enabled":  false,
+    "quota_enforcement_enabled":  false,
+    "settlement_execution_enabled":  false
+}

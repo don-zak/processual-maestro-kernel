@@ -759,7 +759,7 @@ h1{
   async function loadPricingSurface() {
     try {
       const [catalogPayload, offerPayload] = await Promise.all([
-        loadJson("/billing/pricing-catalog"),
+        loadJson("/billing/commercial-pricing-catalog").catch(() => loadJson("/billing/pricing-catalog")),
         loadJson("/billing/offer-pricebook")
       ]);
       renderCatalog(catalogPayload);
