@@ -1,0 +1,28 @@
+{
+    "schema_version":  "2026-07-group2-package1-readiness-v1",
+    "generated_at":  "2026-07-30T14:50:53Z",
+    "branch":  "feature/group2-entitlements-adaptive-commercial-runtime",
+    "head_before_report":  "4e7a95737bfa9e81742176ef1a1b22e8747dddc1",
+    "base":  "origin/main",
+    "decision":  "ready_for_package_review",
+    "changed_file_count":  45,
+    "commit_count":  22,
+    "full_test_summary":  "3563 passed, 19 skipped, 29 warnings in 113.26s (0:01:53)",
+    "gates":  {
+                  "ruff_format":  true,
+                  "ruff_lint":  true,
+                  "alembic_single_head":  true,
+                  "focused_tests":  true,
+                  "full_tests":  true,
+                  "git_whitespace":  true,
+                  "fail_closed_flags":  true,
+                  "sensitive_boundary_scan":  true
+              },
+    "activation":  {
+                       "checkout":  false,
+                       "commercial":  false,
+                       "runtime_wiring":  false,
+                       "reconciliation_auto_repair":  false,
+                       "reconciliation_persistence":  false
+                   }
+}
