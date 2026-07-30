@@ -31,7 +31,7 @@ TOP_UP_SEAT_BASED: Final = False
 
 
 class TopUpRolloverPolicy(StrEnum):
-    EXPIRES_WITH_BILLING_CYCLE = "expires_with_billing_cycle"
+    NON_EXPIRING_USAGE_RIGHT = "non_expiring_usage_right"
     CONTRACT_DEFINED = "contract_defined"
 
 
@@ -113,13 +113,13 @@ _TOP_UP_POLICY_INPUTS: Final[
         5_000,
         1,
         4,
-        TopUpRolloverPolicy.EXPIRES_WITH_BILLING_CYCLE,
+        TopUpRolloverPolicy.NON_EXPIRING_USAGE_RIGHT,
     ),
     "starter": (
         10_000,
         1,
         8,
-        TopUpRolloverPolicy.EXPIRES_WITH_BILLING_CYCLE,
+        TopUpRolloverPolicy.NON_EXPIRING_USAGE_RIGHT,
     ),
     "enterprise_integration_starter": (
         25_000,
@@ -131,7 +131,7 @@ _TOP_UP_POLICY_INPUTS: Final[
         25_000,
         1,
         16,
-        TopUpRolloverPolicy.EXPIRES_WITH_BILLING_CYCLE,
+        TopUpRolloverPolicy.NON_EXPIRING_USAGE_RIGHT,
     ),
     "enterprise_pilot": (
         100_000,
