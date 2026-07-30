@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMwNTA4MGQiLz4=PHBhdGggZD0iTTE2IDQ2VjE4aDhsOCAxNCA4LTE0aDh2MjhoLThWMzFsLTggMTQtOC0xNHYxNXoiIGZpbGw9IiNmNWE2MjMiLz48L3N2Zz4=" />
 <title>Maestro Plans</title>
 <style>
 :root{--bg:#05080d;--card:#101722;--line:rgba(61,88,145,.45);--text:#e7edf8;--muted:#8ca0c4;--amber:#f5a623}
@@ -27,7 +28,7 @@
   function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character])); }
   function planCard(plan) {
     const id = encodeURIComponent(String(plan.plan_id || ""));
-    return `<a class="plan-card" href="/plans/${id}" data-plan-id="${escapeHtml(plan.plan_id)}"><span class="plan-card-content"><h2>${escapeHtml(plan.display_name || "Plan")}</h2><span class="plan-description">${escapeHtml(plan.description || "")}</span><span class="plan-action">Discover this plan â†’</span></span></a>`;
+    return `<a class="plan-card" href="/plans/${id}" data-plan-id="${escapeHtml(plan.plan_id)}"><span class="plan-card-content"><h2>${escapeHtml(plan.display_name || "Plan")}</h2><span class="plan-description">${escapeHtml(plan.description || "")}</span><span class="plan-action">Discover this plan &rarr;</span></span></a>`;
   }
   async function loadJson(url) { const response = await fetch(url,{headers:{"Accept":"application/json"}}); if(!response.ok) throw new Error(`${url} failed: ${response.status}`); return response.json(); }
   async function loadPricingSurface() {

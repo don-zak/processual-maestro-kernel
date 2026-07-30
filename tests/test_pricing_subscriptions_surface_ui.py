@@ -2,64 +2,55 @@ from pathlib import Path
 
 LOGIN_HTML = Path("processual_api/static/login.html")
 PRICING_HTML = Path("processual_api/static/pricing.html")
+PLAN_DETAIL_HTML = Path("processual_api/static/plan_detail.html")
 
 
-def _pricing_text() -> str:
-    return PRICING_HTML.read_text(encoding="utf-8")
-
-
-def test_pricing_surface_file_exists_and_fetches_public_catalog() -> None:
-    text = _pricing_text()
-
-    assert PRICING_HTML.exists()
-    assert "Subscription options" in text
+def test_pricing_surface_fetches_public_catalog() -> None:
+    text = PRICING_HTML.read_text(encoding="utf-8")
+    assert 'loadJson("/billing/commercial-pricing-catalog")' in text
     assert 'loadJson("/billing/pricing-catalog")' in text
     assert 'id="pricing-plan-grid"' in text
     assert "commercially_listed" in text
 
 
-def test_pricing_surface_renders_catalog_safety_metadata() -> None:
-    text = _pricing_text()
-
-    assert "Draft pricing" in text
-    assert "BYOK" in text
-    assert "provider costs are not included" in text.lower()
-    assert "Checkout" in text
-    assert "Disabled" in text
+def test_pricing_index_does_not_display_internal_runtime_statuses() -> None:
+    text = PRICING_HTML.read_text(encoding="utf-8")
+    assert "Draft pricing" not in text
+    assert "Checkout" not in text
+    assert "Disabled" not in text
+    assert "Unavailable" not in text
 
 
-def test_pricing_surface_has_request_access_but_no_checkout_link() -> None:
-    text = _pricing_text().lower()
+def test_plan_detail_discloses_byok_and_non_activation_boundaries() -> None:
+    text = PLAN_DETAIL_HTML.read_text(encoding="utf-8")
+    assert "BYOK only" in text
+    assert "AI provider usage is outside the Maestro subscription" in text
+    assert "Selection does not activate payment, subscription, quota enforcement, or entitlement grants" in text
 
-    assert 'href="/apply"' in text
-    assert "request access" in text
+
+def test_plan_surfaces_have_no_checkout_or_provider_links() -> None:
+    text = (PRICING_HTML.read_text(encoding="utf-8") + PLAN_DETAIL_HTML.read_text(encoding="utf-8")).lower()
     assert "/billing/checkout" not in text
     assert "billing/checkout" not in text
     assert "lemonsqueezy" not in text
     assert "lemon_squeezy" not in text
 
 
-def test_pricing_surface_does_not_expose_secret_markers() -> None:
-    text = _pricing_text().lower()
-
-    assert "provider_secret" not in text
-    assert "encrypted_key" not in text
-    assert "api_key" not in text
-    assert "webhook_secret" not in text
-    assert "lemonsqueezy_api_key" not in text
+def test_pricing_surfaces_do_not_expose_secret_markers() -> None:
+    text = (PRICING_HTML.read_text(encoding="utf-8") + PLAN_DETAIL_HTML.read_text(encoding="utf-8")).lower()
+    for marker in ("provider_secret", "encrypted_key", "api_key", "webhook_secret", "lemonsqueezy_api_key"):
+        assert marker not in text
 
 
 def test_login_commercial_panel_links_to_pricing_surface_without_checkout() -> None:
     text = LOGIN_HTML.read_text(encoding="utf-8").lower()
-
     assert 'href="/pricing"' in text
     assert 'aria-label="request access"' in text
     assert "/billing/checkout" not in text
-    assert "billing/checkout" not in text
+
 
 def test_login_offers_action_links_directly_to_public_pricing_page() -> None:
     text = LOGIN_HTML.read_text(encoding="utf-8")
-
     assert 'id="login-offers-registration-button"' in text
     assert 'href="/pricing"' in text
     assert 'aria-label="View subscription options and registration"' in text
