@@ -20,6 +20,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Register Group 2 subscription checkout tables before capturing Base.metadata.
+from processual_api.billing import commercial_subscription_checkout_models  # noqa: E402,F401
+
 target_metadata = Base.metadata
 
 
