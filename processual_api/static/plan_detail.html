@@ -16,7 +16,44 @@
   function planIdFromPath(){const parts=window.location.pathname.split("/").filter(Boolean);return parts.length===2&&parts[0]==="plans"?decodeURIComponent(parts[1]):"";}
   async function loadPlan(){const planId=planIdFromPath();if(!planId)throw new Error("Plan identifier is missing.");const response=await fetch(`/billing/commercial-pricing-catalog/${encodeURIComponent(planId)}`,{headers:{"Accept":"application/json"}});if(!response.ok){if(response.status===404)throw new Error("The requested plan was not found.");throw new Error(`Unable to load plan details (${response.status}).`);}return response.json();}
   function render(payload){const plan=payload.plan||{};document.title=`${plan.display_name||"Maestro"} Plan`;document.getElementById("plan-name").textContent=plan.display_name||"Plan";document.getElementById("plan-description").textContent=plan.description||"";document.getElementById("monthly-price").textContent=`$${plan.monthly_price_usd} USD`;document.getElementById("annual-price").textContent=`$${plan.annual_price_usd} USD`;document.getElementById("monthly-units").textContent=Number(plan.monthly_unit_allowance||0).toLocaleString();document.getElementById("overage-price").textContent=`$${plan.overage_price_per_1000_units_usd} USD per additional 1,000 units`;const features=Array.isArray(plan.features)?plan.features:[];document.getElementById("feature-list").innerHTML=features.map((item)=>`<li>${escapeHtml(item)}</li>`).join("");confirmButton.dataset.planId=plan.plan_id||"";loading.hidden=true;content.hidden=false;}
-  confirmButton.addEventListener("click",()=>{const planId=confirmButton.dataset.planId||"";const target=new URL("/register",window.location.origin);target.searchParams.set("plan",planId);target.searchParams.set("source","plan_detail");window.location.assign(target.toString());});
+  function journeySessionToken() {
+    const key = "pmk.registrationJourney.sessionToken";
+    let token = sessionStorage.getItem(key);
+    if (!token) {
+      token = crypto.randomUUID() + crypto.randomUUID();
+      sessionStorage.setItem(key, token);
+    }
+    return token;
+  }
+
+  confirmButton.addEventListener("click", async () => {
+    const planId = confirmButton.dataset.planId || "";
+    confirmButton.disabled = true;
+    try {
+      const response = await fetch("/registration/intents", {
+        method: "POST",
+        headers: {"Accept": "application/json", "Content-Type": "application/json"},
+        body: JSON.stringify({
+          plan_id: planId,
+          source_context: "plan_detail",
+          session_token: journeySessionToken()
+        })
+      });
+      if (!response.ok) throw new Error(`Unable to start journey (${response.status}).`);
+      const intent = await response.json();
+      sessionStorage.setItem("pmk.registrationJourney.intentId", intent.intent_id);
+      const target = new URL("/register", window.location.origin);
+      target.searchParams.set("plan", planId);
+      target.searchParams.set("source", "plan_detail");
+      target.searchParams.set("journey_intent", intent.intent_id);
+      window.location.assign(target.toString());
+    } catch (error) {
+      errorState.textContent = error.message;
+      errorState.hidden = false;
+      confirmButton.disabled = false;
+    }
+  });
+
   loadPlan().then(render).catch((error)=>{loading.hidden=true;errorState.textContent=error.message;errorState.hidden=false;});
 })();
 </script>

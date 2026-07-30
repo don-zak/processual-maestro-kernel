@@ -23,19 +23,27 @@ def test_plan_detail_uses_authoritative_single_plan_api() -> None:
     assert 'id="confirm-plan"' in text
 
 
-def test_opening_plan_detail_does_not_create_commercial_mutations() -> None:
+def test_opening_plan_detail_only_creates_registration_journey_context() -> None:
     text = DETAIL.read_text(encoding="utf-8")
-    assert 'method: "POST"' not in text
+
+    assert 'fetch("/registration/intents"' in text
+    assert 'method: "POST"' in text
     assert "/billing/checkout" not in text
-    assert "/registration/intents" not in text
     assert "/billing/payment" not in text
+    assert "/billing/webhook" not in text
+    assert "/subscriptions" not in text
+    assert "/entitlements" not in text
 
 
 def test_plan_confirmation_preserves_plan_context_for_registration() -> None:
     text = DETAIL.read_text(encoding="utf-8")
-    assert 'new URL("/register",window.location.origin)' in text
-    assert 'target.searchParams.set("plan",planId)' in text
-    assert 'target.searchParams.set("source","plan_detail")' in text
+    compact = "".join(text.split())
+
+    assert 'newURL("/register",window.location.origin)' in compact
+    assert 'target.searchParams.set("plan",planId)' in compact
+    assert 'target.searchParams.set("source","plan_detail")' in compact
+    assert 'target.searchParams.set("journey_intent",intent.intent_id)' in compact
+    assert 'sessionStorage.setItem("pmk.registrationJourney.intentId",intent.intent_id)' in compact
 
 
 def test_new_surfaces_do_not_contain_mojibake() -> None:

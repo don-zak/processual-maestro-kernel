@@ -35,8 +35,9 @@ def test_commercial_details_are_in_dedicated_plan_space() -> None:
         assert marker in source
 
 
-def test_new_surfaces_are_secret_safe_and_have_no_checkout_mutation() -> None:
+def test_new_surfaces_are_secret_safe_and_only_create_journey_context() -> None:
     source = (PRICING_HTML.read_text(encoding="utf-8") + PLAN_DETAIL_HTML.read_text(encoding="utf-8")).lower()
+
     for marker in (
         "provider_secret",
         "encrypted_key",
@@ -45,16 +46,25 @@ def test_new_surfaces_are_secret_safe_and_have_no_checkout_mutation() -> None:
         "lemonsqueezy",
         "lemon_squeezy",
         "/billing/checkout",
-        'method: "post"',
+        "/billing/payment",
+        "/billing/webhook",
+        "/subscriptions",
+        "/entitlements",
     ):
         assert marker not in source
 
+    assert 'fetch("/registration/intents"' in source
+    assert 'method: "post"' in source
 
-def test_plan_confirmation_only_preserves_registration_context() -> None:
+
+def test_plan_confirmation_creates_and_preserves_registration_context() -> None:
     source = PLAN_DETAIL_HTML.read_text(encoding="utf-8")
     compact = "".join(source.split())
 
+    assert 'fetch("/registration/intents"' in compact
+    assert 'method:"POST"' in compact
     assert 'newURL("/register",window.location.origin)' in compact
     assert 'target.searchParams.set("plan",planId)' in compact
     assert 'target.searchParams.set("source","plan_detail")' in compact
-    assert "/registration/intents" not in source
+    assert 'target.searchParams.set("journey_intent",intent.intent_id)' in compact
+    assert 'sessionStorage.setItem("pmk.registrationJourney.intentId",intent.intent_id)' in compact

@@ -192,6 +192,21 @@
   </style>
 </head>
 <body>
+<div id="selected-plan-context" role="status" hidden>
+  Continuing registration for <strong id="selected-plan-name"></strong>.
+</div>
+<script>
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const intentId = params.get("journey_intent");
+  const planId = params.get("plan");
+  if (!intentId || !planId) return;
+  sessionStorage.setItem("pmk.registrationJourney.intentId", intentId);
+  document.getElementById("selected-plan-name").textContent = planId;
+  document.getElementById("selected-plan-context").hidden = false;
+})();
+</script>
+
   <main class="page">
     <header class="topbar">
       <a class="brand" href="/login">

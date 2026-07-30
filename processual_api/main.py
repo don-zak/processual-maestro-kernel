@@ -97,6 +97,7 @@ from .middleware.request_id import RequestIDMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.subscription import SubscriptionMiddleware
 from .middleware.usage_log import UsageLogMiddleware
+from .registration_journey.router import router as registration_journey_router
 from .routers import applications, cgt, cgt_governor, discord, governance, health, reports, telemetry, workflows
 from .routers import settings as settings_router
 from .routers.institution_qualification_18 import (
@@ -158,6 +159,7 @@ app.include_router(cgt_governor.router)
 app.include_router(settings_router.router)
 app.include_router(applications.router)
 app.include_router(billing_router)
+app.include_router(registration_journey_router)
 
 # Register Stage 18 qualification routes only after the
 # complete router module has been initialized.
