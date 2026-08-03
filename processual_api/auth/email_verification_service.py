@@ -37,6 +37,13 @@ class EmailVerificationRepository(Protocol):
         invalidated_at: datetime,
     ) -> None: ...
 
+    async def mark_registration_plan_intent_verified(
+        self,
+        user_id: uuid.UUID,
+        *,
+        verified_at: datetime,
+    ) -> None: ...
+
     def add_verification_delivery(self, **values) -> None: ...
 
 
@@ -101,6 +108,10 @@ class EmailVerificationService:
             if user.status == "pending_verification":
                 user.status = "active"
                 user.email_verified_at = now
+            await unit_of_work.repository.mark_registration_plan_intent_verified(
+                user.id,
+                verified_at=now,
+            )
             await unit_of_work.commit()
         return VerificationOutcome()
 

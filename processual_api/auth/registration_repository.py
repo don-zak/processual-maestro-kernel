@@ -95,6 +95,26 @@ class SqlAlchemyRegistrationRepository:
         )
         await self._session.execute(statement)
 
+    async def mark_registration_plan_intent_verified(
+        self,
+        user_id: uuid.UUID,
+        *,
+        verified_at: datetime,
+    ) -> None:
+        statement = (
+            update(AuthRegistrationPlanIntent)
+            .where(
+                AuthRegistrationPlanIntent.user_id == user_id,
+                AuthRegistrationPlanIntent.state == "pending_verification",
+            )
+            .values(
+                state="verified",
+                verified_at=verified_at,
+                updated_at=verified_at,
+            )
+        )
+        await self._session.execute(statement)
+
     def add_verification_delivery(
         self,
         *,
