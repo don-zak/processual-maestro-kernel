@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify your Maestro email</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, system-ui, sans-serif;
+      background: #07111f;
+      color: #eef5ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top right, #17436a 0, transparent 40%),
+        #07111f;
+    }
+
+    main {
+      width: min(100%, 680px);
+      padding: clamp(24px, 5vw, 48px);
+      border: 1px solid #29425e;
+      border-radius: 24px;
+      background: rgba(10, 25, 43, .95);
+    }
+
+    h1 { margin-top: 0; }
+    p { color: #b3c4d6; line-height: 1.6; }
+
+    .state {
+      display: none;
+      margin: 24px 0;
+      padding: 18px;
+      border: 1px solid #35546f;
+      border-radius: 12px;
+      background: #0c2136;
+    }
+
+    .state[data-active="true"] { display: block; }
+
+    form {
+      display: grid;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    input,
+    button {
+      padding: 12px 14px;
+      border-radius: 10px;
+      font: inherit;
+    }
+
+    input {
+      border: 1px solid #3b5876;
+      background: #0b1b2d;
+      color: #fff;
+    }
+
+    button {
+      border: 0;
+      background: #54a8ff;
+      color: #04101d;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button:disabled { opacity: .65; cursor: wait; }
+
+    input:focus-visible,
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid #73b7ff;
+      outline-offset: 3px;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 26px;
+    }
+
+    a { color: #83c0ff; }
+
+    .notice {
+      min-height: 44px;
+      margin-top: 14px;
+      color: #d9e9f8;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p>Processual Maestro</p>
+    <h1>Email verification</h1>
+
+    <section
+      class="state"
+      data-verification-state="pending"
+      data-active="true"
+    >
+      <h2>Check your email</h2>
+      <p>Open the verification link sent to your address.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="processing"
+      data-active="false"
+    >
+      <h2>Verifying</h2>
+      <p>Your verification request is being processed.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="verified"
+      data-active="false"
+    >
+      <h2>Email processed</h2>
+      <p>You may now continue to the sign-in page.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="invalid"
+      data-active="false"
+    >
+      <h2>Invalid verification request</h2>
+      <p>The verification link could not be used.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="expired"
+      data-active="false"
+    >
+      <h2>Verification link expired</h2>
+      <p>Request another verification email below.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="already-used"
+      data-active="false"
+    >
+      <h2>Verification already processed</h2>
+      <p>Continue to sign in, or request another message if necessary.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="rate-limited"
+      data-active="false"
+    >
+      <h2>Please wait</h2>
+      <p>Too many verification attempts were received.</p>
+    </section>
+
+    <section
+      class="state"
+      data-verification-state="unavailable"
+      data-active="false"
+    >
+      <h2>Service unavailable</h2>
+      <p>Email verification is temporarily unavailable.</p>
+    </section>
+
+    <form id="verification-resend-form" novalidate>
+      <label for="verification-email">Email address</label>
+      <input
+        id="verification-email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        minlength="3"
+        maxlength="320"
+        required
+      >
+      <button id="verification-resend-button" type="submit">
+        Resend verification email
+      </button>
+    </form>
+
+    <div
+      id="verification-status"
+      class="notice"
+      role="status"
+      aria-live="polite"
+    >
+      Waiting for a verification link.
+    </div>
+
+    <nav aria-label="Verification links">
+      <a href="/login">Continue to sign in</a>
+      <a href="/pricing">View subscription options</a>
+    </nav>
+  </main>
+
+  <script src="/console/js/pages/verify-email.js"></script>
+</body>
+</html>

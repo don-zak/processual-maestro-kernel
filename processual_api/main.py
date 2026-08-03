@@ -178,6 +178,29 @@ async def pricing_page() -> FileResponse:
 if _static_dir.exists():
     app.mount("/console", StaticFiles(directory=str(_static_dir), html=True), name="console")
 
+_register_page_path = _static_dir / "register.html"
+_verify_email_page_path = _static_dir / "verify-email.html"
+
+
+@app.get("/register", response_class=HTMLResponse, include_in_schema=False)
+async def registration_page() -> HTMLResponse:
+    if not _register_page_path.exists():
+        return HTMLResponse(
+            "<h1>Registration page unavailable</h1>",
+            status_code=503,
+        )
+    return HTMLResponse(_register_page_path.read_text("utf-8"))
+
+
+@app.get("/verify-email", response_class=HTMLResponse, include_in_schema=False)
+async def email_verification_page() -> HTMLResponse:
+    if not _verify_email_page_path.exists():
+        return HTMLResponse(
+            "<h1>Email verification page unavailable</h1>",
+            status_code=503,
+        )
+    return HTMLResponse(_verify_email_page_path.read_text("utf-8"))
+
 
 _splash_path = Path(__file__).resolve().parent / "static" / "splash.html"
 _splash_html = _splash_path.read_text("utf-8") if _splash_path.exists() else "<h1>Splash page not found</h1>"
