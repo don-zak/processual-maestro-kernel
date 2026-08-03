@@ -136,9 +136,7 @@ def test_resend_rotates_token_and_outbox_in_one_commit():
     repository.latest = SimpleNamespace(created_at=now - RESEND_COOLDOWN - timedelta(seconds=1))
     unit_of_work = FakeUnitOfWork(repository)
 
-    outcome = asyncio.run(
-        _service(repository, unit_of_work, now=now).resend(" Person@Example.com ")
-    )
+    outcome = asyncio.run(_service(repository, unit_of_work, now=now).resend(" Person@Example.com "))
 
     assert outcome.accepted is True
     assert repository.invalidations == [(user.id, now)]

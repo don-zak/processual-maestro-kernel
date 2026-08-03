@@ -91,9 +91,7 @@ class EmailVerificationService:
         token_hash = self._token_digester.digest(raw_token, purpose="verify_email")
         now = self._now()
         async with self._unit_of_work_factory() as unit_of_work:
-            principals = await unit_of_work.repository.verification_principals_for_update(
-                token_hash
-            )
+            principals = await unit_of_work.repository.verification_principals_for_update(token_hash)
             if principals is None:
                 return VerificationOutcome()
             action_token, user = principals
