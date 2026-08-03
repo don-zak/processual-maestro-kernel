@@ -180,6 +180,34 @@ if _static_dir.exists():
 
 _register_page_path = _static_dir / "register.html"
 _verify_email_page_path = _static_dir / "verify-email.html"
+_plans_page_path = _static_dir / "plans.html"
+_offer_page_path = _static_dir / "offer.html"
+
+
+@app.get("/plans", response_class=HTMLResponse, include_in_schema=False)
+async def plans_page() -> HTMLResponse:
+    if not _plans_page_path.exists():
+        return HTMLResponse(
+            "<h1>Plans page unavailable</h1>",
+            status_code=503,
+        )
+    return HTMLResponse(_plans_page_path.read_text("utf-8"))
+
+
+@app.get(
+    "/offer/{plan_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def offer_page(plan_id: str) -> HTMLResponse:
+    del plan_id
+
+    if not _offer_page_path.exists():
+        return HTMLResponse(
+            "<h1>Offer page unavailable</h1>",
+            status_code=503,
+        )
+    return HTMLResponse(_offer_page_path.read_text("utf-8"))
 
 
 @app.get("/register", response_class=HTMLResponse, include_in_schema=False)

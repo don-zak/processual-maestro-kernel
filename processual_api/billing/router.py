@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from processual_api.billing.offer_pricebook import public_offer_pricebook
+from processual_api.billing.public_plan_journey import public_plan_journey_catalog
 from processual_api.billing.subscription_catalog import public_subscription_catalog
 from processual_api.billing.unit_cost_assumptions import get_unit_cost_assumptions as build_unit_cost_assumptions
 
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 # ─── Helpers ───
+
 
 def _get_api_key() -> str:
     return os.environ.get("LEMONSQUEEZY_API_KEY", "")
@@ -51,7 +53,7 @@ def _load_checkouts() -> list[dict]:
     if path.exists():
         try:
             return json.loads(path.read_text("utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             pass
     return []
 
@@ -66,7 +68,7 @@ def _load_subscriptions() -> list[dict]:
     if path.exists():
         try:
             return json.loads(path.read_text("utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             pass
     return []
 
@@ -94,6 +96,7 @@ _VARIANTS = {
 
 # ─── Endpoints ───
 
+
 @router.post("/checkout", response_model=dict)
 async def create_checkout(body: dict, current_user: dict = Depends(get_current_user)):
     """Create a Lemon Squeezy checkout session and return the URL."""
@@ -119,6 +122,7 @@ async def create_checkout(body: dict, current_user: dict = Depends(get_current_u
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=15) as client:
             payload: dict[str, Any] = {
                 "data": {
@@ -156,14 +160,16 @@ async def create_checkout(body: dict, current_user: dict = Depends(get_current_u
             checkout_id = data.get("data", {}).get("id", "")
 
             checkouts = _load_checkouts()
-            checkouts.append({
-                "id": checkout_id,
-                "user_id": user_id,
-                "url": checkout_url,
-                "variant_id": variant_id,
-                "created_at": datetime.now(UTC).isoformat(),
-                "completed": False,
-            })
+            checkouts.append(
+                {
+                    "id": checkout_id,
+                    "user_id": user_id,
+                    "url": checkout_url,
+                    "variant_id": variant_id,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "completed": False,
+                }
+            )
             _save_checkouts(checkouts)
 
             return {"url": checkout_url, "checkout_id": checkout_id}
@@ -194,6 +200,7 @@ async def customer_portal(current_user: dict = Depends(get_current_user)):
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=15) as client:
             res = await client.get(
                 f"https://api.lemonsqueezy.com/v1/customers/{customer_id}",
@@ -243,21 +250,24 @@ async def lemon_squeezy_webhook(request: Request):
         status = first_sub.get("status", "active") if first_sub else "active"
         renews_at = first_sub.get("renews_at") if first_sub else None
 
-        subs.append({
-            "id": data.get("id"),
-            "user_id": user_id,
-            "customer_id": str(customer_id) if customer_id else "",
-            "order_id": str(order_id) if order_id else "",
-            "variant_id": variant_id,
-            "status": status,
-            "created_at": attrs.get("created_at", ""),
-            "renews_at": renews_at,
-            "plan": _variant_to_plan(variant_id),
-        })
+        subs.append(
+            {
+                "id": data.get("id"),
+                "user_id": user_id,
+                "customer_id": str(customer_id) if customer_id else "",
+                "order_id": str(order_id) if order_id else "",
+                "variant_id": variant_id,
+                "status": status,
+                "created_at": attrs.get("created_at", ""),
+                "renews_at": renews_at,
+                "plan": _variant_to_plan(variant_id),
+            }
+        )
         _save_subscriptions(subs)
 
         await _discord().send_billing_alert(
-            "order_created", user_id,
+            "order_created",
+            user_id,
             {"plan": _variant_to_plan(variant_id), "status": status},
         )
 
@@ -285,7 +295,8 @@ async def lemon_squeezy_webhook(request: Request):
                 break
         _save_subscriptions(subs)
         await _discord().send_billing_alert(
-            "subscription_payment_failed", user_id,
+            "subscription_payment_failed",
+            user_id,
             {"stage": "grace", "payment_failures": str(s.get("payment_failures", 1))},
         )
 
@@ -337,12 +348,19 @@ async def get_billing_subscription(current_user: dict = Depends(get_current_user
 
 # ─── Helpers ───
 
+
 def _variant_to_plan(variant_id: str) -> str:
     mapping = {}
     for plan, vid in _VARIANTS.items():
         if vid and str(vid) == str(variant_id):
             mapping[str(vid)] = plan.replace("_yearly", "")
     return mapping.get(str(variant_id), "unknown")
+
+
+@router.get("/public-plan-journey")
+async def get_public_plan_journey() -> dict[str, object]:
+    """Return the public plan-led registration journey catalog."""
+    return public_plan_journey_catalog()
 
 
 @router.get("/pricing-catalog")
@@ -355,7 +373,6 @@ async def get_pricing_catalog() -> dict[str, object]:
 async def get_offer_pricebook() -> dict[str, object]:
     """Return the public-safe draft offer price book."""
     return public_offer_pricebook()
-
 
 
 @router.get("/unit-cost-assumptions")

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta
+    name="maestro-plan-catalog-endpoint"
+    content="/billing/public-plan-journey"
+  >
+  <title>Choose a plan · Maestro</title>
+  <meta
+    name="description"
+    content="Choose a Maestro plan to review its offer and begin registration."
+  >
+  <link rel="stylesheet" href="/console/css/public-journey.css">
+</head>
+<body>
+  <main class="journey-shell">
+    <header class="journey-header">
+      <a class="brand" href="/">Maestro</a>
+      <p class="eyebrow">Step 1 of 5</p>
+      <h1>Choose your plan</h1>
+      <p class="lede">
+        Select a plan to review the corresponding offer before creating your account.
+      </p>
+    </header>
+
+    <section
+      id="plans-grid"
+      class="plan-grid"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <p id="plans-status">Loading available plans…</p>
+    </section>
+  </main>
+
+  <script type="module" src="/console/js/pages/plans.js"></script>
+</body>
+</html>

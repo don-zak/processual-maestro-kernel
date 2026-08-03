@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta
+    name="maestro-plan-catalog-endpoint"
+    content="/billing/public-plan-journey"
+  >
+  <title>Plan offer · Maestro</title>
+  <meta
+    name="description"
+    content="Review a Maestro plan offer before registration."
+  >
+  <link rel="stylesheet" href="/console/css/public-journey.css">
+</head>
+<body>
+  <main class="journey-shell">
+    <header class="journey-header">
+      <a class="back-link" href="/plans">← Back to plans</a>
+      <p class="eyebrow">Step 2 of 5</p>
+      <h1 id="offer-title">Loading offer…</h1>
+      <p id="offer-description" class="lede"></p>
+    </header>
+
+    <section
+      id="offer-card"
+      class="offer-card"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <p id="offer-status">Loading plan details…</p>
+
+      <div id="offer-content" hidden>
+        <div class="offer-price" id="offer-price"></div>
+
+        <p class="provider-note" id="provider-note"></p>
+
+        <div class="offer-actions">
+          <a id="offer-action" class="primary-action" href="/register">
+            Continue
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/console/js/pages/offer.js"></script>
+</body>
+</html>
