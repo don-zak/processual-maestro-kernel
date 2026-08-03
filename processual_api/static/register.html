@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create a Maestro account</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, system-ui, sans-serif;
+      background: #07111f;
+      color: #eef5ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, #153b66 0, transparent 38%),
+        #07111f;
+    }
+
+    main {
+      width: min(100%, 720px);
+      padding: clamp(24px, 5vw, 48px);
+      border: 1px solid #29425e;
+      border-radius: 24px;
+      background: rgba(10, 25, 43, .94);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, .38);
+    }
+
+    h1 { margin-top: 0; font-size: clamp(2rem, 5vw, 3rem); }
+    p { color: #aec0d4; line-height: 1.6; }
+
+    fieldset {
+      margin: 24px 0;
+      padding: 0;
+      border: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .mode-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .mode-options label,
+    .terms {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 16px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #3b5876;
+      border-radius: 10px;
+      background: #0b1b2d;
+      color: #fff;
+      font: inherit;
+    }
+
+    input:focus-visible,
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid #73b7ff;
+      outline-offset: 3px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 22px;
+      padding: 13px 18px;
+      border: 0;
+      border-radius: 11px;
+      background: #54a8ff;
+      color: #04101d;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button:disabled { cursor: wait; opacity: .65; }
+
+    [hidden] { display: none !important; }
+
+    .status {
+      min-height: 48px;
+      margin-top: 20px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #0d2238;
+    }
+
+    .status[data-state="error"] {
+      border: 1px solid #d96a70;
+      color: #ffd7da;
+    }
+
+    .status[data-state="success"] {
+      border: 1px solid #4ca276;
+      color: #ccffe1;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    a { color: #83c0ff; }
+
+    .policy {
+      margin-top: 20px;
+      padding: 14px;
+      border-left: 3px solid #6a91b8;
+      background: #0b1929;
+      font-size: .92rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p>Processual Maestro</p>
+    <h1>Create your account</h1>
+    <p>
+      Registration creates an identity request. It does not activate a paid
+      subscription, entitlement, quota, or checkout.
+    </p>
+
+    <form id="registration-form" novalidate>
+      <fieldset id="registration-mode-fieldset">
+        <legend>Account type</legend>
+        <div class="mode-options">
+          <label>
+            <input type="radio" name="registration_mode" value="individual" checked>
+            Individual
+          </label>
+          <label>
+            <input type="radio" name="registration_mode" value="organization">
+            Organization
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="registration-full-name">Full name</label>
+        <input
+          id="registration-full-name"
+          name="full_name"
+          type="text"
+          autocomplete="name"
+          minlength="1"
+          maxlength="160"
+          required
+        >
+      </div>
+
+      <div class="field" id="organization-name-field" hidden>
+        <label for="registration-organization-name">Organization name</label>
+        <input
+          id="registration-organization-name"
+          name="organization_name"
+          type="text"
+          autocomplete="organization"
+          minlength="2"
+          maxlength="200"
+        >
+      </div>
+
+      <div class="field">
+        <label for="registration-email">Email address</label>
+        <input
+          id="registration-email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          minlength="3"
+          maxlength="320"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label for="registration-password">Password</label>
+        <input
+          id="registration-password"
+          name="password"
+          type="password"
+          autocomplete="new-password"
+          minlength="12"
+          maxlength="1024"
+          aria-describedby="password-requirements"
+          required
+        >
+        <small id="password-requirements">
+          Use at least <span id="password-minimum">12</span> characters.
+        </small>
+      </div>
+
+      <label class="terms">
+        <input
+          id="registration-terms"
+          name="accepted_terms"
+          type="checkbox"
+          required
+        >
+        I accept the currently published terms.
+      </label>
+
+      <input
+        id="accepted-terms-version"
+        name="accepted_terms_version"
+        type="hidden"
+        value="current"
+      >
+
+      <button id="registration-submit" type="submit">
+        Submit registration
+      </button>
+    </form>
+
+    <div
+      id="registration-status"
+      class="status"
+      data-state="idle"
+      role="status"
+      aria-live="polite"
+    >
+      Complete the form to begin.
+    </div>
+
+    <aside class="policy">
+      Prices and checkout may remain under review. Provider/API usage costs are
+      outside the Maestro subscription catalog unless explicitly stated.
+    </aside>
+
+    <nav aria-label="Registration links">
+      <a href="/login">Already registered? Sign in</a>
+      <a href="/pricing">View subscription options</a>
+    </nav>
+  </main>
+
+  <script src="/console/js/pages/register.js"></script>
+</body>
+</html>
