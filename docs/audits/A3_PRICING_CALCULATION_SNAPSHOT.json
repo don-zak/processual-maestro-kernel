@@ -1,0 +1,228 @@
+{
+  "reference_type": "maestro_pricing_calculation_snapshot",
+  "public_price_policy": {
+    "priced_through": "enterprise_pilot",
+    "post_pilot_display": "assessment_without_public_price"
+  },
+  "selected_monthly_prices_usd": {
+    "academic": "29",
+    "starter": "49",
+    "enterprise_integration_starter": "259",
+    "business": "519",
+    "enterprise_pilot": "2790",
+    "enterprise_core": "7890",
+    "enterprise_scale": "14990",
+    "enterprise_strategic": "23900"
+  },
+  "selected_overage_prices_per_1000_units_usd": {
+    "academic": "6.50",
+    "starter": "5.90",
+    "enterprise_integration_starter": "6.00",
+    "business": "6.00",
+    "enterprise_pilot": "6.50",
+    "enterprise_core": "6.20",
+    "enterprise_scale": "5.95",
+    "enterprise_strategic": "5.75"
+  },
+  "selected_pricing_proposal": {
+    "proposal_version": "2026-07-group1-selected-pricing-v1",
+    "proposal_status": "draft_review",
+    "currency": "USD",
+    "basis_scenario": "recommended",
+    "byok_only": true,
+    "provider_cost_included": false,
+    "approved_for_quota": false,
+    "approved_for_pricing": false,
+    "approved_for_invoicing": false,
+    "approved_for_checkout": false,
+    "approved_for_settlement": false,
+    "yearly_discount_percent": "15",
+    "plans": [
+      {
+        "plan_id": "academic",
+        "monthly_unit_allowance": 5000,
+        "value_band": "academic_research",
+        "calculated_monthly_cost": "9.63",
+        "calculated_minimum_monthly_price": "21.89",
+        "calculated_recommended_monthly_price": "26.86",
+        "enterprise_volume_adjustment_percent": "0",
+        "selected_monthly_price": "29",
+        "selected_yearly_price": "295.80",
+        "selected_overage_price_per_1000_units": "6.50",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "starter",
+        "monthly_unit_allowance": 10000,
+        "value_band": "standard",
+        "calculated_monthly_cost": "19.25",
+        "calculated_minimum_monthly_price": "43.28",
+        "calculated_recommended_monthly_price": "47.56",
+        "enterprise_volume_adjustment_percent": "0",
+        "selected_monthly_price": "49",
+        "selected_yearly_price": "499.80",
+        "selected_overage_price_per_1000_units": "5.90",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "enterprise_integration_starter",
+        "monthly_unit_allowance": 50000,
+        "value_band": "advanced",
+        "calculated_monthly_cost": "96.25",
+        "calculated_minimum_monthly_price": "214.40",
+        "calculated_recommended_monthly_price": "254.60",
+        "enterprise_volume_adjustment_percent": "0",
+        "selected_monthly_price": "259",
+        "selected_yearly_price": "2641.80",
+        "selected_overage_price_per_1000_units": "6.00",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "business",
+        "monthly_unit_allowance": 100000,
+        "value_band": "advanced",
+        "calculated_monthly_cost": "192.50",
+        "calculated_minimum_monthly_price": "428.30",
+        "calculated_recommended_monthly_price": "508.70",
+        "enterprise_volume_adjustment_percent": "0",
+        "selected_monthly_price": "519",
+        "selected_yearly_price": "5293.80",
+        "selected_overage_price_per_1000_units": "6.00",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "enterprise_pilot",
+        "monthly_unit_allowance": 500000,
+        "value_band": "enterprise_governed",
+        "calculated_monthly_cost": "962.50",
+        "calculated_minimum_monthly_price": "2139.50",
+        "calculated_recommended_monthly_price": "2777.00",
+        "enterprise_volume_adjustment_percent": "0",
+        "selected_monthly_price": "2790",
+        "selected_yearly_price": "28458.00",
+        "selected_overage_price_per_1000_units": "6.50",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "enterprise_core",
+        "monthly_unit_allowance": 1500000,
+        "value_band": "enterprise_governed",
+        "calculated_monthly_cost": "2887.50",
+        "calculated_minimum_monthly_price": "6417.50",
+        "calculated_recommended_monthly_price": "8330.00",
+        "enterprise_volume_adjustment_percent": "6",
+        "selected_monthly_price": "7890",
+        "selected_yearly_price": "80478.00",
+        "selected_overage_price_per_1000_units": "6.20",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "enterprise_scale",
+        "monthly_unit_allowance": 3000000,
+        "value_band": "enterprise_governed",
+        "calculated_monthly_cost": "5775.00",
+        "calculated_minimum_monthly_price": "12834.50",
+        "calculated_recommended_monthly_price": "16659.50",
+        "enterprise_volume_adjustment_percent": "10",
+        "selected_monthly_price": "14990",
+        "selected_yearly_price": "152898.00",
+        "selected_overage_price_per_1000_units": "5.95",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      },
+      {
+        "plan_id": "enterprise_strategic",
+        "monthly_unit_allowance": 5000000,
+        "value_band": "enterprise_governed",
+        "calculated_monthly_cost": "9625.00",
+        "calculated_minimum_monthly_price": "21390.50",
+        "calculated_recommended_monthly_price": "27765.50",
+        "enterprise_volume_adjustment_percent": "14",
+        "selected_monthly_price": "23900",
+        "selected_yearly_price": "243780.00",
+        "selected_overage_price_per_1000_units": "5.75",
+        "currency": "USD",
+        "pricing_status": "draft_review",
+        "approved_for_pricing": false,
+        "approved_for_checkout": false
+      }
+    ]
+  },
+  "reference_files": [
+    {
+      "path": "processual_api/billing/maestro_reference_workloads.py",
+      "exists": true,
+      "sha256": "723ce8c88242713907455507f800f093ddcc9cc8ea6426d07dc4b412860f568e"
+    },
+    {
+      "path": "processual_api/billing/maestro_calibration_contracts.py",
+      "exists": true,
+      "sha256": "1206622dfea0e8af45618730d7af8075cbb428fbbbdafc2008115cf490bc7b71"
+    },
+    {
+      "path": "processual_api/billing/maestro_shadow_measurements.py",
+      "exists": true,
+      "sha256": "f93e557596cd155670692f2e0e4568a5db75f2361b497ffef71a283b333348de"
+    },
+    {
+      "path": "processual_api/billing/unit_cost_assumptions.py",
+      "exists": true,
+      "sha256": "29c71cda91123c6d019c55687dc121f9a56ac615a69c74d8c916c80f30ecb282"
+    },
+    {
+      "path": "processual_api/billing/maestro_group1_pricing_review.py",
+      "exists": true,
+      "sha256": "25e48254e595f524920dedd308466cc2a59f4a42bc16a9128d91f78edc981a6b"
+    },
+    {
+      "path": "processual_api/billing/maestro_group1_selected_pricing.py",
+      "exists": true,
+      "sha256": "f3e3db647888d4ca23981318f0c2e005fa2759103aaae89e959cc6e39b89455c"
+    },
+    {
+      "path": "processual_api/billing/commercial_catalog_contracts.py",
+      "exists": true,
+      "sha256": "e739d0ea3a155b3b45d4d61c3c5dc629ae6bcbd26faafb70cfd26ae680ceb57c"
+    },
+    {
+      "path": "processual_api/billing/usage_pricing.py",
+      "exists": true,
+      "sha256": "b0500d14527cdd01af4b43064e46f54e82e5ac130e6eb26555da7a061caae71c"
+    },
+    {
+      "path": "processual_api/billing/commercial_quota_top_up_contracts.py",
+      "exists": true,
+      "sha256": "f6bc920289d9c7e6e3d5f2febc9ee3c1528945560ea2b498b2e7951464f2be0c"
+    },
+    {
+      "path": "processual_api/billing/offer_pricebook.py",
+      "exists": true,
+      "sha256": "3dcb8d11b2510e14aedc6a35dd7e6076c4232843d98e6a71336a0ea9c69dacfd"
+    },
+    {
+      "path": "processual_api/billing/subscription_catalog.py",
+      "exists": true,
+      "sha256": "4d01c98da61c923c39d303c4ca7e0b7b368fdf437a63b4c49fb169c46f16ca6c"
+    }
+  ]
+}
