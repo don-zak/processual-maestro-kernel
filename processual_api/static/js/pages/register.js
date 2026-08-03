@@ -19,6 +19,12 @@
     return selected ? selected.value : "individual";
   }
 
+  function selectedPlanId() {
+    const value = new URLSearchParams(window.location.search).get("plan_id");
+    const normalized = String(value || "").trim();
+    return normalized || null;
+  }
+
   function setStatus(message, state) {
     status.textContent = message;
     status.dataset.state = state;
@@ -86,6 +92,11 @@
       payload.organization_name = String(
         formData.get("organization_name") || "",
       ).trim();
+    }
+
+    const planId = selectedPlanId();
+    if (planId) {
+      payload.selected_plan_id = planId;
     }
 
     return payload;

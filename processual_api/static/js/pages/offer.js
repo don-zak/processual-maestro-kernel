@@ -44,10 +44,10 @@ function renderOffer(plan, payload) {
     ? ""
     : "Provider and API usage costs are not included.";
 
-  if (plan.requires_assessment) {
+  if (plan.requires_assessment || !plan.registration_available) {
     price.textContent = "Pricing after assessment";
     action.textContent = "Request assessment";
-    action.href = `/register?plan=${encodeURIComponent(
+    action.href = `/apply?plan_id=${encodeURIComponent(
       plan.plan_id,
     )}&journey=assessment`;
   } else {
@@ -59,7 +59,7 @@ function renderOffer(plan, payload) {
 
     price.textContent = `${formatted} / month`;
     action.textContent = "Start registration";
-    action.href = `/register?plan=${encodeURIComponent(plan.plan_id)}`;
+    action.href = `/register?plan_id=${encodeURIComponent(plan.plan_id)}`;
   }
 
   status.hidden = true;
