@@ -70,6 +70,28 @@ def _public_price(plan_id: str) -> Decimal | None:
     return SELECTED_MONTHLY_PRICES[plan_id]
 
 
+def resolve_direct_registration_plan(plan_id: str | None) -> str | None:
+    """Resolve a server-owned public plan for direct registration.
+
+    Missing plans preserve the legacy registration journey. Unknown plans and
+    assessment-only plans fail closed. Client-supplied prices are never used.
+    """
+    if plan_id is None:
+        return None
+
+    normalized = plan_id.strip().lower()
+    if not normalized:
+        return None
+
+    if normalized not in PUBLIC_PLAN_ORDER:
+        raise ValueError("Plan is not available for direct registration.")
+
+    if _public_price(normalized) is None:
+        raise ValueError("Plan requires a commercial assessment.")
+
+    return normalized
+
+
 def public_plan_journey_catalog() -> dict[str, Any]:
     _validate_catalog_configuration()
 
@@ -108,4 +130,5 @@ __all__ = [
     "PUBLIC_PLAN_ORDER",
     "PUBLIC_PRICE_CEILING_PLAN",
     "public_plan_journey_catalog",
+    "resolve_direct_registration_plan",
 ]

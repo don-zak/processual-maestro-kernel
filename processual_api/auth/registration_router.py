@@ -184,6 +184,7 @@ async def _register(
                 display_name=payload.full_name,
                 password=payload.password,
                 accepted_terms_version=payload.accepted_terms_version,
+                selected_plan_id=payload.selected_plan_id,
                 organization_name=organization_name,
             )
         )

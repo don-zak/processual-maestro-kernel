@@ -73,6 +73,7 @@ class IndividualRegistrationRequestContract(_StrictContractModel):
     full_name: str = Field(min_length=1, max_length=160)
     password: str = Field(min_length=12, max_length=1024)
     accepted_terms_version: str = Field(min_length=1, max_length=64)
+    selected_plan_id: str | None = Field(default=None, min_length=1, max_length=80)
 
 
 class OrganizationRegistrationRequestContract(IndividualRegistrationRequestContract):

@@ -17,6 +17,7 @@ from processual_api.auth.passwords import PasswordService
 from processual_api.auth.registration_contracts import RegistrationMode
 from processual_api.auth.registration_repository import RegistrationConflictError
 from processual_api.auth.token_material import TokenDigester
+from processual_api.billing.public_plan_journey import resolve_direct_registration_plan
 
 EMAIL_VERIFICATION_TTL = timedelta(hours=24)
 GENERIC_REGISTRATION_STATUS = "accepted"
@@ -48,6 +49,7 @@ class RegistrationCommand:
     display_name: str
     password: str
     accepted_terms_version: str
+    selected_plan_id: str | None = None
     organization_name: str | None = None
 
 
@@ -88,6 +90,7 @@ class RegistrationService:
         terms_version = command.accepted_terms_version.strip()
         if not terms_version or len(terms_version) > 64:
             raise ValueError("accepted_terms_version is invalid.")
+        resolve_direct_registration_plan(command.selected_plan_id)
         organization_name = None
         slug = None
         organization_id = None
