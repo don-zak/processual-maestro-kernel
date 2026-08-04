@@ -17,9 +17,19 @@ class AdminMarketplaceAuditSafetyError(AdminMarketplaceError):
     """Raised when audit metadata contains prohibited sensitive material."""
 
 
+class PaymentDestinationNotFoundError(AdminMarketplaceError):
+    """Raised when a payment destination does not exist."""
+
+
+class PaymentDestinationConflictError(AdminMarketplaceError):
+    """Raised when a payment-destination transition conflicts with stored state."""
+
+
 __all__ = [
     "AdminMarketplaceAuditSafetyError",
     "AdminMarketplaceAuthorityDeniedError",
     "AdminMarketplaceError",
     "AdminMarketplaceStepUpRequiredError",
+    "PaymentDestinationConflictError",
+    "PaymentDestinationNotFoundError",
 ]

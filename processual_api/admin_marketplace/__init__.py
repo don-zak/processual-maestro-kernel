@@ -44,9 +44,15 @@ from processual_api.admin_marketplace.errors import (
     AdminMarketplaceAuthorityDeniedError,
     AdminMarketplaceError,
     AdminMarketplaceStepUpRequiredError,
+    PaymentDestinationConflictError,
+    PaymentDestinationNotFoundError,
 )
 from processual_api.admin_marketplace.identity_authority import (
     AdminMarketplaceIdentityAuthorityResolver,
+)
+from processual_api.admin_marketplace.payment_destination_service import (
+    PaymentDestinationAdministrationResult,
+    PaymentDestinationAdministrationService,
 )
 
 __all__ = [name for name in globals() if not name.startswith("_")]
