@@ -211,6 +211,7 @@
   }
 </style>
 <link rel="stylesheet" href="/console/css/admin_ui_hardening_13c.css?v=adminui13c-13eh3r2toggle">
+<link rel="stylesheet" href="/console/css/admin_marketplace.css?v=a3-phase7b-1">
   <link rel="stylesheet" href="/console/css/admin_operator_pilot_handoff.css?v=operatorhandoff14eprogress">
   <link rel="stylesheet" href="/console/css/admin_operator_pilot_handoff_17c.css?v=pilothandoff17cr1r5">
 </head>
@@ -227,6 +228,7 @@
     </div>
     <div id="nav">
       <button class="nav-btn active" data-admin-page="home" type="button"><span class="nav-ind"></span><span class="nav-ico">A</span><span>Admin Home</span></button>
+      <button id="admin-marketplace-nav" class="nav-btn" data-admin-page="admin-marketplace" type="button" hidden><span class="nav-ind"></span><span class="nav-ico">M</span><span>Admin Market</span></button>
       <button class="nav-btn" data-admin-page="adapters" type="button"><span class="nav-ind"></span><span class="nav-ico">P</span><span>Adapters</span></button>
       <button class="nav-btn" data-admin-page="api-keys" type="button"><span class="nav-ind"></span><span class="nav-ico">K</span><span>API Keys</span></button>
       <button class="nav-btn" data-admin-page="operator-pilot-handoff" type="button"><span class="nav-ind"></span><span class="nav-ico">O</span><span>Pilot Handoff</span></button>
@@ -314,6 +316,93 @@
           <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Loading supervisor overview...</div>
         </div>
 </section>
+</div>
+<!-- ===== ADMIN PAGE: Admin Marketplace ===== -->
+<div id="page-admin-marketplace" class="admin-page" aria-labelledby="admin-marketplace-title">
+  <header class="am-topbar">
+    <div>
+      <div class="am-eyebrow">Maestro Direct · Tunisia</div>
+      <h1 id="admin-marketplace-title">Admin Market</h1>
+      <p>Commercial operations, Tunisian payment destinations, subscriptions, and exception oversight.</p>
+    </div>
+    <div class="am-market-state" id="admin-marketplace-authority-state" role="status">Verifying platform authority…</div>
+  </header>
+
+  <nav class="am-section-nav" aria-label="Admin Market sections">
+    <button type="button" class="active" data-am-section="overview">Overview</button>
+    <button type="button" data-am-section="catalog">Catalog / Offers</button>
+    <button type="button" data-am-section="payment-destinations">Payment Destinations</button>
+    <button type="button" data-am-section="orders">Orders</button>
+    <button type="button" data-am-section="contracts">Contracts</button>
+    <button type="button" data-am-section="payments">Payments</button>
+    <button type="button" data-am-section="reconciliation">Reconciliation &amp; Exceptions</button>
+    <button type="button" data-am-section="subscriptions">Subscriptions &amp; Activations</button>
+    <button type="button" data-am-section="audit">Audit Log</button>
+  </nav>
+
+  <section class="am-section active" data-am-panel="overview">
+    <div class="am-hero-card">
+      <div>
+        <span class="am-kicker">Operational foundation</span>
+        <h2>Tunisian direct commerce, controlled from one workspace.</h2>
+        <p>The shell is complete. Payment destinations are live; later sections stay honest and empty until their domain APIs are ready.</p>
+      </div>
+      <button class="btn accent" type="button" data-am-open="payment-destinations">Manage payment destinations</button>
+    </div>
+    <div class="am-kpis" aria-label="Admin Market overview">
+      <article><span>Destinations</span><strong id="am-kpi-destination-count">—</strong><small>Configured</small></article>
+      <article><span>Active</span><strong id="am-kpi-active-count">—</strong><small>Ready to receive</small></article>
+      <article><span>Default</span><strong id="am-kpi-default-count">—</strong><small>Exactly one required</small></article>
+      <article><span>Channel</span><strong>TN · TND</strong><small>maestro_direct</small></article>
+    </div>
+    <div class="am-readiness-grid">
+      <article class="am-card"><span class="am-status live">Live</span><h3>Payment Destinations</h3><p>Secure API, masked identifiers, MFA-gated lifecycle, and retry-safe creation.</p></article>
+      <article class="am-card"><span class="am-status planned">Next</span><h3>Tunisia Payment Choice</h3><p>Server-side eligibility for verified Tunisian customer addresses.</p></article>
+      <article class="am-card"><span class="am-status planned">Planned</span><h3>Orders to Activation</h3><p>Order, contract, payment verification, subscription, and entitlements.</p></article>
+    </div>
+  </section>
+
+  <section class="am-section" data-am-panel="payment-destinations">
+    <div class="am-section-heading">
+      <div><span class="am-kicker">Secure receiving accounts</span><h2>Payment Destinations</h2><p>Only masked identifiers leave the API. Activation and default selection remain separate actions.</p></div>
+      <button id="am-refresh-destinations" class="btn secondary" type="button">Refresh</button>
+    </div>
+    <div id="am-payment-notice" class="am-notice" role="status" aria-live="polite" hidden></div>
+    <div class="am-payment-layout">
+      <form id="am-payment-destination-form" class="am-card am-destination-form" autocomplete="off">
+        <div class="am-card-heading"><div><span class="am-kicker">Tunisia · TND</span><h3>Add payment destination</h3></div><span class="am-lock">Encrypted</span></div>
+        <label>Reference<input id="am-destination-ref" name="destination_ref" maxlength="128" required placeholder="tunisia-primary-bank" pattern="[A-Za-z0-9._-]+"></label>
+        <label>Display name<input id="am-display-name" name="display_name" minlength="2" maxlength="120" required placeholder="Primary Tunisian account"></label>
+        <div class="am-form-grid">
+          <label>Destination type<select id="am-destination-type" name="destination_type" required><option value="bank_account">Bank account</option><option value="postal_account">Postal account</option></select></label>
+          <label>Institution<input id="am-institution-name" name="institution_name" maxlength="160" required placeholder="Institution name"></label>
+        </div>
+        <label>Account holder<input id="am-account-holder-name" name="account_holder_name" maxlength="160" required placeholder="Legal account holder"></label>
+        <label>Account identifier<input id="am-account-identifier" name="raw_account_identifier" type="password" minlength="8" maxlength="96" required inputmode="text" spellcheck="false" aria-describedby="am-identifier-help" placeholder="IBAN, RIB, or postal identifier"></label>
+        <small id="am-identifier-help">Sent once over the protected API, encrypted server-side, then cleared from this form.</small>
+        <label>Customer payment instructions<textarea id="am-instructions" name="instructions" maxlength="1000" rows="4" placeholder="Non-sensitive transfer instructions"></textarea></label>
+        <div class="am-fixed-values"><span>Country <strong>TN</strong></span><span>Currency <strong>TND</strong></span><span>Channel <strong>maestro_direct</strong></span></div>
+        <button id="am-create-validate" class="btn accent am-primary-action" type="submit" disabled>Create &amp; Validate</button>
+        <p class="am-form-note">This action creates and structurally validates atomically. It never activates or sets the destination as default.</p>
+      </form>
+
+      <div class="am-card am-destination-list-card">
+        <div class="am-card-heading"><div><span class="am-kicker">Lifecycle</span><h3>Configured destinations</h3></div><span id="am-destination-count" class="am-count">0</span></div>
+        <div id="am-payment-destination-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading payment destinations…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="am-section" data-am-panel="catalog"><div class="am-empty-panel"><span>Catalog / Offers</span><h2>Commercial catalog workspace</h2><p>The shell is reserved. It will connect only after the offer administration contract is finalized.</p></div></section>
+  <section class="am-section" data-am-panel="orders"><div class="am-empty-panel"><span>Orders</span><h2>No commercial orders yet</h2><p>Order data will appear after the idempotent commercial-order foundation is active.</p></div></section>
+  <section class="am-section" data-am-panel="contracts"><div class="am-empty-panel"><span>Contracts</span><h2>Contract operations are not wired yet</h2><p>No synthetic records are shown. Contract completion will be driven by the order domain.</p></div></section>
+  <section class="am-section" data-am-panel="payments"><div class="am-empty-panel"><span>Payments</span><h2>Payment evidence is not wired yet</h2><p>Verified evidence and destination snapshots will populate this section in the payment phase.</p></div></section>
+  <section class="am-section" data-am-panel="reconciliation"><div class="am-empty-panel"><span>Reconciliation &amp; Exceptions</span><h2>No exception workflow yet</h2><p>Underpayments, duplicate evidence, and unmatched references will be handled here with MFA and audit.</p></div></section>
+  <section class="am-section" data-am-panel="subscriptions"><div class="am-empty-panel"><span>Subscriptions &amp; Activations</span><h2>Activation pipeline is not wired yet</h2><p>Automatic activation and entitlements will appear here after all server-side gates pass.</p></div></section>
+  <section class="am-section" data-am-panel="audit"><div class="am-empty-panel"><span>Audit Log</span><h2>Payment audit API pending</h2><p>Audit events exist in persistence, but this panel stays empty until a safe read-only DTO is exposed.</p></div></section>
+
+  <dialog id="am-confirm-dialog" class="am-dialog"><form method="dialog"><span class="am-kicker">Sensitive operation</span><h2 id="am-confirm-title">Confirm action</h2><p id="am-confirm-message"></p><div class="am-dialog-actions"><button class="btn secondary" value="cancel">Cancel</button><button id="am-confirm-submit" class="btn accent" value="confirm">Confirm</button></div></form></dialog>
+  <dialog id="am-mfa-dialog" class="am-dialog"><form id="am-mfa-form"><span class="am-kicker">Recent MFA required</span><h2>Verify this administrator session</h2><p>Enter the current authenticator code. The code is never stored in the page.</p><label>Authenticator code<input id="am-mfa-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8" required></label><div id="am-mfa-error" class="am-dialog-error" role="alert"></div><div class="am-dialog-actions"><button id="am-mfa-cancel" class="btn secondary" type="button">Cancel</button><button id="am-mfa-submit" class="btn accent" type="submit">Verify &amp; retry</button></div></form></dialog>
 </div>
   <!-- ===== ADMIN PAGE: Adapters ===== -->
 <div id="page-admin-adapters" class="admin-page">
@@ -510,6 +599,7 @@
 (function () {
   const pageIds = {
     home: 'page-admin-home',
+    'admin-marketplace': 'page-admin-marketplace',
     adapters: 'page-admin-adapters',
     'api-keys': 'page-admin-api-keys',
     'operator-pilot-handoff': 'page-operator-pilot-handoff',
@@ -523,6 +613,7 @@
   const labelToPage = {
     'admin home': 'home',
     home: 'home',
+    'admin market': 'admin-marketplace',
     adapters: 'adapters',
     'api keys': 'api-keys',
     clients: 'clients',
@@ -546,6 +637,7 @@
 
     if (labelToPage[text]) return labelToPage[text];
     if (text.includes('admin home')) return 'home';
+    if (text.includes('admin market')) return 'admin-marketplace';
     if (text.includes('adapters')) return 'adapters';
     if (text.includes('api keys')) return 'api-keys';
     if (text.includes('clients')) return 'clients';
@@ -701,6 +793,7 @@
 </script>
 <script src="/console/js/client.js?v=adminruntime05"></script>
 <script src="/console/js/admin_auth_bridge.js?v=adminruntime05"></script>
+<script src="/console/js/admin_marketplace.js?v=a3-phase7b-1"></script>
 <script src="/console/js/adapters/adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_api_keys.js?v=adminapikeys13eh2"></script>
