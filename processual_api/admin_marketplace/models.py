@@ -736,7 +736,12 @@ class AdminMarketAuditRecord(Base):
                 'channel_eligibility_decided',
                 'channel_selected',
                 'payment_verification_decided',
-                'subscription_activation_decided'
+                'subscription_activation_decided',
+                'payment_destination_created',
+                'payment_destination_validated',
+                'payment_destination_activated',
+                'payment_destination_deactivated',
+                'payment_destination_default_set'
             )
             """,
             name="action_allowed",
@@ -750,7 +755,8 @@ class AdminMarketAuditRecord(Base):
                 'payment_verification',
                 'subscription',
                 'trial',
-                'sales_channel_eligibility'
+                'sales_channel_eligibility',
+                'payment_destination'
             )
             """,
             name="resource_type_allowed",

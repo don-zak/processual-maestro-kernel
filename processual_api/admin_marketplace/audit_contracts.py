@@ -23,6 +23,11 @@ class CommercialAuditAction(StrEnum):
     CHANNEL_SELECTED = "channel_selected"
     PAYMENT_VERIFICATION_DECIDED = "payment_verification_decided"
     SUBSCRIPTION_ACTIVATION_DECIDED = "subscription_activation_decided"
+    PAYMENT_DESTINATION_CREATED = "payment_destination_created"
+    PAYMENT_DESTINATION_VALIDATED = "payment_destination_validated"
+    PAYMENT_DESTINATION_ACTIVATED = "payment_destination_activated"
+    PAYMENT_DESTINATION_DEACTIVATED = "payment_destination_deactivated"
+    PAYMENT_DESTINATION_DEFAULT_SET = "payment_destination_default_set"
 
 
 class CommercialResourceType(StrEnum):
@@ -33,6 +38,7 @@ class CommercialResourceType(StrEnum):
     SUBSCRIPTION = "subscription"
     TRIAL = "trial"
     SALES_CHANNEL_ELIGIBILITY = "sales_channel_eligibility"
+    PAYMENT_DESTINATION = "payment_destination"
 
 
 class CommercialAuditOutcome(StrEnum):
