@@ -11,11 +11,13 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    LargeBinary,
     Numeric,
     String,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -734,7 +736,12 @@ class AdminMarketAuditRecord(Base):
                 'channel_eligibility_decided',
                 'channel_selected',
                 'payment_verification_decided',
-                'subscription_activation_decided'
+                'subscription_activation_decided',
+                'payment_destination_created',
+                'payment_destination_validated',
+                'payment_destination_activated',
+                'payment_destination_deactivated',
+                'payment_destination_default_set'
             )
             """,
             name="action_allowed",
@@ -748,7 +755,8 @@ class AdminMarketAuditRecord(Base):
                 'payment_verification',
                 'subscription',
                 'trial',
-                'sales_channel_eligibility'
+                'sales_channel_eligibility',
+                'payment_destination'
             )
             """,
             name="resource_type_allowed",
@@ -853,6 +861,197 @@ class AdminMarketAuditRecord(Base):
     created_at: Mapped[datetime] = _created_at_column()
 
 
+class AdminMarketPaymentDestination(Base):
+    __tablename__ = "admin_market_payment_destinations"
+    __table_args__ = (
+        CheckConstraint(
+            """
+            destination_type IN (
+                'bank_account',
+                'postal_account'
+            )
+            """,
+            name="destination_type_allowed",
+        ),
+        CheckConstraint(
+            "country_code = 'TN'",
+            name="country_tunisia_only",
+        ),
+        CheckConstraint(
+            "currency = 'TND'",
+            name="currency_tnd_only",
+        ),
+        CheckConstraint(
+            "sales_channel = 'maestro_direct'",
+            name="channel_direct",
+        ),
+        CheckConstraint(
+            """
+            status IN (
+                'draft',
+                'validated',
+                'active',
+                'inactive'
+            )
+            """,
+            name="status_allowed",
+        ),
+        CheckConstraint(
+            """
+            validation_method IS NULL
+            OR validation_method IN (
+                'structural',
+                'provider'
+            )
+            """,
+            name="validation_method_allowed",
+        ),
+        CheckConstraint(
+            "length(identifier_ciphertext) > 12",
+            name="ciphertext_not_truncated",
+        ),
+        CheckConstraint(
+            "length(trim(masked_identifier)) >= 8",
+            name="masked_identifier_present",
+        ),
+        CheckConstraint(
+            """
+            expires_at IS NULL
+            OR effective_at IS NULL
+            OR expires_at > effective_at
+            """,
+            name="effective_window_valid",
+        ),
+        CheckConstraint(
+            """
+            NOT is_active
+            OR status = 'active'
+            """,
+            name="active_status",
+        ),
+        CheckConstraint(
+            """
+            NOT is_default
+            OR (
+                is_active
+                AND status = 'active'
+            )
+            """,
+            name="default_requires_active",
+        ),
+        CheckConstraint(
+            """
+            status = 'draft'
+            OR (
+                validation_method IS NOT NULL
+                AND validation_reason_code IS NOT NULL
+                AND validated_at IS NOT NULL
+            )
+            """,
+            name="validated_state",
+        ),
+        UniqueConstraint(
+            "destination_ref",
+            name="uq_admin_market_payment_destinations_destination_ref",
+        ),
+        Index(
+            "ix_admin_market_payment_destinations_status",
+            "status",
+            "is_active",
+        ),
+        Index(
+            "uq_admin_market_payment_destinations_active_default",
+            "sales_channel",
+            unique=True,
+            postgresql_where=text("is_active AND is_default"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    destination_ref: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+    display_name: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+    )
+    destination_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+    institution_name: Mapped[str] = mapped_column(
+        String(160),
+        nullable=False,
+    )
+    account_holder_name: Mapped[str] = mapped_column(
+        String(160),
+        nullable=False,
+    )
+    identifier_ciphertext: Mapped[bytes] = mapped_column(
+        LargeBinary,
+        nullable=False,
+    )
+    identifier_key_version: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    masked_identifier: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+    country_code: Mapped[str] = mapped_column(
+        String(2),
+        nullable=False,
+        default="TN",
+    )
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default="TND",
+    )
+    sales_channel: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="maestro_direct",
+    )
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="draft",
+    )
+    validation_method: Mapped[str | None] = mapped_column(
+        String(24),
+    )
+    validation_reason_code: Mapped[str | None] = mapped_column(
+        String(128),
+    )
+    validated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    effective_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    instructions: Mapped[str | None] = mapped_column(
+        String(1000),
+    )
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+
 ADMIN_MARKET_MODELS = (
     AdminMarketPlan,
     AdminMarketOffer,
@@ -860,6 +1059,7 @@ ADMIN_MARKET_MODELS = (
     AdminMarketTrial,
     AdminMarketOrder,
     AdminMarketPaymentVerification,
+    AdminMarketPaymentDestination,
     AdminMarketInvoice,
     AdminMarketEntitlementActivation,
     AdminMarketChannelEligibility,

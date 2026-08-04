@@ -15,6 +15,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketInvoice,
     AdminMarketOffer,
     AdminMarketOrder,
+    AdminMarketPaymentDestination,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -154,6 +155,69 @@ class SqlAlchemyOrderRepository:
         order: AdminMarketOrder,
     ) -> None:
         self._session.add(order)
+
+
+class SqlAlchemyPaymentDestinationRepository:
+    """Persistence operations for Tunisian payment destinations."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(
+        self,
+        destination_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.id == destination_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_by_ref(
+        self,
+        destination_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.destination_ref
+            == destination_ref.strip().lower(),
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_active_default(
+        self,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.sales_channel == "maestro_direct",
+            AdminMarketPaymentDestination.country_code == "TN",
+            AdminMarketPaymentDestination.currency == "TND",
+            AdminMarketPaymentDestination.status == "active",
+            AdminMarketPaymentDestination.is_active.is_(True),
+            AdminMarketPaymentDestination.is_default.is_(True),
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        destination: AdminMarketPaymentDestination,
+    ) -> None:
+        self._session.add(destination)
 
 
 class SqlAlchemyPaymentVerificationRepository:
@@ -391,6 +455,7 @@ __all__ = [
     "SqlAlchemyInvoiceRepository",
     "SqlAlchemyOfferRepository",
     "SqlAlchemyOrderRepository",
+    "SqlAlchemyPaymentDestinationRepository",
     "SqlAlchemyPaymentVerificationRepository",
     "SqlAlchemyPlanRepository",
     "SqlAlchemySubscriptionRepository",

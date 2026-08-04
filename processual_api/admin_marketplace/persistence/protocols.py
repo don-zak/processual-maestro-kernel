@@ -13,6 +13,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketInvoice,
     AdminMarketOffer,
     AdminMarketOrder,
+    AdminMarketPaymentDestination,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -90,6 +91,34 @@ class OrderRepository(Protocol):
     def add(
         self,
         order: AdminMarketOrder,
+    ) -> None: ...
+
+
+@runtime_checkable
+class PaymentDestinationRepository(Protocol):
+    async def get_by_id(
+        self,
+        destination_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    async def get_by_ref(
+        self,
+        destination_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    async def get_active_default(
+        self,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    def add(
+        self,
+        destination: AdminMarketPaymentDestination,
     ) -> None: ...
 
 
@@ -215,6 +244,7 @@ class AdminMarketplaceUnitOfWork(Protocol):
     subscriptions: SubscriptionRepository
     trials: TrialRepository
     orders: OrderRepository
+    payment_destinations: PaymentDestinationRepository
     payment_verifications: PaymentVerificationRepository
     invoices: InvoiceRepository
     entitlement_activations: EntitlementActivationRepository
@@ -249,6 +279,7 @@ __all__ = [
     "InvoiceRepository",
     "OfferRepository",
     "OrderRepository",
+    "PaymentDestinationRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
     "SubscriptionRepository",
