@@ -36,6 +36,11 @@ class AdminMarketplaceAction(StrEnum):
     DECIDE_ORDER = "marketplace.order.decide"
     ACTIVATE_SUBSCRIPTION = "marketplace.subscription.activate"
     CHANGE_CHANNEL_ELIGIBILITY = "marketplace.channel_eligibility.change"
+    CREATE_PAYMENT_DESTINATION = "marketplace.payment_destination.create"
+    VALIDATE_PAYMENT_DESTINATION = "marketplace.payment_destination.validate"
+    ACTIVATE_PAYMENT_DESTINATION = "marketplace.payment_destination.activate"
+    DEACTIVATE_PAYMENT_DESTINATION = "marketplace.payment_destination.deactivate"
+    SET_DEFAULT_PAYMENT_DESTINATION = "marketplace.payment_destination.set_default"
 
 
 SENSITIVE_ACTIONS = frozenset(
@@ -48,6 +53,11 @@ SENSITIVE_ACTIONS = frozenset(
         AdminMarketplaceAction.DECIDE_ORDER,
         AdminMarketplaceAction.ACTIVATE_SUBSCRIPTION,
         AdminMarketplaceAction.CHANGE_CHANNEL_ELIGIBILITY,
+        AdminMarketplaceAction.CREATE_PAYMENT_DESTINATION,
+        AdminMarketplaceAction.VALIDATE_PAYMENT_DESTINATION,
+        AdminMarketplaceAction.ACTIVATE_PAYMENT_DESTINATION,
+        AdminMarketplaceAction.DEACTIVATE_PAYMENT_DESTINATION,
+        AdminMarketplaceAction.SET_DEFAULT_PAYMENT_DESTINATION,
     }
 )
 
