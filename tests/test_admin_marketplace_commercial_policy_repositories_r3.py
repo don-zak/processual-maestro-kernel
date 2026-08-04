@@ -127,6 +127,45 @@ async def test_commercial_policy_repository_supports_locking(
     assert "FOR UPDATE" in sql
 
 
+@pytest.mark.asyncio
+async def test_channel_eligibility_repository_reads_by_customer_ref() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyChannelEligibilityRepository(session)
+
+    row = MagicMock(spec=AdminMarketChannelEligibility)
+    session.scalar_result = row
+
+    result = await repository.get_by_customer_ref("customer_001")
+
+    assert result is row
+    assert len(session.scalar_statements) == 1
+
+    sql = _compile_postgresql(session.scalar_statements[0])
+
+    assert "FROM admin_market_channel_eligibilities" in sql
+    assert "customer_ref" in sql
+    assert "FOR UPDATE" not in sql
+
+
+@pytest.mark.asyncio
+async def test_channel_eligibility_repository_customer_lookup_supports_locking() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyChannelEligibilityRepository(session)
+
+    await repository.get_by_customer_ref(
+        "customer_001",
+        for_update=True,
+    )
+
+    assert len(session.scalar_statements) == 1
+
+    sql = _compile_postgresql(session.scalar_statements[0])
+
+    assert "FROM admin_market_channel_eligibilities" in sql
+    assert "customer_ref" in sql
+    assert "FOR UPDATE" in sql
+
+
 @pytest.mark.parametrize(
     ("implementation", "protocol"),
     (

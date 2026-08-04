@@ -261,6 +261,21 @@ class SqlAlchemyChannelEligibilityRepository:
 
         return await self._session.scalar(statement)
 
+    async def get_by_customer_ref(
+        self,
+        customer_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketChannelEligibility | None:
+        statement = select(AdminMarketChannelEligibility).where(
+            AdminMarketChannelEligibility.customer_ref == customer_ref,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
     def add(
         self,
         eligibility: AdminMarketChannelEligibility,

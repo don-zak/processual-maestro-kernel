@@ -147,6 +147,13 @@ class ChannelEligibilityRepository(Protocol):
         for_update: bool = False,
     ) -> AdminMarketChannelEligibility | None: ...
 
+    async def get_by_customer_ref(
+        self,
+        customer_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketChannelEligibility | None: ...
+
     def add(
         self,
         eligibility: AdminMarketChannelEligibility,
