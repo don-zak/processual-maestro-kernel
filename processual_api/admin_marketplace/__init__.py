@@ -45,5 +45,8 @@ from processual_api.admin_marketplace.errors import (
     AdminMarketplaceError,
     AdminMarketplaceStepUpRequiredError,
 )
+from processual_api.admin_marketplace.identity_authority import (
+    AdminMarketplaceIdentityAuthorityResolver,
+)
 
 __all__ = [name for name in globals() if not name.startswith("_")]
