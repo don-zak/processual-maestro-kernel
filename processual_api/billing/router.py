@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,9 +16,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from processual_api.billing.offer_pricebook import public_offer_pricebook
 from processual_api.billing.public_plan_journey import public_plan_journey_catalog
 from processual_api.billing.subscription_catalog import public_subscription_catalog
+from processual_api.billing.subscription_preparation import (
+    build_subscription_preparation,
+)
+from processual_api.billing.subscription_preparation_repository import (
+    SqlAlchemySubscriptionPreparationRepository,
+)
 from processual_api.billing.unit_cost_assumptions import get_unit_cost_assumptions as build_unit_cost_assumptions
+from processual_api.db.session import get_session_factory
 
 from ..auth.security import get_current_user
+from ..auth.session_router import get_identity_user
 from ..services.discord_service import DiscordService
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -320,6 +329,37 @@ async def lemon_squeezy_webhook(request: Request):
 
     return {"received": True, "event": event_name}
 
+
+@router.get("/subscription-preparation", response_model=dict)
+async def get_subscription_preparation(
+    current_user: dict = Depends(get_identity_user),
+) -> dict[str, object]:
+    """Return the authenticated identity user's verified plan handoff."""
+    try:
+        user_id = uuid.UUID(str(current_user["user_id"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid identity session.",
+        ) from exc
+
+    try:
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            repository = SqlAlchemySubscriptionPreparationRepository(
+                session
+            )
+            return await build_subscription_preparation(
+                repository=repository,
+                user_id=user_id,
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Subscription preparation is unavailable.",
+        ) from exc
 
 @router.get("/subscription", response_model=dict)
 async def get_billing_subscription(current_user: dict = Depends(get_current_user)):
