@@ -35,6 +35,7 @@ EXPECTED_TABLES = {
     "admin_market_channel_selections",
     "admin_market_commercial_decisions",
     "admin_market_audit_records",
+    "admin_market_payment_destinations",
 }
 
 
@@ -49,7 +50,7 @@ def _check_sql(model: type[Base]) -> set[str]:
 
 
 def test_admin_market_metadata_catalog_is_exact() -> None:
-    assert len(ADMIN_MARKET_MODELS) == 12
+    assert len(ADMIN_MARKET_MODELS) == 13
 
     assert {model.__tablename__ for model in ADMIN_MARKET_MODELS} == EXPECTED_TABLES
 
@@ -283,4 +284,4 @@ def test_postgresql_identifiers_compile_safely() -> None:
         for index in table.indexes:
             index_sql = str(CreateIndex(index).compile(dialect=dialect))
 
-            assert "CREATE INDEX" in index_sql
+            assert index_sql.startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
