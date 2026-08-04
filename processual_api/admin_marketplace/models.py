@@ -954,6 +954,10 @@ class AdminMarketPaymentDestination(Base):
             "destination_ref",
             name="uq_admin_market_payment_destinations_destination_ref",
         ),
+        UniqueConstraint(
+            "creation_idempotency_key_hash",
+            name="uq_admin_market_payment_destinations_create_idem_hash",
+        ),
         Index(
             "ix_admin_market_payment_destinations_status",
             "status",
@@ -999,6 +1003,9 @@ class AdminMarketPaymentDestination(Base):
     masked_identifier: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
+    )
+    creation_idempotency_key_hash: Mapped[str | None] = mapped_column(
+        String(64),
     )
     country_code: Mapped[str] = mapped_column(
         String(2),

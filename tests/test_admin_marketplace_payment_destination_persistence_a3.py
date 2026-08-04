@@ -80,6 +80,13 @@ def test_payment_destination_model_has_unique_reference() -> None:
         "destination_ref",
     )
 
+    idempotency_constraint = unique_constraints[
+        "uq_admin_market_payment_destinations_create_idem_hash"
+    ]
+    assert tuple(
+        column.name for column in idempotency_constraint.columns
+    ) == ("creation_idempotency_key_hash",)
+
 
 def test_payment_destination_default_index_is_partial_and_unique() -> None:
     table = AdminMarketPaymentDestination.__table__
@@ -150,6 +157,20 @@ async def test_payment_destination_repository_adds_model() -> None:
     repository.add(destination)
 
     session.add.assert_called_once_with(destination)
+
+
+@pytest.mark.asyncio
+async def test_payment_destination_repository_lists_safe_models() -> None:
+    session = MagicMock(spec=AsyncSession)
+    scalars_result = MagicMock()
+    scalars_result.all.return_value = []
+    session.scalars = AsyncMock(return_value=scalars_result)
+    repository = SqlAlchemyPaymentDestinationRepository(session)
+
+    result = await repository.list_all()
+
+    assert result == ()
+    session.scalars.assert_awaited_once()
 
 
 @pytest.mark.asyncio
