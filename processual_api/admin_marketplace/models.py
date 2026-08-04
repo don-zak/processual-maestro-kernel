@@ -109,6 +109,18 @@ class AdminMarketOffer(Base):
             name="currency_length",
         ),
         CheckConstraint(
+            "sales_channel IN ('maestro_direct', 'lemon_squeezy')",
+            name="sales_channel_allowed",
+        ),
+        CheckConstraint(
+            "billing_period IN ('monthly', 'annual')",
+            name="billing_period_allowed",
+        ),
+        CheckConstraint(
+            "sales_channel != 'maestro_direct' OR currency = 'TND'",
+            name="direct_channel_requires_tnd",
+        ),
+        CheckConstraint(
             """
             expires_at IS NULL
             OR effective_at IS NULL
@@ -148,8 +160,18 @@ class AdminMarketOffer(Base):
         String(3),
         nullable=False,
     )
+    sales_channel: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="lemon_squeezy",
+    )
+    billing_period: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="monthly",
+    )
     amount: Mapped[Decimal] = mapped_column(
-        Numeric(18, 2),
+        Numeric(18, 3),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(
@@ -330,19 +352,66 @@ class AdminMarketOrder(Base):
             """
             status IN (
                 'draft',
-                'submitted',
-                'awaiting_payment_verification',
-                'approved',
-                'rejected',
+                'awaiting_contract',
+                'awaiting_payment',
+                'payment_under_review',
+                'ready_for_activation',
+                'activated',
                 'cancelled',
-                'fulfilled'
+                'expired',
+                'requires_review'
             )
             """,
             name="status_allowed",
         ),
+        CheckConstraint(
+            "billing_period IN ('monthly', 'annual')",
+            name="billing_period_allowed",
+        ),
+        CheckConstraint(
+            "selected_channel != 'maestro_direct' OR country_code = 'TN'",
+            name="direct_channel_country_tunisia",
+        ),
+        CheckConstraint(
+            "selected_channel != 'maestro_direct' OR currency = 'TND'",
+            name="direct_channel_currency_tnd",
+        ),
+        CheckConstraint(
+            "subtotal_amount >= 0 AND tax_amount >= 0 AND total_amount >= 0",
+            name="amounts_nonnegative",
+        ),
+        CheckConstraint(
+            "total_amount = subtotal_amount + tax_amount",
+            name="total_amount_consistent",
+        ),
+        CheckConstraint(
+            "contract_status IN ('not_required', 'pending', 'completed', 'rejected', 'expired')",
+            name="contract_status_allowed",
+        ),
+        CheckConstraint(
+            "payment_requirement IN ('required', 'not_required')",
+            name="payment_requirement_allowed",
+        ),
+        CheckConstraint(
+            """
+            payment_status IN (
+                'pending', 'customer_reported', 'notification_received', 'matched',
+                'verified', 'requires_review', 'rejected', 'not_required'
+            )
+            """,
+            name="payment_status_allowed",
+        ),
         UniqueConstraint(
             "order_ref",
             name="uq_admin_market_orders_order_ref",
+        ),
+        UniqueConstraint(
+            "creation_idempotency_key_hash",
+            name="uq_admin_market_orders_creation_idem_hash",
+        ),
+        UniqueConstraint(
+            "payment_reference",
+            name="uq_admin_market_orders_payment_reference",
         ),
         Index(
             "ix_admin_market_orders_customer_status",
@@ -368,17 +437,64 @@ class AdminMarketOrder(Base):
         ),
         nullable=False,
     )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_plans.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    billing_period: Mapped[str] = mapped_column(String(16), nullable=False)
     selected_channel: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
     )
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 3),
+        nullable=False,
+        default=Decimal("0.000"),
+    )
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
     status: Mapped[str] = mapped_column(
         String(40),
         nullable=False,
         default="draft",
     )
+    contract_status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="pending",
+    )
+    payment_requirement: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="required",
+    )
+    payment_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="pending",
+    )
+    payment_reference: Mapped[str | None] = mapped_column(String(64))
+    payment_destination_snapshot: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    offer_snapshot: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    creation_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created_at_column()
     updated_at: Mapped[datetime] = _updated_at_column()
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AdminMarketPaymentVerification(Base):
@@ -548,6 +664,21 @@ class AdminMarketChannelEligibility(Base):
             name="country_code_length",
         ),
         CheckConstraint(
+            "address_status IN ('unverified', 'confirmed', 'revoked')",
+            name="address_status_allowed",
+        ),
+        CheckConstraint(
+            """
+            address_status != 'confirmed'
+            OR (
+                country_code IS NOT NULL
+                AND address_source IS NOT NULL
+                AND address_verified_at IS NOT NULL
+            )
+            """,
+            name="confirmed_address_requires_evidence",
+        ),
+        CheckConstraint(
             """
             NOT admin_review_required
             OR NOT automatic_activation_allowed
@@ -587,6 +718,15 @@ class AdminMarketChannelEligibility(Base):
     )
     country_code: Mapped[str | None] = mapped_column(
         String(2),
+    )
+    address_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="unverified",
+    )
+    address_source: Mapped[str | None] = mapped_column(String(64))
+    address_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
     )
     maestro_direct_status: Mapped[str] = mapped_column(
         String(24),
@@ -725,8 +865,8 @@ class AdminMarketAuditRecord(Base):
     __tablename__ = "admin_market_audit_records"
     __table_args__ = (
         CheckConstraint(
-            "platform_authority = 'platform_admin'",
-            name="platform_authority_exact",
+            "platform_authority IN ('platform_admin', 'identity_customer', 'system')",
+            name="actor_authority_allowed",
         ),
         CheckConstraint(
             """
@@ -741,7 +881,8 @@ class AdminMarketAuditRecord(Base):
                 'payment_destination_validated',
                 'payment_destination_activated',
                 'payment_destination_deactivated',
-                'payment_destination_default_set'
+                'payment_destination_default_set',
+                'order_created'
             )
             """,
             name="action_allowed",

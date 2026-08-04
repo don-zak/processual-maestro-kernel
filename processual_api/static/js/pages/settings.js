@@ -9,6 +9,7 @@ PAGES.settings = (() => {
   };
 
   let settingsInitDone = false;
+  let tunisianDirectOrderIdempotencyKey = null;
 
   function setText(id, value) {
     const el = document.getElementById(id);
@@ -223,6 +224,88 @@ PAGES.settings = (() => {
     } catch (e) {
       setText('set-usage-latest-status', 'Usage summary unavailable');
     }
+  }
+
+  function uniqueRequestKey(prefix) {
+    const random = window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+    return prefix + '-' + random;
+  }
+
+  function hideTunisiaDirectPayment() {
+    const card = document.getElementById('set-tunisia-direct-payment-card');
+    if (card) card.style.display = 'none';
+  }
+
+  async function loadTunisiaDirectPaymentOption() {
+    hideTunisiaDirectPayment();
+    try {
+      const option = await CLIENT.get('/billing/subscription-preparation/payment-options');
+      if (!option || option.visible !== true) return;
+      const card = document.getElementById('set-tunisia-direct-payment-card');
+      if (!card) return;
+      setText('set-tn-payment-offer', option.offer_display_name || option.offer_ref);
+      setText(
+        'set-tn-payment-billing',
+        String(option.amount) + ' ' + option.currency + ' / ' + option.billing_period
+      );
+      setText('set-tn-payment-address', option.country_code + ' / ' + option.address_status);
+      setText('set-tn-payment-status', 'Validated payment option');
+      card.style.display = '';
+    } catch (_) {
+      hideTunisiaDirectPayment();
+    }
+  }
+
+  function renderTunisiaDirectOrder(order) {
+    const destination = order.payment_destination || {};
+    const result = document.getElementById('set-tn-payment-result');
+    if (!result) return;
+    result.textContent = [
+      'Order: ' + order.order_ref,
+      'Payment reference: ' + (order.payment_reference || '-'),
+      'Amount: ' + order.total_amount + ' ' + order.currency,
+      'Destination: ' + (destination.display_name || '-'),
+      'Institution: ' + (destination.institution_name || '-'),
+      'Account holder: ' + (destination.account_holder_name || '-'),
+      'Account: ' + (destination.masked_identifier || '-'),
+      'Instructions: ' + (destination.instructions || 'Use the payment reference above.'),
+    ].join('\n');
+    result.style.display = '';
+  }
+
+  async function createTunisiaDirectOrder() {
+    const button = document.getElementById('set-tn-payment-create-order');
+    if (button) button.disabled = true;
+    setText('set-tn-payment-status', 'Creating order...');
+    tunisianDirectOrderIdempotencyKey = tunisianDirectOrderIdempotencyKey || uniqueRequestKey('tn-order');
+    try {
+      const order = await CLIENT.request(
+        'POST',
+        '/billing/subscription-preparation/maestro-direct/orders',
+        {},
+        {
+          'X-Correlation-ID': uniqueRequestKey('tn-payment-ui'),
+          'Idempotency-Key': tunisianDirectOrderIdempotencyKey,
+        }
+      );
+      renderTunisiaDirectOrder(order);
+      setText('set-tn-payment-status', 'Order created');
+      tunisianDirectOrderIdempotencyKey = null;
+    } catch (error) {
+      const detail = typeof error.detail === 'string'
+        ? error.detail
+        : (error.detail && error.detail.message) || error.message;
+      setText('set-tn-payment-status', 'Order unavailable: ' + detail);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  function initTunisiaDirectPayment() {
+    const button = document.getElementById('set-tn-payment-create-order');
+    if (button) button.onclick = createTunisiaDirectOrder;
   }
 
   function prepareUsageReviewRequest() {
@@ -1377,6 +1460,7 @@ function initCollapsibleSettingsSections() {
       if (settings && settings.subscription) applySubscription(settings.subscription);
     }
     await loadUsageSummary();
+    await loadTunisiaDirectPaymentOption();
     await loadApiKeyIntegration();
     await loadProviderConnection();
   }
@@ -1387,6 +1471,7 @@ function initCollapsibleSettingsSections() {
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
       initIntegrationKeyRequestWorkflow();
+      initTunisiaDirectPayment();
     initClientLaunchActions();
       refresh();
       return;
@@ -1418,6 +1503,7 @@ function initCollapsibleSettingsSections() {
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
       initIntegrationKeyRequestWorkflow();
+    initTunisiaDirectPayment();
     initClientLaunchActions();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {

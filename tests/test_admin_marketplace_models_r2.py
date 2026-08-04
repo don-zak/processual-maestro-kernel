@@ -63,6 +63,8 @@ def test_offer_persistence_matches_r1_contract() -> None:
         "offer_code",
         "plan_id",
         "display_name",
+        "sales_channel",
+        "billing_period",
         "currency",
         "amount",
         "status",
@@ -93,21 +95,22 @@ def test_subscription_and_order_status_are_constrained() -> None:
     )
 
     assert any(
-        "awaiting_payment_verification" in expression and "fulfilled" in expression for expression in order_checks
+        "awaiting_contract" in expression and "activated" in expression
+        for expression in order_checks
     )
 
     assert any("maestro_direct" in expression and "lemon_squeezy" in expression for expression in order_checks)
 
 
 def test_commercial_amounts_are_fixed_precision() -> None:
-    for model in (
-        AdminMarketOffer,
-        AdminMarketInvoice,
+    for model, expected_scale in (
+        (AdminMarketOffer, 3),
+        (AdminMarketInvoice, 2),
     ):
         amount = model.__table__.columns["amount"]
 
         assert amount.type.precision == 18
-        assert amount.type.scale == 2
+        assert amount.type.scale == expected_scale
 
         assert any("amount >= 0" in expression for expression in _check_sql(model))
 

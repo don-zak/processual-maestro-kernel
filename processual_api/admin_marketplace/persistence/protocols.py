@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from processual_api.admin_marketplace.models import (
@@ -40,6 +41,15 @@ class OfferRepository(Protocol):
         self,
         offer_id: uuid.UUID,
         *,
+        for_update: bool = False,
+    ) -> AdminMarketOffer | None: ...
+
+    async def get_published_direct_for_plan_code(
+        self,
+        *,
+        plan_code: str,
+        billing_period: str,
+        now: datetime,
         for_update: bool = False,
     ) -> AdminMarketOffer | None: ...
 
@@ -84,6 +94,20 @@ class OrderRepository(Protocol):
     async def get_by_id(
         self,
         order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None: ...
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None: ...
+
+    async def get_by_ref(
+        self,
+        order_ref: str,
         *,
         for_update: bool = False,
     ) -> AdminMarketOrder | None: ...

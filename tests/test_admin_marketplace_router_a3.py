@@ -61,6 +61,7 @@ def _runtime(
                 state=AdminMarketplaceEligibilityState.ELIGIBLE,
                 visible=True,
                 country_code="TN",
+                address_status="confirmed",
                 maestro_direct_status="eligible",
                 admin_review_required=False,
                 reason_code="tunisian_maestro_direct_eligible",
@@ -87,6 +88,7 @@ async def test_eligibility_endpoint_returns_read_result() -> None:
     assert response.state is AdminMarketplaceEligibilityState.ELIGIBLE
     assert response.visible is True
     assert response.country_code == "TN"
+    assert response.address_status == "confirmed"
     assert response.maestro_direct_status == "eligible"
     assert response.admin_review_required is False
     assert response.reason_code == "tunisian_maestro_direct_eligible"

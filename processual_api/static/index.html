@@ -698,6 +698,31 @@ pending ───────────────────→ deactivated
       </div>
     </div>
 
+    <!-- Tunisia direct subscription payment: fail-closed and hidden until eligible -->
+    <div class="card settings-section" id="set-tunisia-direct-payment-card" data-settings-section-key="plan-usage" style="display:none">
+      <div class="sec-hdr">
+        <div class="sh-title">Tunisia Subscription Payment</div>
+        <div class="sh-sub">Available only for a confirmed Tunisian address and an active validated payment destination</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Offer</label>
+          <span id="set-tn-payment-offer" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Billing</label>
+          <span id="set-tn-payment-billing" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Confirmed address</label>
+          <span id="set-tn-payment-address" class="font-data">—</span>
+        </div>
+      </div>
+      <button id="set-tn-payment-create-order" class="btn accent sm" type="button" style="margin-top:var(--s-3)">Create payment order</button>
+      <span id="set-tn-payment-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+      <div id="set-tn-payment-result" class="mono-block" style="display:none;font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)"></div>
+    </div>
+
 
     <!-- Enterprise Integration -->
     <div class="card settings-section" id="set-api-key-integration-card" style="display:none">

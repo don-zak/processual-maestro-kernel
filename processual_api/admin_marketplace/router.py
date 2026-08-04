@@ -101,6 +101,7 @@ class AdminMarketplaceEligibilityResponse(BaseModel):
     state: AdminMarketplaceEligibilityState
     visible: bool
     country_code: str | None
+    address_status: str | None
     maestro_direct_status: str | None
     admin_review_required: bool
     reason_code: str
@@ -224,6 +225,7 @@ async def get_admin_marketplace_eligibility(
         state=result.state,
         visible=result.visible,
         country_code=result.country_code,
+        address_status=result.address_status,
         maestro_direct_status=result.maestro_direct_status,
         admin_review_required=result.admin_review_required,
         reason_code=result.reason_code,

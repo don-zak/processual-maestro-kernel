@@ -25,11 +25,25 @@ class PaymentDestinationConflictError(AdminMarketplaceError):
     """Raised when a payment-destination transition conflicts with stored state."""
 
 
+class DirectCommerceUnavailableError(AdminMarketplaceError):
+    """Raised when a fail-closed direct-commerce gate is not satisfied."""
+
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code
+        super().__init__("Direct commerce is unavailable.")
+
+
+class DirectCommerceConflictError(AdminMarketplaceError):
+    """Raised when an idempotent order request conflicts with stored state."""
+
+
 __all__ = [
     "AdminMarketplaceAuditSafetyError",
     "AdminMarketplaceAuthorityDeniedError",
     "AdminMarketplaceError",
     "AdminMarketplaceStepUpRequiredError",
+    "DirectCommerceConflictError",
+    "DirectCommerceUnavailableError",
     "PaymentDestinationConflictError",
     "PaymentDestinationNotFoundError",
 ]
