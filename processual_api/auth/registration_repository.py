@@ -167,6 +167,7 @@ class SqlAlchemyRegistrationRepository:
         organization_slug: str | None = None,
         organization_name: str | None = None,
         selected_plan_id: str | None = None,
+        billing_period: str | None = None,
     ) -> None:
         user = IdentityUser(
             id=user_id,
@@ -183,6 +184,7 @@ class SqlAlchemyRegistrationRepository:
                     id=uuid.uuid4(),
                     user_id=user_id,
                     selected_plan_id=selected_plan_id,
+                    billing_period=billing_period,
                     state="pending_verification",
                     user=user,
                 )

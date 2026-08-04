@@ -50,6 +50,7 @@ class RegistrationCommand:
     password: str
     accepted_terms_version: str
     selected_plan_id: str | None = None
+    billing_period: str | None = None
     organization_name: str | None = None
 
 
@@ -91,6 +92,21 @@ class RegistrationService:
         if not terms_version or len(terms_version) > 64:
             raise ValueError("accepted_terms_version is invalid.")
         selected_plan_id = resolve_direct_registration_plan(command.selected_plan_id)
+        billing_period = (
+            command.billing_period.strip().lower()
+            if command.billing_period is not None
+            else None
+        )
+
+        if selected_plan_id is None:
+            if billing_period is not None:
+                raise ValueError("billing_period requires a selected plan.")
+        else:
+            if billing_period not in ("monthly", "annual"):
+                raise ValueError(
+                    "A direct registration plan requires monthly or annual billing."
+                )
+
         organization_name = None
         slug = None
         organization_id = None
@@ -142,6 +158,7 @@ class RegistrationService:
                     organization_slug=slug,
                     organization_name=organization_name,
                     selected_plan_id=selected_plan_id,
+                    billing_period=billing_period,
                 )
                 unit_of_work.repository.add_delivery_outbox(
                     outbox_id=outbox_id,

@@ -491,6 +491,10 @@ class AuthRegistrationPlanIntent(Base):
             "state IN ('pending_verification', 'verified', 'superseded', 'cancelled')",
             name="state_allowed",
         ),
+        CheckConstraint(
+            "billing_period IS NULL OR billing_period IN ('monthly', 'annual')",
+            name="billing_period_allowed",
+        ),
         Index("ix_auth_registration_plan_intents_state", "state", "created_at"),
     )
 
@@ -501,6 +505,7 @@ class AuthRegistrationPlanIntent(Base):
         nullable=False,
     )
     selected_plan_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    billing_period: Mapped[str | None] = mapped_column(String(16))
     state: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

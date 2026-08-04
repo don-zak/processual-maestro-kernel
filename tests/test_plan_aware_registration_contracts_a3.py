@@ -16,9 +16,15 @@ def _payload(**overrides):
     return payload
 
 
-def test_registration_contract_accepts_optional_selected_plan_id():
-    contract = IndividualRegistrationRequestContract(**_payload(selected_plan_id="starter"))
+def test_registration_contract_accepts_selected_plan_with_billing_period():
+    contract = IndividualRegistrationRequestContract(
+        **_payload(
+            selected_plan_id="starter",
+            billing_period="monthly",
+        )
+    )
     assert contract.selected_plan_id == "starter"
+    assert contract.billing_period == "monthly"
 
 
 def test_registration_contract_preserves_legacy_missing_plan():

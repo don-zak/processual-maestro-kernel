@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RegistrationMode(StrEnum):
@@ -74,6 +74,22 @@ class IndividualRegistrationRequestContract(_StrictContractModel):
     password: str = Field(min_length=12, max_length=1024)
     accepted_terms_version: str = Field(min_length=1, max_length=64)
     selected_plan_id: str | None = Field(default=None, min_length=1, max_length=80)
+    billing_period: str | None = Field(default=None, min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def validate_plan_billing_pair(self):
+        has_plan = self.selected_plan_id is not None
+        has_billing_period = self.billing_period is not None
+
+        if has_plan != has_billing_period:
+            raise ValueError(
+                "selected_plan_id and billing_period must be provided together."
+            )
+
+        if self.billing_period not in (None, "monthly", "annual"):
+            raise ValueError("billing_period must be monthly or annual.")
+
+        return self
 
 
 class OrganizationRegistrationRequestContract(IndividualRegistrationRequestContract):
