@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,6 +65,42 @@ class SqlAlchemyOfferRepository:
         if for_update:
             statement = statement.with_for_update()
 
+        return await self._session.scalar(statement)
+
+    async def get_published_direct_for_plan_code(
+        self,
+        *,
+        plan_code: str,
+        billing_period: str,
+        now: datetime,
+        for_update: bool = False,
+    ) -> AdminMarketOffer | None:
+        statement = (
+            select(AdminMarketOffer)
+            .join(
+                AdminMarketPlan,
+                AdminMarketPlan.id == AdminMarketOffer.plan_id,
+            )
+            .where(
+                AdminMarketPlan.plan_code == plan_code.strip().lower(),
+                AdminMarketOffer.billing_period == billing_period,
+                AdminMarketOffer.sales_channel == "maestro_direct",
+                AdminMarketOffer.currency == "TND",
+                AdminMarketOffer.status == "published",
+                (
+                    AdminMarketOffer.effective_at.is_(None)
+                    | (AdminMarketOffer.effective_at <= now)
+                ),
+                (
+                    AdminMarketOffer.expires_at.is_(None)
+                    | (AdminMarketOffer.expires_at > now)
+                ),
+            )
+            .order_by(AdminMarketOffer.updated_at.desc())
+            .limit(1)
+        )
+        if for_update:
+            statement = statement.with_for_update()
         return await self._session.scalar(statement)
 
     def add(
@@ -148,6 +185,32 @@ class SqlAlchemyOrderRepository:
         if for_update:
             statement = statement.with_for_update()
 
+        return await self._session.scalar(statement)
+
+    async def get_by_ref(
+        self,
+        order_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None:
+        statement = select(AdminMarketOrder).where(
+            AdminMarketOrder.order_ref == order_ref.strip().lower(),
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None:
+        statement = select(AdminMarketOrder).where(
+            AdminMarketOrder.creation_idempotency_key_hash == key_hash,
+        )
+        if for_update:
+            statement = statement.with_for_update()
         return await self._session.scalar(statement)
 
     def add(

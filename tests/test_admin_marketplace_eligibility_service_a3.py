@@ -65,12 +65,14 @@ def _authority(*authorities: str, active: bool = True):
 def _eligibility(
     *,
     country_code: str | None = "TN",
+    address_status: str = "confirmed",
     maestro_direct_status: str = "eligible",
     admin_review_required: bool = False,
     restriction_reason: str | None = None,
 ):
     return SimpleNamespace(
         country_code=country_code,
+        address_status=address_status,
         maestro_direct_status=maestro_direct_status,
         admin_review_required=admin_review_required,
         restriction_reason=restriction_reason,
@@ -118,6 +120,21 @@ async def test_missing_eligibility_record_is_hidden() -> None:
     assert result.visible is False
     assert result.reason_code == "channel_eligibility_record_required"
     assert unit.commit_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_address_is_hidden_even_when_country_is_tunisia() -> None:
+    service, _, _ = _service(_eligibility(address_status="unverified"))
+
+    result = await service.evaluate(
+        authority=_authority("platform_admin"),
+        customer_ref="customer_001",
+    )
+
+    assert result.state is AdminMarketplaceEligibilityState.ADDRESS_NOT_CONFIRMED
+    assert result.visible is False
+    assert result.address_status == "unverified"
+    assert result.reason_code == "confirmed_customer_address_required"
 
 
 @pytest.mark.asyncio

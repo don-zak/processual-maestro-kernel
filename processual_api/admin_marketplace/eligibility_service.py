@@ -22,6 +22,7 @@ REQUIRES_REVIEW_CHANNEL_STATUS = "requires_review"
 class AdminMarketplaceEligibilityState(StrEnum):
     ELIGIBLE = "eligible"
     ELIGIBILITY_NOT_FOUND = "eligibility_not_found"
+    ADDRESS_NOT_CONFIRMED = "address_not_confirmed"
     NON_TUNISIAN = "non_tunisian"
     MAESTRO_DIRECT_INELIGIBLE = "maestro_direct_ineligible"
     MAESTRO_DIRECT_REQUIRES_REVIEW = "maestro_direct_requires_review"
@@ -34,6 +35,7 @@ class AdminMarketplaceEligibilityResult:
     state: AdminMarketplaceEligibilityState
     visible: bool
     country_code: str | None
+    address_status: str | None
     maestro_direct_status: str | None
     admin_review_required: bool
     reason_code: str
@@ -75,14 +77,30 @@ class AdminMarketplaceEligibilityService:
                 state=AdminMarketplaceEligibilityState.ELIGIBILITY_NOT_FOUND,
                 visible=False,
                 country_code=None,
+                address_status=None,
                 maestro_direct_status=None,
                 admin_review_required=False,
                 reason_code="channel_eligibility_record_required",
             )
 
         country_code = eligibility.country_code.strip().upper() if eligibility.country_code is not None else None
+        address_status = str(
+            getattr(eligibility, "address_status", "unverified")
+        ).strip().lower()
         maestro_direct_status = eligibility.maestro_direct_status.strip().lower()
         admin_review_required = bool(eligibility.admin_review_required)
+
+        if address_status != "confirmed":
+            return AdminMarketplaceEligibilityResult(
+                customer_ref=normalized_customer_ref,
+                state=AdminMarketplaceEligibilityState.ADDRESS_NOT_CONFIRMED,
+                visible=False,
+                country_code=country_code,
+                address_status=address_status,
+                maestro_direct_status=maestro_direct_status,
+                admin_review_required=admin_review_required,
+                reason_code="confirmed_customer_address_required",
+            )
 
         if country_code != TUNISIA_COUNTRY_CODE:
             return AdminMarketplaceEligibilityResult(
@@ -90,6 +108,7 @@ class AdminMarketplaceEligibilityService:
                 state=AdminMarketplaceEligibilityState.NON_TUNISIAN,
                 visible=False,
                 country_code=country_code,
+                address_status=address_status,
                 maestro_direct_status=maestro_direct_status,
                 admin_review_required=admin_review_required,
                 reason_code="tunisian_customer_required",
@@ -101,6 +120,7 @@ class AdminMarketplaceEligibilityService:
                 state=(AdminMarketplaceEligibilityState.MAESTRO_DIRECT_REQUIRES_REVIEW),
                 visible=False,
                 country_code=country_code,
+                address_status=address_status,
                 maestro_direct_status=maestro_direct_status,
                 admin_review_required=admin_review_required,
                 reason_code="maestro_direct_admin_review_required",
@@ -112,6 +132,7 @@ class AdminMarketplaceEligibilityService:
                 state=(AdminMarketplaceEligibilityState.MAESTRO_DIRECT_INELIGIBLE),
                 visible=False,
                 country_code=country_code,
+                address_status=address_status,
                 maestro_direct_status=maestro_direct_status,
                 admin_review_required=admin_review_required,
                 reason_code=(eligibility.restriction_reason or "maestro_direct_channel_ineligible"),
@@ -123,6 +144,7 @@ class AdminMarketplaceEligibilityService:
                 state=AdminMarketplaceEligibilityState.INVALID_ELIGIBILITY_STATE,
                 visible=False,
                 country_code=country_code,
+                address_status=address_status,
                 maestro_direct_status=maestro_direct_status,
                 admin_review_required=admin_review_required,
                 reason_code="invalid_maestro_direct_eligibility_state",
@@ -133,6 +155,7 @@ class AdminMarketplaceEligibilityService:
             state=AdminMarketplaceEligibilityState.ELIGIBLE,
             visible=True,
             country_code=country_code,
+            address_status=address_status,
             maestro_direct_status=maestro_direct_status,
             admin_review_required=False,
             reason_code="tunisian_maestro_direct_eligible",

@@ -28,6 +28,7 @@ class CommercialAuditAction(StrEnum):
     PAYMENT_DESTINATION_ACTIVATED = "payment_destination_activated"
     PAYMENT_DESTINATION_DEACTIVATED = "payment_destination_deactivated"
     PAYMENT_DESTINATION_DEFAULT_SET = "payment_destination_default_set"
+    ORDER_CREATED = "order_created"
 
 
 class CommercialResourceType(StrEnum):
@@ -112,8 +113,14 @@ class CommercialAuditRecord:
             raise AdminMarketplaceAuditSafetyError("resource_type must be a valid CommercialResourceType.")
         if not isinstance(self.outcome, CommercialAuditOutcome):
             raise AdminMarketplaceAuditSafetyError("outcome must be a valid CommercialAuditOutcome.")
-        if self.platform_authority != "platform_admin":
-            raise AdminMarketplaceAuditSafetyError("Commercial audit actor must use platform_admin authority.")
+        if self.platform_authority not in {
+            "platform_admin",
+            "identity_customer",
+            "system",
+        }:
+            raise AdminMarketplaceAuditSafetyError(
+                "Commercial audit actor authority is invalid."
+            )
         object.__setattr__(
             self, "previous_state_digest", _digest(self.previous_state_digest, field_name="previous_state_digest")
         )

@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from processual_api.admin_marketplace.direct_order_service import (
+    TunisiaDirectOrderService,
+)
+from processual_api.admin_marketplace.persistence.unit_of_work import (
+    SqlAlchemyAdminMarketplaceUnitOfWork,
+)
+from processual_api.db.session import get_session_factory
+
+
+class DirectOrderRuntimeUnavailableError(RuntimeError):
+    """Raised when the direct-order persistence authority is unavailable."""
+
+
+def build_direct_order_service() -> TunisiaDirectOrderService:
+    try:
+        session_factory = get_session_factory()
+
+        def unit_of_work_factory() -> SqlAlchemyAdminMarketplaceUnitOfWork:
+            return SqlAlchemyAdminMarketplaceUnitOfWork(session_factory)
+
+        return TunisiaDirectOrderService(
+            unit_of_work_factory=unit_of_work_factory,
+            clock=lambda: datetime.now(UTC),
+        )
+    except (RuntimeError, TypeError, ValueError) as exc:
+        raise DirectOrderRuntimeUnavailableError(
+            "Direct-order runtime is unavailable."
+        ) from exc
+
+
+__all__ = [
+    "DirectOrderRuntimeUnavailableError",
+    "build_direct_order_service",
+]

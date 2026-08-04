@@ -9,8 +9,9 @@ const CLIENT = (() => {
   function clearToken() { _token = null; }
   function onUnauthorized(fn) { _onUnauthorized = fn; }
 
-  async function fetchJSON(method, path, body) {
+  async function fetchJSON(method, path, body, requestHeaders) {
     const headers = { 'Content-Type': 'application/json' };
+    Object.assign(headers, requestHeaders || {});
     const activeToken = _token || sessionStorage.getItem('maestro_token');
     if (activeToken) {
       _token = activeToken;
@@ -44,6 +45,7 @@ const CLIENT = (() => {
 
   return {
     setToken, getToken, clearToken, onUnauthorized,
+    request: (method, path, body, headers) => fetchJSON(method, path, body, headers),
     get:   (p)      => fetchJSON('GET', p),
     post:  (p, b)   => fetchJSON('POST', p, b),
     put:   (p, b)   => fetchJSON('PUT', p, b),

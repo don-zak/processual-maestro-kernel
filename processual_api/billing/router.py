@@ -13,6 +13,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from processual_api.billing.direct_checkout_router import (
+    router as direct_checkout_router,
+)
 from processual_api.billing.offer_pricebook import public_offer_pricebook
 from processual_api.billing.public_plan_journey import public_plan_journey_catalog
 from processual_api.billing.subscription_catalog import public_subscription_catalog
@@ -32,6 +35,10 @@ from ..services.discord_service import DiscordService
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 router = APIRouter(prefix="/billing", tags=["billing"])
+# These routes already carry the complete /billing prefix. Extending preserves
+# the repository's flat route catalog (used by route-contract checks) while
+# keeping their implementation isolated in direct_checkout_router.py.
+router.routes.extend(direct_checkout_router.routes)
 
 
 # ─── Helpers ───
