@@ -20,6 +20,7 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "AUTH_DELIVERY_KEY_RING_JSON",
     "AUTH_DELIVERY_PROVIDER_TOKEN",
     "AUTH_MFA_KEY_RING_JSON",
+    "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
 )
 
 
@@ -144,6 +145,16 @@ class APISettings:
     )
     auth_mfa_step_up_seconds: int = field(
         default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "300"))
+    )
+    admin_marketplace_payment_destination_key_ring_json: str | None = field(
+        default_factory=lambda: os.environ.get(
+            "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON"
+        )
+    )
+    admin_marketplace_payment_destination_current_key_version: str | None = field(
+        default_factory=lambda: os.environ.get(
+            "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION"
+        )
     )
 
     # --- Rate Limiting ---

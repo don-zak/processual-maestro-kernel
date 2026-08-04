@@ -96,6 +96,10 @@ class OrderRepository(Protocol):
 
 @runtime_checkable
 class PaymentDestinationRepository(Protocol):
+    async def list_all(
+        self,
+    ) -> Sequence[AdminMarketPaymentDestination]: ...
+
     async def get_by_id(
         self,
         destination_id: uuid.UUID,
@@ -106,6 +110,13 @@ class PaymentDestinationRepository(Protocol):
     async def get_by_ref(
         self,
         destination_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
         *,
         for_update: bool = False,
     ) -> AdminMarketPaymentDestination | None: ...

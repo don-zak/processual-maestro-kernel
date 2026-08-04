@@ -87,6 +87,9 @@ class FakePaymentDestinationRepository:
         self.default_lock_calls: list[bool] = []
         self.added: list[AdminMarketPaymentDestination] = []
 
+    async def list_all(self):
+        return tuple(self.destinations.values())
+
     async def get_by_ref(
         self,
         destination_ref: str,
@@ -96,6 +99,22 @@ class FakePaymentDestinationRepository:
         normalized = destination_ref.strip().lower()
         self.get_calls.append((normalized, for_update))
         return self.destinations.get(normalized)
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ):
+        del for_update
+        return next(
+            (
+                destination
+                for destination in self.destinations.values()
+                if destination.creation_idempotency_key_hash == key_hash
+            ),
+            None,
+        )
 
     async def get_by_id(
         self,
@@ -399,9 +418,105 @@ async def test_create_rejects_duplicate_reference_atomically() -> None:
     assert unit.commercial_audit.records == []
     assert unit.commit_calls == 0
 
-    # Encryption occurs before the locked duplicate check, but plaintext
-    # is never persisted or included in audit data.
+    # The duplicate is rejected before encryption or persistence.
+    assert len(cipher.encrypt_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_create_and_validate_is_atomic_and_audits_both_states() -> None:
+    service, repository, unit, cipher = _service()
+
+    result = await service.create_and_validate(
+        authority=_authority(),
+        command=_command(),
+        correlation_id="correlation-create-validate-001",
+    )
+
+    assert result.status is PaymentDestinationStatus.VALIDATED
+    assert result.validation_method == "structural"
+    assert result.validation_reason_code == "structurally_validated"
+    assert result.masked_identifier.endswith("0000")
+    assert result.is_active is False
+    assert result.is_default is False
+    assert len(repository.added) == 1
     assert len(cipher.encrypt_calls) == 1
+    assert unit.commit_calls == 1
+    assert [record.action for record in unit.commercial_audit.records] == [
+        "payment_destination_created",
+        "payment_destination_validated",
+    ]
+    assert {
+        record.correlation_id
+        for record in unit.commercial_audit.records
+    } == {"correlation-create-validate-001"}
+
+
+@pytest.mark.asyncio
+async def test_create_and_validate_retry_is_idempotent() -> None:
+    service, repository, unit, cipher = _service()
+    idempotency_key = "payment-destination-create-validate-001"
+
+    first = await service.create_and_validate(
+        authority=_authority(),
+        command=_command(),
+        correlation_id="correlation-first",
+        idempotency_key=idempotency_key,
+    )
+    second = await service.create_and_validate(
+        authority=_authority(),
+        command=_command(),
+        correlation_id="correlation-retry",
+        idempotency_key=idempotency_key,
+    )
+
+    assert first.destination_id == second.destination_id
+    assert second.reason_code == "payment_destination_create_validate_idempotent"
+    assert len(repository.added) == 1
+    assert len(cipher.encrypt_calls) == 1
+    assert unit.commit_calls == 1
+    assert len(unit.commercial_audit.records) == 2
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_cannot_be_rebound_to_another_reference() -> None:
+    service, repository, unit, _ = _service()
+    idempotency_key = "payment-destination-create-validate-001"
+
+    await service.create_and_validate(
+        authority=_authority(),
+        command=_command(),
+        correlation_id="correlation-first",
+        idempotency_key=idempotency_key,
+    )
+
+    with pytest.raises(PaymentDestinationConflictError, match="Idempotency"):
+        await service.create_and_validate(
+            authority=_authority(),
+            command=_command(destination_ref="bank-secondary"),
+            correlation_id="correlation-conflict",
+            idempotency_key=idempotency_key,
+        )
+
+    assert len(repository.added) == 1
+    assert unit.commit_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_payment_destination_reads_do_not_require_recent_mfa() -> None:
+    destination = _destination(status="active", is_active=True, is_default=True)
+    service, _, _, _ = _service([destination])
+    authority = _authority(step_up=False)
+
+    listed = await service.list_destinations(authority=authority)
+    selected = await service.get_destination(
+        authority=authority,
+        destination_ref="bank-primary",
+    )
+    default = await service.get_default_destination(authority=authority)
+
+    assert len(listed) == 1
+    assert selected.destination_ref == "bank-primary"
+    assert default.is_default is True
 
 
 @pytest.mark.asyncio

@@ -163,6 +163,16 @@ class SqlAlchemyPaymentDestinationRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_all(
+        self,
+    ) -> Sequence[AdminMarketPaymentDestination]:
+        statement = select(AdminMarketPaymentDestination).order_by(
+            AdminMarketPaymentDestination.created_at.desc(),
+            AdminMarketPaymentDestination.id.desc(),
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     async def get_by_id(
         self,
         destination_id: uuid.UUID,
@@ -187,6 +197,22 @@ class SqlAlchemyPaymentDestinationRepository:
         statement = select(AdminMarketPaymentDestination).where(
             AdminMarketPaymentDestination.destination_ref
             == destination_ref.strip().lower(),
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.creation_idempotency_key_hash
+            == key_hash,
         )
 
         if for_update:
