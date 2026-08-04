@@ -34,7 +34,7 @@ def test_email_verification_page_declares_distinct_states() -> None:
 
     assert 'aria-live="polite"' in html
     assert 'href="/login"' in html
-    assert 'href="/pricing"' in html
+    assert 'href="/plans"' in html
 
 
 def test_email_verification_page_loads_controller() -> None:

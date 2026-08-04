@@ -34,10 +34,9 @@ def test_registration_contract_rejects_client_supplied_price():
 @pytest.mark.parametrize(
     ("plan_id", "expected"),
     [
-        ("academic", "academic"),
+        ("academic", "academic_individual"),
         ("starter", "starter"),
         ("business", "business"),
-        ("enterprise_integration_starter", "enterprise_integration_starter"),
         ("enterprise_pilot", "enterprise_pilot"),
         (" STARTER ", "starter"),
         (None, None),
@@ -47,6 +46,13 @@ def test_registration_contract_rejects_client_supplied_price():
 )
 def test_direct_registration_plan_resolver_accepts_public_registration_plans(plan_id, expected):
     assert resolve_direct_registration_plan(plan_id) == expected
+
+def test_direct_registration_plan_resolver_rejects_commercial_assessment_plan():
+    with pytest.raises(
+        ValueError,
+        match="Plan requires a commercial assessment",
+    ):
+        resolve_direct_registration_plan("enterprise_integration_starter")
 
 
 @pytest.mark.parametrize(

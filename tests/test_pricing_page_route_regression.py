@@ -23,5 +23,5 @@ def test_login_links_to_public_pricing_route() -> None:
     response = TestClient(app).get("/login")
 
     assert response.status_code == 200
-    assert 'href="/pricing"' in response.text
+    assert 'href="/plans"' in response.text
     assert 'href="/console/pricing.html"' not in response.text

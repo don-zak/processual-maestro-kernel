@@ -5,10 +5,11 @@ OFFER_JS = STATIC / "js" / "pages" / "offer.js"
 REGISTER_JS = STATIC / "js" / "pages" / "register.js"
 
 
-def test_direct_offer_uses_canonical_plan_id_registration_query() -> None:
+def test_direct_offer_uses_plan_owned_registration_path_and_query() -> None:
     source = OFFER_JS.read_text(encoding="utf-8")
 
-    assert "/register?plan_id=" in source
+    assert "plan.registration_path" in source
+    assert "?plan_id=" in source
     assert "/register?plan=" not in source
 
 
@@ -18,7 +19,6 @@ def test_assessment_offer_uses_apply_journey_not_registration() -> None:
     assert "plan.requires_assessment || !plan.registration_available" in source
     assert "/apply?plan_id=" in source
     assert "journey=assessment" in source
-    assert "/register?plan=${" not in source
 
 
 def test_registration_controller_reads_optional_plan_id() -> None:
@@ -35,6 +35,7 @@ def test_registration_payload_does_not_send_client_price_fields() -> None:
     forbidden = (
         "amount_cents",
         "monthly_price_usd",
+        "annual_price_usd",
         "currency:",
         "offer_id",
         "checkout",
