@@ -34,6 +34,11 @@ from processual_api.admin_marketplace.contracts import (
     SubscriptionStatus,
     TrialStatus,
 )
+from processual_api.admin_marketplace.eligibility_service import (
+    AdminMarketplaceEligibilityResult,
+    AdminMarketplaceEligibilityService,
+    AdminMarketplaceEligibilityState,
+)
 from processual_api.admin_marketplace.errors import (
     AdminMarketplaceAuditSafetyError,
     AdminMarketplaceAuthorityDeniedError,
