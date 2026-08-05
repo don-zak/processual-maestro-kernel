@@ -18,6 +18,8 @@ down_revision: str | None = "20260805_0023"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+AUDIT_TABLE = "admin_market_audit_records"
+
 _ACTIONS = (
     "action IN ('authority_checked', 'offer_decided', "
     "'channel_eligibility_decided', 'channel_selected', "
@@ -50,10 +52,21 @@ _PREVIOUS_RESOURCES = (
 )
 
 
+def _reflected_check_names() -> set[str]:
+    inspector = sa.inspect(op.get_bind())
+    return {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints(AUDIT_TABLE)
+        if constraint.get("name")
+    }
+
+
 def _replace_audit_constraint(name: str, expression: str) -> None:
     resolved_name = op.f(name)
-    with op.batch_alter_table("admin_market_audit_records") as batch_op:
-        batch_op.drop_constraint(resolved_name, type_="check")
+    reflected = _reflected_check_names()
+    with op.batch_alter_table(AUDIT_TABLE) as batch_op:
+        if resolved_name in reflected:
+            batch_op.drop_constraint(resolved_name, type_="check")
         batch_op.create_check_constraint(resolved_name, expression)
 
 
