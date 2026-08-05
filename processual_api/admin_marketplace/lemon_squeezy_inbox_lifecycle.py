@@ -40,9 +40,11 @@ def claim_lemon_squeezy_webhook(
     if entry.claimed_at is not None or entry.processed_at is not None or entry.rejected_at is not None:
         raise LemonSqueezyWebhookError("webhook lifecycle timestamps are inconsistent.")
 
+    timestamp = _aware_timestamp(claimed_at, field_name="claimed_at")
+
     entry.processing_status = "processing"
     entry.attempt_count += 1
-    entry.claimed_at = _aware_timestamp(claimed_at, field_name="claimed_at")
+    entry.claimed_at = timestamp
     entry.last_error_code = None
 
 
@@ -76,8 +78,10 @@ def mark_lemon_squeezy_webhook_rejected(
     error_code: str,
     rejected_at: datetime | None = None,
 ) -> None:
+    normalized_error_code = _normalized_error_code(error_code)
+
     if entry.processing_status == "rejected":
-        if entry.last_error_code != _normalized_error_code(error_code):
+        if entry.last_error_code != normalized_error_code:
             raise LemonSqueezyWebhookError(
                 "rejected webhook cannot be replayed with a different error code."
             )
@@ -96,4 +100,4 @@ def mark_lemon_squeezy_webhook_rejected(
     entry.processing_status = "rejected"
     entry.rejected_at = timestamp
     entry.processed_at = None
-    entry.last_error_code = _normalized_error_code(error_code)
+    entry.last_error_code = normalized_error_code
