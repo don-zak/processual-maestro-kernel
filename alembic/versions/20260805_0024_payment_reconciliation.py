@@ -75,6 +75,8 @@ def _replace_audit_constraint(name: str, expression: str) -> None:
 
 
 def _assert_empty_before_downgrade() -> None:
+    if context.is_offline_mode():
+        return
     row = op.get_bind().execute(
         sa.text("SELECT 1 FROM admin_market_payment_reconciliation_cases LIMIT 1")
     ).first()
