@@ -43,6 +43,15 @@
     window.location.replace('/login?mode=admin');
   }
 
+  function loadAdminMarketplaceCatalog() {
+    if (document.querySelector('script[data-admin-marketplace-catalog]')) return;
+    const script = document.createElement('script');
+    script.src = '/console/js/admin_marketplace_catalog.js?v=a3-original-offers-1';
+    script.defer = true;
+    script.dataset.adminMarketplaceCatalog = 'true';
+    document.head.appendChild(script);
+  }
+
   function bindAdminActions() {
     const clientButton = document.getElementById('admin-client-console-btn');
     const logoutButton = document.getElementById('admin-logout-btn');
@@ -60,11 +69,14 @@
         logout();
       });
     }
+
+    loadAdminMarketplaceCatalog();
   }
 
   window.PMK_ADMIN_ACTIONS = {
     bindAdminActions,
     clearAuthState,
+    loadAdminMarketplaceCatalog,
     logout,
     openClientConsole,
   };
