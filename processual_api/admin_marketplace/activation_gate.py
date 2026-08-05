@@ -9,8 +9,8 @@ from typing import Mapping
 class ActivationGateInput:
     order_ref: str
     customer_ref: str
-    offer_id: str
-    plan_id: str
+    offer_ref: str
+    plan_ref: str
     order_status: str
     contract_status: str
     payment_requirement: str
@@ -48,8 +48,8 @@ def _snapshot_text(snapshot: Mapping[str, object], key: str) -> str:
 def evaluate_activation_gate(candidate: ActivationGateInput) -> ActivationGateDecision:
     """Return a fail-closed activation decision without mutating persistence.
 
-    The gate intentionally duplicates high-value identity and commercial checks
-    before the transactional activation service creates a subscription. Database
+    The gate duplicates high-value identity and commercial checks before a
+    transactional activation service creates a subscription. Database unique
     constraints remain the final concurrency authority.
     """
 
@@ -59,10 +59,10 @@ def evaluate_activation_gate(candidate: ActivationGateInput) -> ActivationGateDe
         reasons.append("missing_order_ref")
     if not candidate.customer_ref.strip():
         reasons.append("missing_customer_ref")
-    if not candidate.offer_id.strip():
-        reasons.append("missing_offer_id")
-    if not candidate.plan_id.strip():
-        reasons.append("missing_plan_id")
+    if not candidate.offer_ref.strip():
+        reasons.append("missing_offer_ref")
+    if not candidate.plan_ref.strip():
+        reasons.append("missing_plan_ref")
 
     if candidate.order_status != _REQUIRED_ORDER_STATUS:
         reasons.append("order_not_ready_for_activation")
@@ -84,22 +84,22 @@ def evaluate_activation_gate(candidate: ActivationGateInput) -> ActivationGateDe
     if candidate.total_amount < Decimal("0"):
         reasons.append("negative_order_total")
 
-    snapshot_offer_id = _snapshot_text(candidate.offer_snapshot, "offer_id")
-    snapshot_plan_id = _snapshot_text(candidate.offer_snapshot, "plan_id")
+    snapshot_offer_ref = _snapshot_text(candidate.offer_snapshot, "offer_ref")
+    snapshot_plan_ref = _snapshot_text(candidate.offer_snapshot, "plan_ref")
     snapshot_currency = _snapshot_text(candidate.offer_snapshot, "currency")
     snapshot_channel = _snapshot_text(candidate.offer_snapshot, "sales_channel")
-    snapshot_version = _snapshot_text(candidate.offer_snapshot, "pricebook_version")
+    snapshot_at = _snapshot_text(candidate.offer_snapshot, "snapshot_at")
 
-    if not snapshot_offer_id or snapshot_offer_id != candidate.offer_id:
+    if not snapshot_offer_ref or snapshot_offer_ref != candidate.offer_ref:
         reasons.append("offer_snapshot_mismatch")
-    if not snapshot_plan_id or snapshot_plan_id != candidate.plan_id:
+    if not snapshot_plan_ref or snapshot_plan_ref != candidate.plan_ref:
         reasons.append("plan_snapshot_mismatch")
     if not snapshot_currency or snapshot_currency != candidate.currency:
         reasons.append("currency_snapshot_mismatch")
     if not snapshot_channel or snapshot_channel != candidate.selected_channel:
         reasons.append("channel_snapshot_mismatch")
-    if not snapshot_version:
-        reasons.append("missing_pricebook_version")
+    if not snapshot_at:
+        reasons.append("missing_offer_snapshot_timestamp")
 
     if candidate.payment_status == "verified":
         if candidate.payment_customer_ref != candidate.customer_ref:
