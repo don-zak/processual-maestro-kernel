@@ -55,9 +55,10 @@ from processual_api.admin_marketplace.payment_destination_service import (
     PaymentDestinationAdministrationService,
 )
 
-# Import the catalog route extension after the authority and contract exports.
-# Importing the package therefore registers the read-only original-offer routes
-# on the shared Admin Marketplace router without creating a second router tree.
+# Import route extensions after authority and contract exports.
 from processual_api.admin_marketplace import catalog_router as _catalog_router
+from processual_api.admin_marketplace import (
+    lemon_squeezy_secure_webhook_router as _lemon_squeezy_secure_webhook_router,
+)
 
 __all__ = [name for name in globals() if not name.startswith("_")]
