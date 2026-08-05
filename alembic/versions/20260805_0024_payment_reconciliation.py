@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260805_0024"
 down_revision: str | None = "20260805_0023"
@@ -53,6 +53,10 @@ _PREVIOUS_RESOURCES = (
 
 
 def _reflected_check_names() -> set[str]:
+    action_name = op.f("ck_admin_market_audit_records_action_allowed")
+    resource_name = op.f("ck_admin_market_audit_records_resource_type_allowed")
+    if context.is_offline_mode():
+        return {action_name, resource_name}
     inspector = sa.inspect(op.get_bind())
     return {
         constraint["name"]
