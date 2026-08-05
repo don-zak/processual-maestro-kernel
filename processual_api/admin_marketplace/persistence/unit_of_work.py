@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.admin_marketplace.lemon_squeezy_persistence import (
     SqlAlchemyLemonSqueezyWebhookInboxRepository,
 )
+from processual_api.admin_marketplace.lemon_squeezy_reconciliation_persistence import (
+    SqlAlchemyLemonSqueezyReconciliationDecisionRepository,
+)
 from processual_api.admin_marketplace.notification_outbox import (
     SqlAlchemyNotificationOutboxRepository,
 )
@@ -64,10 +67,11 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.commercial_audit: SqlAlchemyCommercialAuditRepository
         self.notification_outbox: SqlAlchemyNotificationOutboxRepository
         self.lemon_squeezy_webhook_inbox: SqlAlchemyLemonSqueezyWebhookInboxRepository
+        self.lemon_squeezy_reconciliation_decisions: SqlAlchemyLemonSqueezyReconciliationDecisionRepository
 
     async def __aenter__(
         self,
-    ) -> SqlAlchemyAdminMarketplaceUnitOfWork:
+    ) -> "SqlAlchemyAdminMarketplaceUnitOfWork":
         if self._session is not None:
             raise RuntimeError("Admin Marketplace unit of work is already active.")
 
@@ -93,6 +97,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.commercial_audit = SqlAlchemyCommercialAuditRepository(session)
         self.notification_outbox = SqlAlchemyNotificationOutboxRepository(session)
         self.lemon_squeezy_webhook_inbox = SqlAlchemyLemonSqueezyWebhookInboxRepository(session)
+        self.lemon_squeezy_reconciliation_decisions = SqlAlchemyLemonSqueezyReconciliationDecisionRepository(session)
 
         return self
 
