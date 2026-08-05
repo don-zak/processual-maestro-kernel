@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.routing import APIRoute
@@ -19,17 +18,18 @@ from processual_api.billing.router import router as billing_router
 from processual_api.db.session import get_session_factory
 
 _MAX_BODY_BYTES = 1_048_576
+_MIN_SECRET_LENGTH = 32
 _secure_router = APIRouter(prefix="/billing", tags=["billing"])
 
 
-def _required_environment(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise HTTPException(
-            status_code=503,
-            detail="Webhook processing is unavailable.",
-        )
-    return value
+def _webhook_configuration() -> tuple[str, str]:
+    signing_secret = os.environ.get("LEMONSQUEEZY_WEBHOOK_SECRET", "").strip()
+    store_id = os.environ.get("LEMONSQUEEZY_STORE_ID", "").strip()
+    if len(signing_secret) < _MIN_SECRET_LENGTH:
+        raise HTTPException(status_code=503, detail="Webhook processing is unavailable.")
+    if not store_id.isdigit() or int(store_id) <= 0:
+        raise HTTPException(status_code=503, detail="Webhook processing is unavailable.")
+    return signing_secret, store_id
 
 
 def _uow_factory() -> SqlAlchemyAdminMarketplaceUnitOfWork:
@@ -41,13 +41,15 @@ async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
-            if int(content_length) > _MAX_BODY_BYTES:
-                raise HTTPException(status_code=413, detail="Webhook request is too large.")
+            declared_length = int(content_length)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid webhook request.") from exc
+        if declared_length < 0:
+            raise HTTPException(status_code=400, detail="Invalid webhook request.")
+        if declared_length > _MAX_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Webhook request is too large.")
 
-    signing_secret = _required_environment("LEMONSQUEEZY_WEBHOOK_SECRET")
-    expected_store_id = _required_environment("LEMONSQUEEZY_STORE_ID")
+    signing_secret, expected_store_id = _webhook_configuration()
     signature = request.headers.get("X-Signature", "")
     event_header = request.headers.get("X-Event-Name", "")
     raw_body = await request.body()
