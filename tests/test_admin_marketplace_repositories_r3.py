@@ -83,14 +83,28 @@ async def test_plan_repository_adds_and_reads_by_id() -> None:
 
     plan_id = uuid.uuid4()
     plan = MagicMock(spec=AdminMarketPlan)
-    session.get_result = plan
+    session.scalar_result = plan
 
     repository.add(plan)
     result = await repository.get_by_id(plan_id)
 
     assert session.added == [plan]
-    assert session.get_calls == [(AdminMarketPlan, plan_id)]
     assert result is plan
+    assert len(session.scalar_statements) == 1
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "FROM admin_market_plans" in sql
+    assert "FOR UPDATE" not in sql
+
+
+@pytest.mark.asyncio
+async def test_plan_repository_supports_activation_row_lock() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyPlanRepository(session)  # type: ignore[arg-type]
+
+    await repository.get_by_id(uuid.uuid4(), for_update=True)
+
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "FOR UPDATE" in sql
 
 
 @pytest.mark.asyncio

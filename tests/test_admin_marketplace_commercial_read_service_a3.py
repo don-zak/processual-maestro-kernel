@@ -51,11 +51,33 @@ class PaymentEvidence:
         return (self.item,)
 
 
+class Activations(PaymentEvidence):
+    pass
+
+
+class Subscriptions:
+    def __init__(self, item) -> None:
+        self.item = item
+
+    async def get_by_id(self, subscription_id, *, for_update=False):
+        assert subscription_id == self.item.id
+        return self.item
+
+
 class Unit:
-    def __init__(self, order, contract, evidence=None) -> None:
+    def __init__(
+        self,
+        order,
+        contract,
+        evidence=None,
+        activation=None,
+        subscription=None,
+    ) -> None:
         self.orders = Orders(order)
         self.contracts = Contracts(contract)
         self.payment_evidence = PaymentEvidence(evidence)
+        self.entitlement_activations = Activations(activation)
+        self.subscriptions = Subscriptions(subscription)
 
     async def __aenter__(self):
         return self
@@ -123,6 +145,27 @@ def payment_evidence():
     )
 
 
+def activation_records():
+    subscription_id = uuid.UUID("40000000-0000-0000-0000-000000000001")
+    activation = SimpleNamespace(
+        activation_ref="act_001",
+        subscription_id=subscription_id,
+        order_id=ORDER_ID,
+        customer_ref="customer_001",
+        entitlement_profile_ref="starter_entitlements_v1",
+        status="activated",
+        automatic_activation_allowed=True,
+        activated_at=NOW,
+    )
+    subscription = SimpleNamespace(
+        id=subscription_id,
+        subscription_ref="sub_001",
+        status="active",
+        starts_at=NOW,
+    )
+    return activation, subscription
+
+
 @pytest.mark.asyncio
 async def test_platform_admin_reads_real_orders_and_contracts_without_mfa() -> None:
     order, contract = records()
@@ -158,3 +201,23 @@ async def test_platform_admin_reads_only_safe_payment_evidence_fields() -> None:
     assert items[0].order_ref == "ord_001"
     assert items[0].safe_source_reference == "***7788"
     assert not hasattr(items[0], "source_reference_hash")
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_reads_automatic_subscription_activations() -> None:
+    order, contract = records()
+    activation, subscription = activation_records()
+    service = AdminMarketplaceCommercialReadService(
+        unit_of_work_factory=lambda: Unit(
+            order,
+            contract,
+            activation=activation,
+            subscription=subscription,
+        )
+    )
+
+    items = await service.list_subscription_activations(authority=authority("platform_admin"))
+
+    assert items[0].subscription_ref == "sub_001"
+    assert items[0].order_ref == "ord_001"
+    assert items[0].automatic_activation_allowed is True

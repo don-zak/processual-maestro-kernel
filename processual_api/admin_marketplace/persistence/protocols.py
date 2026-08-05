@@ -29,6 +29,8 @@ class PlanRepository(Protocol):
     async def get_by_id(
         self,
         plan_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> AdminMarketPlan | None: ...
 
     def add(
@@ -63,9 +65,22 @@ class OfferRepository(Protocol):
 
 @runtime_checkable
 class SubscriptionRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketSubscription]: ...
+
     async def get_by_id(
         self,
         subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None: ...
+
+    async def get_active_by_customer_ref(
+        self,
+        customer_ref: str,
         *,
         for_update: bool = False,
     ) -> AdminMarketSubscription | None: ...
@@ -253,11 +268,29 @@ class InvoiceRepository(Protocol):
 
 @runtime_checkable
 class EntitlementActivationRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketEntitlementActivation]: ...
+
     async def get_by_id(
         self,
         activation_id: uuid.UUID,
         *,
         for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None: ...
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None: ...
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
     ) -> AdminMarketEntitlementActivation | None: ...
 
     def add(

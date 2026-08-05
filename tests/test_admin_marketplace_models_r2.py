@@ -98,10 +98,7 @@ def test_subscription_and_order_status_are_constrained() -> None:
         for expression in subscription_checks
     )
 
-    assert any(
-        "awaiting_contract" in expression and "activated" in expression
-        for expression in order_checks
-    )
+    assert any("awaiting_contract" in expression and "activated" in expression for expression in order_checks)
 
     assert any("maestro_direct" in expression and "lemon_squeezy" in expression for expression in order_checks)
 
@@ -192,6 +189,19 @@ def test_entitlement_activation_defaults_fail_closed() -> None:
     assert column.default.arg is False
 
 
+def test_automatic_activation_has_order_and_idempotency_identity() -> None:
+    subscription_columns = _column_names(AdminMarketSubscription)
+    activation_columns = _column_names(AdminMarketEntitlementActivation)
+
+    assert "order_id" in subscription_columns
+    assert {
+        "order_id",
+        "status",
+        "activation_idempotency_key_hash",
+        "activated_at",
+    }.issubset(activation_columns)
+
+
 def test_audit_table_is_append_only_and_authority_locked() -> None:
     columns = _column_names(AdminMarketAuditRecord)
 
@@ -232,6 +242,13 @@ def test_internal_foreign_key_delete_policies_are_explicit() -> None:
             "RESTRICT",
         ),
         (
+            AdminMarketSubscription,
+            "order_id",
+        ): (
+            "admin_market_orders.id",
+            "RESTRICT",
+        ),
+        (
             AdminMarketOrder,
             "offer_id",
         ): (
@@ -258,6 +275,13 @@ def test_internal_foreign_key_delete_policies_are_explicit() -> None:
         ): (
             "admin_market_subscriptions.id",
             "CASCADE",
+        ),
+        (
+            AdminMarketEntitlementActivation,
+            "order_id",
+        ): (
+            "admin_market_orders.id",
+            "RESTRICT",
         ),
     }
 

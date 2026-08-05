@@ -7,6 +7,7 @@
   let orders = [];
   let contracts = [];
   let paymentEvidence = [];
+  let subscriptionActivations = [];
   let pendingCreateKey = '';
   let pendingMfaOperation = null;
 
@@ -293,10 +294,35 @@
     ].join('')).join('');
   }
 
+  function renderSubscriptionActivations() {
+    const target = element('am-subscription-activation-list');
+    if (!target) return;
+    if (!subscriptionActivations.length) {
+      target.dataset.state = 'empty';
+      target.innerHTML = '<div class="am-empty">No subscriptions have passed every automatic activation gate.</div>';
+      return;
+    }
+    target.dataset.state = 'ready';
+    target.innerHTML = subscriptionActivations.map((item) => [
+      '<article class="am-destination-item">',
+      '<div class="am-destination-title"><div><h4>' + escapeHtml(item.subscription_ref) + '</h4><p>Order ' + escapeHtml(item.order_ref) + '</p></div>',
+      '<div class="am-badges"><span class="am-badge active">' + escapeHtml(item.subscription_status) + '</span></div></div>',
+      '<div class="am-destination-details">',
+      '<div><span>Customer</span><strong>' + escapeHtml(item.customer_ref) + '</strong></div>',
+      '<div><span>Activation</span><strong>' + escapeHtml(item.activation_ref) + '</strong></div>',
+      '<div><span>Entitlement profile</span><strong>' + escapeHtml(item.entitlement_profile_ref) + '</strong></div>',
+      '<div><span>Mode</span><strong>' + (item.automatic_activation_allowed ? 'Automatic' : 'Blocked') + '</strong></div>',
+      '<div><span>Started</span><strong>' + escapeHtml(safeDate(item.starts_at)) + '</strong></div>',
+      '<div><span>Activated</span><strong>' + escapeHtml(safeDate(item.activated_at)) + '</strong></div>',
+      '</div></article>',
+    ].join('')).join('');
+  }
+
   async function loadCommercialList(kind) {
     const target = element(
       kind === 'orders' ? 'am-order-list' :
-        (kind === 'contracts' ? 'am-contract-list' : 'am-payment-evidence-list')
+        (kind === 'contracts' ? 'am-contract-list' :
+          (kind === 'payment-evidence' ? 'am-payment-evidence-list' : 'am-subscription-activation-list'))
     );
     if (target) {
       target.dataset.state = 'loading';
@@ -310,9 +336,12 @@
       } else if (kind === 'contracts') {
         contracts = Array.isArray(result.items) ? result.items : [];
         renderContracts();
-      } else {
+      } else if (kind === 'payment-evidence') {
         paymentEvidence = Array.isArray(result.items) ? result.items : [];
         renderPaymentEvidence();
+      } else {
+        subscriptionActivations = Array.isArray(result.items) ? result.items : [];
+        renderSubscriptionActivations();
       }
     } catch (error) {
       if (target) {
@@ -498,7 +527,7 @@
     setMutationLoading(button, true, 'Verifying…');
     const idempotencyKey = uniqueKey('payment-verification');
     const operation = async function () {
-      await request(
+      const result = await request(
         ADMIN_MARKET_ROOT + '/payment-evidence/' + encodeURIComponent(evidenceRef) + '/verify',
         {
           method: 'POST',
@@ -509,9 +538,15 @@
           body: { decision: 'verified', reason_code: 'admin_exact_match_confirmed' },
         }
       );
-      showNotice('Payment verified. The order is ready for the separate activation phase.', 'success');
+      showNotice(
+        result.activation_status === 'activated'
+          ? 'Payment verified and subscription activated automatically.'
+          : 'Payment verified. Automatic activation is waiting on gate: ' + (result.activation_reason_code || 'not_ready') + '.',
+        result.activation_status === 'activated' ? 'success' : 'warning'
+      );
       await loadCommercialList('payment-evidence');
       await loadCommercialList('orders');
+      await loadCommercialList('subscription-activations');
     };
     try {
       await withMfaRetry(operation);
@@ -534,6 +569,7 @@
     if (name === 'orders') loadCommercialList('orders');
     if (name === 'contracts') loadCommercialList('contracts');
     if (name === 'payments') loadCommercialList('payment-evidence');
+    if (name === 'subscriptions') loadCommercialList('subscription-activations');
   }
 
   function bind() {
@@ -563,6 +599,8 @@
     if (refreshContracts) refreshContracts.addEventListener('click', () => loadCommercialList('contracts'));
     const refreshPayments = element('am-refresh-payments');
     if (refreshPayments) refreshPayments.addEventListener('click', () => loadCommercialList('payment-evidence'));
+    const refreshSubscriptions = element('am-refresh-subscriptions');
+    if (refreshSubscriptions) refreshSubscriptions.addEventListener('click', () => loadCommercialList('subscription-activations'));
     const list = element('am-payment-destination-list');
     if (list) list.addEventListener('click', (event) => {
       const button = event.target.closest('[data-am-destination-action]');

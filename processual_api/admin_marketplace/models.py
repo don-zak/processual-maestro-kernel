@@ -221,6 +221,17 @@ class AdminMarketSubscription(Base):
             "subscription_ref",
             name="uq_admin_market_subscriptions_subscription_ref",
         ),
+        UniqueConstraint(
+            "order_id",
+            name="uq_admin_market_subscriptions_order_id",
+        ),
+        Index(
+            "uq_admin_market_subscriptions_active_customer",
+            "customer_ref",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
         Index(
             "ix_admin_market_subscriptions_customer_status",
             "customer_ref",
@@ -236,6 +247,14 @@ class AdminMarketSubscription(Base):
     customer_ref: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_orders.id",
+            name="fk_admin_market_subscription_order",
+            ondelete="RESTRICT",
+        ),
     )
     offer_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -723,6 +742,22 @@ class AdminMarketEntitlementActivation(Base):
             "activation_ref",
             name=("uq_admin_market_entitlement_activations_activation_ref"),
         ),
+        UniqueConstraint(
+            "subscription_id",
+            name="uq_admin_market_entitlement_activations_subscription_id",
+        ),
+        UniqueConstraint(
+            "order_id",
+            name="uq_admin_market_entitlement_activations_order_id",
+        ),
+        UniqueConstraint(
+            "activation_idempotency_key_hash",
+            name="uq_admin_market_entitlement_activations_idem_hash",
+        ),
+        CheckConstraint(
+            "status IN ('activated', 'failed', 'requires_review')",
+            name="status_allowed",
+        ),
         Index(
             "ix_admin_market_entitlement_subscription",
             "subscription_id",
@@ -737,6 +772,14 @@ class AdminMarketEntitlementActivation(Base):
     customer_ref: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_orders.id",
+            name="fk_admin_market_entitlement_order",
+            ondelete="RESTRICT",
+        ),
     )
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -756,6 +799,13 @@ class AdminMarketEntitlementActivation(Base):
         nullable=False,
         default=False,
     )
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="activated",
+    )
+    activation_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
 
 

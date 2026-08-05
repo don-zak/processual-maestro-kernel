@@ -20,6 +20,8 @@ from processual_api.admin_marketplace.errors import (
     PaymentDestinationNotFoundError,
     PaymentEvidenceNotFoundError,
     PaymentVerificationConflictError,
+    SubscriptionActivationConflictError,
+    SubscriptionActivationNotReadyError,
 )
 from processual_api.admin_marketplace.payment_destination_contracts import (
     PaymentDestinationCreateContract,
@@ -41,6 +43,9 @@ from processual_api.admin_marketplace.runtime import (
     AdminMarketplaceRuntime,
     AdminMarketplaceRuntimeUnavailableError,
     build_admin_marketplace_runtime,
+)
+from processual_api.admin_marketplace.subscription_activation_service import (
+    SubscriptionActivationResult,
 )
 from processual_api.auth.session_router import get_identity_user
 
@@ -247,6 +252,32 @@ class PaymentVerificationResponse(BaseModel):
     order_status: str
     payment_status: str
     reason_code: str
+    activation_status: str | None = None
+    activation_reason_code: str | None = None
+    subscription_ref: str | None = None
+    activation_ref: str | None = None
+
+
+class SubscriptionActivationReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activation_ref: str
+    subscription_ref: str
+    order_ref: str
+    customer_ref: str
+    entitlement_profile_ref: str
+    activation_status: str
+    subscription_status: str
+    automatic_activation_allowed: bool
+    starts_at: datetime | None
+    activated_at: datetime
+
+
+class SubscriptionActivationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[SubscriptionActivationReadResponse, ...]
+    count: int
 
 
 async def get_admin_marketplace_runtime() -> AdminMarketplaceRuntime:
@@ -405,6 +436,9 @@ async def list_admin_marketplace_payment_evidence(
 
 def _payment_verification_response(
     result: AdminPaymentVerificationResult,
+    *,
+    activation: SubscriptionActivationResult | None = None,
+    activation_reason_code: str | None = None,
 ) -> PaymentVerificationResponse:
     return PaymentVerificationResponse(
         verification_id=str(result.verification_id),
@@ -414,9 +448,15 @@ def _payment_verification_response(
         status=result.status,
         decision_reason_code=result.decision_reason_code,
         decided_at=result.decided_at,
-        order_status=result.order_status,
+        order_status=(activation.order_status if activation is not None else result.order_status),
         payment_status=result.payment_status,
         reason_code=result.reason_code,
+        activation_status=(
+            activation.status if activation is not None else ("not_ready" if activation_reason_code else None)
+        ),
+        activation_reason_code=(activation.reason_code if activation is not None else activation_reason_code),
+        subscription_ref=(None if activation is None else activation.subscription_ref),
+        activation_ref=None if activation is None else activation.activation_ref,
     )
 
 
@@ -442,6 +482,17 @@ async def verify_admin_marketplace_payment(
             correlation_id=correlation_id,
             idempotency_key=idempotency_key,
         )
+        activation = None
+        activation_reason_code = None
+        if result.status == "verified":
+            try:
+                activation = await runtime.subscription_activation_service.activate_ready_order(
+                    order_ref=result.order_ref,
+                    correlation_id=correlation_id,
+                    idempotency_key=idempotency_key,
+                )
+            except SubscriptionActivationNotReadyError as exc:
+                activation_reason_code = exc.reason_code
     except AdminMarketplaceStepUpRequiredError as exc:
         raise HTTPException(status_code=428, detail="Recent MFA step-up is required.") from exc
     except AdminMarketplaceAuthorityDeniedError as exc:
@@ -451,7 +502,11 @@ async def verify_admin_marketplace_payment(
         ) from exc
     except PaymentEvidenceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Payment evidence was not found.") from exc
-    except (PaymentVerificationConflictError, AdminMarketplaceConflictError) as exc:
+    except (
+        PaymentVerificationConflictError,
+        SubscriptionActivationConflictError,
+        AdminMarketplaceConflictError,
+    ) as exc:
         raise HTTPException(
             status_code=409,
             detail="Payment verification conflicts with stored state.",
@@ -460,7 +515,33 @@ async def verify_admin_marketplace_payment(
         raise HTTPException(status_code=400, detail="Invalid payment verification request.") from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
-    return _payment_verification_response(result)
+    return _payment_verification_response(
+        result,
+        activation=activation,
+        activation_reason_code=activation_reason_code,
+    )
+
+
+@router.get(
+    "/subscription-activations",
+    response_model=SubscriptionActivationListResponse,
+)
+async def list_admin_marketplace_subscription_activations(
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+) -> SubscriptionActivationListResponse:
+    try:
+        authority = await _commercial_read_authority(current_user=current_user, runtime=runtime)
+        items = await runtime.commercial_read_service.list_subscription_activations(authority=authority)
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Active platform administrator authority is required.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    responses = tuple(SubscriptionActivationReadResponse.model_validate(item, from_attributes=True) for item in items)
+    return SubscriptionActivationListResponse(items=responses, count=len(responses))
 
 
 def _payment_destination_service(
@@ -879,6 +960,8 @@ __all__ = [
     "PaymentEvidenceReadResponse",
     "PaymentVerificationRequest",
     "PaymentVerificationResponse",
+    "SubscriptionActivationListResponse",
+    "SubscriptionActivationReadResponse",
     "activate_payment_destination",
     "create_and_validate_payment_destination",
     "create_payment_destination",
@@ -889,6 +972,7 @@ __all__ = [
     "get_payment_destination",
     "list_payment_destinations",
     "list_admin_marketplace_payment_evidence",
+    "list_admin_marketplace_subscription_activations",
     "router",
     "set_default_payment_destination",
     "validate_payment_destination",

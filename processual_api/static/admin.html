@@ -407,7 +407,10 @@
     <div id="am-payment-evidence-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading payment evidence…</div></div>
   </section>
   <section class="am-section" data-am-panel="reconciliation"><div class="am-empty-panel"><span>Reconciliation &amp; Exceptions</span><h2>No exception workflow yet</h2><p>Underpayments, duplicate evidence, and unmatched references will be handled here with MFA and audit.</p></div></section>
-  <section class="am-section" data-am-panel="subscriptions"><div class="am-empty-panel"><span>Subscriptions &amp; Activations</span><h2>Activation pipeline is not wired yet</h2><p>Automatic activation and entitlements will appear here after all server-side gates pass.</p></div></section>
+  <section class="am-section" data-am-panel="subscriptions">
+    <div class="am-section-heading"><div><span class="am-kicker">Automatic gated activation</span><h2>Subscriptions &amp; Activations</h2><p>Subscriptions and entitlement profiles created atomically after contract, payment, offer, and eligibility gates pass.</p></div><button id="am-refresh-subscriptions" class="btn secondary" type="button">Refresh</button></div>
+    <div id="am-subscription-activation-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading subscription activations…</div></div>
+  </section>
   <section class="am-section" data-am-panel="audit"><div class="am-empty-panel"><span>Audit Log</span><h2>Payment audit API pending</h2><p>Audit events exist in persistence, but this panel stays empty until a safe read-only DTO is exposed.</p></div></section>
 
   <dialog id="am-confirm-dialog" class="am-dialog"><form method="dialog"><span class="am-kicker">Sensitive operation</span><h2 id="am-confirm-title">Confirm action</h2><p id="am-confirm-message"></p><div class="am-dialog-actions"><button class="btn secondary" value="cancel">Cancel</button><button id="am-confirm-submit" class="btn accent" value="confirm">Confirm</button></div></form></dialog>
@@ -802,7 +805,7 @@
 </script>
 <script src="/console/js/client.js?v=adminruntime05"></script>
 <script src="/console/js/admin_auth_bridge.js?v=adminruntime05"></script>
-<script src="/console/js/admin_marketplace.js?v=a3-phase11-12"></script>
+<script src="/console/js/admin_marketplace.js?v=a3-phase13-14"></script>
 <script src="/console/js/adapters/adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_api_keys.js?v=adminapikeys13eh2"></script>

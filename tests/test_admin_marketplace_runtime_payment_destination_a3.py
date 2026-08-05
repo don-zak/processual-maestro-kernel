@@ -20,9 +20,7 @@ def _config(**updates):
         "admin_marketplace_payment_destination_key_ring_json": json.dumps(
             {"payment-v1": base64.b64encode(b"p" * 32).decode()}
         ),
-        "admin_marketplace_payment_destination_current_key_version": (
-            "payment-v1"
-        ),
+        "admin_marketplace_payment_destination_current_key_version": ("payment-v1"),
     }
     values.update(updates)
     return SimpleNamespace(**values)
@@ -36,6 +34,8 @@ async def test_runtime_wires_real_payment_destination_cipher(monkeypatch) -> Non
 
     assert runtime.eligibility_service is not None
     assert runtime.payment_destination_service is not None
+    assert runtime.payment_verification_service is not None
+    assert runtime.subscription_activation_service is not None
 
 
 @pytest.mark.asyncio
