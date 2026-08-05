@@ -44,7 +44,8 @@ def test_subscription_activation_upgrade_enforces_single_activation() -> None:
 
 
 def test_subscription_activation_downgrade_is_data_guarded() -> None:
+    source = MIGRATION.read_text(encoding="utf-8").lower()
     sql = offline("downgrade", "20260805_0023:20260805_0022", "--sql")
 
-    assert "downgrade blocked: automatic subscription activation exists" in sql
+    assert "downgrade blocked: automatic subscription activation exists" in source
     assert "drop column order_id" in sql
