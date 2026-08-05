@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_JS = ROOT / "processual_api" / "static" / "js" / "admin_marketplace_catalog.js"
 ADMIN_ACTIONS_JS = ROOT / "processual_api" / "static" / "js" / "admin_actions.js"
