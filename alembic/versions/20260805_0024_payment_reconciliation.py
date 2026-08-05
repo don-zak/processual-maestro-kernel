@@ -18,6 +18,54 @@ down_revision: str | None = "20260805_0023"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+_ACTIONS = (
+    "action IN ('authority_checked', 'offer_decided', "
+    "'channel_eligibility_decided', 'channel_selected', "
+    "'payment_verification_decided', 'subscription_activation_decided', "
+    "'payment_destination_created', 'payment_destination_validated', "
+    "'payment_destination_activated', 'payment_destination_deactivated', "
+    "'payment_destination_default_set', 'order_created', "
+    "'contract_completed', 'payment_evidence_recorded', "
+    "'payment_reconciliation_decided')"
+)
+_PREVIOUS_ACTIONS = (
+    "action IN ('authority_checked', 'offer_decided', "
+    "'channel_eligibility_decided', 'channel_selected', "
+    "'payment_verification_decided', 'subscription_activation_decided', "
+    "'payment_destination_created', 'payment_destination_validated', "
+    "'payment_destination_activated', 'payment_destination_deactivated', "
+    "'payment_destination_default_set', 'order_created', "
+    "'contract_completed', 'payment_evidence_recorded')"
+)
+_RESOURCES = (
+    "resource_type IN ('offer', 'plan', 'order', 'payment_verification', "
+    "'subscription', 'trial', 'sales_channel_eligibility', "
+    "'payment_destination', 'contract', 'payment_evidence', "
+    "'payment_reconciliation')"
+)
+_PREVIOUS_RESOURCES = (
+    "resource_type IN ('offer', 'plan', 'order', 'payment_verification', "
+    "'subscription', 'trial', 'sales_channel_eligibility', "
+    "'payment_destination', 'contract', 'payment_evidence')"
+)
+
+
+def _replace_audit_constraint(name: str, expression: str) -> None:
+    resolved_name = op.f(name)
+    with op.batch_alter_table("admin_market_audit_records") as batch_op:
+        batch_op.drop_constraint(resolved_name, type_="check")
+        batch_op.create_check_constraint(resolved_name, expression)
+
+
+def _assert_empty_before_downgrade() -> None:
+    row = op.get_bind().execute(
+        sa.text("SELECT 1 FROM admin_market_payment_reconciliation_cases LIMIT 1")
+    ).first()
+    if row:
+        raise RuntimeError(
+            "Downgrade blocked: payment reconciliation cases exist"
+        )
+
 
 def upgrade() -> None:
     op.create_table(
@@ -43,8 +91,8 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "exception_type IN ('underpayment', 'overpayment', 'unknown_reference', "
-            "'old_destination', 'late_payment', 'duplicate_payment', 'payer_mismatch', "
-            "'currency_mismatch', 'untrusted_evidence', 'other')",
+            "'old_destination', 'late_payment', 'duplicate_payment', "
+            "'payer_mismatch', 'currency_mismatch', 'untrusted_evidence', 'other')",
             name=op.f("ck_admin_market_payment_reconciliation_cases_exception_type_allowed"),
         ),
         sa.CheckConstraint(
@@ -64,63 +112,26 @@ def upgrade() -> None:
         "admin_market_payment_reconciliation_cases",
         ["status", "updated_at"],
     )
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"), "admin_market_audit_records", type_="check"
+    _replace_audit_constraint(
+        "ck_admin_market_audit_records_action_allowed", _ACTIONS
     )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"),
-        "admin_market_audit_records",
-        "action IN ('authority_checked', 'offer_decided', 'channel_eligibility_decided', "
-        "'channel_selected', 'payment_verification_decided', 'subscription_activation_decided', "
-        "'payment_destination_created', 'payment_destination_validated', "
-        "'payment_destination_activated', 'payment_destination_deactivated', "
-        "'payment_destination_default_set', 'order_created', 'contract_completed', "
-        "'payment_evidence_recorded', 'payment_reconciliation_decided')",
-    )
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"), "admin_market_audit_records", type_="check"
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"),
-        "admin_market_audit_records",
-        "resource_type IN ('offer', 'plan', 'order', 'payment_verification', "
-        "'subscription', 'trial', 'sales_channel_eligibility', 'payment_destination', "
-        "'contract', 'payment_evidence', 'payment_reconciliation')",
+    _replace_audit_constraint(
+        "ck_admin_market_audit_records_resource_type_allowed", _RESOURCES
     )
 
 
 def downgrade() -> None:
-    op.execute("""
-        DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM admin_market_payment_reconciliation_cases) THEN
-                RAISE EXCEPTION 'Downgrade blocked: payment reconciliation cases exist';
-            END IF;
-        END $$
-    """)
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"), "admin_market_audit_records", type_="check"
+    _assert_empty_before_downgrade()
+    _replace_audit_constraint(
+        "ck_admin_market_audit_records_resource_type_allowed",
+        _PREVIOUS_RESOURCES,
     )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"),
-        "admin_market_audit_records",
-        "resource_type IN ('offer', 'plan', 'order', 'payment_verification', "
-        "'subscription', 'trial', 'sales_channel_eligibility', 'payment_destination', "
-        "'contract', 'payment_evidence')",
-    )
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"), "admin_market_audit_records", type_="check"
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"),
-        "admin_market_audit_records",
-        "action IN ('authority_checked', 'offer_decided', 'channel_eligibility_decided', "
-        "'channel_selected', 'payment_verification_decided', 'subscription_activation_decided', "
-        "'payment_destination_created', 'payment_destination_validated', "
-        "'payment_destination_activated', 'payment_destination_deactivated', "
-        "'payment_destination_default_set', 'order_created', 'contract_completed', "
-        "'payment_evidence_recorded')",
+    _replace_audit_constraint(
+        "ck_admin_market_audit_records_action_allowed",
+        _PREVIOUS_ACTIONS,
     )
     op.drop_index(
-        "ix_admin_market_reconciliation_status_updated", table_name="admin_market_payment_reconciliation_cases"
+        "ix_admin_market_reconciliation_status_updated",
+        table_name="admin_market_payment_reconciliation_cases",
     )
     op.drop_table("admin_market_payment_reconciliation_cases")
