@@ -21,17 +21,17 @@ CONSTRAINT = "ck_auth_registration_plan_intents_billing_period_allowed"
 
 
 def upgrade() -> None:
-    op.add_column(
-        TABLE,
-        sa.Column("billing_period", sa.String(length=16), nullable=True),
-    )
-    op.create_check_constraint(
-        CONSTRAINT,
-        TABLE,
-        "billing_period IS NULL OR billing_period IN ('monthly', 'annual')",
-    )
+    with op.batch_alter_table(TABLE) as batch_op:
+        batch_op.add_column(
+            sa.Column("billing_period", sa.String(length=16), nullable=True)
+        )
+        batch_op.create_check_constraint(
+            CONSTRAINT,
+            "billing_period IS NULL OR billing_period IN ('monthly', 'annual')",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint(CONSTRAINT, TABLE, type_="check")
-    op.drop_column(TABLE, "billing_period")
+    with op.batch_alter_table(TABLE) as batch_op:
+        batch_op.drop_constraint(CONSTRAINT, type_="check")
+        batch_op.drop_column("billing_period")
