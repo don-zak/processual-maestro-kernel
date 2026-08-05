@@ -40,7 +40,8 @@ def test_admin_marketplace_shell_contains_every_approved_section() -> None:
     ):
         assert f'data-am-panel="{section}"' in html
 
-    assert "No synthetic records are shown" in html
+    assert 'id="am-order-list"' in html
+    assert 'id="am-contract-list"' in html
     assert "Payment audit API pending" in html
 
 
@@ -116,3 +117,23 @@ def test_admin_marketplace_layout_has_responsive_rules() -> None:
     assert "@media (max-width: 1000px)" in css
     assert "@media (max-width: 700px)" in css
     assert ".am-dialog::backdrop" in css
+
+
+def test_order_and_contract_sections_use_live_read_only_apis() -> None:
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert "ADMIN_MARKET_ROOT + '/' + kind" in script
+    assert "loadCommercialList('orders')" in script
+    assert "loadCommercialList('contracts')" in script
+    assert "function renderOrders()" in script
+    assert "function renderContracts()" in script
+    assert "escapeHtml(item.customer_ref)" in script
+    assert "item.evidence_reference" in script
+    order_renderer = script.split("function renderOrders()", 1)[1].split(
+        "function renderContracts()", 1
+    )[0]
+    contract_renderer = script.split("function renderContracts()", 1)[1].split(
+        "async function loadCommercialList", 1
+    )[0]
+    assert "raw_account_identifier" not in order_renderer
+    assert "raw_account_identifier" not in contract_renderer

@@ -357,8 +357,8 @@
     </div>
     <div class="am-readiness-grid">
       <article class="am-card"><span class="am-status live">Live</span><h3>Payment Destinations</h3><p>Secure API, masked identifiers, MFA-gated lifecycle, and retry-safe creation.</p></article>
-      <article class="am-card"><span class="am-status planned">Next</span><h3>Tunisia Payment Choice</h3><p>Server-side eligibility for verified Tunisian customer addresses.</p></article>
-      <article class="am-card"><span class="am-status planned">Planned</span><h3>Orders to Activation</h3><p>Order, contract, payment verification, subscription, and entitlements.</p></article>
+      <article class="am-card"><span class="am-status live">Live</span><h3>Tunisia Payment Choice</h3><p>Server-side eligibility for verified Tunisian customer addresses.</p></article>
+      <article class="am-card"><span class="am-status live">In progress</span><h3>Orders to Activation</h3><p>Orders, contract completion, and payment instructions are active; verification and activation remain gated.</p></article>
     </div>
   </section>
 
@@ -394,8 +394,14 @@
   </section>
 
   <section class="am-section" data-am-panel="catalog"><div class="am-empty-panel"><span>Catalog / Offers</span><h2>Commercial catalog workspace</h2><p>The shell is reserved. It will connect only after the offer administration contract is finalized.</p></div></section>
-  <section class="am-section" data-am-panel="orders"><div class="am-empty-panel"><span>Orders</span><h2>No commercial orders yet</h2><p>Order data will appear after the idempotent commercial-order foundation is active.</p></div></section>
-  <section class="am-section" data-am-panel="contracts"><div class="am-empty-panel"><span>Contracts</span><h2>Contract operations are not wired yet</h2><p>No synthetic records are shown. Contract completion will be driven by the order domain.</p></div></section>
+  <section class="am-section" data-am-panel="orders">
+    <div class="am-section-heading"><div><span class="am-kicker">Live commercial records</span><h2>Orders</h2><p>Read-only order state from the trusted Maestro Direct flow.</p></div><button id="am-refresh-orders" class="btn secondary" type="button">Refresh</button></div>
+    <div id="am-order-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading commercial orders…</div></div>
+  </section>
+  <section class="am-section" data-am-panel="contracts">
+    <div class="am-section-heading"><div><span class="am-kicker">Authenticated acceptance</span><h2>Contracts</h2><p>Immutable clickwrap completion records and safe evidence references.</p></div><button id="am-refresh-contracts" class="btn secondary" type="button">Refresh</button></div>
+    <div id="am-contract-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading completed contracts…</div></div>
+  </section>
   <section class="am-section" data-am-panel="payments"><div class="am-empty-panel"><span>Payments</span><h2>Payment evidence is not wired yet</h2><p>Verified evidence and destination snapshots will populate this section in the payment phase.</p></div></section>
   <section class="am-section" data-am-panel="reconciliation"><div class="am-empty-panel"><span>Reconciliation &amp; Exceptions</span><h2>No exception workflow yet</h2><p>Underpayments, duplicate evidence, and unmatched references will be handled here with MFA and audit.</p></div></section>
   <section class="am-section" data-am-panel="subscriptions"><div class="am-empty-panel"><span>Subscriptions &amp; Activations</span><h2>Activation pipeline is not wired yet</h2><p>Automatic activation and entitlements will appear here after all server-side gates pass.</p></div></section>

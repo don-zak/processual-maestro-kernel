@@ -6,6 +6,9 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from processual_api.admin_marketplace.commercial_read_service import (
+    AdminMarketplaceCommercialReadService,
+)
 from processual_api.admin_marketplace.eligibility_service import (
     AdminMarketplaceEligibilityService,
 )
@@ -34,6 +37,7 @@ class AdminMarketplaceRuntime:
     authority_resolver: AdminMarketplaceIdentityAuthorityResolver
     eligibility_service: AdminMarketplaceEligibilityService
     payment_destination_service: PaymentDestinationAdministrationService | None
+    commercial_read_service: AdminMarketplaceCommercialReadService
 
 
 def _payment_destination_keys(raw_json: str | None) -> dict[str, bytes]:
@@ -85,6 +89,9 @@ async def build_admin_marketplace_runtime(
         eligibility_service = AdminMarketplaceEligibilityService(
             unit_of_work_factory=unit_of_work_factory,
         )
+        commercial_read_service = AdminMarketplaceCommercialReadService(
+            unit_of_work_factory=unit_of_work_factory,
+        )
     except (RuntimeError, TypeError, ValueError) as exc:
         raise AdminMarketplaceRuntimeUnavailableError(
             "Admin Marketplace runtime authority is unavailable."
@@ -114,6 +121,7 @@ async def build_admin_marketplace_runtime(
         authority_resolver=authority_resolver,
         eligibility_service=eligibility_service,
         payment_destination_service=payment_destination_service,
+        commercial_read_service=commercial_read_service,
     )
 
 

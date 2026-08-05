@@ -10,6 +10,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketChannelEligibility,
     AdminMarketChannelSelection,
     AdminMarketCommercialDecision,
+    AdminMarketContract,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
     AdminMarketOffer,
@@ -91,6 +92,8 @@ class TrialRepository(Protocol):
 
 @runtime_checkable
 class OrderRepository(Protocol):
+    async def list_recent(self, *, limit: int = 100) -> Sequence[AdminMarketOrder]: ...
+
     async def get_by_id(
         self,
         order_id: uuid.UUID,
@@ -116,6 +119,31 @@ class OrderRepository(Protocol):
         self,
         order: AdminMarketOrder,
     ) -> None: ...
+
+
+@runtime_checkable
+class ContractRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketContract]: ...
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None: ...
+
+    async def get_by_completion_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None: ...
+
+    def add(self, contract: AdminMarketContract) -> None: ...
 
 
 @runtime_checkable
@@ -279,6 +307,7 @@ class AdminMarketplaceUnitOfWork(Protocol):
     subscriptions: SubscriptionRepository
     trials: TrialRepository
     orders: OrderRepository
+    contracts: ContractRepository
     payment_destinations: PaymentDestinationRepository
     payment_verifications: PaymentVerificationRepository
     invoices: InvoiceRepository
@@ -310,6 +339,7 @@ __all__ = [
     "ChannelSelectionRepository",
     "CommercialAuditRepository",
     "CommercialDecisionRepository",
+    "ContractRepository",
     "EntitlementActivationRepository",
     "InvoiceRepository",
     "OfferRepository",

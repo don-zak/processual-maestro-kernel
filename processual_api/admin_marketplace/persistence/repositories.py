@@ -12,6 +12,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketChannelEligibility,
     AdminMarketChannelSelection,
     AdminMarketCommercialDecision,
+    AdminMarketContract,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
     AdminMarketOffer,
@@ -172,6 +173,15 @@ class SqlAlchemyOrderRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_recent(self, *, limit: int = 100) -> Sequence[AdminMarketOrder]:
+        statement = (
+            select(AdminMarketOrder)
+            .order_by(AdminMarketOrder.created_at.desc(), AdminMarketOrder.id.desc())
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     async def get_by_id(
         self,
         order_id: uuid.UUID,
@@ -218,6 +228,58 @@ class SqlAlchemyOrderRepository:
         order: AdminMarketOrder,
     ) -> None:
         self._session.add(order)
+
+
+class SqlAlchemyContractRepository:
+    """Persistence for immutable order-contract completion records."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketContract]:
+        statement = (
+            select(AdminMarketContract)
+            .order_by(
+                AdminMarketContract.completed_at.desc(),
+                AdminMarketContract.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None:
+        statement = select(AdminMarketContract).where(
+            AdminMarketContract.order_id == order_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_completion_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None:
+        statement = select(AdminMarketContract).where(
+            AdminMarketContract.completion_idempotency_key_hash == key_hash,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    def add(self, contract: AdminMarketContract) -> None:
+        self._session.add(contract)
 
 
 class SqlAlchemyPaymentDestinationRepository:
@@ -540,6 +602,7 @@ __all__ = [
     "SqlAlchemyChannelSelectionRepository",
     "SqlAlchemyCommercialAuditRepository",
     "SqlAlchemyCommercialDecisionRepository",
+    "SqlAlchemyContractRepository",
     "SqlAlchemyEntitlementActivationRepository",
     "SqlAlchemyInvoiceRepository",
     "SqlAlchemyOfferRepository",

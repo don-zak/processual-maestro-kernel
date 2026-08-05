@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -7,6 +9,10 @@ import pytest
 from fastapi import HTTPException
 
 from processual_api.admin_marketplace.authority import authority_context
+from processual_api.admin_marketplace.commercial_read_service import (
+    CommercialContractReadResult,
+    CommercialOrderReadResult,
+)
 from processual_api.admin_marketplace.eligibility_service import (
     AdminMarketplaceEligibilityResult,
     AdminMarketplaceEligibilityState,
@@ -18,6 +24,8 @@ from processual_api.admin_marketplace.router import (
     GENERIC_UNAVAILABLE,
     _identity_principal,
     get_admin_marketplace_eligibility,
+    list_admin_marketplace_contracts,
+    list_admin_marketplace_orders,
     router,
 )
 
@@ -204,3 +212,56 @@ def test_router_registers_read_only_eligibility_route() -> None:
 
     assert len(matches) == 1
     assert matches[0].methods == {"GET"}
+
+
+@pytest.mark.asyncio
+async def test_admin_commercial_read_endpoints_return_live_records() -> None:
+    now = datetime(2026, 8, 5, 10, 0, tzinfo=UTC)
+    runtime = _runtime()
+    runtime.commercial_read_service = SimpleNamespace(
+        list_orders=AsyncMock(
+            return_value=(
+                CommercialOrderReadResult(
+                    order_ref="ord_001",
+                    customer_ref="customer_001",
+                    plan_ref="starter",
+                    offer_ref="starter_tn_monthly",
+                    billing_period="monthly",
+                    status="awaiting_payment",
+                    contract_status="completed",
+                    payment_status="pending",
+                    payment_reference="TN-34567890",
+                    total_amount=Decimal("49.900"),
+                    currency="TND",
+                    created_at=now,
+                    updated_at=now,
+                ),
+            )
+        ),
+        list_contracts=AsyncMock(
+            return_value=(
+                CommercialContractReadResult(
+                    contract_ref="ctr_001",
+                    order_ref="ord_001",
+                    customer_ref="customer_001",
+                    contract_version="tn-direct-v1",
+                    status="completed",
+                    acceptance_method="authenticated_clickwrap",
+                    evidence_reference="cev_001",
+                    completed_at=now,
+                ),
+            )
+        ),
+    )
+
+    orders = await list_admin_marketplace_orders(
+        current_user=_current_user(), runtime=runtime
+    )
+    contracts = await list_admin_marketplace_contracts(
+        current_user=_current_user(), runtime=runtime
+    )
+
+    assert orders.count == 1
+    assert orders.items[0].order_ref == "ord_001"
+    assert contracts.count == 1
+    assert contracts.items[0].contract_ref == "ctr_001"

@@ -8,6 +8,9 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
+from processual_api.admin_marketplace.contract_service import (
+    ContractCompletionResult,
+)
 from processual_api.admin_marketplace.direct_order_service import (
     DirectCommercialOrderResult,
     TunisiaPaymentOptionResult,
@@ -60,6 +63,7 @@ def order() -> DirectCommercialOrderResult:
         total_amount=Decimal("49.900"),
         status="awaiting_contract",
         contract_status="pending",
+        contract_version="tn-direct-v1",
         payment_requirement="required",
         payment_status="pending",
         payment_reference="TN-34567890",
@@ -79,6 +83,24 @@ def order() -> DirectCommercialOrderResult:
         created_at=NOW,
         updated_at=NOW,
         reason_code="commercial_order_created",
+    )
+
+
+def completed_contract() -> ContractCompletionResult:
+    return ContractCompletionResult(
+        contract_id=uuid.UUID("40000000-0000-0000-0000-000000000001"),
+        contract_ref="ctr_001",
+        order_ref="ord_001",
+        contract_version="tn-direct-v1",
+        status="completed",
+        acceptance_method="authenticated_clickwrap",
+        evidence_reference="cev_001",
+        completed_at=NOW,
+        order_status="awaiting_payment",
+        payment_status="pending",
+        payment_reference="TN-34567890",
+        payment_destination_snapshot=order().payment_destination_snapshot,
+        reason_code="contract_completed",
     )
 
 
@@ -176,3 +198,55 @@ async def test_order_fails_closed_with_safe_reason(monkeypatch) -> None:
 
     assert captured.value.status_code == 409
     assert captured.value.detail["reason_code"] == "confirmed_customer_address_required"
+
+
+@pytest.mark.asyncio
+async def test_contract_completion_derives_customer_from_identity() -> None:
+    service = AsyncMock()
+    service.complete_authenticated_clickwrap.return_value = completed_contract()
+
+    response = await checkout.complete_tunisia_direct_contract(
+        order_ref="ord_001",
+        body=checkout.ContractCompletionRequest(
+            accepted=True,
+            contract_version="tn-direct-v1",
+        ),
+        current_user=current_user(),
+        service=service,
+        correlation_id="corr_contract_001",
+        idempotency_key="contract-idempotency-0001",
+    )
+
+    assert response.status == "completed"
+    assert response.order_status == "awaiting_payment"
+    assert response.payment_destination.masked_identifier == "****************1234"
+    service.complete_authenticated_clickwrap.assert_awaited_once_with(
+        actor_user_id=USER_ID,
+        actor_session_id=SESSION_ID,
+        customer_ref=ORGANIZATION_ID,
+        order_ref="ord_001",
+        contract_version="tn-direct-v1",
+        correlation_id="corr_contract_001",
+        idempotency_key="contract-idempotency-0001",
+    )
+
+
+@pytest.mark.asyncio
+async def test_contract_completion_requires_explicit_acceptance() -> None:
+    service = AsyncMock()
+
+    with pytest.raises(HTTPException) as captured:
+        await checkout.complete_tunisia_direct_contract(
+            order_ref="ord_001",
+            body=checkout.ContractCompletionRequest(
+                accepted=False,
+                contract_version="tn-direct-v1",
+            ),
+            current_user=current_user(),
+            service=service,
+            correlation_id="corr_contract_001",
+            idempotency_key="contract-idempotency-0001",
+        )
+
+    assert captured.value.status_code == 400
+    service.complete_authenticated_clickwrap.assert_not_awaited()

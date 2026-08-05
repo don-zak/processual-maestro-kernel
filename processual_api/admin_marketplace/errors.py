@@ -37,11 +37,21 @@ class DirectCommerceConflictError(AdminMarketplaceError):
     """Raised when an idempotent order request conflicts with stored state."""
 
 
+class ContractCompletionConflictError(AdminMarketplaceError):
+    """Raised when contract completion conflicts with the order state."""
+
+
+class CommercialOrderNotFoundError(AdminMarketplaceError):
+    """Raised when an authenticated customer cannot access an order."""
+
+
 __all__ = [
     "AdminMarketplaceAuditSafetyError",
     "AdminMarketplaceAuthorityDeniedError",
     "AdminMarketplaceError",
     "AdminMarketplaceStepUpRequiredError",
+    "CommercialOrderNotFoundError",
+    "ContractCompletionConflictError",
     "DirectCommerceConflictError",
     "DirectCommerceUnavailableError",
     "PaymentDestinationConflictError",

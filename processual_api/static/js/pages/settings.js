@@ -10,6 +10,8 @@ PAGES.settings = (() => {
 
   let settingsInitDone = false;
   let tunisianDirectOrderIdempotencyKey = null;
+  let tunisianContractIdempotencyKey = null;
+  let tunisianPendingOrder = null;
 
   function setText(id, value) {
     const el = document.getElementById(id);
@@ -258,12 +260,25 @@ PAGES.settings = (() => {
     }
   }
 
-  function renderTunisiaDirectOrder(order) {
+  function showTunisiaContractAction(order) {
+    tunisianPendingOrder = order;
+    tunisianContractIdempotencyKey = null;
+    setText('set-tn-contract-version', order.contract_version);
+    const accepted = document.getElementById('set-tn-contract-accepted');
+    const complete = document.getElementById('set-tn-contract-complete');
+    const action = document.getElementById('set-tn-contract-action');
+    if (accepted) accepted.checked = false;
+    if (complete) complete.disabled = true;
+    if (action) action.style.display = '';
+  }
+
+  function renderTunisiaPaymentInstructions(order) {
     const destination = order.payment_destination || {};
     const result = document.getElementById('set-tn-payment-result');
     if (!result) return;
     result.textContent = [
       'Order: ' + order.order_ref,
+      'Contract: ' + (order.contract_ref || order.contract_status || '-'),
       'Payment reference: ' + (order.payment_reference || '-'),
       'Amount: ' + order.total_amount + ' ' + order.currency,
       'Destination: ' + (destination.display_name || '-'),
@@ -290,8 +305,8 @@ PAGES.settings = (() => {
           'Idempotency-Key': tunisianDirectOrderIdempotencyKey,
         }
       );
-      renderTunisiaDirectOrder(order);
-      setText('set-tn-payment-status', 'Order created');
+      showTunisiaContractAction(order);
+      setText('set-tn-payment-status', 'Order created — contract acceptance required');
       tunisianDirectOrderIdempotencyKey = null;
     } catch (error) {
       const detail = typeof error.detail === 'string'
@@ -303,9 +318,51 @@ PAGES.settings = (() => {
     }
   }
 
+  async function completeTunisiaDirectContract() {
+    if (!tunisianPendingOrder) return;
+    const accepted = document.getElementById('set-tn-contract-accepted');
+    const button = document.getElementById('set-tn-contract-complete');
+    if (!accepted || accepted.checked !== true) return;
+    button.disabled = true;
+    setText('set-tn-payment-status', 'Completing contract...');
+    tunisianContractIdempotencyKey = tunisianContractIdempotencyKey || uniqueRequestKey('tn-contract');
+    try {
+      const completion = await CLIENT.request(
+        'POST',
+        '/billing/subscription-preparation/maestro-direct/orders/' +
+          encodeURIComponent(tunisianPendingOrder.order_ref) + '/contract/complete',
+        {
+          accepted: true,
+          contract_version: tunisianPendingOrder.contract_version,
+        },
+        {
+          'X-Correlation-ID': uniqueRequestKey('tn-contract-ui'),
+          'Idempotency-Key': tunisianContractIdempotencyKey,
+        }
+      );
+      renderTunisiaPaymentInstructions(completion);
+      setText('set-tn-payment-status', 'Contract completed — payment instructions ready');
+      document.getElementById('set-tn-contract-action').style.display = 'none';
+      tunisianPendingOrder = null;
+      tunisianContractIdempotencyKey = null;
+    } catch (error) {
+      const detail = typeof error.detail === 'string' ? error.detail : error.message;
+      setText('set-tn-payment-status', 'Contract unavailable: ' + detail);
+      button.disabled = false;
+    }
+  }
+
   function initTunisiaDirectPayment() {
     const button = document.getElementById('set-tn-payment-create-order');
     if (button) button.onclick = createTunisiaDirectOrder;
+    const accepted = document.getElementById('set-tn-contract-accepted');
+    const complete = document.getElementById('set-tn-contract-complete');
+    if (accepted && complete) {
+      accepted.onchange = function () {
+        complete.disabled = accepted.checked !== true;
+      };
+      complete.onclick = completeTunisiaDirectContract;
+    }
   }
 
   function prepareUsageReviewRequest() {
