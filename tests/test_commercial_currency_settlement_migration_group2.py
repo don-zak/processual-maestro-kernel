@@ -77,13 +77,24 @@ def test_migration_downgrade_restores_original_shape() -> None:
     source = _source()
 
     assert 'new_column_name="verified_amount_usd"' in source
-    assert 'op.drop_column(ORDER_TABLE, "settlement_currency")' in source
-    assert 'op.drop_column(ORDER_TABLE, "settlement_amount")' in source
+    assert 'batch_op.drop_column("settlement_currency")' in source
+    assert 'batch_op.drop_column("settlement_amount")' in source
 
 
 def test_payment_amount_constraint_uses_final_database_name() -> None:
     source = _source()
 
     assert source.count("op.f(PAYMENT_AMOUNT_CHECK)") == 4
-    assert source.count("op.drop_constraint(\n        PAYMENT_AMOUNT_CHECK,") == 0
-    assert source.count("op.create_check_constraint(\n        PAYMENT_AMOUNT_CHECK,") == 0
+    assert "op.drop_constraint(" not in source
+    assert "op.create_check_constraint(" not in source
+
+
+def test_sqlite_sensitive_schema_changes_use_batch_mode() -> None:
+    source = _source()
+
+    assert source.count("with op.batch_alter_table(ORDER_TABLE)") == 3
+    assert source.count("with op.batch_alter_table(PAYMENT_TABLE)") == 2
+    assert "op.alter_column(" not in source
+    assert "op.drop_constraint(" not in source
+    assert "op.create_check_constraint(" not in source
+    assert "op.drop_column(" not in source
