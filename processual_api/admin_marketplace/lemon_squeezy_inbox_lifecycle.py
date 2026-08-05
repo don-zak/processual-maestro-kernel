@@ -12,6 +12,7 @@ from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
 
 
 _ERROR_CODE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+_MAX_ATTEMPT_COUNT = 2_147_483_646
 
 
 def _aware_timestamp(value: datetime | None, *, field_name: str) -> datetime:
@@ -39,6 +40,10 @@ def claim_lemon_squeezy_webhook(
         )
     if entry.claimed_at is not None or entry.processed_at is not None or entry.rejected_at is not None:
         raise LemonSqueezyWebhookError("webhook lifecycle timestamps are inconsistent.")
+    if not isinstance(entry.attempt_count, int) or isinstance(entry.attempt_count, bool):
+        raise LemonSqueezyWebhookError("attempt_count is invalid.")
+    if entry.attempt_count < 0 or entry.attempt_count > _MAX_ATTEMPT_COUNT:
+        raise LemonSqueezyWebhookError("attempt_count is outside the supported range.")
 
     timestamp = _aware_timestamp(claimed_at, field_name="claimed_at")
 
