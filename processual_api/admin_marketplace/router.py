@@ -339,6 +339,28 @@ class PaymentReconciliationResponse(BaseModel):
     updated_at: datetime
 
 
+class CommercialNotificationReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event_ref: str
+    event_type: str
+    aggregate_type: str
+    aggregate_ref: str
+    recipient_customer_ref: str
+    delivery_status: str
+    attempt_count: int
+    available_at: datetime
+    delivered_at: datetime | None
+    dead_lettered_at: datetime | None
+    last_error_code: str | None
+    created_at: datetime
+
+
+class CommercialNotificationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: tuple[CommercialNotificationReadResponse, ...]
+    count: int
+
+
 async def get_admin_marketplace_runtime() -> AdminMarketplaceRuntime:
     try:
         return await build_admin_marketplace_runtime()
@@ -510,6 +532,22 @@ async def list_admin_marketplace_payment_reconciliations(
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
     responses = tuple(PaymentReconciliationReadResponse.model_validate(item, from_attributes=True) for item in items)
     return PaymentReconciliationListResponse(items=responses, count=len(responses))
+
+
+@router.get("/notification-outbox", response_model=CommercialNotificationListResponse)
+async def list_admin_marketplace_notification_outbox(
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+) -> CommercialNotificationListResponse:
+    try:
+        authority = await _commercial_read_authority(current_user=current_user, runtime=runtime)
+        items = await runtime.commercial_read_service.list_commercial_notifications(authority=authority)
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Active platform administrator authority is required.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    responses = tuple(CommercialNotificationReadResponse.model_validate(item, from_attributes=True) for item in items)
+    return CommercialNotificationListResponse(items=responses, count=len(responses))
 
 
 @router.post(
@@ -1069,6 +1107,8 @@ async def set_default_payment_destination(
 
 __all__ = [
     "AdminMarketplaceEligibilityResponse",
+    "CommercialNotificationListResponse",
+    "CommercialNotificationReadResponse",
     "GENERIC_UNAVAILABLE",
     "MAX_ADMIN_MARKETPLACE_REQUEST_BYTES",
     "PaymentDestinationCreateRequest",
@@ -1094,6 +1134,7 @@ __all__ = [
     "get_payment_destination",
     "list_payment_destinations",
     "list_admin_marketplace_payment_evidence",
+    "list_admin_marketplace_notification_outbox",
     "list_admin_marketplace_payment_reconciliations",
     "list_admin_marketplace_subscription_activations",
     "router",

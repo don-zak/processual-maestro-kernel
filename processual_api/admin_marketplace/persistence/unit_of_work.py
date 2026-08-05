@@ -6,6 +6,9 @@ from types import TracebackType
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.admin_marketplace.notification_outbox import (
+    SqlAlchemyNotificationOutboxRepository,
+)
 from processual_api.admin_marketplace.persistence.integrity import (
     translate_database_error,
 )
@@ -56,6 +59,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.channel_selections: SqlAlchemyChannelSelectionRepository
         self.commercial_decisions: SqlAlchemyCommercialDecisionRepository
         self.commercial_audit: SqlAlchemyCommercialAuditRepository
+        self.notification_outbox: SqlAlchemyNotificationOutboxRepository
 
     async def __aenter__(
         self,
@@ -83,6 +87,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.channel_selections = SqlAlchemyChannelSelectionRepository(session)
         self.commercial_decisions = SqlAlchemyCommercialDecisionRepository(session)
         self.commercial_audit = SqlAlchemyCommercialAuditRepository(session)
+        self.notification_outbox = SqlAlchemyNotificationOutboxRepository(session)
 
         return self
 
