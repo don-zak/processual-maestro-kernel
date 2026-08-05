@@ -21,6 +21,7 @@ PLAN_ID = uuid.UUID("30000000-0000-0000-0000-000000000001")
 SUBSCRIPTION_ID = uuid.UUID("40000000-0000-0000-0000-000000000001")
 ACTIVATION_ID = uuid.UUID("50000000-0000-0000-0000-000000000001")
 EVENT_ID = uuid.UUID("60000000-0000-0000-0000-000000000001")
+EVIDENCE_ID = uuid.UUID("70000000-0000-0000-0000-000000000001")
 
 
 class SingleRepository:
@@ -49,6 +50,11 @@ class Contracts(SingleRepository):
 
 class Verifications(Contracts):
     pass
+
+
+class PaymentEvidence(SingleRepository):
+    async def list_by_order_id(self, order_id):
+        return tuple(item for item in self.items if item.order_id == order_id)
 
 
 class Eligibility(SingleRepository):
@@ -86,17 +92,40 @@ class Audit:
         self.items.append(item)
 
 
+class NotificationOutbox(SingleRepository):
+    async def get_by_deduplication_key_hash(self, key_hash):
+        return next(
+            (item for item in self.items if item.deduplication_key_hash == key_hash),
+            None,
+        )
+
+
 class Unit:
     def __init__(self, *, active_subscription=None) -> None:
         self.orders = Orders(order())
-        self.contracts = Contracts(SimpleNamespace(order_id=ORDER_ID, status="completed"))
-        self.payment_verifications = Verifications(SimpleNamespace(order_id=ORDER_ID, status="verified"))
+        self.contracts = Contracts(
+            SimpleNamespace(
+                order_id=ORDER_ID,
+                customer_ref="customer_001",
+                status="completed",
+            )
+        )
+        self.payment_verifications = Verifications(
+            SimpleNamespace(
+                order_id=ORDER_ID,
+                evidence_id=EVIDENCE_ID,
+                status="verified",
+            )
+        )
+        self.payment_evidence = PaymentEvidence()
+        self.payment_evidence.items.append(evidence())
         self.channel_eligibilities = Eligibility(eligibility())
         self.subscriptions = Subscriptions(active_subscription)
         self.entitlement_activations = Activations()
         self.offers = SingleRepository(offer())
         self.plans = SingleRepository(plan())
         self.commercial_audit = Audit()
+        self.notification_outbox = NotificationOutbox()
         self.commit_calls = 0
 
     async def __aenter__(self):
@@ -121,13 +150,39 @@ def order():
         country_code="TN",
         currency="TND",
         subtotal_amount=Decimal("49.900"),
+        tax_amount=Decimal("0.000"),
+        total_amount=Decimal("49.900"),
         status="ready_for_activation",
         contract_status="completed",
         payment_requirement="required",
         payment_status="verified",
+        offer_snapshot={
+            "offer_ref": "starter_monthly_tnd",
+            "plan_ref": "starter",
+            "currency": "TND",
+            "sales_channel": "maestro_direct",
+            "snapshot_at": NOW.isoformat(),
+        },
         completed_at=None,
         updated_at=NOW,
     )
+
+
+def evidence(**changes):
+    values = {
+        "id": EVIDENCE_ID,
+        "order_id": ORDER_ID,
+        "customer_ref": "customer_001",
+        "status": "matched",
+        "actual_amount": Decimal("49.900"),
+        "currency": "TND",
+        "reference_matched": True,
+        "amount_matched": True,
+        "currency_matched": True,
+        "destination_matched": True,
+    }
+    values.update(changes)
+    return SimpleNamespace(**values)
 
 
 def eligibility(**changes):
@@ -147,6 +202,7 @@ def eligibility(**changes):
 def offer(**changes):
     values = {
         "id": OFFER_ID,
+        "offer_code": "starter_monthly_tnd",
         "plan_id": PLAN_ID,
         "status": "published",
         "sales_channel": "maestro_direct",
@@ -163,7 +219,9 @@ def offer(**changes):
 def plan():
     return SimpleNamespace(
         id=PLAN_ID,
+        plan_code="starter",
         entitlement_profile_ref="starter_entitlements_v1",
+        quota_profile_ref="starter_quotas_v1",
     )
 
 
@@ -219,6 +277,7 @@ async def test_activation_creates_subscription_entitlement_and_audit_atomically(
     audit = unit.commercial_audit.items[0]
     assert audit.action == "subscription_activation_decided"
     assert audit.platform_authority == "system"
+    assert audit.metadata_json["quota_profile_ref"] == "starter_quotas_v1"
 
 
 @pytest.mark.asyncio
@@ -255,7 +314,7 @@ async def test_activation_blocks_a_second_active_customer_subscription() -> None
     with pytest.raises(SubscriptionActivationNotReadyError) as captured:
         await service(unit).activate_ready_order(**kwargs())
 
-    assert captured.value.reason_code == "active_subscription_conflict"
+    assert captured.value.reason_code == "customer_already_has_active_subscription"
     assert unit.commit_calls == 0
 
 
@@ -269,3 +328,25 @@ async def test_activation_rechecks_offer_at_execution_time() -> None:
 
     assert captured.value.reason_code == "offer_no_longer_valid"
     assert unit.commit_calls == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("change", "reason_code"),
+    [
+        ({"customer_ref": "customer_002"}, "payment_evidence_not_fully_matched"),
+        ({"actual_amount": Decimal("40.000")}, "payment_amount_mismatch"),
+        ({"currency": "USD"}, "payment_currency_mismatch"),
+        ({"destination_matched": False}, "payment_evidence_not_fully_matched"),
+    ],
+)
+async def test_activation_rejects_mismatched_payment_evidence(change, reason_code) -> None:
+    unit = Unit()
+    unit.payment_evidence.items = [evidence(**change)]
+
+    with pytest.raises(SubscriptionActivationNotReadyError) as captured:
+        await service(unit).activate_ready_order(**kwargs())
+
+    assert captured.value.reason_code == reason_code
+    assert unit.commit_calls == 0
+    assert unit.subscriptions.items == []
