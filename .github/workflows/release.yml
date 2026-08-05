@@ -5,10 +5,42 @@ on:
     tags: ["v*.*.*"]
 
 jobs:
-  release:
+  release-gate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    env:
+      ENVIRONMENT: staging
+      API_DEBUG: "false"
+      AUDIT_ENABLED: "true"
+      RATE_LIMIT_ENABLED: "true"
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      API_KEYS: ${{ secrets.API_KEYS }}
+      PROCESSUAL_CRYPTO_KEY_B64: ${{ secrets.PROCESSUAL_CRYPTO_KEY_B64 }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      MAESTRO_ADMIN_EMAIL: ${{ secrets.MAESTRO_ADMIN_EMAIL }}
+      MAESTRO_ADMIN_PASSWORD: ${{ secrets.MAESTRO_ADMIN_PASSWORD }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+      AUTH_TOKEN_PEPPER: ${{ secrets.AUTH_TOKEN_PEPPER }}
+      AUTH_RATE_LIMIT_PEPPER: ${{ secrets.AUTH_RATE_LIMIT_PEPPER }}
+      AUTH_DELIVERY_KEY_RING_JSON: ${{ secrets.AUTH_DELIVERY_KEY_RING_JSON }}
+      AUTH_DELIVERY_CURRENT_KEY_VERSION: ${{ secrets.AUTH_DELIVERY_CURRENT_KEY_VERSION }}
+      AUTH_DELIVERY_PROVIDER_URL: ${{ secrets.AUTH_DELIVERY_PROVIDER_URL }}
+      AUTH_DELIVERY_PROVIDER_TOKEN: ${{ secrets.AUTH_DELIVERY_PROVIDER_TOKEN }}
+      AUTH_PUBLIC_BASE_URL: ${{ secrets.AUTH_PUBLIC_BASE_URL }}
+      AUTH_MFA_KEY_RING_JSON: ${{ secrets.AUTH_MFA_KEY_RING_JSON }}
+      AUTH_MFA_CURRENT_KEY_VERSION: ${{ secrets.AUTH_MFA_CURRENT_KEY_VERSION }}
+      ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON: ${{ secrets.ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON }}
+      ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION: ${{ secrets.ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION }}
+      LEMONSQUEEZY_STORE_ID: ${{ secrets.LEMONSQUEEZY_STORE_ID }}
+      LEMONSQUEEZY_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_WEBHOOK_SECRET }}
+      LEMONSQUEEZY_CHECKOUT_SUCCESS_URL: ${{ secrets.LEMONSQUEEZY_CHECKOUT_SUCCESS_URL }}
+      LEMONSQUEEZY_CHECKOUT_CANCEL_URL: ${{ secrets.LEMONSQUEEZY_CHECKOUT_CANCEL_URL }}
+      CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,14 +54,73 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev,api,observability,security,database,cache,reports,llm]
 
+      - name: Commercial release environment gate
+        run: python -m processual_api.release_gate
+
+      - name: Verify migration head
+        run: python -m alembic heads | grep "20260805_0029 (head)"
+
+      - name: Run commercial regression gate
+        run: |
+          python -m pytest \
+            tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_inbox_ingestion_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_inbox_lifecycle_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_security_regressions_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_persistence_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_uow_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_ingestion_service_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_reconciliation_gate_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_reconciliation_bundle_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_reconciliation_migration_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_secure_transport_a3.py \
+            tests/test_admin_marketplace_subscription_usage_endpoint_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_reconciliation_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_usage_bundle_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_bootstrap_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_migration_a3.py \
+            tests/test_subscription_middleware_database_runtime_a3.py \
+            tests/test_migration_regression_lock_a3.py \
+            tests/test_sqlite_migration_chain.py \
+            tests/test_commercial_release_gate_a3.py \
+            -q
+
       - name: Run all tests
         run: pytest --cov=cgtlib --cov=processual_kernel --cov=processual_api -q
+
+      - name: Ruff check
+        run: ruff check . --output-format=github
+
+      - name: Bandit security scan
+        run: bandit -r cgtlib processual_kernel processual_api
 
       - name: Build package
         run: python -m build
 
+      - name: Check package metadata
+        run: python -m twine check dist/*
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: release-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
