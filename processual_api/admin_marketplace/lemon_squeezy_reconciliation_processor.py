@@ -12,7 +12,6 @@ from processual_api.admin_marketplace.lemon_squeezy_inbox_lifecycle import (
 )
 from processual_api.admin_marketplace.lemon_squeezy_reconciliation_gate import (
     LemonSqueezyReconciliationContext,
-    LemonSqueezyReconciliationDecision,
     classify_lemon_squeezy_reconciliation,
 )
 from processual_api.admin_marketplace.lemon_squeezy_reconciliation_persistence import (
@@ -42,10 +41,28 @@ def _aware_now(value: datetime | None) -> datetime:
     return timestamp
 
 
-def _decision_matches(existing: object, decision: LemonSqueezyReconciliationDecision) -> bool:
+def _stored_binding_matches(existing: object, inbox: object) -> bool:
     return (
-        getattr(existing, "action", None) == decision.action
-        and getattr(existing, "reason_code", None) == decision.reason_code
+        getattr(existing, "inbox_id", None) == getattr(inbox, "id", None)
+        and getattr(existing, "event_identity_hash", None)
+        == getattr(inbox, "event_identity_hash", None)
+        and getattr(existing, "customer_ref", None) == getattr(inbox, "customer_ref", None)
+        and getattr(existing, "order_ref", None) == getattr(inbox, "order_ref", None)
+        and getattr(existing, "offer_ref", None) == getattr(inbox, "offer_ref", None)
+    )
+
+
+def _as_record(existing: object) -> LemonSqueezyReconciliationDecisionRecord:
+    return LemonSqueezyReconciliationDecisionRecord(
+        id=existing.id,
+        inbox_id=existing.inbox_id,
+        event_identity_hash=existing.event_identity_hash,
+        customer_ref=existing.customer_ref,
+        order_ref=existing.order_ref,
+        offer_ref=existing.offer_ref,
+        action=existing.action,
+        reason_code=existing.reason_code,
+        decided_at=existing.decided_at,
     )
 
 
@@ -73,28 +90,12 @@ def process_lemon_squeezy_reconciliation_factory(
                 inbox_id,
                 for_update=True,
             )
-
             if existing is not None:
-                context = await context_loader(inbox)
-                decision = classify_lemon_squeezy_reconciliation(
-                    entry=inbox,
-                    context=context,
-                )
-                if not _decision_matches(existing, decision):
+                if not _stored_binding_matches(existing, inbox):
                     raise LemonSqueezyWebhookError(
-                        "stored reconciliation decision conflicts with current binding."
+                        "stored reconciliation decision conflicts with inbox binding."
                     )
-                return LemonSqueezyReconciliationDecisionRecord(
-                    id=existing.id,
-                    inbox_id=existing.inbox_id,
-                    event_identity_hash=existing.event_identity_hash,
-                    customer_ref=existing.customer_ref,
-                    order_ref=existing.order_ref,
-                    offer_ref=existing.offer_ref,
-                    action=existing.action,
-                    reason_code=existing.reason_code,
-                    decided_at=existing.decided_at,
-                )
+                return _as_record(existing)
 
             claim_lemon_squeezy_webhook(inbox, claimed_at=timestamp)
             context = await context_loader(inbox)
