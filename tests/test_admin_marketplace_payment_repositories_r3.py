@@ -11,16 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.admin_marketplace.models import (
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
 )
 from processual_api.admin_marketplace.persistence.protocols import (
     EntitlementActivationRepository,
     InvoiceRepository,
+    PaymentEvidenceRepository,
     PaymentVerificationRepository,
 )
 from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyEntitlementActivationRepository,
     SqlAlchemyInvoiceRepository,
+    SqlAlchemyPaymentEvidenceRepository,
     SqlAlchemyPaymentVerificationRepository,
 )
 
@@ -69,6 +72,30 @@ REPOSITORIES = (
         "admin_market_entitlement_activations",
     ),
 )
+
+
+def test_payment_evidence_repository_matches_protocol_and_has_no_transaction_api() -> None:
+    repository = SqlAlchemyPaymentEvidenceRepository(MagicMock(spec=AsyncSession))
+
+    assert isinstance(repository, PaymentEvidenceRepository)
+    assert _public_methods(SqlAlchemyPaymentEvidenceRepository).isdisjoint(
+        {"begin", "close", "commit", "create_session", "rollback"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_payment_evidence_repository_reads_by_safe_reference_with_lock() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyPaymentEvidenceRepository(session)
+    row = MagicMock(spec=AdminMarketPaymentEvidence)
+    session.scalar_result = row
+
+    result = await repository.get_by_ref("pev_001", for_update=True)
+
+    assert result is row
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "FROM admin_market_payment_evidence" in sql
+    assert "FOR UPDATE" in sql
 
 
 @pytest.mark.parametrize(

@@ -730,6 +730,15 @@ pending ───────────────────→ deactivated
         <button id="set-tn-contract-complete" class="btn accent sm" type="button" disabled style="margin-top:var(--s-2)">Accept &amp; continue to payment</button>
       </div>
       <div id="set-tn-payment-result" class="mono-block" style="display:none;font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)"></div>
+      <form id="set-tn-payment-report-form" class="mono-block" style="display:none;font-size:11px;margin-top:var(--s-3)" autocomplete="off">
+        <strong>Report your bank transfer</strong>
+        <p>This report will be matched and queued for administrator verification. It does not confirm payment by itself.</p>
+        <label class="inp-label">Amount sent<input id="set-tn-payment-report-amount" class="inp" inputmode="decimal" required></label>
+        <label class="inp-label">Currency<input id="set-tn-payment-report-currency" class="inp" value="TND" minlength="3" maxlength="3" required></label>
+        <label class="inp-label">Order payment reference<input id="set-tn-payment-report-reference" class="inp" required></label>
+        <label class="inp-label">Bank transfer reference<input id="set-tn-payment-transfer-reference" class="inp" minlength="4" maxlength="128" required autocomplete="off"></label>
+        <button id="set-tn-payment-report-submit" class="btn accent sm" type="submit" style="margin-top:var(--s-2)">Submit payment report</button>
+      </form>
     </div>
 
 

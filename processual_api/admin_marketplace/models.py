@@ -563,6 +563,14 @@ class AdminMarketPaymentVerification(Base):
             "verification_ref",
             name=("uq_admin_market_payment_verifications_verification_ref"),
         ),
+        UniqueConstraint(
+            "order_id",
+            name="uq_admin_market_payment_verifications_order_id",
+        ),
+        UniqueConstraint(
+            "decision_idempotency_key_hash",
+            name="uq_admin_market_payment_verifications_decision_idem_hash",
+        ),
         Index(
             "ix_admin_market_payment_verifications_order_status",
             "order_id",
@@ -584,6 +592,14 @@ class AdminMarketPaymentVerification(Base):
         ),
         nullable=False,
     )
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_payment_evidence.id",
+            name="fk_admin_market_payment_verification_evidence",
+            ondelete="RESTRICT",
+        ),
+    )
     status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
@@ -592,8 +608,67 @@ class AdminMarketPaymentVerification(Base):
     safe_reference: Mapped[str | None] = mapped_column(
         String(255),
     )
+    decided_by_user_id: Mapped[str | None] = mapped_column(String(128))
+    decision_reason_code: Mapped[str | None] = mapped_column(String(128))
+    decision_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
     updated_at: Mapped[datetime] = _updated_at_column()
+
+
+class AdminMarketPaymentEvidence(Base):
+    __tablename__ = "admin_market_payment_evidence"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type IN ('customer_report', 'admin_exception', 'provider_notification', 'reconciliation')",
+            name="source_type_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('received', 'matched', 'requires_review', 'rejected')",
+            name="status_allowed",
+        ),
+        CheckConstraint("actual_amount >= 0", name="actual_amount_nonnegative"),
+        CheckConstraint("length(currency) = 3", name="currency_length"),
+        UniqueConstraint("evidence_ref", name="uq_admin_market_payment_evidence_ref"),
+        UniqueConstraint(
+            "source_reference_hash",
+            name="uq_admin_market_payment_evidence_source_reference_hash",
+        ),
+        UniqueConstraint(
+            "submission_idempotency_key_hash",
+            name="uq_admin_market_payment_evidence_submission_idem_hash",
+        ),
+        Index(
+            "ix_admin_market_payment_evidence_order_status",
+            "order_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    evidence_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    actual_amount: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    safe_source_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_reference_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    submission_idempotency_key_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False
+    )
+    reference_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    amount_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    currency_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    destination_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    match_reason_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = _created_at_column()
 
 
 class AdminMarketInvoice(Base):
@@ -931,7 +1006,8 @@ class AdminMarketAuditRecord(Base):
                 'payment_destination_deactivated',
                 'payment_destination_default_set',
                 'order_created',
-                'contract_completed'
+                'contract_completed',
+                'payment_evidence_recorded'
             )
             """,
             name="action_allowed",
@@ -946,7 +1022,9 @@ class AdminMarketAuditRecord(Base):
                 'subscription',
                 'trial',
                 'sales_channel_eligibility',
-                'payment_destination'
+                'payment_destination',
+                'contract',
+                'payment_evidence'
             )
             """,
             name="resource_type_allowed",
@@ -1256,6 +1334,7 @@ ADMIN_MARKET_MODELS = (
     AdminMarketTrial,
     AdminMarketOrder,
     AdminMarketContract,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
     AdminMarketPaymentDestination,
     AdminMarketInvoice,

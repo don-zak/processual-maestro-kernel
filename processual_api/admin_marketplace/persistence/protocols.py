@@ -16,6 +16,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketOffer,
     AdminMarketOrder,
     AdminMarketPaymentDestination,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -194,10 +195,45 @@ class PaymentVerificationRepository(Protocol):
         for_update: bool = False,
     ) -> AdminMarketPaymentVerification | None: ...
 
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentVerification | None: ...
+
     def add(
         self,
         verification: AdminMarketPaymentVerification,
     ) -> None: ...
+
+
+@runtime_checkable
+class PaymentEvidenceRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentEvidence]: ...
+
+    async def list_by_order_id(
+        self,
+        order_id: uuid.UUID,
+    ) -> Sequence[AdminMarketPaymentEvidence]: ...
+
+    async def get_by_ref(
+        self,
+        evidence_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentEvidence | None: ...
+
+    async def get_by_submission_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentEvidence | None: ...
+
+    def add(self, evidence: AdminMarketPaymentEvidence) -> None: ...
 
 
 @runtime_checkable
@@ -310,6 +346,7 @@ class AdminMarketplaceUnitOfWork(Protocol):
     contracts: ContractRepository
     payment_destinations: PaymentDestinationRepository
     payment_verifications: PaymentVerificationRepository
+    payment_evidence: PaymentEvidenceRepository
     invoices: InvoiceRepository
     entitlement_activations: EntitlementActivationRepository
     channel_eligibilities: ChannelEligibilityRepository
@@ -345,6 +382,7 @@ __all__ = [
     "OfferRepository",
     "OrderRepository",
     "PaymentDestinationRepository",
+    "PaymentEvidenceRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
     "SubscriptionRepository",

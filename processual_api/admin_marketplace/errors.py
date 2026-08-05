@@ -45,6 +45,18 @@ class CommercialOrderNotFoundError(AdminMarketplaceError):
     """Raised when an authenticated customer cannot access an order."""
 
 
+class PaymentEvidenceNotFoundError(AdminMarketplaceError):
+    """Raised when payment evidence cannot be accessed."""
+
+
+class PaymentEvidenceConflictError(AdminMarketplaceError):
+    """Raised when a payment report conflicts with trusted order state."""
+
+
+class PaymentVerificationConflictError(AdminMarketplaceError):
+    """Raised when an administrator decision conflicts with stored state."""
+
+
 __all__ = [
     "AdminMarketplaceAuditSafetyError",
     "AdminMarketplaceAuthorityDeniedError",
@@ -56,4 +68,7 @@ __all__ = [
     "DirectCommerceUnavailableError",
     "PaymentDestinationConflictError",
     "PaymentDestinationNotFoundError",
+    "PaymentEvidenceConflictError",
+    "PaymentEvidenceNotFoundError",
+    "PaymentVerificationConflictError",
 ]

@@ -30,6 +30,7 @@ class CommercialAuditAction(StrEnum):
     PAYMENT_DESTINATION_DEFAULT_SET = "payment_destination_default_set"
     ORDER_CREATED = "order_created"
     CONTRACT_COMPLETED = "contract_completed"
+    PAYMENT_EVIDENCE_RECORDED = "payment_evidence_recorded"
 
 
 class CommercialResourceType(StrEnum):
@@ -42,6 +43,7 @@ class CommercialResourceType(StrEnum):
     SALES_CHANNEL_ELIGIBILITY = "sales_channel_eligibility"
     PAYMENT_DESTINATION = "payment_destination"
     CONTRACT = "contract"
+    PAYMENT_EVIDENCE = "payment_evidence"
 
 
 class CommercialAuditOutcome(StrEnum):

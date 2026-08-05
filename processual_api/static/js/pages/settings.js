@@ -12,6 +12,8 @@ PAGES.settings = (() => {
   let tunisianDirectOrderIdempotencyKey = null;
   let tunisianContractIdempotencyKey = null;
   let tunisianPendingOrder = null;
+  let tunisianPaymentOrder = null;
+  let tunisianPaymentReportIdempotencyKey = null;
 
   function setText(id, value) {
     const el = document.getElementById(id);
@@ -288,6 +290,18 @@ PAGES.settings = (() => {
       'Instructions: ' + (destination.instructions || 'Use the payment reference above.'),
     ].join('\n');
     result.style.display = '';
+    tunisianPaymentOrder = order;
+    tunisianPaymentReportIdempotencyKey = null;
+    const reportForm = document.getElementById('set-tn-payment-report-form');
+    const amount = document.getElementById('set-tn-payment-report-amount');
+    const currency = document.getElementById('set-tn-payment-report-currency');
+    const reference = document.getElementById('set-tn-payment-report-reference');
+    const transferReference = document.getElementById('set-tn-payment-transfer-reference');
+    if (amount) amount.value = order.total_amount;
+    if (currency) currency.value = order.currency;
+    if (reference) reference.value = order.payment_reference || '';
+    if (transferReference) transferReference.value = '';
+    if (reportForm) reportForm.style.display = '';
   }
 
   async function createTunisiaDirectOrder() {
@@ -340,7 +354,7 @@ PAGES.settings = (() => {
           'Idempotency-Key': tunisianContractIdempotencyKey,
         }
       );
-      renderTunisiaPaymentInstructions(completion);
+      renderTunisiaPaymentInstructions(Object.assign({}, tunisianPendingOrder, completion));
       setText('set-tn-payment-status', 'Contract completed — payment instructions ready');
       document.getElementById('set-tn-contract-action').style.display = 'none';
       tunisianPendingOrder = null;
@@ -349,6 +363,49 @@ PAGES.settings = (() => {
       const detail = typeof error.detail === 'string' ? error.detail : error.message;
       setText('set-tn-payment-status', 'Contract unavailable: ' + detail);
       button.disabled = false;
+    }
+  }
+
+  async function reportTunisiaDirectPayment(event) {
+    event.preventDefault();
+    if (!tunisianPaymentOrder) return;
+    const form = document.getElementById('set-tn-payment-report-form');
+    const button = document.getElementById('set-tn-payment-report-submit');
+    const transferInput = document.getElementById('set-tn-payment-transfer-reference');
+    if (!form || !form.reportValidity()) return;
+    if (button) button.disabled = true;
+    tunisianPaymentReportIdempotencyKey = tunisianPaymentReportIdempotencyKey || uniqueRequestKey('tn-payment-report');
+    try {
+      const report = await CLIENT.request(
+        'POST',
+        '/billing/subscription-preparation/maestro-direct/orders/' +
+          encodeURIComponent(tunisianPaymentOrder.order_ref) + '/payment/report',
+        {
+          actual_amount: document.getElementById('set-tn-payment-report-amount').value,
+          currency: document.getElementById('set-tn-payment-report-currency').value,
+          payment_reference: document.getElementById('set-tn-payment-report-reference').value,
+          transfer_reference: transferInput.value,
+        },
+        {
+          'X-Correlation-ID': uniqueRequestKey('tn-payment-report-ui'),
+          'Idempotency-Key': tunisianPaymentReportIdempotencyKey,
+        }
+      );
+      setText(
+        'set-tn-payment-status',
+        report.status === 'matched'
+          ? 'Payment reported and matched — awaiting administrator verification'
+          : 'Payment reported — administrator review required'
+      );
+      tunisianPaymentReportIdempotencyKey = null;
+      tunisianPaymentOrder = null;
+      form.style.display = 'none';
+    } catch (error) {
+      const detail = typeof error.detail === 'string' ? error.detail : error.message;
+      setText('set-tn-payment-status', 'Payment report unavailable: ' + detail);
+    } finally {
+      if (transferInput) transferInput.value = '';
+      if (button) button.disabled = false;
     }
   }
 
@@ -362,6 +419,13 @@ PAGES.settings = (() => {
         complete.disabled = accepted.checked !== true;
       };
       complete.onclick = completeTunisiaDirectContract;
+    }
+    const reportForm = document.getElementById('set-tn-payment-report-form');
+    if (reportForm) {
+      reportForm.onsubmit = reportTunisiaDirectPayment;
+      reportForm.oninput = function () {
+        tunisianPaymentReportIdempotencyKey = null;
+      };
     }
   }
 

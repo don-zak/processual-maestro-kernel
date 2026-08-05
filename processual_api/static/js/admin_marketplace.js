@@ -6,6 +6,7 @@
   let destinations = [];
   let orders = [];
   let contracts = [];
+  let paymentEvidence = [];
   let pendingCreateKey = '';
   let pendingMfaOperation = null;
 
@@ -265,8 +266,38 @@
     ].join('')).join('');
   }
 
+  function renderPaymentEvidence() {
+    const target = element('am-payment-evidence-list');
+    if (!target) return;
+    if (!paymentEvidence.length) {
+      target.dataset.state = 'empty';
+      target.innerHTML = '<div class="am-empty">No customer payment reports are recorded.</div>';
+      return;
+    }
+    target.dataset.state = 'ready';
+    target.innerHTML = paymentEvidence.map((item) => [
+      '<article class="am-destination-item">',
+      '<div class="am-destination-title"><div><h4>' + escapeHtml(item.evidence_ref) + '</h4><p>Order ' + escapeHtml(item.order_ref) + '</p></div>',
+      '<div class="am-badges"><span class="am-badge ' + escapeHtml(item.status) + '">' + escapeHtml(item.status) + '</span></div></div>',
+      '<div class="am-destination-details">',
+      '<div><span>Customer</span><strong>' + escapeHtml(item.customer_ref) + '</strong></div>',
+      '<div><span>Amount</span><strong>' + escapeHtml(item.actual_amount + ' ' + item.currency) + '</strong></div>',
+      '<div><span>Safe transfer reference</span><strong>' + escapeHtml(item.safe_source_reference) + '</strong></div>',
+      '<div><span>Match</span><strong>' + escapeHtml(item.match_reason_code) + '</strong></div>',
+      '<div><span>Reported</span><strong>' + escapeHtml(safeDate(item.reported_at)) + '</strong></div>',
+      '</div>',
+      item.status === 'matched'
+        ? '<div class="am-destination-actions"><button type="button" class="btn accent sm" data-am-payment-verify="' + escapeHtml(item.evidence_ref) + '">Verify payment</button></div>'
+        : '<p>Verification is blocked until all server-side match gates pass.</p>',
+      '</article>',
+    ].join('')).join('');
+  }
+
   async function loadCommercialList(kind) {
-    const target = element(kind === 'orders' ? 'am-order-list' : 'am-contract-list');
+    const target = element(
+      kind === 'orders' ? 'am-order-list' :
+        (kind === 'contracts' ? 'am-contract-list' : 'am-payment-evidence-list')
+    );
     if (target) {
       target.dataset.state = 'loading';
       target.innerHTML = '<div class="am-empty">Loading ' + escapeHtml(kind) + '…</div>';
@@ -276,9 +307,12 @@
       if (kind === 'orders') {
         orders = Array.isArray(result.items) ? result.items : [];
         renderOrders();
-      } else {
+      } else if (kind === 'contracts') {
         contracts = Array.isArray(result.items) ? result.items : [];
         renderContracts();
+      } else {
+        paymentEvidence = Array.isArray(result.items) ? result.items : [];
+        renderPaymentEvidence();
       }
     } catch (error) {
       if (target) {
@@ -454,6 +488,40 @@
     }
   }
 
+  async function verifyPayment(evidenceRef, button) {
+    const confirmed = await confirmAction(
+      'Verify this matched payment?',
+      'This is the final payment decision. It requires recent MFA and moves the order to ready for activation.',
+      'Verify payment'
+    );
+    if (!confirmed) return;
+    setMutationLoading(button, true, 'Verifying…');
+    const idempotencyKey = uniqueKey('payment-verification');
+    const operation = async function () {
+      await request(
+        ADMIN_MARKET_ROOT + '/payment-evidence/' + encodeURIComponent(evidenceRef) + '/verify',
+        {
+          method: 'POST',
+          headers: {
+            'X-Correlation-ID': uniqueKey('admin-market-ui'),
+            'Idempotency-Key': idempotencyKey,
+          },
+          body: { decision: 'verified', reason_code: 'admin_exact_match_confirmed' },
+        }
+      );
+      showNotice('Payment verified. The order is ready for the separate activation phase.', 'success');
+      await loadCommercialList('payment-evidence');
+      await loadCommercialList('orders');
+    };
+    try {
+      await withMfaRetry(operation);
+    } catch (error) {
+      showNotice(reasonMessage(error), 'error');
+    } finally {
+      setMutationLoading(button, false);
+    }
+  }
+
   function activateSection(section) {
     const name = section || 'overview';
     document.querySelectorAll('[data-am-section]').forEach((button) => {
@@ -465,6 +533,7 @@
     if (name !== 'payment-destinations') clearIdentifier();
     if (name === 'orders') loadCommercialList('orders');
     if (name === 'contracts') loadCommercialList('contracts');
+    if (name === 'payments') loadCommercialList('payment-evidence');
   }
 
   function bind() {
@@ -492,11 +561,19 @@
     if (refreshOrders) refreshOrders.addEventListener('click', () => loadCommercialList('orders'));
     const refreshContracts = element('am-refresh-contracts');
     if (refreshContracts) refreshContracts.addEventListener('click', () => loadCommercialList('contracts'));
+    const refreshPayments = element('am-refresh-payments');
+    if (refreshPayments) refreshPayments.addEventListener('click', () => loadCommercialList('payment-evidence'));
     const list = element('am-payment-destination-list');
     if (list) list.addEventListener('click', (event) => {
       const button = event.target.closest('[data-am-destination-action]');
       if (!button) return;
       runLifecycle(button.dataset.amDestinationAction, button.dataset.destinationRef, button);
+    });
+    const paymentList = element('am-payment-evidence-list');
+    if (paymentList) paymentList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-am-payment-verify]');
+      if (!button) return;
+      verifyPayment(button.dataset.amPaymentVerify, button);
     });
     const mfaForm = element('am-mfa-form');
     if (mfaForm) mfaForm.addEventListener('submit', submitMfa);
