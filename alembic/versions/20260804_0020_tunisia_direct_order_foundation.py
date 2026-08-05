@@ -124,7 +124,6 @@ def upgrade() -> None:
         batch_op.alter_column("address_status", server_default=None)
 
     with op.batch_alter_table("admin_market_orders") as batch_op:
-        batch_op.drop_constraint(op.f("ck_admin_market_orders_status_allowed"), type_="check")
         batch_op.add_column(sa.Column("plan_id", sa.Uuid(), nullable=True))
         batch_op.add_column(sa.Column("billing_period", sa.String(16), server_default="monthly", nullable=False))
         batch_op.add_column(sa.Column("country_code", sa.String(2), server_default="TN", nullable=False))
