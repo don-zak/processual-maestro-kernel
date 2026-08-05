@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260805_0025"
 down_revision: str | None = "20260805_0024"
@@ -60,13 +60,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    connection = op.get_bind()
-    if connection.execute(
-        sa.text("SELECT 1 FROM admin_market_notification_outbox LIMIT 1")
-    ).first():
-        raise RuntimeError(
-            "Downgrade blocked: commercial notification outbox rows exist"
-        )
+    if not context.is_offline_mode():
+        connection = op.get_bind()
+        if connection.execute(
+            sa.text("SELECT 1 FROM admin_market_notification_outbox LIMIT 1")
+        ).first():
+            raise RuntimeError(
+                "Downgrade blocked: commercial notification outbox rows exist"
+            )
     op.drop_index(
         "ix_admin_market_notification_outbox_dispatch",
         table_name="admin_market_notification_outbox",
