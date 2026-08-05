@@ -1,145 +1,127 @@
+from __future__ import annotations
+
 import asyncio
-import json
-from datetime import UTC, datetime, timedelta
+import inspect
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from fastapi.routing import APIRoute
 
 import processual_api.billing.router as billing_router
-import processual_api.middleware.subscription as subscription_module
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_billing_router_keeps_expected_public_routes_and_events():
-    source = (ROOT / "processual_api" / "billing" / "router.py").read_text(
-        encoding="utf-8"
+def _routes(path: str, method: str) -> list[APIRoute]:
+    return [
+        route
+        for route in billing_router.router.routes
+        if isinstance(route, APIRoute)
+        and route.path == path
+        and method in route.methods
+    ]
+
+
+def test_billing_router_keeps_public_contracts_without_legacy_storage() -> None:
+    expected = {
+        ("POST", "/billing/checkout"),
+        ("GET", "/billing/portal"),
+        ("POST", "/billing/webhook"),
+        ("GET", "/billing/subscription"),
+        ("GET", "/billing/subscription-preparation"),
+        ("GET", "/billing/public-plan-journey"),
+        ("GET", "/billing/pricing-catalog"),
+        ("GET", "/billing/offer-pricebook"),
+        ("GET", "/billing/unit-cost-assumptions"),
+    }
+    actual = {
+        (method, route.path)
+        for route in billing_router.router.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+        if method in {"GET", "POST"}
+    }
+    assert expected <= actual
+    assert len(_routes("/billing/webhook", "POST")) == 1
+
+    source = inspect.getsource(billing_router)
+    forbidden = (
+        "subscriptions.json",
+        "checkouts.json",
+        "_load_subscriptions",
+        "_save_subscriptions",
+        "_load_checkouts",
+        "_save_checkouts",
+        "lemon_squeezy_webhook(request",
     )
-
-    required_markers = [
-        'APIRouter(prefix="/billing"',
-        "checkout",
-        "portal",
-        "webhook",
-        'get("/subscription"',
-        "get_billing_subscription",
-        "order_created",
-        "subscription_updated",
-        "subscription_payment_failed",
-        "subscription_cancelled",
-        "subscription_expired",
-        "lemonsqueezy",
-    ]
-
-    missing = [marker for marker in required_markers if marker not in source]
-    assert not missing, f"Missing billing router markers: {missing}"
+    for marker in forbidden:
+        assert marker not in source
 
 
-def test_billing_subscription_store_roundtrip_uses_json_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(billing_router, "_DATA_DIR", tmp_path)
-
-    records = [
-        {
-            "user_id": "user-1",
-            "subscription_id": "sub-1",
-            "plan": "professional",
-            "status": "active",
-            "stage": "active",
-            "created_at": "2026-06-30T10:00:00+00:00",
-        },
-        {
-            "user_id": "user-2",
-            "subscription_id": "sub-2",
-            "plan": "enterprise",
-            "status": "past_due",
-            "stage": "grace",
-            "payment_failures": 1,
-            "suspended_at": "2026-06-30T10:00:00+00:00",
-        },
-    ]
-
-    billing_router._save_subscriptions(records)
-
-    stored_path = tmp_path / "subscriptions.json"
-    assert stored_path.is_file()
-    assert json.loads(stored_path.read_text(encoding="utf-8")) == records
-    assert billing_router._load_subscriptions() == records
-
-
-def test_billing_subscription_returns_demo_state_when_user_has_no_subscription(
-    monkeypatch,
-):
-    monkeypatch.setattr(billing_router, "_load_subscriptions", lambda: [])
+def test_billing_subscription_reads_authoritative_runtime(monkeypatch) -> None:
+    snapshot = SimpleNamespace(
+        subscription_id="00000000-0000-0000-0000-000000000001",
+        entitlement_profile_ref="professional",
+        access_stage="active",
+        grace_until=None,
+    )
+    resolver = AsyncMock(return_value=snapshot)
+    monkeypatch.setattr(billing_router, "resolve_subscription_access", resolver)
 
     response = asyncio.run(
         billing_router.get_billing_subscription(
-            {
-                "user_id": "missing-user",
-                "id": "missing-user",
-                "sub": "missing-user",
-                "email": "missing@example.com",
-            }
+            {"sub": "00000000-0000-0000-0000-000000000002"}
         )
     )
 
-    assert response["has_subscription"] is False
-    assert response["plan"] == "demo"
-    assert response["billing_provider"] == "lemonsqueezy"
-
-
-def test_subscription_middleware_policy_constants_are_guarded():
-    assert "GET" in subscription_module._READ_ONLY_METHODS
-    assert "HEAD" in subscription_module._READ_ONLY_METHODS
-    assert "OPTIONS" in subscription_module._READ_ONLY_METHODS
-    assert "POST" not in subscription_module._READ_ONLY_METHODS
-
-    assert "/billing" in subscription_module._SUSPENSION_ALLOWED_PREFIXES
-
-
-def test_subscription_middleware_stage_boundaries_are_stable():
-    now = datetime.now(UTC)
-
-    assert subscription_module._compute_stage({"status": "active"}) == "active"
-    assert subscription_module._compute_stage({"status": "expired"}) == "expired"
-    assert subscription_module._compute_stage({"status": "cancelled"}) == "expired"
-
-    recent_failure = {
-        "status": "past_due",
-        "suspended_at": (now - timedelta(days=2)).isoformat(),
+    resolver.assert_awaited_once_with("00000000-0000-0000-0000-000000000002")
+    assert response == {
+        "subscription_id": "00000000-0000-0000-0000-000000000001",
+        "plan": "professional",
+        "status": "active",
+        "renews_at": None,
+        "billing_provider": "lemonsqueezy",
+        "has_subscription": True,
     }
-    assert subscription_module._compute_stage(recent_failure) == "grace"
-
-    suspended_failure = {
-        "status": "past_due",
-        "suspended_at": (now - timedelta(days=30)).isoformat(),
-    }
-    assert subscription_module._compute_stage(suspended_failure) == "suspended"
-
-    expired_failure = {
-        "status": "past_due",
-        "suspended_at": (now - timedelta(days=120)).isoformat(),
-    }
-    assert subscription_module._compute_stage(expired_failure) == "expired"
 
 
-def test_settings_subscription_reads_billing_subscriptions_before_local_settings():
-    source = (ROOT / "processual_api" / "routers" / "settings.py").read_text(
-        encoding="utf-8"
+def test_billing_subscription_missing_runtime_is_inactive(monkeypatch) -> None:
+    monkeypatch.setattr(
+        billing_router,
+        "resolve_subscription_access",
+        AsyncMock(return_value=None),
     )
-
-    required_markers = [
-        "def _load_billing_subscriptions()",
-        'subscriptions.json"',
-        'router.get("/subscription"',
-        "billing_subs = _load_billing_subscriptions()",
-        'latest.get("plan"',
-        'latest.get("status"',
-        'latest.get("suspended_at"',
-    ]
-
-    missing = [marker for marker in required_markers if marker not in source]
-    assert not missing, f"Missing settings subscription markers: {missing}"
+    response = asyncio.run(
+        billing_router.get_billing_subscription(
+            {"sub": "00000000-0000-0000-0000-000000000003"}
+        )
+    )
+    assert response["has_subscription"] is False
+    assert response["status"] == "inactive"
+    assert response["plan"] is None
 
 
-def test_billing_package_exports_billing_router_alias():
-    import processual_api.billing as billing_package
+def test_billing_subscription_lookup_failure_is_fail_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        billing_router,
+        "resolve_subscription_access",
+        AsyncMock(side_effect=RuntimeError("database detail")),
+    )
+    with pytest.raises(Exception) as captured:
+        asyncio.run(
+            billing_router.get_billing_subscription(
+                {"sub": "00000000-0000-0000-0000-000000000004"}
+            )
+        )
+    assert getattr(captured.value, "status_code", None) == 503
+    assert "database detail" not in str(getattr(captured.value, "detail", ""))
 
-    assert billing_package.billing_router is billing_router.router
+
+def test_billing_package_is_side_effect_free() -> None:
+    package_source = (
+        ROOT / "processual_api" / "billing" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    assert "import_module" not in package_source
+    assert "billing_router" not in package_source
