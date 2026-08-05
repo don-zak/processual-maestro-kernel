@@ -32,6 +32,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
 )
+from processual_api.admin_marketplace.notification_outbox import enqueue_commercial_notification
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
 )
@@ -254,6 +255,21 @@ class CustomerPaymentEvidenceService:
                     },
                 )
             )
+            enqueue_commercial_notification(
+                unit,
+                event_type="payment_reported" if matched else "payment_requires_review",
+                aggregate_type="order",
+                aggregate_ref=order.order_ref,
+                customer_ref=order.customer_ref,
+                payload={
+                    "order_ref": order.order_ref,
+                    "evidence_ref": evidence.evidence_ref,
+                    "status": evidence.status,
+                    "currency": evidence.currency,
+                },
+                deduplication_material=evidence.submission_idempotency_key_hash,
+                occurred_at=now,
+            )
             await unit.commit()
             return _customer_result(evidence, order, "payment_report_recorded")
 
@@ -436,6 +452,21 @@ class AdminPaymentVerificationService:
                         "decision": decision,
                     },
                 )
+            )
+            enqueue_commercial_notification(
+                unit,
+                event_type="payment_verified" if decision == "verified" else "payment_requires_review",
+                aggregate_type="order",
+                aggregate_ref=order.order_ref,
+                customer_ref=order.customer_ref,
+                payload={
+                    "order_ref": order.order_ref,
+                    "evidence_ref": evidence.evidence_ref,
+                    "verification_ref": verification.verification_ref,
+                    "status": verification.status,
+                },
+                deduplication_material=verification.decision_idempotency_key_hash,
+                occurred_at=now,
             )
             await unit.commit()
             return _verification_result(verification, evidence, order, "payment_decision_recorded")

@@ -22,6 +22,9 @@ from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
     AdminMarketOrder,
 )
+from processual_api.admin_marketplace.notification_outbox import (
+    enqueue_commercial_notification,
+)
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
 )
@@ -272,6 +275,20 @@ class TunisiaDirectOrderService:
                     correlation_id=correlation_id,
                     occurred_at=now,
                 )
+            )
+            enqueue_commercial_notification(
+                unit,
+                event_type="order_created",
+                aggregate_type="order",
+                aggregate_ref=order.order_ref,
+                customer_ref=order.customer_ref,
+                payload={
+                    "order_ref": order.order_ref,
+                    "status": order.status,
+                    "currency": order.currency,
+                },
+                deduplication_material=order.creation_idempotency_key_hash,
+                occurred_at=now,
             )
             await unit.commit()
             return _order_result(order, "commercial_order_created")

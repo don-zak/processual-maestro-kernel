@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     LargeBinary,
     Numeric,
     String,
@@ -678,9 +679,7 @@ class AdminMarketPaymentEvidence(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     safe_source_reference: Mapped[str] = mapped_column(String(128), nullable=False)
     source_reference_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    submission_idempotency_key_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
+    submission_idempotency_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     reference_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
     amount_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
     currency_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -743,6 +742,46 @@ class AdminMarketPaymentReconciliationCase(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
     updated_at: Mapped[datetime] = _updated_at_column()
+
+
+class AdminMarketNotificationOutbox(Base):
+    __tablename__ = "admin_market_notification_outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('order_created', 'contract_completed', "
+            "'payment_instructions_ready', 'payment_reported', 'payment_verified', "
+            "'payment_requires_review', 'subscription_activated', "
+            "'activation_failed', 'order_cancelled')",
+            name="event_type_allowed",
+        ),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        UniqueConstraint("event_ref", name="uq_admin_market_notification_event_ref"),
+        UniqueConstraint("deduplication_key_hash", name="uq_admin_market_notification_dedup_hash"),
+        Index(
+            "ix_admin_market_notification_outbox_dispatch",
+            "delivered_at",
+            "dead_lettered_at",
+            "available_at",
+            "claimed_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    event_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    aggregate_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    recipient_customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_json: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+    deduplication_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = _created_at_column()
 
 
 class AdminMarketInvoice(Base):

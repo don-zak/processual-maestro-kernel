@@ -27,6 +27,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
     AdminMarketPaymentReconciliationCase,
 )
+from processual_api.admin_marketplace.notification_outbox import enqueue_commercial_notification
 from processual_api.admin_marketplace.persistence.protocols import (
     AdminMarketplaceUnitOfWork,
 )
@@ -245,6 +246,21 @@ class PaymentReconciliationService:
                     previous_digest=previous_digest,
                     new_digest=_digest(_case_state(case, evidence)),
                 )
+            )
+            enqueue_commercial_notification(
+                unit,
+                event_type="payment_reported" if action == "accept_match" else "payment_requires_review",
+                aggregate_type="order",
+                aggregate_ref=original.order_ref,
+                customer_ref=original.customer_ref,
+                payload={
+                    "order_ref": original.order_ref,
+                    "case_ref": case.case_ref,
+                    "status": case.status,
+                    "reason_code": case.reason_code,
+                },
+                deduplication_material=idempotency_hash,
+                occurred_at=now,
             )
             await unit.commit()
             if candidate is None and case.candidate_order_id is not None:

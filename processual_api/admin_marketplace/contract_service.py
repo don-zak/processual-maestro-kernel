@@ -21,6 +21,9 @@ from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
     AdminMarketContract,
 )
+from processual_api.admin_marketplace.notification_outbox import (
+    enqueue_commercial_notification,
+)
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
 )
@@ -185,6 +188,34 @@ class DirectContractCompletionService:
                     previous_digest=previous_digest,
                     occurred_at=now,
                 )
+            )
+            enqueue_commercial_notification(
+                unit,
+                event_type="contract_completed",
+                aggregate_type="order",
+                aggregate_ref=order.order_ref,
+                customer_ref=order.customer_ref,
+                payload={
+                    "order_ref": order.order_ref,
+                    "contract_ref": contract.contract_ref,
+                    "contract_version": contract.contract_version,
+                },
+                deduplication_material=contract.completion_idempotency_key_hash,
+                occurred_at=now,
+            )
+            enqueue_commercial_notification(
+                unit,
+                event_type="payment_instructions_ready",
+                aggregate_type="order",
+                aggregate_ref=order.order_ref,
+                customer_ref=order.customer_ref,
+                payload={
+                    "order_ref": order.order_ref,
+                    "currency": "TND",
+                    "status": order.status,
+                },
+                deduplication_material=contract.completion_idempotency_key_hash,
+                occurred_at=now,
             )
             await unit.commit()
             return _result(contract, order, "contract_completed")

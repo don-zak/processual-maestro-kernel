@@ -23,6 +23,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketEntitlementActivation,
     AdminMarketSubscription,
 )
+from processual_api.admin_marketplace.notification_outbox import enqueue_commercial_notification
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
 )
@@ -192,6 +193,21 @@ class SubscriptionActivationOrchestrator:
                     correlation_id=correlation_id,
                     previous_digest=previous_digest,
                 )
+            )
+            enqueue_commercial_notification(
+                unit,
+                event_type="subscription_activated",
+                aggregate_type="order",
+                aggregate_ref=order.order_ref,
+                customer_ref=order.customer_ref,
+                payload={
+                    "order_ref": order.order_ref,
+                    "subscription_ref": subscription.subscription_ref,
+                    "activation_ref": activation.activation_ref,
+                    "status": activation.status,
+                },
+                deduplication_material=activation.activation_idempotency_key_hash,
+                occurred_at=now,
             )
             await unit.commit()
             return _result(

@@ -13,6 +13,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketContract,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
+    AdminMarketNotificationOutbox,
     AdminMarketOffer,
     AdminMarketOrder,
     AdminMarketPaymentDestination,
@@ -394,6 +395,15 @@ class CommercialAuditRepository(Protocol):
 
 
 @runtime_checkable
+class NotificationOutboxRepository(Protocol):
+    async def list_recent(self, *, limit: int = 100) -> Sequence[AdminMarketNotificationOutbox]: ...
+
+    async def get_by_deduplication_key_hash(self, key_hash: str) -> AdminMarketNotificationOutbox | None: ...
+
+    def add(self, event: AdminMarketNotificationOutbox) -> None: ...
+
+
+@runtime_checkable
 class AdminMarketplaceUnitOfWork(Protocol):
     plans: PlanRepository
     offers: OfferRepository
@@ -411,6 +421,7 @@ class AdminMarketplaceUnitOfWork(Protocol):
     channel_selections: ChannelSelectionRepository
     commercial_decisions: CommercialDecisionRepository
     commercial_audit: CommercialAuditRepository
+    notification_outbox: NotificationOutboxRepository
 
     async def __aenter__(
         self,
@@ -437,6 +448,7 @@ __all__ = [
     "ContractRepository",
     "EntitlementActivationRepository",
     "InvoiceRepository",
+    "NotificationOutboxRepository",
     "OfferRepository",
     "OrderRepository",
     "PaymentDestinationRepository",

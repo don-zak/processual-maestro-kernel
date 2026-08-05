@@ -94,6 +94,22 @@ class PaymentReconciliationReadResult:
     updated_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class CommercialNotificationReadResult:
+    event_ref: str
+    event_type: str
+    aggregate_type: str
+    aggregate_ref: str
+    recipient_customer_ref: str
+    delivery_status: str
+    attempt_count: int
+    available_at: datetime
+    delivered_at: datetime | None
+    dead_lettered_at: datetime | None
+    last_error_code: str | None
+    created_at: datetime
+
+
 class AdminMarketplaceCommercialReadService:
     """Read-only, authority-gated Admin Market order and contract views."""
 
@@ -270,9 +286,7 @@ class AdminMarketplaceCommercialReadService:
                         evidence_status=evidence.status,
                         case_status="unopened" if case is None else case.status,
                         exception_type=(
-                            _payment_exception_type(evidence, original)
-                            if case is None
-                            else case.exception_type
+                            _payment_exception_type(evidence, original) if case is None else case.exception_type
                         ),
                         resolution=None if case is None else case.resolution,
                         reason_code=evidence.match_reason_code if case is None else case.reason_code,
@@ -283,6 +297,38 @@ class AdminMarketplaceCommercialReadService:
                     )
                 )
         return tuple(rows)
+
+    async def list_commercial_notifications(
+        self, *, authority: AdminMarketplaceAuthorityContext, limit: int = 100
+    ) -> tuple[CommercialNotificationReadResult, ...]:
+        require_admin_marketplace_authority(context=authority, action=AdminMarketplaceAction.VIEW_AUDIT)
+        async with self._unit_of_work_factory() as unit:
+            events = await unit.notification_outbox.list_recent(limit=limit)
+        return tuple(
+            CommercialNotificationReadResult(
+                event_ref=event.event_ref,
+                event_type=event.event_type,
+                aggregate_type=event.aggregate_type,
+                aggregate_ref=event.aggregate_ref,
+                recipient_customer_ref=event.recipient_customer_ref,
+                delivery_status=(
+                    "delivered"
+                    if event.delivered_at is not None
+                    else (
+                        "dead_lettered"
+                        if event.dead_lettered_at is not None
+                        else ("claimed" if event.claimed_at is not None else "pending")
+                    )
+                ),
+                attempt_count=event.attempt_count,
+                available_at=event.available_at,
+                delivered_at=event.delivered_at,
+                dead_lettered_at=event.dead_lettered_at,
+                last_error_code=event.last_error_code,
+                created_at=event.created_at,
+            )
+            for event in events
+        )
 
 
 def _payment_exception_type(evidence, order) -> str:
@@ -303,6 +349,7 @@ def _payment_exception_type(evidence, order) -> str:
 
 __all__ = [
     "AdminMarketplaceCommercialReadService",
+    "CommercialNotificationReadResult",
     "CommercialContractReadResult",
     "CommercialOrderReadResult",
     "PaymentEvidenceReadResult",
