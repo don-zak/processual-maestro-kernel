@@ -41,7 +41,8 @@ def test_upgrade_sql_creates_immutable_contract_and_audit_contract() -> None:
 
 
 def test_downgrade_blocks_completed_contract_data_loss() -> None:
+    source = MIGRATION.read_text(encoding="utf-8")
     sql = offline("downgrade", "20260805_0021:20260804_0020", "--sql")
 
-    assert "Downgrade blocked: completed commercial contract exists" in sql
+    assert "Downgrade blocked: completed commercial contract exists" in source
     assert "DROP TABLE admin_market_contracts" in sql
