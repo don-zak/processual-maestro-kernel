@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import inspect
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.admin_marketplace.lemon_squeezy_inbox import (
+    LemonSqueezyWebhookInboxEntry,
+)
 from processual_api.admin_marketplace.lemon_squeezy_persistence import (
     AdminMarketLemonSqueezyWebhookInbox,
     SqlAlchemyLemonSqueezyWebhookInboxRepository,
@@ -128,6 +132,45 @@ async def test_repository_reads_without_lock_by_default_and_adds_only() -> None:
     assert result is row
     assert session.added == [row]
     assert "FOR UPDATE" not in _compile(session.scalar_statements[0])
+
+
+def test_repository_maps_domain_entry_to_mapped_orm_row() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyLemonSqueezyWebhookInboxRepository(session)  # type: ignore[arg-type]
+    received_at = datetime(2026, 8, 5, 20, 0, tzinfo=timezone.utc)
+    entry = LemonSqueezyWebhookInboxEntry(
+        id=uuid.uuid4(),
+        event_identity_hash="a" * 64,
+        payload_digest="b" * 64,
+        event_name="subscription_updated",
+        resource_type="subscriptions",
+        external_resource_id="123",
+        store_id="42",
+        customer_ref="customer-1",
+        order_ref="order-1",
+        offer_ref="offer-1",
+        test_mode=False,
+        processing_status="received",
+        attempt_count=0,
+        received_at=received_at,
+    )
+
+    repository.add(entry)
+
+    assert len(session.added) == 1
+    row = session.added[0]
+    assert isinstance(row, AdminMarketLemonSqueezyWebhookInbox)
+    assert row is not entry
+    assert row.id == entry.id
+    assert row.event_identity_hash == entry.event_identity_hash
+    assert row.payload_digest == entry.payload_digest
+    assert row.customer_ref == entry.customer_ref
+    assert row.order_ref == entry.order_ref
+    assert row.offer_ref == entry.offer_ref
+    assert row.test_mode is False
+    assert row.processing_status == "received"
+    assert row.attempt_count == 0
+    assert row.received_at == received_at
 
 
 def test_repository_does_not_own_transactions_or_activation() -> None:
