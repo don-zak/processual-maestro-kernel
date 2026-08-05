@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260805_0021"
 down_revision: str | None = "20260804_0020"
@@ -49,6 +49,8 @@ def _replace_audit_action_constraint(expression: str) -> None:
 
 
 def _assert_empty_before_downgrade() -> None:
+    if context.is_offline_mode():
+        return
     connection = op.get_bind()
     has_contracts = connection.execute(
         sa.text("SELECT 1 FROM admin_market_contracts LIMIT 1")
