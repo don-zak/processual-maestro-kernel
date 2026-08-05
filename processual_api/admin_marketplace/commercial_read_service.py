@@ -62,6 +62,20 @@ class PaymentEvidenceReadResult:
     reported_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class SubscriptionActivationReadResult:
+    activation_ref: str
+    subscription_ref: str
+    order_ref: str
+    customer_ref: str
+    entitlement_profile_ref: str
+    activation_status: str
+    subscription_status: str
+    automatic_activation_allowed: bool
+    starts_at: datetime | None
+    activated_at: datetime
+
+
 class AdminMarketplaceCommercialReadService:
     """Read-only, authority-gated Admin Market order and contract views."""
 
@@ -169,10 +183,45 @@ class AdminMarketplaceCommercialReadService:
             for evidence in evidence_items
         )
 
+    async def list_subscription_activations(
+        self,
+        *,
+        authority: AdminMarketplaceAuthorityContext,
+        limit: int = 100,
+    ) -> tuple[SubscriptionActivationReadResult, ...]:
+        require_admin_marketplace_authority(
+            context=authority,
+            action=AdminMarketplaceAction.VIEW_CATALOG,
+        )
+        async with self._unit_of_work_factory() as unit:
+            activations = await unit.entitlement_activations.list_recent(limit=limit)
+            rows = []
+            for activation in activations:
+                subscription = await unit.subscriptions.get_by_id(activation.subscription_id)
+                order = None if activation.order_id is None else await unit.orders.get_by_id(activation.order_id)
+                if subscription is None:
+                    continue
+                rows.append(
+                    SubscriptionActivationReadResult(
+                        activation_ref=activation.activation_ref,
+                        subscription_ref=subscription.subscription_ref,
+                        order_ref="" if order is None else order.order_ref,
+                        customer_ref=activation.customer_ref,
+                        entitlement_profile_ref=activation.entitlement_profile_ref,
+                        activation_status=activation.status,
+                        subscription_status=subscription.status,
+                        automatic_activation_allowed=(activation.automatic_activation_allowed),
+                        starts_at=subscription.starts_at,
+                        activated_at=(activation.activated_at or activation.created_at),
+                    )
+                )
+        return tuple(rows)
+
 
 __all__ = [
     "AdminMarketplaceCommercialReadService",
     "CommercialContractReadResult",
     "CommercialOrderReadResult",
     "PaymentEvidenceReadResult",
+    "SubscriptionActivationReadResult",
 ]

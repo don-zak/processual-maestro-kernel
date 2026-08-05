@@ -27,6 +27,9 @@ from processual_api.admin_marketplace.payment_evidence_service import (
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
+from processual_api.admin_marketplace.subscription_activation_service import (
+    SubscriptionActivationOrchestrator,
+)
 from processual_api.db.session import get_session_factory
 from processual_api.settings import APISettings, settings
 
@@ -42,6 +45,7 @@ class AdminMarketplaceRuntime:
     payment_destination_service: PaymentDestinationAdministrationService | None
     commercial_read_service: AdminMarketplaceCommercialReadService
     payment_verification_service: AdminPaymentVerificationService
+    subscription_activation_service: SubscriptionActivationOrchestrator
 
 
 def _payment_destination_keys(raw_json: str | None) -> dict[str, bytes]:
@@ -98,6 +102,10 @@ async def build_admin_marketplace_runtime(
             unit_of_work_factory=unit_of_work_factory,
             clock=lambda: datetime.now(UTC),
         )
+        subscription_activation_service = SubscriptionActivationOrchestrator(
+            unit_of_work_factory=unit_of_work_factory,
+            clock=lambda: datetime.now(UTC),
+        )
     except (RuntimeError, TypeError, ValueError) as exc:
         raise AdminMarketplaceRuntimeUnavailableError("Admin Marketplace runtime authority is unavailable.") from exc
 
@@ -122,6 +130,7 @@ async def build_admin_marketplace_runtime(
         payment_destination_service=payment_destination_service,
         commercial_read_service=commercial_read_service,
         payment_verification_service=payment_verification_service,
+        subscription_activation_service=subscription_activation_service,
     )
 
 

@@ -57,6 +57,18 @@ class PaymentVerificationConflictError(AdminMarketplaceError):
     """Raised when an administrator decision conflicts with stored state."""
 
 
+class SubscriptionActivationNotReadyError(AdminMarketplaceError):
+    """Raised when a verified order does not satisfy every activation gate."""
+
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code
+        super().__init__("Subscription activation is not ready.")
+
+
+class SubscriptionActivationConflictError(AdminMarketplaceError):
+    """Raised when an activation request conflicts with stored state."""
+
+
 __all__ = [
     "AdminMarketplaceAuditSafetyError",
     "AdminMarketplaceAuthorityDeniedError",
@@ -71,4 +83,6 @@ __all__ = [
     "PaymentEvidenceConflictError",
     "PaymentEvidenceNotFoundError",
     "PaymentVerificationConflictError",
+    "SubscriptionActivationConflictError",
+    "SubscriptionActivationNotReadyError",
 ]

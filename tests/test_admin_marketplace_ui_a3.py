@@ -21,7 +21,7 @@ def test_admin_marketplace_is_registered_inside_existing_admin_shell() -> None:
     assert 'id="page-admin-marketplace"' in html
     assert "'admin-marketplace': 'page-admin-marketplace'" in nav
     assert "/console/css/admin_marketplace.css?v=a3-phase7b-1" in html
-    assert "/console/js/admin_marketplace.js?v=a3-phase11-12" in html
+    assert "/console/js/admin_marketplace.js?v=a3-phase13-14" in html
 
 
 def test_admin_marketplace_shell_contains_every_approved_section() -> None:
@@ -82,9 +82,7 @@ def test_payment_destination_ui_handles_recent_mfa_and_safe_retry() -> None:
 
 def test_destination_renderer_only_uses_safe_response_fields() -> None:
     script = _read(ADMIN_MARKETPLACE_JS)
-    renderer = script.split("function renderDestinations()", 1)[1].split(
-        "async function loadDestinations", 1
-    )[0]
+    renderer = script.split("function renderDestinations()", 1)[1].split("async function loadDestinations", 1)[0]
 
     assert "masked_identifier" in renderer
     assert "raw_account_identifier" not in renderer
@@ -129,12 +127,10 @@ def test_order_and_contract_sections_use_live_read_only_apis() -> None:
     assert "function renderContracts()" in script
     assert "escapeHtml(item.customer_ref)" in script
     assert "item.evidence_reference" in script
-    order_renderer = script.split("function renderOrders()", 1)[1].split(
-        "function renderContracts()", 1
-    )[0]
-    contract_renderer = script.split("function renderContracts()", 1)[1].split(
-        "async function loadCommercialList", 1
-    )[0]
+    order_renderer = script.split("function renderOrders()", 1)[1].split("function renderContracts()", 1)[0]
+    contract_renderer = script.split("function renderContracts()", 1)[1].split("async function loadCommercialList", 1)[
+        0
+    ]
     assert "raw_account_identifier" not in order_renderer
     assert "raw_account_identifier" not in contract_renderer
 
@@ -162,3 +158,15 @@ def test_customer_payment_report_form_never_claims_final_verification() -> None:
     assert "/payment/report" in script
     assert "awaiting administrator verification" in script
     assert "transferInput.value = ''" in script
+
+
+def test_subscription_section_renders_only_server_activated_records() -> None:
+    html = _read(ADMIN_HTML)
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert 'id="am-subscription-activation-list"' in html
+    assert "function renderSubscriptionActivations()" in script
+    assert "loadCommercialList('subscription-activations')" in script
+    assert "item.entitlement_profile_ref" in script
+    assert "item.automatic_activation_allowed" in script
+    assert "Payment verified and subscription activated automatically." in script

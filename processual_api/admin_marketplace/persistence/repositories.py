@@ -35,11 +35,15 @@ class SqlAlchemyPlanRepository:
     async def get_by_id(
         self,
         plan_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> AdminMarketPlan | None:
-        return await self._session.get(
-            AdminMarketPlan,
-            plan_id,
+        statement = select(AdminMarketPlan).where(
+            AdminMarketPlan.id == plan_id,
         )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
 
     def add(
         self,
@@ -118,6 +122,22 @@ class SqlAlchemySubscriptionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketSubscription]:
+        statement = (
+            select(AdminMarketSubscription)
+            .order_by(
+                AdminMarketSubscription.created_at.desc(),
+                AdminMarketSubscription.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     async def get_by_id(
         self,
         subscription_id: uuid.UUID,
@@ -131,6 +151,20 @@ class SqlAlchemySubscriptionRepository:
         if for_update:
             statement = statement.with_for_update()
 
+        return await self._session.scalar(statement)
+
+    async def get_active_by_customer_ref(
+        self,
+        customer_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None:
+        statement = select(AdminMarketSubscription).where(
+            AdminMarketSubscription.customer_ref == customer_ref,
+            AdminMarketSubscription.status == "active",
+        )
+        if for_update:
+            statement = statement.with_for_update()
         return await self._session.scalar(statement)
 
     def add(
@@ -510,6 +544,22 @@ class SqlAlchemyEntitlementActivationRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketEntitlementActivation]:
+        statement = (
+            select(AdminMarketEntitlementActivation)
+            .order_by(
+                AdminMarketEntitlementActivation.created_at.desc(),
+                AdminMarketEntitlementActivation.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     async def get_by_id(
         self,
         activation_id: uuid.UUID,
@@ -523,6 +573,28 @@ class SqlAlchemyEntitlementActivationRepository:
         if for_update:
             statement = statement.with_for_update()
 
+        return await self._session.scalar(statement)
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None:
+        statement = select(AdminMarketEntitlementActivation).where(
+            AdminMarketEntitlementActivation.order_id == order_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketEntitlementActivation | None:
+        statement = select(AdminMarketEntitlementActivation).where(
+            AdminMarketEntitlementActivation.activation_idempotency_key_hash == key_hash,
+        )
         return await self._session.scalar(statement)
 
     def add(

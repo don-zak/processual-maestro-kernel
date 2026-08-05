@@ -253,7 +253,25 @@ def test_payment_repositories_have_no_automatic_activation_api(
     )
 
 
-def test_entitlement_activation_repository_records_only() -> None:
+def test_entitlement_activation_repository_only_records_and_reads() -> None:
     methods = _public_methods(SqlAlchemyEntitlementActivationRepository)
 
-    assert methods == {"add", "get_by_id"}
+    assert methods == {
+        "add",
+        "get_by_id",
+        "get_by_idempotency_key_hash",
+        "get_by_order_id",
+        "list_recent",
+    }
+
+
+@pytest.mark.asyncio
+async def test_entitlement_activation_order_lookup_uses_row_lock() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyEntitlementActivationRepository(session)
+
+    await repository.get_by_order_id(uuid.uuid4(), for_update=True)
+
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "admin_market_entitlement_activations.order_id" in sql
+    assert "FOR UPDATE" in sql
