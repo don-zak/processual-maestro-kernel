@@ -36,15 +36,17 @@ from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemySubscriptionRepository,
     SqlAlchemyTrialRepository,
 )
+from processual_api.admin_marketplace.subscription_runtime_persistence import (
+    SqlAlchemySubscriptionQuotaRepository,
+    SqlAlchemySubscriptionRuntimeRepository,
+    SqlAlchemySubscriptionUsageRepository,
+)
 
 
 class SqlAlchemyAdminMarketplaceUnitOfWork:
     """Transaction boundary for Admin Marketplace persistence."""
 
-    def __init__(
-        self,
-        session_factory: Callable[[], AsyncSession],
-    ) -> None:
+    def __init__(self, session_factory: Callable[[], AsyncSession]) -> None:
         self._session_factory = session_factory
         self._session: AsyncSession | None = None
         self._committed = False
@@ -68,10 +70,11 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.notification_outbox: SqlAlchemyNotificationOutboxRepository
         self.lemon_squeezy_webhook_inbox: SqlAlchemyLemonSqueezyWebhookInboxRepository
         self.lemon_squeezy_reconciliation_decisions: SqlAlchemyLemonSqueezyReconciliationDecisionRepository
+        self.subscription_runtime: SqlAlchemySubscriptionRuntimeRepository
+        self.subscription_quotas: SqlAlchemySubscriptionQuotaRepository
+        self.subscription_usage: SqlAlchemySubscriptionUsageRepository
 
-    async def __aenter__(
-        self,
-    ) -> "SqlAlchemyAdminMarketplaceUnitOfWork":
+    async def __aenter__(self) -> "SqlAlchemyAdminMarketplaceUnitOfWork":
         if self._session is not None:
             raise RuntimeError("Admin Marketplace unit of work is already active.")
 
@@ -98,18 +101,19 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.notification_outbox = SqlAlchemyNotificationOutboxRepository(session)
         self.lemon_squeezy_webhook_inbox = SqlAlchemyLemonSqueezyWebhookInboxRepository(session)
         self.lemon_squeezy_reconciliation_decisions = SqlAlchemyLemonSqueezyReconciliationDecisionRepository(session)
+        self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
+        self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
+        self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
 
         return self
 
     async def commit(self) -> None:
         session = self._require_active_session()
-
         try:
             await session.commit()
         except DBAPIError as exc:
             await session.rollback()
             raise translate_database_error(exc) from exc
-
         self._committed = True
 
     async def rollback(self) -> None:
@@ -117,16 +121,10 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         await session.rollback()
         self._committed = False
 
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None) -> None:
         session = self._session
         if session is None:
             return
-
         try:
             if exc is not None or not self._committed:
                 await session.rollback()
@@ -138,10 +136,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
     def _require_active_session(self) -> AsyncSession:
         if self._session is None:
             raise RuntimeError("Admin Marketplace unit of work is not active.")
-
         return self._session
 
 
-__all__ = [
-    "SqlAlchemyAdminMarketplaceUnitOfWork",
-]
+__all__ = ["SqlAlchemyAdminMarketplaceUnitOfWork"]
