@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260805_0023"
 down_revision: str | None = "20260805_0022"
@@ -23,6 +23,8 @@ ACTIVATION_TABLE = "admin_market_entitlement_activations"
 
 
 def _assert_safe_to_downgrade() -> None:
+    if context.is_offline_mode():
+        return
     connection = op.get_bind()
     checks = (
         sa.text(
