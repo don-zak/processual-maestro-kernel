@@ -52,7 +52,7 @@ def apply_reconciliation_to_runtime_factory(
 
     async def apply(
         *,
-        reconciliation_decision_id: uuid.UUID,
+        reconciliation_event_identity_hash: str,
         subscription_id: uuid.UUID,
         customer_ref: str,
         event_name: str,
@@ -61,14 +61,24 @@ def apply_reconciliation_to_runtime_factory(
         timestamp = effective_at or datetime.now(timezone.utc)
         if timestamp.tzinfo is None:
             raise SubscriptionRuntimeError("effective_at must be timezone-aware.")
+        identity_hash = reconciliation_event_identity_hash.strip().lower()
+        if len(identity_hash) != 64 or any(ch not in "0123456789abcdef" for ch in identity_hash):
+            raise SubscriptionRuntimeError("reconciliation event identity hash is invalid.")
         normalized_event = event_name.strip().lower()
         target_stage = _TARGET_BY_EVENT.get(normalized_event)
         if target_stage is None:
             raise SubscriptionRuntimeError("event does not define a runtime transition.")
 
         async with uow_factory() as uow:
+            decision = await uow.lemon_squeezy_reconciliation_decisions.get_by_event_identity_hash(
+                identity_hash,
+                for_update=True,
+            )
+            if decision is None:
+                raise SubscriptionRuntimeError("reconciliation decision was not found.")
+
             existing = await uow.subscription_runtime_transitions.get_by_decision_id(
-                reconciliation_decision_id,
+                decision.id,
                 for_update=True,
             )
             if existing is not None:
@@ -83,16 +93,6 @@ def apply_reconciliation_to_runtime_factory(
                     )
                 return existing
 
-            decision = await uow.lemon_squeezy_reconciliation_decisions.get_by_event_identity_hash(
-                str(reconciliation_decision_id),
-                for_update=True,
-            ) if False else None
-            decision = await uow.lemon_squeezy_reconciliation_decisions.get_by_id(
-                reconciliation_decision_id,
-                for_update=True,
-            )
-            if decision is None:
-                raise SubscriptionRuntimeError("reconciliation decision was not found.")
             if decision.action != "reconcile":
                 raise SubscriptionRuntimeError("reconciliation decision is not executable.")
             if decision.customer_ref != customer_ref:
@@ -138,7 +138,7 @@ def apply_reconciliation_to_runtime_factory(
                 id=uuid.uuid4(),
                 runtime_id=runtime.id,
                 subscription_id=subscription_id,
-                reconciliation_decision_id=reconciliation_decision_id,
+                reconciliation_decision_id=decision.id,
                 customer_ref=customer_ref,
                 event_name=normalized_event,
                 from_stage=from_stage,
