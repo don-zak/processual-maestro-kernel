@@ -11,14 +11,8 @@ down_revision = "20260723_0007"
 branch_labels = None
 depends_on = None
 
-ACTION_CONSTRAINT = (
-    "ck_auth_action_tokens_"
-    "ck_auth_action_tokens_purpose_allowed"
-)
-DELIVERY_CONSTRAINT = (
-    "ck_auth_delivery_outbox_"
-    "ck_auth_delivery_outbox_event_t_8c12"
-)
+ACTION_CONSTRAINT = "ck_auth_action_tokens_purpose_allowed"
+DELIVERY_CONSTRAINT = "ck_auth_delivery_outbox_event_type_allowed"
 
 
 def _replace_check_constraint(
@@ -27,10 +21,9 @@ def _replace_check_constraint(
     constraint_name: str,
     expression: str,
 ) -> None:
-    resolved_name = op.f(constraint_name)
     with op.batch_alter_table(table_name) as batch_op:
-        batch_op.drop_constraint(resolved_name, type_="check")
-        batch_op.create_check_constraint(resolved_name, expression)
+        batch_op.drop_constraint(constraint_name, type_="check")
+        batch_op.create_check_constraint(constraint_name, expression)
 
 
 def upgrade() -> None:
