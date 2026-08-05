@@ -1,13 +1,8 @@
-"""Billing & subscription management — Lemon Squeezy integration.
+"""Billing package.
 
-Keep the package attribute ``router`` available as the *submodule* so imports like
-``import processual_api.billing.router as br`` resolve to the module, not the
-APIRouter instance.  The APIRouter is exposed as ``billing_router``.
+Import concrete routers from their modules explicitly. Package initialization is
+kept side-effect free so domain helpers can be imported without constructing the
+entire HTTP application graph.
 """
 
-from importlib import import_module
-
-router = import_module(__name__ + ".router")
-billing_router = router.router
-
-__all__ = ["billing_router"]
+__all__: list[str] = []
