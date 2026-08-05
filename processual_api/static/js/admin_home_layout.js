@@ -80,6 +80,21 @@
     });
   }
 
+  function removeLegacyReadinessSurfaces() {
+    const integrationCenter = document.getElementById('page-admin-integration-center');
+    if (!integrationCenter) return;
+
+    [
+      'admin-integration-readiness-card',
+      'admin-integration-readiness-case-management-host',
+    ].forEach((id) => {
+      const duplicate = document.getElementById(id);
+      if (duplicate && !integrationCenter.contains(duplicate)) {
+        duplicate.remove();
+      }
+    });
+  }
+
   function removeHomeDuplicatesAndEmptyGrids() {
     const home = homePage();
     const surface = document.getElementById('admin-home-runtime-surface');
@@ -116,17 +131,30 @@
     installStyle();
     moveHomeRuntimeCards();
     removeHomeDuplicatesAndEmptyGrids();
+    removeLegacyReadinessSurfaces();
+  }
+
+  function observeLegacyReadinessRecreation() {
+    if (!document.body || window.PMK_ADMIN_READINESS_OWNERSHIP_OBSERVER) return;
+
+    const observer = new MutationObserver(() => {
+      removeLegacyReadinessSurfaces();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.PMK_ADMIN_READINESS_OWNERSHIP_OBSERVER = observer;
   }
 
   window.PMK_ADMIN_HOME_LAYOUT = {
     cleanHomeLayout,
     ensureSurface,
     moveHomeRuntimeCards,
+    removeLegacyReadinessSurfaces,
   };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       cleanHomeLayout();
+      observeLegacyReadinessRecreation();
       setTimeout(cleanHomeLayout, 200);
       setTimeout(cleanHomeLayout, 800);
       setTimeout(cleanHomeLayout, 2000);
@@ -134,6 +162,7 @@
     });
   } else {
     cleanHomeLayout();
+    observeLegacyReadinessRecreation();
     setTimeout(cleanHomeLayout, 200);
     setTimeout(cleanHomeLayout, 800);
     setTimeout(cleanHomeLayout, 2000);
