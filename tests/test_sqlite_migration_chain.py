@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 
-HEAD_REVISION = "20260805_0025"
+HEAD_REVISION = "20260805_0026"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 
 
@@ -66,7 +66,7 @@ def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
 
     _run_alembic(repo_root, database_url, "downgrade", "-1")
     downgraded = _run_alembic(repo_root, database_url, "current")
-    assert "20260805_0024" in f"{downgraded.stdout}\n{downgraded.stderr}"
+    assert "20260805_0025" in f"{downgraded.stdout}\n{downgraded.stderr}"
 
     _run_alembic(repo_root, database_url, "upgrade", "head")
     _assert_current_head(repo_root, database_url)
