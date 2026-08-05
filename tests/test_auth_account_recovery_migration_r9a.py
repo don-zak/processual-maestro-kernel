@@ -10,9 +10,8 @@ ALEMBIC_INI = ROOT / "alembic.ini"
 
 def _alembic_environment() -> dict[str, str]:
     environment = os.environ.copy()
-    environment.setdefault(
-        "DATABASE_URL",
-        "postgresql+asyncpg://user:password@localhost:5432/maestro",
+    environment["DATABASE_URL"] = (
+        "postgresql+asyncpg://user:password@localhost:5432/maestro"
     )
     return environment
 
@@ -29,9 +28,14 @@ def _offline(*arguments: str) -> str:
         ],
         cwd=ROOT,
         env=_alembic_environment(),
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
+    )
+    assert completed.returncode == 0, (
+        f"alembic {' '.join(arguments)} failed\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
     )
     return completed.stdout
 
