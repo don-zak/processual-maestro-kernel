@@ -3,10 +3,24 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, UniqueConstraint, Uuid, func, select
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
+from processual_api.admin_marketplace.lemon_squeezy_inbox import (
+    LemonSqueezyWebhookInboxEntry,
+)
 from processual_api.db.base import Base
 
 
@@ -130,5 +144,31 @@ class SqlAlchemyLemonSqueezyWebhookInboxRepository:
             statement = statement.with_for_update()
         return await self._session.scalar(statement)
 
-    def add(self, entry: AdminMarketLemonSqueezyWebhookInbox) -> None:
-        self._session.add(entry)
+    def add(
+        self,
+        entry: LemonSqueezyWebhookInboxEntry | AdminMarketLemonSqueezyWebhookInbox,
+    ) -> None:
+        if isinstance(entry, AdminMarketLemonSqueezyWebhookInbox):
+            row = entry
+        else:
+            row = AdminMarketLemonSqueezyWebhookInbox(
+                id=entry.id,
+                event_identity_hash=entry.event_identity_hash,
+                payload_digest=entry.payload_digest,
+                event_name=entry.event_name,
+                resource_type=entry.resource_type,
+                external_resource_id=entry.external_resource_id,
+                store_id=entry.store_id,
+                customer_ref=entry.customer_ref,
+                order_ref=entry.order_ref,
+                offer_ref=entry.offer_ref,
+                test_mode=entry.test_mode,
+                processing_status=entry.processing_status,
+                attempt_count=entry.attempt_count,
+                last_error_code=entry.last_error_code,
+                received_at=entry.received_at,
+                claimed_at=entry.claimed_at,
+                processed_at=entry.processed_at,
+                rejected_at=entry.rejected_at,
+            )
+        self._session.add(row)
