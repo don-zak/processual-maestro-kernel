@@ -18,6 +18,9 @@ down_revision: str | None = "20260805_0021"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+VERIFICATION_TABLE = "admin_market_payment_verifications"
+AUDIT_TABLE = "admin_market_audit_records"
+
 _AUDIT_ACTIONS = """
 action IN (
     'authority_checked', 'offer_decided', 'channel_eligibility_decided',
@@ -56,6 +59,37 @@ resource_type IN (
 """
 
 
+def _replace_audit_constraints(action_check: str, resource_check: str) -> None:
+    action_name = op.f("ck_admin_market_audit_records_action_allowed")
+    resource_name = op.f("ck_admin_market_audit_records_resource_type_allowed")
+    with op.batch_alter_table(AUDIT_TABLE) as batch_op:
+        batch_op.drop_constraint(action_name, type_="check")
+        batch_op.drop_constraint(resource_name, type_="check")
+        batch_op.create_check_constraint(action_name, action_check)
+        batch_op.create_check_constraint(resource_name, resource_check)
+
+
+def _assert_safe_to_downgrade() -> None:
+    connection = op.get_bind()
+    checks = (
+        sa.text("SELECT 1 FROM admin_market_payment_evidence LIMIT 1"),
+        sa.text(
+            "SELECT 1 FROM admin_market_payment_verifications "
+            "WHERE evidence_id IS NOT NULL "
+            "OR decision_idempotency_key_hash IS NOT NULL LIMIT 1"
+        ),
+        sa.text(
+            "SELECT 1 FROM admin_market_audit_records "
+            "WHERE action = 'payment_evidence_recorded' "
+            "OR resource_type IN ('contract', 'payment_evidence') LIMIT 1"
+        ),
+    )
+    if any(connection.execute(query).first() for query in checks):
+        raise RuntimeError(
+            "Downgrade blocked: payment evidence or verification exists"
+        )
+
+
 def upgrade() -> None:
     op.create_table(
         "admin_market_payment_evidence",
@@ -69,21 +103,14 @@ def upgrade() -> None:
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("safe_source_reference", sa.String(length=128), nullable=False),
         sa.Column("source_reference_hash", sa.String(length=64), nullable=False),
-        sa.Column(
-            "submission_idempotency_key_hash", sa.String(length=64), nullable=False
-        ),
+        sa.Column("submission_idempotency_key_hash", sa.String(length=64), nullable=False),
         sa.Column("reference_matched", sa.Boolean(), nullable=False),
         sa.Column("amount_matched", sa.Boolean(), nullable=False),
         sa.Column("currency_matched", sa.Boolean(), nullable=False),
         sa.Column("destination_matched", sa.Boolean(), nullable=False),
         sa.Column("match_reason_code", sa.String(length=128), nullable=False),
         sa.Column("reported_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint(
             "source_type IN ('customer_report', 'admin_exception', 'provider_notification', 'reconciliation')",
             name=op.f("ck_admin_market_payment_evidence_source_type_allowed"),
@@ -101,19 +128,12 @@ def upgrade() -> None:
             name=op.f("ck_admin_market_payment_evidence_currency_length"),
         ),
         sa.ForeignKeyConstraint(
-            ["order_id"],
-            ["admin_market_orders.id"],
-            name=op.f(
-                "fk_admin_market_payment_evidence_order_id_admin_market_orders"
-            ),
+            ["order_id"], ["admin_market_orders.id"],
+            name=op.f("fk_admin_market_payment_evidence_order_id_admin_market_orders"),
             ondelete="RESTRICT",
         ),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_admin_market_payment_evidence")
-        ),
-        sa.UniqueConstraint(
-            "evidence_ref", name=op.f("uq_admin_market_payment_evidence_ref")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_admin_market_payment_evidence")),
+        sa.UniqueConstraint("evidence_ref", name=op.f("uq_admin_market_payment_evidence_ref")),
         sa.UniqueConstraint(
             "source_reference_hash",
             name=op.f("uq_admin_market_payment_evidence_source_reference_hash"),
@@ -130,134 +150,54 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.add_column(
-        "admin_market_payment_verifications",
-        sa.Column("evidence_id", sa.Uuid(), nullable=True),
-    )
-    op.add_column(
-        "admin_market_payment_verifications",
-        sa.Column("decided_by_user_id", sa.String(length=128), nullable=True),
-    )
-    op.add_column(
-        "admin_market_payment_verifications",
-        sa.Column("decision_reason_code", sa.String(length=128), nullable=True),
-    )
-    op.add_column(
-        "admin_market_payment_verifications",
-        sa.Column(
-            "decision_idempotency_key_hash", sa.String(length=64), nullable=True
-        ),
-    )
-    op.add_column(
-        "admin_market_payment_verifications",
-        sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_admin_market_payment_verification_evidence",
-        "admin_market_payment_verifications",
-        "admin_market_payment_evidence",
-        ["evidence_id"],
-        ["id"],
-        ondelete="RESTRICT",
-    )
-    op.create_unique_constraint(
-        "uq_admin_market_payment_verifications_order_id",
-        "admin_market_payment_verifications",
-        ["order_id"],
-    )
-    op.create_unique_constraint(
-        "uq_admin_market_payment_verifications_decision_idem_hash",
-        "admin_market_payment_verifications",
-        ["decision_idempotency_key_hash"],
-    )
+    with op.batch_alter_table(VERIFICATION_TABLE) as batch_op:
+        batch_op.add_column(sa.Column("evidence_id", sa.Uuid(), nullable=True))
+        batch_op.add_column(sa.Column("decided_by_user_id", sa.String(length=128), nullable=True))
+        batch_op.add_column(sa.Column("decision_reason_code", sa.String(length=128), nullable=True))
+        batch_op.add_column(sa.Column("decision_idempotency_key_hash", sa.String(length=64), nullable=True))
+        batch_op.add_column(sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True))
+        batch_op.create_foreign_key(
+            "fk_admin_market_payment_verification_evidence",
+            "admin_market_payment_evidence",
+            ["evidence_id"],
+            ["id"],
+            ondelete="RESTRICT",
+        )
+        batch_op.create_unique_constraint(
+            "uq_admin_market_payment_verifications_order_id",
+            ["order_id"],
+        )
+        batch_op.create_unique_constraint(
+            "uq_admin_market_payment_verifications_decision_idem_hash",
+            ["decision_idempotency_key_hash"],
+        )
 
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"),
-        "admin_market_audit_records",
-        type_="check",
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"),
-        "admin_market_audit_records",
-        _AUDIT_ACTIONS,
-    )
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"),
-        "admin_market_audit_records",
-        type_="check",
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"),
-        "admin_market_audit_records",
-        _AUDIT_RESOURCES,
-    )
+    _replace_audit_constraints(_AUDIT_ACTIONS, _AUDIT_RESOURCES)
 
 
 def downgrade() -> None:
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF EXISTS (SELECT 1 FROM admin_market_payment_evidence)
-               OR EXISTS (
-                    SELECT 1 FROM admin_market_payment_verifications
-                    WHERE evidence_id IS NOT NULL
-                       OR decision_idempotency_key_hash IS NOT NULL
-               )
-               OR EXISTS (
-                    SELECT 1 FROM admin_market_audit_records
-                    WHERE action = 'payment_evidence_recorded'
-                       OR resource_type IN ('contract', 'payment_evidence')
-               )
-            THEN
-                RAISE EXCEPTION
-                    'Downgrade blocked: payment evidence or verification exists';
-            END IF;
-        END $$
-        """
-    )
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"),
-        "admin_market_audit_records",
-        type_="check",
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_resource_type_allowed"),
-        "admin_market_audit_records",
-        _PREVIOUS_AUDIT_RESOURCES,
-    )
-    op.drop_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"),
-        "admin_market_audit_records",
-        type_="check",
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_audit_records_action_allowed"),
-        "admin_market_audit_records",
-        _PREVIOUS_AUDIT_ACTIONS,
-    )
-    op.drop_constraint(
-        "uq_admin_market_payment_verifications_decision_idem_hash",
-        "admin_market_payment_verifications",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "uq_admin_market_payment_verifications_order_id",
-        "admin_market_payment_verifications",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "fk_admin_market_payment_verification_evidence",
-        "admin_market_payment_verifications",
-        type_="foreignkey",
-    )
-    op.drop_column("admin_market_payment_verifications", "decided_at")
-    op.drop_column(
-        "admin_market_payment_verifications", "decision_idempotency_key_hash"
-    )
-    op.drop_column("admin_market_payment_verifications", "decision_reason_code")
-    op.drop_column("admin_market_payment_verifications", "decided_by_user_id")
-    op.drop_column("admin_market_payment_verifications", "evidence_id")
+    _assert_safe_to_downgrade()
+    _replace_audit_constraints(_PREVIOUS_AUDIT_ACTIONS, _PREVIOUS_AUDIT_RESOURCES)
+
+    with op.batch_alter_table(VERIFICATION_TABLE) as batch_op:
+        batch_op.drop_constraint(
+            "uq_admin_market_payment_verifications_decision_idem_hash",
+            type_="unique",
+        )
+        batch_op.drop_constraint(
+            "uq_admin_market_payment_verifications_order_id",
+            type_="unique",
+        )
+        batch_op.drop_constraint(
+            "fk_admin_market_payment_verification_evidence",
+            type_="foreignkey",
+        )
+        batch_op.drop_column("decided_at")
+        batch_op.drop_column("decision_idempotency_key_hash")
+        batch_op.drop_column("decision_reason_code")
+        batch_op.drop_column("decided_by_user_id")
+        batch_op.drop_column("evidence_id")
+
     op.drop_index(
         op.f("ix_admin_market_payment_evidence_order_status"),
         table_name="admin_market_payment_evidence",
