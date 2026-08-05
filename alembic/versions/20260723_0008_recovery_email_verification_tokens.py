@@ -21,81 +21,44 @@ DELIVERY_CONSTRAINT = (
 )
 
 
-def upgrade() -> None:
-    op.execute(
-        f"""
-        ALTER TABLE auth_action_tokens
-        DROP CONSTRAINT {ACTION_CONSTRAINT}
-        """
-    )
-    op.execute(
-        f"""
-        ALTER TABLE auth_action_tokens
-        ADD CONSTRAINT {ACTION_CONSTRAINT}
-        CHECK (
-            purpose IN (
-                'verify_email',
-                'verify_recovery_email',
-                'reset_password',
-                'change_email',
-                'accept_invitation'
-            )
-        )
-        """
-    )
+def _replace_check_constraint(
+    *,
+    table_name: str,
+    constraint_name: str,
+    expression: str,
+) -> None:
+    with op.batch_alter_table(table_name) as batch_op:
+        batch_op.drop_constraint(constraint_name, type_="check")
+        batch_op.create_check_constraint(constraint_name, expression)
 
-    op.execute(
-        f"""
-        ALTER TABLE auth_delivery_outbox
-        DROP CONSTRAINT {DELIVERY_CONSTRAINT}
-        """
+
+def upgrade() -> None:
+    _replace_check_constraint(
+        table_name="auth_action_tokens",
+        constraint_name=ACTION_CONSTRAINT,
+        expression=(
+            "purpose IN ('verify_email', 'verify_recovery_email', "
+            "'reset_password', 'change_email', 'accept_invitation')"
+        ),
     )
-    op.execute(
-        f"""
-        ALTER TABLE auth_delivery_outbox
-        ADD CONSTRAINT {DELIVERY_CONSTRAINT}
-        CHECK (
-            event_type IN (
-                'verify_email',
-                'verify_recovery_email'
-            )
-        )
-        """
+    _replace_check_constraint(
+        table_name="auth_delivery_outbox",
+        constraint_name=DELIVERY_CONSTRAINT,
+        expression="event_type IN ('verify_email', 'verify_recovery_email')",
     )
 
 
 def downgrade() -> None:
-    op.execute(
-        f"""
-        ALTER TABLE auth_delivery_outbox
-        DROP CONSTRAINT {DELIVERY_CONSTRAINT}
-        """
+    _replace_check_constraint(
+        table_name="auth_delivery_outbox",
+        constraint_name=DELIVERY_CONSTRAINT,
+        expression="event_type IN ('verify_email')",
     )
-    op.execute(
-        f"""
-        ALTER TABLE auth_delivery_outbox
-        ADD CONSTRAINT {DELIVERY_CONSTRAINT}
-        CHECK (event_type IN ('verify_email'))
-        """
-    )
-
-    op.execute(
-        f"""
-        ALTER TABLE auth_action_tokens
-        DROP CONSTRAINT {ACTION_CONSTRAINT}
-        """
-    )
-    op.execute(
-        f"""
-        ALTER TABLE auth_action_tokens
-        ADD CONSTRAINT {ACTION_CONSTRAINT}
-        CHECK (
-            purpose IN (
-                'verify_email',
-                'reset_password',
-                'change_email',
-                'accept_invitation'
-            )
-        )
-        """
+    _replace_check_constraint(
+        table_name="auth_action_tokens",
+        constraint_name=ACTION_CONSTRAINT,
+        expression=(
+            "purpose IN ('verify_email', 'reset_password', "
+            "'change_email', 'accept_invitation')"
+        ),
     )
