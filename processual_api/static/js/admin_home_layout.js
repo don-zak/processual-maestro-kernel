@@ -1,4 +1,3 @@
-
 (function () {
   function installStyle() {
     if (document.getElementById('admin-home-layout-style')) return;
@@ -49,7 +48,6 @@
     surface.setAttribute('data-admin-runtime-grid', '1');
 
     const anchor = findOverviewAnchor(home);
-
     if (anchor && anchor.parentElement) {
       anchor.insertAdjacentElement('afterend', surface);
     } else {
@@ -66,7 +64,6 @@
   function moveHomeRuntimeCards() {
     const home = homePage();
     const surface = ensureSurface();
-
     if (!home || !surface) return;
 
     Array.from(home.querySelectorAll('#admin-runtime-home-summary,#admin-runtime-auth-state')).forEach((card) => {
@@ -83,31 +80,32 @@
     });
   }
 
-  function removeHomeRuntimeDuplicatesAndEmptyGrids() {
+  function removeHomeDuplicatesAndEmptyGrids() {
     const home = homePage();
     const surface = document.getElementById('admin-home-runtime-surface');
-
     if (!home || !surface) return;
 
     home.querySelectorAll('.card').forEach((card) => {
       if (isWantedHomeRuntimeCard(card)) return;
 
       const text = card.textContent || '';
-      const isLegacy =
+      const isLegacyAuthCard =
         text.includes('PROTECTED AREA') ||
         text.includes('Protected Area') ||
         text.includes('Checking admin session') ||
         text.includes('Admin auth token missing') ||
         text.includes('Backend scopes remain the authority');
+      const isDuplicateNavigationCard =
+        card.id === 'admin-supervisor-home-console' ||
+        text.includes('Supervisor Operations Center');
 
-      if (isLegacy) {
+      if (isLegacyAuthCard || isDuplicateNavigationCard) {
         card.remove();
       }
     });
 
     home.querySelectorAll('[data-admin-runtime-grid]').forEach((grid) => {
       if (grid.id === 'admin-home-runtime-surface') return;
-
       if (!grid.querySelector('.card')) {
         grid.remove();
       }
@@ -117,7 +115,7 @@
   function cleanHomeLayout() {
     installStyle();
     moveHomeRuntimeCards();
-    removeHomeRuntimeDuplicatesAndEmptyGrids();
+    removeHomeDuplicatesAndEmptyGrids();
   }
 
   window.PMK_ADMIN_HOME_LAYOUT = {
