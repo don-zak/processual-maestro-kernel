@@ -40,6 +40,15 @@ _PREVIOUS_ORDER_STATUS = """status IN (
 'cancelled','fulfilled')"""
 
 
+def _reflected_check_names(table_name: str) -> set[str]:
+    inspector = sa.inspect(op.get_bind())
+    return {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints(table_name)
+        if constraint.get("name")
+    }
+
+
 def _backfill_orders() -> None:
     bind = op.get_bind()
     orders = sa.table(
@@ -162,18 +171,28 @@ def upgrade() -> None:
         for name in ("billing_period","country_code","currency","subtotal_amount","tax_amount","total_amount","contract_status","payment_requirement","payment_status","payment_destination_snapshot","offer_snapshot"):
             batch_op.alter_column(name, server_default=None)
 
+    reflected = _reflected_check_names("admin_market_audit_records")
     with op.batch_alter_table("admin_market_audit_records") as batch_op:
-        batch_op.drop_constraint(op.f("ck_admin_market_audit_records_platform_authority_exact"), type_="check")
-        batch_op.drop_constraint(op.f("ck_admin_market_audit_records_action_allowed"), type_="check")
+        for name in (
+            op.f("ck_admin_market_audit_records_platform_authority_exact"),
+            op.f("ck_admin_market_audit_records_action_allowed"),
+        ):
+            if name in reflected:
+                batch_op.drop_constraint(name, type_="check")
         batch_op.create_check_constraint(op.f("ck_admin_market_audit_records_actor_authority_allowed"), "platform_authority IN ('platform_admin','identity_customer','system')")
         batch_op.create_check_constraint(op.f("ck_admin_market_audit_records_action_allowed"), _AUDIT_ACTIONS)
 
 
 def downgrade() -> None:
     _assert_downgrade_safe()
+    reflected = _reflected_check_names("admin_market_audit_records")
     with op.batch_alter_table("admin_market_audit_records") as batch_op:
-        batch_op.drop_constraint(op.f("ck_admin_market_audit_records_action_allowed"), type_="check")
-        batch_op.drop_constraint(op.f("ck_admin_market_audit_records_actor_authority_allowed"), type_="check")
+        for name in (
+            op.f("ck_admin_market_audit_records_action_allowed"),
+            op.f("ck_admin_market_audit_records_actor_authority_allowed"),
+        ):
+            if name in reflected:
+                batch_op.drop_constraint(name, type_="check")
         batch_op.create_check_constraint(op.f("ck_admin_market_audit_records_platform_authority_exact"), "platform_authority = 'platform_admin'")
         batch_op.create_check_constraint(op.f("ck_admin_market_audit_records_action_allowed"), _PREVIOUS_AUDIT_ACTIONS)
 
