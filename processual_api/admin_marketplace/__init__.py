@@ -1,4 +1,9 @@
 # ruff: noqa: F401
+# Route extensions that belong to the Admin Marketplace router.
+from processual_api.admin_marketplace import catalog_router as _catalog_router
+from processual_api.admin_marketplace import (
+    subscription_usage_router as _subscription_usage_router,
+)
 from processual_api.admin_marketplace.audit_contracts import (
     CommercialAuditAction,
     CommercialAuditOutcome,
@@ -53,15 +58,6 @@ from processual_api.admin_marketplace.identity_authority import (
 from processual_api.admin_marketplace.payment_destination_service import (
     PaymentDestinationAdministrationResult,
     PaymentDestinationAdministrationService,
-)
-
-# Import route extensions after authority and contract exports.
-from processual_api.admin_marketplace import catalog_router as _catalog_router
-from processual_api.admin_marketplace import (
-    lemon_squeezy_secure_webhook_router as _lemon_squeezy_secure_webhook_router,
-)
-from processual_api.admin_marketplace import (
-    subscription_usage_router as _subscription_usage_router,
 )
 
 __all__ = [name for name in globals() if not name.startswith("_")]
