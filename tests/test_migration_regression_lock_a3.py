@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260805_0027"
+HEAD_REVISION = "20260805_0028"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -81,6 +81,8 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260805_0026:20260805_0025"),
         ("upgrade", "20260805_0026:20260805_0027"),
         ("downgrade", "20260805_0027:20260805_0026"),
+        ("upgrade", "20260805_0027:20260805_0028"),
+        ("downgrade", "20260805_0028:20260805_0027"),
     )
 
     for command, revision_range in ranges:
@@ -156,6 +158,10 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260805_0027_lemon_squeezy_reconciliation_decisions.py": (
             "Downgrade blocked: Lemon Squeezy reconciliation decisions exist",
+            "context.is_offline_mode()",
+        ),
+        "20260805_0028_subscription_runtime_quotas_usage.py": (
+            "Downgrade blocked: subscription runtime, quota, or usage rows exist",
             "context.is_offline_mode()",
         ),
     }
