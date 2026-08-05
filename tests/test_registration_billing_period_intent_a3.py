@@ -90,7 +90,7 @@ def test_billing_period_migration_is_reversible_and_preserves_legacy_rows():
     assert 'revision: str = "20260804_0016"' in source
     assert 'down_revision: str | None = "20260803_0015"' in source
     assert 'sa.Column("billing_period", sa.String(length=16), nullable=True)' in source
-    assert "op.create_check_constraint(" in source
-    assert "op.drop_constraint(" in source
-    assert 'op.drop_column(TABLE, "billing_period")' in source
+    assert "batch_op.create_check_constraint(" in source
+    assert "batch_op.drop_constraint(" in source
+    assert 'batch_op.drop_column("billing_period")' in source
     assert "server_default" not in source
