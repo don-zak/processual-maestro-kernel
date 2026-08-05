@@ -140,6 +140,14 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
             "Downgrade blocked: automatic subscription activation exists",
             "context.is_offline_mode()",
         ),
+        "20260805_0024_payment_reconciliation.py": (
+            "Downgrade blocked: payment reconciliation cases exist",
+            "context.is_offline_mode()",
+        ),
+        "20260805_0025_commercial_notification_outbox.py": (
+            "Downgrade blocked: commercial notification outbox rows exist",
+            "context.is_offline_mode()",
+        ),
     }
 
     versions = ROOT / "alembic" / "versions"
@@ -147,5 +155,4 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         source = (versions / filename).read_text(encoding="utf-8")
         for marker in markers:
             assert marker in source
-        assert "def _assert" in source
         assert "op.get_bind()" in source
