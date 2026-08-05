@@ -10,6 +10,8 @@ from starlette.requests import Request
 from processual_api.admin_marketplace import lemon_squeezy_secure_webhook_router as transport
 from processual_api.billing.router import router as billing_router
 
+STRONG_SECRET = "s" * 32
+
 
 def _request(*, body: bytes = b"{}", headers: dict[str, str] | None = None) -> Request:
     sent = False
@@ -52,20 +54,26 @@ def test_legacy_webhook_route_is_replaced_not_duplicated() -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_configuration_fails_closed_before_ingestion(monkeypatch) -> None:
+async def test_missing_or_weak_configuration_fails_closed_before_ingestion(monkeypatch) -> None:
     monkeypatch.delenv("LEMONSQUEEZY_WEBHOOK_SECRET", raising=False)
     monkeypatch.delenv("LEMONSQUEEZY_STORE_ID", raising=False)
 
-    with pytest.raises(HTTPException) as captured:
+    with pytest.raises(HTTPException) as missing:
         await transport.secure_lemon_squeezy_webhook(_request())
+    assert missing.value.status_code == 503
+    assert missing.value.detail == "Webhook processing is unavailable."
 
-    assert captured.value.status_code == 503
-    assert captured.value.detail == "Webhook processing is unavailable."
+    monkeypatch.setenv("LEMONSQUEEZY_WEBHOOK_SECRET", "weak")
+    monkeypatch.setenv("LEMONSQUEEZY_STORE_ID", "not-numeric")
+    with pytest.raises(HTTPException) as weak:
+        await transport.secure_lemon_squeezy_webhook(_request())
+    assert weak.value.status_code == 503
+    assert weak.value.detail == "Webhook processing is unavailable."
 
 
 @pytest.mark.asyncio
 async def test_declared_or_actual_oversized_body_is_rejected(monkeypatch) -> None:
-    monkeypatch.setenv("LEMONSQUEEZY_WEBHOOK_SECRET", "secret")
+    monkeypatch.setenv("LEMONSQUEEZY_WEBHOOK_SECRET", STRONG_SECRET)
     monkeypatch.setenv("LEMONSQUEEZY_STORE_ID", "42")
 
     with pytest.raises(HTTPException) as declared:
@@ -83,7 +91,7 @@ async def test_declared_or_actual_oversized_body_is_rejected(monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_verification_errors_are_sanitized(monkeypatch) -> None:
-    monkeypatch.setenv("LEMONSQUEEZY_WEBHOOK_SECRET", "secret")
+    monkeypatch.setenv("LEMONSQUEEZY_WEBHOOK_SECRET", STRONG_SECRET)
     monkeypatch.setenv("LEMONSQUEEZY_STORE_ID", "42")
 
     with pytest.raises(HTTPException) as captured:
