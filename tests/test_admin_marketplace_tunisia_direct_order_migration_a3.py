@@ -50,7 +50,8 @@ def test_upgrade_sql_adds_confirmed_address_and_safe_direct_order_contract() -> 
 
 
 def test_downgrade_sql_blocks_loss_of_customer_order_audit() -> None:
+    source = MIGRATION.read_text(encoding="utf-8")
     sql = offline("downgrade", "20260804_0020:20260804_0019", "--sql")
 
-    assert "Downgrade blocked: customer direct-order audit exists" in sql
+    assert "Downgrade blocked: customer direct-order audit exists" in source
     assert "DROP COLUMN payment_destination_snapshot" in sql
