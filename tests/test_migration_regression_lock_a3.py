@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260805_0025"
+HEAD_REVISION = "20260805_0026"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -21,7 +21,6 @@ def _run(
     expect_success: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    # Deliberately replace, rather than default, any caller-provided URL.
     environment["DATABASE_URL"] = database_url
     completed = subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
@@ -63,7 +62,6 @@ def _assert_partial_default_index(database_path: Path) -> None:
 def test_commercial_migrations_render_offline_without_runtime_database_access(
     monkeypatch,
 ) -> None:
-    # A poisoned parent value catches helpers that use setdefault instead of replacement.
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///must-not-be-inherited.db")
 
     ranges = (
@@ -79,6 +77,8 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260805_0024:20260805_0023"),
         ("upgrade", "20260805_0024:20260805_0025"),
         ("downgrade", "20260805_0025:20260805_0024"),
+        ("upgrade", "20260805_0025:20260805_0026"),
+        ("downgrade", "20260805_0026:20260805_0025"),
     )
 
     for command, revision_range in ranges:
@@ -146,6 +146,10 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260805_0025_commercial_notification_outbox.py": (
             "Downgrade blocked: commercial notification outbox rows exist",
+            "context.is_offline_mode()",
+        ),
+        "20260805_0026_lemon_squeezy_webhook_inbox.py": (
+            "Downgrade blocked: Lemon Squeezy webhook inbox rows exist",
             "context.is_offline_mode()",
         ),
     }
