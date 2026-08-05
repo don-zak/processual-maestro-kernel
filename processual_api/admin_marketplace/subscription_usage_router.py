@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from processual_api.admin_marketplace.persistence.unit_of_work import (
