@@ -59,12 +59,24 @@ resource_type IN (
 """
 
 
+def _reflected_check_names() -> set[str]:
+    inspector = sa.inspect(op.get_bind())
+    return {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints(AUDIT_TABLE)
+        if constraint.get("name")
+    }
+
+
 def _replace_audit_constraints(action_check: str, resource_check: str) -> None:
     action_name = op.f("ck_admin_market_audit_records_action_allowed")
     resource_name = op.f("ck_admin_market_audit_records_resource_type_allowed")
+    reflected = _reflected_check_names()
     with op.batch_alter_table(AUDIT_TABLE) as batch_op:
-        batch_op.drop_constraint(action_name, type_="check")
-        batch_op.drop_constraint(resource_name, type_="check")
+        if action_name in reflected:
+            batch_op.drop_constraint(action_name, type_="check")
+        if resource_name in reflected:
+            batch_op.drop_constraint(resource_name, type_="check")
         batch_op.create_check_constraint(action_name, action_check)
         batch_op.create_check_constraint(resource_name, resource_check)
 
