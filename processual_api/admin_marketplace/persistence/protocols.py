@@ -17,6 +17,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketOrder,
     AdminMarketPaymentDestination,
     AdminMarketPaymentEvidence,
+    AdminMarketPaymentReconciliationCase,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -350,6 +351,29 @@ class CommercialDecisionRepository(Protocol):
 
 
 @runtime_checkable
+class PaymentReconciliationRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentReconciliationCase]: ...
+
+    async def get_by_evidence_id(
+        self,
+        evidence_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentReconciliationCase | None: ...
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentReconciliationCase | None: ...
+
+    def add(self, case: AdminMarketPaymentReconciliationCase) -> None: ...
+
+
+@runtime_checkable
 class CommercialAuditRepository(Protocol):
     async def get_by_id(
         self,
@@ -380,6 +404,7 @@ class AdminMarketplaceUnitOfWork(Protocol):
     payment_destinations: PaymentDestinationRepository
     payment_verifications: PaymentVerificationRepository
     payment_evidence: PaymentEvidenceRepository
+    payment_reconciliations: PaymentReconciliationRepository
     invoices: InvoiceRepository
     entitlement_activations: EntitlementActivationRepository
     channel_eligibilities: ChannelEligibilityRepository
@@ -416,6 +441,7 @@ __all__ = [
     "OrderRepository",
     "PaymentDestinationRepository",
     "PaymentEvidenceRepository",
+    "PaymentReconciliationRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
     "SubscriptionRepository",

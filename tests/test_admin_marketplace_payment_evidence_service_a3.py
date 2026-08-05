@@ -275,3 +275,44 @@ async def test_admin_cannot_verify_mismatched_customer_report() -> None:
             correlation_id="corr_verify",
             idempotency_key="payment-verify-idempotency-0001",
         )
+
+
+@pytest.mark.asyncio
+async def test_admin_can_separately_verify_an_explicitly_accepted_exception() -> None:
+    unit = Unit(order())
+    await report_service(unit).report(**report_kwargs(actual_amount=Decimal("40.000")))
+    evidence = unit.payment_evidence.items[0]
+    evidence.status = "matched"
+    unit.orders.item.status = "awaiting_payment"
+    unit.orders.item.payment_status = "customer_reported"
+    reconciliation = SimpleNamespace(
+        evidence_id=evidence.id,
+        status="resolved",
+        resolution="accepted_match",
+    )
+
+    class Reconciliations:
+        async def get_by_evidence_id(self, evidence_id, *, for_update=False):
+            assert for_update is True
+            return reconciliation if evidence_id == evidence.id else None
+
+    unit.payment_reconciliations = Reconciliations()
+    service = AdminPaymentVerificationService(
+        unit_of_work_factory=lambda: unit,
+        clock=lambda: NOW,
+        id_factory=lambda: VERIFY_ID,
+        reference_factory=lambda: REFERENCE_ID,
+        event_id_factory=lambda: EVENT_ID,
+    )
+
+    result = await service.decide(
+        authority=admin(),
+        evidence_ref=evidence.evidence_ref,
+        decision="verified",
+        reason_code="admin_accepted_exception_confirmed",
+        correlation_id="corr_verify_exception",
+        idempotency_key="payment-verify-idempotency-exception-0001",
+    )
+
+    assert result.status == "verified"
+    assert result.order_status == "ready_for_activation"

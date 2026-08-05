@@ -690,6 +690,61 @@ class AdminMarketPaymentEvidence(Base):
     created_at: Mapped[datetime] = _created_at_column()
 
 
+class AdminMarketPaymentReconciliationCase(Base):
+    __tablename__ = "admin_market_payment_reconciliation_cases"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'requires_review', 'resolved', 'rejected')",
+            name="status_allowed",
+        ),
+        CheckConstraint(
+            "exception_type IN ('underpayment', 'overpayment', 'unknown_reference', "
+            "'old_destination', 'late_payment', 'duplicate_payment', 'payer_mismatch', "
+            "'currency_mismatch', 'untrusted_evidence', 'other')",
+            name="exception_type_allowed",
+        ),
+        CheckConstraint(
+            "resolution IS NULL OR resolution IN ('accepted_match', 'rejected', "
+            "'linked', 'unlinked', 'reevaluated', 'placed_in_review')",
+            name="resolution_allowed",
+        ),
+        UniqueConstraint("case_ref", name="uq_admin_market_reconciliation_case_ref"),
+        UniqueConstraint("evidence_id", name="uq_admin_market_reconciliation_evidence"),
+        UniqueConstraint(
+            "decision_idempotency_key_hash",
+            name="uq_admin_market_reconciliation_idem_hash",
+        ),
+        Index(
+            "ix_admin_market_reconciliation_status_updated",
+            "status",
+            "updated_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    case_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_payment_evidence.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    candidate_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    exception_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    resolution: Mapped[str | None] = mapped_column(String(32))
+    reason_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    safe_note: Mapped[str | None] = mapped_column(String(500))
+    decided_by_user_id: Mapped[str | None] = mapped_column(String(128))
+    decision_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+
 class AdminMarketInvoice(Base):
     __tablename__ = "admin_market_invoices"
     __table_args__ = (
@@ -1057,7 +1112,8 @@ class AdminMarketAuditRecord(Base):
                 'payment_destination_default_set',
                 'order_created',
                 'contract_completed',
-                'payment_evidence_recorded'
+                'payment_evidence_recorded',
+                'payment_reconciliation_decided'
             )
             """,
             name="action_allowed",
@@ -1074,7 +1130,8 @@ class AdminMarketAuditRecord(Base):
                 'sales_channel_eligibility',
                 'payment_destination',
                 'contract',
-                'payment_evidence'
+                'payment_evidence',
+                'payment_reconciliation'
             )
             """,
             name="resource_type_allowed",

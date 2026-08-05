@@ -19,6 +19,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketOrder,
     AdminMarketPaymentDestination,
     AdminMarketPaymentEvidence,
+    AdminMarketPaymentReconciliationCase,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -508,6 +509,56 @@ class SqlAlchemyPaymentEvidenceRepository:
 
     def add(self, evidence: AdminMarketPaymentEvidence) -> None:
         self._session.add(evidence)
+
+
+class SqlAlchemyPaymentReconciliationRepository:
+    """Persistence for MFA-gated payment reconciliation cases."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentReconciliationCase]:
+        statement = (
+            select(AdminMarketPaymentReconciliationCase)
+            .order_by(
+                AdminMarketPaymentReconciliationCase.updated_at.desc(),
+                AdminMarketPaymentReconciliationCase.id.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_evidence_id(
+        self,
+        evidence_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentReconciliationCase | None:
+        statement = select(AdminMarketPaymentReconciliationCase).where(
+            AdminMarketPaymentReconciliationCase.evidence_id == evidence_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentReconciliationCase | None:
+        return await self._session.scalar(
+            select(AdminMarketPaymentReconciliationCase).where(
+                AdminMarketPaymentReconciliationCase.decision_idempotency_key_hash
+                == key_hash,
+            )
+        )
+
+    def add(self, case: AdminMarketPaymentReconciliationCase) -> None:
+        self._session.add(case)
 
 
 class SqlAlchemyInvoiceRepository:

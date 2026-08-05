@@ -21,6 +21,7 @@ from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyOrderRepository,
     SqlAlchemyPaymentDestinationRepository,
     SqlAlchemyPaymentEvidenceRepository,
+    SqlAlchemyPaymentReconciliationRepository,
     SqlAlchemyPaymentVerificationRepository,
     SqlAlchemyPlanRepository,
     SqlAlchemySubscriptionRepository,
@@ -48,6 +49,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.payment_destinations: SqlAlchemyPaymentDestinationRepository
         self.payment_verifications: SqlAlchemyPaymentVerificationRepository
         self.payment_evidence: SqlAlchemyPaymentEvidenceRepository
+        self.payment_reconciliations: SqlAlchemyPaymentReconciliationRepository
         self.invoices: SqlAlchemyInvoiceRepository
         self.entitlement_activations: SqlAlchemyEntitlementActivationRepository
         self.channel_eligibilities: SqlAlchemyChannelEligibilityRepository
@@ -74,6 +76,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.payment_destinations = SqlAlchemyPaymentDestinationRepository(session)
         self.payment_verifications = SqlAlchemyPaymentVerificationRepository(session)
         self.payment_evidence = SqlAlchemyPaymentEvidenceRepository(session)
+        self.payment_reconciliations = SqlAlchemyPaymentReconciliationRepository(session)
         self.invoices = SqlAlchemyInvoiceRepository(session)
         self.entitlement_activations = SqlAlchemyEntitlementActivationRepository(session)
         self.channel_eligibilities = SqlAlchemyChannelEligibilityRepository(session)

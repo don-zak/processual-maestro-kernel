@@ -64,7 +64,7 @@ def _load_subscriptions() -> list[dict]:
     if path.exists():
         try:
             return json.loads(path.read_text("utf-8"))
-        except json.JSONDecodeError, OSError:
+        except (json.JSONDecodeError, OSError):
             pass
     return []
 
@@ -101,7 +101,7 @@ def _compute_stage(sub: dict) -> str:
     created_str = sub.get("suspended_at") or sub.get("created_at", "")
     try:
         suspended_at = datetime.fromisoformat(created_str)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return "grace"
 
     now = datetime.now(UTC)

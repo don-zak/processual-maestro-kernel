@@ -167,3 +167,11 @@ def test_router_registers_payment_evidence_read_and_verification_routes() -> Non
         "/admin-marketplace/subscription-activations",
         frozenset({"GET"}),
     ) in routes
+    assert (
+        "/admin-marketplace/payment-reconciliations",
+        frozenset({"GET"}),
+    ) in routes
+    assert (
+        "/admin-marketplace/payment-evidence/{evidence_ref}/reconcile",
+        frozenset({"POST"}),
+    ) in routes

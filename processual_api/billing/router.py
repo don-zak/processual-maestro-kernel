@@ -69,7 +69,7 @@ def _load_checkouts() -> list[dict]:
     if path.exists():
         try:
             return json.loads(path.read_text("utf-8"))
-        except json.JSONDecodeError, OSError:
+        except (json.JSONDecodeError, OSError):
             pass
     return []
 
@@ -84,7 +84,7 @@ def _load_subscriptions() -> list[dict]:
     if path.exists():
         try:
             return json.loads(path.read_text("utf-8"))
-        except json.JSONDecodeError, OSError:
+        except (json.JSONDecodeError, OSError):
             pass
     return []
 
