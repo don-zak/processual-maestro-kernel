@@ -45,7 +45,8 @@ def upgrade() -> None:
             name=op.f("ck_admin_market_notification_outbox_event_type_allowed"),
         ),
         sa.CheckConstraint(
-            "attempt_count >= 0", name=op.f("ck_admin_market_notification_outbox_attempt_count_nonnegative")
+            "attempt_count >= 0",
+            name=op.f("ck_admin_market_notification_outbox_attempt_count_nonnegative"),
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("event_ref", name="uq_admin_market_notification_event_ref"),
@@ -59,12 +60,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("""
-        DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM admin_market_notification_outbox) THEN
-                RAISE EXCEPTION 'Downgrade blocked: commercial notification outbox rows exist';
-            END IF;
-        END $$
-    """)
-    op.drop_index("ix_admin_market_notification_outbox_dispatch", table_name="admin_market_notification_outbox")
+    connection = op.get_bind()
+    if connection.execute(
+        sa.text("SELECT 1 FROM admin_market_notification_outbox LIMIT 1")
+    ).first():
+        raise RuntimeError(
+            "Downgrade blocked: commercial notification outbox rows exist"
+        )
+    op.drop_index(
+        "ix_admin_market_notification_outbox_dispatch",
+        table_name="admin_market_notification_outbox",
+    )
     op.drop_table("admin_market_notification_outbox")
