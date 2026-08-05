@@ -60,6 +60,9 @@ jobs:
       - name: Verify migration head
         run: python -m alembic heads | grep "20260805_0029 (head)"
 
+      - name: Commercial staging smoke gate
+        run: python -m processual_api.staging_smoke
+
       - name: Run commercial regression gate
         run: |
           python -m pytest \
@@ -83,6 +86,7 @@ jobs:
             tests/test_migration_regression_lock_a3.py \
             tests/test_sqlite_migration_chain.py \
             tests/test_commercial_release_gate_a3.py \
+            tests/test_commercial_staging_smoke_a3.py \
             -q
 
       - name: Run all tests
