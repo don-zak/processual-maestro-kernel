@@ -345,7 +345,7 @@
       <div>
         <span class="am-kicker">Operational foundation</span>
         <h2>Tunisian direct commerce, controlled from one workspace.</h2>
-        <p>The shell is complete. Payment destinations are live; later sections stay honest and empty until their domain APIs are ready.</p>
+        <p>Payment destinations, orders, contracts, and MFA-gated payment verification are live. Activation remains a separate later gate.</p>
       </div>
       <button class="btn accent" type="button" data-am-open="payment-destinations">Manage payment destinations</button>
     </div>
@@ -358,7 +358,7 @@
     <div class="am-readiness-grid">
       <article class="am-card"><span class="am-status live">Live</span><h3>Payment Destinations</h3><p>Secure API, masked identifiers, MFA-gated lifecycle, and retry-safe creation.</p></article>
       <article class="am-card"><span class="am-status live">Live</span><h3>Tunisia Payment Choice</h3><p>Server-side eligibility for verified Tunisian customer addresses.</p></article>
-      <article class="am-card"><span class="am-status live">In progress</span><h3>Orders to Activation</h3><p>Orders, contract completion, and payment instructions are active; verification and activation remain gated.</p></article>
+      <article class="am-card"><span class="am-status live">Live</span><h3>Payment Verification</h3><p>Matched customer reports require an explicit MFA-gated platform administrator decision.</p></article>
     </div>
   </section>
 
@@ -402,7 +402,10 @@
     <div class="am-section-heading"><div><span class="am-kicker">Authenticated acceptance</span><h2>Contracts</h2><p>Immutable clickwrap completion records and safe evidence references.</p></div><button id="am-refresh-contracts" class="btn secondary" type="button">Refresh</button></div>
     <div id="am-contract-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading completed contracts…</div></div>
   </section>
-  <section class="am-section" data-am-panel="payments"><div class="am-empty-panel"><span>Payments</span><h2>Payment evidence is not wired yet</h2><p>Verified evidence and destination snapshots will populate this section in the payment phase.</p></div></section>
+  <section class="am-section" data-am-panel="payments">
+    <div class="am-section-heading"><div><span class="am-kicker">Evidence and matching</span><h2>Payments</h2><p>Customer reports are never final verification. Only exact matches can be explicitly verified by an MFA-authenticated platform administrator.</p></div><button id="am-refresh-payments" class="btn secondary" type="button">Refresh</button></div>
+    <div id="am-payment-evidence-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading payment evidence…</div></div>
+  </section>
   <section class="am-section" data-am-panel="reconciliation"><div class="am-empty-panel"><span>Reconciliation &amp; Exceptions</span><h2>No exception workflow yet</h2><p>Underpayments, duplicate evidence, and unmatched references will be handled here with MFA and audit.</p></div></section>
   <section class="am-section" data-am-panel="subscriptions"><div class="am-empty-panel"><span>Subscriptions &amp; Activations</span><h2>Activation pipeline is not wired yet</h2><p>Automatic activation and entitlements will appear here after all server-side gates pass.</p></div></section>
   <section class="am-section" data-am-panel="audit"><div class="am-empty-panel"><span>Audit Log</span><h2>Payment audit API pending</h2><p>Audit events exist in persistence, but this panel stays empty until a safe read-only DTO is exposed.</p></div></section>
@@ -799,7 +802,7 @@
 </script>
 <script src="/console/js/client.js?v=adminruntime05"></script>
 <script src="/console/js/admin_auth_bridge.js?v=adminruntime05"></script>
-<script src="/console/js/admin_marketplace.js?v=a3-phase7b-1"></script>
+<script src="/console/js/admin_marketplace.js?v=a3-phase11-12"></script>
 <script src="/console/js/adapters/adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_adapters.js?v=adminruntime05"></script>
 <script src="/console/js/admin_api_keys.js?v=adminapikeys13eh2"></script>

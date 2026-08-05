@@ -21,7 +21,7 @@ def test_admin_marketplace_is_registered_inside_existing_admin_shell() -> None:
     assert 'id="page-admin-marketplace"' in html
     assert "'admin-marketplace': 'page-admin-marketplace'" in nav
     assert "/console/css/admin_marketplace.css?v=a3-phase7b-1" in html
-    assert "/console/js/admin_marketplace.js?v=a3-phase7b-1" in html
+    assert "/console/js/admin_marketplace.js?v=a3-phase11-12" in html
 
 
 def test_admin_marketplace_shell_contains_every_approved_section() -> None:
@@ -137,3 +137,28 @@ def test_order_and_contract_sections_use_live_read_only_apis() -> None:
     )[0]
     assert "raw_account_identifier" not in order_renderer
     assert "raw_account_identifier" not in contract_renderer
+
+
+def test_payment_section_uses_safe_evidence_and_mfa_gated_verification() -> None:
+    html = _read(ADMIN_HTML)
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert 'id="am-payment-evidence-list"' in html
+    assert "function renderPaymentEvidence()" in script
+    assert "item.safe_source_reference" in script
+    assert "item.source_reference_hash" not in script
+    assert "data-am-payment-verify" in script
+    assert "await withMfaRetry(operation)" in script
+    assert "decision: 'verified'" in script
+    assert "loadCommercialList('payment-evidence')" in script
+
+
+def test_customer_payment_report_form_never_claims_final_verification() -> None:
+    html = _read(STATIC / "index.html")
+    script = _read(STATIC / "js" / "pages" / "settings.js")
+
+    assert 'id="set-tn-payment-report-form"' in html
+    assert "does not confirm payment by itself" in html
+    assert "/payment/report" in script
+    assert "awaiting administrator verification" in script
+    assert "transferInput.value = ''" in script

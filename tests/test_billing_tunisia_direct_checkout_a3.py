@@ -16,6 +16,9 @@ from processual_api.admin_marketplace.direct_order_service import (
     TunisiaPaymentOptionResult,
 )
 from processual_api.admin_marketplace.errors import DirectCommerceUnavailableError
+from processual_api.admin_marketplace.payment_evidence_service import (
+    CustomerPaymentReportResult,
+)
 from processual_api.billing import direct_checkout_router as checkout
 
 USER_ID = "11111111-1111-4111-8111-111111111111"
@@ -114,9 +117,7 @@ async def test_payment_option_uses_verified_intent_and_server_identity(monkeypat
         AsyncMock(return_value={"status": "verified", "plan_id": "starter", "billing_period": "monthly"}),
     )
 
-    response = await checkout.get_tunisia_payment_options(
-        current_user=current_user(), service=service
-    )
+    response = await checkout.get_tunisia_payment_options(current_user=current_user(), service=service)
 
     assert response.visible is True
     assert response.address_status == "confirmed"
@@ -136,9 +137,7 @@ async def test_unverified_registration_intent_hides_payment_option(monkeypatch) 
         AsyncMock(return_value={"status": "pending"}),
     )
 
-    response = await checkout.get_tunisia_payment_options(
-        current_user=current_user(), service=service
-    )
+    response = await checkout.get_tunisia_payment_options(current_user=current_user(), service=service)
 
     assert response.visible is False
     assert response.reason_code == "verified_registration_intent_required"
@@ -179,9 +178,7 @@ async def test_order_derives_customer_and_offer_inputs_on_server(monkeypatch) ->
 @pytest.mark.asyncio
 async def test_order_fails_closed_with_safe_reason(monkeypatch) -> None:
     service = AsyncMock()
-    service.create_order.side_effect = DirectCommerceUnavailableError(
-        "confirmed_customer_address_required"
-    )
+    service.create_order.side_effect = DirectCommerceUnavailableError("confirmed_customer_address_required")
     monkeypatch.setattr(
         checkout,
         "_verified_preparation",
@@ -250,3 +247,59 @@ async def test_contract_completion_requires_explicit_acceptance() -> None:
 
     assert captured.value.status_code == 400
     service.complete_authenticated_clickwrap.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_payment_report_derives_customer_identity_and_returns_no_raw_reference() -> None:
+    service = AsyncMock()
+    service.report.return_value = CustomerPaymentReportResult(
+        evidence_id=uuid.UUID("50000000-0000-0000-0000-000000000001"),
+        evidence_ref="pev_001",
+        order_ref="ord_001",
+        source_type="customer_report",
+        status="matched",
+        actual_amount=Decimal("49.900"),
+        currency="TND",
+        safe_source_reference="***7788",
+        reference_matched=True,
+        amount_matched=True,
+        currency_matched=True,
+        destination_matched=True,
+        match_reason_code="customer_report_exact_match",
+        reported_at=NOW,
+        order_status="awaiting_payment",
+        payment_status="customer_reported",
+        reason_code="payment_report_recorded",
+    )
+
+    response = await checkout.report_tunisia_direct_payment(
+        order_ref="ord_001",
+        body=checkout.CustomerPaymentReportRequest(
+            actual_amount=Decimal("49.900"),
+            currency="TND",
+            payment_reference="TN-34567890",
+            transfer_reference="BANK-TRANSFER-7788",
+        ),
+        current_user=current_user(),
+        service=service,
+        correlation_id="corr_report_001",
+        idempotency_key="payment-report-idempotency-0001",
+    )
+
+    assert response.payment_status == "customer_reported"
+    assert response.status == "matched"
+    serialized = response.model_dump_json()
+    assert "BANK-TRANSFER-7788" not in serialized
+    assert "***7788" in serialized
+    service.report.assert_awaited_once_with(
+        actor_user_id=USER_ID,
+        actor_session_id=SESSION_ID,
+        customer_ref=ORGANIZATION_ID,
+        order_ref="ord_001",
+        actual_amount=Decimal("49.900"),
+        currency="TND",
+        payment_reference="TN-34567890",
+        transfer_reference="BANK-TRANSFER-7788",
+        correlation_id="corr_report_001",
+        idempotency_key="payment-report-idempotency-0001",
+    )

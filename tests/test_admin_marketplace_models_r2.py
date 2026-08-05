@@ -18,6 +18,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketInvoice,
     AdminMarketOffer,
     AdminMarketOrder,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
     AdminMarketSubscription,
 )
@@ -31,6 +32,7 @@ EXPECTED_TABLES = {
     "admin_market_orders",
     "admin_market_contracts",
     "admin_market_payment_verifications",
+    "admin_market_payment_evidence",
     "admin_market_invoices",
     "admin_market_entitlement_activations",
     "admin_market_channel_eligibilities",
@@ -52,7 +54,7 @@ def _check_sql(model: type[Base]) -> set[str]:
 
 
 def test_admin_market_metadata_catalog_is_exact() -> None:
-    assert len(ADMIN_MARKET_MODELS) == 14
+    assert len(ADMIN_MARKET_MODELS) == 15
 
     assert {model.__tablename__ for model in ADMIN_MARKET_MODELS} == EXPECTED_TABLES
 
@@ -133,6 +135,20 @@ def test_payment_verification_has_no_raw_evidence() -> None:
 
     assert columns.isdisjoint(forbidden)
     assert "safe_reference" in columns
+
+
+def test_payment_evidence_stores_only_safe_reference_and_match_results() -> None:
+    columns = _column_names(AdminMarketPaymentEvidence)
+
+    assert {
+        "safe_source_reference",
+        "source_reference_hash",
+        "reference_matched",
+        "amount_matched",
+        "currency_matched",
+        "destination_matched",
+    }.issubset(columns)
+    assert columns.isdisjoint({"raw_reference", "document", "attachment", "payload"})
 
 
 def test_contract_completion_record_is_immutable_and_evidence_safe() -> None:

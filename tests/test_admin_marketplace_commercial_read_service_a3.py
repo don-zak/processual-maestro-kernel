@@ -42,10 +42,20 @@ class Contracts:
         return (self.item,)
 
 
+class PaymentEvidence:
+    def __init__(self, item) -> None:
+        self.item = item
+
+    async def list_recent(self, *, limit=100):
+        assert limit == 100
+        return (self.item,)
+
+
 class Unit:
-    def __init__(self, order, contract) -> None:
+    def __init__(self, order, contract, evidence=None) -> None:
         self.orders = Orders(order)
         self.contracts = Contracts(contract)
+        self.payment_evidence = PaymentEvidence(evidence)
 
     async def __aenter__(self):
         return self
@@ -93,12 +103,30 @@ def records():
     return order, contract
 
 
+def payment_evidence():
+    return SimpleNamespace(
+        id=uuid.UUID("30000000-0000-0000-0000-000000000001"),
+        evidence_ref="pev_001",
+        order_id=ORDER_ID,
+        customer_ref="customer_001",
+        source_type="customer_report",
+        status="matched",
+        actual_amount=Decimal("49.900"),
+        currency="TND",
+        safe_source_reference="***7788",
+        reference_matched=True,
+        amount_matched=True,
+        currency_matched=True,
+        destination_matched=True,
+        match_reason_code="customer_report_exact_match",
+        reported_at=NOW,
+    )
+
+
 @pytest.mark.asyncio
 async def test_platform_admin_reads_real_orders_and_contracts_without_mfa() -> None:
     order, contract = records()
-    service = AdminMarketplaceCommercialReadService(
-        unit_of_work_factory=lambda: Unit(order, contract)
-    )
+    service = AdminMarketplaceCommercialReadService(unit_of_work_factory=lambda: Unit(order, contract))
 
     orders = await service.list_orders(authority=authority("platform_admin"))
     contracts = await service.list_contracts(authority=authority("platform_admin"))
@@ -112,9 +140,21 @@ async def test_platform_admin_reads_real_orders_and_contracts_without_mfa() -> N
 @pytest.mark.asyncio
 async def test_non_platform_admin_cannot_read_commercial_records() -> None:
     order, contract = records()
-    service = AdminMarketplaceCommercialReadService(
-        unit_of_work_factory=lambda: Unit(order, contract)
-    )
+    service = AdminMarketplaceCommercialReadService(unit_of_work_factory=lambda: Unit(order, contract))
 
     with pytest.raises(AdminMarketplaceAuthorityDeniedError):
         await service.list_orders(authority=authority("billing_admin"))
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_reads_only_safe_payment_evidence_fields() -> None:
+    order, contract = records()
+    service = AdminMarketplaceCommercialReadService(
+        unit_of_work_factory=lambda: Unit(order, contract, payment_evidence())
+    )
+
+    items = await service.list_payment_evidence(authority=authority("platform_admin"))
+
+    assert items[0].order_ref == "ord_001"
+    assert items[0].safe_source_reference == "***7788"
+    assert not hasattr(items[0], "source_reference_hash")

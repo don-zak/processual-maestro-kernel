@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from processual_api.admin_marketplace.contract_service import (
     ContractCompletionResult,
@@ -13,6 +14,7 @@ from processual_api.admin_marketplace.contract_service import (
 from processual_api.admin_marketplace.direct_order_runtime import (
     DirectOrderRuntimeUnavailableError,
     build_contract_completion_service,
+    build_customer_payment_evidence_service,
     build_direct_order_service,
 )
 from processual_api.admin_marketplace.direct_order_service import (
@@ -25,6 +27,11 @@ from processual_api.admin_marketplace.errors import (
     ContractCompletionConflictError,
     DirectCommerceConflictError,
     DirectCommerceUnavailableError,
+    PaymentEvidenceConflictError,
+)
+from processual_api.admin_marketplace.payment_evidence_service import (
+    CustomerPaymentEvidenceService,
+    CustomerPaymentReportResult,
 )
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
@@ -121,6 +128,37 @@ class ContractCompletionResponse(BaseModel):
     reason_code: str
 
 
+class CustomerPaymentReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    actual_amount: Decimal = Field(ge=0, decimal_places=3, max_digits=18)
+    currency: str = Field(min_length=3, max_length=3)
+    payment_reference: str = Field(min_length=1, max_length=64)
+    transfer_reference: str = Field(min_length=4, max_length=128)
+
+
+class CustomerPaymentReportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_id: uuid.UUID
+    evidence_ref: str
+    order_ref: str
+    source_type: str
+    status: str
+    actual_amount: Decimal
+    currency: str
+    safe_source_reference: str
+    reference_matched: bool
+    amount_matched: bool
+    currency_matched: bool
+    destination_matched: bool
+    match_reason_code: str
+    reported_at: datetime
+    order_status: str
+    payment_status: str
+    reason_code: str
+
+
 async def get_direct_order_service() -> TunisiaDirectOrderService:
     try:
         return build_direct_order_service()
@@ -138,6 +176,16 @@ async def get_contract_completion_service() -> DirectContractCompletionService:
         raise HTTPException(
             status_code=503,
             detail="Contract completion is temporarily unavailable.",
+        ) from exc
+
+
+async def get_customer_payment_evidence_service() -> CustomerPaymentEvidenceService:
+    try:
+        return build_customer_payment_evidence_service()
+    except DirectOrderRuntimeUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Payment reporting is temporarily unavailable.",
         ) from exc
 
 
@@ -230,9 +278,7 @@ def _order_response(
         payment_requirement=result.payment_requirement,
         payment_status=result.payment_status,
         payment_reference=result.payment_reference,
-        payment_destination=PaymentDestinationSnapshotResponse.model_validate(
-            result.payment_destination_snapshot
-        ),
+        payment_destination=PaymentDestinationSnapshotResponse.model_validate(result.payment_destination_snapshot),
         reason_code=result.reason_code,
     )
 
@@ -251,9 +297,31 @@ def _contract_response(
         order_status=result.order_status,
         payment_status=result.payment_status,
         payment_reference=result.payment_reference,
-        payment_destination=PaymentDestinationSnapshotResponse.model_validate(
-            result.payment_destination_snapshot
-        ),
+        payment_destination=PaymentDestinationSnapshotResponse.model_validate(result.payment_destination_snapshot),
+        reason_code=result.reason_code,
+    )
+
+
+def _payment_report_response(
+    result: CustomerPaymentReportResult,
+) -> CustomerPaymentReportResponse:
+    return CustomerPaymentReportResponse(
+        evidence_id=result.evidence_id,
+        evidence_ref=result.evidence_ref,
+        order_ref=result.order_ref,
+        source_type=result.source_type,
+        status=result.status,
+        actual_amount=result.actual_amount,
+        currency=result.currency,
+        safe_source_reference=result.safe_source_reference,
+        reference_matched=result.reference_matched,
+        amount_matched=result.amount_matched,
+        currency_matched=result.currency_matched,
+        destination_matched=result.destination_matched,
+        match_reason_code=result.match_reason_code,
+        reported_at=result.reported_at,
+        order_status=result.order_status,
+        payment_status=result.payment_status,
         reason_code=result.reason_code,
     )
 
@@ -363,9 +431,7 @@ async def complete_tunisia_direct_contract(
     order_ref: str,
     body: ContractCompletionRequest,
     current_user: dict = Depends(get_identity_user),
-    service: DirectContractCompletionService = Depends(
-        get_contract_completion_service
-    ),
+    service: DirectContractCompletionService = Depends(get_contract_completion_service),
     correlation_id: str = Header(
         ...,
         alias="X-Correlation-ID",
@@ -418,16 +484,64 @@ async def complete_tunisia_direct_contract(
     return _contract_response(result)
 
 
+@router.post(
+    "/maestro-direct/orders/{order_ref}/payment/report",
+    response_model=CustomerPaymentReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def report_tunisia_direct_payment(
+    order_ref: str,
+    body: CustomerPaymentReportRequest,
+    current_user: dict = Depends(get_identity_user),
+    service: CustomerPaymentEvidenceService = Depends(get_customer_payment_evidence_service),
+    correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=128),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=16, max_length=128),
+) -> CustomerPaymentReportResponse:
+    user_id, session_id, customer_ref = _identity(current_user)
+    try:
+        result = await service.report(
+            actor_user_id=str(user_id),
+            actor_session_id=session_id,
+            customer_ref=customer_ref,
+            order_ref=order_ref,
+            actual_amount=body.actual_amount,
+            currency=body.currency,
+            payment_reference=body.payment_reference,
+            transfer_reference=body.transfer_reference,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+        )
+    except CommercialOrderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Commercial order was not found.") from exc
+    except (PaymentEvidenceConflictError, AdminMarketplaceConflictError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Payment report conflicts with stored order state.",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid payment report.") from exc
+    except AdminMarketplacePersistenceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Payment reporting is temporarily unavailable.",
+        ) from exc
+    return _payment_report_response(result)
+
+
 __all__ = [
     "DirectCommercialOrderResponse",
     "ContractCompletionRequest",
     "ContractCompletionResponse",
+    "CustomerPaymentReportRequest",
+    "CustomerPaymentReportResponse",
     "PaymentDestinationSnapshotResponse",
     "TunisiaPaymentOptionResponse",
     "create_tunisia_direct_order",
     "complete_tunisia_direct_contract",
     "get_contract_completion_service",
+    "get_customer_payment_evidence_service",
     "get_direct_order_service",
     "get_tunisia_payment_options",
+    "report_tunisia_direct_payment",
     "router",
 ]

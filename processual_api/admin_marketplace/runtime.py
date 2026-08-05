@@ -21,6 +21,9 @@ from processual_api.admin_marketplace.payment_destination_crypto import (
 from processual_api.admin_marketplace.payment_destination_service import (
     PaymentDestinationAdministrationService,
 )
+from processual_api.admin_marketplace.payment_evidence_service import (
+    AdminPaymentVerificationService,
+)
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
@@ -38,6 +41,7 @@ class AdminMarketplaceRuntime:
     eligibility_service: AdminMarketplaceEligibilityService
     payment_destination_service: PaymentDestinationAdministrationService | None
     commercial_read_service: AdminMarketplaceCommercialReadService
+    payment_verification_service: AdminPaymentVerificationService
 
 
 def _payment_destination_keys(raw_json: str | None) -> dict[str, bytes]:
@@ -64,9 +68,7 @@ def _payment_destination_keys(raw_json: str | None) -> dict[str, bytes]:
             "Admin Marketplace payment destination key authority is invalid."
         ) from exc
     if len(keys) != len(payload):
-        raise AdminMarketplaceRuntimeUnavailableError(
-            "Admin Marketplace payment destination key authority is invalid."
-        )
+        raise AdminMarketplaceRuntimeUnavailableError("Admin Marketplace payment destination key authority is invalid.")
     return keys
 
 
@@ -92,27 +94,24 @@ async def build_admin_marketplace_runtime(
         commercial_read_service = AdminMarketplaceCommercialReadService(
             unit_of_work_factory=unit_of_work_factory,
         )
+        payment_verification_service = AdminPaymentVerificationService(
+            unit_of_work_factory=unit_of_work_factory,
+            clock=lambda: datetime.now(UTC),
+        )
     except (RuntimeError, TypeError, ValueError) as exc:
-        raise AdminMarketplaceRuntimeUnavailableError(
-            "Admin Marketplace runtime authority is unavailable."
-        ) from exc
+        raise AdminMarketplaceRuntimeUnavailableError("Admin Marketplace runtime authority is unavailable.") from exc
 
     payment_destination_service = None
     try:
         payment_destination_service = PaymentDestinationAdministrationService(
             unit_of_work_factory=unit_of_work_factory,
             cipher=PaymentDestinationCipher(
-                current_key_version=(
-                    config.admin_marketplace_payment_destination_current_key_version
-                    or ""
-                ),
-                keys=_payment_destination_keys(
-                    config.admin_marketplace_payment_destination_key_ring_json
-                ),
+                current_key_version=(config.admin_marketplace_payment_destination_current_key_version or ""),
+                keys=_payment_destination_keys(config.admin_marketplace_payment_destination_key_ring_json),
             ),
             clock=lambda: datetime.now(UTC),
         )
-    except (AdminMarketplaceRuntimeUnavailableError, TypeError, ValueError):
+    except AdminMarketplaceRuntimeUnavailableError, TypeError, ValueError:
         # Eligibility reads remain available; payment administration fails
         # closed at its dedicated dependency boundary.
         payment_destination_service = None
@@ -122,6 +121,7 @@ async def build_admin_marketplace_runtime(
         eligibility_service=eligibility_service,
         payment_destination_service=payment_destination_service,
         commercial_read_service=commercial_read_service,
+        payment_verification_service=payment_verification_service,
     )
 
 

@@ -18,6 +18,8 @@ from processual_api.admin_marketplace.errors import (
     AdminMarketplaceStepUpRequiredError,
     PaymentDestinationConflictError,
     PaymentDestinationNotFoundError,
+    PaymentEvidenceNotFoundError,
+    PaymentVerificationConflictError,
 )
 from processual_api.admin_marketplace.payment_destination_contracts import (
     PaymentDestinationCreateContract,
@@ -27,6 +29,9 @@ from processual_api.admin_marketplace.payment_destination_contracts import (
 from processual_api.admin_marketplace.payment_destination_service import (
     PaymentDestinationAdministrationResult,
     PaymentDestinationAdministrationService,
+)
+from processual_api.admin_marketplace.payment_evidence_service import (
+    AdminPaymentVerificationResult,
 )
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
@@ -54,15 +59,11 @@ class SensitiveAdminMarketplaceAPIRoute(APIRoute):
                 if media_type != "application/json":
                     return JSONResponse(
                         status_code=415,
-                        content={
-                            "detail": "Admin Marketplace requests require JSON."
-                        },
+                        content={"detail": "Admin Marketplace requests require JSON."},
                     )
                 content_length = request.headers.get("content-length")
                 try:
-                    declared_length = (
-                        int(content_length) if content_length is not None else 0
-                    )
+                    declared_length = int(content_length) if content_length is not None else 0
                 except ValueError:
                     return JSONResponse(
                         status_code=400,
@@ -87,6 +88,7 @@ class SensitiveAdminMarketplaceAPIRoute(APIRoute):
                 )
 
         return sanitized_route_handler
+
 
 router = APIRouter(
     prefix="/admin-marketplace",
@@ -199,6 +201,54 @@ class CommercialContractListResponse(BaseModel):
     count: int
 
 
+class PaymentEvidenceReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_ref: str
+    order_ref: str
+    customer_ref: str
+    source_type: str
+    status: str
+    actual_amount: Decimal
+    currency: str
+    safe_source_reference: str
+    reference_matched: bool
+    amount_matched: bool
+    currency_matched: bool
+    destination_matched: bool
+    match_reason_code: str
+    reported_at: datetime
+
+
+class PaymentEvidenceListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[PaymentEvidenceReadResponse, ...]
+    count: int
+
+
+class PaymentVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    decision: str = Field(pattern="^(verified|rejected)$")
+    reason_code: str = Field(min_length=2, max_length=128)
+
+
+class PaymentVerificationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    verification_id: str
+    verification_ref: str
+    evidence_ref: str
+    order_ref: str
+    status: str
+    decision_reason_code: str
+    decided_at: datetime
+    order_status: str
+    payment_status: str
+    reason_code: str
+
+
 async def get_admin_marketplace_runtime() -> AdminMarketplaceRuntime:
     try:
         return await build_admin_marketplace_runtime()
@@ -306,10 +356,7 @@ async def list_admin_marketplace_orders(
         ) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
-    responses = tuple(
-        CommercialOrderReadResponse.model_validate(item, from_attributes=True)
-        for item in items
-    )
+    responses = tuple(CommercialOrderReadResponse.model_validate(item, from_attributes=True) for item in items)
     return CommercialOrderListResponse(items=responses, count=len(responses))
 
 
@@ -333,11 +380,87 @@ async def list_admin_marketplace_contracts(
         ) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
-    responses = tuple(
-        CommercialContractReadResponse.model_validate(item, from_attributes=True)
-        for item in items
-    )
+    responses = tuple(CommercialContractReadResponse.model_validate(item, from_attributes=True) for item in items)
     return CommercialContractListResponse(items=responses, count=len(responses))
+
+
+@router.get("/payment-evidence", response_model=PaymentEvidenceListResponse)
+async def list_admin_marketplace_payment_evidence(
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+) -> PaymentEvidenceListResponse:
+    try:
+        authority = await _commercial_read_authority(current_user=current_user, runtime=runtime)
+        items = await runtime.commercial_read_service.list_payment_evidence(authority=authority)
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Active platform administrator authority is required.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    responses = tuple(PaymentEvidenceReadResponse.model_validate(item, from_attributes=True) for item in items)
+    return PaymentEvidenceListResponse(items=responses, count=len(responses))
+
+
+def _payment_verification_response(
+    result: AdminPaymentVerificationResult,
+) -> PaymentVerificationResponse:
+    return PaymentVerificationResponse(
+        verification_id=str(result.verification_id),
+        verification_ref=result.verification_ref,
+        evidence_ref=result.evidence_ref,
+        order_ref=result.order_ref,
+        status=result.status,
+        decision_reason_code=result.decision_reason_code,
+        decided_at=result.decided_at,
+        order_status=result.order_status,
+        payment_status=result.payment_status,
+        reason_code=result.reason_code,
+    )
+
+
+@router.post(
+    "/payment-evidence/{evidence_ref}/verify",
+    response_model=PaymentVerificationResponse,
+)
+async def verify_admin_marketplace_payment(
+    evidence_ref: str,
+    body: PaymentVerificationRequest,
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+    correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=128),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=16, max_length=128),
+) -> PaymentVerificationResponse:
+    try:
+        authority = await _commercial_read_authority(current_user=current_user, runtime=runtime)
+        result = await runtime.payment_verification_service.decide(
+            authority=authority,
+            evidence_ref=evidence_ref,
+            decision=body.decision,
+            reason_code=body.reason_code,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+        )
+    except AdminMarketplaceStepUpRequiredError as exc:
+        raise HTTPException(status_code=428, detail="Recent MFA step-up is required.") from exc
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Active platform administrator authority is required.",
+        ) from exc
+    except PaymentEvidenceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Payment evidence was not found.") from exc
+    except (PaymentVerificationConflictError, AdminMarketplaceConflictError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Payment verification conflicts with stored state.",
+        ) from exc
+    except AdminMarketplaceError as exc:
+        raise HTTPException(status_code=400, detail="Invalid payment verification request.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    return _payment_verification_response(result)
 
 
 def _payment_destination_service(
@@ -373,9 +496,7 @@ def _payment_destination_command(
         destination_type=body.destination_type,
         institution_name=body.institution_name,
         account_holder_name=body.account_holder_name,
-        raw_account_identifier=(
-            body.raw_account_identifier.get_secret_value()
-        ),
+        raw_account_identifier=(body.raw_account_identifier.get_secret_value()),
         instructions=body.instructions,
     )
 
@@ -754,6 +875,10 @@ __all__ = [
     "PaymentDestinationCreateRequest",
     "PaymentDestinationListResponse",
     "PaymentDestinationResponse",
+    "PaymentEvidenceListResponse",
+    "PaymentEvidenceReadResponse",
+    "PaymentVerificationRequest",
+    "PaymentVerificationResponse",
     "activate_payment_destination",
     "create_and_validate_payment_destination",
     "create_payment_destination",
@@ -763,7 +888,9 @@ __all__ = [
     "get_admin_marketplace_runtime",
     "get_payment_destination",
     "list_payment_destinations",
+    "list_admin_marketplace_payment_evidence",
     "router",
     "set_default_payment_destination",
     "validate_payment_destination",
+    "verify_admin_marketplace_payment",
 ]

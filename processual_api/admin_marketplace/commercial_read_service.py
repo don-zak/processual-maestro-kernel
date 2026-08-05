@@ -44,6 +44,24 @@ class CommercialContractReadResult:
     completed_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class PaymentEvidenceReadResult:
+    evidence_ref: str
+    order_ref: str
+    customer_ref: str
+    source_type: str
+    status: str
+    actual_amount: Decimal
+    currency: str
+    safe_source_reference: str
+    reference_matched: bool
+    amount_matched: bool
+    currency_matched: bool
+    destination_matched: bool
+    match_reason_code: str
+    reported_at: datetime
+
+
 class AdminMarketplaceCommercialReadService:
     """Read-only, authority-gated Admin Market order and contract views."""
 
@@ -115,9 +133,46 @@ class AdminMarketplaceCommercialReadService:
             for contract in contracts
         )
 
+    async def list_payment_evidence(
+        self,
+        *,
+        authority: AdminMarketplaceAuthorityContext,
+        limit: int = 100,
+    ) -> tuple[PaymentEvidenceReadResult, ...]:
+        require_admin_marketplace_authority(
+            context=authority,
+            action=AdminMarketplaceAction.VIEW_CATALOG,
+        )
+        async with self._unit_of_work_factory() as unit:
+            evidence_items = await unit.payment_evidence.list_recent(limit=limit)
+            order_refs = {}
+            for evidence in evidence_items:
+                order = await unit.orders.get_by_id(evidence.order_id)
+                order_refs[evidence.order_id] = "" if order is None else order.order_ref
+        return tuple(
+            PaymentEvidenceReadResult(
+                evidence_ref=evidence.evidence_ref,
+                order_ref=order_refs[evidence.order_id],
+                customer_ref=evidence.customer_ref,
+                source_type=evidence.source_type,
+                status=evidence.status,
+                actual_amount=Decimal(evidence.actual_amount),
+                currency=evidence.currency,
+                safe_source_reference=evidence.safe_source_reference,
+                reference_matched=evidence.reference_matched,
+                amount_matched=evidence.amount_matched,
+                currency_matched=evidence.currency_matched,
+                destination_matched=evidence.destination_matched,
+                match_reason_code=evidence.match_reason_code,
+                reported_at=evidence.reported_at,
+            )
+            for evidence in evidence_items
+        )
+
 
 __all__ = [
     "AdminMarketplaceCommercialReadService",
     "CommercialContractReadResult",
     "CommercialOrderReadResult",
+    "PaymentEvidenceReadResult",
 ]

@@ -18,6 +18,7 @@ from processual_api.admin_marketplace.models import (
     AdminMarketOffer,
     AdminMarketOrder,
     AdminMarketPaymentDestination,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -392,11 +393,87 @@ class SqlAlchemyPaymentVerificationRepository:
 
         return await self._session.scalar(statement)
 
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentVerification | None:
+        statement = select(AdminMarketPaymentVerification).where(
+            AdminMarketPaymentVerification.order_id == order_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
     def add(
         self,
         verification: AdminMarketPaymentVerification,
     ) -> None:
         self._session.add(verification)
+
+
+class SqlAlchemyPaymentEvidenceRepository:
+    """Persistence for safe payment-evidence metadata and match results."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentEvidence]:
+        statement = (
+            select(AdminMarketPaymentEvidence)
+            .order_by(
+                AdminMarketPaymentEvidence.reported_at.desc(),
+                AdminMarketPaymentEvidence.id.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def list_by_order_id(
+        self,
+        order_id: uuid.UUID,
+    ) -> Sequence[AdminMarketPaymentEvidence]:
+        statement = (
+            select(AdminMarketPaymentEvidence)
+            .where(AdminMarketPaymentEvidence.order_id == order_id)
+            .order_by(
+                AdminMarketPaymentEvidence.reported_at.desc(),
+                AdminMarketPaymentEvidence.id.desc(),
+            )
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_ref(
+        self,
+        evidence_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentEvidence | None:
+        statement = select(AdminMarketPaymentEvidence).where(
+            AdminMarketPaymentEvidence.evidence_ref == evidence_ref.strip().lower(),
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_submission_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentEvidence | None:
+        statement = select(AdminMarketPaymentEvidence).where(
+            AdminMarketPaymentEvidence.submission_idempotency_key_hash == key_hash,
+        )
+        return await self._session.scalar(statement)
+
+    def add(self, evidence: AdminMarketPaymentEvidence) -> None:
+        self._session.add(evidence)
 
 
 class SqlAlchemyInvoiceRepository:
@@ -608,6 +685,7 @@ __all__ = [
     "SqlAlchemyOfferRepository",
     "SqlAlchemyOrderRepository",
     "SqlAlchemyPaymentDestinationRepository",
+    "SqlAlchemyPaymentEvidenceRepository",
     "SqlAlchemyPaymentVerificationRepository",
     "SqlAlchemyPlanRepository",
     "SqlAlchemySubscriptionRepository",
