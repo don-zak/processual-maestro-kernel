@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import select
 
@@ -12,10 +14,14 @@ from processual_api.db.session import get_session_factory
 
 @dataclass(frozen=True, slots=True)
 class SubscriptionAccessSnapshot:
+    runtime_id: uuid.UUID
+    subscription_id: uuid.UUID
     customer_ref: str
     access_stage: str
     entitlement_profile_ref: str
     quota_profile_ref: str
+    effective_at: datetime
+    grace_until: datetime | None
 
 
 async def resolve_subscription_access(
@@ -46,8 +52,12 @@ async def resolve_subscription_access(
 
     runtime = rows[0]
     return SubscriptionAccessSnapshot(
+        runtime_id=runtime.id,
+        subscription_id=runtime.subscription_id,
         customer_ref=runtime.customer_ref,
         access_stage=runtime.access_stage,
         entitlement_profile_ref=runtime.entitlement_profile_ref,
         quota_profile_ref=runtime.quota_profile_ref,
+        effective_at=runtime.effective_at,
+        grace_until=runtime.grace_until,
     )
