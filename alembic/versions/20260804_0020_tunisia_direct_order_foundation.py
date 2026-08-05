@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260804_0020"
 down_revision: str | None = "20260804_0019"
@@ -41,6 +41,12 @@ _PREVIOUS_ORDER_STATUS = """status IN (
 
 
 def _reflected_check_names(table_name: str) -> set[str]:
+    if context.is_offline_mode():
+        return {
+            op.f("ck_admin_market_audit_records_platform_authority_exact"),
+            op.f("ck_admin_market_audit_records_action_allowed"),
+            op.f("ck_admin_market_audit_records_actor_authority_allowed"),
+        }
     inspector = sa.inspect(op.get_bind())
     return {
         constraint["name"]
@@ -50,6 +56,8 @@ def _reflected_check_names(table_name: str) -> set[str]:
 
 
 def _backfill_orders() -> None:
+    if context.is_offline_mode():
+        return
     bind = op.get_bind()
     orders = sa.table(
         "admin_market_orders",
@@ -100,6 +108,8 @@ def _backfill_orders() -> None:
 
 
 def _assert_downgrade_safe() -> None:
+    if context.is_offline_mode():
+        return
     bind = op.get_bind()
     row = bind.execute(sa.text(
         "SELECT 1 FROM admin_market_audit_records "
