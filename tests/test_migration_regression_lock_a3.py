@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260805_0028"
+HEAD_REVISION = "20260805_0029"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -83,6 +83,8 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260805_0027:20260805_0026"),
         ("upgrade", "20260805_0027:20260805_0028"),
         ("downgrade", "20260805_0028:20260805_0027"),
+        ("upgrade", "20260805_0028:20260805_0029"),
+        ("downgrade", "20260805_0029:20260805_0028"),
     )
 
     for command, revision_range in ranges:
@@ -162,6 +164,10 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260805_0028_subscription_runtime_quotas_usage.py": (
             "Downgrade blocked: subscription runtime, quota, or usage rows exist",
+            "context.is_offline_mode()",
+        ),
+        "20260805_0029_subscription_runtime_transitions.py": (
+            "Downgrade blocked: subscription runtime transitions exist",
             "context.is_offline_mode()",
         ),
     }
