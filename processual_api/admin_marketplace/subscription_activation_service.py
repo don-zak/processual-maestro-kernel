@@ -7,6 +7,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from processual_api.admin_marketplace.activation_gate import (
+    ActivationGateInput,
+    evaluate_activation_gate,
+)
 from processual_api.admin_marketplace.audit_contracts import (
     CommercialAuditAction,
     CommercialAuditOutcome,
@@ -111,13 +115,20 @@ class SubscriptionActivationOrchestrator:
 
             key_replay = await unit.entitlement_activations.get_by_idempotency_key_hash(idempotency_hash)
             if key_replay is not None and key_replay.order_id != order.id:
-                raise SubscriptionActivationConflictError("Activation idempotency key conflicts with another order.")
+                raise SubscriptionActivationConflictError(
+                    "Activation idempotency key conflicts with another order."
+                )
 
-            existing = await unit.entitlement_activations.get_by_order_id(order.id, for_update=True)
+            existing = await unit.entitlement_activations.get_by_order_id(
+                order.id,
+                for_update=True,
+            )
             if existing is not None:
                 subscription = await unit.subscriptions.get_by_id(existing.subscription_id)
                 if subscription is None:
-                    raise SubscriptionActivationConflictError("Activation references a missing subscription.")
+                    raise SubscriptionActivationConflictError(
+                        "Activation references a missing subscription."
+                    )
                 return _result(
                     activation=existing,
                     subscription=subscription,
@@ -126,28 +137,99 @@ class SubscriptionActivationOrchestrator:
                 )
 
             _require_order_ready(order)
-            contract = await unit.contracts.get_by_order_id(order.id, for_update=True)
-            if contract is None or contract.status != "completed":
-                raise SubscriptionActivationNotReadyError("completed_contract_required")
-            if order.payment_requirement == "required":
-                verification = await unit.payment_verifications.get_by_order_id(order.id, for_update=True)
-                if verification is None or verification.status != "verified":
-                    raise SubscriptionActivationNotReadyError("verified_payment_required")
 
-            eligibility = await unit.channel_eligibilities.get_by_customer_ref(order.customer_ref, for_update=True)
+            contract = await unit.contracts.get_by_order_id(order.id, for_update=True)
+            if (
+                contract is None
+                or contract.status != "completed"
+                or contract.order_id != order.id
+                or contract.customer_ref != order.customer_ref
+            ):
+                raise SubscriptionActivationNotReadyError("completed_contract_required")
+
+            verification = None
+            evidence = None
+            if order.payment_requirement == "required":
+                verification = await unit.payment_verifications.get_by_order_id(
+                    order.id,
+                    for_update=True,
+                )
+                if (
+                    verification is None
+                    or verification.status != "verified"
+                    or verification.order_id != order.id
+                    or verification.evidence_id is None
+                ):
+                    raise SubscriptionActivationNotReadyError("verified_payment_required")
+                evidence = await _load_verified_evidence(
+                    unit=unit,
+                    order=order,
+                    verification=verification,
+                )
+
+            eligibility = await unit.channel_eligibilities.get_by_customer_ref(
+                order.customer_ref,
+                for_update=True,
+            )
             _require_automatic_eligibility(eligibility)
 
             active_subscription = await unit.subscriptions.get_active_by_customer_ref(
-                order.customer_ref, for_update=True
+                order.customer_ref,
+                for_update=True,
             )
-            if active_subscription is not None:
-                raise SubscriptionActivationNotReadyError("active_subscription_conflict")
 
             offer = await unit.offers.get_by_id(order.offer_id, for_update=True)
             _require_offer_valid(offer=offer, order=order, now=now)
             plan = await unit.plans.get_by_id(order.plan_id, for_update=True)
-            if plan is None or not plan.entitlement_profile_ref.strip():
-                raise SubscriptionActivationNotReadyError("entitlement_profile_required")
+            if (
+                plan is None
+                or plan.id != order.plan_id
+                or not plan.plan_code.strip()
+                or not plan.entitlement_profile_ref.strip()
+                or not plan.quota_profile_ref.strip()
+            ):
+                raise SubscriptionActivationNotReadyError(
+                    "entitlement_and_quota_profiles_required"
+                )
+
+            decision = evaluate_activation_gate(
+                ActivationGateInput(
+                    order_ref=order.order_ref,
+                    customer_ref=order.customer_ref,
+                    offer_ref=offer.offer_code,
+                    plan_ref=plan.plan_code,
+                    order_status=order.status,
+                    contract_status=order.contract_status,
+                    payment_requirement=order.payment_requirement,
+                    payment_status=order.payment_status,
+                    selected_channel=order.selected_channel,
+                    country_code=order.country_code,
+                    currency=order.currency,
+                    total_amount=order.total_amount,
+                    offer_snapshot=order.offer_snapshot,
+                    payment_customer_ref=(
+                        None if evidence is None else evidence.customer_ref
+                    ),
+                    payment_order_ref=(
+                        None
+                        if evidence is None or evidence.order_id != order.id
+                        else order.order_ref
+                    ),
+                    payment_amount=(
+                        None if evidence is None else evidence.actual_amount
+                    ),
+                    payment_currency=(
+                        None if evidence is None else evidence.currency
+                    ),
+                    existing_active_subscription_customer_ref=(
+                        None
+                        if active_subscription is None
+                        else active_subscription.customer_ref
+                    ),
+                )
+            )
+            if not decision.allowed:
+                raise SubscriptionActivationNotReadyError(decision.reasons[0])
 
             previous_digest = _digest(_activation_state(order, None, None))
             subscription_token = self._reference_factory().hex
@@ -192,6 +274,7 @@ class SubscriptionActivationOrchestrator:
                     activation=activation,
                     correlation_id=correlation_id,
                     previous_digest=previous_digest,
+                    quota_profile_ref=plan.quota_profile_ref,
                 )
             )
             enqueue_commercial_notification(
@@ -227,11 +310,15 @@ class SubscriptionActivationOrchestrator:
             order = await unit.orders.get_by_ref(order_ref)
             if order is None:
                 return None
-            activation = await unit.entitlement_activations.get_by_idempotency_key_hash(idempotency_hash)
+            activation = await unit.entitlement_activations.get_by_idempotency_key_hash(
+                idempotency_hash
+            )
             if activation is None:
                 return None
             if activation.order_id != order.id:
-                raise SubscriptionActivationConflictError("Activation idempotency key conflicts with another order.")
+                raise SubscriptionActivationConflictError(
+                    "Activation idempotency key conflicts with another order."
+                )
             subscription = await unit.subscriptions.get_by_id(activation.subscription_id)
         if subscription is None:
             return None
@@ -243,9 +330,32 @@ class SubscriptionActivationOrchestrator:
         )
 
 
+async def _load_verified_evidence(*, unit, order, verification):
+    evidence_items = await unit.payment_evidence.list_by_order_id(order.id)
+    evidence = next(
+        (item for item in evidence_items if item.id == verification.evidence_id),
+        None,
+    )
+    if evidence is None:
+        raise SubscriptionActivationNotReadyError("verified_payment_evidence_required")
+    if (
+        evidence.order_id != order.id
+        or evidence.customer_ref != order.customer_ref
+        or evidence.status != "matched"
+        or not evidence.reference_matched
+        or not evidence.amount_matched
+        or not evidence.currency_matched
+        or not evidence.destination_matched
+    ):
+        raise SubscriptionActivationNotReadyError("payment_evidence_not_fully_matched")
+    return evidence
+
+
 def _require_order_ready(order) -> None:
     if order.status == "activated":
-        raise SubscriptionActivationConflictError("Activated order is missing its activation record.")
+        raise SubscriptionActivationConflictError(
+            "Activated order is missing its activation record."
+        )
     if order.status != "ready_for_activation":
         raise SubscriptionActivationNotReadyError("order_not_ready_for_activation")
     if order.selected_channel != "maestro_direct":
@@ -266,11 +376,15 @@ def _require_automatic_eligibility(eligibility) -> None:
     if eligibility.address_status != "confirmed" or eligibility.country_code != "TN":
         raise SubscriptionActivationNotReadyError("confirmed_tunisian_address_required")
     if eligibility.maestro_direct_status != "eligible":
-        raise SubscriptionActivationNotReadyError("maestro_direct_eligibility_required")
+        raise SubscriptionActivationNotReadyError(
+            "maestro_direct_eligibility_required"
+        )
     if eligibility.admin_review_required:
         raise SubscriptionActivationNotReadyError("admin_review_blocks_activation")
     if not eligibility.automatic_activation_allowed:
-        raise SubscriptionActivationNotReadyError("automatic_activation_not_allowed")
+        raise SubscriptionActivationNotReadyError(
+            "automatic_activation_not_allowed"
+        )
 
 
 def _require_offer_valid(*, offer, order, now: datetime) -> None:
@@ -301,6 +415,7 @@ def _activation_audit(
     activation,
     correlation_id,
     previous_digest,
+    quota_profile_ref,
 ) -> AdminMarketAuditRecord:
     record = CommercialAuditRecord(
         event_id=str(event_id),
@@ -321,6 +436,7 @@ def _activation_audit(
             "subscription_ref": subscription.subscription_ref,
             "activation_ref": activation.activation_ref,
             "entitlement_profile_ref": activation.entitlement_profile_ref,
+            "quota_profile_ref": quota_profile_ref,
         },
     )
     return AdminMarketAuditRecord(
@@ -364,8 +480,12 @@ def _activation_state(order, subscription, activation) -> dict[str, object]:
     return {
         "order_ref": order.order_ref,
         "order_status": order.status,
-        "subscription_ref": None if subscription is None else subscription.subscription_ref,
-        "subscription_status": None if subscription is None else subscription.status,
+        "subscription_ref": (
+            None if subscription is None else subscription.subscription_ref
+        ),
+        "subscription_status": (
+            None if subscription is None else subscription.status
+        ),
         "activation_ref": None if activation is None else activation.activation_ref,
         "activation_status": None if activation is None else activation.status,
     }
