@@ -86,6 +86,8 @@ def _replace_audit_constraints(action_check: str, resource_check: str) -> None:
 
 
 def _assert_safe_to_downgrade() -> None:
+    if context.is_offline_mode():
+        return
     connection = op.get_bind()
     checks = (
         sa.text("SELECT 1 FROM admin_market_payment_evidence LIMIT 1"),
