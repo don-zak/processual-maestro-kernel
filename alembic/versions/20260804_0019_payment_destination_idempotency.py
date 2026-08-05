@@ -18,30 +18,26 @@ down_revision: str | None = "20260804_0018"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+TABLE = "admin_market_payment_destinations"
+CONSTRAINT = "uq_admin_market_payment_destinations_create_idem_hash"
+
 
 def upgrade() -> None:
-    op.add_column(
-        "admin_market_payment_destinations",
-        sa.Column(
-            "creation_idempotency_key_hash",
-            sa.String(length=64),
-            nullable=True,
-        ),
-    )
-    op.create_unique_constraint(
-        op.f("uq_admin_market_payment_destinations_create_idem_hash"),
-        "admin_market_payment_destinations",
-        ["creation_idempotency_key_hash"],
-    )
+    with op.batch_alter_table(TABLE) as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "creation_idempotency_key_hash",
+                sa.String(length=64),
+                nullable=True,
+            )
+        )
+        batch_op.create_unique_constraint(
+            CONSTRAINT,
+            ["creation_idempotency_key_hash"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        op.f("uq_admin_market_payment_destinations_create_idem_hash"),
-        "admin_market_payment_destinations",
-        type_="unique",
-    )
-    op.drop_column(
-        "admin_market_payment_destinations",
-        "creation_idempotency_key_hash",
-    )
+    with op.batch_alter_table(TABLE) as batch_op:
+        batch_op.drop_constraint(CONSTRAINT, type_="unique")
+        batch_op.drop_column("creation_idempotency_key_hash")
