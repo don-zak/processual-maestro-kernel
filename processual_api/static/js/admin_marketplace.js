@@ -2,7 +2,10 @@
   'use strict';
 
   const API_ROOT = '/admin-marketplace/payment-destinations';
+  const ADMIN_MARKET_ROOT = '/admin-marketplace';
   let destinations = [];
+  let orders = [];
+  let contracts = [];
   let pendingCreateKey = '';
   let pendingMfaOperation = null;
 
@@ -215,6 +218,76 @@
     }
   }
 
+  function renderOrders() {
+    const target = element('am-order-list');
+    if (!target) return;
+    if (!orders.length) {
+      target.dataset.state = 'empty';
+      target.innerHTML = '<div class="am-empty">No commercial orders have been created.</div>';
+      return;
+    }
+    target.dataset.state = 'ready';
+    target.innerHTML = orders.map((item) => [
+      '<article class="am-destination-item">',
+      '<div class="am-destination-title"><div><h4>' + escapeHtml(item.order_ref) + '</h4><p>' + escapeHtml(item.customer_ref) + '</p></div>',
+      '<div class="am-badges"><span class="am-badge ' + escapeHtml(item.status) + '">' + escapeHtml(item.status) + '</span></div></div>',
+      '<div class="am-destination-details">',
+      '<div><span>Plan / offer</span><strong>' + escapeHtml(item.plan_ref + ' / ' + item.offer_ref) + '</strong></div>',
+      '<div><span>Billing</span><strong>' + escapeHtml(item.billing_period) + '</strong></div>',
+      '<div><span>Contract</span><strong>' + escapeHtml(item.contract_status) + '</strong></div>',
+      '<div><span>Payment</span><strong>' + escapeHtml(item.payment_status) + '</strong></div>',
+      '<div><span>Amount</span><strong>' + escapeHtml(item.total_amount + ' ' + item.currency) + '</strong></div>',
+      '<div><span>Created</span><strong>' + escapeHtml(safeDate(item.created_at)) + '</strong></div>',
+      '</div></article>',
+    ].join('')).join('');
+  }
+
+  function renderContracts() {
+    const target = element('am-contract-list');
+    if (!target) return;
+    if (!contracts.length) {
+      target.dataset.state = 'empty';
+      target.innerHTML = '<div class="am-empty">No completed contracts are recorded.</div>';
+      return;
+    }
+    target.dataset.state = 'ready';
+    target.innerHTML = contracts.map((item) => [
+      '<article class="am-destination-item">',
+      '<div class="am-destination-title"><div><h4>' + escapeHtml(item.contract_ref) + '</h4><p>Order ' + escapeHtml(item.order_ref) + '</p></div>',
+      '<div class="am-badges"><span class="am-badge ' + escapeHtml(item.status) + '">' + escapeHtml(item.status) + '</span></div></div>',
+      '<div class="am-destination-details">',
+      '<div><span>Customer</span><strong>' + escapeHtml(item.customer_ref) + '</strong></div>',
+      '<div><span>Version</span><strong>' + escapeHtml(item.contract_version) + '</strong></div>',
+      '<div><span>Method</span><strong>' + escapeHtml(item.acceptance_method) + '</strong></div>',
+      '<div><span>Evidence reference</span><strong>' + escapeHtml(item.evidence_reference) + '</strong></div>',
+      '<div><span>Completed</span><strong>' + escapeHtml(safeDate(item.completed_at)) + '</strong></div>',
+      '</div></article>',
+    ].join('')).join('');
+  }
+
+  async function loadCommercialList(kind) {
+    const target = element(kind === 'orders' ? 'am-order-list' : 'am-contract-list');
+    if (target) {
+      target.dataset.state = 'loading';
+      target.innerHTML = '<div class="am-empty">Loading ' + escapeHtml(kind) + '…</div>';
+    }
+    try {
+      const result = await request(ADMIN_MARKET_ROOT + '/' + kind);
+      if (kind === 'orders') {
+        orders = Array.isArray(result.items) ? result.items : [];
+        renderOrders();
+      } else {
+        contracts = Array.isArray(result.items) ? result.items : [];
+        renderContracts();
+      }
+    } catch (error) {
+      if (target) {
+        target.dataset.state = 'error';
+        target.innerHTML = '<div class="am-empty">' + escapeHtml(reasonMessage(error)) + '</div>';
+      }
+    }
+  }
+
   function confirmAction(title, message, confirmLabel) {
     const dialog = element('am-confirm-dialog');
     if (!dialog || typeof dialog.showModal !== 'function') {
@@ -390,6 +463,8 @@
       panel.classList.toggle('active', panel.dataset.amPanel === name);
     });
     if (name !== 'payment-destinations') clearIdentifier();
+    if (name === 'orders') loadCommercialList('orders');
+    if (name === 'contracts') loadCommercialList('contracts');
   }
 
   function bind() {
@@ -413,6 +488,10 @@
     });
     const refresh = element('am-refresh-destinations');
     if (refresh) refresh.addEventListener('click', () => loadDestinations());
+    const refreshOrders = element('am-refresh-orders');
+    if (refreshOrders) refreshOrders.addEventListener('click', () => loadCommercialList('orders'));
+    const refreshContracts = element('am-refresh-contracts');
+    if (refreshContracts) refreshContracts.addEventListener('click', () => loadCommercialList('contracts'));
     const list = element('am-payment-destination-list');
     if (list) list.addEventListener('click', (event) => {
       const button = event.target.closest('[data-am-destination-action]');
@@ -444,6 +523,7 @@
     activateSection,
     clearIdentifier,
     reasonMessage,
+    loadCommercialList,
   };
 
   if (document.readyState === 'loading') {

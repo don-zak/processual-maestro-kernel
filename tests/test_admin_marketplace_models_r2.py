@@ -13,6 +13,7 @@ from processual_api.admin_marketplace.models import (
     ADMIN_MARKET_MODELS,
     AdminMarketAuditRecord,
     AdminMarketChannelEligibility,
+    AdminMarketContract,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
     AdminMarketOffer,
@@ -28,6 +29,7 @@ EXPECTED_TABLES = {
     "admin_market_subscriptions",
     "admin_market_trials",
     "admin_market_orders",
+    "admin_market_contracts",
     "admin_market_payment_verifications",
     "admin_market_invoices",
     "admin_market_entitlement_activations",
@@ -50,7 +52,7 @@ def _check_sql(model: type[Base]) -> set[str]:
 
 
 def test_admin_market_metadata_catalog_is_exact() -> None:
-    assert len(ADMIN_MARKET_MODELS) == 13
+    assert len(ADMIN_MARKET_MODELS) == 14
 
     assert {model.__tablename__ for model in ADMIN_MARKET_MODELS} == EXPECTED_TABLES
 
@@ -131,6 +133,22 @@ def test_payment_verification_has_no_raw_evidence() -> None:
 
     assert columns.isdisjoint(forbidden)
     assert "safe_reference" in columns
+
+
+def test_contract_completion_record_is_immutable_and_evidence_safe() -> None:
+    columns = _column_names(AdminMarketContract)
+
+    assert {
+        "order_id",
+        "contract_version",
+        "accepted_party_ref",
+        "acceptance_method",
+        "evidence_reference",
+        "completion_idempotency_key_hash",
+        "completed_at",
+    }.issubset(columns)
+    assert "updated_at" not in columns
+    assert columns.isdisjoint({"signature", "document", "raw_evidence", "ip_address"})
 
 
 def test_channel_policy_is_preserved_in_database_constraints() -> None:

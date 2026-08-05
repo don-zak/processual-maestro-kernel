@@ -6,8 +6,13 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
+from processual_api.admin_marketplace.contract_service import (
+    ContractCompletionResult,
+    DirectContractCompletionService,
+)
 from processual_api.admin_marketplace.direct_order_runtime import (
     DirectOrderRuntimeUnavailableError,
+    build_contract_completion_service,
     build_direct_order_service,
 )
 from processual_api.admin_marketplace.direct_order_service import (
@@ -16,10 +21,13 @@ from processual_api.admin_marketplace.direct_order_service import (
     TunisiaPaymentOptionResult,
 )
 from processual_api.admin_marketplace.errors import (
+    CommercialOrderNotFoundError,
+    ContractCompletionConflictError,
     DirectCommerceConflictError,
     DirectCommerceUnavailableError,
 )
 from processual_api.admin_marketplace.persistence.errors import (
+    AdminMarketplaceConflictError,
     AdminMarketplacePersistenceError,
 )
 from processual_api.auth.session_router import get_identity_user
@@ -81,7 +89,32 @@ class DirectCommercialOrderResponse(BaseModel):
     total_amount: Decimal
     status: str
     contract_status: str
+    contract_version: str
     payment_requirement: str
+    payment_status: str
+    payment_reference: str | None
+    payment_destination: PaymentDestinationSnapshotResponse
+    reason_code: str
+
+
+class ContractCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    accepted: bool
+    contract_version: str
+
+
+class ContractCompletionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contract_id: uuid.UUID
+    contract_ref: str
+    order_ref: str
+    contract_version: str
+    status: str
+    acceptance_method: str
+    evidence_reference: str
+    order_status: str
     payment_status: str
     payment_reference: str | None
     payment_destination: PaymentDestinationSnapshotResponse
@@ -95,6 +128,16 @@ async def get_direct_order_service() -> TunisiaDirectOrderService:
         raise HTTPException(
             status_code=503,
             detail="Tunisian direct payment is temporarily unavailable.",
+        ) from exc
+
+
+async def get_contract_completion_service() -> DirectContractCompletionService:
+    try:
+        return build_contract_completion_service()
+    except DirectOrderRuntimeUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Contract completion is temporarily unavailable.",
         ) from exc
 
 
@@ -183,7 +226,29 @@ def _order_response(
         total_amount=result.total_amount,
         status=result.status,
         contract_status=result.contract_status,
+        contract_version=result.contract_version,
         payment_requirement=result.payment_requirement,
+        payment_status=result.payment_status,
+        payment_reference=result.payment_reference,
+        payment_destination=PaymentDestinationSnapshotResponse.model_validate(
+            result.payment_destination_snapshot
+        ),
+        reason_code=result.reason_code,
+    )
+
+
+def _contract_response(
+    result: ContractCompletionResult,
+) -> ContractCompletionResponse:
+    return ContractCompletionResponse(
+        contract_id=result.contract_id,
+        contract_ref=result.contract_ref,
+        order_ref=result.order_ref,
+        contract_version=result.contract_version,
+        status=result.status,
+        acceptance_method=result.acceptance_method,
+        evidence_reference=result.evidence_reference,
+        order_status=result.order_status,
         payment_status=result.payment_status,
         payment_reference=result.payment_reference,
         payment_destination=PaymentDestinationSnapshotResponse.model_validate(
@@ -290,11 +355,78 @@ async def create_tunisia_direct_order(
     return _order_response(result)
 
 
+@router.post(
+    "/maestro-direct/orders/{order_ref}/contract/complete",
+    response_model=ContractCompletionResponse,
+)
+async def complete_tunisia_direct_contract(
+    order_ref: str,
+    body: ContractCompletionRequest,
+    current_user: dict = Depends(get_identity_user),
+    service: DirectContractCompletionService = Depends(
+        get_contract_completion_service
+    ),
+    correlation_id: str = Header(
+        ...,
+        alias="X-Correlation-ID",
+        min_length=1,
+        max_length=128,
+    ),
+    idempotency_key: str = Header(
+        ...,
+        alias="Idempotency-Key",
+        min_length=16,
+        max_length=128,
+    ),
+) -> ContractCompletionResponse:
+    user_id, session_id, customer_ref = _identity(current_user)
+    if body.accepted is not True:
+        raise HTTPException(
+            status_code=400,
+            detail="Explicit contract acceptance is required.",
+        )
+    try:
+        result = await service.complete_authenticated_clickwrap(
+            actor_user_id=str(user_id),
+            actor_session_id=session_id,
+            customer_ref=customer_ref,
+            order_ref=order_ref,
+            contract_version=body.contract_version,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+        )
+    except CommercialOrderNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Commercial order was not found.",
+        ) from exc
+    except (ContractCompletionConflictError, AdminMarketplaceConflictError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Contract completion conflicts with stored order state.",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid contract completion request.",
+        ) from exc
+    except AdminMarketplacePersistenceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Contract completion is temporarily unavailable.",
+        ) from exc
+    return _contract_response(result)
+
+
 __all__ = [
     "DirectCommercialOrderResponse",
+    "ContractCompletionRequest",
+    "ContractCompletionResponse",
     "PaymentDestinationSnapshotResponse",
     "TunisiaPaymentOptionResponse",
     "create_tunisia_direct_order",
+    "complete_tunisia_direct_contract",
+    "get_contract_completion_service",
     "get_direct_order_service",
     "get_tunisia_payment_options",
     "router",

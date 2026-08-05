@@ -29,6 +29,8 @@ from processual_api.admin_marketplace.persistence.protocols import (
     AdminMarketplaceUnitOfWork,
 )
 
+TUNISIA_DIRECT_CONTRACT_VERSION = "tn-direct-v1"
+
 
 @dataclass(frozen=True, slots=True)
 class TunisiaPaymentOptionResult:
@@ -60,6 +62,7 @@ class DirectCommercialOrderResult:
     total_amount: Decimal
     status: str
     contract_status: str
+    contract_version: str
     payment_requirement: str
     payment_status: str
     payment_reference: str | None
@@ -307,6 +310,8 @@ class TunisiaDirectOrderService:
             "currency": "TND",
             "amount": str(amount),
             "sales_channel": "maestro_direct",
+            "contract_required": True,
+            "contract_version": TUNISIA_DIRECT_CONTRACT_VERSION,
             "snapshot_at": now.isoformat(),
         }
         return AdminMarketOrder(
@@ -519,6 +524,7 @@ def _order_result(
         total_amount=Decimal(order.total_amount),
         status=order.status,
         contract_status=order.contract_status,
+        contract_version=str(order.offer_snapshot["contract_version"]),
         payment_requirement=order.payment_requirement,
         payment_status=order.payment_status,
         payment_reference=order.payment_reference,
@@ -535,4 +541,5 @@ __all__ = [
     "DirectCommercialOrderResult",
     "TunisiaDirectOrderService",
     "TunisiaPaymentOptionResult",
+    "TUNISIA_DIRECT_CONTRACT_VERSION",
 ]

@@ -29,6 +29,7 @@ class CommercialAuditAction(StrEnum):
     PAYMENT_DESTINATION_DEACTIVATED = "payment_destination_deactivated"
     PAYMENT_DESTINATION_DEFAULT_SET = "payment_destination_default_set"
     ORDER_CREATED = "order_created"
+    CONTRACT_COMPLETED = "contract_completed"
 
 
 class CommercialResourceType(StrEnum):
@@ -40,6 +41,7 @@ class CommercialResourceType(StrEnum):
     TRIAL = "trial"
     SALES_CHANNEL_ELIGIBILITY = "sales_channel_eligibility"
     PAYMENT_DESTINATION = "payment_destination"
+    CONTRACT = "contract"
 
 
 class CommercialAuditOutcome(StrEnum):

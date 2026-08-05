@@ -720,6 +720,15 @@ pending ───────────────────→ deactivated
       </div>
       <button id="set-tn-payment-create-order" class="btn accent sm" type="button" style="margin-top:var(--s-3)">Create payment order</button>
       <span id="set-tn-payment-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+      <div id="set-tn-contract-action" class="mono-block" style="display:none;font-size:11px;margin-top:var(--s-3)">
+        <strong>Direct subscription contract</strong>
+        <div>Version: <span id="set-tn-contract-version">—</span></div>
+        <label style="display:block;margin-top:var(--s-2)">
+          <input id="set-tn-contract-accepted" type="checkbox">
+          I accept this subscription contract using my authenticated account.
+        </label>
+        <button id="set-tn-contract-complete" class="btn accent sm" type="button" disabled style="margin-top:var(--s-2)">Accept &amp; continue to payment</button>
+      </div>
       <div id="set-tn-payment-result" class="mono-block" style="display:none;font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)"></div>
     </div>
 

@@ -497,6 +497,54 @@ class AdminMarketOrder(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AdminMarketContract(Base):
+    __tablename__ = "admin_market_contracts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('completed', 'rejected', 'expired')",
+            name="status_allowed",
+        ),
+        CheckConstraint(
+            "acceptance_method IN ('authenticated_clickwrap', 'admin_exception')",
+            name="acceptance_method_allowed",
+        ),
+        UniqueConstraint("contract_ref", name="uq_admin_market_contracts_contract_ref"),
+        UniqueConstraint("order_id", name="uq_admin_market_contracts_order_id"),
+        UniqueConstraint(
+            "evidence_reference",
+            name="uq_admin_market_contracts_evidence_reference",
+        ),
+        UniqueConstraint(
+            "completion_idempotency_key_hash",
+            name="uq_admin_market_contracts_completion_idem_hash",
+        ),
+        Index("ix_admin_market_contracts_customer_status", "customer_ref", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    contract_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    contract_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    accepted_party_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    acceptance_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    completion_idempotency_key_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = _created_at_column()
+
+
 class AdminMarketPaymentVerification(Base):
     __tablename__ = "admin_market_payment_verifications"
     __table_args__ = (
@@ -882,7 +930,8 @@ class AdminMarketAuditRecord(Base):
                 'payment_destination_activated',
                 'payment_destination_deactivated',
                 'payment_destination_default_set',
-                'order_created'
+                'order_created',
+                'contract_completed'
             )
             """,
             name="action_allowed",
@@ -1206,6 +1255,7 @@ ADMIN_MARKET_MODELS = (
     AdminMarketSubscription,
     AdminMarketTrial,
     AdminMarketOrder,
+    AdminMarketContract,
     AdminMarketPaymentVerification,
     AdminMarketPaymentDestination,
     AdminMarketInvoice,

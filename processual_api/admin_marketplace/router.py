@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -153,6 +154,51 @@ class PaymentDestinationListResponse(BaseModel):
     count: int
 
 
+class CommercialOrderReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    order_ref: str
+    customer_ref: str
+    plan_ref: str
+    offer_ref: str
+    billing_period: str
+    status: str
+    contract_status: str
+    payment_status: str
+    payment_reference: str | None
+    total_amount: Decimal
+    currency: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommercialOrderListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[CommercialOrderReadResponse, ...]
+    count: int
+
+
+class CommercialContractReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contract_ref: str
+    order_ref: str
+    customer_ref: str
+    contract_version: str
+    status: str
+    acceptance_method: str
+    evidence_reference: str
+    completed_at: datetime
+
+
+class CommercialContractListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[CommercialContractReadResponse, ...]
+    count: int
+
+
 async def get_admin_marketplace_runtime() -> AdminMarketplaceRuntime:
     try:
         return await build_admin_marketplace_runtime()
@@ -230,6 +276,68 @@ async def get_admin_marketplace_eligibility(
         admin_review_required=result.admin_review_required,
         reason_code=result.reason_code,
     )
+
+
+async def _commercial_read_authority(*, current_user: dict, runtime):
+    user_id, session_id = _identity_principal(current_user)
+    return await runtime.authority_resolver.resolve(
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+
+@router.get("/orders", response_model=CommercialOrderListResponse)
+async def list_admin_marketplace_orders(
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+) -> CommercialOrderListResponse:
+    try:
+        authority = await _commercial_read_authority(
+            current_user=current_user,
+            runtime=runtime,
+        )
+        items = await runtime.commercial_read_service.list_orders(
+            authority=authority,
+        )
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Active platform administrator authority is required.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    responses = tuple(
+        CommercialOrderReadResponse.model_validate(item, from_attributes=True)
+        for item in items
+    )
+    return CommercialOrderListResponse(items=responses, count=len(responses))
+
+
+@router.get("/contracts", response_model=CommercialContractListResponse)
+async def list_admin_marketplace_contracts(
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+) -> CommercialContractListResponse:
+    try:
+        authority = await _commercial_read_authority(
+            current_user=current_user,
+            runtime=runtime,
+        )
+        items = await runtime.commercial_read_service.list_contracts(
+            authority=authority,
+        )
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Active platform administrator authority is required.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    responses = tuple(
+        CommercialContractReadResponse.model_validate(item, from_attributes=True)
+        for item in items
+    )
+    return CommercialContractListResponse(items=responses, count=len(responses))
 
 
 def _payment_destination_service(
