@@ -41,6 +41,9 @@ from processual_api.admin_marketplace.subscription_runtime_persistence import (
     SqlAlchemySubscriptionRuntimeRepository,
     SqlAlchemySubscriptionUsageRepository,
 )
+from processual_api.admin_marketplace.subscription_runtime_transition_persistence import (
+    SqlAlchemySubscriptionRuntimeTransitionRepository,
+)
 
 
 class SqlAlchemyAdminMarketplaceUnitOfWork:
@@ -73,6 +76,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.subscription_runtime: SqlAlchemySubscriptionRuntimeRepository
         self.subscription_quotas: SqlAlchemySubscriptionQuotaRepository
         self.subscription_usage: SqlAlchemySubscriptionUsageRepository
+        self.subscription_runtime_transitions: SqlAlchemySubscriptionRuntimeTransitionRepository
 
     async def __aenter__(self) -> "SqlAlchemyAdminMarketplaceUnitOfWork":
         if self._session is not None:
@@ -104,6 +108,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
         self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
+        self.subscription_runtime_transitions = SqlAlchemySubscriptionRuntimeTransitionRepository(session)
 
         return self
 
