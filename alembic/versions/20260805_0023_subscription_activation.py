@@ -18,164 +18,150 @@ down_revision: str | None = "20260805_0022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+SUBSCRIPTION_TABLE = "admin_market_subscriptions"
+ACTIVATION_TABLE = "admin_market_entitlement_activations"
+
+
+def _assert_safe_to_downgrade() -> None:
+    connection = op.get_bind()
+    checks = (
+        sa.text(
+            "SELECT 1 FROM admin_market_entitlement_activations "
+            "WHERE order_id IS NOT NULL "
+            "OR activation_idempotency_key_hash IS NOT NULL "
+            "OR activated_at IS NOT NULL LIMIT 1"
+        ),
+        sa.text(
+            "SELECT 1 FROM admin_market_subscriptions "
+            "WHERE order_id IS NOT NULL LIMIT 1"
+        ),
+        sa.text(
+            "SELECT 1 FROM admin_market_orders "
+            "WHERE status = 'activated' LIMIT 1"
+        ),
+    )
+    if any(connection.execute(query).first() for query in checks):
+        raise RuntimeError(
+            "Downgrade blocked: automatic subscription activation exists"
+        )
+
 
 def upgrade() -> None:
-    op.add_column(
-        "admin_market_subscriptions",
-        sa.Column("order_id", sa.Uuid(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_admin_market_subscription_order",
-        "admin_market_subscriptions",
-        "admin_market_orders",
-        ["order_id"],
-        ["id"],
-        ondelete="RESTRICT",
-    )
-    op.create_unique_constraint(
-        "uq_admin_market_subscriptions_order_id",
-        "admin_market_subscriptions",
-        ["order_id"],
-    )
+    with op.batch_alter_table(SUBSCRIPTION_TABLE) as batch_op:
+        batch_op.add_column(sa.Column("order_id", sa.Uuid(), nullable=True))
+        batch_op.create_foreign_key(
+            "fk_admin_market_subscription_order",
+            "admin_market_orders",
+            ["order_id"],
+            ["id"],
+            ondelete="RESTRICT",
+        )
+        batch_op.create_unique_constraint(
+            "uq_admin_market_subscriptions_order_id",
+            ["order_id"],
+        )
+
+    active_predicate = sa.text("status = 'active'")
     op.create_index(
         "uq_admin_market_subscriptions_active_customer",
-        "admin_market_subscriptions",
+        SUBSCRIPTION_TABLE,
         ["customer_ref"],
         unique=True,
-        postgresql_where=sa.text("status = 'active'"),
+        postgresql_where=active_predicate,
+        sqlite_where=active_predicate,
     )
 
-    op.add_column(
-        "admin_market_entitlement_activations",
-        sa.Column("order_id", sa.Uuid(), nullable=True),
-    )
-    op.add_column(
-        "admin_market_entitlement_activations",
-        sa.Column(
+    with op.batch_alter_table(ACTIVATION_TABLE) as batch_op:
+        batch_op.add_column(sa.Column("order_id", sa.Uuid(), nullable=True))
+        batch_op.add_column(
+            sa.Column(
+                "status",
+                sa.String(length=24),
+                server_default="activated",
+                nullable=False,
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "activation_idempotency_key_hash",
+                sa.String(length=64),
+                nullable=True,
+            )
+        )
+        batch_op.add_column(
+            sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True)
+        )
+        batch_op.alter_column(
             "status",
-            sa.String(length=24),
-            server_default="activated",
-            nullable=False,
-        ),
-    )
-    op.add_column(
-        "admin_market_entitlement_activations",
-        sa.Column(
-            "activation_idempotency_key_hash",
-            sa.String(length=64),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "admin_market_entitlement_activations",
-        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.alter_column(
-        "admin_market_entitlement_activations",
-        "status",
-        server_default=None,
-    )
-    op.create_check_constraint(
-        op.f("ck_admin_market_entitlement_activations_status_allowed"),
-        "admin_market_entitlement_activations",
-        "status IN ('activated', 'failed', 'requires_review')",
-    )
-    op.create_foreign_key(
-        "fk_admin_market_entitlement_order",
-        "admin_market_entitlement_activations",
-        "admin_market_orders",
-        ["order_id"],
-        ["id"],
-        ondelete="RESTRICT",
-    )
-    op.create_unique_constraint(
-        "uq_admin_market_entitlement_activations_subscription_id",
-        "admin_market_entitlement_activations",
-        ["subscription_id"],
-    )
-    op.create_unique_constraint(
-        "uq_admin_market_entitlement_activations_order_id",
-        "admin_market_entitlement_activations",
-        ["order_id"],
-    )
-    op.create_unique_constraint(
-        "uq_admin_market_entitlement_activations_idem_hash",
-        "admin_market_entitlement_activations",
-        ["activation_idempotency_key_hash"],
-    )
+            existing_type=sa.String(length=24),
+            server_default=None,
+            existing_nullable=False,
+        )
+        batch_op.create_check_constraint(
+            op.f("ck_admin_market_entitlement_activations_status_allowed"),
+            "status IN ('activated', 'failed', 'requires_review')",
+        )
+        batch_op.create_foreign_key(
+            "fk_admin_market_entitlement_order",
+            "admin_market_orders",
+            ["order_id"],
+            ["id"],
+            ondelete="RESTRICT",
+        )
+        batch_op.create_unique_constraint(
+            "uq_admin_market_entitlement_activations_subscription_id",
+            ["subscription_id"],
+        )
+        batch_op.create_unique_constraint(
+            "uq_admin_market_entitlement_activations_order_id",
+            ["order_id"],
+        )
+        batch_op.create_unique_constraint(
+            "uq_admin_market_entitlement_activations_idem_hash",
+            ["activation_idempotency_key_hash"],
+        )
 
 
 def downgrade() -> None:
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF EXISTS (
-                SELECT 1 FROM admin_market_entitlement_activations
-                WHERE order_id IS NOT NULL
-                   OR activation_idempotency_key_hash IS NOT NULL
-                   OR activated_at IS NOT NULL
-            )
-               OR EXISTS (
-                    SELECT 1 FROM admin_market_subscriptions
-                    WHERE order_id IS NOT NULL
-               )
-               OR EXISTS (
-                    SELECT 1 FROM admin_market_orders
-                    WHERE status = 'activated'
-               )
-            THEN
-                RAISE EXCEPTION
-                    'Downgrade blocked: automatic subscription activation exists';
-            END IF;
-        END $$
-        """
-    )
-    op.drop_constraint(
-        "uq_admin_market_entitlement_activations_idem_hash",
-        "admin_market_entitlement_activations",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "uq_admin_market_entitlement_activations_order_id",
-        "admin_market_entitlement_activations",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "uq_admin_market_entitlement_activations_subscription_id",
-        "admin_market_entitlement_activations",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "fk_admin_market_entitlement_order",
-        "admin_market_entitlement_activations",
-        type_="foreignkey",
-    )
-    op.drop_constraint(
-        op.f("ck_admin_market_entitlement_activations_status_allowed"),
-        "admin_market_entitlement_activations",
-        type_="check",
-    )
-    op.drop_column("admin_market_entitlement_activations", "activated_at")
-    op.drop_column(
-        "admin_market_entitlement_activations",
-        "activation_idempotency_key_hash",
-    )
-    op.drop_column("admin_market_entitlement_activations", "status")
-    op.drop_column("admin_market_entitlement_activations", "order_id")
+    _assert_safe_to_downgrade()
+
+    with op.batch_alter_table(ACTIVATION_TABLE) as batch_op:
+        batch_op.drop_constraint(
+            "uq_admin_market_entitlement_activations_idem_hash",
+            type_="unique",
+        )
+        batch_op.drop_constraint(
+            "uq_admin_market_entitlement_activations_order_id",
+            type_="unique",
+        )
+        batch_op.drop_constraint(
+            "uq_admin_market_entitlement_activations_subscription_id",
+            type_="unique",
+        )
+        batch_op.drop_constraint(
+            "fk_admin_market_entitlement_order",
+            type_="foreignkey",
+        )
+        batch_op.drop_constraint(
+            op.f("ck_admin_market_entitlement_activations_status_allowed"),
+            type_="check",
+        )
+        batch_op.drop_column("activated_at")
+        batch_op.drop_column("activation_idempotency_key_hash")
+        batch_op.drop_column("status")
+        batch_op.drop_column("order_id")
 
     op.drop_index(
         "uq_admin_market_subscriptions_active_customer",
-        table_name="admin_market_subscriptions",
+        table_name=SUBSCRIPTION_TABLE,
     )
-    op.drop_constraint(
-        "uq_admin_market_subscriptions_order_id",
-        "admin_market_subscriptions",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "fk_admin_market_subscription_order",
-        "admin_market_subscriptions",
-        type_="foreignkey",
-    )
-    op.drop_column("admin_market_subscriptions", "order_id")
+    with op.batch_alter_table(SUBSCRIPTION_TABLE) as batch_op:
+        batch_op.drop_constraint(
+            "uq_admin_market_subscriptions_order_id",
+            type_="unique",
+        )
+        batch_op.drop_constraint(
+            "fk_admin_market_subscription_order",
+            type_="foreignkey",
+        )
+        batch_op.drop_column("order_id")
