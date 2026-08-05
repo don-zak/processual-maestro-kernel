@@ -95,6 +95,28 @@
     });
   }
 
+  function removeLegacyUsagePlaceholder() {
+    const usagePage = document.getElementById('page-admin-usage');
+    const analyticsHost = document.getElementById('admin-subscription-analytics-host');
+    if (!usagePage || !analyticsHost || !usagePage.contains(analyticsHost)) return;
+
+    usagePage.querySelectorAll('.card').forEach((card) => {
+      const text = card.textContent || '';
+      if (
+        text.includes('Planned usage view:') ||
+        text.includes('evaluations used, evaluations remaining')
+      ) {
+        const wrapper = card.parentElement;
+        card.remove();
+        if (wrapper && wrapper !== usagePage && !wrapper.querySelector('.card')) {
+          const heading = wrapper.querySelector('.sec-hdr');
+          if (heading) heading.remove();
+          if (!wrapper.textContent.trim()) wrapper.remove();
+        }
+      }
+    });
+  }
+
   function removeHomeDuplicatesAndEmptyGrids() {
     const home = homePage();
     const surface = document.getElementById('admin-home-runtime-surface');
@@ -132,16 +154,18 @@
     moveHomeRuntimeCards();
     removeHomeDuplicatesAndEmptyGrids();
     removeLegacyReadinessSurfaces();
+    removeLegacyUsagePlaceholder();
   }
 
-  function observeLegacyReadinessRecreation() {
-    if (!document.body || window.PMK_ADMIN_READINESS_OWNERSHIP_OBSERVER) return;
+  function observeLegacySurfaceRecreation() {
+    if (!document.body || window.PMK_ADMIN_SURFACE_OWNERSHIP_OBSERVER) return;
 
     const observer = new MutationObserver(() => {
       removeLegacyReadinessSurfaces();
+      removeLegacyUsagePlaceholder();
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    window.PMK_ADMIN_READINESS_OWNERSHIP_OBSERVER = observer;
+    window.PMK_ADMIN_SURFACE_OWNERSHIP_OBSERVER = observer;
   }
 
   window.PMK_ADMIN_HOME_LAYOUT = {
@@ -149,12 +173,13 @@
     ensureSurface,
     moveHomeRuntimeCards,
     removeLegacyReadinessSurfaces,
+    removeLegacyUsagePlaceholder,
   };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       cleanHomeLayout();
-      observeLegacyReadinessRecreation();
+      observeLegacySurfaceRecreation();
       setTimeout(cleanHomeLayout, 200);
       setTimeout(cleanHomeLayout, 800);
       setTimeout(cleanHomeLayout, 2000);
@@ -162,7 +187,7 @@
     });
   } else {
     cleanHomeLayout();
-    observeLegacyReadinessRecreation();
+    observeLegacySurfaceRecreation();
     setTimeout(cleanHomeLayout, 200);
     setTimeout(cleanHomeLayout, 800);
     setTimeout(cleanHomeLayout, 2000);
