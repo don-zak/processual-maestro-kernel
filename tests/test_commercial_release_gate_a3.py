@@ -32,12 +32,18 @@ def _valid_environment() -> dict[str, str]:
         "AUTH_PUBLIC_BASE_URL": "https://accounts.maestro.invalid",
         "AUTH_MFA_KEY_RING_JSON": '{"v1":"mfa-material"}',
         "AUTH_MFA_CURRENT_KEY_VERSION": "v1",
-        "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON": '{"v1":"payment-material"}',
+        "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON": (
+            '{"v1":"payment-material"}'
+        ),
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION": "v1",
         "LEMONSQUEEZY_STORE_ID": "12345",
         "LEMONSQUEEZY_WEBHOOK_SECRET": "w" * 48,
-        "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL": "https://app.maestro.invalid/console",
-        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL": "https://app.maestro.invalid/pricing",
+        "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL": (
+            "https://app.maestro.invalid/console"
+        ),
+        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL": (
+            "https://app.maestro.invalid/pricing"
+        ),
         "CORS_ORIGINS": "https://app.maestro.invalid",
         "API_DEBUG": "false",
         "AUDIT_ENABLED": "true",
@@ -79,7 +85,10 @@ def test_valid_staging_and_production_environment_passes() -> None:
         ("AUDIT_ENABLED", "false"),
         ("RATE_LIMIT_ENABLED", "false"),
         ("AUTH_PUBLIC_BASE_URL", "http://accounts.maestro.invalid"),
-        ("LEMONSQUEEZY_CHECKOUT_SUCCESS_URL", "https://your-frontend.example.com/console"),
+        (
+            "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
+            "https://your-frontend.example.com/console",
+        ),
     ),
 )
 def test_unsafe_release_environment_fails_closed(name: str, value: str) -> None:
@@ -99,14 +108,20 @@ def test_missing_required_value_fails_without_echoing_secret() -> None:
 
 
 def test_release_workflow_requires_gates_before_publish() -> None:
-    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml").read_text(
-        encoding="utf-8"
+    workflow_path = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "release.yml"
     )
+    workflow = workflow_path.read_text(encoding="utf-8")
     required = (
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
         "Verify migration head",
         "20260805_0029",
+        "Commercial staging smoke gate",
+        "python -m processual_api.staging_smoke",
         "Run commercial regression gate",
         "Run all tests",
         "Ruff check",
