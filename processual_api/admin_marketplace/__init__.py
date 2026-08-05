@@ -60,5 +60,8 @@ from processual_api.admin_marketplace import catalog_router as _catalog_router
 from processual_api.admin_marketplace import (
     lemon_squeezy_secure_webhook_router as _lemon_squeezy_secure_webhook_router,
 )
+from processual_api.admin_marketplace import (
+    subscription_usage_router as _subscription_usage_router,
+)
 
 __all__ = [name for name in globals() if not name.startswith("_")]
