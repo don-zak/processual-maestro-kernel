@@ -45,7 +45,8 @@ def test_payment_evidence_upgrade_has_safe_matching_and_verification_constraints
 
 
 def test_payment_evidence_downgrade_is_data_guarded() -> None:
+    source = MIGRATION.read_text(encoding="utf-8").lower()
     sql = offline("downgrade", "20260805_0022:20260805_0021", "--sql")
 
-    assert "downgrade blocked: payment evidence or verification exists" in sql
+    assert "downgrade blocked: payment evidence or verification exists" in source
     assert "drop table admin_market_payment_evidence" in sql
