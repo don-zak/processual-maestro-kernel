@@ -376,7 +376,19 @@ class AdminPaymentVerificationService:
                     idempotency_hash=idempotency_hash,
                 )
                 return _verification_result(existing, evidence, order, "payment_decision_idempotent")
-            _require_verifiable(order=order, evidence=evidence, decision=decision)
+            reconciliation = None
+            reconciliation_repository = getattr(unit, "payment_reconciliations", None)
+            if reconciliation_repository is not None:
+                reconciliation = await reconciliation_repository.get_by_evidence_id(
+                    evidence.id,
+                    for_update=True,
+                )
+            _require_verifiable(
+                order=order,
+                evidence=evidence,
+                decision=decision,
+                reconciliation=reconciliation,
+            )
             previous_digest = _digest(_order_payment_state(order))
             verification = AdminMarketPaymentVerification(
                 id=self._id_factory(),
@@ -495,7 +507,7 @@ def _require_replay(
         raise PaymentEvidenceConflictError("Idempotency key conflicts with stored state.")
 
 
-def _require_verifiable(*, order, evidence, decision: str) -> None:
+def _require_verifiable(*, order, evidence, decision: str, reconciliation=None) -> None:
     if order.contract_status != "completed" or order.selected_channel != "maestro_direct":
         raise PaymentVerificationConflictError("Order cannot be payment-verified.")
     if decision == "verified":
@@ -507,7 +519,13 @@ def _require_verifiable(*, order, evidence, decision: str) -> None:
                 evidence.destination_matched,
             )
         )
-        if not exact or order.payment_status != "customer_reported":
+        accepted_exception = bool(
+            reconciliation is not None
+            and reconciliation.status == "resolved"
+            and reconciliation.resolution == "accepted_match"
+            and reconciliation.evidence_id == evidence.id
+        )
+        if not (exact or accepted_exception) or order.payment_status != "customer_reported":
             raise PaymentVerificationConflictError("Only an exact matched customer report can be verified.")
         if order.status != "awaiting_payment":
             raise PaymentVerificationConflictError("Order is not awaiting verification.")

@@ -33,6 +33,7 @@ class AdminMarketplaceAction(StrEnum):
     PUBLISH_OFFER = "marketplace.offer.publish"
     RETIRE_OFFER = "marketplace.offer.retire"
     VERIFY_PAYMENT = "marketplace.payment.verify"
+    RECONCILE_PAYMENT = "marketplace.payment.reconcile"
     DECIDE_ORDER = "marketplace.order.decide"
     ACTIVATE_SUBSCRIPTION = "marketplace.subscription.activate"
     CHANGE_CHANNEL_ELIGIBILITY = "marketplace.channel_eligibility.change"
@@ -50,6 +51,7 @@ SENSITIVE_ACTIONS = frozenset(
         AdminMarketplaceAction.PUBLISH_OFFER,
         AdminMarketplaceAction.RETIRE_OFFER,
         AdminMarketplaceAction.VERIFY_PAYMENT,
+        AdminMarketplaceAction.RECONCILE_PAYMENT,
         AdminMarketplaceAction.DECIDE_ORDER,
         AdminMarketplaceAction.ACTIVATE_SUBSCRIPTION,
         AdminMarketplaceAction.CHANGE_CHANNEL_ELIGIBILITY,

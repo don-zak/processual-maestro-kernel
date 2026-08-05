@@ -406,7 +406,10 @@
     <div class="am-section-heading"><div><span class="am-kicker">Evidence and matching</span><h2>Payments</h2><p>Customer reports are never final verification. Only exact matches can be explicitly verified by an MFA-authenticated platform administrator.</p></div><button id="am-refresh-payments" class="btn secondary" type="button">Refresh</button></div>
     <div id="am-payment-evidence-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading payment evidence…</div></div>
   </section>
-  <section class="am-section" data-am-panel="reconciliation"><div class="am-empty-panel"><span>Reconciliation &amp; Exceptions</span><h2>No exception workflow yet</h2><p>Underpayments, duplicate evidence, and unmatched references will be handled here with MFA and audit.</p></div></section>
+  <section class="am-section" data-am-panel="reconciliation">
+    <div class="am-section-heading"><div><span class="am-kicker">MFA-gated exception handling</span><h2>Reconciliation &amp; Exceptions</h2><p>Review mismatches without rewriting original evidence. Accepted matches still require the separate final Verify payment action.</p></div><button id="am-refresh-reconciliation" class="btn secondary" type="button">Refresh</button></div>
+    <div id="am-reconciliation-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading payment exceptions…</div></div>
+  </section>
   <section class="am-section" data-am-panel="subscriptions">
     <div class="am-section-heading"><div><span class="am-kicker">Automatic gated activation</span><h2>Subscriptions &amp; Activations</h2><p>Subscriptions and entitlement profiles created atomically after contract, payment, offer, and eligibility gates pass.</p></div><button id="am-refresh-subscriptions" class="btn secondary" type="button">Refresh</button></div>
     <div id="am-subscription-activation-list" class="am-destination-list" data-state="loading"><div class="am-empty">Loading subscription activations…</div></div>

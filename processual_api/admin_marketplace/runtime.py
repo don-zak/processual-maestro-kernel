@@ -24,6 +24,9 @@ from processual_api.admin_marketplace.payment_destination_service import (
 from processual_api.admin_marketplace.payment_evidence_service import (
     AdminPaymentVerificationService,
 )
+from processual_api.admin_marketplace.payment_reconciliation_service import (
+    PaymentReconciliationService,
+)
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
@@ -46,6 +49,7 @@ class AdminMarketplaceRuntime:
     commercial_read_service: AdminMarketplaceCommercialReadService
     payment_verification_service: AdminPaymentVerificationService
     subscription_activation_service: SubscriptionActivationOrchestrator
+    payment_reconciliation_service: PaymentReconciliationService
 
 
 def _payment_destination_keys(raw_json: str | None) -> dict[str, bytes]:
@@ -106,6 +110,10 @@ async def build_admin_marketplace_runtime(
             unit_of_work_factory=unit_of_work_factory,
             clock=lambda: datetime.now(UTC),
         )
+        payment_reconciliation_service = PaymentReconciliationService(
+            unit_of_work_factory=unit_of_work_factory,
+            clock=lambda: datetime.now(UTC),
+        )
     except (RuntimeError, TypeError, ValueError) as exc:
         raise AdminMarketplaceRuntimeUnavailableError("Admin Marketplace runtime authority is unavailable.") from exc
 
@@ -119,7 +127,7 @@ async def build_admin_marketplace_runtime(
             ),
             clock=lambda: datetime.now(UTC),
         )
-    except AdminMarketplaceRuntimeUnavailableError, TypeError, ValueError:
+    except (AdminMarketplaceRuntimeUnavailableError, TypeError, ValueError):
         # Eligibility reads remain available; payment administration fails
         # closed at its dedicated dependency boundary.
         payment_destination_service = None
@@ -131,6 +139,7 @@ async def build_admin_marketplace_runtime(
         commercial_read_service=commercial_read_service,
         payment_verification_service=payment_verification_service,
         subscription_activation_service=subscription_activation_service,
+        payment_reconciliation_service=payment_reconciliation_service,
     )
 
 

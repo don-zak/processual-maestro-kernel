@@ -42,7 +42,19 @@ def test_admin_marketplace_shell_contains_every_approved_section() -> None:
 
     assert 'id="am-order-list"' in html
     assert 'id="am-contract-list"' in html
+    assert 'id="am-reconciliation-list"' in html
     assert "Payment audit API pending" in html
+
+
+def test_reconciliation_workspace_is_mfa_gated_and_keeps_verification_separate() -> None:
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert "function renderPaymentReconciliations()" in script
+    assert "function reconcilePayment(" in script
+    assert "await withMfaRetry(operation)" in script
+    assert "payment-reconciliations" in script
+    assert "Accept match does not verify payment" in script
+    assert "Final verification remains separate" in script
 
 
 def test_payment_destination_form_uses_atomic_create_validate_contract() -> None:

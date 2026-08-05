@@ -57,6 +57,10 @@ class PaymentVerificationConflictError(AdminMarketplaceError):
     """Raised when an administrator decision conflicts with stored state."""
 
 
+class PaymentReconciliationConflictError(AdminMarketplaceError):
+    """Raised when a reconciliation action conflicts with trusted state."""
+
+
 class SubscriptionActivationNotReadyError(AdminMarketplaceError):
     """Raised when a verified order does not satisfy every activation gate."""
 
@@ -83,6 +87,7 @@ __all__ = [
     "PaymentEvidenceConflictError",
     "PaymentEvidenceNotFoundError",
     "PaymentVerificationConflictError",
+    "PaymentReconciliationConflictError",
     "SubscriptionActivationConflictError",
     "SubscriptionActivationNotReadyError",
 ]

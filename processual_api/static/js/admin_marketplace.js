@@ -8,6 +8,7 @@
   let contracts = [];
   let paymentEvidence = [];
   let subscriptionActivations = [];
+  let paymentReconciliations = [];
   let pendingCreateKey = '';
   let pendingMfaOperation = null;
 
@@ -318,11 +319,50 @@
     ].join('')).join('');
   }
 
+  function renderPaymentReconciliations() {
+    const target = element('am-reconciliation-list');
+    if (!target) return;
+    if (!paymentReconciliations.length) {
+      target.dataset.state = 'empty';
+      target.innerHTML = '<div class="am-empty">No payment exceptions require reconciliation.</div>';
+      return;
+    }
+    target.dataset.state = 'ready';
+    target.innerHTML = paymentReconciliations.map((item) => [
+      '<article class="am-destination-item" data-am-reconciliation-card="' + escapeHtml(item.evidence_ref) + '">',
+      '<div class="am-destination-title"><div><h4>' + escapeHtml(item.evidence_ref) + '</h4><p>Original order ' + escapeHtml(item.original_order_ref) + '</p></div>',
+      '<div class="am-badges"><span class="am-badge ' + escapeHtml(item.case_status) + '">' + escapeHtml(item.exception_type) + '</span></div></div>',
+      '<div class="am-destination-details">',
+      '<div><span>Evidence</span><strong>' + escapeHtml(item.evidence_status) + '</strong></div>',
+      '<div><span>Case</span><strong>' + escapeHtml(item.case_status) + '</strong></div>',
+      '<div><span>Amount</span><strong>' + escapeHtml(item.actual_amount + ' ' + item.currency) + '</strong></div>',
+      '<div><span>Candidate order</span><strong>' + escapeHtml(item.candidate_order_ref || 'Not linked') + '</strong></div>',
+      '<div><span>Reason</span><strong>' + escapeHtml(item.reason_code) + '</strong></div>',
+      '<div><span>Updated</span><strong>' + escapeHtml(safeDate(item.updated_at)) + '</strong></div>',
+      '</div>',
+      '<div class="am-form-grid"><label>Exception type<select data-am-exception-type>' + [
+        'underpayment', 'overpayment', 'unknown_reference', 'old_destination', 'late_payment',
+        'duplicate_payment', 'payer_mismatch', 'currency_mismatch', 'untrusted_evidence', 'other',
+      ].map((value) => '<option value="' + value + '"' + (value === item.exception_type ? ' selected' : '') + '>' + value.replaceAll('_', ' ') + '</option>').join('') + '</select></label>',
+      '<label>Candidate order reference<input data-am-candidate-order maxlength="128" value="' + escapeHtml(item.candidate_order_ref || '') + '" placeholder="ord_..."></label>',
+      '<label>Non-sensitive note<input data-am-reconciliation-note maxlength="500" value="' + escapeHtml(item.safe_note || '') + '" placeholder="Operational note only"></label></div>',
+      '<div class="am-destination-actions">',
+      '<button type="button" class="btn secondary sm" data-am-reconcile="review">Place in review</button>',
+      '<button type="button" class="btn secondary sm" data-am-reconcile="reevaluate">Re-evaluate</button>',
+      '<button type="button" class="btn secondary sm" data-am-reconcile="link">Link candidate</button>',
+      item.candidate_order_ref ? '<button type="button" class="btn secondary sm" data-am-reconcile="unlink">Unlink</button>' : '',
+      '<button type="button" class="btn accent sm" data-am-reconcile="accept_match">Accept match</button>',
+      '<button type="button" class="btn danger sm" data-am-reconcile="reject">Reject</button>',
+      '</div><p>Accept match does not verify payment or activate a subscription.</p></article>',
+    ].join('')).join('');
+  }
+
   async function loadCommercialList(kind) {
     const target = element(
       kind === 'orders' ? 'am-order-list' :
         (kind === 'contracts' ? 'am-contract-list' :
-          (kind === 'payment-evidence' ? 'am-payment-evidence-list' : 'am-subscription-activation-list'))
+          (kind === 'payment-evidence' ? 'am-payment-evidence-list' :
+            (kind === 'payment-reconciliations' ? 'am-reconciliation-list' : 'am-subscription-activation-list')))
     );
     if (target) {
       target.dataset.state = 'loading';
@@ -339,6 +379,9 @@
       } else if (kind === 'payment-evidence') {
         paymentEvidence = Array.isArray(result.items) ? result.items : [];
         renderPaymentEvidence();
+      } else if (kind === 'payment-reconciliations') {
+        paymentReconciliations = Array.isArray(result.items) ? result.items : [];
+        renderPaymentReconciliations();
       } else {
         subscriptionActivations = Array.isArray(result.items) ? result.items : [];
         renderSubscriptionActivations();
@@ -557,6 +600,51 @@
     }
   }
 
+  async function reconcilePayment(action, evidenceRef, card, button) {
+    const candidateInput = card.querySelector('[data-am-candidate-order]');
+    const noteInput = card.querySelector('[data-am-reconciliation-note]');
+    const exceptionTypeInput = card.querySelector('[data-am-exception-type]');
+    const candidateOrderRef = candidateInput ? candidateInput.value.trim() : '';
+    if (action === 'link' && !candidateOrderRef) {
+      showNotice('Enter a candidate order reference before linking.', 'warning');
+      return;
+    }
+    const confirmed = await confirmAction(
+      'Confirm reconciliation action?',
+      'This MFA-gated action is audited. It cannot by itself verify payment or activate a subscription.',
+      action.replaceAll('_', ' ')
+    );
+    if (!confirmed) return;
+    setMutationLoading(button, true, 'Working…');
+    const operation = async function () {
+      await request(ADMIN_MARKET_ROOT + '/payment-evidence/' + encodeURIComponent(evidenceRef) + '/reconcile', {
+        method: 'POST',
+        headers: {
+          'X-Correlation-ID': uniqueKey('admin-market-ui'),
+          'Idempotency-Key': uniqueKey('payment-reconciliation'),
+        },
+        body: {
+          action,
+          exception_type: exceptionTypeInput ? exceptionTypeInput.value : 'other',
+          reason_code: 'admin_reconciliation_' + action,
+          safe_note: noteInput && noteInput.value.trim() ? noteInput.value.trim() : null,
+          candidate_order_ref: action === 'link' ? candidateOrderRef : null,
+        },
+      });
+      showNotice('Payment reconciliation state updated. Final verification remains separate.', 'success');
+      await loadCommercialList('payment-reconciliations');
+      await loadCommercialList('payment-evidence');
+      await loadCommercialList('orders');
+    };
+    try {
+      await withMfaRetry(operation);
+    } catch (error) {
+      showNotice(reasonMessage(error), 'error');
+    } finally {
+      setMutationLoading(button, false);
+    }
+  }
+
   function activateSection(section) {
     const name = section || 'overview';
     document.querySelectorAll('[data-am-section]').forEach((button) => {
@@ -569,6 +657,7 @@
     if (name === 'orders') loadCommercialList('orders');
     if (name === 'contracts') loadCommercialList('contracts');
     if (name === 'payments') loadCommercialList('payment-evidence');
+    if (name === 'reconciliation') loadCommercialList('payment-reconciliations');
     if (name === 'subscriptions') loadCommercialList('subscription-activations');
   }
 
@@ -601,6 +690,8 @@
     if (refreshPayments) refreshPayments.addEventListener('click', () => loadCommercialList('payment-evidence'));
     const refreshSubscriptions = element('am-refresh-subscriptions');
     if (refreshSubscriptions) refreshSubscriptions.addEventListener('click', () => loadCommercialList('subscription-activations'));
+    const refreshReconciliation = element('am-refresh-reconciliation');
+    if (refreshReconciliation) refreshReconciliation.addEventListener('click', () => loadCommercialList('payment-reconciliations'));
     const list = element('am-payment-destination-list');
     if (list) list.addEventListener('click', (event) => {
       const button = event.target.closest('[data-am-destination-action]');
@@ -612,6 +703,13 @@
       const button = event.target.closest('[data-am-payment-verify]');
       if (!button) return;
       verifyPayment(button.dataset.amPaymentVerify, button);
+    });
+    const reconciliationList = element('am-reconciliation-list');
+    if (reconciliationList) reconciliationList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-am-reconcile]');
+      if (!button) return;
+      const card = button.closest('[data-am-reconciliation-card]');
+      reconcilePayment(button.dataset.amReconcile, card.dataset.amReconciliationCard, card, button);
     });
     const mfaForm = element('am-mfa-form');
     if (mfaForm) mfaForm.addEventListener('submit', submitMfa);

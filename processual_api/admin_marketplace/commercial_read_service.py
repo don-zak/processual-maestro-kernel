@@ -76,6 +76,24 @@ class SubscriptionActivationReadResult:
     activated_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class PaymentReconciliationReadResult:
+    case_ref: str | None
+    evidence_ref: str
+    original_order_ref: str
+    candidate_order_ref: str | None
+    customer_ref: str
+    evidence_status: str
+    case_status: str
+    exception_type: str
+    resolution: str | None
+    reason_code: str
+    safe_note: str | None
+    actual_amount: Decimal
+    currency: str
+    updated_at: datetime
+
+
 class AdminMarketplaceCommercialReadService:
     """Read-only, authority-gated Admin Market order and contract views."""
 
@@ -217,11 +235,77 @@ class AdminMarketplaceCommercialReadService:
                 )
         return tuple(rows)
 
+    async def list_payment_reconciliations(
+        self,
+        *,
+        authority: AdminMarketplaceAuthorityContext,
+        limit: int = 100,
+    ) -> tuple[PaymentReconciliationReadResult, ...]:
+        require_admin_marketplace_authority(
+            context=authority,
+            action=AdminMarketplaceAction.VIEW_CATALOG,
+        )
+        async with self._unit_of_work_factory() as unit:
+            evidence_items = await unit.payment_evidence.list_recent(limit=limit)
+            cases = await unit.payment_reconciliations.list_recent(limit=limit)
+            cases_by_evidence = {case.evidence_id: case for case in cases}
+            rows = []
+            for evidence in evidence_items:
+                case = cases_by_evidence.get(evidence.id)
+                if case is None and evidence.status not in {"requires_review", "rejected"}:
+                    continue
+                original = await unit.orders.get_by_id(evidence.order_id)
+                if original is None:
+                    continue
+                candidate = None
+                if case is not None and case.candidate_order_id is not None:
+                    candidate = await unit.orders.get_by_id(case.candidate_order_id)
+                rows.append(
+                    PaymentReconciliationReadResult(
+                        case_ref=None if case is None else case.case_ref,
+                        evidence_ref=evidence.evidence_ref,
+                        original_order_ref=original.order_ref,
+                        candidate_order_ref=None if candidate is None else candidate.order_ref,
+                        customer_ref=evidence.customer_ref,
+                        evidence_status=evidence.status,
+                        case_status="unopened" if case is None else case.status,
+                        exception_type=(
+                            _payment_exception_type(evidence, original)
+                            if case is None
+                            else case.exception_type
+                        ),
+                        resolution=None if case is None else case.resolution,
+                        reason_code=evidence.match_reason_code if case is None else case.reason_code,
+                        safe_note=None if case is None else case.safe_note,
+                        actual_amount=Decimal(evidence.actual_amount),
+                        currency=evidence.currency,
+                        updated_at=evidence.reported_at if case is None else case.updated_at,
+                    )
+                )
+        return tuple(rows)
+
+
+def _payment_exception_type(evidence, order) -> str:
+    actual = Decimal(evidence.actual_amount)
+    expected = Decimal(order.total_amount)
+    if actual < expected:
+        return "underpayment"
+    if actual > expected:
+        return "overpayment"
+    if not evidence.currency_matched:
+        return "currency_mismatch"
+    if not evidence.reference_matched:
+        return "unknown_reference"
+    if not evidence.destination_matched:
+        return "old_destination"
+    return "other"
+
 
 __all__ = [
     "AdminMarketplaceCommercialReadService",
     "CommercialContractReadResult",
     "CommercialOrderReadResult",
     "PaymentEvidenceReadResult",
+    "PaymentReconciliationReadResult",
     "SubscriptionActivationReadResult",
 ]

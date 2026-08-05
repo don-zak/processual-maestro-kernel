@@ -19,6 +19,7 @@ from processual_api.admin_marketplace.errors import (
     PaymentDestinationConflictError,
     PaymentDestinationNotFoundError,
     PaymentEvidenceNotFoundError,
+    PaymentReconciliationConflictError,
     PaymentVerificationConflictError,
     SubscriptionActivationConflictError,
     SubscriptionActivationNotReadyError,
@@ -34,6 +35,9 @@ from processual_api.admin_marketplace.payment_destination_service import (
 )
 from processual_api.admin_marketplace.payment_evidence_service import (
     AdminPaymentVerificationResult,
+)
+from processual_api.admin_marketplace.payment_reconciliation_service import (
+    PaymentReconciliationResult,
 )
 from processual_api.admin_marketplace.persistence.errors import (
     AdminMarketplaceConflictError,
@@ -280,6 +284,61 @@ class SubscriptionActivationListResponse(BaseModel):
     count: int
 
 
+class PaymentReconciliationReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_ref: str | None
+    evidence_ref: str
+    original_order_ref: str
+    candidate_order_ref: str | None
+    customer_ref: str
+    evidence_status: str
+    case_status: str
+    exception_type: str
+    resolution: str | None
+    reason_code: str
+    safe_note: str | None
+    actual_amount: Decimal
+    currency: str
+    updated_at: datetime
+
+
+class PaymentReconciliationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[PaymentReconciliationReadResponse, ...]
+    count: int
+
+
+class PaymentReconciliationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    action: str = Field(pattern="^(accept_match|reject|link|unlink|reevaluate|review)$")
+    exception_type: str | None = Field(
+        default=None,
+        pattern="^(underpayment|overpayment|unknown_reference|old_destination|late_payment|duplicate_payment|payer_mismatch|currency_mismatch|untrusted_evidence|other)$",
+    )
+    reason_code: str = Field(min_length=2, max_length=128)
+    safe_note: str | None = Field(default=None, max_length=500)
+    candidate_order_ref: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class PaymentReconciliationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_ref: str
+    evidence_ref: str
+    original_order_ref: str
+    candidate_order_ref: str | None
+    status: str
+    exception_type: str
+    resolution: str | None
+    reason_code: str
+    safe_note: str | None
+    evidence_status: str
+    updated_at: datetime
+
+
 async def get_admin_marketplace_runtime() -> AdminMarketplaceRuntime:
     try:
         return await build_admin_marketplace_runtime()
@@ -432,6 +491,65 @@ async def list_admin_marketplace_payment_evidence(
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
     responses = tuple(PaymentEvidenceReadResponse.model_validate(item, from_attributes=True) for item in items)
     return PaymentEvidenceListResponse(items=responses, count=len(responses))
+
+
+@router.get(
+    "/payment-reconciliations",
+    response_model=PaymentReconciliationListResponse,
+)
+async def list_admin_marketplace_payment_reconciliations(
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+) -> PaymentReconciliationListResponse:
+    try:
+        authority = await _commercial_read_authority(current_user=current_user, runtime=runtime)
+        items = await runtime.commercial_read_service.list_payment_reconciliations(authority=authority)
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Active platform administrator authority is required.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    responses = tuple(PaymentReconciliationReadResponse.model_validate(item, from_attributes=True) for item in items)
+    return PaymentReconciliationListResponse(items=responses, count=len(responses))
+
+
+@router.post(
+    "/payment-evidence/{evidence_ref}/reconcile",
+    response_model=PaymentReconciliationResponse,
+)
+async def reconcile_admin_marketplace_payment(
+    evidence_ref: str,
+    body: PaymentReconciliationRequest,
+    current_user: dict = Depends(get_identity_user),
+    runtime: AdminMarketplaceRuntime = Depends(get_admin_marketplace_runtime),
+    correlation_id: str = Header(..., alias="X-Correlation-ID", min_length=1, max_length=128),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=16, max_length=128),
+) -> PaymentReconciliationResponse:
+    try:
+        authority = await _commercial_read_authority(current_user=current_user, runtime=runtime)
+        result: PaymentReconciliationResult = await runtime.payment_reconciliation_service.decide(
+            authority=authority,
+            evidence_ref=evidence_ref,
+            action=body.action,
+            exception_type=body.exception_type,
+            reason_code=body.reason_code,
+            safe_note=body.safe_note,
+            candidate_order_ref=body.candidate_order_ref,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+        )
+    except AdminMarketplaceStepUpRequiredError as exc:
+        raise HTTPException(status_code=428, detail="Recent MFA step-up is required.") from exc
+    except AdminMarketplaceAuthorityDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Active platform administrator authority is required.") from exc
+    except PaymentEvidenceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Payment evidence was not found.") from exc
+    except (PaymentReconciliationConflictError, AdminMarketplaceConflictError) as exc:
+        raise HTTPException(status_code=409, detail="Payment reconciliation conflicts with stored state.") from exc
+    except AdminMarketplaceError as exc:
+        raise HTTPException(status_code=400, detail="Invalid payment reconciliation request.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
+    return PaymentReconciliationResponse.model_validate(result, from_attributes=True)
 
 
 def _payment_verification_response(
@@ -958,6 +1076,10 @@ __all__ = [
     "PaymentDestinationResponse",
     "PaymentEvidenceListResponse",
     "PaymentEvidenceReadResponse",
+    "PaymentReconciliationListResponse",
+    "PaymentReconciliationReadResponse",
+    "PaymentReconciliationRequest",
+    "PaymentReconciliationResponse",
     "PaymentVerificationRequest",
     "PaymentVerificationResponse",
     "SubscriptionActivationListResponse",
@@ -972,8 +1094,10 @@ __all__ = [
     "get_payment_destination",
     "list_payment_destinations",
     "list_admin_marketplace_payment_evidence",
+    "list_admin_marketplace_payment_reconciliations",
     "list_admin_marketplace_subscription_activations",
     "router",
+    "reconcile_admin_marketplace_payment",
     "set_default_payment_destination",
     "validate_payment_destination",
     "verify_admin_marketplace_payment",
