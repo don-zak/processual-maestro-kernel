@@ -111,6 +111,15 @@ def record_subscription_quota_usage_factory(
                 raise SubscriptionQuotaUsageError(
                     "quota usage falls outside the selected cycle."
                 )
+
+            if runtime.access_stage == "grace":
+                await _enforce_degraded_grace_cap(
+                    uow=uow,
+                    command=command,
+                    cycle=cycle,
+                    runtime=runtime,
+                )
+
             if command.units > cycle.available_units:
                 raise SubscriptionQuotaUsageError("quota balance is insufficient.")
 
@@ -131,6 +140,54 @@ def record_subscription_quota_usage_factory(
             return usage
 
     return record
+
+
+async def _enforce_degraded_grace_cap(
+    *,
+    uow: object,
+    command: SubscriptionQuotaUsageCommand,
+    cycle: object,
+    runtime: object,
+) -> None:
+    delinquency = await uow.subscription_delinquency.get_by_subscription_id(
+        command.subscription_id,
+        for_update=True,
+    )
+    if delinquency is None or delinquency.state != "grace_degraded":
+        raise SubscriptionQuotaUsageError(
+            "grace usage requires authoritative delinquency state."
+        )
+    if delinquency.customer_ref != command.customer_ref:
+        raise SubscriptionQuotaUsageError(
+            "grace usage customer conflicts with delinquency state."
+        )
+
+    grace_started_at = delinquency.grace_started_at
+    grace_until = delinquency.grace_until
+    if (
+        grace_started_at is None
+        or grace_started_at.tzinfo is None
+        or grace_until is None
+        or grace_until.tzinfo is None
+        or runtime.grace_until != grace_until
+    ):
+        raise SubscriptionQuotaUsageError(
+            "grace usage requires consistent timezone-aware deadlines."
+        )
+    if not grace_started_at <= command.occurred_at < grace_until:
+        raise SubscriptionQuotaUsageError(
+            "quota usage falls outside the degraded grace window."
+        )
+
+    grace_cap = cycle.base_limit_units * delinquency.grace_usage_percent // 100
+    consumed_in_grace = await uow.subscription_quota_cycle_usage.sum_units_since(
+        quota_cycle_id=cycle.id,
+        occurred_at=grace_started_at,
+    )
+    if consumed_in_grace + command.units > grace_cap:
+        raise SubscriptionQuotaUsageError(
+            "degraded grace usage cap is exhausted."
+        )
 
 
 def _validate(command: SubscriptionQuotaUsageCommand) -> None:
