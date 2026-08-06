@@ -62,13 +62,18 @@ def _digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def _event_identity(webhook: VerifiedLemonSqueezyWebhook) -> str:
+def _event_identity(
+    webhook: VerifiedLemonSqueezyWebhook,
+    *,
+    payload_digest: str,
+) -> str:
     canonical = "\x1f".join(
         (
             webhook.store_id,
             webhook.event_name,
             webhook.resource_type,
             webhook.external_resource_id,
+            payload_digest,
         )
     ).encode("utf-8")
     return _digest(canonical)
@@ -100,8 +105,11 @@ async def ingest_verified_lemon_squeezy_webhook(
     if not isinstance(raw_body, bytes) or not raw_body:
         raise LemonSqueezyWebhookError("verified webhook raw body is required.")
 
-    identity_hash = _event_identity(webhook)
     payload_digest = _digest(raw_body)
+    identity_hash = _event_identity(
+        webhook,
+        payload_digest=payload_digest,
+    )
 
     existing = await repository.get_by_event_identity_hash(
         identity_hash,
