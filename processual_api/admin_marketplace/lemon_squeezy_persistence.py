@@ -37,6 +37,21 @@ class AdminMarketLemonSqueezyWebhookInbox(Base):
             name="digest_lengths",
         ),
         CheckConstraint(
+            "evidence_schema_version IS NULL OR evidence_schema_version >= 1",
+            name="evidence_schema_version_positive",
+        ),
+        CheckConstraint(
+            "currency IS NULL OR length(currency) = 3",
+            name="evidence_currency_length",
+        ),
+        CheckConstraint(
+            "(evidence_schema_version IS NULL AND provider_customer_id IS NULL "
+            "AND provider_status IS NULL AND provider_effective_at IS NULL) "
+            "OR (evidence_schema_version IS NOT NULL AND provider_customer_id IS NOT NULL "
+            "AND provider_status IS NOT NULL AND provider_effective_at IS NOT NULL)",
+            name="evidence_core_complete",
+        ),
+        CheckConstraint(
             "(processing_status = 'processed' AND processed_at IS NOT NULL AND rejected_at IS NULL) "
             "OR (processing_status = 'rejected' AND rejected_at IS NOT NULL AND processed_at IS NULL) "
             "OR (processing_status IN ('received', 'processing') AND processed_at IS NULL AND rejected_at IS NULL)",
@@ -61,6 +76,16 @@ class AdminMarketLemonSqueezyWebhookInbox(Base):
             "order_ref",
             "received_at",
         ),
+        Index(
+            "ix_admin_market_ls_webhook_provider_customer",
+            "provider_customer_id",
+            "provider_effective_at",
+        ),
+        Index(
+            "ix_admin_market_ls_webhook_provider_subscription",
+            "provider_subscription_id",
+            "provider_effective_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -78,6 +103,17 @@ class AdminMarketLemonSqueezyWebhookInbox(Base):
     test_mode: Mapped[bool] = mapped_column(Boolean, nullable=False)
     processing_status: Mapped[str] = mapped_column(String(24), nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    evidence_schema_version: Mapped[int | None] = mapped_column(Integer)
+    provider_customer_id: Mapped[str | None] = mapped_column(String(128))
+    provider_order_id: Mapped[str | None] = mapped_column(String(128))
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(128))
+    variant_id: Mapped[str | None] = mapped_column(String(128))
+    currency: Mapped[str | None] = mapped_column(String(3))
+    total_amount: Mapped[str | None] = mapped_column(String(64))
+    provider_status: Mapped[str | None] = mapped_column(String(64))
+    provider_effective_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     last_error_code: Mapped[str | None] = mapped_column(String(128))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -155,6 +191,15 @@ class SqlAlchemyLemonSqueezyWebhookInboxRepository:
                 test_mode=entry.test_mode,
                 processing_status=entry.processing_status,
                 attempt_count=entry.attempt_count,
+                evidence_schema_version=entry.evidence_schema_version,
+                provider_customer_id=entry.provider_customer_id,
+                provider_order_id=entry.provider_order_id,
+                provider_subscription_id=entry.provider_subscription_id,
+                variant_id=entry.variant_id,
+                currency=entry.currency,
+                total_amount=entry.total_amount,
+                provider_status=entry.provider_status,
+                provider_effective_at=entry.provider_effective_at,
                 last_error_code=entry.last_error_code,
                 received_at=entry.received_at,
                 claimed_at=entry.claimed_at,
