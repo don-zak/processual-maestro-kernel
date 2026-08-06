@@ -91,6 +91,10 @@ def normalize_plan_id(plan_id: str | None) -> str:
     return normalize_plan_code(plan_id)
 
 
+def monthly_unit_allowance(plan_id: str | None) -> int:
+    return PLAN_MONTHLY_UNIT_ALLOWANCES.get(normalize_plan_id(plan_id), 0)
+
+
 def allows_enterprise_integration(plan_id: str | None) -> bool:
     return normalize_plan_id(plan_id) in ENTERPRISE_INTEGRATION_PLANS
 
