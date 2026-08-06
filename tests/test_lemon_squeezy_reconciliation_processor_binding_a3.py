@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -38,10 +38,30 @@ class DecisionRepository:
         self.added.append(record)
 
 
+class BindingRepository:
+    def __init__(self, binding: object | None) -> None:
+        self.binding = binding
+        self.lookups: list[tuple[str, bool]] = []
+
+    async def get_by_provider_order_id(
+        self,
+        provider_order_id: str,
+        *,
+        for_update: bool = False,
+    ):
+        self.lookups.append((provider_order_id, for_update))
+        if self.binding is None:
+            return None
+        if self.binding.provider_order_id != provider_order_id:
+            return None
+        return self.binding
+
+
 class FakeUnitOfWork:
-    def __init__(self, inbox: object) -> None:
+    def __init__(self, inbox: object, binding: object | None = None) -> None:
         self.lemon_squeezy_webhook_inbox = InboxRepository(inbox)
         self.lemon_squeezy_reconciliation_decisions = DecisionRepository()
+        self.lemon_squeezy_bindings = BindingRepository(binding or _binding())
         self.committed = False
 
     async def __aenter__(self):
@@ -54,34 +74,49 @@ class FakeUnitOfWork:
         self.committed = True
 
 
-def _inbox() -> SimpleNamespace:
-    return SimpleNamespace(
-        id=uuid.uuid4(),
-        event_identity_hash="a" * 64,
-        customer_ref="customer_001",
-        order_ref="order_001",
-        offer_ref="starter_monthly",
-        event_name="subscription_updated",
-        resource_type="subscriptions",
-        external_resource_id="9001",
-        test_mode=False,
-        processing_status="received",
-        attempt_count=0,
-        received_at=NOW,
-        claimed_at=None,
-        processed_at=None,
-        rejected_at=None,
-        last_error_code=None,
-        evidence_schema_version=1,
-        provider_customer_id="7001",
-        provider_order_id="8001",
-        provider_subscription_id="9001",
-        variant_id="6001",
-        currency=None,
-        total_amount=None,
-        provider_status="active",
-        provider_effective_at=NOW,
-    )
+def _inbox(**overrides: object) -> SimpleNamespace:
+    values = {
+        "id": uuid.uuid4(),
+        "event_identity_hash": "a" * 64,
+        "customer_ref": "customer_001",
+        "order_ref": "order_001",
+        "offer_ref": "starter_monthly",
+        "event_name": "subscription_updated",
+        "resource_type": "subscriptions",
+        "external_resource_id": "9001",
+        "test_mode": False,
+        "processing_status": "received",
+        "attempt_count": 0,
+        "received_at": NOW,
+        "claimed_at": None,
+        "processed_at": None,
+        "rejected_at": None,
+        "last_error_code": None,
+        "evidence_schema_version": 1,
+        "provider_customer_id": "7001",
+        "provider_order_id": "8001",
+        "provider_subscription_id": "9001",
+        "variant_id": "6001",
+        "currency": None,
+        "total_amount": None,
+        "provider_status": "active",
+        "provider_effective_at": NOW,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _binding(**overrides: object) -> SimpleNamespace:
+    values = {
+        "customer_ref": "customer_001",
+        "provider_customer_id": "7001",
+        "provider_order_id": "8001",
+        "provider_subscription_id": None,
+        "variant_id": "6001",
+        "last_provider_effective_at": NOW - timedelta(hours=1),
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
 
 
 def _context(**overrides: object) -> LemonSqueezyReconciliationContext:
@@ -96,6 +131,7 @@ def _context(**overrides: object) -> LemonSqueezyReconciliationContext:
         "expected_provider_order_id": "8001",
         "expected_provider_subscription_id": "9001",
         "expected_variant_id": "6001",
+        "latest_provider_effective_at": NOW - timedelta(hours=1),
     }
     values.update(overrides)
     return LemonSqueezyReconciliationContext(**values)
@@ -104,7 +140,8 @@ def _context(**overrides: object) -> LemonSqueezyReconciliationContext:
 @pytest.mark.asyncio
 async def test_context_loader_receives_active_unit_of_work_and_locked_inbox() -> None:
     inbox = _inbox()
-    uow = FakeUnitOfWork(inbox)
+    binding = _binding()
+    uow = FakeUnitOfWork(inbox, binding)
     observed: list[tuple[object, object]] = []
 
     async def loader(active_uow: object, locked_inbox: object):
@@ -120,6 +157,9 @@ async def test_context_loader_receives_active_unit_of_work_and_locked_inbox() ->
 
     assert observed == [(uow, inbox)]
     assert record.action == "reconcile"
+    assert uow.lemon_squeezy_bindings.lookups == [("8001", True)]
+    assert binding.provider_subscription_id == "9001"
+    assert binding.last_provider_effective_at == NOW
     assert uow.committed is True
 
 
@@ -144,3 +184,89 @@ async def test_conflicting_context_binding_is_rejected_without_commit() -> None:
 
     assert uow.committed is False
     assert uow.lemon_squeezy_reconciliation_decisions.added == []
+
+
+@pytest.mark.asyncio
+async def test_missing_authoritative_binding_rejects_without_commit() -> None:
+    inbox = _inbox()
+    uow = FakeUnitOfWork(inbox)
+    uow.lemon_squeezy_bindings = BindingRepository(None)
+
+    async def loader(active_uow: object, locked_inbox: object):
+        return _context()
+
+    process = process_lemon_squeezy_reconciliation_factory(
+        uow_factory=lambda: uow,
+        context_loader=loader,
+    )
+
+    with pytest.raises(LemonSqueezyWebhookError, match="binding was not found"):
+        await process(inbox_id=inbox.id, decided_at=NOW)
+
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_binding_subscription_conflict_rejects_without_commit() -> None:
+    inbox = _inbox()
+    binding = _binding(provider_subscription_id="9999")
+    uow = FakeUnitOfWork(inbox, binding)
+
+    async def loader(active_uow: object, locked_inbox: object):
+        return _context()
+
+    process = process_lemon_squeezy_reconciliation_factory(
+        uow_factory=lambda: uow,
+        context_loader=loader,
+    )
+
+    with pytest.raises(LemonSqueezyWebhookError, match="subscription conflicts"):
+        await process(inbox_id=inbox.id, decided_at=NOW)
+
+    assert binding.provider_subscription_id == "9999"
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_binding_watermark_cannot_move_backwards() -> None:
+    inbox = _inbox(provider_effective_at=NOW - timedelta(hours=2))
+    binding = _binding(last_provider_effective_at=NOW)
+    uow = FakeUnitOfWork(inbox, binding)
+
+    async def loader(active_uow: object, locked_inbox: object):
+        return _context(latest_provider_effective_at=None)
+
+    process = process_lemon_squeezy_reconciliation_factory(
+        uow_factory=lambda: uow,
+        context_loader=loader,
+    )
+
+    with pytest.raises(LemonSqueezyWebhookError, match="older than binding watermark"):
+        await process(inbox_id=inbox.id, decided_at=NOW)
+
+    assert binding.last_provider_effective_at == NOW
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_requires_review_does_not_mutate_binding() -> None:
+    inbox = _inbox(provider_customer_id="wrong")
+    binding = _binding()
+    original_watermark = binding.last_provider_effective_at
+    uow = FakeUnitOfWork(inbox, binding)
+
+    async def loader(active_uow: object, locked_inbox: object):
+        return _context()
+
+    process = process_lemon_squeezy_reconciliation_factory(
+        uow_factory=lambda: uow,
+        context_loader=loader,
+    )
+
+    record = await process(inbox_id=inbox.id, decided_at=NOW)
+
+    assert record.action == "requires_review"
+    assert uow.lemon_squeezy_bindings.lookups == []
+    assert binding.provider_subscription_id is None
+    assert binding.last_provider_effective_at == original_watermark
+    assert uow.committed is True
