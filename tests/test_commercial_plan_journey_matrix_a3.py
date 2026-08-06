@@ -9,7 +9,6 @@ from processual_api.billing.public_plan_journey import (
     public_plan_journey_catalog,
 )
 
-
 CATALOG = public_plan_journey_catalog()
 PLANS = {plan["plan_id"]: plan for plan in CATALOG["plans"]}
 
