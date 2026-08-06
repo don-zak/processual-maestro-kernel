@@ -4,10 +4,10 @@ import hashlib
 import hmac
 import json
 import re
-import typing
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import Any
 
 from processual_api.admin_marketplace.errors import AdminMarketplaceError
 
@@ -44,9 +44,9 @@ class LemonSqueezyWebhookError(AdminMarketplaceError):
 
 
 def _reject_duplicate_keys(
-    pairs: list[tuple[str, typing.Any]],
-) -> dict[str, typing.Any]:
-    result: dict[str, typing.Any] = {}
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
             raise LemonSqueezyWebhookError("webhook JSON contains duplicate keys.")
@@ -58,7 +58,7 @@ def _required_mapping(
     value: object,
     *,
     field_name: str,
-) -> Mapping[str, typing.Any]:
+) -> Mapping[str, Any]:
     if not isinstance(value, dict):
         raise LemonSqueezyWebhookError(f"{field_name} must be an object.")
     return value
@@ -141,7 +141,7 @@ class VerifiedLemonSqueezyWebhook:
     order_ref: str
     offer_ref: str
     test_mode: bool
-    payload: Mapping[str, typing.Any]
+    payload: Mapping[str, Any]
 
 
 def parse_verified_lemon_squeezy_webhook(
