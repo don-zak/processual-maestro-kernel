@@ -33,10 +33,10 @@ async def apply_lemon_squeezy_subscription_lifecycle(
     uow: object,
     binding: object,
     inbox: object,
-) -> None:
+) -> object | None:
     target_status = _EVENT_STATUS.get(getattr(inbox, "event_name", ""))
     if target_status is None:
-        return
+        return None
 
     subscription_id = getattr(binding, "subscription_id", None)
     if subscription_id is None:
@@ -77,6 +77,8 @@ async def apply_lemon_squeezy_subscription_lifecycle(
         subscription.ends_at = None
     elif target_status in {"cancelled", "expired"}:
         subscription.ends_at = effective_at
+
+    return subscription
 
 
 __all__ = ["apply_lemon_squeezy_subscription_lifecycle"]
