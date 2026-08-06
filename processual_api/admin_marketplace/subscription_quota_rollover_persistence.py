@@ -27,10 +27,7 @@ class AdminMarketSubscriptionQuotaCycle(Base):
             "period_start",
             name="uq_admin_market_quota_cycle_period",
         ),
-        UniqueConstraint(
-            "source_cycle_id",
-            name="uq_admin_market_quota_cycle_source",
-        ),
+        UniqueConstraint("source_cycle_id", name="uq_admin_market_quota_cycle_source"),
         Index(
             "ix_admin_market_quota_cycle_customer_metric",
             "customer_ref",
@@ -39,9 +36,7 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("admin_market_subscriptions.id", ondelete="RESTRICT"),
@@ -78,6 +73,19 @@ class AdminMarketSubscriptionQuotaCycle(Base):
 class SqlAlchemySubscriptionQuotaCycleRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def get_by_id(
+        self,
+        cycle_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaCycle | None:
+        statement = select(AdminMarketSubscriptionQuotaCycle).where(
+            AdminMarketSubscriptionQuotaCycle.id == cycle_id
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
 
     async def get_by_period(
         self,
