@@ -8,6 +8,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from alembic.sqlite_recovery import cleanup_orphaned_batch_tables
 from processual_api.admin_marketplace import models as admin_marketplace_models  # noqa: F401
 from processual_api.auth import models as identity_auth_models  # noqa: F401
 from processual_api.db.base import Base
@@ -39,6 +40,7 @@ def run_migrations_offline() -> None:
 
 
 def _run_sync_migrations(connection) -> None:
+    cleanup_orphaned_batch_tables(connection)
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
