@@ -17,6 +17,9 @@ from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
 )
 
 NOW = datetime(2026, 8, 6, 11, 0, tzinfo=UTC)
+ORDER_ID = uuid.UUID("00000000-0000-0000-0000-000000000101")
+OFFER_ID = uuid.UUID("00000000-0000-0000-0000-000000000102")
+SUBSCRIPTION_ID = uuid.UUID("00000000-0000-0000-0000-000000000103")
 
 
 class InboxRepository:
@@ -57,11 +60,36 @@ class BindingRepository:
         return self.binding
 
 
+class SubscriptionRepository:
+    def __init__(self, subscription: object | None) -> None:
+        self.subscription = subscription
+        self.lookups: list[tuple[uuid.UUID, bool]] = []
+
+    async def get_by_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ):
+        self.lookups.append((subscription_id, for_update))
+        if self.subscription is None:
+            return None
+        if self.subscription.id != subscription_id:
+            return None
+        return self.subscription
+
+
 class FakeUnitOfWork:
-    def __init__(self, inbox: object, binding: object | None = None) -> None:
+    def __init__(
+        self,
+        inbox: object,
+        binding: object | None = None,
+        subscription: object | None = None,
+    ) -> None:
         self.lemon_squeezy_webhook_inbox = InboxRepository(inbox)
         self.lemon_squeezy_reconciliation_decisions = DecisionRepository()
         self.lemon_squeezy_bindings = BindingRepository(binding or _binding())
+        self.subscriptions = SubscriptionRepository(subscription or _subscription())
         self.committed = False
 
     async def __aenter__(self):
@@ -109,11 +137,28 @@ def _inbox(**overrides: object) -> SimpleNamespace:
 def _binding(**overrides: object) -> SimpleNamespace:
     values = {
         "customer_ref": "customer_001",
+        "order_id": ORDER_ID,
+        "offer_id": OFFER_ID,
+        "subscription_id": SUBSCRIPTION_ID,
         "provider_customer_id": "7001",
         "provider_order_id": "8001",
         "provider_subscription_id": None,
         "variant_id": "6001",
         "last_provider_effective_at": NOW - timedelta(hours=1),
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _subscription(**overrides: object) -> SimpleNamespace:
+    values = {
+        "id": SUBSCRIPTION_ID,
+        "customer_ref": "customer_001",
+        "order_id": ORDER_ID,
+        "offer_id": OFFER_ID,
+        "status": "pending",
+        "starts_at": None,
+        "ends_at": None,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -141,7 +186,8 @@ def _context(**overrides: object) -> LemonSqueezyReconciliationContext:
 async def test_context_loader_receives_active_unit_of_work_and_locked_inbox() -> None:
     inbox = _inbox()
     binding = _binding()
-    uow = FakeUnitOfWork(inbox, binding)
+    subscription = _subscription()
+    uow = FakeUnitOfWork(inbox, binding, subscription)
     observed: list[tuple[object, object]] = []
 
     async def loader(active_uow: object, locked_inbox: object):
@@ -158,8 +204,11 @@ async def test_context_loader_receives_active_unit_of_work_and_locked_inbox() ->
     assert observed == [(uow, inbox)]
     assert record.action == "reconcile"
     assert uow.lemon_squeezy_bindings.lookups == [("8001", True)]
+    assert uow.subscriptions.lookups == [(SUBSCRIPTION_ID, True)]
     assert binding.provider_subscription_id == "9001"
     assert binding.last_provider_effective_at == NOW
+    assert subscription.status == "active"
+    assert subscription.starts_at == NOW
     assert uow.committed is True
 
 
@@ -252,8 +301,9 @@ async def test_binding_watermark_cannot_move_backwards() -> None:
 async def test_requires_review_does_not_mutate_binding() -> None:
     inbox = _inbox(provider_customer_id="wrong")
     binding = _binding()
+    subscription = _subscription()
     original_watermark = binding.last_provider_effective_at
-    uow = FakeUnitOfWork(inbox, binding)
+    uow = FakeUnitOfWork(inbox, binding, subscription)
 
     async def loader(active_uow: object, locked_inbox: object):
         return _context()
@@ -267,6 +317,8 @@ async def test_requires_review_does_not_mutate_binding() -> None:
 
     assert record.action == "requires_review"
     assert uow.lemon_squeezy_bindings.lookups == []
+    assert uow.subscriptions.lookups == []
     assert binding.provider_subscription_id is None
     assert binding.last_provider_effective_at == original_watermark
+    assert subscription.status == "pending"
     assert uow.committed is True
