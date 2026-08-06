@@ -40,6 +40,9 @@ from processual_api.admin_marketplace.persistence.repositories import (
 from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
     SqlAlchemySubscriptionQuotaCycleRepository,
 )
+from processual_api.admin_marketplace.subscription_quota_usage_persistence import (
+    SqlAlchemySubscriptionQuotaCycleUsageRepository,
+)
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
     SqlAlchemySubscriptionQuotaRepository,
     SqlAlchemySubscriptionRuntimeRepository,
@@ -82,13 +85,22 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.commercial_audit = SqlAlchemyCommercialAuditRepository(session)
         self.notification_outbox = SqlAlchemyNotificationOutboxRepository(session)
         self.lemon_squeezy_webhook_inbox = SqlAlchemyLemonSqueezyWebhookInboxRepository(session)
-        self.lemon_squeezy_reconciliation_decisions = SqlAlchemyLemonSqueezyReconciliationDecisionRepository(session)
+        self.lemon_squeezy_reconciliation_decisions = (
+            SqlAlchemyLemonSqueezyReconciliationDecisionRepository(session)
+        )
         self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
-        self.subscription_quota_cycles = SqlAlchemySubscriptionQuotaCycleRepository(session)
+        self.subscription_quota_cycles = SqlAlchemySubscriptionQuotaCycleRepository(
+            session
+        )
+        self.subscription_quota_cycle_usage = (
+            SqlAlchemySubscriptionQuotaCycleUsageRepository(session)
+        )
         self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
-        self.subscription_runtime_transitions = SqlAlchemySubscriptionRuntimeTransitionRepository(session)
+        self.subscription_runtime_transitions = (
+            SqlAlchemySubscriptionRuntimeTransitionRepository(session)
+        )
         return self
 
     async def commit(self) -> None:
