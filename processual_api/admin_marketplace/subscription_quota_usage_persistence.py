@@ -3,7 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func, select
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,6 +74,20 @@ class SqlAlchemySubscriptionQuotaCycleUsageRepository:
         if for_update:
             statement = statement.with_for_update()
         return await self._session.scalar(statement)
+
+    async def sum_units_since(
+        self,
+        *,
+        quota_cycle_id: uuid.UUID,
+        occurred_at: datetime,
+    ) -> int:
+        statement = select(
+            func.coalesce(func.sum(AdminMarketSubscriptionQuotaCycleUsage.units), 0)
+        ).where(
+            AdminMarketSubscriptionQuotaCycleUsage.quota_cycle_id == quota_cycle_id,
+            AdminMarketSubscriptionQuotaCycleUsage.occurred_at >= occurred_at,
+        )
+        return int(await self._session.scalar(statement) or 0)
 
     def add(self, usage: AdminMarketSubscriptionQuotaCycleUsage) -> None:
         self._session.add(usage)
