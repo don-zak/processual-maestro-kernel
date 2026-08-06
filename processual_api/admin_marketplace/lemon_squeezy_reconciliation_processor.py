@@ -17,6 +17,9 @@ from processual_api.admin_marketplace.lemon_squeezy_reconciliation_gate import (
 from processual_api.admin_marketplace.lemon_squeezy_reconciliation_persistence import (
     LemonSqueezyReconciliationDecisionRecord,
 )
+from processual_api.admin_marketplace.lemon_squeezy_subscription_reconciliation import (
+    apply_lemon_squeezy_subscription_lifecycle,
+)
 from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
     LemonSqueezyWebhookError,
 )
@@ -26,6 +29,7 @@ class LemonSqueezyReconciliationUnitOfWork(Protocol):
     lemon_squeezy_webhook_inbox: object
     lemon_squeezy_reconciliation_decisions: object
     lemon_squeezy_bindings: object
+    subscriptions: object
 
     async def __aenter__(self) -> LemonSqueezyReconciliationUnitOfWork: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
@@ -81,7 +85,7 @@ def _as_record(existing: object) -> LemonSqueezyReconciliationDecisionRecord:
     )
 
 
-async def _advance_binding_watermark(uow: object, inbox: object) -> None:
+async def _advance_binding_watermark(uow: object, inbox: object) -> object:
     provider_order_id = getattr(inbox, "provider_order_id", None)
     provider_effective_at = getattr(inbox, "provider_effective_at", None)
     if not provider_order_id or provider_effective_at is None:
@@ -116,6 +120,7 @@ async def _advance_binding_watermark(uow: object, inbox: object) -> None:
     if incoming_subscription_id is not None:
         binding.provider_subscription_id = incoming_subscription_id
     binding.last_provider_effective_at = provider_effective_at
+    return binding
 
 
 def process_lemon_squeezy_reconciliation_factory(
@@ -155,10 +160,7 @@ def process_lemon_squeezy_reconciliation_factory(
                 raise LemonSqueezyWebhookError(
                     "reconciliation context conflicts with inbox binding."
                 )
-            decision = classify_lemon_squeezy_reconciliation(
-                entry=inbox,
-                context=context,
-            )
+            decision = classify_lemon_squeezy_reconciliation(entry=inbox, context=context)
 
             record = LemonSqueezyReconciliationDecisionRecord(
                 id=uuid.uuid4(),
@@ -181,11 +183,13 @@ def process_lemon_squeezy_reconciliation_factory(
                 )
             else:
                 if decision.action == "reconcile":
-                    await _advance_binding_watermark(uow, inbox)
-                mark_lemon_squeezy_webhook_processed(
-                    inbox,
-                    processed_at=timestamp,
-                )
+                    binding = await _advance_binding_watermark(uow, inbox)
+                    await apply_lemon_squeezy_subscription_lifecycle(
+                        uow=uow,
+                        binding=binding,
+                        inbox=inbox,
+                    )
+                mark_lemon_squeezy_webhook_processed(inbox, processed_at=timestamp)
 
             await uow.commit()
             return record
