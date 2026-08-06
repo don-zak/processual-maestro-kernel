@@ -8,7 +8,6 @@ from processual_api.admin_marketplace.lemon_squeezy_inbox import (
     LemonSqueezyWebhookInboxEntry,
 )
 
-
 ReconciliationAction = Literal["ignore", "reconcile", "requires_review"]
 
 
