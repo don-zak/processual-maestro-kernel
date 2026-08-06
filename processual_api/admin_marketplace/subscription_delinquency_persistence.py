@@ -69,6 +69,9 @@ class AdminMarketSubscriptionDelinquency(Base):
     last_failed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    grace_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     grace_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     grace_usage_percent: Mapped[int] = mapped_column(
         Integer,
