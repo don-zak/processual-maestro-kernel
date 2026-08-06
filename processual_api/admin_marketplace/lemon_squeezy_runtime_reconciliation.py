@@ -5,6 +5,10 @@ import uuid
 from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
     LemonSqueezyWebhookError,
 )
+from processual_api.admin_marketplace.subscription_delinquency_policy import (
+    apply_payment_failure,
+    resolve_payment_delinquency,
+)
 from processual_api.admin_marketplace.subscription_runtime_transition_persistence import (
     AdminMarketSubscriptionRuntimeTransition,
 )
@@ -15,6 +19,9 @@ _STATUS_STAGE = {
     "cancelled": "terminated",
     "expired": "terminated",
 }
+_PAYMENT_RECOVERY_EVENTS = frozenset(
+    {"subscription_payment_success", "subscription_payment_recovered"}
+)
 
 
 async def apply_lemon_squeezy_runtime_access(
@@ -25,7 +32,10 @@ async def apply_lemon_squeezy_runtime_access(
     inbox: object,
     reconciliation_decision_id: uuid.UUID,
 ) -> None:
+    event_name = getattr(inbox, "event_name", "")
     target_stage = _STATUS_STAGE.get(getattr(subscription, "status", ""))
+    if event_name == "subscription_payment_failed":
+        target_stage = "grace"
     if target_stage is None:
         return
 
@@ -62,11 +72,27 @@ async def apply_lemon_squeezy_runtime_access(
     if from_stage == "terminated" and target_stage != "terminated":
         raise LemonSqueezyWebhookError("terminated runtime cannot be reactivated.")
 
-    if from_stage != target_stage:
+    delinquency = None
+    if event_name == "subscription_payment_failed":
+        delinquency = await apply_payment_failure(
+            uow=uow,
+            subscription=subscription,
+            effective_at=effective_at,
+        )
+    elif event_name in _PAYMENT_RECOVERY_EVENTS:
+        await resolve_payment_delinquency(
+            uow=uow,
+            subscription=subscription,
+            effective_at=effective_at,
+        )
+
+    if from_stage != target_stage or target_stage == "grace":
         runtime.access_stage = target_stage
         runtime.effective_at = effective_at
         runtime.version += 1
-        runtime.grace_until = None
+        runtime.grace_until = (
+            delinquency.grace_until if target_stage == "grace" else None
+        )
         runtime.suspended_at = effective_at if target_stage == "suspended" else None
         runtime.terminated_at = effective_at if target_stage == "terminated" else None
 
@@ -76,7 +102,7 @@ async def apply_lemon_squeezy_runtime_access(
             subscription_id=subscription.id,
             reconciliation_decision_id=reconciliation_decision_id,
             customer_ref=subscription.customer_ref,
-            event_name=getattr(inbox, "event_name", "unknown"),
+            event_name=event_name or "unknown",
             from_stage=from_stage,
             to_stage=target_stage,
             effective_at=effective_at,
