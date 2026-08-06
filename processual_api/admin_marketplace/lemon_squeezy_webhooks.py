@@ -10,6 +10,11 @@ from types import MappingProxyType
 from typing import Any
 
 from processual_api.admin_marketplace.errors import AdminMarketplaceError
+from processual_api.admin_marketplace.lemon_squeezy_evidence import (
+    LemonSqueezyEvidenceError,
+    LemonSqueezyVerifiedEvidence,
+    extract_lemon_squeezy_verified_evidence,
+)
 
 _MAX_BODY_BYTES = 1_048_576
 _SIGNATURE_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -42,9 +47,7 @@ class LemonSqueezyWebhookError(AdminMarketplaceError):
     """Fail-closed error for an untrusted or malformed webhook request."""
 
 
-def _reject_duplicate_keys(
-    pairs: list[tuple[str, Any]],
-) -> dict[str, Any]:
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
@@ -53,11 +56,7 @@ def _reject_duplicate_keys(
     return result
 
 
-def _required_mapping(
-    value: object,
-    *,
-    field_name: str,
-) -> Mapping[str, Any]:
+def _required_mapping(value: object, *, field_name: str) -> Mapping[str, Any]:
     if not isinstance(value, dict):
         raise LemonSqueezyWebhookError(f"{field_name} must be an object.")
     return value
@@ -121,11 +120,7 @@ def verify_lemon_squeezy_signature(
     if not _SIGNATURE_PATTERN.fullmatch(candidate):
         raise LemonSqueezyWebhookError("X-Signature is invalid.")
 
-    expected = hmac.new(
-        secret.encode("utf-8"),
-        raw_body,
-        hashlib.sha256,
-    ).hexdigest()
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, candidate.lower()):
         raise LemonSqueezyWebhookError("webhook signature verification failed.")
 
@@ -140,6 +135,7 @@ class VerifiedLemonSqueezyWebhook:
     order_ref: str
     offer_ref: str
     test_mode: bool
+    evidence: LemonSqueezyVerifiedEvidence
     payload: Mapping[str, Any]
 
 
@@ -169,7 +165,9 @@ def parse_verified_lemon_squeezy_webhook(
     attributes = _required_mapping(data.get("attributes"), field_name="data.attributes")
 
     header_event = _required_text(event_header, field_name="X-Event-Name").lower()
-    payload_event = _required_text(meta.get("event_name"), field_name="meta.event_name").lower()
+    payload_event = _required_text(
+        meta.get("event_name"), field_name="meta.event_name"
+    ).lower()
     if header_event != payload_event:
         raise LemonSqueezyWebhookError("webhook event names do not match.")
     if payload_event not in _SUPPORTED_EVENTS:
@@ -184,7 +182,9 @@ def parse_verified_lemon_squeezy_webhook(
         field_name="expected_store_id",
     )
     if store_id != trusted_store_id:
-        raise LemonSqueezyWebhookError("webhook store does not match the configured store.")
+        raise LemonSqueezyWebhookError(
+            "webhook store does not match the configured store."
+        )
 
     resource_type = _required_text(data.get("type"), field_name="data.type").lower()
     external_resource_id = _positive_identifier(data.get("id"), field_name="data.id")
@@ -202,6 +202,17 @@ def parse_verified_lemon_squeezy_webhook(
     if not isinstance(test_mode, bool):
         raise LemonSqueezyWebhookError("data.attributes.test_mode must be boolean.")
 
+    try:
+        evidence = extract_lemon_squeezy_verified_evidence(
+            resource_type=resource_type,
+            external_resource_id=external_resource_id,
+            attributes=attributes,
+        )
+    except LemonSqueezyEvidenceError as exc:
+        raise LemonSqueezyWebhookError(
+            "webhook reconciliation evidence is invalid."
+        ) from exc
+
     return VerifiedLemonSqueezyWebhook(
         event_name=payload_event,
         resource_type=resource_type,
@@ -211,5 +222,6 @@ def parse_verified_lemon_squeezy_webhook(
         order_ref=references["order_ref"],
         offer_ref=references["offer_ref"],
         test_mode=test_mode,
+        evidence=evidence,
         payload=MappingProxyType(dict(root)),
     )
