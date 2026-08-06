@@ -27,6 +27,16 @@ class SingleRepository:
         return self.value
 
 
+class SubscriptionRepository:
+    def __init__(self, value: object | None) -> None:
+        self.value = value
+
+    async def get_by_id(self, value_id: uuid.UUID, *, for_update: bool = False):
+        if self.value is None or self.value.id != value_id:
+            return None
+        return self.value
+
+
 class RuntimeRepository:
     def __init__(self, value: object | None) -> None:
         self.value = value
@@ -42,9 +52,30 @@ class RuntimeRepository:
         return self.value
 
 
+class DelinquencyRepository:
+    def __init__(self, value: object | None) -> None:
+        self.value = value
+
+    async def get_by_subscription_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ):
+        if self.value is None or self.value.subscription_id != subscription_id:
+            return None
+        return self.value
+
+
 class UsageRepository:
-    def __init__(self, existing: object | None = None) -> None:
+    def __init__(
+        self,
+        existing: object | None = None,
+        *,
+        consumed_since: int = 0,
+    ) -> None:
         self.existing = existing
+        self.consumed_since = consumed_since
         self.added: list[object] = []
 
     async def get_by_idempotency_hash(
@@ -59,6 +90,16 @@ class UsageRepository:
             return None
         return self.existing
 
+    async def sum_units_since(
+        self,
+        *,
+        quota_cycle_id: uuid.UUID,
+        occurred_at: datetime,
+    ) -> int:
+        assert quota_cycle_id == CYCLE_ID
+        assert occurred_at.tzinfo is not None
+        return self.consumed_since
+
     def add(self, value: object) -> None:
         self.added.append(value)
 
@@ -69,13 +110,27 @@ class FakeUnitOfWork:
         *,
         subscription: object | None = None,
         runtime: object | None = None,
+        delinquency: object | None = None,
         cycle: object | None = None,
         existing: object | None = None,
+        consumed_since: int = 0,
     ) -> None:
-        self.subscriptions = SingleRepository(subscription or _subscription())
-        self.subscription_runtime = RuntimeRepository(runtime or _runtime())
+        selected_runtime = runtime or _runtime()
+        self.subscriptions = SubscriptionRepository(subscription or _subscription())
+        self.subscription_runtime = RuntimeRepository(selected_runtime)
+        default_delinquency = (
+            _delinquency(grace_until=selected_runtime.grace_until)
+            if selected_runtime.access_stage == "grace"
+            else None
+        )
+        self.subscription_delinquency = DelinquencyRepository(
+            delinquency if delinquency is not None else default_delinquency
+        )
         self.subscription_quota_cycles = SingleRepository(cycle or _cycle())
-        self.subscription_quota_cycle_usage = UsageRepository(existing)
+        self.subscription_quota_cycle_usage = UsageRepository(
+            existing,
+            consumed_since=consumed_since,
+        )
         self.committed = False
 
     async def __aenter__(self):
@@ -108,6 +163,19 @@ def _runtime(**overrides: object) -> SimpleNamespace:
         "suspended_at": None,
         "terminated_at": None,
         "version": 0,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _delinquency(**overrides: object) -> SimpleNamespace:
+    values = {
+        "subscription_id": SUBSCRIPTION_ID,
+        "customer_ref": "customer_001",
+        "state": "grace_degraded",
+        "grace_started_at": NOW - timedelta(hours=1),
+        "grace_until": NOW + timedelta(hours=1),
+        "grace_usage_percent": 25,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -165,34 +233,44 @@ async def test_active_runtime_consumes_base_and_rollover_balance() -> None:
 
 
 @pytest.mark.asyncio
-async def test_grace_runtime_allows_usage_before_deadline() -> None:
-    cycle = _cycle()
-    runtime = _runtime(
-        access_stage="grace",
-        grace_until=NOW + timedelta(hours=1),
-    )
-    uow = FakeUnitOfWork(runtime=runtime, cycle=cycle)
+async def test_grace_runtime_allows_exactly_twenty_five_percent_of_base() -> None:
+    cycle = _cycle(rollover_units=1_000, available_units=1_080)
+    grace_until = NOW + timedelta(hours=1)
+    runtime = _runtime(access_stage="grace", grace_until=grace_until)
+    uow = FakeUnitOfWork(runtime=runtime, cycle=cycle, consumed_since=20)
     record = record_subscription_quota_usage_factory(
         unit_of_work_factory=lambda: uow
     )
 
-    usage = await record(_command())
+    usage = await record(_command(units=5))
 
-    assert usage.units == 25
-    assert runtime.access_stage == "grace"
-    assert runtime.version == 0
-    assert cycle.used_units == 45
+    assert usage.units == 5
+    assert cycle.used_units == 25
     assert uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_grace_cap_excludes_rollover_and_is_cumulative() -> None:
+    cycle = _cycle(rollover_units=1_000, available_units=1_080)
+    grace_until = NOW + timedelta(hours=1)
+    runtime = _runtime(access_stage="grace", grace_until=grace_until)
+    uow = FakeUnitOfWork(runtime=runtime, cycle=cycle, consumed_since=20)
+    record = record_subscription_quota_usage_factory(
+        unit_of_work_factory=lambda: uow
+    )
+
+    with pytest.raises(SubscriptionQuotaUsageError, match="cap is exhausted"):
+        await record(_command(units=6))
+
+    assert cycle.used_units == 20
+    assert uow.committed is False
 
 
 @pytest.mark.asyncio
 async def test_expired_grace_is_suspended_and_blocks_usage() -> None:
     cycle = _cycle()
     grace_until = NOW - timedelta(minutes=1)
-    runtime = _runtime(
-        access_stage="grace",
-        grace_until=grace_until,
-    )
+    runtime = _runtime(access_stage="grace", grace_until=grace_until)
     uow = FakeUnitOfWork(runtime=runtime, cycle=cycle)
     record = record_subscription_quota_usage_factory(
         unit_of_work_factory=lambda: uow
