@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -74,6 +75,9 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         ForeignKey("admin_market_subscription_quota_cycles.id", ondelete="RESTRICT"),
     )
     customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    plan_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    plan_catalog_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    entitlement_codes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     quota_profile_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     metric_code: Mapped[str] = mapped_column(String(128), nullable=False)
     period_start: Mapped[datetime] = mapped_column(
