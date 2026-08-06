@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from processual_api.admin_marketplace.lemon_squeezy_persistence import (
     AdminMarketLemonSqueezyWebhookInbox,
 )
-from processual_api.db.base import Base
 
 NOW = datetime(2026, 8, 6, 10, 0, tzinfo=UTC)
 
