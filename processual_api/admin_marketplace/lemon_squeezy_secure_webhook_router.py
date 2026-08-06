@@ -5,8 +5,14 @@ import os
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.routing import APIRoute
 
+from processual_api.admin_marketplace.lemon_squeezy_context_loader import (
+    lemon_squeezy_reconciliation_context_loader_factory,
+)
 from processual_api.admin_marketplace.lemon_squeezy_ingestion_service import (
     ingest_lemon_squeezy_webhook_request_factory,
+)
+from processual_api.admin_marketplace.lemon_squeezy_reconciliation_processor import (
+    process_lemon_squeezy_reconciliation_factory,
 )
 from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
     LemonSqueezyWebhookError,
@@ -15,6 +21,7 @@ from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
 from processual_api.db.session import get_session_factory
+from processual_api.settings import settings
 
 _MAX_BODY_BYTES = 1_048_576
 _MIN_SECRET_LENGTH = 32
@@ -35,6 +42,15 @@ def _uow_factory() -> SqlAlchemyAdminMarketplaceUnitOfWork:
     return SqlAlchemyAdminMarketplaceUnitOfWork(get_session_factory())
 
 
+def _production_mode() -> bool:
+    environment = settings.environment.strip().lower()
+    if environment in {"production", "prod"}:
+        return True
+    if environment in {"development", "dev", "test", "testing", "staging"}:
+        return False
+    raise HTTPException(status_code=503, detail="Webhook processing is unavailable.")
+
+
 @_secure_router.post("/webhook", include_in_schema=True)
 async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
     content_length = request.headers.get("content-length")
@@ -49,6 +65,7 @@ async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
             raise HTTPException(status_code=413, detail="Webhook request is too large.")
 
     signing_secret, expected_store_id = _webhook_configuration()
+    production_mode = _production_mode()
     signature = request.headers.get("X-Signature", "")
     event_header = request.headers.get("X-Event-Name", "")
     raw_body = await request.body()
@@ -56,6 +73,12 @@ async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=413, detail="Webhook request is too large.")
 
     ingest = ingest_lemon_squeezy_webhook_request_factory(uow_factory=_uow_factory)
+    process = process_lemon_squeezy_reconciliation_factory(
+        uow_factory=_uow_factory,
+        context_loader=lemon_squeezy_reconciliation_context_loader_factory(
+            production_mode=production_mode,
+        ),
+    )
     try:
         result = await ingest(
             raw_body=raw_body,
@@ -64,13 +87,16 @@ async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
             event_header=event_header,
             expected_store_id=expected_store_id,
         )
+        decision = await process(inbox_id=result.entry.id)
     except LemonSqueezyWebhookError as exc:
-        raise HTTPException(status_code=400, detail="Invalid webhook request.") from exc
+        raise HTTPException(status_code=409, detail="Webhook reconciliation failed.") from exc
 
     return {
         "received": True,
         "replayed": result.replayed,
         "inbox_id": str(result.entry.id),
+        "reconciliation_action": decision.action,
+        "reconciliation_reason": decision.reason_code,
     }
 
 
