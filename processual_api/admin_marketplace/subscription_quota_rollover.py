@@ -76,6 +76,7 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 period_end=command.period_end,
                 base_limit_units=command.base_limit_units,
                 rollover_units=source.available_units,
+                rollover_status="available",
                 used_units=0,
             )
             uow.subscription_quota_cycles.add(cycle)
