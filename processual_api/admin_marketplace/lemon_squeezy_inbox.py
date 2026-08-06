@@ -28,6 +28,15 @@ class LemonSqueezyWebhookInboxEntry:
     processing_status: str
     attempt_count: int
     received_at: datetime
+    evidence_schema_version: int | None = None
+    provider_customer_id: str | None = None
+    provider_order_id: str | None = None
+    provider_subscription_id: str | None = None
+    variant_id: str | None = None
+    currency: str | None = None
+    total_amount: str | None = None
+    provider_status: str | None = None
+    provider_effective_at: datetime | None = None
     claimed_at: datetime | None = None
     processed_at: datetime | None = None
     rejected_at: datetime | None = None
@@ -83,6 +92,7 @@ def _same_binding(
     existing: LemonSqueezyWebhookInboxEntry,
     webhook: VerifiedLemonSqueezyWebhook,
 ) -> bool:
+    evidence = webhook.evidence
     return (
         existing.event_name == webhook.event_name
         and existing.resource_type == webhook.resource_type
@@ -92,6 +102,15 @@ def _same_binding(
         and existing.order_ref == webhook.order_ref
         and existing.offer_ref == webhook.offer_ref
         and existing.test_mode is webhook.test_mode
+        and existing.evidence_schema_version == evidence.schema_version
+        and existing.provider_customer_id == evidence.provider_customer_id
+        and existing.provider_order_id == evidence.provider_order_id
+        and existing.provider_subscription_id == evidence.provider_subscription_id
+        and existing.variant_id == evidence.variant_id
+        and existing.currency == evidence.currency
+        and existing.total_amount == evidence.total_amount
+        and existing.provider_status == evidence.status
+        and existing.provider_effective_at == evidence.effective_at
     )
 
 
@@ -106,10 +125,7 @@ async def ingest_verified_lemon_squeezy_webhook(
         raise LemonSqueezyWebhookError("verified webhook raw body is required.")
 
     payload_digest = _digest(raw_body)
-    identity_hash = _event_identity(
-        webhook,
-        payload_digest=payload_digest,
-    )
+    identity_hash = _event_identity(webhook, payload_digest=payload_digest)
 
     existing = await repository.get_by_event_identity_hash(
         identity_hash,
@@ -120,10 +136,7 @@ async def ingest_verified_lemon_squeezy_webhook(
             raise LemonSqueezyWebhookError(
                 "webhook event identity was replayed with conflicting payload or references."
             )
-        return LemonSqueezyWebhookIngestionResult(
-            entry=existing,
-            replayed=True,
-        )
+        return LemonSqueezyWebhookIngestionResult(entry=existing, replayed=True)
 
     payload_owner = await repository.get_by_payload_digest(
         payload_digest,
@@ -138,6 +151,7 @@ async def ingest_verified_lemon_squeezy_webhook(
     if timestamp.tzinfo is None:
         raise LemonSqueezyWebhookError("received_at must be timezone-aware.")
 
+    evidence = webhook.evidence
     entry = LemonSqueezyWebhookInboxEntry(
         id=uuid.uuid4(),
         event_identity_hash=identity_hash,
@@ -153,6 +167,15 @@ async def ingest_verified_lemon_squeezy_webhook(
         processing_status="received",
         attempt_count=0,
         received_at=timestamp,
+        evidence_schema_version=evidence.schema_version,
+        provider_customer_id=evidence.provider_customer_id,
+        provider_order_id=evidence.provider_order_id,
+        provider_subscription_id=evidence.provider_subscription_id,
+        variant_id=evidence.variant_id,
+        currency=evidence.currency,
+        total_amount=evidence.total_amount,
+        provider_status=evidence.status,
+        provider_effective_at=evidence.effective_at,
     )
     repository.add(entry)
     return LemonSqueezyWebhookIngestionResult(entry=entry, replayed=False)
