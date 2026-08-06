@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from processual_api.routers import settings as settings_module
-from processual_api.routers import settings_subscription_runtime as runtime_module
-
+from processual_api.routers import (
+    settings as settings_module,
+    settings_subscription_runtime as runtime_module,
+)
 
 RUNTIME_SOURCE = Path(
     "processual_api/routers/settings_subscription_runtime.py"
