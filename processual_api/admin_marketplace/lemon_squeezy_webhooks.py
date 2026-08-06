@@ -11,7 +11,6 @@ from typing import Any
 
 from processual_api.admin_marketplace.errors import AdminMarketplaceError
 
-
 _MAX_BODY_BYTES = 1_048_576
 _SIGNATURE_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 _REFERENCE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
