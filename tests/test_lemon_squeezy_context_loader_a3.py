@@ -40,24 +40,34 @@ class SingleRepository:
 
 
 class BindingRepository:
-    def __init__(self, binding: object) -> None:
+    def __init__(self, binding: object, customer_owner: object) -> None:
         self.binding = binding
-        self.customer_owner = binding
+        self.customer_owner = customer_owner
+        self.provider_owner = customer_owner
         self.subscription_owner = binding
         self.calls: list[tuple[str, object, bool]] = []
 
-    async def get_by_order_id(self, value: object, *, for_update: bool = False):
-        self.calls.append(("order", value, for_update))
-        return self.binding
-
-    async def get_by_provider_customer_id(
+    async def get_customer_binding_by_customer_ref(
         self,
         value: object,
         *,
         for_update: bool = False,
     ):
-        self.calls.append(("customer", value, for_update))
+        self.calls.append(("customer_ref", value, for_update))
         return self.customer_owner
+
+    async def get_customer_binding_by_provider_customer_id(
+        self,
+        value: object,
+        *,
+        for_update: bool = False,
+    ):
+        self.calls.append(("provider_customer", value, for_update))
+        return self.provider_owner
+
+    async def get_by_order_id(self, value: object, *, for_update: bool = False):
+        self.calls.append(("order", value, for_update))
+        return self.binding
 
     async def get_by_provider_subscription_id(
         self,
@@ -74,6 +84,7 @@ def _fixtures():
     offer_id = uuid.uuid4()
     subscription_id = uuid.uuid4()
     binding_id = uuid.uuid4()
+    customer_binding_id = uuid.uuid4()
     order = SimpleNamespace(
         id=order_id,
         order_ref="order_001",
@@ -92,6 +103,11 @@ def _fixtures():
         id=subscription_id,
         order_id=order_id,
         offer_id=offer_id,
+    )
+    customer_owner = SimpleNamespace(
+        id=customer_binding_id,
+        customer_ref="customer_001",
+        provider_customer_id="501",
     )
     binding = SimpleNamespace(
         id=binding_id,
@@ -115,7 +131,7 @@ def _fixtures():
         provider_subscription_id="9001",
         test_mode=False,
     )
-    bindings = BindingRepository(binding)
+    bindings = BindingRepository(binding, customer_owner)
     uow = SimpleNamespace(
         orders=SingleRepository(order),
         offers=SingleRepository(offer),
@@ -151,9 +167,10 @@ async def test_loader_builds_context_from_locked_authoritative_records() -> None
 @pytest.mark.asyncio
 async def test_loader_rejects_cross_customer_provider_owner() -> None:
     uow, inbox, binding = _fixtures()
-    uow.lemon_squeezy_bindings.customer_owner = SimpleNamespace(
+    uow.lemon_squeezy_bindings.provider_owner = SimpleNamespace(
         id=uuid.uuid4(),
         customer_ref="customer_999",
+        provider_customer_id="501",
     )
     loader = lemon_squeezy_reconciliation_context_loader_factory(
         production_mode=True
