@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
@@ -134,7 +134,7 @@ async def ingest_verified_lemon_squeezy_webhook(
             "webhook payload was already bound to a different event identity."
         )
 
-    timestamp = received_at or datetime.now(timezone.utc)
+    timestamp = received_at or datetime.now(UTC)
     if timestamp.tzinfo is None:
         raise LemonSqueezyWebhookError("received_at must be timezone-aware.")
 
