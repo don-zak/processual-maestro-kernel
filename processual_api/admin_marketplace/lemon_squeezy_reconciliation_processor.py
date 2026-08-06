@@ -25,6 +25,7 @@ from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
 class LemonSqueezyReconciliationUnitOfWork(Protocol):
     lemon_squeezy_webhook_inbox: object
     lemon_squeezy_reconciliation_decisions: object
+    lemon_squeezy_bindings: object
 
     async def __aenter__(self) -> LemonSqueezyReconciliationUnitOfWork: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
@@ -78,6 +79,43 @@ def _as_record(existing: object) -> LemonSqueezyReconciliationDecisionRecord:
         reason_code=existing.reason_code,
         decided_at=existing.decided_at,
     )
+
+
+async def _advance_binding_watermark(uow: object, inbox: object) -> None:
+    provider_order_id = getattr(inbox, "provider_order_id", None)
+    provider_effective_at = getattr(inbox, "provider_effective_at", None)
+    if not provider_order_id or provider_effective_at is None:
+        raise LemonSqueezyWebhookError("reconciliation binding evidence is incomplete.")
+
+    binding = await uow.lemon_squeezy_bindings.get_by_provider_order_id(
+        provider_order_id,
+        for_update=True,
+    )
+    if binding is None:
+        raise LemonSqueezyWebhookError("authoritative Lemon Squeezy binding was not found.")
+
+    if (
+        binding.customer_ref != getattr(inbox, "customer_ref", None)
+        or binding.provider_customer_id != getattr(inbox, "provider_customer_id", None)
+        or binding.variant_id != getattr(inbox, "variant_id", None)
+    ):
+        raise LemonSqueezyWebhookError(
+            "authoritative Lemon Squeezy binding conflicts with verified evidence."
+        )
+
+    incoming_subscription_id = getattr(inbox, "provider_subscription_id", None)
+    if binding.provider_subscription_id not in {None, incoming_subscription_id}:
+        raise LemonSqueezyWebhookError(
+            "provider subscription conflicts with authoritative binding."
+        )
+
+    current_effective_at = binding.last_provider_effective_at
+    if current_effective_at is not None and provider_effective_at < current_effective_at:
+        raise LemonSqueezyWebhookError("provider event is older than binding watermark.")
+
+    if incoming_subscription_id is not None:
+        binding.provider_subscription_id = incoming_subscription_id
+    binding.last_provider_effective_at = provider_effective_at
 
 
 def process_lemon_squeezy_reconciliation_factory(
@@ -142,6 +180,8 @@ def process_lemon_squeezy_reconciliation_factory(
                     rejected_at=timestamp,
                 )
             else:
+                if decision.action == "reconcile":
+                    await _advance_binding_watermark(uow, inbox)
                 mark_lemon_squeezy_webhook_processed(
                     inbox,
                     processed_at=timestamp,
