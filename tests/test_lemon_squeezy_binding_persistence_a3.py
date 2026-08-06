@@ -8,4 +8,5 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from processual_api.admin_marketplace.lemon_squeezy_binding_persistence import (
-    AdminMarketLemonS
+    AdminMarketLemonSqueezyBinding,
+    AdminMarketLemon
