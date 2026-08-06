@@ -10,8 +10,8 @@ from processual_api.admin_marketplace.lemon_squeezy_binding_persistence import (
     AdminMarketLemonSqueezyCustomerBinding,
 )
 from processual_api.admin_marketplace.persistence.errors import (
-    AdminMarketplaceConflictError,
     AdminMarketplaceConcurrencyError,
+    AdminMarketplaceConflictError,
 )
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
