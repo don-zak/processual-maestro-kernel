@@ -18,6 +18,7 @@ class SubscriptionQuotaRolloverError(RuntimeError):
 class SubscriptionQuotaRolloverCommand:
     subscription_id: uuid.UUID
     source_cycle_id: uuid.UUID
+    metric_code: str
     period_start: datetime
     period_end: datetime
     base_limit_units: int
@@ -48,18 +49,23 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 _assert_replay_matches(command, existing)
                 return existing
 
-            source = await uow.subscription_quota_cycles.get_by_period(
-                subscription_id=command.subscription_id,
-                metric_code="credits",
-                period_start=subscription.starts_at,
+            source = await uow.subscription_quota_cycles.get_by_id(
+                command.source_cycle_id,
                 for_update=True,
             )
-            if source is None or source.id != command.source_cycle_id:
+            if source is None:
                 raise SubscriptionQuotaRolloverError("source quota cycle was not found.")
+            if (
+                source.subscription_id != command.subscription_id
+                or source.metric_code != command.metric_code.strip().lower()
+                or source.customer_ref != subscription.customer_ref
+            ):
+                raise SubscriptionQuotaRolloverError(
+                    "source quota cycle conflicts with the subscription."
+                )
             if source.period_end != command.period_start:
                 raise SubscriptionQuotaRolloverError("quota periods are not contiguous.")
 
-            rollover_units = source.available_units
             cycle = AdminMarketSubscriptionQuotaCycle(
                 subscription_id=subscription.id,
                 source_cycle_id=source.id,
@@ -69,7 +75,7 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 period_start=command.period_start,
                 period_end=command.period_end,
                 base_limit_units=command.base_limit_units,
-                rollover_units=rollover_units,
+                rollover_units=source.available_units,
                 used_units=0,
             )
             uow.subscription_quota_cycles.add(cycle)
@@ -80,6 +86,8 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
 
 
 def _validate(command: SubscriptionQuotaRolloverCommand) -> None:
+    if not command.metric_code.strip():
+        raise ValueError("quota metric code is required.")
     if command.period_start.tzinfo is None or command.period_end.tzinfo is None:
         raise ValueError("quota rollover timestamps must be timezone-aware.")
     if command.period_end <= command.period_start:
@@ -95,6 +103,7 @@ def _assert_replay_matches(
     if (
         existing.subscription_id != command.subscription_id
         or existing.source_cycle_id != command.source_cycle_id
+        or existing.metric_code != command.metric_code.strip().lower()
         or existing.period_start != command.period_start
         or existing.period_end != command.period_end
         or existing.base_limit_units != command.base_limit_units
