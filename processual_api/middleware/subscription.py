@@ -111,7 +111,11 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             )
 
         if access is None:
-            return await call_next(request)
+            return _json_response(
+                status_code=403,
+                detail="No active subscription access record was found.",
+                stage="inactive",
+            )
 
         stage = access.access_stage
         if stage == "active":
