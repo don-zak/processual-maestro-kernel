@@ -18,9 +18,7 @@ from processual_api.admin_marketplace.lemon_squeezy_reconciliation_persistence i
 from processual_api.admin_marketplace.notification_outbox import (
     SqlAlchemyNotificationOutboxRepository,
 )
-from processual_api.admin_marketplace.persistence.integrity import (
-    translate_database_error,
-)
+from processual_api.admin_marketplace.persistence.integrity import translate_database_error
 from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyChannelEligibilityRepository,
     SqlAlchemyChannelSelectionRepository,
@@ -38,6 +36,9 @@ from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyPlanRepository,
     SqlAlchemySubscriptionRepository,
     SqlAlchemyTrialRepository,
+)
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    SqlAlchemySubscriptionQuotaCycleRepository,
 )
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
     SqlAlchemySubscriptionQuotaRepository,
@@ -57,39 +58,12 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self._session: AsyncSession | None = None
         self._committed = False
 
-        self.plans: SqlAlchemyPlanRepository
-        self.offers: SqlAlchemyOfferRepository
-        self.subscriptions: SqlAlchemySubscriptionRepository
-        self.trials: SqlAlchemyTrialRepository
-        self.orders: SqlAlchemyOrderRepository
-        self.contracts: SqlAlchemyContractRepository
-        self.payment_destinations: SqlAlchemyPaymentDestinationRepository
-        self.payment_verifications: SqlAlchemyPaymentVerificationRepository
-        self.payment_evidence: SqlAlchemyPaymentEvidenceRepository
-        self.payment_reconciliations: SqlAlchemyPaymentReconciliationRepository
-        self.invoices: SqlAlchemyInvoiceRepository
-        self.entitlement_activations: SqlAlchemyEntitlementActivationRepository
-        self.channel_eligibilities: SqlAlchemyChannelEligibilityRepository
-        self.channel_selections: SqlAlchemyChannelSelectionRepository
-        self.commercial_decisions: SqlAlchemyCommercialDecisionRepository
-        self.commercial_audit: SqlAlchemyCommercialAuditRepository
-        self.notification_outbox: SqlAlchemyNotificationOutboxRepository
-        self.lemon_squeezy_webhook_inbox: SqlAlchemyLemonSqueezyWebhookInboxRepository
-        self.lemon_squeezy_reconciliation_decisions: SqlAlchemyLemonSqueezyReconciliationDecisionRepository
-        self.lemon_squeezy_bindings: SqlAlchemyLemonSqueezyBindingRepository
-        self.subscription_runtime: SqlAlchemySubscriptionRuntimeRepository
-        self.subscription_quotas: SqlAlchemySubscriptionQuotaRepository
-        self.subscription_usage: SqlAlchemySubscriptionUsageRepository
-        self.subscription_runtime_transitions: SqlAlchemySubscriptionRuntimeTransitionRepository
-
     async def __aenter__(self) -> SqlAlchemyAdminMarketplaceUnitOfWork:
         if self._session is not None:
             raise RuntimeError("Admin Marketplace unit of work is already active.")
-
         session = self._session_factory()
         self._session = session
         self._committed = False
-
         self.plans = SqlAlchemyPlanRepository(session)
         self.offers = SqlAlchemyOfferRepository(session)
         self.subscriptions = SqlAlchemySubscriptionRepository(session)
@@ -112,9 +86,9 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
+        self.subscription_quota_cycles = SqlAlchemySubscriptionQuotaCycleRepository(session)
         self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
         self.subscription_runtime_transitions = SqlAlchemySubscriptionRuntimeTransitionRepository(session)
-
         return self
 
     async def commit(self) -> None:
