@@ -16,6 +16,7 @@ from processual_api.billing.plan_fulfillment_catalog import (
 )
 
 TOP_UP_MINIMUM_MONTHLY_CONSUMPTION_PERCENT = 80
+_ALLOWED_BILLING_PERIODS = frozenset({"monthly", "annual"})
 
 
 class SubscriptionTopUpEligibilityError(RuntimeError):
@@ -24,10 +25,11 @@ class SubscriptionTopUpEligibilityError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class SubscriptionTopUpEligibilityCommand:
-    account_id: uuid.UUID
+    customer_ref: str
     subscription_id: uuid.UUID
     quota_cycle_id: uuid.UUID
     requested_units: int
+    billing_period: str
     evaluated_at: datetime
 
 
@@ -35,8 +37,10 @@ class SubscriptionTopUpEligibilityCommand:
 class SubscriptionTopUpEligibilityDecision:
     eligible: bool
     reason: str
+    customer_ref: str
     plan_code: str
     plan_catalog_version: str
+    billing_period: str
     quota_cycle_id: uuid.UUID
     monthly_base_units: int
     monthly_used_units: int
@@ -56,7 +60,7 @@ def evaluate_subscription_top_up_eligibility_factory(
     async def evaluate(
         command: SubscriptionTopUpEligibilityCommand,
     ) -> SubscriptionTopUpEligibilityDecision:
-        _validate(command)
+        customer_ref, billing_period = _validate(command)
         async with unit_of_work_factory() as uow:
             subscription = await uow.subscriptions.get_by_id(
                 command.subscription_id,
@@ -68,15 +72,9 @@ def evaluate_subscription_top_up_eligibility_factory(
                 raise SubscriptionTopUpEligibilityError(
                     "top-up purchase requires an active subscription."
                 )
-
-            subscription_account_id = getattr(subscription, "account_id", None)
-            if subscription_account_id is None:
+            if subscription.customer_ref != customer_ref:
                 raise SubscriptionTopUpEligibilityError(
-                    "subscription account ownership is not authoritative."
-                )
-            if subscription_account_id != command.account_id:
-                raise SubscriptionTopUpEligibilityError(
-                    "subscription does not belong to the purchasing account."
+                    "subscription does not belong to the purchasing customer."
                 )
 
             plan = await uow.plans.get_by_id(subscription.plan_id, for_update=True)
@@ -97,7 +95,7 @@ def evaluate_subscription_top_up_eligibility_factory(
                 raise SubscriptionTopUpEligibilityError("quota cycle was not found.")
             if (
                 cycle.subscription_id != subscription.id
-                or cycle.customer_ref != subscription.customer_ref
+                or cycle.customer_ref != customer_ref
                 or cycle.metric_code != QUOTA_METRIC_CODE
             ):
                 raise SubscriptionTopUpEligibilityError(
@@ -142,8 +140,10 @@ def evaluate_subscription_top_up_eligibility_factory(
             return SubscriptionTopUpEligibilityDecision(
                 eligible=True,
                 reason="monthly base quota consumption threshold satisfied",
+                customer_ref=customer_ref,
                 plan_code=spec.plan_code,
                 plan_catalog_version=PLAN_FULFILLMENT_CATALOG_VERSION,
+                billing_period=billing_period,
                 quota_cycle_id=cycle.id,
                 monthly_base_units=cycle.base_limit_units,
                 monthly_used_units=cycle.used_units,
@@ -163,11 +163,18 @@ def _ceil_percent(value: int, percent: int) -> int:
     return (value * percent + 99) // 100
 
 
-def _validate(command: SubscriptionTopUpEligibilityCommand) -> None:
+def _validate(command: SubscriptionTopUpEligibilityCommand) -> tuple[str, str]:
+    customer_ref = command.customer_ref.strip()
+    if not customer_ref:
+        raise ValueError("customer_ref is required.")
     if command.requested_units <= 0:
         raise ValueError("requested_units must be positive.")
+    billing_period = command.billing_period.strip().lower()
+    if billing_period not in _ALLOWED_BILLING_PERIODS:
+        raise ValueError("billing_period must be monthly or annual.")
     if command.evaluated_at.tzinfo is None:
         raise ValueError("top-up eligibility timestamp must be timezone-aware.")
+    return customer_ref, billing_period
 
 
 __all__ = [
