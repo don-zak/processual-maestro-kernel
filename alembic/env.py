@@ -8,10 +8,12 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from alembic.sqlite_recovery import cleanup_orphaned_batch_tables
 from processual_api.admin_marketplace import models as admin_marketplace_models  # noqa: F401
 from processual_api.auth import models as identity_auth_models  # noqa: F401
 from processual_api.db.base import Base
+from processual_api.db.sqlite_migration_recovery import (
+    cleanup_orphaned_batch_tables,
+)
 
 config = context.config
 if config.config_file_name is not None:
