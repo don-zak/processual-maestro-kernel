@@ -28,6 +28,10 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         CheckConstraint("base_limit_units >= 0", name="base_nonnegative"),
         CheckConstraint("rollover_units >= 0", name="rollover_nonnegative"),
         CheckConstraint(
+            "rollover_status IN ('available','locked_for_delinquency','restored','expired')",
+            name="rollover_status",
+        ),
+        CheckConstraint(
             "used_units >= 0 AND used_units <= base_limit_units + rollover_units",
             name="usage_within_available",
         ),
@@ -47,6 +51,11 @@ class AdminMarketSubscriptionQuotaCycle(Base):
             "customer_ref",
             "metric_code",
             "period_end",
+        ),
+        Index(
+            "ix_admin_market_quota_cycle_rollover_expiry",
+            "rollover_status",
+            "rollover_expires_at",
         ),
     )
 
@@ -81,6 +90,23 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         nullable=False,
         default=0,
     )
+    rollover_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="available",
+    )
+    rollover_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    rollover_locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    rollover_restored_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    rollover_expired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     used_units: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
@@ -104,8 +130,14 @@ class AdminMarketSubscriptionQuotaCycle(Base):
     )
 
     @property
+    def spendable_rollover_units(self) -> int:
+        if self.rollover_status not in {"available", "restored"}:
+            return 0
+        return self.rollover_units
+
+    @property
     def available_units(self) -> int:
-        return self.base_limit_units + self.rollover_units - self.used_units
+        return self.base_limit_units + self.spendable_rollover_units - self.used_units
 
 
 class SqlAlchemySubscriptionQuotaCycleRepository:
@@ -154,6 +186,22 @@ class SqlAlchemySubscriptionQuotaCycleRepository:
         if for_update:
             statement = statement.with_for_update()
         return await self._session.scalar(statement)
+
+    async def list_rollover_cycles(
+        self,
+        *,
+        subscription_id: uuid.UUID,
+        for_update: bool = False,
+    ) -> list[AdminMarketSubscriptionQuotaCycle]:
+        statement = select(AdminMarketSubscriptionQuotaCycle).where(
+            AdminMarketSubscriptionQuotaCycle.subscription_id == subscription_id,
+            AdminMarketSubscriptionQuotaCycle.rollover_units > 0,
+            AdminMarketSubscriptionQuotaCycle.rollover_status != "expired",
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self._session.scalars(statement)
+        return list(result)
 
     def add(self, cycle: AdminMarketSubscriptionQuotaCycle) -> None:
         self._session.add(cycle)
