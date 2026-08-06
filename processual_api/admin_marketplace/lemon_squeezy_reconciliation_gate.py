@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Literal
 
@@ -25,6 +26,7 @@ class LemonSqueezyReconciliationContext:
     expected_variant_id: str | None = None
     expected_currency: str | None = None
     expected_total_amount: str | None = None
+    latest_provider_effective_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +84,10 @@ def _amounts_equal(left: str, right: str) -> bool:
         return False
 
 
+def _is_aware(value: datetime) -> bool:
+    return value.tzinfo is not None and value.utcoffset() is not None
+
+
 def classify_lemon_squeezy_reconciliation(
     *,
     entry: LemonSqueezyWebhookInboxEntry,
@@ -122,6 +128,14 @@ def classify_lemon_squeezy_reconciliation(
 
     if entry.evidence_schema_version != 1:
         return _review("verified_evidence_missing")
+    if entry.provider_effective_at is None or not _is_aware(entry.provider_effective_at):
+        return _review("provider_effective_at_invalid")
+    if context.latest_provider_effective_at is not None:
+        if not _is_aware(context.latest_provider_effective_at):
+            return _review("latest_provider_effective_at_invalid")
+        if entry.provider_effective_at < context.latest_provider_effective_at:
+            return _review("stale_provider_event")
+
     if entry.provider_customer_id != context.expected_provider_customer_id:
         return _review("provider_customer_mismatch")
 
