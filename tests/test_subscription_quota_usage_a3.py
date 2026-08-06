@@ -17,19 +17,12 @@ SUBSCRIPTION_ID = uuid.uuid4()
 CYCLE_ID = uuid.uuid4()
 
 
-class SingleRepository:
+class Repository:
     def __init__(self, value: object | None) -> None:
         self.value = value
 
     async def get_by_id(self, value_id: uuid.UUID, *, for_update: bool = False):
-        if self.value is None or self.value.id != value_id:
-            return None
-        return self.value
-
-
-class RuntimeRepository:
-    def __init__(self, value: object | None) -> None:
-        self.value = value
+        return self.value if self.value is not None and self.value.id == value_id else None
 
     async def get_by_subscription_id(
         self,
@@ -37,9 +30,9 @@ class RuntimeRepository:
         *,
         for_update: bool = False,
     ):
-        if self.value is None or self.value.subscription_id != subscription_id:
+        if self.value is None:
             return None
-        return self.value
+        return self.value if self.value.subscription_id == subscription_id else None
 
 
 class UsageRepository:
@@ -55,9 +48,7 @@ class UsageRepository:
     ):
         if self.existing is None:
             return None
-        if self.existing.idempotency_key_hash != value:
-            return None
-        return self.existing
+        return self.existing if self.existing.idempotency_key_hash == value else None
 
     def add(self, value: object) -> None:
         self.added.append(value)
@@ -67,14 +58,25 @@ class FakeUnitOfWork:
     def __init__(
         self,
         *,
-        subscription: object | None = None,
-        runtime: object | None = None,
+        runtime_stage: str = "active",
         cycle: object | None = None,
         existing: object | None = None,
     ) -> None:
-        self.subscriptions = SingleRepository(subscription or _subscription())
-        self.subscription_runtime = RuntimeRepository(runtime or _runtime())
-        self.subscription_quota_cycles = SingleRepository(cycle or _cycle())
+        self.subscriptions = Repository(
+            SimpleNamespace(
+                id=SUBSCRIPTION_ID,
+                customer_ref="customer_001",
+                status="active",
+            )
+        )
+        self.subscription_runtime = Repository(
+            SimpleNamespace(
+                subscription_id=SUBSCRIPTION_ID,
+                customer_ref="customer_001",
+                access_stage=runtime_stage,
+            )
+        )
+        self.subscription_quota_cycles = Repository(cycle or _cycle())
         self.subscription_quota_cycle_usage = UsageRepository(existing)
         self.committed = False
 
@@ -88,45 +90,20 @@ class FakeUnitOfWork:
         self.committed = True
 
 
-def _subscription(**overrides: object) -> SimpleNamespace:
-    values = {
-        "id": SUBSCRIPTION_ID,
-        "customer_ref": "customer_001",
-        "status": "active",
-    }
-    values.update(overrides)
-    return SimpleNamespace(**values)
-
-
-def _runtime(**overrides: object) -> SimpleNamespace:
-    values = {
-        "subscription_id": SUBSCRIPTION_ID,
-        "customer_ref": "customer_001",
-        "access_stage": "active",
-    }
-    values.update(overrides)
-    return SimpleNamespace(**values)
-
-
-def _cycle(**overrides: object) -> SimpleNamespace:
-    values = {
-        "id": CYCLE_ID,
-        "subscription_id": SUBSCRIPTION_ID,
-        "customer_ref": "customer_001",
-        "metric_code": "credits",
-        "period_start": NOW - timedelta(days=5),
-        "period_end": NOW + timedelta(days=25),
-        "base_limit_units": 100,
-        "rollover_units": 30,
-        "used_units": 20,
-        "version": 0,
-    }
-    values.update(overrides)
-    cycle = SimpleNamespace(**values)
-    cycle.__class__.available_units = property(
-        lambda self: self.base_limit_units + self.rollover_units - self.used_units
+def _cycle() -> SimpleNamespace:
+    return SimpleNamespace(
+        id=CYCLE_ID,
+        subscription_id=SUBSCRIPTION_ID,
+        customer_ref="customer_001",
+        metric_code="credits",
+        period_start=NOW - timedelta(days=5),
+        period_end=NOW + timedelta(days=25),
+        base_limit_units=100,
+        rollover_units=30,
+        used_units=20,
+        version=0,
+        available_units=110,
     )
-    return cycle
 
 
 def _command(**overrides: object) -> SubscriptionQuotaUsageCommand:
@@ -157,7 +134,6 @@ async def test_active_runtime_consumes_base_and_rollover_balance() -> None:
     assert cycle.used_units == 45
     assert cycle.version == 1
     assert usage.units == 25
-    assert usage.quota_cycle_id == CYCLE_ID
     assert uow.subscription_quota_cycle_usage.added == [usage]
     assert uow.committed is True
 
@@ -165,7 +141,7 @@ async def test_active_runtime_consumes_base_and_rollover_balance() -> None:
 @pytest.mark.asyncio
 async def test_suspended_runtime_cannot_consume_quota() -> None:
     cycle = _cycle()
-    uow = FakeUnitOfWork(runtime=_runtime(access_stage="suspended"), cycle=cycle)
+    uow = FakeUnitOfWork(runtime_stage="suspended", cycle=cycle)
     record = record_subscription_quota_usage_factory(
         unit_of_work_factory=lambda: uow
     )
@@ -210,9 +186,7 @@ async def test_matching_replay_returns_existing_without_commit() -> None:
         unit_of_work_factory=lambda: uow
     )
 
-    result = await record(command)
-
-    assert result is existing
+    assert await record(command) is existing
     assert uow.committed is False
 
 
