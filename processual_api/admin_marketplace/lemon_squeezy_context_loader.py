@@ -83,6 +83,29 @@ def lemon_squeezy_reconciliation_context_loader_factory(
                 "order billing period conflicts with offer."
             )
 
+        customer_owner = (
+            await uow.lemon_squeezy_bindings.get_customer_binding_by_customer_ref(
+                customer_ref,
+                for_update=True,
+            )
+        )
+        provider_owner = await uow.lemon_squeezy_bindings.get_customer_binding_by_provider_customer_id(
+            provider_customer_id,
+            for_update=True,
+        )
+        if customer_owner is None or provider_owner is None:
+            raise LemonSqueezyWebhookError(
+                "provider customer ownership was not found."
+            )
+        if customer_owner.id != provider_owner.id:
+            raise LemonSqueezyWebhookError(
+                "provider customer identifier has conflicting ownership."
+            )
+        if customer_owner.provider_customer_id != provider_customer_id:
+            raise LemonSqueezyWebhookError(
+                "provider customer binding conflicts with webhook."
+            )
+
         binding = await uow.lemon_squeezy_bindings.get_by_order_id(
             order.id,
             for_update=True,
@@ -102,20 +125,6 @@ def lemon_squeezy_reconciliation_context_loader_factory(
         if binding.provider_customer_id != provider_customer_id:
             raise LemonSqueezyWebhookError(
                 "provider customer binding conflicts with webhook."
-            )
-
-        provider_customer_owner = (
-            await uow.lemon_squeezy_bindings.get_by_provider_customer_id(
-                provider_customer_id,
-                for_update=True,
-            )
-        )
-        if (
-            provider_customer_owner is None
-            or provider_customer_owner.id != binding.id
-        ):
-            raise LemonSqueezyWebhookError(
-                "provider customer identifier has conflicting ownership."
             )
 
         active_subscription = await uow.subscriptions.get_active_by_customer_ref(
@@ -138,16 +147,13 @@ def lemon_squeezy_reconciliation_context_loader_factory(
                 )
 
         if provider_subscription_id is not None:
-            provider_subscription_owner = (
+            subscription_owner = (
                 await uow.lemon_squeezy_bindings.get_by_provider_subscription_id(
                     provider_subscription_id,
                     for_update=True,
                 )
             )
-            if (
-                provider_subscription_owner is None
-                or provider_subscription_owner.id != binding.id
-            ):
+            if subscription_owner is None or subscription_owner.id != binding.id:
                 raise LemonSqueezyWebhookError(
                     "provider subscription identifier has conflicting ownership."
                 )
