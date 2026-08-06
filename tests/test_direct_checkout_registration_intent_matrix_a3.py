@@ -41,7 +41,10 @@ def _option(*, plan_id: str, billing_period: str) -> TunisiaPaymentOptionResult:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("billing_period", ("monthly", "annual"))
-@pytest.mark.parametrize("plan_id", ("academic_individual", "starter", "business", "enterprise_pilot"))
+@pytest.mark.parametrize(
+    "plan_id",
+    ("academic_individual", "starter", "business", "enterprise_pilot"),
+)
 async def test_payment_option_is_bound_to_verified_registration_intent(
     monkeypatch,
     plan_id: str,
@@ -82,7 +85,9 @@ async def test_payment_option_is_bound_to_verified_registration_intent(
 @pytest.mark.parametrize(
     "preparation",
     (
-        {"status": "pending", "plan_id": "starter", "billing_period": "monthly"},
+        {"status": "pending_verification", "checkout_available": False},
+        {"status": "no_intent", "checkout_available": False},
+        {"status": "invalid_intent", "checkout_available": False},
         {"status": "verified", "billing_period": "monthly"},
         {"status": "verified", "plan_id": "starter"},
         {"status": "verified", "plan_id": None, "billing_period": "annual"},
