@@ -8,6 +8,11 @@ from datetime import datetime
 from processual_api.admin_marketplace.subscription_quota_usage_persistence import (
     AdminMarketSubscriptionQuotaCycleUsage,
 )
+from processual_api.admin_marketplace.subscription_runtime_access_policy import (
+    SubscriptionRuntimeAccessError,
+    advance_expired_runtime_stage,
+    runtime_allows_usage,
+)
 
 
 class SubscriptionQuotaUsageError(RuntimeError):
@@ -60,13 +65,32 @@ def record_subscription_quota_usage_factory(
                 command.subscription_id,
                 for_update=True,
             )
-            if runtime is None or runtime.access_stage != "active":
+            if runtime is None:
                 raise SubscriptionQuotaUsageError(
-                    "quota usage requires active runtime access."
+                    "quota usage requires authoritative runtime access."
                 )
             if runtime.customer_ref != command.customer_ref:
                 raise SubscriptionQuotaUsageError(
                     "quota usage customer conflicts with runtime."
+                )
+
+            try:
+                expired = advance_expired_runtime_stage(
+                    runtime,
+                    evaluated_at=command.occurred_at,
+                )
+                allowed = runtime_allows_usage(
+                    runtime,
+                    occurred_at=command.occurred_at,
+                )
+            except SubscriptionRuntimeAccessError as exc:
+                raise SubscriptionQuotaUsageError(str(exc)) from exc
+
+            if not allowed:
+                if expired:
+                    await uow.commit()
+                raise SubscriptionQuotaUsageError(
+                    "quota usage is blocked by runtime access stage."
                 )
 
             cycle = await uow.subscription_quota_cycles.get_by_id(
