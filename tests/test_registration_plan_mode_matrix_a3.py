@@ -3,13 +3,14 @@ from __future__ import annotations
 import pytest
 
 from processual_api.auth.registration_contracts import RegistrationMode
-from processual_api.auth.registration_service import validate_registration_plan_mode
+from processual_api.auth.registration_service import (
+    validate_registration_plan_mode,
+)
 from processual_api.billing.public_plan_journey import (
     PLAN_DEFINITIONS,
     public_plan_journey_catalog,
     resolve_direct_registration_plan,
 )
-
 
 DIRECT_PLAN_IDS = tuple(
     plan["plan_id"]
