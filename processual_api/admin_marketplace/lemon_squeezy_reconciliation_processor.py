@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
-from datetime import datetime, timezone
-from typing import Awaitable, Protocol
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Protocol
 
 from processual_api.admin_marketplace.lemon_squeezy_inbox_lifecycle import (
     claim_lemon_squeezy_webhook,
@@ -31,11 +31,14 @@ class LemonSqueezyReconciliationUnitOfWork(Protocol):
     async def commit(self) -> None: ...
 
 
-ContextLoader = Callable[[object], Awaitable[LemonSqueezyReconciliationContext]]
+ContextLoader = Callable[
+    [LemonSqueezyReconciliationUnitOfWork, object],
+    Awaitable[LemonSqueezyReconciliationContext],
+]
 
 
 def _aware_now(value: datetime | None) -> datetime:
-    timestamp = value or datetime.now(timezone.utc)
+    timestamp = value or datetime.now(UTC)
     if timestamp.tzinfo is None:
         raise LemonSqueezyWebhookError("decided_at must be timezone-aware.")
     return timestamp
@@ -49,6 +52,17 @@ def _stored_binding_matches(existing: object, inbox: object) -> bool:
         and getattr(existing, "customer_ref", None) == getattr(inbox, "customer_ref", None)
         and getattr(existing, "order_ref", None) == getattr(inbox, "order_ref", None)
         and getattr(existing, "offer_ref", None) == getattr(inbox, "offer_ref", None)
+    )
+
+
+def _context_binding_matches(
+    context: LemonSqueezyReconciliationContext,
+    inbox: object,
+) -> bool:
+    return (
+        context.expected_customer_ref == getattr(inbox, "customer_ref", None)
+        and context.expected_order_ref == getattr(inbox, "order_ref", None)
+        and context.expected_offer_ref == getattr(inbox, "offer_ref", None)
     )
 
 
@@ -98,7 +112,11 @@ def process_lemon_squeezy_reconciliation_factory(
                 return _as_record(existing)
 
             claim_lemon_squeezy_webhook(inbox, claimed_at=timestamp)
-            context = await context_loader(inbox)
+            context = await context_loader(uow, inbox)
+            if not _context_binding_matches(context, inbox):
+                raise LemonSqueezyWebhookError(
+                    "reconciliation context conflicts with inbox binding."
+                )
             decision = classify_lemon_squeezy_reconciliation(
                 entry=inbox,
                 context=context,
