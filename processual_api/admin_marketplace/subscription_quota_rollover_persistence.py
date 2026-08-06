@@ -3,7 +3,18 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func, select
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,7 +38,10 @@ class AdminMarketSubscriptionQuotaCycle(Base):
             "period_start",
             name="uq_admin_market_quota_cycle_period",
         ),
-        UniqueConstraint("source_cycle_id", name="uq_admin_market_quota_cycle_source"),
+        UniqueConstraint(
+            "source_cycle_id",
+            name="uq_admin_market_quota_cycle_source",
+        ),
         Index(
             "ix_admin_market_quota_cycle_customer_metric",
             "customer_ref",
@@ -36,7 +50,11 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("admin_market_subscriptions.id", ondelete="RESTRICT"),
@@ -49,14 +67,34 @@ class AdminMarketSubscriptionQuotaCycle(Base):
     customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     quota_profile_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     metric_code: Mapped[str] = mapped_column(String(128), nullable=False)
-    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    period_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
     base_limit_units: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    rollover_units: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    used_units: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    rollover_units: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    used_units: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    version: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
