@@ -37,6 +37,9 @@ from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemySubscriptionRepository,
     SqlAlchemyTrialRepository,
 )
+from processual_api.admin_marketplace.subscription_delinquency_persistence import (
+    SqlAlchemySubscriptionDelinquencyRepository,
+)
 from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
     SqlAlchemySubscriptionQuotaCycleRepository,
 )
@@ -90,6 +93,9 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         )
         self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
+        self.subscription_delinquency = SqlAlchemySubscriptionDelinquencyRepository(
+            session
+        )
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
         self.subscription_quota_cycles = SqlAlchemySubscriptionQuotaCycleRepository(
             session
