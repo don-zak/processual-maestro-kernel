@@ -17,6 +17,9 @@ from processual_api.admin_marketplace.lemon_squeezy_reconciliation_gate import (
 from processual_api.admin_marketplace.lemon_squeezy_reconciliation_persistence import (
     LemonSqueezyReconciliationDecisionRecord,
 )
+from processual_api.admin_marketplace.lemon_squeezy_runtime_reconciliation import (
+    apply_lemon_squeezy_runtime_access,
+)
 from processual_api.admin_marketplace.lemon_squeezy_subscription_reconciliation import (
     apply_lemon_squeezy_subscription_lifecycle,
 )
@@ -30,6 +33,8 @@ class LemonSqueezyReconciliationUnitOfWork(Protocol):
     lemon_squeezy_reconciliation_decisions: object
     lemon_squeezy_bindings: object
     subscriptions: object
+    subscription_runtime: object
+    subscription_runtime_transitions: object
 
     async def __aenter__(self) -> LemonSqueezyReconciliationUnitOfWork: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
@@ -184,11 +189,19 @@ def process_lemon_squeezy_reconciliation_factory(
             else:
                 if decision.action == "reconcile":
                     binding = await _advance_binding_watermark(uow, inbox)
-                    await apply_lemon_squeezy_subscription_lifecycle(
+                    subscription = await apply_lemon_squeezy_subscription_lifecycle(
                         uow=uow,
                         binding=binding,
                         inbox=inbox,
                     )
+                    if subscription is not None:
+                        await apply_lemon_squeezy_runtime_access(
+                            uow=uow,
+                            binding=binding,
+                            subscription=subscription,
+                            inbox=inbox,
+                            reconciliation_decision_id=record.id,
+                        )
                 mark_lemon_squeezy_webhook_processed(inbox, processed_at=timestamp)
 
             await uow.commit()
