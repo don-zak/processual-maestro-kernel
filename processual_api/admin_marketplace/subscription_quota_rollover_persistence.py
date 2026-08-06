@@ -31,12 +31,6 @@ class AdminMarketSubscriptionQuotaCycle(Base):
             "used_units >= 0 AND used_units <= base_limit_units + rollover_units",
             name="usage_within_available",
         ),
-        CheckConstraint(
-            "grace_usage_baseline_units IS NULL OR "
-            "(grace_usage_baseline_units >= 0 AND "
-            "grace_usage_baseline_units <= used_units)",
-            name="grace_baseline_valid",
-        ),
         CheckConstraint("version >= 0", name="version_nonnegative"),
         UniqueConstraint(
             "subscription_id",
@@ -92,7 +86,6 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         nullable=False,
         default=0,
     )
-    grace_usage_baseline_units: Mapped[int | None] = mapped_column(BigInteger)
     version: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
