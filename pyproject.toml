@@ -9,7 +9,6 @@ description = "Production-ready Processual Maestro Kernel with CGT v2, security 
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
-license-files = ["LICENSE*"]
 authors = [{name = "Zakaria Essamit / ChatGPT implementation"}]
 dependencies = ["cryptography>=41", "bcrypt>=4.1", "tzdata>=2024.1; platform_system == \"Windows\""]
 
