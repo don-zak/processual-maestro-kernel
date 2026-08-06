@@ -50,16 +50,6 @@ class AdminMarketLemonSqueezyWebhookInbox(Base):
             "payload_digest",
             name="uq_admin_market_ls_webhook_payload_digest",
         ),
-        UniqueConstraint(
-            "store_id",
-            "event_name",
-            "resource_type",
-            "external_resource_id",
-            "customer_ref",
-            "order_ref",
-            "offer_ref",
-            name="uq_admin_market_ls_webhook_resource_binding",
-        ),
         Index(
             "ix_admin_market_ls_webhook_dispatch",
             "processing_status",
