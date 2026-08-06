@@ -38,6 +38,7 @@ async def apply_payment_failure(
             last_failed_cycle_key=cycle_key,
             first_failed_at=effective_at,
             last_failed_at=effective_at,
+            grace_started_at=effective_at,
             grace_until=effective_at + timedelta(days=GRACE_DAYS),
             grace_usage_percent=GRACE_USAGE_PERCENT,
         )
@@ -46,7 +47,9 @@ async def apply_payment_failure(
 
     if record.customer_ref != subscription.customer_ref:
         raise RuntimeError("delinquency customer conflicts with subscription.")
-    if record.last_failed_cycle_key != cycle_key:
+
+    new_cycle = record.last_failed_cycle_key != cycle_key
+    if new_cycle:
         record.missed_billing_cycles += 1
         record.last_failed_cycle_key = cycle_key
     record.last_failed_at = effective_at
@@ -55,14 +58,18 @@ async def apply_payment_failure(
     if record.missed_billing_cycles >= PENDING_DELETION_AFTER_MISSED_CYCLES:
         record.state = "pending_deletion"
         record.deletion_eligible_at = effective_at
+        record.grace_started_at = None
         record.grace_until = None
     elif record.missed_billing_cycles >= FREEZE_AFTER_MISSED_CYCLES:
         record.state = "account_frozen"
         record.frozen_at = effective_at
+        record.grace_started_at = None
         record.grace_until = None
     else:
         record.state = "grace_degraded"
-        record.grace_until = effective_at + timedelta(days=GRACE_DAYS)
+        if new_cycle or record.grace_started_at is None:
+            record.grace_started_at = effective_at
+            record.grace_until = effective_at + timedelta(days=GRACE_DAYS)
     return record
 
 
@@ -82,6 +89,7 @@ async def resolve_payment_delinquency(
     if record.customer_ref != subscription.customer_ref:
         raise RuntimeError("delinquency customer conflicts with subscription.")
     record.state = "resolved"
+    record.grace_started_at = None
     record.grace_until = None
     record.frozen_at = None
     record.deletion_eligible_at = None
