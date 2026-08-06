@@ -5,7 +5,6 @@ from typing import Any, Final
 
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_SPECS,
-    monthly_unit_allowance,
     normalize_plan_code,
 )
 
