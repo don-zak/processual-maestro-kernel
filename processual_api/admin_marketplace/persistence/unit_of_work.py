@@ -6,6 +6,9 @@ from types import TracebackType
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.admin_marketplace.lemon_squeezy_binding_persistence import (
+    SqlAlchemyLemonSqueezyBindingRepository,
+)
 from processual_api.admin_marketplace.lemon_squeezy_persistence import (
     SqlAlchemyLemonSqueezyWebhookInboxRepository,
 )
@@ -73,12 +76,13 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.notification_outbox: SqlAlchemyNotificationOutboxRepository
         self.lemon_squeezy_webhook_inbox: SqlAlchemyLemonSqueezyWebhookInboxRepository
         self.lemon_squeezy_reconciliation_decisions: SqlAlchemyLemonSqueezyReconciliationDecisionRepository
+        self.lemon_squeezy_bindings: SqlAlchemyLemonSqueezyBindingRepository
         self.subscription_runtime: SqlAlchemySubscriptionRuntimeRepository
         self.subscription_quotas: SqlAlchemySubscriptionQuotaRepository
         self.subscription_usage: SqlAlchemySubscriptionUsageRepository
         self.subscription_runtime_transitions: SqlAlchemySubscriptionRuntimeTransitionRepository
 
-    async def __aenter__(self) -> "SqlAlchemyAdminMarketplaceUnitOfWork":
+    async def __aenter__(self) -> SqlAlchemyAdminMarketplaceUnitOfWork:
         if self._session is not None:
             raise RuntimeError("Admin Marketplace unit of work is already active.")
 
@@ -105,6 +109,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.notification_outbox = SqlAlchemyNotificationOutboxRepository(session)
         self.lemon_squeezy_webhook_inbox = SqlAlchemyLemonSqueezyWebhookInboxRepository(session)
         self.lemon_squeezy_reconciliation_decisions = SqlAlchemyLemonSqueezyReconciliationDecisionRepository(session)
+        self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
         self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
@@ -126,7 +131,12 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         await session.rollback()
         self._committed = False
 
-    async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         session = self._session
         if session is None:
             return
