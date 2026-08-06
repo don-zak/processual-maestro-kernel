@@ -5,6 +5,9 @@ from types import MappingProxyType
 
 import pytest
 
+from processual_api.admin_marketplace.lemon_squeezy_evidence import (
+    LemonSqueezyVerifiedEvidence,
+)
 from processual_api.admin_marketplace.lemon_squeezy_inbox import (
     LemonSqueezyWebhookInboxEntry,
     ingest_verified_lemon_squeezy_webhook,
@@ -45,11 +48,26 @@ class FakeInboxRepository:
         self.by_payload[entry.payload_digest] = entry
 
 
+def _evidence(*, status: str = "active") -> LemonSqueezyVerifiedEvidence:
+    return LemonSqueezyVerifiedEvidence(
+        schema_version=1,
+        provider_customer_id="5001",
+        provider_order_id="6001",
+        provider_subscription_id="9001",
+        variant_id="8001",
+        currency=None,
+        total_amount=None,
+        status=status,
+        effective_at=NOW,
+    )
+
+
 def _webhook(
     *,
     customer_ref: str = "customer_001",
     order_ref: str = "order_001",
     offer_ref: str = "starter_monthly",
+    status: str = "active",
 ) -> VerifiedLemonSqueezyWebhook:
     return VerifiedLemonSqueezyWebhook(
         event_name="subscription_updated",
@@ -60,6 +78,7 @@ def _webhook(
         order_ref=order_ref,
         offer_ref=offer_ref,
         test_mode=False,
+        evidence=_evidence(status=status),
         payload=MappingProxyType({"verified": True}),
     )
 
@@ -85,6 +104,7 @@ async def test_exact_signed_body_replay_is_idempotent() -> None:
     assert first.replayed is False
     assert replay.replayed is True
     assert replay.entry.id == first.entry.id
+    assert replay.entry.provider_subscription_id == "9001"
     assert len(repository.added) == 1
 
 
@@ -94,13 +114,13 @@ async def test_successive_updates_for_same_subscription_are_distinct_events() ->
 
     first = await ingest_verified_lemon_squeezy_webhook(
         repository=repository,
-        webhook=_webhook(),
+        webhook=_webhook(status="active"),
         raw_body=b'{"event":"subscription_updated","status":"active"}',
         received_at=NOW,
     )
     second = await ingest_verified_lemon_squeezy_webhook(
         repository=repository,
-        webhook=_webhook(),
+        webhook=_webhook(status="paused"),
         raw_body=b'{"event":"subscription_updated","status":"paused"}',
         received_at=NOW,
     )
@@ -109,6 +129,7 @@ async def test_successive_updates_for_same_subscription_are_distinct_events() ->
     assert second.replayed is False
     assert second.entry.id != first.entry.id
     assert second.entry.event_identity_hash != first.entry.event_identity_hash
+    assert second.entry.provider_status == "paused"
     assert len(repository.added) == 2
 
 
@@ -139,13 +160,31 @@ async def test_same_payload_cannot_be_rebound_to_different_internal_references()
 
 
 @pytest.mark.asyncio
+async def test_same_payload_cannot_change_verified_evidence() -> None:
+    repository = FakeInboxRepository()
+    raw_body = b'{"event":"subscription_updated","status":"active"}'
+
+    await ingest_verified_lemon_squeezy_webhook(
+        repository=repository,
+        webhook=_webhook(status="active"),
+        raw_body=raw_body,
+        received_at=NOW,
+    )
+
+    with pytest.raises(LemonSqueezyWebhookError, match="conflicting payload"):
+        await ingest_verified_lemon_squeezy_webhook(
+            repository=repository,
+            webhook=_webhook(status="paused"),
+            raw_body=raw_body,
+            received_at=NOW,
+        )
+
+
+@pytest.mark.asyncio
 async def test_naive_received_timestamp_is_rejected() -> None:
     repository = FakeInboxRepository()
 
-    with pytest.raises(
-        LemonSqueezyWebhookError,
-        match="timezone-aware",
-    ):
+    with pytest.raises(LemonSqueezyWebhookError, match="timezone-aware"):
         await ingest_verified_lemon_squeezy_webhook(
             repository=repository,
             webhook=_webhook(),
