@@ -5,6 +5,10 @@ from datetime import datetime, timedelta
 from processual_api.admin_marketplace.subscription_delinquency_persistence import (
     AdminMarketSubscriptionDelinquency,
 )
+from processual_api.admin_marketplace.subscription_rollover_delinquency import (
+    lock_rollover_for_delinquency,
+    restore_or_expire_rollover_after_payment,
+)
 
 GRACE_DAYS = 15
 GRACE_USAGE_PERCENT = 25
@@ -16,6 +20,25 @@ def billing_cycle_key(value: datetime) -> str:
     if value.tzinfo is None:
         raise ValueError("billing cycle timestamp must be timezone-aware.")
     return value.strftime("%Y-%m")
+
+
+def rollover_payment_deadline(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError("rollover deadline timestamp must be timezone-aware.")
+    year = value.year
+    month = value.month + 2
+    if month > 12:
+        year += (month - 1) // 12
+        month = ((month - 1) % 12) + 1
+    return value.replace(
+        year=year,
+        month=month,
+        day=1,
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
 
 
 async def apply_payment_failure(
@@ -43,6 +66,12 @@ async def apply_payment_failure(
             grace_usage_percent=GRACE_USAGE_PERCENT,
         )
         uow.subscription_delinquency.add(record)
+        await lock_rollover_for_delinquency(
+            uow=uow,
+            subscription_id=subscription.id,
+            effective_at=effective_at,
+            expires_at=rollover_payment_deadline(effective_at),
+        )
         return record
 
     if record.customer_ref != subscription.customer_ref:
@@ -88,6 +117,11 @@ async def resolve_payment_delinquency(
         return None
     if record.customer_ref != subscription.customer_ref:
         raise RuntimeError("delinquency customer conflicts with subscription.")
+    await restore_or_expire_rollover_after_payment(
+        uow=uow,
+        subscription_id=subscription.id,
+        effective_at=effective_at,
+    )
     record.state = "resolved"
     record.grace_started_at = None
     record.grace_until = None
@@ -107,4 +141,5 @@ __all__ = [
     "apply_payment_failure",
     "billing_cycle_key",
     "resolve_payment_delinquency",
+    "rollover_payment_deadline",
 ]
