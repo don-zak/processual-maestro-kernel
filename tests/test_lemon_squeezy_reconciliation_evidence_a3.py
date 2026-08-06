@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -149,3 +149,52 @@ def test_invoice_requires_parent_subscription_and_money() -> None:
 
     assert decision.action == "requires_review"
     assert decision.reason_code == "invoice_evidence_incomplete"
+
+
+def test_older_provider_event_requires_review() -> None:
+    decision = classify_lemon_squeezy_reconciliation(
+        entry=_entry(provider_effective_at=NOW),
+        context=_context(latest_provider_effective_at=NOW + timedelta(minutes=1)),
+    )
+
+    assert decision.action == "requires_review"
+    assert decision.reason_code == "stale_provider_event"
+
+
+def test_equal_provider_effective_timestamp_is_not_stale() -> None:
+    decision = classify_lemon_squeezy_reconciliation(
+        entry=_entry(provider_effective_at=NOW),
+        context=_context(latest_provider_effective_at=NOW),
+    )
+
+    assert decision.action == "reconcile"
+
+
+@pytest.mark.parametrize(
+    ("entry_overrides", "context_overrides", "reason"),
+    [
+        ({"provider_effective_at": None}, {}, "provider_effective_at_invalid"),
+        (
+            {"provider_effective_at": datetime(2026, 8, 6, 10, 30)},
+            {},
+            "provider_effective_at_invalid",
+        ),
+        (
+            {},
+            {"latest_provider_effective_at": datetime(2026, 8, 6, 10, 30)},
+            "latest_provider_effective_at_invalid",
+        ),
+    ],
+)
+def test_invalid_provider_timestamps_require_review(
+    entry_overrides: dict[str, object],
+    context_overrides: dict[str, object],
+    reason: str,
+) -> None:
+    decision = classify_lemon_squeezy_reconciliation(
+        entry=_entry(**entry_overrides),
+        context=_context(**context_overrides),
+    )
+
+    assert decision.action == "requires_review"
+    assert decision.reason_code == reason
