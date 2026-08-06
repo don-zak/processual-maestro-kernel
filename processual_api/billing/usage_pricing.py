@@ -3,36 +3,46 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Final
 
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_SPECS,
+    monthly_unit_allowance,
+    normalize_plan_code,
+)
+
 PRICING_VERSION: Final = "2026-07-byok-v1"
 BILLING_POLICY: Final = "byok"
 BILLING_SCOPE: Final = "maestro_usage_units"
 PROVIDER_COST_INCLUDED: Final = False
 
 DEVELOPER_UNIT_ALLOWANCE: Final = 2_000
-STARTER_UNIT_ALLOWANCE: Final = 10_000
-BUSINESS_UNIT_ALLOWANCE: Final = 100_000
-ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE: Final = 50_000
-ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE: Final = 500_000
+STARTER_UNIT_ALLOWANCE: Final = PLAN_FULFILLMENT_SPECS["starter"].monthly_unit_allowance
+BUSINESS_UNIT_ALLOWANCE: Final = PLAN_FULFILLMENT_SPECS["business"].monthly_unit_allowance
+ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE: Final = PLAN_FULFILLMENT_SPECS[
+    "enterprise_integration_starter"
+].monthly_unit_allowance
+ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE: Final = PLAN_FULFILLMENT_SPECS[
+    "enterprise_pilot"
+].monthly_unit_allowance
 
 PLAN_MONTHLY_UNIT_ALLOWANCES: Final[dict[str, int]] = {
     "developer": DEVELOPER_UNIT_ALLOWANCE,
     "internal": DEVELOPER_UNIT_ALLOWANCE,
-    "starter": STARTER_UNIT_ALLOWANCE,
+    **{
+        code: spec.monthly_unit_allowance
+        for code, spec in PLAN_FULFILLMENT_SPECS.items()
+    },
     "pilot_starter": STARTER_UNIT_ALLOWANCE,
-    "business": BUSINESS_UNIT_ALLOWANCE,
-    "enterprise_integration_starter": (
-        ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE
-    ),
     "enterprise": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
     "enterprise_integration": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
 }
 
 ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
     {
-        "enterprise",
-        "enterprise_integration",
         "enterprise_integration_starter",
-        "enterprise_custom",
+        "enterprise_pilot",
+        "enterprise_core",
+        "enterprise_scale",
+        "enterprise_strategic",
     }
 )
 
@@ -79,11 +89,7 @@ def normalize_endpoint(endpoint: str) -> str:
 
 
 def normalize_plan_id(plan_id: str | None) -> str:
-    return str(plan_id or "").strip().lower().replace(" ", "_")
-
-
-def monthly_unit_allowance(plan_id: str | None) -> int:
-    return PLAN_MONTHLY_UNIT_ALLOWANCES.get(normalize_plan_id(plan_id), 0)
+    return normalize_plan_code(plan_id)
 
 
 def allows_enterprise_integration(plan_id: str | None) -> bool:
