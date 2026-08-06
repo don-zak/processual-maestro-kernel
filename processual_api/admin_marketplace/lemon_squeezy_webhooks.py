@@ -4,10 +4,10 @@ import hashlib
 import hmac
 import json
 import re
+import typing
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any
 
 from processual_api.admin_marketplace.errors import AdminMarketplaceError
 
@@ -43,8 +43,10 @@ class LemonSqueezyWebhookError(AdminMarketplaceError):
     """Fail-closed error for an untrusted or malformed webhook request."""
 
 
-def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
+def _reject_duplicate_keys(
+    pairs: list[tuple[str, typing.Any]],
+) -> dict[str, typing.Any]:
+    result: dict[str, typing.Any] = {}
     for key, value in pairs:
         if key in result:
             raise LemonSqueezyWebhookError("webhook JSON contains duplicate keys.")
@@ -52,7 +54,11 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _required_mapping(value: object, *, field_name: str) -> Mapping[str, Any]:
+def _required_mapping(
+    value: object,
+    *,
+    field_name: str,
+) -> Mapping[str, typing.Any]:
     if not isinstance(value, dict):
         raise LemonSqueezyWebhookError(f"{field_name} must be an object.")
     return value
@@ -135,7 +141,7 @@ class VerifiedLemonSqueezyWebhook:
     order_ref: str
     offer_ref: str
     test_mode: bool
-    payload: Mapping[str, Any]
+    payload: Mapping[str, typing.Any]
 
 
 def parse_verified_lemon_squeezy_webhook(
@@ -170,8 +176,14 @@ def parse_verified_lemon_squeezy_webhook(
     if payload_event not in _SUPPORTED_EVENTS:
         raise LemonSqueezyWebhookError("webhook event is not supported.")
 
-    store_id = _positive_identifier(attributes.get("store_id"), field_name="data.attributes.store_id")
-    trusted_store_id = _positive_identifier(expected_store_id, field_name="expected_store_id")
+    store_id = _positive_identifier(
+        attributes.get("store_id"),
+        field_name="data.attributes.store_id",
+    )
+    trusted_store_id = _positive_identifier(
+        expected_store_id,
+        field_name="expected_store_id",
+    )
     if store_id != trusted_store_id:
         raise LemonSqueezyWebhookError("webhook store does not match the configured store.")
 
@@ -180,7 +192,10 @@ def parse_verified_lemon_squeezy_webhook(
 
     custom_data = _required_mapping(meta.get("custom_data"), field_name="meta.custom_data")
     references = {
-        name: _internal_reference(custom_data.get(name), field_name=f"meta.custom_data.{name}")
+        name: _internal_reference(
+            custom_data.get(name),
+            field_name=f"meta.custom_data.{name}",
+        )
         for name in _REQUIRED_CUSTOM_REFERENCES
     }
 
