@@ -126,7 +126,7 @@ async def test_same_payload_cannot_be_rebound_to_different_internal_references()
 
     with pytest.raises(
         LemonSqueezyWebhookError,
-        match="payload was already bound",
+        match="event identity was replayed with conflicting payload or references",
     ):
         await ingest_verified_lemon_squeezy_webhook(
             repository=repository,
