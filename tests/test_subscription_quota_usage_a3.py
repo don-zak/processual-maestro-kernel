@@ -17,12 +17,19 @@ SUBSCRIPTION_ID = uuid.uuid4()
 CYCLE_ID = uuid.uuid4()
 
 
-class Repository:
+class SingleRepository:
     def __init__(self, value: object | None) -> None:
         self.value = value
 
     async def get_by_id(self, value_id: uuid.UUID, *, for_update: bool = False):
-        return self.value if self.value is not None and self.value.id == value_id else None
+        if self.value is None or self.value.id != value_id:
+            return None
+        return self.value
+
+
+class RuntimeRepository:
+    def __init__(self, value: object | None) -> None:
+        self.value = value
 
     async def get_by_subscription_id(
         self,
@@ -30,9 +37,9 @@ class Repository:
         *,
         for_update: bool = False,
     ):
-        if self.value is None:
+        if self.value is None or self.value.subscription_id != subscription_id:
             return None
-        return self.value if self.value.subscription_id == subscription_id else None
+        return self.value
 
 
 class UsageRepository:
@@ -48,7 +55,9 @@ class UsageRepository:
     ):
         if self.existing is None:
             return None
-        return self.existing if self.existing.idempotency_key_hash == value else None
+        if self.existing.idempotency_key_hash != value:
+            return None
+        return self.existing
 
     def add(self, value: object) -> None:
         self.added.append(value)
@@ -58,25 +67,14 @@ class FakeUnitOfWork:
     def __init__(
         self,
         *,
-        runtime_stage: str = "active",
+        subscription: object | None = None,
+        runtime: object | None = None,
         cycle: object | None = None,
         existing: object | None = None,
     ) -> None:
-        self.subscriptions = Repository(
-            SimpleNamespace(
-                id=SUBSCRIPTION_ID,
-                customer_ref="customer_001",
-                status="active",
-            )
-        )
-        self.subscription_runtime = Repository(
-            SimpleNamespace(
-                subscription_id=SUBSCRIPTION_ID,
-                customer_ref="customer_001",
-                access_stage=runtime_stage,
-            )
-        )
-        self.subscription_quota_cycles = Repository(cycle or _cycle())
+        self.subscriptions = SingleRepository(subscription or _subscription())
+        self.subscription_runtime = RuntimeRepository(runtime or _runtime())
+        self.subscription_quota_cycles = SingleRepository(cycle or _cycle())
         self.subscription_quota_cycle_usage = UsageRepository(existing)
         self.committed = False
 
@@ -90,20 +88,47 @@ class FakeUnitOfWork:
         self.committed = True
 
 
-def _cycle() -> SimpleNamespace:
-    return SimpleNamespace(
-        id=CYCLE_ID,
-        subscription_id=SUBSCRIPTION_ID,
-        customer_ref="customer_001",
-        metric_code="credits",
-        period_start=NOW - timedelta(days=5),
-        period_end=NOW + timedelta(days=25),
-        base_limit_units=100,
-        rollover_units=30,
-        used_units=20,
-        version=0,
-        available_units=110,
-    )
+def _subscription(**overrides: object) -> SimpleNamespace:
+    values = {
+        "id": SUBSCRIPTION_ID,
+        "customer_ref": "customer_001",
+        "status": "active",
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _runtime(**overrides: object) -> SimpleNamespace:
+    values = {
+        "subscription_id": SUBSCRIPTION_ID,
+        "customer_ref": "customer_001",
+        "access_stage": "active",
+        "effective_at": NOW - timedelta(days=1),
+        "grace_until": None,
+        "suspended_at": None,
+        "terminated_at": None,
+        "version": 0,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _cycle(**overrides: object) -> SimpleNamespace:
+    values = {
+        "id": CYCLE_ID,
+        "subscription_id": SUBSCRIPTION_ID,
+        "customer_ref": "customer_001",
+        "metric_code": "credits",
+        "period_start": NOW - timedelta(days=5),
+        "period_end": NOW + timedelta(days=25),
+        "base_limit_units": 100,
+        "rollover_units": 30,
+        "used_units": 20,
+        "version": 0,
+        "available_units": 110,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
 
 
 def _command(**overrides: object) -> SubscriptionQuotaUsageCommand:
@@ -134,19 +159,82 @@ async def test_active_runtime_consumes_base_and_rollover_balance() -> None:
     assert cycle.used_units == 45
     assert cycle.version == 1
     assert usage.units == 25
+    assert usage.quota_cycle_id == CYCLE_ID
     assert uow.subscription_quota_cycle_usage.added == [usage]
     assert uow.committed is True
 
 
 @pytest.mark.asyncio
-async def test_suspended_runtime_cannot_consume_quota() -> None:
+async def test_grace_runtime_allows_usage_before_deadline() -> None:
     cycle = _cycle()
-    uow = FakeUnitOfWork(runtime_stage="suspended", cycle=cycle)
+    runtime = _runtime(
+        access_stage="grace",
+        grace_until=NOW + timedelta(hours=1),
+    )
+    uow = FakeUnitOfWork(runtime=runtime, cycle=cycle)
     record = record_subscription_quota_usage_factory(
         unit_of_work_factory=lambda: uow
     )
 
-    with pytest.raises(SubscriptionQuotaUsageError, match="active runtime"):
+    usage = await record(_command())
+
+    assert usage.units == 25
+    assert runtime.access_stage == "grace"
+    assert runtime.version == 0
+    assert cycle.used_units == 45
+    assert uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_expired_grace_is_suspended_and_blocks_usage() -> None:
+    cycle = _cycle()
+    grace_until = NOW - timedelta(minutes=1)
+    runtime = _runtime(
+        access_stage="grace",
+        grace_until=grace_until,
+    )
+    uow = FakeUnitOfWork(runtime=runtime, cycle=cycle)
+    record = record_subscription_quota_usage_factory(
+        unit_of_work_factory=lambda: uow
+    )
+
+    with pytest.raises(SubscriptionQuotaUsageError, match="blocked"):
+        await record(_command())
+
+    assert runtime.access_stage == "suspended"
+    assert runtime.effective_at == grace_until
+    assert runtime.grace_until is None
+    assert runtime.suspended_at == grace_until
+    assert runtime.version == 1
+    assert cycle.used_units == 20
+    assert uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_grace_without_deadline_fails_closed() -> None:
+    cycle = _cycle()
+    runtime = _runtime(access_stage="grace", grace_until=None)
+    uow = FakeUnitOfWork(runtime=runtime, cycle=cycle)
+    record = record_subscription_quota_usage_factory(
+        unit_of_work_factory=lambda: uow
+    )
+
+    with pytest.raises(SubscriptionQuotaUsageError, match="grace deadline"):
+        await record(_command())
+
+    assert cycle.used_units == 20
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_suspended_runtime_cannot_consume_quota() -> None:
+    cycle = _cycle()
+    uow = FakeUnitOfWork(runtime=_runtime(access_stage="suspended"), cycle=cycle)
+    record = record_subscription_quota_usage_factory(
+        unit_of_work_factory=lambda: uow
+    )
+
+    with pytest.raises(SubscriptionQuotaUsageError, match="blocked"):
         await record(_command())
 
     assert cycle.used_units == 20
@@ -186,7 +274,9 @@ async def test_matching_replay_returns_existing_without_commit() -> None:
         unit_of_work_factory=lambda: uow
     )
 
-    assert await record(command) is existing
+    result = await record(command)
+
+    assert result is existing
     assert uow.committed is False
 
 
