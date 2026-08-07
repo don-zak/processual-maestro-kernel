@@ -7,7 +7,6 @@ from processual_api.admin_marketplace.top_up_operations_router import (
 )
 from processual_api.settings import settings
 
-
 TOP_UP_KEYS = (
     "MAESTRO_TOP_UP_PURCHASE_ENABLED",
     "MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED",
