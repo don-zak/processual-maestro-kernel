@@ -78,12 +78,16 @@ def compare(
 
 
 def markdown(deltas: list[TopologyDelta]) -> str:
+    header = (
+        "| Workload | Concurrency | 1w p95 ms | 2w p95 ms | p95 delta | "
+        "1w OCU/s | 2w OCU/s | OCU/s delta | 1w BP | 2w BP | Max true errors |"
+    )
     lines = [
         "# Maestro worker topology comparison",
         "",
         "Positive OCU/s change is better; negative p95 change is better.",
         "",
-        "| Workload | Concurrency | 1w p95 ms | 2w p95 ms | p95 delta | 1w OCU/s | 2w OCU/s | OCU/s delta | 1w BP | 2w BP | Max true errors |",
+        header,
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for item in deltas:
