@@ -37,47 +37,34 @@ def percentile(values: list[float], q: float) -> float:
     return ordered[max(index, 0)]
 
 
+def workflow_payload(index: int, *, step_count: int, label: str) -> tuple[str, dict[str, object], dict[str, str]]:
+    token = uuid.uuid4().hex
+    steps = [
+        {
+            "id": f"{label}-step-{index}-{step_index}",
+            "agent_type": "work",
+            "description": f"{label} benchmark workflow step " + ("x" * 96),
+        }
+        for step_index in range(step_count)
+    ]
+    return (
+        "/workflows",
+        {
+            "workflow_id": f"{label}-load-{index}-{token}",
+            "goal": f"benchmark {label} workflow creation",
+            "steps": steps,
+        },
+        {"X-API-Key": "benchmark-only-api-key"},
+    )
+
+
 def payload_for(workload: str, index: int) -> tuple[str, dict[str, object] | None, dict[str, str]]:
     if workload == "light":
         return "/health/live", None, {}
     if workload == "normal":
-        return (
-            "/cgt/evaluate",
-            {
-                "transition_channel": 0.62,
-                "compatibility": 0.71,
-                "retention": 0.66,
-                "harmony": 0.58,
-                "fatigue": 0.24,
-                "complexity": 0.41,
-                "shock": 0.17,
-                "dwell_time": 4.0,
-                "carrier": 0.69,
-                "diversity": 0.54,
-                "novelty": 0.73,
-                "lift": 0.08,
-            },
-            {},
-        )
+        return workflow_payload(index, step_count=12, label="normal")
     if workload == "heavy":
-        token = uuid.uuid4().hex
-        steps = [
-            {
-                "id": f"step-{index}-{step_index}",
-                "agent_type": "work",
-                "description": "benchmark workflow step " + ("x" * 96),
-            }
-            for step_index in range(120)
-        ]
-        return (
-            "/workflows",
-            {
-                "workflow_id": f"load-{index}-{token}",
-                "goal": "benchmark realistic workflow creation",
-                "steps": steps,
-            },
-            {"X-API-Key": "benchmark-only-api-key"},
-        )
+        return workflow_payload(index, step_count=120, label="heavy")
     raise ValueError(f"unknown workload: {workload}")
 
 
