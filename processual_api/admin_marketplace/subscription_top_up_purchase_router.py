@@ -4,7 +4,7 @@ import hashlib
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import Depends, Header, HTTPException
@@ -229,7 +229,7 @@ async def purchase_subscription_top_up_endpoint(
 
     provider = _required_provider_config()
     customer_ref = _identity_customer_ref(current_user)
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(UTC)
     internal_idempotency_key = _internal_idempotency_key(
         customer_ref=customer_ref,
         client_key=idempotency_key,
