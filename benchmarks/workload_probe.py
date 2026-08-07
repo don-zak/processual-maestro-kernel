@@ -19,7 +19,9 @@ class Result:
     concurrency: int
     requests: int
     success: int
+    backpressure: int
     errors: int
+    backpressure_rate: float
     error_rate: float
     duration_seconds: float
     throughput_rps: float
@@ -110,10 +112,11 @@ async def run_stage(
     semaphore = asyncio.Semaphore(concurrency)
     latencies: list[float] = []
     success = 0
+    backpressure = 0
     errors = 0
 
     async def one(index: int) -> None:
-        nonlocal success, errors
+        nonlocal success, backpressure, errors
         path, payload, headers = payload_for(workload, index)
         async with semaphore:
             started = time.perf_counter()
@@ -124,6 +127,8 @@ async def run_stage(
                     response = await client.post(f"{base_url}{path}", json=payload, headers=headers)
                 if 200 <= response.status_code < 300:
                     success += 1
+                elif response.status_code == 429 and response.headers.get("X-Maestro-Capacity-Reason"):
+                    backpressure += 1
                 else:
                     errors += 1
             except Exception:
@@ -139,7 +144,9 @@ async def run_stage(
         concurrency=concurrency,
         requests=request_count,
         success=success,
+        backpressure=backpressure,
         errors=errors,
+        backpressure_rate=backpressure / request_count,
         error_rate=errors / request_count,
         duration_seconds=round(elapsed, 4),
         throughput_rps=round(request_count / elapsed, 2),
@@ -168,6 +175,10 @@ def first_saturation(results: list[Result]) -> int | None:
     return None
 
 
+def first_backpressure(results: list[Result]) -> int | None:
+    return next((result.concurrency for result in results if result.backpressure > 0), None)
+
+
 def markdown(results_by_workload: dict[str, list[Result]]) -> str:
     lines = ["# Maestro realistic workload benchmark", ""]
     for workload, results in results_by_workload.items():
@@ -175,24 +186,30 @@ def markdown(results_by_workload: dict[str, list[Result]]) -> str:
             [
                 f"## {workload}",
                 "",
-                "| Concurrency | Requests | p50 ms | p95 ms | p99 ms | RPS | Errors |",
-                "|---:|---:|---:|---:|---:|---:|---:|",
+                "| Concurrency | Requests | p50 ms | p95 ms | p99 ms | RPS | Backpressure | Errors |",
+                "|---:|---:|---:|---:|---:|---:|---:|---:|",
             ]
         )
         for result in results:
             lines.append(
                 f"| {result.concurrency} | {result.requests} | {result.p50_ms:.2f} | "
                 f"{result.p95_ms:.2f} | {result.p99_ms:.2f} | {result.throughput_rps:.2f} | "
-                f"{result.error_rate:.2%} |"
+                f"{result.backpressure_rate:.2%} | {result.error_rate:.2%} |"
             )
         saturation = first_saturation(results)
+        backpressure = first_backpressure(results)
         lines.extend(
             [
                 "",
                 (
-                    f"Approximate first saturation stage: **{saturation} concurrent requests**."
+                    f"Approximate first unprotected saturation stage: **{saturation} concurrent requests**."
                     if saturation is not None
-                    else "No saturation threshold reached in configured stages."
+                    else "No unprotected saturation threshold reached in configured stages."
+                ),
+                (
+                    f"First capacity backpressure stage: **{backpressure} concurrent requests**."
+                    if backpressure is not None
+                    else "No capacity backpressure observed in configured stages."
                 ),
                 "",
             ]
@@ -236,6 +253,7 @@ async def main() -> None:
     payload = {
         workload: {
             "saturation_concurrency": first_saturation(results),
+            "backpressure_concurrency": first_backpressure(results),
             "results": [asdict(result) for result in results],
         }
         for workload, results in results_by_workload.items()
