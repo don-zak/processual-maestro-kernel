@@ -6,7 +6,7 @@ import json
 import math
 import statistics
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import httpx
@@ -27,6 +27,7 @@ class FanoutResult:
     p99_ms: float
     backpressure_rate: float
     error_rate: float
+    error_details: dict[str, int] = field(default_factory=dict)
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -35,6 +36,10 @@ def percentile(values: list[float], q: float) -> float:
     ordered = sorted(values)
     index = min(math.ceil(q * len(ordered)) - 1, len(ordered) - 1)
     return ordered[max(index, 0)]
+
+
+def increment_error(details: dict[str, int], key: str) -> None:
+    details[key] = details.get(key, 0) + 1
 
 
 async def run_stage(
@@ -51,6 +56,7 @@ async def run_stage(
     success = 0
     backpressure = 0
     errors = 0
+    error_details: dict[str, int] = {}
 
     async def one() -> None:
         nonlocal success, backpressure, errors
@@ -70,8 +76,10 @@ async def run_stage(
                     backpressure += 1
                 else:
                     errors += 1
-            except Exception:
+                    increment_error(error_details, f"status:{response.status_code}")
+            except Exception as exc:
                 errors += 1
+                increment_error(error_details, f"exception:{type(exc).__name__}")
             finally:
                 latencies.append((time.perf_counter() - started) * 1000)
 
@@ -92,6 +100,7 @@ async def run_stage(
         p99_ms=round(percentile(latencies, 0.99), 2),
         backpressure_rate=backpressure / requests,
         error_rate=errors / requests,
+        error_details=error_details,
     )
 
 
@@ -102,6 +111,7 @@ async def main() -> None:
     parser.add_argument("--concurrency", default="5,10,20,40")
     parser.add_argument("--requests", type=int, default=120)
     parser.add_argument("--delay-ms", type=int, default=25)
+    parser.add_argument("--max-error-rate", type=float, default=0.0)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -134,6 +144,19 @@ async def main() -> None:
             f"| {result.width} | {result.concurrency} | {result.p95_ms:.2f} | "
             f"{result.throughput_rps:.2f} | {result.backpressure_rate:.2%} | "
             f"{result.error_rate:.2%} |"
+        )
+        if result.error_details:
+            print(f"  error details: {json.dumps(result.error_details, sort_keys=True)}")
+
+    violations = [result for result in results if result.error_rate > args.max_error_rate]
+    if violations:
+        details = ", ".join(
+            f"width={result.width}/concurrency={result.concurrency}:"
+            f"{result.error_rate:.2%} {result.error_details}"
+            for result in violations
+        )
+        raise SystemExit(
+            f"fan-out true error rate exceeded {args.max_error_rate:.2%}: {details}"
         )
 
 
