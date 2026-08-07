@@ -54,6 +54,15 @@ from processual_api.admin_marketplace.subscription_runtime_persistence import (
 from processual_api.admin_marketplace.subscription_runtime_transition_persistence import (
     SqlAlchemySubscriptionRuntimeTransitionRepository,
 )
+from processual_api.admin_marketplace.subscription_top_up_grant_persistence import (
+    SqlAlchemySubscriptionTopUpGrantRepository,
+)
+from processual_api.billing.commercial_top_up_repositories import (
+    SqlAlchemyCommercialTopUpAuditRepository,
+    SqlAlchemyCommercialTopUpGrantRepository,
+    SqlAlchemyCommercialTopUpOrderRepository,
+    SqlAlchemyCommercialTopUpPaymentRepository,
+)
 
 
 class SqlAlchemyAdminMarketplaceUnitOfWork:
@@ -106,6 +115,13 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
         self.subscription_runtime_transitions = (
             SqlAlchemySubscriptionRuntimeTransitionRepository(session)
+        )
+        self.top_up_orders = SqlAlchemyCommercialTopUpOrderRepository(session)
+        self.top_up_payments = SqlAlchemyCommercialTopUpPaymentRepository(session)
+        self.top_up_grants = SqlAlchemyCommercialTopUpGrantRepository(session)
+        self.top_up_audit = SqlAlchemyCommercialTopUpAuditRepository(session)
+        self.subscription_top_up_grants = SqlAlchemySubscriptionTopUpGrantRepository(
+            session
         )
         return self
 
