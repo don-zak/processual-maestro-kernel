@@ -102,9 +102,22 @@ class CommercialTopUpOrder(Base):
             """,
             name="state_allowed",
         ),
+        CheckConstraint(
+            "checkout_creation_status IN ('not_started','creating','ready','uncertain')",
+            name="checkout_creation_status_allowed",
+        ),
+        CheckConstraint(
+            "(checkout_creation_status = 'ready' AND provider_checkout_id IS NOT NULL) "
+            "OR checkout_creation_status != 'ready'",
+            name="ready_checkout_has_provider_id",
+        ),
         UniqueConstraint(
             "idempotency_key",
             name="uq_commercial_top_up_orders_idempotency_key",
+        ),
+        UniqueConstraint(
+            "provider_checkout_id",
+            name="uq_commercial_top_up_orders_provider_checkout_id",
         ),
         Index(
             "ix_commercial_top_up_orders_account_state",
@@ -164,6 +177,12 @@ class CommercialTopUpOrder(Base):
     )
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
     provider_variant_id: Mapped[str | None] = mapped_column(String(128))
+    provider_checkout_id: Mapped[str | None] = mapped_column(String(128))
+    checkout_creation_status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="not_started",
+    )
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     state: Mapped[str] = mapped_column(
         String(40),
