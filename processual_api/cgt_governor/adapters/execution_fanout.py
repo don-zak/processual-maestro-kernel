@@ -16,23 +16,21 @@ import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 from processual_api.cache.redis import get_redis
 from processual_api.settings import settings
 
-T = TypeVar("T")
 
-
-class ExecutionFanoutSaturated(RuntimeError):
+class ExecutionFanoutSaturatedError(RuntimeError):
     """Raised when an external provider slot cannot be admitted in time."""
 
 
-class ExecutionFanoutAuthorityUnavailable(RuntimeError):
+class ExecutionFanoutAuthorityUnavailableError(RuntimeError):
     """Raised when production cannot reach its shared fan-out authority."""
 
 
-class ExecutionFanoutLeaseLost(RuntimeError):
+class ExecutionFanoutLeaseLostError(RuntimeError):
     """Raised when a live provider call loses its shared lease."""
 
 
@@ -293,10 +291,10 @@ async def _heartbeat(
         except Exception:
             renewed = False
         if not renewed:
-            raise ExecutionFanoutLeaseLost("execution fan-out lease lost")
+            raise ExecutionFanoutLeaseLostError("execution fan-out lease lost")
 
 
-async def run_with_execution_fanout(
+async def run_with_execution_fanout[T](
     provider: str,
     operation: Callable[[], Awaitable[T]],
 ) -> T:
@@ -311,7 +309,7 @@ async def run_with_execution_fanout(
     if redis_client is not None:
         backend = RedisExecutionFanoutBackend(redis_client)
     elif settings.is_production:
-        raise ExecutionFanoutAuthorityUnavailable(
+        raise ExecutionFanoutAuthorityUnavailableError(
             "execution fan-out authority is unavailable"
         )
     else:
@@ -332,7 +330,7 @@ async def run_with_execution_fanout(
         if decision.admitted:
             break
         if time.monotonic() >= deadline:
-            raise ExecutionFanoutSaturated(
+            raise ExecutionFanoutSaturatedError(
                 f"execution fan-out saturated: {decision.reason}"
             )
         await asyncio.sleep(policy.retry_ms / 1000)
@@ -357,8 +355,7 @@ async def run_with_execution_fanout(
                 with suppress(asyncio.CancelledError):
                     await operation_task
                 raise heartbeat_error
-        result = await operation_task
-        return result
+        return await operation_task
     finally:
         for task in (heartbeat_task, operation_task):
             if not task.done():
