@@ -12,6 +12,10 @@ from processual_api.middleware.runtime_capacity import (
     _request_actor_key,
     _request_weight,
 )
+from processual_api.middleware.runtime_capacity_metrics import (
+    RuntimeCapacityAccounting,
+    operational_statistical_units,
+)
 
 
 @pytest.mark.asyncio
@@ -160,3 +164,56 @@ def test_api_key_actor_is_stable_but_not_raw_secret() -> None:
     assert actor_key is not None
     assert actor_key.startswith("api-key:")
     assert "benchmark-only-api-key" not in actor_key
+
+
+def test_one_maestro_operational_unit_is_one_ocu_second() -> None:
+    units = operational_statistical_units(
+        weight_ocu=4,
+        admitted_at=10.0,
+        finished_at=10.25,
+        lease_expires_at=20.0,
+    )
+
+    assert units == pytest.approx(1.0)
+
+
+def test_operational_units_are_capped_at_lease_expiry() -> None:
+    units = operational_statistical_units(
+        weight_ocu=3,
+        admitted_at=10.0,
+        finished_at=30.0,
+        lease_expires_at=15.0,
+    )
+
+    assert units == pytest.approx(15.0)
+
+
+def test_operational_units_never_go_negative() -> None:
+    units = operational_statistical_units(
+        weight_ocu=4,
+        admitted_at=10.0,
+        finished_at=9.0,
+        lease_expires_at=20.0,
+    )
+
+    assert units == 0.0
+
+
+def test_capacity_accounting_is_idempotent_per_lease() -> None:
+    accounting = RuntimeCapacityAccounting()
+
+    assert accounting.admitted(
+        lease_id="lease-ocu",
+        weight_ocu=2,
+        admitted_at=100.0,
+        lease_seconds=10,
+    ) is True
+    assert accounting.admitted(
+        lease_id="lease-ocu",
+        weight_ocu=2,
+        admitted_at=100.0,
+        lease_seconds=10,
+    ) is False
+
+    assert accounting.released(lease_id="lease-ocu", finished_at=101.5) == pytest.approx(3.0)
+    assert accounting.released(lease_id="lease-ocu", finished_at=102.0) == 0.0
