@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from hashlib import sha256
 import json
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Literal
 
 
@@ -101,7 +101,7 @@ def build_usage_reservation(
     normalized_key = idempotency_key.strip()
     if not normalized_key or len(normalized_key) > 512:
         raise SubscriptionRuntimeError("usage idempotency key is invalid.")
-    timestamp = occurred_at or datetime.now(timezone.utc)
+    timestamp = occurred_at or datetime.now(UTC)
     _aware(timestamp, "occurred_at")
     try:
         canonical_dimensions = json.dumps(
