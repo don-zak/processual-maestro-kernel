@@ -111,18 +111,28 @@ class CommercialTopUpOrder(Base):
             "account_id",
             "state",
         ),
+        Index(
+            "ix_commercial_top_up_orders_customer_state",
+            "customer_ref",
+            "state",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _uuid_column()
-    account_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        nullable=False,
-    )
+    account_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
+        ForeignKey("admin_market_subscriptions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    quota_cycle_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_subscription_quota_cycles.id", ondelete="RESTRICT"),
         nullable=False,
     )
     plan_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    plan_catalog_version: Mapped[str] = mapped_column(String(64), nullable=False)
     requested_units: Mapped[int] = mapped_column(nullable=False)
     bundle_count: Mapped[int] = mapped_column(nullable=False)
     total_price_usd: Mapped[Decimal] = mapped_column(
