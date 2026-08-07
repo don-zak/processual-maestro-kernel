@@ -12,9 +12,13 @@ on:
       - benchmarks/flush_redis.py
       - tests/test_topology_compare.py
       - tests/test_fanout_probe.py
+      - tests/test_execution_fanout.py
+      - tests/test_adapter_registry.py
       - .github/workflows/topology-benchmark.yml
       - processual_api/middleware/runtime_capacity.py
       - processual_api/middleware/runtime_capacity_metrics.py
+      - processual_api/cgt_governor/adapters/execution_fanout.py
+      - processual_api/cgt_governor/adapters/registry.py
 
 permissions:
   contents: read
@@ -60,6 +64,9 @@ jobs:
       CAPACITY_GUARD_ENABLED: "true"
       CAPACITY_GLOBAL_LIMIT_OCU: "40"
       CAPACITY_ACTOR_LIMIT_OCU: "12"
+      EXECUTION_FANOUT_ENABLED: "true"
+      EXECUTION_FANOUT_GLOBAL_LIMIT: "16"
+      EXECUTION_FANOUT_PROVIDER_LIMIT: "8"
 
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +86,8 @@ jobs:
           PYTHONPATH=. python -m pytest \
             tests/test_topology_compare.py \
             tests/test_fanout_probe.py \
+            tests/test_execution_fanout.py \
+            tests/test_adapter_registry.py \
             -q
 
       - name: Capture runner envelope
@@ -173,7 +182,7 @@ jobs:
       - name: Start fanout harness with one worker
         run: |
           python benchmarks/flush_redis.py
-          python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 1 > topology-results/fanout-1w.log 2>&1 &
+          CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 1 > topology-results/fanout-1w.log 2>&1 &
           echo $! > topology-results/fanout.pid
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then
@@ -205,7 +214,7 @@ jobs:
             sleep 1
           done
           python benchmarks/flush_redis.py
-          python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 2 > topology-results/fanout-2w.log 2>&1 &
+          CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 2 > topology-results/fanout-2w.log 2>&1 &
           echo $! > topology-results/fanout.pid
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then
