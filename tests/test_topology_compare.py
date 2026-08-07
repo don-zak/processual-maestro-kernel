@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from benchmarks.topology_compare import compare
 
 
@@ -27,8 +29,8 @@ def test_compare_reports_worker_scaling_delta() -> None:
     deltas = compare(one_worker, two_workers)
 
     assert len(deltas) == 3
-    assert all(item.p95_change_pct == -20.0 for item in deltas)
-    assert all(item.ocu_per_second_change_pct == 30.0 for item in deltas)
+    assert all(item.p95_change_pct == pytest.approx(-20.0) for item in deltas)
+    assert all(item.ocu_per_second_change_pct == pytest.approx(30.0) for item in deltas)
     assert all(item.true_error_rate_max == 0.0 for item in deltas)
 
 
@@ -38,6 +40,6 @@ def test_compare_preserves_backpressure_and_true_error_signals() -> None:
 
     deltas = compare(one_worker, two_workers)
 
-    assert all(item.one_worker_backpressure_rate == 0.25 for item in deltas)
-    assert all(item.two_worker_backpressure_rate == 0.15 for item in deltas)
-    assert all(item.true_error_rate_max == 0.02 for item in deltas)
+    assert all(item.one_worker_backpressure_rate == pytest.approx(0.25) for item in deltas)
+    assert all(item.two_worker_backpressure_rate == pytest.approx(0.15) for item in deltas)
+    assert all(item.true_error_rate_max == pytest.approx(0.02) for item in deltas)
