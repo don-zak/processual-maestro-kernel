@@ -3,9 +3,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Protocol
 
+from processual_api.admin_marketplace.subscription_billing_period import quota_period_end
 from processual_api.admin_marketplace.subscription_quota_profiles import (
     SubscriptionQuotaProfile,
     validate_quota_profile,
@@ -138,7 +139,10 @@ def bootstrap_subscription_runtime_factory(
                 version=0,
                 effective_at=effective_at,
             )
-            period_end = effective_at + timedelta(days=profile.period_days)
+            period_end = quota_period_end(
+                starts_at=effective_at,
+                period_days=profile.period_days,
+            )
             accounts = tuple(
                 AdminMarketSubscriptionQuotaAccount(
                     id=uuid.uuid4(),
