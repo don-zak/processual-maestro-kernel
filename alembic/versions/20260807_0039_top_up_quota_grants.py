@@ -22,14 +22,36 @@ GRANT_TABLE = "admin_market_subscription_top_up_grants"
 CATALOG_VERSION = "2026-08-plan-fulfillment-v1"
 
 _ENTITLEMENTS_BY_PLAN = {
-    "academic": '["maestro_execution","byok_provider_connection","standard_support","academic_use"]',
-    "starter": '["maestro_execution","byok_provider_connection","standard_support"]',
-    "enterprise_integration_starter": '["maestro_execution","byok_provider_connection","business_support","advanced_integration","enterprise_governance"]',
-    "business": '["maestro_execution","byok_provider_connection","business_support"]',
-    "enterprise_pilot": '["maestro_execution","byok_provider_connection","business_support","enterprise_governance"]',
-    "enterprise_core": '["maestro_execution","byok_provider_connection","business_support","enterprise_governance"]',
-    "enterprise_scale": '["maestro_execution","byok_provider_connection","business_support","enterprise_governance","advanced_integration"]',
-    "enterprise_strategic": '["maestro_execution","byok_provider_connection","business_support","enterprise_governance","advanced_integration"]',
+    "academic": (
+        '["maestro_execution","byok_provider_connection",'
+        '"standard_support","academic_use"]'
+    ),
+    "starter": (
+        '["maestro_execution","byok_provider_connection","standard_support"]'
+    ),
+    "enterprise_integration_starter": (
+        '["maestro_execution","byok_provider_connection","business_support",'
+        '"advanced_integration","enterprise_governance"]'
+    ),
+    "business": (
+        '["maestro_execution","byok_provider_connection","business_support"]'
+    ),
+    "enterprise_pilot": (
+        '["maestro_execution","byok_provider_connection","business_support",'
+        '"enterprise_governance"]'
+    ),
+    "enterprise_core": (
+        '["maestro_execution","byok_provider_connection","business_support",'
+        '"enterprise_governance"]'
+    ),
+    "enterprise_scale": (
+        '["maestro_execution","byok_provider_connection","business_support",'
+        '"enterprise_governance","advanced_integration"]'
+    ),
+    "enterprise_strategic": (
+        '["maestro_execution","byok_provider_connection","business_support",'
+        '"enterprise_governance","advanced_integration"]'
+    ),
 }
 
 
@@ -46,7 +68,10 @@ def upgrade() -> None:
         batch.drop_constraint("usage_within_available", type_="check")
         batch.create_check_constraint(
             "usage_within_available",
-            "used_units >= 0 AND used_units <= base_limit_units + rollover_units + top_up_units",
+            (
+                "used_units >= 0 AND used_units <= "
+                "base_limit_units + rollover_units + top_up_units"
+            ),
         )
         batch.create_check_constraint("top_up_nonnegative", "top_up_units >= 0")
 
