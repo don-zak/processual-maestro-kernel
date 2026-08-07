@@ -130,8 +130,11 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "alembic/versions/*.py" = ["E501", "I001"]
 "tests/*.py" = ["E501", "I001", "UP017"]
 "processual_api/cgt_governor/reports/llm_reporter.py" = ["E501"]
-"processual_api/admin_marketplace/subscription_runtime_persistence.py" = ["E501"]
+"processual_api/admin_marketplace/lemon_squeezy_inbox_lifecycle.py" = ["I001"]
+"processual_api/admin_marketplace/subscription_runtime.py" = ["I001"]
+"processual_api/admin_marketplace/subscription_runtime_persistence.py" = ["E501", "I001"]
 "processual_api/admin_marketplace/subscription_runtime_transition_persistence.py" = ["E501"]
+"processual_api/staging_smoke.py" = ["I001"]
 
 [tool.flake8]
 max-line-length = 120
