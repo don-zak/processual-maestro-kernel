@@ -35,7 +35,7 @@ class CapacityPolicy:
     route_weights: dict[str, int]
 
     @classmethod
-    def from_env(cls) -> "CapacityPolicy":
+    def from_env(cls) -> CapacityPolicy:
         raw_overrides = os.environ.get("CAPACITY_ROUTE_WEIGHTS_JSON", "").strip()
         route_weights: dict[str, int] = {}
         if raw_overrides:
