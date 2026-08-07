@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from processual_api.admin_marketplace.subscription_access import (
     resolve_subscription_access,
@@ -86,14 +87,8 @@ def _extract_customer_ref(request: Request) -> str | None:
         return None
 
 
-class SubscriptionMiddleware(RuntimeCapacityMiddleware):
+class _SubscriptionAccessMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        async def subscription_call_next(capacity_request: Request):
-            return await self._dispatch_subscription(capacity_request, call_next)
-
-        return await super().dispatch(request, subscription_call_next)
-
-    async def _dispatch_subscription(self, request: Request, call_next):
         path = request.url.path
 
         if (
@@ -157,3 +152,14 @@ class SubscriptionMiddleware(RuntimeCapacityMiddleware):
             detail="Subscription access is temporarily unavailable.",
             stage="unavailable",
         )
+
+
+class SubscriptionMiddleware:
+    """Compose capacity admission and subscription access as independent layers."""
+
+    def __init__(self, app) -> None:
+        subscription_layer = _SubscriptionAccessMiddleware(app)
+        self._app = RuntimeCapacityMiddleware(subscription_layer)
+
+    async def __call__(self, scope, receive, send) -> None:
+        await self._app(scope, receive, send)
