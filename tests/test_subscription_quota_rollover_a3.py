@@ -94,12 +94,13 @@ def _plan(plan_code: str = "starter") -> SimpleNamespace:
     )
 
 
-def _subscription(status: str = "active") -> SimpleNamespace:
+def _subscription(status: str = "active", *, starts_at: datetime = START) -> SimpleNamespace:
     return SimpleNamespace(
         id=SUBSCRIPTION_ID,
         customer_ref="customer_001",
         status=status,
         plan_id=PLAN_ID,
+        starts_at=starts_at,
     )
 
 
@@ -289,3 +290,41 @@ async def test_noncontiguous_period_is_rejected() -> None:
 
     with pytest.raises(SubscriptionQuotaRolloverError, match="not contiguous"):
         await rollover(_command())
+
+
+@pytest.mark.asyncio
+async def test_monthly_rollover_preserves_original_activation_day_after_short_month() -> None:
+    activated_at = datetime(2026, 1, 31, 14, 30, tzinfo=UTC)
+    february_boundary = datetime(2026, 2, 28, 14, 30, tzinfo=UTC)
+    march_boundary = datetime(2026, 3, 31, 14, 30, tzinfo=UTC)
+    source = _source(period_start=activated_at, period_end=february_boundary)
+    uow = FakeUow(_subscription(starts_at=activated_at), source)
+    rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
+
+    cycle = await rollover(
+        _command(period_start=february_boundary, period_end=march_boundary)
+    )
+
+    assert cycle.period_start == february_boundary
+    assert cycle.period_end == march_boundary
+
+
+@pytest.mark.asyncio
+async def test_caller_cannot_replace_activation_anchored_month_with_fixed_thirty_days() -> None:
+    activated_at = datetime(2026, 1, 31, 14, 30, tzinfo=UTC)
+    february_boundary = datetime(2026, 2, 28, 14, 30, tzinfo=UTC)
+    fixed_thirty_day_end = february_boundary + timedelta(days=30)
+    source = _source(period_start=activated_at, period_end=february_boundary)
+    uow = FakeUow(_subscription(starts_at=activated_at), source)
+    rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
+
+    with pytest.raises(
+        SubscriptionQuotaRolloverError,
+        match="activation-anchored monthly boundary",
+    ):
+        await rollover(
+            _command(
+                period_start=february_boundary,
+                period_end=fixed_thirty_day_end,
+            )
+        )
