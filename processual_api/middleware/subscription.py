@@ -158,8 +158,13 @@ class SubscriptionMiddleware:
     """Compose capacity admission and subscription access as independent layers."""
 
     def __init__(self, app) -> None:
-        subscription_layer = _SubscriptionAccessMiddleware(app)
-        self._app = RuntimeCapacityMiddleware(subscription_layer)
+        self._subscription_layer = _SubscriptionAccessMiddleware(app)
+        self._app = RuntimeCapacityMiddleware(self._subscription_layer)
+
+    async def dispatch(self, request: Request, call_next):
+        """Preserve the historical direct-dispatch contract for focused tests."""
+
+        return await self._subscription_layer.dispatch(request, call_next)
 
     async def __call__(self, scope, receive, send) -> None:
         await self._app(scope, receive, send)
