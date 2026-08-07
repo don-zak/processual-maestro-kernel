@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from processual_api.admin_marketplace.lemon_squeezy_top_up_checkout import (
     CreateTopUpCheckoutCommand,
@@ -19,6 +21,9 @@ from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
 from processual_api.admin_marketplace.router import router
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    AdminMarketSubscriptionQuotaCycle,
+)
 from processual_api.admin_marketplace.subscription_top_up_order import (
     CreateSubscriptionTopUpOrderCommand,
     SubscriptionTopUpOrderError,
@@ -28,6 +33,7 @@ from processual_api.auth.session_router import get_identity_user
 from processual_api.billing.commercial_settings_top_up_checkout_contracts import (
     TopUpCheckoutChannel,
 )
+from processual_api.billing.plan_fulfillment_catalog import QUOTA_METRIC_CODE
 from processual_api.db.session import get_session_factory
 
 _TOP_UP_ORDER_NAMESPACE = uuid.UUID("ce8609b7-bab8-5d96-8ee7-177bd43f73ef")
@@ -37,7 +43,6 @@ class SubscriptionTopUpPurchaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     subscription_id: uuid.UUID
-    quota_cycle_id: uuid.UUID
     requested_units: int = Field(gt=0, le=2_147_483_647)
     email: str | None = Field(default=None, max_length=320)
 
@@ -103,9 +108,42 @@ def _required_provider_config() -> _LemonTopUpProviderConfig:
     return _LemonTopUpProviderConfig(**values)
 
 
+def _internal_idempotency_key(*, customer_ref: str, client_key: str) -> str:
+    digest = hashlib.sha256(client_key.strip().encode("utf-8")).hexdigest()
+    return f"top-up:{customer_ref}:{digest}"
+
+
 def _deterministic_order_id(*, customer_ref: str, idempotency_key: str) -> uuid.UUID:
-    material = f"maestro-top-up:{customer_ref}:{idempotency_key.strip()}"
+    material = f"maestro-top-up:{customer_ref}:{idempotency_key}"
     return uuid.uuid5(_TOP_UP_ORDER_NAMESPACE, material)
+
+
+async def _resolve_current_cycle_id(
+    *,
+    subscription_id: uuid.UUID,
+    customer_ref: str,
+    at: datetime,
+) -> uuid.UUID:
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        statement = (
+            select(AdminMarketSubscriptionQuotaCycle.id)
+            .where(
+                AdminMarketSubscriptionQuotaCycle.subscription_id == subscription_id,
+                AdminMarketSubscriptionQuotaCycle.customer_ref == customer_ref,
+                AdminMarketSubscriptionQuotaCycle.metric_code == QUOTA_METRIC_CODE,
+                AdminMarketSubscriptionQuotaCycle.period_start <= at,
+                AdminMarketSubscriptionQuotaCycle.period_end > at,
+            )
+            .order_by(AdminMarketSubscriptionQuotaCycle.period_start.desc())
+            .limit(2)
+        )
+        cycle_ids = list((await session.scalars(statement)).all())
+    if len(cycle_ids) != 1:
+        raise SubscriptionTopUpOrderError(
+            "top-up purchase requires exactly one current authoritative quota cycle."
+        )
+    return cycle_ids[0]
 
 
 async def _retrieve_ready_checkout(
@@ -166,25 +204,34 @@ async def purchase_subscription_top_up_endpoint(
 
     provider = _required_provider_config()
     customer_ref = _identity_customer_ref(current_user)
+    created_at = datetime.now(timezone.utc)
+    internal_idempotency_key = _internal_idempotency_key(
+        customer_ref=customer_ref,
+        client_key=idempotency_key,
+    )
     order_id = _deterministic_order_id(
         customer_ref=customer_ref,
-        idempotency_key=idempotency_key,
+        idempotency_key=internal_idempotency_key,
     )
-    created_at = datetime.now(timezone.utc)
 
-    create_order = create_subscription_top_up_order_factory(
-        unit_of_work_factory=_uow_factory,
-    )
     try:
+        quota_cycle_id = await _resolve_current_cycle_id(
+            subscription_id=body.subscription_id,
+            customer_ref=customer_ref,
+            at=created_at,
+        )
+        create_order = create_subscription_top_up_order_factory(
+            unit_of_work_factory=_uow_factory,
+        )
         order_result = await create_order(
             CreateSubscriptionTopUpOrderCommand(
                 order_id=order_id,
                 customer_ref=customer_ref,
                 subscription_id=body.subscription_id,
-                quota_cycle_id=body.quota_cycle_id,
+                quota_cycle_id=quota_cycle_id,
                 requested_units=body.requested_units,
                 channel=TopUpCheckoutChannel.LEMON_SQUEEZY,
-                idempotency_key=idempotency_key,
+                idempotency_key=internal_idempotency_key,
                 created_at=created_at,
             )
         )
