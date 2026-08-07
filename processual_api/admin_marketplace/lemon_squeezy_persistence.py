@@ -109,6 +109,7 @@ class AdminMarketLemonSqueezyWebhookInbox(Base):
     provider_subscription_id: Mapped[str | None] = mapped_column(String(128))
     variant_id: Mapped[str | None] = mapped_column(String(128))
     currency: Mapped[str | None] = mapped_column(String(3))
+    subtotal_amount: Mapped[str | None] = mapped_column(String(64))
     total_amount: Mapped[str | None] = mapped_column(String(64))
     provider_status: Mapped[str | None] = mapped_column(String(64))
     provider_effective_at: Mapped[datetime | None] = mapped_column(
@@ -197,6 +198,7 @@ class SqlAlchemyLemonSqueezyWebhookInboxRepository:
                 provider_subscription_id=entry.provider_subscription_id,
                 variant_id=entry.variant_id,
                 currency=entry.currency,
+                subtotal_amount=entry.subtotal_amount,
                 total_amount=entry.total_amount,
                 provider_status=entry.provider_status,
                 provider_effective_at=entry.provider_effective_at,
