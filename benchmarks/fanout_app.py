@@ -19,7 +19,7 @@ async def health_live() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/benchmark/fanout")
+@app.post("/benchmark/fanout", response_model=None)
 async def fanout(
     width: int = Query(default=4, ge=1, le=32),
     delay_ms: int = Query(default=25, ge=1, le=250),
