@@ -17,11 +17,29 @@ from processual_api.admin_marketplace.router import (
 from processual_api.admin_marketplace.runtime import AdminMarketplaceRuntime
 from processual_api.admin_marketplace.top_up_production_readiness import (
     evaluate_top_up_production_readiness,
+    require_top_up_production_readiness,
 )
 from processual_api.admin_marketplace.top_up_recovery_scan import (
     scan_top_up_recovery_candidates,
 )
 from processual_api.auth.session_router import get_identity_user
+from processual_api.settings import settings
+
+
+def _enforce_production_readiness_on_import() -> None:
+    if not settings.is_production:
+        return
+    readiness = evaluate_top_up_production_readiness()
+    if not (
+        readiness.lemon_purchase_enabled
+        or readiness.local_purchase_enabled
+        or readiness.local_admin_enabled
+    ):
+        return
+    require_top_up_production_readiness()
+
+
+_enforce_production_readiness_on_import()
 
 
 class TopUpOperationsStatusResponse(BaseModel):
