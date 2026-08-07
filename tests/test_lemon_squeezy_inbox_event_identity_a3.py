@@ -56,7 +56,9 @@ def _evidence(*, status: str = "active") -> LemonSqueezyVerifiedEvidence:
         provider_subscription_id="9001",
         variant_id="8001",
         currency=None,
+        subtotal_amount=None,
         total_amount=None,
+        refunded_amount=None,
         status=status,
         effective_at=NOW,
     )
