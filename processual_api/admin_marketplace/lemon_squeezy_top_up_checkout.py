@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Protocol
@@ -98,17 +98,18 @@ def create_lemon_squeezy_top_up_checkout_factory(
                         "ready checkout is missing provider checkout id."
                     )
                 raise LemonSqueezyTopUpCheckoutError(
-                    "checkout URL is not persisted and cannot be replayed safely."
+                    "checkout already exists; retrieve it from the provider instead of creating another."
                 )
             if order.checkout_creation_status in {"creating", "uncertain"}:
                 raise LemonSqueezyTopUpCheckoutError(
-                    "checkout creation state is uncertain; manual reconciliation is required."
+                    "checkout creation state is uncertain; reconciliation is required."
                 )
             if order.checkout_creation_status != "not_started":
                 raise LemonSqueezyTopUpCheckoutError(
                     "checkout creation state is invalid."
                 )
 
+            subtotal_usd = Decimal(str(order.total_price_usd))
             order.provider_variant_id = command.provider_variant_id
             order.checkout_creation_status = "creating"
             await uow.commit()
@@ -120,7 +121,7 @@ def create_lemon_squeezy_top_up_checkout_factory(
                     variant_id=command.provider_variant_id,
                     customer_ref=command.customer_ref,
                     order_ref=str(command.order_id),
-                    subtotal_usd=Decimal(str(order.total_price_usd)),
+                    subtotal_usd=subtotal_usd,
                     email=command.email.strip() if command.email else None,
                     success_url=command.success_url,
                 )
@@ -172,41 +173,48 @@ def build_lemon_squeezy_checkout_payload(
     request: LemonSqueezyCheckoutRequest,
 ) -> dict[str, Any]:
     cents = _usd_to_cents(request.subtotal_usd)
-    attributes: dict[str, Any] = {
-        "checkout_options": {
-            "embed": False,
-            "media": False,
-            "logo": True,
-        },
-        "checkout_data": {
-            "custom": {
-                "customer_ref": request.customer_ref,
-                "order_ref": request.order_ref,
-                "offer_ref": _TOP_UP_OFFER_REF,
-            }
-        },
-        "product_options": {
-            "redirect_url": request.success_url,
-            "enabled_variants": [int(request.variant_id)],
-        },
-        "expires_at": None,
-        "preview": False,
-        "test_mode": False,
+    checkout_data: dict[str, Any] = {
+        "custom": {
+            "customer_ref": request.customer_ref,
+            "order_ref": request.order_ref,
+            "offer_ref": _TOP_UP_OFFER_REF,
+        }
     }
     if request.email:
-        attributes["checkout_data"]["email"] = request.email
-    relationships = {
-        "store": {"data": {"type": "stores", "id": request.store_id}},
-        "variant": {"data": {"type": "variants", "id": request.variant_id}},
-    }
+        checkout_data["email"] = request.email
+
     return {
         "data": {
             "type": "checkouts",
             "attributes": {
-                **attributes,
                 "custom_price": cents,
+                "product_options": {
+                    "redirect_url": request.success_url,
+                    "enabled_variants": [int(request.variant_id)],
+                },
+                "checkout_options": {
+                    "embed": False,
+                    "media": False,
+                    "logo": True,
+                },
+                "checkout_data": checkout_data,
+                "expires_at": None,
+                "preview": False,
             },
-            "relationships": relationships,
+            "relationships": {
+                "store": {
+                    "data": {
+                        "type": "stores",
+                        "id": request.store_id,
+                    }
+                },
+                "variant": {
+                    "data": {
+                        "type": "variants",
+                        "id": request.variant_id,
+                    }
+                },
+            },
         }
     }
 
@@ -267,8 +275,10 @@ def _validate(command: CreateTopUpCheckoutCommand) -> None:
 
 
 def _validate_provider_response(response: LemonSqueezyCheckoutResponse) -> None:
-    if not response.checkout_id.strip() or not response.checkout_id.isdigit():
-        raise LemonSqueezyTopUpCheckoutError("provider checkout id is invalid.")
+    try:
+        uuid.UUID(response.checkout_id)
+    except (ValueError, AttributeError) as exc:
+        raise LemonSqueezyTopUpCheckoutError("provider checkout id is invalid.") from exc
     if not response.url.startswith("https://"):
         raise LemonSqueezyTopUpCheckoutError("provider checkout URL is invalid.")
 
