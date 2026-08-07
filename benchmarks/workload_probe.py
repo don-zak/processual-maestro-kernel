@@ -58,6 +58,35 @@ def workflow_payload(index: int, *, step_count: int, label: str) -> tuple[str, d
     )
 
 
+def governance_payload(index: int, *, batch_size: int = 20) -> tuple[str, dict[str, object], dict[str, str]]:
+    answers = []
+    for item in range(batch_size):
+        answers.append(
+            {
+                "answer": f"Deterministic benchmark answer {index}-{item}. " + ("stable context " * 12),
+                "language": "en",
+                "compatibility": 0.72,
+                "coherence": 0.78,
+                "structural_support": 0.68,
+                "usefulness": 0.81,
+                "complexity": 0.34,
+                "fatigue": 0.12,
+                "shock": 0.08,
+                "lift": 0.64,
+                "novelty": 0.43,
+                "no_answer": 0.0,
+                "hallucination": 0.03,
+                "constraint_failure": 0.01,
+                "speed": 0.74,
+            }
+        )
+    return (
+        "/cgt/govern/batch",
+        {"answers": answers},
+        {"X-API-Key": "benchmark-only-api-key"},
+    )
+
+
 def payload_for(workload: str, index: int) -> tuple[str, dict[str, object] | None, dict[str, str]]:
     if workload == "light":
         return "/health/live", None, {}
@@ -65,6 +94,8 @@ def payload_for(workload: str, index: int) -> tuple[str, dict[str, object] | Non
         return workflow_payload(index, step_count=12, label="normal")
     if workload == "heavy":
         return workflow_payload(index, step_count=120, label="heavy")
+    if workload == "governance-heavy":
+        return governance_payload(index)
     raise ValueError(f"unknown workload: {workload}")
 
 
@@ -177,6 +208,7 @@ async def main() -> None:
     parser.add_argument("--light-requests", type=int, default=200)
     parser.add_argument("--normal-requests", type=int, default=160)
     parser.add_argument("--heavy-requests", type=int, default=80)
+    parser.add_argument("--governance-requests", type=int, default=40)
     args = parser.parse_args()
 
     stages = [int(value) for value in args.concurrency.split(",") if value.strip()]
@@ -184,11 +216,12 @@ async def main() -> None:
         "light": args.light_requests,
         "normal": args.normal_requests,
         "heavy": args.heavy_requests,
+        "governance-heavy": args.governance_requests,
     }
     limits = httpx.Limits(max_connections=max(stages) * 3, max_keepalive_connections=max(stages))
-    async with httpx.AsyncClient(timeout=20.0, limits=limits) as client:
+    async with httpx.AsyncClient(timeout=30.0, limits=limits) as client:
         results_by_workload: dict[str, list[Result]] = {}
-        for workload in ("light", "normal", "heavy"):
+        for workload in ("light", "normal", "heavy", "governance-heavy"):
             results_by_workload[workload] = [
                 await run_stage(
                     client=client,
