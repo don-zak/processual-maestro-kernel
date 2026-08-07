@@ -7,6 +7,7 @@ on:
       - feat/a3-admin-marketplace-original-offers
     paths:
       - benchmarks/load_probe.py
+      - benchmarks/workload_probe.py
       - .github/workflows/load-benchmark.yml
 
 permissions:
@@ -110,6 +111,16 @@ jobs:
             --output benchmark-results/dependency-ready.json \
             | tee benchmark-results/dependency-ready.txt
 
+      - name: Probe realistic Maestro workloads
+        run: |
+          python benchmarks/workload_probe.py \
+            --concurrency 1,5,10,20,40 \
+            --light-requests 200 \
+            --normal-requests 160 \
+            --heavy-requests 80 \
+            --output benchmark-results/workloads.json \
+            | tee benchmark-results/workloads.txt
+
       - name: Build benchmark summary
         if: always()
         run: |
@@ -119,6 +130,8 @@ jobs:
             cat benchmark-results/http-live.md || true
             echo
             cat benchmark-results/dependency-ready.md || true
+            echo
+            cat benchmark-results/workloads.md || true
             echo
             echo "## Server tail"
             echo '```text'
