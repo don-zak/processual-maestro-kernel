@@ -34,6 +34,7 @@ class LemonSqueezyWebhookInboxEntry:
     provider_subscription_id: str | None = None
     variant_id: str | None = None
     currency: str | None = None
+    subtotal_amount: str | None = None
     total_amount: str | None = None
     provider_status: str | None = None
     provider_effective_at: datetime | None = None
@@ -108,6 +109,7 @@ def _same_binding(
         and existing.provider_subscription_id == evidence.provider_subscription_id
         and existing.variant_id == evidence.variant_id
         and existing.currency == evidence.currency
+        and existing.subtotal_amount == evidence.subtotal_amount
         and existing.total_amount == evidence.total_amount
         and existing.provider_status == evidence.status
         and existing.provider_effective_at == evidence.effective_at
@@ -173,6 +175,7 @@ async def ingest_verified_lemon_squeezy_webhook(
         provider_subscription_id=evidence.provider_subscription_id,
         variant_id=evidence.variant_id,
         currency=evidence.currency,
+        subtotal_amount=evidence.subtotal_amount,
         total_amount=evidence.total_amount,
         provider_status=evidence.status,
         provider_effective_at=evidence.effective_at,
