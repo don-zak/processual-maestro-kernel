@@ -36,6 +36,7 @@ class LemonSqueezyWebhookInboxEntry:
     currency: str | None = None
     subtotal_amount: str | None = None
     total_amount: str | None = None
+    refunded_amount: str | None = None
     provider_status: str | None = None
     provider_effective_at: datetime | None = None
     claimed_at: datetime | None = None
@@ -111,6 +112,7 @@ def _same_binding(
         and existing.currency == evidence.currency
         and existing.subtotal_amount == evidence.subtotal_amount
         and existing.total_amount == evidence.total_amount
+        and existing.refunded_amount == evidence.refunded_amount
         and existing.provider_status == evidence.status
         and existing.provider_effective_at == evidence.effective_at
     )
@@ -177,6 +179,7 @@ async def ingest_verified_lemon_squeezy_webhook(
         currency=evidence.currency,
         subtotal_amount=evidence.subtotal_amount,
         total_amount=evidence.total_amount,
+        refunded_amount=evidence.refunded_amount,
         provider_status=evidence.status,
         provider_effective_at=evidence.effective_at,
     )
