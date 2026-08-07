@@ -30,6 +30,10 @@ try:
         "Requests that encountered runtime-capacity backpressure.",
         ["reason"],
     )
+    LEASE_RENEWALS = Counter(
+        "maestro_capacity_lease_renewals",
+        "Successful runtime-capacity lease renewals for long-running work.",
+    )
     LEASE_EXPIRATIONS = Counter(
         "maestro_capacity_lease_expirations",
         "Capacity reservations whose accounting reached the lease expiry boundary.",
@@ -86,6 +90,32 @@ class RuntimeCapacityAccounting:
             ADMISSIONS.labels(outcome="admitted", reason="none").inc()
         return True
 
+    def renewed(
+        self,
+        *,
+        lease_id: str,
+        renewed_at: float,
+        lease_seconds: int,
+    ) -> bool:
+        lease = self._leases.get(lease_id)
+        if lease is None:
+            return False
+        self._leases[lease_id] = CapacityLeaseAccounting(
+            weight_ocu=lease.weight_ocu,
+            admitted_at=lease.admitted_at,
+            lease_expires_at=max(
+                lease.lease_expires_at,
+                renewed_at + lease_seconds,
+            ),
+        )
+        if _PROMETHEUS_AVAILABLE:
+            LEASE_RENEWALS.inc()
+        return True
+
+    def lease_expires_at(self, *, lease_id: str) -> float | None:
+        lease = self._leases.get(lease_id)
+        return lease.lease_expires_at if lease is not None else None
+
     def backpressured(self, *, reason: str) -> None:
         if _PROMETHEUS_AVAILABLE:
             BACKPRESSURE.labels(reason=_bounded_reason(reason)).inc()
@@ -114,7 +144,7 @@ class RuntimeCapacityAccounting:
 
 
 def _bounded_reason(reason: str) -> str:
-    if reason in {"global", "actor", "backend_unavailable"}:
+    if reason in {"global", "actor", "backend_unavailable", "lease_lost"}:
         return reason
     return "unknown"
 
