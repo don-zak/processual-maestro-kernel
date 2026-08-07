@@ -5,6 +5,7 @@ import asyncio
 import pytest
 from starlette.requests import Request
 
+import processual_api.middleware.runtime_capacity as capacity_module
 from processual_api.middleware.runtime_capacity import (
     CapacityPolicy,
     CapacityReservation,
@@ -113,6 +114,70 @@ async def test_release_restores_capacity() -> None:
     assert retried.admitted is True
 
 
+@pytest.mark.asyncio
+async def test_renew_extends_in_memory_lease_without_double_charging(monkeypatch) -> None:
+    backend = InMemoryCapacityBackend()
+    reservation = CapacityReservation("one", 4, "customer:a")
+    now = 100.0
+    monkeypatch.setattr(capacity_module.time, "monotonic", lambda: now)
+
+    admitted = await backend.reserve(
+        lease_id=reservation.lease_id,
+        weight=reservation.weight,
+        actor_key=reservation.actor_key,
+        global_limit=4,
+        actor_limit=4,
+        lease_seconds=5,
+    )
+    assert admitted.admitted is True
+
+    now = 103.0
+    assert await backend.renew(reservation, lease_seconds=5) is True
+
+    now = 106.0
+    blocked = await backend.reserve(
+        lease_id="two",
+        weight=1,
+        actor_key="customer:b",
+        global_limit=4,
+        actor_limit=4,
+        lease_seconds=5,
+    )
+    assert blocked.admitted is False
+    assert blocked.global_used == 4
+
+    await backend.release(reservation)
+    retried = await backend.reserve(
+        lease_id="two",
+        weight=1,
+        actor_key="customer:b",
+        global_limit=4,
+        actor_limit=4,
+        lease_seconds=5,
+    )
+    assert retried.admitted is True
+
+
+@pytest.mark.asyncio
+async def test_expired_in_memory_lease_cannot_be_renewed(monkeypatch) -> None:
+    backend = InMemoryCapacityBackend()
+    reservation = CapacityReservation("one", 2, "customer:a")
+    now = 100.0
+    monkeypatch.setattr(capacity_module.time, "monotonic", lambda: now)
+
+    await backend.reserve(
+        lease_id=reservation.lease_id,
+        weight=reservation.weight,
+        actor_key=reservation.actor_key,
+        global_limit=4,
+        actor_limit=4,
+        lease_seconds=5,
+    )
+    now = 105.0
+
+    assert await backend.renew(reservation, lease_seconds=5) is False
+
+
 def _request(path: str, *, method: str = "GET", headers: list[tuple[bytes, bytes]] | None = None) -> Request:
     return Request(
         {
@@ -217,3 +282,31 @@ def test_capacity_accounting_is_idempotent_per_lease() -> None:
 
     assert accounting.released(lease_id="lease-ocu", finished_at=101.5) == pytest.approx(3.0)
     assert accounting.released(lease_id="lease-ocu", finished_at=102.0) == 0.0
+
+
+def test_capacity_accounting_renewal_extends_ocu_window() -> None:
+    accounting = RuntimeCapacityAccounting()
+
+    assert accounting.admitted(
+        lease_id="lease-renewed",
+        weight_ocu=2,
+        admitted_at=100.0,
+        lease_seconds=10,
+    ) is True
+    assert accounting.lease_expires_at(lease_id="lease-renewed") == pytest.approx(110.0)
+    assert accounting.renewed(
+        lease_id="lease-renewed",
+        renewed_at=106.0,
+        lease_seconds=10,
+    ) is True
+    assert accounting.lease_expires_at(lease_id="lease-renewed") == pytest.approx(116.0)
+
+    assert accounting.released(
+        lease_id="lease-renewed",
+        finished_at=114.0,
+    ) == pytest.approx(28.0)
+    assert accounting.renewed(
+        lease_id="lease-renewed",
+        renewed_at=115.0,
+        lease_seconds=10,
+    ) is False
