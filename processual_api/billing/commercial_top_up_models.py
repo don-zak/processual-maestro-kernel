@@ -163,6 +163,7 @@ class CommercialTopUpOrder(Base):
         DateTime(timezone=True),
     )
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_variant_id: Mapped[str | None] = mapped_column(String(128))
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     state: Mapped[str] = mapped_column(
         String(40),
