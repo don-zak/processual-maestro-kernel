@@ -5,6 +5,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from processual_api.admin_marketplace.subscription_billing_period import (
+    next_anchored_month_boundary,
+)
 from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
     AdminMarketSubscriptionQuotaCycle,
 )
@@ -45,6 +48,10 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 raise SubscriptionQuotaRolloverError(
                     "quota rollover requires an active subscription."
                 )
+            if subscription.starts_at is None or subscription.starts_at.tzinfo is None:
+                raise SubscriptionQuotaRolloverError(
+                    "active subscription is missing its activation anchor."
+                )
 
             plan = await uow.plans.get_by_id(subscription.plan_id, for_update=True)
             if plan is None:
@@ -70,12 +77,26 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                     "quota base limit conflicts with the authoritative plan."
                 )
 
+            expected_period_end = next_anchored_month_boundary(
+                starts_at=command.period_start,
+                anchor_day=subscription.starts_at.day,
+            )
+            if command.period_end != expected_period_end:
+                raise SubscriptionQuotaRolloverError(
+                    "quota period end conflicts with the activation-anchored monthly boundary."
+                )
+
             existing = await uow.subscription_quota_cycles.get_by_source_cycle_id(
                 command.source_cycle_id,
                 for_update=True,
             )
             if existing is not None:
-                _assert_replay_matches(command, existing, plan_spec.plan_code)
+                _assert_replay_matches(
+                    command,
+                    existing,
+                    plan_spec.plan_code,
+                    expected_period_end=expected_period_end,
+                )
                 return existing
 
             source = await uow.subscription_quota_cycles.get_by_id(
@@ -107,7 +128,7 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 quota_profile_ref=plan.quota_profile_ref,
                 metric_code=QUOTA_METRIC_CODE,
                 period_start=command.period_start,
-                period_end=command.period_end,
+                period_end=expected_period_end,
                 base_limit_units=plan_spec.monthly_unit_allowance,
                 rollover_units=source.rollover_eligible_units,
                 top_up_units=0,
@@ -136,6 +157,8 @@ def _assert_replay_matches(
     command: SubscriptionQuotaRolloverCommand,
     existing: AdminMarketSubscriptionQuotaCycle,
     plan_code: str,
+    *,
+    expected_period_end: datetime,
 ) -> None:
     if (
         existing.subscription_id != command.subscription_id
@@ -144,7 +167,7 @@ def _assert_replay_matches(
         or existing.plan_code != plan_code
         or existing.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
         or existing.period_start != command.period_start
-        or existing.period_end != command.period_end
+        or existing.period_end != expected_period_end
         or existing.base_limit_units != command.base_limit_units
         or existing.top_up_units != 0
     ):
