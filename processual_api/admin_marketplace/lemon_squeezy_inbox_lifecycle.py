@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from processual_api.admin_marketplace.lemon_squeezy_inbox import (
     LemonSqueezyWebhookInboxEntry,
@@ -16,7 +16,7 @@ _MAX_ATTEMPT_COUNT = 2_147_483_646
 
 
 def _aware_timestamp(value: datetime | None, *, field_name: str) -> datetime:
-    timestamp = value or datetime.now(timezone.utc)
+    timestamp = value or datetime.now(UTC)
     if timestamp.tzinfo is None:
         raise LemonSqueezyWebhookError(f"{field_name} must be timezone-aware.")
     return timestamp
