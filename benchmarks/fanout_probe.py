@@ -14,6 +14,7 @@ import httpx
 
 @dataclass(slots=True)
 class FanoutResult:
+    providers: int
     width: int
     concurrency: int
     requests: int
@@ -46,6 +47,7 @@ async def run_stage(
     *,
     client: httpx.AsyncClient,
     base_url: str,
+    providers: int,
     width: int,
     concurrency: int,
     requests: int,
@@ -65,7 +67,7 @@ async def run_stage(
             try:
                 response = await client.post(
                     f"{base_url}/benchmark/fanout",
-                    params={"width": width, "delay_ms": delay_ms},
+                    params={"width": width, "providers": providers, "delay_ms": delay_ms},
                     headers={"X-API-Key": "benchmark-only-api-key"},
                 )
                 if 200 <= response.status_code < 300:
@@ -87,6 +89,7 @@ async def run_stage(
     await asyncio.gather(*(one() for _ in range(requests)))
     duration = time.perf_counter() - started
     return FanoutResult(
+        providers=providers,
         width=width,
         concurrency=concurrency,
         requests=requests,
@@ -107,6 +110,7 @@ async def run_stage(
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8010")
+    parser.add_argument("--providers", default="1,2")
     parser.add_argument("--widths", default="1,4,8,16")
     parser.add_argument("--concurrency", default="5,10,20,40")
     parser.add_argument("--requests", type=int, default=120)
@@ -115,6 +119,7 @@ async def main() -> None:
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
+    provider_counts = [int(value) for value in args.providers.split(",") if value.strip()]
     widths = [int(value) for value in args.widths.split(",") if value.strip()]
     stages = [int(value) for value in args.concurrency.split(",") if value.strip()]
     limits = httpx.Limits(max_connections=max(stages) * 3, max_keepalive_connections=max(stages))
@@ -123,11 +128,13 @@ async def main() -> None:
             await run_stage(
                 client=client,
                 base_url=args.base_url.rstrip("/"),
+                providers=providers,
                 width=width,
                 concurrency=concurrency,
                 requests=args.requests,
                 delay_ms=args.delay_ms,
             )
+            for providers in provider_counts
             for width in widths
             for concurrency in stages
         ]
@@ -137,13 +144,13 @@ async def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    print("| Fan-out | Concurrency | p95 ms | RPS | Backpressure | Errors |")
-    print("|---:|---:|---:|---:|---:|---:|")
+    print("| Providers | Fan-out | Concurrency | p95 ms | RPS | Backpressure | Errors |")
+    print("|---:|---:|---:|---:|---:|---:|---:|")
     for result in results:
         print(
-            f"| {result.width} | {result.concurrency} | {result.p95_ms:.2f} | "
-            f"{result.throughput_rps:.2f} | {result.backpressure_rate:.2%} | "
-            f"{result.error_rate:.2%} |"
+            f"| {result.providers} | {result.width} | {result.concurrency} | "
+            f"{result.p95_ms:.2f} | {result.throughput_rps:.2f} | "
+            f"{result.backpressure_rate:.2%} | {result.error_rate:.2%} |"
         )
         if result.error_details:
             print(f"  error details: {json.dumps(result.error_details, sort_keys=True)}")
@@ -151,7 +158,7 @@ async def main() -> None:
     violations = [result for result in results if result.error_rate > args.max_error_rate]
     if violations:
         details = ", ".join(
-            f"width={result.width}/concurrency={result.concurrency}:"
+            f"providers={result.providers}/width={result.width}/concurrency={result.concurrency}:"
             f"{result.error_rate:.2%} {result.error_details}"
             for result in violations
         )
