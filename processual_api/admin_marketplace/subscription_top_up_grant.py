@@ -190,6 +190,7 @@ def grant_verified_subscription_top_up_factory(
                 )
 
             grant_record = AdminMarketSubscriptionTopUpGrant(
+                id=uuid.uuid4(),
                 order_id=order.id,
                 subscription_id=subscription.id,
                 quota_cycle_id=cycle.id,
