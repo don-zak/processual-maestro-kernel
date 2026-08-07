@@ -7,7 +7,6 @@ from processual_api.admin_marketplace.top_up_production_readiness import (
     require_top_up_production_readiness,
 )
 
-
 LEMON_KEYS = (
     "MAESTRO_TOP_UP_PURCHASE_ENABLED",
     "LEMONSQUEEZY_API_KEY",
