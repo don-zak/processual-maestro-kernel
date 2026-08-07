@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from processual_api.admin_marketplace.subscription_billing_period import quota_period_end
@@ -41,7 +41,7 @@ class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
     subscription_runtime: object
     subscription_quotas: object
 
-    async def __aenter__(self) -> "SubscriptionRuntimeBootstrapUnitOfWork": ...
+    async def __aenter__(self) -> SubscriptionRuntimeBootstrapUnitOfWork: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 
@@ -56,7 +56,7 @@ def _require_ref(value: str, name: str) -> str:
 def _require_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
         raise SubscriptionRuntimeError("runtime effective_at must be timezone-aware.")
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
 
 
 def bootstrap_subscription_runtime_factory(
