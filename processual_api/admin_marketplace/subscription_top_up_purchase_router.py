@@ -17,6 +17,12 @@ from processual_api.admin_marketplace.lemon_squeezy_top_up_checkout import (
     create_lemon_squeezy_top_up_checkout_factory,
     lemon_squeezy_http_checkout_creator_factory,
 )
+from processual_api.admin_marketplace.lemon_squeezy_top_up_checkout_recovery import (
+    LemonSqueezyTopUpCheckoutRecoveryError,
+    RecoverTopUpCheckoutCommand,
+    lemon_squeezy_http_checkout_finder_factory,
+    recover_lemon_squeezy_top_up_checkout_factory,
+)
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
@@ -189,6 +195,25 @@ async def _retrieve_ready_checkout(
     return returned_id, url
 
 
+def _purchase_response(
+    *,
+    order_result: object,
+    checkout_id: str,
+    checkout_url: str,
+    replayed: bool,
+) -> SubscriptionTopUpPurchaseResponse:
+    return SubscriptionTopUpPurchaseResponse(
+        order_id=order_result.order_id,
+        checkout_id=checkout_id,
+        checkout_url=checkout_url,
+        plan_code=order_result.plan_code,
+        requested_units=order_result.requested_units,
+        bundle_count=order_result.bundle_count,
+        total_price_usd=order_result.total_price_usd,
+        replayed=replayed,
+    )
+
+
 @router.post(
     "/subscriptions/top-ups/purchase",
     response_model=SubscriptionTopUpPurchaseResponse,
@@ -244,6 +269,7 @@ async def purchase_subscription_top_up_endpoint(
         ) from exc
 
     if order_result.idempotent_replay:
+        recovery_required = False
         try:
             async with _uow_factory() as uow:
                 existing = await uow.top_up_orders.get_by_id(order_id, for_update=False)
@@ -266,28 +292,49 @@ async def purchase_subscription_top_up_endpoint(
                         api_key=provider.api_key,
                         checkout_id=existing.provider_checkout_id,
                     )
-                    return SubscriptionTopUpPurchaseResponse(
-                        order_id=order_result.order_id,
+                    return _purchase_response(
+                        order_result=order_result,
                         checkout_id=checkout_id,
                         checkout_url=checkout_url,
-                        plan_code=order_result.plan_code,
-                        requested_units=order_result.requested_units,
-                        bundle_count=order_result.bundle_count,
-                        total_price_usd=order_result.total_price_usd,
                         replayed=True,
                     )
-                if existing.checkout_creation_status in {"creating", "uncertain"}:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="Top-up checkout requires reconciliation.",
-                    )
-        except HTTPException:
-            raise
+                recovery_required = existing.checkout_creation_status in {
+                    "creating",
+                    "uncertain",
+                }
         except LemonSqueezyTopUpCheckoutError as exc:
             raise HTTPException(
                 status_code=409,
                 detail="Top-up checkout requires reconciliation.",
             ) from exc
+
+        if recovery_required:
+            recover_checkout = recover_lemon_squeezy_top_up_checkout_factory(
+                unit_of_work_factory=_uow_factory,
+                checkout_finder=lemon_squeezy_http_checkout_finder_factory(
+                    api_key=provider.api_key,
+                ),
+            )
+            try:
+                recovered = await recover_checkout(
+                    RecoverTopUpCheckoutCommand(
+                        order_id=order_id,
+                        customer_ref=customer_ref,
+                        store_id=provider.store_id,
+                        provider_variant_id=provider.variant_id,
+                    )
+                )
+            except LemonSqueezyTopUpCheckoutRecoveryError as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Top-up checkout requires reconciliation.",
+                ) from exc
+            return _purchase_response(
+                order_result=order_result,
+                checkout_id=recovered.checkout_id,
+                checkout_url=recovered.url,
+                replayed=True,
+            )
 
     create_checkout = create_lemon_squeezy_top_up_checkout_factory(
         unit_of_work_factory=_uow_factory,
@@ -317,14 +364,10 @@ async def purchase_subscription_top_up_endpoint(
             detail="Top-up purchase is temporarily unavailable.",
         ) from exc
 
-    return SubscriptionTopUpPurchaseResponse(
-        order_id=order_result.order_id,
+    return _purchase_response(
+        order_result=order_result,
         checkout_id=checkout.checkout_id,
         checkout_url=checkout.url,
-        plan_code=order_result.plan_code,
-        requested_units=order_result.requested_units,
-        bundle_count=order_result.bundle_count,
-        total_price_usd=order_result.total_price_usd,
         replayed=False,
     )
 
