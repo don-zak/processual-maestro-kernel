@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import (
@@ -101,6 +102,22 @@ class SqlAlchemySubscriptionTopUpReversalRepository:
         if for_update:
             statement = statement.with_for_update()
         return await self._session.scalar(statement)
+
+    async def list_manual_review(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketSubscriptionTopUpReversal]:
+        result = await self._session.scalars(
+            select(AdminMarketSubscriptionTopUpReversal)
+            .where(AdminMarketSubscriptionTopUpReversal.outcome == "manual_review")
+            .order_by(
+                AdminMarketSubscriptionTopUpReversal.reversed_at.asc(),
+                AdminMarketSubscriptionTopUpReversal.id.asc(),
+            )
+            .limit(max(1, min(limit, 500)))
+        )
+        return tuple(result.all())
 
     def add(self, reversal: AdminMarketSubscriptionTopUpReversal) -> None:
         self._session.add(reversal)
