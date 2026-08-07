@@ -109,7 +109,8 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 period_start=command.period_start,
                 period_end=command.period_end,
                 base_limit_units=plan_spec.monthly_unit_allowance,
-                rollover_units=source.available_units,
+                rollover_units=source.rollover_eligible_units,
+                top_up_units=0,
                 rollover_status="available",
                 used_units=0,
             )
@@ -145,6 +146,7 @@ def _assert_replay_matches(
         or existing.period_start != command.period_start
         or existing.period_end != command.period_end
         or existing.base_limit_units != command.base_limit_units
+        or existing.top_up_units != 0
     ):
         raise SubscriptionQuotaRolloverError(
             "quota rollover replay conflicts with the existing cycle."
