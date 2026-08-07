@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from processual_api.admin_marketplace.subscription_runtime import (
@@ -20,7 +20,7 @@ class SubscriptionRuntimeReconciliationUnitOfWork(Protocol):
     subscription_runtime: object
     subscription_runtime_transitions: object
 
-    async def __aenter__(self) -> "SubscriptionRuntimeReconciliationUnitOfWork": ...
+    async def __aenter__(self) -> SubscriptionRuntimeReconciliationUnitOfWork: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 
@@ -58,7 +58,7 @@ def apply_reconciliation_to_runtime_factory(
         event_name: str,
         effective_at: datetime | None = None,
     ) -> AdminMarketSubscriptionRuntimeTransition:
-        timestamp = effective_at or datetime.now(timezone.utc)
+        timestamp = effective_at or datetime.now(UTC)
         if timestamp.tzinfo is None:
             raise SubscriptionRuntimeError("effective_at must be timezone-aware.")
         identity_hash = reconciliation_event_identity_hash.strip().lower()
