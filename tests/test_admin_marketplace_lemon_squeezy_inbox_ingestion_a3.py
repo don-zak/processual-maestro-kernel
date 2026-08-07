@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 
 import pytest
 
+from processual_api.admin_marketplace.lemon_squeezy_evidence import (
+    LemonSqueezyVerifiedEvidence,
+)
 from processual_api.admin_marketplace.lemon_squeezy_inbox import (
     LemonSqueezyWebhookInboxEntry,
     ingest_verified_lemon_squeezy_webhook,
@@ -57,6 +60,19 @@ def _webhook(**overrides: object) -> VerifiedLemonSqueezyWebhook:
         "order_ref": "order-1",
         "offer_ref": "offer-1",
         "test_mode": False,
+        "evidence": LemonSqueezyVerifiedEvidence(
+            schema_version=1,
+            provider_customer_id="501",
+            provider_order_id="601",
+            provider_subscription_id="901",
+            variant_id="701",
+            currency=None,
+            subtotal_amount=None,
+            total_amount=None,
+            refunded_amount=None,
+            status="active",
+            effective_at=datetime(2026, 8, 5, 18, 0, tzinfo=timezone.utc),
+        ),
         "payload": {},
     }
     values.update(overrides)
