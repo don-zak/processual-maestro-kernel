@@ -111,6 +111,7 @@ class AdminMarketLemonSqueezyWebhookInbox(Base):
     currency: Mapped[str | None] = mapped_column(String(3))
     subtotal_amount: Mapped[str | None] = mapped_column(String(64))
     total_amount: Mapped[str | None] = mapped_column(String(64))
+    refunded_amount: Mapped[str | None] = mapped_column(String(64))
     provider_status: Mapped[str | None] = mapped_column(String(64))
     provider_effective_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
@@ -200,6 +201,7 @@ class SqlAlchemyLemonSqueezyWebhookInboxRepository:
                 currency=entry.currency,
                 subtotal_amount=entry.subtotal_amount,
                 total_amount=entry.total_amount,
+                refunded_amount=entry.refunded_amount,
                 provider_status=entry.provider_status,
                 provider_effective_at=entry.provider_effective_at,
                 last_error_code=entry.last_error_code,
