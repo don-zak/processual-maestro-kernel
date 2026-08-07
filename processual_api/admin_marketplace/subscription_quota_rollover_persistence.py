@@ -146,6 +146,13 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         return self.rollover_units
 
     @property
+    def rollover_eligible_units(self) -> int:
+        return max(
+            self.base_limit_units + self.spendable_rollover_units - self.used_units,
+            0,
+        )
+
+    @property
     def available_units(self) -> int:
         return max(
             self.base_limit_units
