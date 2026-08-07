@@ -22,6 +22,7 @@ async def health_live() -> dict[str, str]:
 @app.post("/benchmark/fanout", response_model=None)
 async def fanout(
     width: int = Query(default=4, ge=1, le=32),
+    providers: int = Query(default=1, ge=1, le=8),
     delay_ms: int = Query(default=25, ge=1, le=250),
 ) -> dict[str, int] | Response:
     """Deterministic provider fan-out harness with no external network calls."""
@@ -29,14 +30,15 @@ async def fanout(
     async def simulated_provider_call() -> None:
         await asyncio.sleep(delay_ms / 1000)
 
-    async def one() -> None:
+    async def one(index: int) -> None:
+        provider = f"benchmark-provider-{index % providers}"
         await run_with_execution_fanout(
-            "benchmark-provider",
+            provider,
             simulated_provider_call,
         )
 
     outcomes = await asyncio.gather(
-        *(one() for _ in range(width)),
+        *(one(index) for index in range(width)),
         return_exceptions=True,
     )
     saturated = sum(isinstance(outcome, ExecutionFanoutSaturatedError) for outcome in outcomes)
@@ -55,4 +57,4 @@ async def fanout(
                 "X-Maestro-Capacity-Reason": "execution_fanout",
             },
         )
-    return {"fanout": width, "delay_ms": delay_ms}
+    return {"fanout": width, "providers": providers, "delay_ms": delay_ms}
