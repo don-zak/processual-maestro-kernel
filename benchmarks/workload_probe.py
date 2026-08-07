@@ -25,6 +25,10 @@ class Result:
     error_rate: float
     duration_seconds: float
     throughput_rps: float
+    admitted_ocu_total: float
+    ocu_seconds_total: float
+    admitted_ocu_per_second: float
+    average_active_ocu: float
     p50_ms: float
     p95_ms: float
     p99_ms: float
@@ -39,7 +43,12 @@ def percentile(values: list[float], q: float) -> float:
     return ordered[max(index, 0)]
 
 
-def workflow_payload(index: int, *, step_count: int, label: str) -> tuple[str, dict[str, object], dict[str, str]]:
+def workflow_payload(
+    index: int,
+    *,
+    step_count: int,
+    label: str,
+) -> tuple[str, dict[str, object], dict[str, str]]:
     token = uuid.uuid4().hex
     steps = [
         {
@@ -60,12 +69,19 @@ def workflow_payload(index: int, *, step_count: int, label: str) -> tuple[str, d
     )
 
 
-def governance_payload(index: int, *, batch_size: int = 20) -> tuple[str, dict[str, object], dict[str, str]]:
+def governance_payload(
+    index: int,
+    *,
+    batch_size: int = 20,
+) -> tuple[str, dict[str, object], dict[str, str]]:
     answers = []
     for item in range(batch_size):
         answers.append(
             {
-                "answer": f"Deterministic benchmark answer {index}-{item}. " + ("stable context " * 12),
+                "answer": (
+                    f"Deterministic benchmark answer {index}-{item}. "
+                    + ("stable context " * 12)
+                ),
                 "language": "en",
                 "compatibility": 0.72,
                 "coherence": 0.78,
@@ -89,7 +105,10 @@ def governance_payload(index: int, *, batch_size: int = 20) -> tuple[str, dict[s
     )
 
 
-def payload_for(workload: str, index: int) -> tuple[str, dict[str, object] | None, dict[str, str]]:
+def payload_for(
+    workload: str,
+    index: int,
+) -> tuple[str, dict[str, object] | None, dict[str, str]]:
     if workload == "light":
         return "/health/live", None, {}
     if workload == "normal":
@@ -99,6 +118,38 @@ def payload_for(workload: str, index: int) -> tuple[str, dict[str, object] | Non
     if workload == "governance-heavy":
         return governance_payload(index)
     raise ValueError(f"unknown workload: {workload}")
+
+
+def capacity_usage(response: httpx.Response) -> tuple[float, float]:
+    """Read weighted admission and occupied OCU-seconds from response headers."""
+
+    try:
+        admitted_ocu = float(response.headers.get("X-Maestro-Capacity-OCU", "0"))
+    except ValueError:
+        admitted_ocu = 0.0
+    try:
+        ocu_seconds = float(
+            response.headers.get("X-Maestro-Capacity-OCU-Seconds", "0")
+        )
+    except ValueError:
+        ocu_seconds = 0.0
+    return max(admitted_ocu, 0.0), max(ocu_seconds, 0.0)
+
+
+def weighted_rates(
+    *,
+    admitted_ocu_total: float,
+    ocu_seconds_total: float,
+    elapsed_seconds: float,
+) -> tuple[float, float]:
+    """Return weighted admission rate and average occupied OCU."""
+
+    if elapsed_seconds <= 0:
+        return 0.0, 0.0
+    return (
+        admitted_ocu_total / elapsed_seconds,
+        ocu_seconds_total / elapsed_seconds,
+    )
 
 
 async def run_stage(
@@ -114,9 +165,12 @@ async def run_stage(
     success = 0
     backpressure = 0
     errors = 0
+    admitted_ocu_total = 0.0
+    ocu_seconds_total = 0.0
 
     async def one(index: int) -> None:
         nonlocal success, backpressure, errors
+        nonlocal admitted_ocu_total, ocu_seconds_total
         path, payload, headers = payload_for(workload, index)
         async with semaphore:
             started = time.perf_counter()
@@ -124,10 +178,20 @@ async def run_stage(
                 if payload is None:
                     response = await client.get(f"{base_url}{path}", headers=headers)
                 else:
-                    response = await client.post(f"{base_url}{path}", json=payload, headers=headers)
+                    response = await client.post(
+                        f"{base_url}{path}",
+                        json=payload,
+                        headers=headers,
+                    )
                 if 200 <= response.status_code < 300:
                     success += 1
-                elif response.status_code == 429 and response.headers.get("X-Maestro-Capacity-Reason"):
+                    admitted_ocu, ocu_seconds = capacity_usage(response)
+                    admitted_ocu_total += admitted_ocu
+                    ocu_seconds_total += ocu_seconds
+                elif (
+                    response.status_code == 429
+                    and response.headers.get("X-Maestro-Capacity-Reason")
+                ):
                     backpressure += 1
                 else:
                     errors += 1
@@ -139,6 +203,11 @@ async def run_stage(
     started = time.perf_counter()
     await asyncio.gather(*(one(index) for index in range(request_count)))
     elapsed = time.perf_counter() - started
+    admitted_rate, average_active = weighted_rates(
+        admitted_ocu_total=admitted_ocu_total,
+        ocu_seconds_total=ocu_seconds_total,
+        elapsed_seconds=elapsed,
+    )
     return Result(
         workload=workload,
         concurrency=concurrency,
@@ -150,6 +219,10 @@ async def run_stage(
         error_rate=errors / request_count,
         duration_seconds=round(elapsed, 4),
         throughput_rps=round(request_count / elapsed, 2),
+        admitted_ocu_total=round(admitted_ocu_total, 6),
+        ocu_seconds_total=round(ocu_seconds_total, 6),
+        admitted_ocu_per_second=round(admitted_rate, 2),
+        average_active_ocu=round(average_active, 2),
         p50_ms=round(statistics.median(latencies), 2),
         p95_ms=round(percentile(latencies, 0.95), 2),
         p99_ms=round(percentile(latencies, 0.99), 2),
@@ -176,7 +249,10 @@ def first_saturation(results: list[Result]) -> int | None:
 
 
 def first_backpressure(results: list[Result]) -> int | None:
-    return next((result.concurrency for result in results if result.backpressure > 0), None)
+    return next(
+        (result.concurrency for result in results if result.backpressure > 0),
+        None,
+    )
 
 
 def markdown(results_by_workload: dict[str, list[Result]]) -> str:
@@ -186,14 +262,20 @@ def markdown(results_by_workload: dict[str, list[Result]]) -> str:
             [
                 f"## {workload}",
                 "",
-                "| Concurrency | Requests | p50 ms | p95 ms | p99 ms | RPS | Backpressure | Errors |",
-                "|---:|---:|---:|---:|---:|---:|---:|---:|",
+                (
+                    "| Concurrency | Requests | p50 ms | p95 ms | p99 ms | RPS | "
+                    "Admitted OCU/s | Avg active OCU | Backpressure | Errors |"
+                ),
+                "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
             ]
         )
         for result in results:
             lines.append(
                 f"| {result.concurrency} | {result.requests} | {result.p50_ms:.2f} | "
-                f"{result.p95_ms:.2f} | {result.p99_ms:.2f} | {result.throughput_rps:.2f} | "
+                f"{result.p95_ms:.2f} | {result.p99_ms:.2f} | "
+                f"{result.throughput_rps:.2f} | "
+                f"{result.admitted_ocu_per_second:.2f} | "
+                f"{result.average_active_ocu:.2f} | "
                 f"{result.backpressure_rate:.2%} | {result.error_rate:.2%} |"
             )
         saturation = first_saturation(results)
@@ -202,12 +284,14 @@ def markdown(results_by_workload: dict[str, list[Result]]) -> str:
             [
                 "",
                 (
-                    f"Approximate first unprotected saturation stage: **{saturation} concurrent requests**."
+                    "Approximate first unprotected saturation stage: "
+                    f"**{saturation} concurrent requests**."
                     if saturation is not None
                     else "No unprotected saturation threshold reached in configured stages."
                 ),
                 (
-                    f"First capacity backpressure stage: **{backpressure} concurrent requests**."
+                    "First capacity backpressure stage: "
+                    f"**{backpressure} concurrent requests**."
                     if backpressure is not None
                     else "No capacity backpressure observed in configured stages."
                 ),
@@ -235,7 +319,10 @@ async def main() -> None:
         "heavy": args.heavy_requests,
         "governance-heavy": args.governance_requests,
     }
-    limits = httpx.Limits(max_connections=max(stages) * 3, max_keepalive_connections=max(stages))
+    limits = httpx.Limits(
+        max_connections=max(stages) * 3,
+        max_keepalive_connections=max(stages),
+    )
     async with httpx.AsyncClient(timeout=30.0, limits=limits) as client:
         results_by_workload: dict[str, list[Result]] = {}
         for workload in ("light", "normal", "heavy", "governance-heavy"):
