@@ -127,8 +127,11 @@ def _order(**overrides: object) -> SimpleNamespace:
     quote = quote_top_up("starter", 10_000)
     values = {
         "id": ORDER_ID,
+        "customer_ref": "customer_001",
         "subscription_id": SUBSCRIPTION_ID,
+        "quota_cycle_id": CYCLE_ID,
         "plan_code": "starter",
+        "plan_catalog_version": PLAN_FULFILLMENT_CATALOG_VERSION,
         "requested_units": quote.total_units,
         "bundle_count": quote.bundle_count,
         "total_price_usd": quote.total_price_usd,
@@ -239,8 +242,16 @@ async def test_grant_rechecks_eighty_percent_threshold() -> None:
 async def test_grant_rejects_cross_customer_attempt() -> None:
     service, _ = _service()
 
-    with pytest.raises(SubscriptionTopUpGrantError, match="customer conflicts"):
+    with pytest.raises(SubscriptionTopUpGrantError, match="ownership snapshot"):
         await service(_command(customer_ref="customer_002"))
+
+
+@pytest.mark.asyncio
+async def test_grant_rejects_tampered_order_ownership_snapshot() -> None:
+    service, _ = _service(order=_order(quota_cycle_id=uuid.uuid4()))
+
+    with pytest.raises(SubscriptionTopUpGrantError, match="ownership snapshot"):
+        await service(_command())
 
 
 @pytest.mark.asyncio
