@@ -67,6 +67,17 @@ def test_webhook_inbox_model_matches_migration_contract() -> None:
         "test_mode",
         "processing_status",
         "attempt_count",
+        "evidence_schema_version",
+        "provider_customer_id",
+        "provider_order_id",
+        "provider_subscription_id",
+        "variant_id",
+        "currency",
+        "subtotal_amount",
+        "total_amount",
+        "refunded_amount",
+        "provider_status",
+        "provider_effective_at",
         "last_error_code",
         "received_at",
         "claimed_at",
@@ -83,13 +94,14 @@ def test_webhook_inbox_model_matches_migration_contract() -> None:
     assert unique_names == {
         "uq_admin_market_ls_webhook_event_identity",
         "uq_admin_market_ls_webhook_payload_digest",
-        "uq_admin_market_ls_webhook_resource_binding",
     }
 
     index_names = {index.name for index in table.indexes}
     assert index_names == {
         "ix_admin_market_ls_webhook_dispatch",
         "ix_admin_market_ls_webhook_order_time",
+        "ix_admin_market_ls_webhook_provider_customer",
+        "ix_admin_market_ls_webhook_provider_subscription",
     }
 
 
