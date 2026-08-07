@@ -21,6 +21,9 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from processual_api.cache.redis import get_redis
+from processual_api.middleware.runtime_capacity_metrics import (
+    RUNTIME_CAPACITY_ACCOUNTING,
+)
 from processual_api.settings import settings
 
 
@@ -352,6 +355,7 @@ class RuntimeCapacityMiddleware(BaseHTTPMiddleware):
             backend = RedisCapacityBackend(redis_client)
         else:
             if settings.is_production:
+                RUNTIME_CAPACITY_ACCOUNTING.rejected(reason="backend_unavailable")
                 return Response(
                     status_code=503,
                     content=json.dumps(
@@ -367,6 +371,7 @@ class RuntimeCapacityMiddleware(BaseHTTPMiddleware):
 
         deadline = time.monotonic() + policy.wait_ms / 1000
         decision = CapacityDecision(False, 0, 0, "global")
+        backpressure_recorded = False
         while True:
             decision = await backend.reserve(
                 lease_id=lease_id,
@@ -378,10 +383,22 @@ class RuntimeCapacityMiddleware(BaseHTTPMiddleware):
             )
             if decision.admitted:
                 break
+            if not backpressure_recorded:
+                RUNTIME_CAPACITY_ACCOUNTING.backpressured(reason=decision.reason)
+                backpressure_recorded = True
             if time.monotonic() >= deadline:
+                RUNTIME_CAPACITY_ACCOUNTING.rejected(reason=decision.reason)
                 return _capacity_response(decision=decision, policy=policy, weight=weight)
             await asyncio.sleep(policy.retry_ms / 1000)
 
+        admitted_at = time.monotonic()
+        RUNTIME_CAPACITY_ACCOUNTING.admitted(
+            lease_id=lease_id,
+            weight_ocu=weight,
+            admitted_at=admitted_at,
+            lease_seconds=policy.lease_seconds,
+        )
+        response: Response | None = None
         try:
             response = await call_next(request)
             response.headers["X-Maestro-Capacity-OCU"] = str(weight)
@@ -390,8 +407,21 @@ class RuntimeCapacityMiddleware(BaseHTTPMiddleware):
             )
             return response
         finally:
+            finished_at = time.monotonic()
+            release_failed = False
             try:
                 await backend.release(reservation)
             except Exception:
-                # The lease TTL guarantees eventual recovery if release fails.
-                pass
+                # Charge the reservation through TTL when explicit release fails.
+                release_failed = True
+            accounting_finished_at = (
+                admitted_at + policy.lease_seconds if release_failed else finished_at
+            )
+            units = RUNTIME_CAPACITY_ACCOUNTING.released(
+                lease_id=lease_id,
+                finished_at=accounting_finished_at,
+            )
+            if response is not None:
+                response.headers["X-Maestro-Capacity-OCU-Seconds"] = f"{units:.6f}"
+                if release_failed:
+                    response.headers["X-Maestro-Capacity-Lease"] = "expires"
