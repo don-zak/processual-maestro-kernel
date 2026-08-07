@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 
 from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from processual_api.admin_marketplace.subscription_access import (
     resolve_subscription_access,
 )
+from processual_api.middleware.runtime_capacity import RuntimeCapacityMiddleware
 
 _PUBLIC_PATHS = {
     "/login",
@@ -86,8 +86,14 @@ def _extract_customer_ref(request: Request) -> str | None:
         return None
 
 
-class SubscriptionMiddleware(BaseHTTPMiddleware):
+class SubscriptionMiddleware(RuntimeCapacityMiddleware):
     async def dispatch(self, request: Request, call_next):
+        async def subscription_call_next(capacity_request: Request):
+            return await self._dispatch_subscription(capacity_request, call_next)
+
+        return await super().dispatch(request, subscription_call_next)
+
+    async def _dispatch_subscription(self, request: Request, call_next):
         path = request.url.path
 
         if (
