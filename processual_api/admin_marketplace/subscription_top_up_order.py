@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
 from processual_api.admin_marketplace.subscription_top_up_eligibility import (
     TOP_UP_MINIMUM_MONTHLY_CONSUMPTION_PERCENT,
+)
+from processual_api.billing.commercial_currency_settlement_contracts import (
+    ExchangeRateProviderPort,
+    calculate_tnd_settlement,
+    validate_channel_settlement,
 )
 from processual_api.billing.commercial_quota_top_up_contracts import quote_top_up
 from processual_api.billing.commercial_settings_top_up_checkout_contracts import (
@@ -22,6 +27,12 @@ from processual_api.billing.plan_fulfillment_catalog import (
 
 class SubscriptionTopUpOrderError(RuntimeError):
     """An authoritative top-up order cannot be created safely."""
+
+
+LocalTunisiaEligibilityResolver = Callable[
+    [str, uuid.UUID, datetime],
+    Awaitable[bool],
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +55,8 @@ class SubscriptionTopUpOrderResult:
     requested_units: int
     bundle_count: int
     total_price_usd: str
+    settlement_currency: str
+    settlement_amount: str
     channel: str
     idempotent_replay: bool
     committed: bool
@@ -52,15 +65,13 @@ class SubscriptionTopUpOrderResult:
 def create_subscription_top_up_order_factory(
     *,
     unit_of_work_factory: Callable[[], object],
+    local_tunisia_eligibility_resolver: LocalTunisiaEligibilityResolver | None = None,
+    exchange_rate_provider: ExchangeRateProviderPort | None = None,
 ):
     async def create(
         command: CreateSubscriptionTopUpOrderCommand,
     ) -> SubscriptionTopUpOrderResult:
         _validate(command)
-        if command.channel is not TopUpCheckoutChannel.LEMON_SQUEEZY:
-            raise SubscriptionTopUpOrderError(
-                "authoritative top-up order creation supports Lemon Squeezy only."
-            )
 
         async with unit_of_work_factory() as uow:
             existing = await uow.top_up_orders.get_by_idempotency_key(
@@ -139,6 +150,55 @@ def create_subscription_top_up_order_factory(
                     "top-up quote units conflict with the requested units."
                 )
 
+            settlement_currency = "USD"
+            settlement_amount = quote.total_price_usd
+            exchange_rate_quote = None
+
+            if command.channel is TopUpCheckoutChannel.LOCAL_TUNISIA:
+                if (
+                    local_tunisia_eligibility_resolver is None
+                    or exchange_rate_provider is None
+                ):
+                    raise SubscriptionTopUpOrderError(
+                        "Tunisia-local top-up ordering is not configured."
+                    )
+                eligible = await local_tunisia_eligibility_resolver(
+                    command.customer_ref,
+                    command.subscription_id,
+                    command.created_at,
+                )
+                if not eligible:
+                    raise SubscriptionTopUpOrderError(
+                        "customer is not eligible for Tunisia-local settlement."
+                    )
+                exchange_rate_quote = await exchange_rate_provider.quote_usd_to_tnd(
+                    requested_at=command.created_at,
+                )
+                if exchange_rate_quote.is_expired_at(command.created_at):
+                    raise SubscriptionTopUpOrderError(
+                        "Tunisia-local exchange-rate quote is expired."
+                    )
+                settlement_currency = "TND"
+                settlement_amount = calculate_tnd_settlement(
+                    amount_usd=quote.total_price_usd,
+                    usd_tnd_rate=exchange_rate_quote.rate,
+                )
+            elif command.channel is not TopUpCheckoutChannel.LEMON_SQUEEZY:
+                raise SubscriptionTopUpOrderError("unsupported top-up checkout channel.")
+
+            try:
+                validate_channel_settlement(
+                    channel=command.channel,
+                    total_price_usd=quote.total_price_usd,
+                    settlement_currency=settlement_currency,
+                    settlement_amount=settlement_amount,
+                    exchange_rate_quote=exchange_rate_quote,
+                )
+            except (TypeError, ValueError) as exc:
+                raise SubscriptionTopUpOrderError(
+                    "top-up settlement snapshot is invalid."
+                ) from exc
+
             order = CommercialTopUpOrder(
                 id=command.order_id,
                 account_id=None,
@@ -150,14 +210,24 @@ def create_subscription_top_up_order_factory(
                 requested_units=quote.total_units,
                 bundle_count=quote.bundle_count,
                 total_price_usd=quote.total_price_usd,
-                settlement_currency="USD",
-                settlement_amount=quote.total_price_usd,
-                exchange_rate_usd_tnd=None,
-                exchange_rate_source=None,
-                exchange_rate_reference=None,
-                exchange_rate_observed_at=None,
-                exchange_rate_expires_at=None,
-                channel=TopUpCheckoutChannel.LEMON_SQUEEZY.value,
+                settlement_currency=settlement_currency,
+                settlement_amount=settlement_amount,
+                exchange_rate_usd_tnd=(
+                    None if exchange_rate_quote is None else exchange_rate_quote.rate
+                ),
+                exchange_rate_source=(
+                    None if exchange_rate_quote is None else exchange_rate_quote.source
+                ),
+                exchange_rate_reference=(
+                    None if exchange_rate_quote is None else exchange_rate_quote.reference
+                ),
+                exchange_rate_observed_at=(
+                    None if exchange_rate_quote is None else exchange_rate_quote.observed_at
+                ),
+                exchange_rate_expires_at=(
+                    None if exchange_rate_quote is None else exchange_rate_quote.expires_at
+                ),
+                channel=command.channel.value,
                 idempotency_key=command.idempotency_key,
                 state="awaiting_payment",
                 created_at=command.created_at,
@@ -182,6 +252,8 @@ def _result(
         requested_units=order.requested_units,
         bundle_count=order.bundle_count,
         total_price_usd=str(order.total_price_usd),
+        settlement_currency=order.settlement_currency,
+        settlement_amount=str(order.settlement_amount),
         channel=order.channel,
         idempotent_replay=replay,
         committed=committed,
@@ -224,6 +296,7 @@ def _validate(command: CreateSubscriptionTopUpOrderCommand) -> None:
 
 __all__ = [
     "CreateSubscriptionTopUpOrderCommand",
+    "LocalTunisiaEligibilityResolver",
     "SubscriptionTopUpOrderError",
     "SubscriptionTopUpOrderResult",
     "create_subscription_top_up_order_factory",
