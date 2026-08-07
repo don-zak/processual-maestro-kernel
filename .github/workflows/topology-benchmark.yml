@@ -7,6 +7,8 @@ on:
       - feat/a3-admin-marketplace-original-offers
     paths:
       - benchmarks/topology_compare.py
+      - benchmarks/fanout_app.py
+      - benchmarks/fanout_probe.py
       - tests/test_topology_compare.py
       - .github/workflows/topology-benchmark.yml
       - processual_api/middleware/runtime_capacity.py
@@ -151,6 +153,73 @@ jobs:
             --output topology-results/comparison.md \
             | tee topology-results/comparison.txt
           cat topology-results/comparison.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop Maestro topology server
+        run: |
+          kill "$(cat topology-results/server.pid)" || true
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$(cat topology-results/server.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Start fanout harness with one worker
+        run: |
+          redis-cli -h 127.0.0.1 FLUSHDB
+          python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 1 > topology-results/fanout-1w.log 2>&1 &
+          echo $! > topology-results/fanout.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat topology-results/fanout-1w.log
+          exit 1
+
+      - name: Benchmark fanout with one worker
+        run: |
+          python benchmarks/fanout_probe.py \
+            --base-url http://127.0.0.1:8010 \
+            --widths 1,4,8,16 \
+            --concurrency 5,10,20,40 \
+            --requests 120 \
+            --delay-ms 25 \
+            --output topology-results/fanout-1w.json \
+            | tee topology-results/fanout-1w.txt
+
+      - name: Restart fanout harness with two workers
+        run: |
+          kill "$(cat topology-results/fanout.pid)"
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$(cat topology-results/fanout.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          redis-cli -h 127.0.0.1 FLUSHDB
+          python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 2 > topology-results/fanout-2w.log 2>&1 &
+          echo $! > topology-results/fanout.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat topology-results/fanout-2w.log
+          exit 1
+
+      - name: Benchmark fanout with two workers
+        run: |
+          python benchmarks/fanout_probe.py \
+            --base-url http://127.0.0.1:8010 \
+            --widths 1,4,8,16 \
+            --concurrency 5,10,20,40 \
+            --requests 120 \
+            --delay-ms 25 \
+            --output topology-results/fanout-2w.json \
+            | tee topology-results/fanout-2w.txt
 
       - name: Upload topology benchmark
         if: always()
