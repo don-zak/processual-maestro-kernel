@@ -118,7 +118,9 @@ def _source(**overrides: object) -> SimpleNamespace:
         "period_end": NEXT,
         "base_limit_units": spec.monthly_unit_allowance,
         "rollover_units": 2_000,
+        "top_up_units": 0,
         "used_units": 7_000,
+        "rollover_eligible_units": 5_000,
         "available_units": 5_000,
     }
     values.update(overrides)
@@ -149,11 +151,30 @@ async def test_active_subscription_rolls_authoritative_plan_quota() -> None:
     assert cycle.plan_catalog_version == PLAN_FULFILLMENT_CATALOG_VERSION
     assert cycle.base_limit_units == 10_000
     assert cycle.rollover_units == 5_000
+    assert cycle.top_up_units == 0
     assert cycle.available_units == 15_000
     assert cycle.entitlement_codes == list(
         PLAN_FULFILLMENT_SPECS["starter"].entitlement_codes
     )
     assert uow.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_top_up_units_never_roll_into_next_month() -> None:
+    source = _source(
+        top_up_units=10_000,
+        used_units=12_000,
+        available_units=10_000,
+        rollover_eligible_units=0,
+    )
+    uow = FakeUow(_subscription(), source)
+    rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
+
+    cycle = await rollover(_command())
+
+    assert cycle.rollover_units == 0
+    assert cycle.top_up_units == 0
+    assert cycle.available_units == 10_000
 
 
 @pytest.mark.asyncio
@@ -231,6 +252,7 @@ async def test_replay_returns_existing_cycle_without_commit() -> None:
         period_start=NEXT,
         period_end=END,
         base_limit_units=10_000,
+        top_up_units=0,
     )
     uow = FakeUow(_subscription(), _source(), existing=existing)
     rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
@@ -250,6 +272,7 @@ async def test_conflicting_replay_fails_closed() -> None:
         period_start=NEXT,
         period_end=END,
         base_limit_units=100_000,
+        top_up_units=0,
     )
     uow = FakeUow(_subscription(), _source(), existing=existing)
     rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
