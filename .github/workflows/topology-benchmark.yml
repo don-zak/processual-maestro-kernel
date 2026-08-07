@@ -10,6 +10,7 @@ on:
       - benchmarks/fanout_app.py
       - benchmarks/fanout_probe.py
       - tests/test_topology_compare.py
+      - tests/test_fanout_probe.py
       - .github/workflows/topology-benchmark.yml
       - processual_api/middleware/runtime_capacity.py
       - processual_api/middleware/runtime_capacity_metrics.py
@@ -70,10 +71,14 @@ jobs:
       - name: Install Maestro and benchmark dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install '.[api,security,database,cache,observability]'
+          python -m pip install '.[dev,api,security,database,cache,observability]'
 
-      - name: Verify topology comparator
-        run: PYTHONPATH=. python -m pytest tests/test_topology_compare.py -q
+      - name: Verify topology benchmark helpers
+        run: |
+          PYTHONPATH=. python -m pytest \
+            tests/test_topology_compare.py \
+            tests/test_fanout_probe.py \
+            -q
 
       - name: Capture runner envelope
         run: |
