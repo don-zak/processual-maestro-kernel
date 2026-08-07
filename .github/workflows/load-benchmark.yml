@@ -8,6 +8,10 @@ on:
     paths:
       - benchmarks/load_probe.py
       - benchmarks/workload_probe.py
+      - benchmarks/performance_guard.py
+      - processual_api/middleware/runtime_capacity.py
+      - processual_api/middleware/runtime_capacity_metrics.py
+      - processual_api/middleware/subscription.py
       - .github/workflows/load-benchmark.yml
 
 permissions:
@@ -120,6 +124,9 @@ jobs:
             --heavy-requests 80 \
             --output benchmark-results/workloads.json \
             | tee benchmark-results/workloads.txt
+
+      - name: Enforce performance regression budgets
+        run: python benchmarks/performance_guard.py benchmark-results/workloads.json
 
       - name: Build benchmark summary
         if: always()
