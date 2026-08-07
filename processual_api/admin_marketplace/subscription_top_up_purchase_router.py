@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import Depends, Header, HTTPException
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from processual_api.admin_marketplace.lemon_squeezy_top_up_checkout import (
     CreateTopUpCheckoutCommand,
@@ -34,12 +34,12 @@ _TOP_UP_ORDER_NAMESPACE = uuid.UUID("ce8609b7-bab8-5d96-8ee7-177bd43f73ef")
 
 
 class SubscriptionTopUpPurchaseRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     subscription_id: uuid.UUID
     quota_cycle_id: uuid.UUID
     requested_units: int = Field(gt=0, le=2_147_483_647)
-    email: EmailStr | None = None
+    email: str | None = Field(default=None, max_length=320)
 
 
 class SubscriptionTopUpPurchaseResponse(BaseModel):
@@ -256,7 +256,7 @@ async def purchase_subscription_top_up_endpoint(
                 provider_variant_id=provider.variant_id,
                 store_id=provider.store_id,
                 success_url=provider.success_url,
-                email=None if body.email is None else str(body.email),
+                email=body.email,
             )
         )
     except LemonSqueezyTopUpCheckoutError as exc:
