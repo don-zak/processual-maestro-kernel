@@ -2,6 +2,9 @@
 # Route extensions that belong to the Admin Marketplace router.
 from processual_api.admin_marketplace import catalog_router as _catalog_router
 from processual_api.admin_marketplace import (
+    subscription_top_up_purchase_router as _subscription_top_up_purchase_router,
+)
+from processual_api.admin_marketplace import (
     subscription_usage_router as _subscription_usage_router,
 )
 from processual_api.admin_marketplace.audit_contracts import (
