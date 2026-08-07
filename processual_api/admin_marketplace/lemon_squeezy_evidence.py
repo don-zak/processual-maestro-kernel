@@ -21,6 +21,7 @@ class LemonSqueezyVerifiedEvidence:
     currency: str | None
     subtotal_amount: str | None
     total_amount: str | None
+    refunded_amount: str | None
     status: str
     effective_at: datetime
 
@@ -98,7 +99,7 @@ def extract_lemon_squeezy_verified_evidence(
     if resource_type == "orders":
         first_item = _mapping(attributes.get("first_order_item"), "first_order_item")
         return LemonSqueezyVerifiedEvidence(
-            schema_version=2,
+            schema_version=3,
             provider_customer_id=customer_id,
             provider_order_id=external_resource_id,
             provider_subscription_id=None,
@@ -106,6 +107,7 @@ def extract_lemon_squeezy_verified_evidence(
             currency=_currency(attributes.get("currency"), "currency"),
             subtotal_amount=_amount(attributes.get("subtotal"), "subtotal"),
             total_amount=_amount(attributes.get("total"), "total"),
+            refunded_amount=_amount(attributes.get("refunded_amount", 0), "refunded_amount"),
             status=status,
             effective_at=effective_at,
         )
@@ -120,6 +122,7 @@ def extract_lemon_squeezy_verified_evidence(
             currency=None,
             subtotal_amount=None,
             total_amount=None,
+            refunded_amount=None,
             status=status,
             effective_at=effective_at,
         )
@@ -136,6 +139,7 @@ def extract_lemon_squeezy_verified_evidence(
             currency=_currency(attributes.get("currency"), "currency"),
             subtotal_amount=_amount(attributes.get("subtotal"), "subtotal"),
             total_amount=_amount(attributes.get("total"), "total"),
+            refunded_amount=_amount(attributes.get("refunded_amount", 0), "refunded_amount"),
             status=status,
             effective_at=effective_at,
         )
