@@ -18,6 +18,9 @@ from processual_api.admin_marketplace.lemon_squeezy_top_up_processor import (
     TOP_UP_OFFER_REF,
     process_lemon_squeezy_top_up_factory,
 )
+from processual_api.admin_marketplace.lemon_squeezy_top_up_refund_processor import (
+    process_lemon_squeezy_top_up_refund_factory,
+)
 from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
     LemonSqueezyWebhookError,
 )
@@ -89,6 +92,29 @@ async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=400, detail="Invalid webhook request.") from exc
 
     if result.entry.offer_ref == TOP_UP_OFFER_REF:
+        if result.entry.event_name == "order_refunded":
+            process_refund = process_lemon_squeezy_top_up_refund_factory(
+                uow_factory=_uow_factory
+            )
+            try:
+                refund = await process_refund(inbox_id=result.entry.id)
+            except LemonSqueezyWebhookError as exc:
+                raise HTTPException(status_code=409, detail="Top-up refund reconciliation failed.") from exc
+            return {
+                "received": True,
+                "replayed": result.replayed or refund.replayed,
+                "inbox_id": str(result.entry.id),
+                "reconciliation_action": (
+                    "top_up_refunded"
+                    if refund.outcome == "reversed"
+                    else "top_up_refund_manual_review"
+                ),
+                "top_up_order_id": str(refund.order_id),
+                "top_up_reversal_id": (
+                    None if refund.reversal_id is None else str(refund.reversal_id)
+                ),
+            }
+
         process_top_up = process_lemon_squeezy_top_up_factory(uow_factory=_uow_factory)
         try:
             top_up = await process_top_up(inbox_id=result.entry.id)
