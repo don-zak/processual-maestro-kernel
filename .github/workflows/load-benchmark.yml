@@ -75,7 +75,7 @@ jobs:
       - name: Install Maestro and benchmark dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install '.[api,database,cache,observability]'
+          python -m pip install '.[api,security,database,cache,observability]'
 
       - name: Start Maestro
         run: |
