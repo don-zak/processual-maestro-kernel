@@ -42,36 +42,48 @@ def test_provider_binding_is_server_side(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.success_url == "https://maestro.example/settings/billing"
 
 
-def test_purchase_request_rejects_provider_control_fields() -> None:
+def test_purchase_request_rejects_provider_and_cycle_control_fields() -> None:
     with pytest.raises(ValidationError):
         purchase.SubscriptionTopUpPurchaseRequest.model_validate(
             {
                 "subscription_id": str(uuid.uuid4()),
-                "quota_cycle_id": str(uuid.uuid4()),
                 "requested_units": 10_000,
+                "quota_cycle_id": str(uuid.uuid4()),
                 "provider_variant_id": "1",
             }
         )
 
 
-def test_order_id_is_stable_per_customer_and_idempotency_key() -> None:
+def test_idempotency_is_stable_and_customer_scoped() -> None:
     customer_ref = str(uuid.uuid4())
+    other_customer_ref = str(uuid.uuid4())
 
-    first = purchase._deterministic_order_id(
+    first_key = purchase._internal_idempotency_key(
         customer_ref=customer_ref,
-        idempotency_key="checkout-1",
+        client_key="checkout-1",
     )
-    second = purchase._deterministic_order_id(
+    second_key = purchase._internal_idempotency_key(
         customer_ref=customer_ref,
-        idempotency_key="checkout-1",
+        client_key="checkout-1",
     )
-    different = purchase._deterministic_order_id(
-        customer_ref=customer_ref,
-        idempotency_key="checkout-2",
+    other_customer_key = purchase._internal_idempotency_key(
+        customer_ref=other_customer_ref,
+        client_key="checkout-1",
     )
 
-    assert first == second
-    assert first != different
+    assert first_key == second_key
+    assert first_key != other_customer_key
+    assert len(first_key) <= 255
+
+    first_order = purchase._deterministic_order_id(
+        customer_ref=customer_ref,
+        idempotency_key=first_key,
+    )
+    replay_order = purchase._deterministic_order_id(
+        customer_ref=customer_ref,
+        idempotency_key=second_key,
+    )
+    assert first_order == replay_order
 
 
 def test_provider_config_fails_closed_when_top_up_variant_is_missing(
@@ -87,7 +99,7 @@ def test_provider_config_fails_closed_when_top_up_variant_is_missing(
 
 
 @pytest.mark.asyncio
-async def test_purchase_wires_authoritative_order_to_server_variant(
+async def test_purchase_wires_authoritative_order_to_server_cycle_and_variant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _enable_provider(monkeypatch)
@@ -95,6 +107,12 @@ async def test_purchase_wires_authoritative_order_to_server_variant(
     subscription_id = uuid.uuid4()
     cycle_id = uuid.uuid4()
     captured: dict[str, object] = {}
+
+    async def fake_cycle_resolver(*, subscription_id, customer_ref, at):
+        captured["cycle_subscription_id"] = subscription_id
+        captured["cycle_customer_ref"] = customer_ref
+        captured["cycle_at"] = at
+        return cycle_id
 
     def fake_order_factory(*, unit_of_work_factory):
         async def create(command):
@@ -135,6 +153,7 @@ async def test_purchase_wires_authoritative_order_to_server_variant(
 
         return create
 
+    monkeypatch.setattr(purchase, "_resolve_current_cycle_id", fake_cycle_resolver)
     monkeypatch.setattr(
         purchase,
         "create_subscription_top_up_order_factory",
@@ -154,7 +173,6 @@ async def test_purchase_wires_authoritative_order_to_server_variant(
     response = await purchase.purchase_subscription_top_up_endpoint(
         purchase.SubscriptionTopUpPurchaseRequest(
             subscription_id=subscription_id,
-            quota_cycle_id=cycle_id,
             requested_units=10_000,
         ),
         current_user={"user_id": customer_ref},
@@ -163,10 +181,13 @@ async def test_purchase_wires_authoritative_order_to_server_variant(
 
     order_command = captured["order"]
     checkout_command = captured["checkout"]
+    assert captured["cycle_subscription_id"] == subscription_id
+    assert captured["cycle_customer_ref"] == customer_ref
     assert order_command.customer_ref == customer_ref
     assert order_command.subscription_id == subscription_id
     assert order_command.quota_cycle_id == cycle_id
     assert order_command.requested_units == 10_000
+    assert order_command.idempotency_key.startswith(f"top-up:{customer_ref}:")
     assert checkout_command.customer_ref == customer_ref
     assert checkout_command.provider_variant_id == "98765"
     assert checkout_command.store_id == "12345"
