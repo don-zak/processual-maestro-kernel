@@ -17,6 +17,20 @@ def add_calendar_months(value: datetime, months: int) -> datetime:
     return value.replace(year=year, month=month, day=day)
 
 
+def next_anchored_month_boundary(*, starts_at: datetime, anchor_day: int) -> datetime:
+    """Advance one month while preserving the original activation day where possible."""
+    if starts_at.tzinfo is None:
+        raise ValueError("billing period anchor must be timezone-aware.")
+    if isinstance(anchor_day, bool) or not isinstance(anchor_day, int) or not 1 <= anchor_day <= 31:
+        raise ValueError("anchor_day must be between 1 and 31.")
+
+    month_index = starts_at.month
+    year = starts_at.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(anchor_day, calendar.monthrange(year, month)[1])
+    return starts_at.replace(year=year, month=month, day=day)
+
+
 def subscription_period_end(*, starts_at: datetime, billing_period: str) -> datetime:
     normalized = billing_period.strip().lower()
     if normalized == "monthly":
@@ -37,6 +51,7 @@ def quota_period_end(*, starts_at: datetime, period_days: int) -> datetime:
 
 __all__ = [
     "add_calendar_months",
+    "next_anchored_month_boundary",
     "quota_period_end",
     "subscription_period_end",
 ]
