@@ -27,6 +27,7 @@ security = [
 database = [
   "sqlalchemy[asyncio]>=2.0",
   "asyncpg>=0.29",
+  "aiosqlite>=0.20",
   "alembic>=1.13",
 ]
 cache = [
@@ -72,6 +73,7 @@ all = [
   "bcrypt>=4.1",
   "sqlalchemy[asyncio]>=2.0",
   "asyncpg>=0.29",
+  "aiosqlite>=0.20",
   "alembic>=1.13",
   "redis>=5.0",
   "prometheus-client>=0.20",
