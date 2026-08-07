@@ -14,6 +14,7 @@ import json
 import os
 import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -90,6 +91,13 @@ class CapacityBackend(Protocol):
         lease_seconds: int,
     ) -> CapacityDecision: ...
 
+    async def renew(
+        self,
+        reservation: CapacityReservation,
+        *,
+        lease_seconds: int,
+    ) -> bool: ...
+
     async def release(self, reservation: CapacityReservation) -> None: ...
 
 
@@ -140,6 +148,28 @@ class InMemoryCapacityBackend:
                 global_used + weight,
                 actor_used + weight if actor_key is not None else actor_used,
             )
+
+    async def renew(
+        self,
+        reservation: CapacityReservation,
+        *,
+        lease_seconds: int,
+    ) -> bool:
+        async with self._lock:
+            now = time.monotonic()
+            self._cleanup(now)
+            current = self._leases.get(reservation.lease_id)
+            if current is None:
+                return False
+            _expiry, weight, actor_key = current
+            if weight != reservation.weight or actor_key != reservation.actor_key:
+                return False
+            self._leases[reservation.lease_id] = (
+                now + lease_seconds,
+                weight,
+                actor_key,
+            )
+            return True
 
     async def release(self, reservation: CapacityReservation) -> None:
         async with self._lock:
@@ -200,6 +230,53 @@ end
 return {1, global_used + weight, actor_used + (has_actor and weight or 0), 0}
 """
 
+_REDIS_RENEW_SCRIPT = """
+local now = tonumber(ARGV[1])
+local expiry = tonumber(ARGV[2])
+local lease_id = ARGV[3]
+local has_actor = ARGV[4] == '1'
+
+local function remove_lease()
+    redis.call('ZREM', KEYS[1], lease_id)
+    redis.call('HDEL', KEYS[2], lease_id)
+    if has_actor then
+        redis.call('ZREM', KEYS[3], lease_id)
+        redis.call('HDEL', KEYS[4], lease_id)
+    end
+end
+
+local global_expiry = tonumber(redis.call('ZSCORE', KEYS[1], lease_id))
+local global_weight = redis.call('HGET', KEYS[2], lease_id)
+if (not global_expiry) or global_expiry <= now or (not global_weight) then
+    remove_lease()
+    return 0
+end
+
+if has_actor then
+    local actor_expiry = tonumber(redis.call('ZSCORE', KEYS[3], lease_id))
+    local actor_weight = redis.call('HGET', KEYS[4], lease_id)
+    if (not actor_expiry) or actor_expiry <= now or (not actor_weight) then
+        remove_lease()
+        return 0
+    end
+    if tonumber(actor_weight) ~= tonumber(global_weight) then
+        remove_lease()
+        return 0
+    end
+end
+
+local ttl = math.max(math.ceil((expiry - now) / 1000) * 2, 10)
+redis.call('ZADD', KEYS[1], expiry, lease_id)
+redis.call('EXPIRE', KEYS[1], ttl)
+redis.call('EXPIRE', KEYS[2], ttl)
+if has_actor then
+    redis.call('ZADD', KEYS[3], expiry, lease_id)
+    redis.call('EXPIRE', KEYS[3], ttl)
+    redis.call('EXPIRE', KEYS[4], ttl)
+end
+return 1
+"""
+
 _REDIS_RELEASE_SCRIPT = """
 redis.call('ZREM', KEYS[1], ARGV[1])
 redis.call('HDEL', KEYS[2], ARGV[1])
@@ -254,6 +331,25 @@ class RedisCapacityBackend:
         reason_code = int(result[3])
         reason = "global" if reason_code == 1 else "actor" if reason_code == 2 else ""
         return CapacityDecision(admitted, int(result[1]), int(result[2]), reason)
+
+    async def renew(
+        self,
+        reservation: CapacityReservation,
+        *,
+        lease_seconds: int,
+    ) -> bool:
+        now_ms = int(time.time() * 1000)
+        expiry_ms = now_ms + lease_seconds * 1000
+        result = await self._redis.eval(
+            _REDIS_RENEW_SCRIPT,
+            4,
+            *self._keys(reservation.actor_key),
+            now_ms,
+            expiry_ms,
+            reservation.lease_id,
+            "1" if reservation.actor_key is not None else "0",
+        )
+        return int(result) == 1
 
     async def release(self, reservation: CapacityReservation) -> None:
         await self._redis.eval(
@@ -334,6 +430,50 @@ def _capacity_response(
     )
 
 
+def _capacity_authority_response() -> Response:
+    return Response(
+        status_code=503,
+        content=json.dumps(
+            {
+                "detail": "Operational capacity authority was lost during execution.",
+                "capacity_reason": "lease_lost",
+            }
+        ),
+        media_type="application/json",
+        headers={
+            "Retry-After": "1",
+            "X-Maestro-Capacity-Reason": "lease_lost",
+        },
+    )
+
+
+async def _lease_heartbeat(
+    *,
+    backend: CapacityBackend,
+    reservation: CapacityReservation,
+    lease_seconds: int,
+) -> None:
+    """Renew one active reservation until cancelled or authority is lost."""
+
+    interval_seconds = max(min(lease_seconds / 3, lease_seconds - 1), 1.0)
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            renewed = await backend.renew(
+                reservation,
+                lease_seconds=lease_seconds,
+            )
+        except Exception:
+            renewed = False
+        if not renewed:
+            raise RuntimeError("runtime capacity lease lost")
+        RUNTIME_CAPACITY_ACCOUNTING.renewed(
+            lease_id=reservation.lease_id,
+            renewed_at=time.monotonic(),
+            lease_seconds=lease_seconds,
+        )
+
+
 class RuntimeCapacityMiddleware(BaseHTTPMiddleware):
     """Weighted admission control with bounded wait and crash-safe leases."""
 
@@ -399,24 +539,59 @@ class RuntimeCapacityMiddleware(BaseHTTPMiddleware):
             lease_seconds=policy.lease_seconds,
         )
         response: Response | None = None
+        heartbeat_task = asyncio.create_task(
+            _lease_heartbeat(
+                backend=backend,
+                reservation=reservation,
+                lease_seconds=policy.lease_seconds,
+            )
+        )
+        request_task = asyncio.create_task(call_next(request))
         try:
-            response = await call_next(request)
+            done, _pending = await asyncio.wait(
+                {request_task, heartbeat_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if heartbeat_task in done:
+                heartbeat_error = heartbeat_task.exception()
+                if heartbeat_error is not None:
+                    request_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await request_task
+                    RUNTIME_CAPACITY_ACCOUNTING.rejected(reason="lease_lost")
+                    response = _capacity_authority_response()
+                    return response
+
+            response = await request_task
+            heartbeat_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await heartbeat_task
             response.headers["X-Maestro-Capacity-OCU"] = str(weight)
             response.headers["X-Maestro-Capacity-Global"] = (
                 f"{decision.global_used}/{policy.global_limit_ocu}"
             )
             return response
         finally:
+            for task in (heartbeat_task, request_task):
+                if not task.done():
+                    task.cancel()
+            for task in (heartbeat_task, request_task):
+                if not task.done():
+                    with suppress(asyncio.CancelledError):
+                        await task
+
             finished_at = time.monotonic()
             release_failed = False
             try:
                 await backend.release(reservation)
             except Exception:
-                # Charge the reservation through TTL when explicit release fails.
+                # Charge the reservation through its latest TTL when explicit release fails.
                 release_failed = True
-            accounting_finished_at = (
-                admitted_at + policy.lease_seconds if release_failed else finished_at
-            )
+            accounting_finished_at = finished_at
+            if release_failed:
+                lease_expiry = RUNTIME_CAPACITY_ACCOUNTING.lease_expires_at(lease_id=lease_id)
+                if lease_expiry is not None:
+                    accounting_finished_at = lease_expiry
             units = RUNTIME_CAPACITY_ACCOUNTING.released(
                 lease_id=lease_id,
                 finished_at=accounting_finished_at,
