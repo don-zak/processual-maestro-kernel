@@ -88,11 +88,11 @@ class FakeUow:
         payment: object,
         existing_grant: object | None = None,
     ) -> None:
-        self.orders = ByIdRepository(order)
+        self.top_up_orders = ByIdRepository(order)
         self.subscriptions = ByIdRepository(subscription)
         self.plans = ByIdRepository(plan)
         self.subscription_quota_cycles = ByIdRepository(cycle)
-        self.payments = PaymentRepository(payment)
+        self.top_up_payments = PaymentRepository(payment)
         self.subscription_top_up_grants = GrantRepository(existing_grant)
         self.commit_count = 0
 
