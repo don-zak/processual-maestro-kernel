@@ -10,6 +10,9 @@ from processual_api.admin_marketplace import (
 from processual_api.admin_marketplace import (
     subscription_usage_router as _subscription_usage_router,
 )
+from processual_api.admin_marketplace import (
+    top_up_operations_router as _top_up_operations_router,
+)
 from processual_api.admin_marketplace.audit_contracts import (
     CommercialAuditAction,
     CommercialAuditOutcome,
