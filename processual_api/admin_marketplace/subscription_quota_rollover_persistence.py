@@ -28,12 +28,13 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         CheckConstraint("period_end > period_start", name="period_valid"),
         CheckConstraint("base_limit_units >= 0", name="base_nonnegative"),
         CheckConstraint("rollover_units >= 0", name="rollover_nonnegative"),
+        CheckConstraint("top_up_units >= 0", name="top_up_nonnegative"),
         CheckConstraint(
             "rollover_status IN ('available','locked_for_delinquency','restored','expired')",
             name="rollover_status",
         ),
         CheckConstraint(
-            "used_units >= 0 AND used_units <= base_limit_units + rollover_units",
+            "used_units >= 0 AND used_units <= base_limit_units + rollover_units + top_up_units",
             name="usage_within_available",
         ),
         CheckConstraint("version >= 0", name="version_nonnegative"),
@@ -94,6 +95,11 @@ class AdminMarketSubscriptionQuotaCycle(Base):
         nullable=False,
         default=0,
     )
+    top_up_units: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
     rollover_status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -141,7 +147,13 @@ class AdminMarketSubscriptionQuotaCycle(Base):
 
     @property
     def available_units(self) -> int:
-        return self.base_limit_units + self.spendable_rollover_units - self.used_units
+        return max(
+            self.base_limit_units
+            + self.spendable_rollover_units
+            + self.top_up_units
+            - self.used_units,
+            0,
+        )
 
 
 class SqlAlchemySubscriptionQuotaCycleRepository:
