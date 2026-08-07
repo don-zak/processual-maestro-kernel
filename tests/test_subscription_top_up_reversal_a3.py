@@ -100,11 +100,15 @@ class FakeUow:
         self.commit_count += 1
 
 
-def _command(*, event_ref: str = "lemon:refund:7001") -> ReverseSubscriptionTopUpCommand:
+def _command(
+    *,
+    event_ref: str = "lemon:refund:7001",
+    reason_code: str = "provider_refund",
+) -> ReverseSubscriptionTopUpCommand:
     return ReverseSubscriptionTopUpCommand(
         order_id=ORDER_ID,
         provider_event_ref=event_ref,
-        reason_code="provider_refund",
+        reason_code=reason_code,
         reversed_at=NOW,
     )
 
@@ -121,6 +125,25 @@ async def test_refund_reverses_unconsumed_top_up_balance_once() -> None:
     assert uow.cycle.top_up_units == 0
     assert uow.cycle.version == 2
     assert uow.subscription_top_up_reversals.reversal.outcome == "reversed"
+    assert uow.commit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_chargeback_reason_is_preserved_in_reversal_ledger() -> None:
+    uow = FakeUow(used_units=8_000)
+    reverse = reverse_subscription_top_up_factory(unit_of_work_factory=lambda: uow)
+
+    result = await reverse(
+        _command(
+            event_ref="risk:chargeback:cb_001",
+            reason_code="provider_chargeback",
+        )
+    )
+
+    assert result.outcome == "reversed"
+    assert uow.subscription_top_up_reversals.reversal.reason_code == "provider_chargeback"
+    assert uow.subscription_top_up_reversals.reversal.provider_event_ref == "risk:chargeback:cb_001"
+    assert uow.cycle.top_up_units == 0
     assert uow.commit_count == 1
 
 
