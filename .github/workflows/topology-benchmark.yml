@@ -9,6 +9,7 @@ on:
       - benchmarks/topology_compare.py
       - benchmarks/fanout_app.py
       - benchmarks/fanout_probe.py
+      - benchmarks/flush_redis.py
       - tests/test_topology_compare.py
       - tests/test_fanout_probe.py
       - .github/workflows/topology-benchmark.yml
@@ -95,7 +96,7 @@ jobs:
 
       - name: Start Maestro with one worker
         run: |
-          redis-cli -h 127.0.0.1 FLUSHDB
+          python benchmarks/flush_redis.py
           python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 1 > topology-results/server-1w.log 2>&1 &
           echo $! > topology-results/server.pid
           for attempt in $(seq 1 30); do
@@ -127,7 +128,7 @@ jobs:
             fi
             sleep 1
           done
-          redis-cli -h 127.0.0.1 FLUSHDB
+          python benchmarks/flush_redis.py
           python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 2 > topology-results/server-2w.log 2>&1 &
           echo $! > topology-results/server.pid
           for attempt in $(seq 1 30); do
@@ -171,7 +172,7 @@ jobs:
 
       - name: Start fanout harness with one worker
         run: |
-          redis-cli -h 127.0.0.1 FLUSHDB
+          python benchmarks/flush_redis.py
           python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 1 > topology-results/fanout-1w.log 2>&1 &
           echo $! > topology-results/fanout.pid
           for attempt in $(seq 1 30); do
@@ -203,7 +204,7 @@ jobs:
             fi
             sleep 1
           done
-          redis-cli -h 127.0.0.1 FLUSHDB
+          python benchmarks/flush_redis.py
           python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 2 > topology-results/fanout-2w.log 2>&1 &
           echo $! > topology-results/fanout.pid
           for attempt in $(seq 1 30); do
