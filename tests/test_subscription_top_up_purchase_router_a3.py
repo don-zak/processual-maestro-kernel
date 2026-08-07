@@ -6,13 +6,13 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from processual_api.admin_marketplace import subscription_top_up_purchase_router as purchase
 from processual_api.admin_marketplace.lemon_squeezy_top_up_checkout import (
     CreateTopUpCheckoutResult,
 )
 from processual_api.admin_marketplace.subscription_top_up_order import (
     SubscriptionTopUpOrderResult,
 )
-from processual_api.admin_marketplace import subscription_top_up_purchase_router as purchase
 
 
 def _enable_provider(monkeypatch: pytest.MonkeyPatch) -> None:
