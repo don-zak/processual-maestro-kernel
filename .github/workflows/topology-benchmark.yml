@@ -1,0 +1,160 @@
+name: Topology Benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - benchmarks/topology_compare.py
+      - tests/test_topology_compare.py
+      - .github/workflows/topology-benchmark.yml
+      - processual_api/middleware/runtime_capacity.py
+      - processual_api/middleware/runtime_capacity_metrics.py
+
+permissions:
+  contents: read
+
+jobs:
+  compare-workers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: benchmark-password
+          POSTGRES_DB: maestro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://maestro:benchmark-password@127.0.0.1:5432/maestro
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: benchmark-only-not-production-jwt-secret
+      API_KEYS: benchmark-only-api-key
+      POSTGRES_PASSWORD: benchmark-password
+      REDIS_PASSWORD: benchmark-password
+      GRAFANA_ADMIN_PASSWORD: benchmark-password
+      RATE_LIMIT_ENABLED: "false"
+      CAPACITY_GUARD_ENABLED: "true"
+      CAPACITY_GLOBAL_LIMIT_OCU: "40"
+      CAPACITY_ACTOR_LIMIT_OCU: "12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install Maestro and benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[api,security,database,cache,observability]'
+
+      - name: Verify topology comparator
+        run: PYTHONPATH=. python -m pytest tests/test_topology_compare.py -q
+
+      - name: Capture runner envelope
+        run: |
+          mkdir -p topology-results
+          {
+            echo "# Runner envelope"
+            echo
+            echo '```text'
+            uname -a
+            lscpu
+            free -h
+            echo '```'
+          } > topology-results/runner.md
+
+      - name: Start Maestro with one worker
+        run: |
+          redis-cli -h 127.0.0.1 FLUSHDB
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 1 > topology-results/server-1w.log 2>&1 &
+          echo $! > topology-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat topology-results/server-1w.log
+          exit 1
+
+      - name: Benchmark one worker
+        run: |
+          python benchmarks/workload_probe.py \
+            --concurrency 1,5,10,20,40 \
+            --light-requests 100 \
+            --normal-requests 160 \
+            --heavy-requests 80 \
+            --governance-requests 40 \
+            --output topology-results/workloads-1w.json \
+            | tee topology-results/workloads-1w.txt
+
+      - name: Restart Maestro with two workers
+        run: |
+          kill "$(cat topology-results/server.pid)"
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$(cat topology-results/server.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          redis-cli -h 127.0.0.1 FLUSHDB
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 2 > topology-results/server-2w.log 2>&1 &
+          echo $! > topology-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat topology-results/server-2w.log
+          exit 1
+
+      - name: Benchmark two workers
+        run: |
+          python benchmarks/workload_probe.py \
+            --concurrency 1,5,10,20,40 \
+            --light-requests 100 \
+            --normal-requests 160 \
+            --heavy-requests 80 \
+            --governance-requests 40 \
+            --output topology-results/workloads-2w.json \
+            | tee topology-results/workloads-2w.txt
+
+      - name: Compare worker topologies
+        run: |
+          python benchmarks/topology_compare.py \
+            topology-results/workloads-1w.json \
+            topology-results/workloads-2w.json \
+            --output topology-results/comparison.md \
+            | tee topology-results/comparison.txt
+          cat topology-results/comparison.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload topology benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-topology-benchmark
+          path: topology-results/
