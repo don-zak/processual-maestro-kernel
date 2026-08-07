@@ -72,7 +72,10 @@ def grant_verified_subscription_top_up_factory(
                     committed=False,
                 )
 
-            order = await uow.orders.get_by_id(command.order_id, for_update=True)
+            order = await uow.top_up_orders.get_by_id(
+                command.order_id,
+                for_update=True,
+            )
             if order is None:
                 raise SubscriptionTopUpGrantError("top-up order was not found.")
             if order.subscription_id != command.subscription_id:
@@ -161,7 +164,7 @@ def grant_verified_subscription_top_up_factory(
                     "top-up order snapshot conflicts with the authoritative quote."
                 )
 
-            payment = await uow.payments.get_by_provider_reference(
+            payment = await uow.top_up_payments.get_by_provider_reference(
                 command.provider_reference
             )
             if payment is None or payment.order_id != order.id:
