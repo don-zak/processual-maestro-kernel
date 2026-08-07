@@ -78,9 +78,14 @@ def grant_verified_subscription_top_up_factory(
             )
             if order is None:
                 raise SubscriptionTopUpGrantError("top-up order was not found.")
-            if order.subscription_id != command.subscription_id:
+            if (
+                order.subscription_id != command.subscription_id
+                or order.quota_cycle_id != command.quota_cycle_id
+                or order.customer_ref != command.customer_ref
+                or order.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
+            ):
                 raise SubscriptionTopUpGrantError(
-                    "top-up order conflicts with the subscription."
+                    "top-up order ownership snapshot conflicts with the grant command."
                 )
             if order.state not in {"awaiting_payment", "payment_verified"}:
                 raise SubscriptionTopUpGrantError(
