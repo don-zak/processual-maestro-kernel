@@ -1,4 +1,4 @@
-"""Add immutable subscription top-up reversal ledger.
+"""Add immutable subscription top-up reversal ledger and refund evidence.
 
 Revision ID: 20260807_0043
 Revises: 20260807_0042
@@ -19,6 +19,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    with op.batch_alter_table("admin_market_lemon_squeezy_webhook_inbox") as batch:
+        batch.add_column(sa.Column("refunded_amount", sa.String(length=64), nullable=True))
+
     op.create_table(
         "admin_market_subscription_top_up_reversals",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -57,3 +60,5 @@ def downgrade() -> None:
         table_name="admin_market_subscription_top_up_reversals",
     )
     op.drop_table("admin_market_subscription_top_up_reversals")
+    with op.batch_alter_table("admin_market_lemon_squeezy_webhook_inbox") as batch:
+        batch.drop_column("refunded_amount")
