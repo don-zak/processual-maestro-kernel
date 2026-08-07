@@ -19,6 +19,7 @@ class LemonSqueezyVerifiedEvidence:
     provider_subscription_id: str | None
     variant_id: str | None
     currency: str | None
+    subtotal_amount: str | None
     total_amount: str | None
     status: str
     effective_at: datetime
@@ -97,12 +98,13 @@ def extract_lemon_squeezy_verified_evidence(
     if resource_type == "orders":
         first_item = _mapping(attributes.get("first_order_item"), "first_order_item")
         return LemonSqueezyVerifiedEvidence(
-            schema_version=1,
+            schema_version=2,
             provider_customer_id=customer_id,
             provider_order_id=external_resource_id,
             provider_subscription_id=None,
             variant_id=_identifier(first_item.get("variant_id"), "variant_id"),
             currency=_currency(attributes.get("currency"), "currency"),
+            subtotal_amount=_amount(attributes.get("subtotal"), "subtotal"),
             total_amount=_amount(attributes.get("total"), "total"),
             status=status,
             effective_at=effective_at,
@@ -116,6 +118,7 @@ def extract_lemon_squeezy_verified_evidence(
             provider_subscription_id=external_resource_id,
             variant_id=_identifier(attributes.get("variant_id"), "variant_id"),
             currency=None,
+            subtotal_amount=None,
             total_amount=None,
             status=status,
             effective_at=effective_at,
@@ -131,6 +134,7 @@ def extract_lemon_squeezy_verified_evidence(
             ),
             variant_id=None,
             currency=_currency(attributes.get("currency"), "currency"),
+            subtotal_amount=_amount(attributes.get("subtotal"), "subtotal"),
             total_amount=_amount(attributes.get("total"), "total"),
             status=status,
             effective_at=effective_at,
