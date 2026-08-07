@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from benchmarks.fanout_app import app
 from benchmarks.fanout_probe import percentile
 
 
@@ -12,3 +13,10 @@ def test_fanout_percentile_uses_nearest_rank() -> None:
 
 def test_fanout_percentile_handles_empty_samples() -> None:
     assert percentile([], 0.95) == 0.0
+
+
+def test_fanout_harness_registers_health_and_probe_routes() -> None:
+    paths = {route.path for route in app.routes}
+
+    assert "/health/live" in paths
+    assert "/benchmark/fanout" in paths
