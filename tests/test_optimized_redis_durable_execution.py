@@ -5,7 +5,7 @@ import uuid
 import pytest
 import redis.asyncio as redis
 
-from processual_api.execution.durable import ExecutionPriority, JobSpec
+from processual_api.execution.durable import ExecutionPriority, JobSpec, JobStatus, RetryPolicy
 from processual_api.execution.redis_store_optimized import OptimizedRedisDurableJobStore
 
 
@@ -51,16 +51,17 @@ async def test_optimized_claim_preserves_priority_and_domain_filtering() -> None
         decode_responses=True,
     )
     prefix = f"{{optimized-priority-{uuid.uuid4().hex}}}"
-    store = OptimizedRedisDurableJobStore(client, prefix=prefix)
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix, candidate_window=2)
     try:
-        await store.submit(
-            JobSpec(
-                idempotency_key="batch",
-                domain="billing",
-                payload={},
-                priority=ExecutionPriority.BATCH,
+        for index in range(20):
+            await store.submit(
+                JobSpec(
+                    idempotency_key=f"batch-{index}",
+                    domain="billing",
+                    payload={},
+                    priority=ExecutionPriority.BATCH,
+                )
             )
-        )
         emergency = await store.submit(
             JobSpec(
                 idempotency_key="alarm",
@@ -89,3 +90,64 @@ async def test_optimized_claim_preserves_priority_and_domain_filtering() -> None
         assert claimed.spec.domain == "network"
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_priority_index_tracks_retry_cancel_and_recovery() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-index-{uuid.uuid4().hex}}}"
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix)
+    try:
+        retry_job = await store.submit(
+            JobSpec(
+                idempotency_key="retry",
+                domain="network",
+                payload={},
+                priority=ExecutionPriority.INTERACTIVE,
+                retry=RetryPolicy(
+                    max_attempts=3,
+                    initial_backoff_seconds=0.01,
+                    max_backoff_seconds=0.02,
+                ),
+            )
+        )
+        claimed = await store.claim(worker_id="worker-a", lease_seconds=1)
+        assert claimed is not None and claimed.lease_token is not None
+        retried = await store.fail(
+            job_id=claimed.job_id,
+            worker_id="worker-a",
+            lease_token=claimed.lease_token,
+            error="TimeoutError",
+        )
+        assert retried.status is JobStatus.RETRY_WAIT
+
+        await asyncio.sleep(0.03)
+        claimed_again = await store.claim(worker_id="worker-b", lease_seconds=0.05)
+        assert claimed_again is not None
+        assert claimed_again.job_id == retry_job.job.job_id
+        await asyncio.sleep(0.08)
+        assert await store.recover_expired_leases() == 1
+        recovered = await store.claim(worker_id="worker-c", lease_seconds=1)
+        assert recovered is not None
+        assert recovered.job_id == retry_job.job.job_id
+
+        cancelled = await store.submit(
+            JobSpec(
+                idempotency_key="cancel",
+                domain="billing",
+                payload={},
+                priority=ExecutionPriority.BATCH,
+            )
+        )
+        cancelled_job = await store.request_cancel(cancelled.job.job_id)
+        assert cancelled_job.status is JobStatus.CANCELLED
+    finally:
+        await client.aclose()
+
+
+def test_candidate_window_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="candidate_window"):
+        OptimizedRedisDurableJobStore(object(), candidate_window=0)
