@@ -7,7 +7,6 @@ promote as the default durable Redis store.
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from collections.abc import Sequence
 
@@ -19,12 +18,6 @@ from .redis_store import RedisDurableJobStore
 
 class OptimizedRedisDurableJobStore(RedisDurableJobStore):
     """Redis store with pipelined candidate reads and job-local claim watches."""
-
-    def __init__(self, redis_client, *, prefix: str = "maestro:durable", claim_window: int = 16) -> None:
-        super().__init__(redis_client, prefix=prefix)
-        if claim_window < 1:
-            raise ValueError("claim_window must be positive")
-        self._claim_window = claim_window
 
     async def _candidate_jobs(self, now: float) -> list[ExecutionJob]:
         candidate_ids = await self._redis.zrangebyscore(self._queue_key, "-inf", now)
@@ -52,11 +45,6 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
             await self._redis.zrem(self._queue_key, *stale_ids)
         return jobs
 
-    @staticmethod
-    def _worker_offset(worker_id: str, width: int) -> int:
-        digest = hashlib.blake2b(worker_id.encode("utf-8"), digest_size=8).digest()
-        return int.from_bytes(digest, "big") % width
-
     async def claim(
         self,
         *,
@@ -70,7 +58,7 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
             raise ValueError("lease_seconds must be positive")
         allowed = set(domains) if domains is not None else None
 
-        for retry_index in range(12):
+        for _ in range(12):
             now = await self._now()
             candidates = []
             for job in await self._candidate_jobs(now):
@@ -94,21 +82,15 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
                     job.job_id,
                 )
             )
-            best_priority = int(candidates[0].spec.priority)
-            priority_candidates = [
-                job for job in candidates if int(job.spec.priority) == best_priority
-            ][: self._claim_window]
-            offset = (self._worker_offset(worker_id, len(priority_candidates)) + retry_index) % len(
-                priority_candidates
-            )
-            selected = priority_candidates[offset]
+            selected = candidates[0]
             key = self._job_key(selected.job_id)
 
             async with self._redis.pipeline(transaction=True) as pipe:
                 try:
-                    # The job hash, not the shared queue ZSET, is the ownership
-                    # authority. Watching the queue caused unrelated claims to
-                    # invalidate each other under multi-worker load.
+                    # Job state is the ownership authority. Watching the shared
+                    # queue makes unrelated claims invalidate each other; watching
+                    # only the chosen job still prevents duplicate ownership while
+                    # allowing independent jobs to be claimed concurrently.
                     await pipe.watch(key)
                     current_data = await pipe.hgetall(key)
                     if not current_data:
