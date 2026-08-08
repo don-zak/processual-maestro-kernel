@@ -435,6 +435,13 @@
     }
   }
 
+  function observePageMutations(page) {
+    observer?.observe(page, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
   function reconcile() {
     const page = settingsPage();
 
@@ -443,6 +450,8 @@
     }
 
     reconciling = true;
+    const resumeObserver = Boolean(observer);
+    observer?.disconnect();
 
     try {
       const { panelsRoot } =
@@ -488,6 +497,9 @@
 
       page.dataset.sl18Ready = '1';
     } finally {
+      if (resumeObserver) {
+        observePageMutations(page);
+      }
       reconciling = false;
     }
   }
@@ -514,10 +526,7 @@
       }
     });
 
-    observer.observe(page, {
-      childList: true,
-      subtree: true,
-    });
+    observePageMutations(page);
   }
 
   function init() {
