@@ -120,6 +120,7 @@ async def test_eight_redis_workers_preserve_emergency_capacity_under_batch_press
     await pool.start()
     try:
         await asyncio.wait_for(seven_batch_started.wait(), timeout=2.0)
+        assert batch_started == 7
 
         noc_jobs = []
         for index in range(2):
@@ -141,12 +142,7 @@ async def test_eight_redis_workers_preserve_emergency_capacity_under_batch_press
             assert job.status is JobStatus.SUCCEEDED
             assert job.attempt == 1
 
-        running_batch = 0
-        for job_id in batch_jobs:
-            job = await store.get(job_id)
-            if job.status is JobStatus.RUNNING:
-                running_batch += 1
-        assert running_batch <= 7
+        assert batch_started == 7
     finally:
         batch_release.set()
         await pool.stop(graceful_timeout_seconds=2.0)
