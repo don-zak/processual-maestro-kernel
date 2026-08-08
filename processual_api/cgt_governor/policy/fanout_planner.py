@@ -3,11 +3,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TypeVar
-
-
-ItemT = TypeVar("ItemT")
-ResultT = TypeVar("ResultT")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +47,7 @@ def plan_fanout_execution(*, width: int, provider_count: int) -> FanoutExecution
     )
 
 
-async def execute_fanout_plan(
+async def execute_fanout_plan[ItemT, ResultT](
     items: Sequence[ItemT],
     worker: Callable[[ItemT], Awaitable[ResultT]],
     plan: FanoutExecutionPlan,
