@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from benchmarks.durable_worker_scale import percentile, run_scale_scenario
+from benchmarks.durable_worker_scale import ScaleResult, percentile, run_scale_scenario, summarize_trials
 from processual_api.execution.capacity import (
     DomainCapacityController,
     DomainCapacityPolicy,
@@ -27,6 +27,35 @@ def test_percentile_is_deterministic(values, q, expected) -> None:
     assert percentile(values, q) == expected
 
 
+def test_scale_trial_summary_uses_medians_and_preserves_raw_trials() -> None:
+    trials = [
+        ScaleResult(4, 96, 96, 0, 2.0, 48.0, 100.0, 200.0, 300.0, 20.0),
+        ScaleResult(4, 96, 96, 0, 1.0, 96.0, 80.0, 150.0, 250.0, 22.0),
+        ScaleResult(4, 96, 95, 1, 1.5, 64.0, 90.0, 180.0, 270.0, 21.0),
+    ]
+
+    summary = summarize_trials(trials)
+
+    assert summary.repetitions == 3
+    assert summary.completed_min == 95
+    assert summary.true_errors_total == 1
+    assert summary.successful_workflows_per_second_median == 64.0
+    assert summary.queue_delay_p95_ms_median == 180.0
+    assert summary.queue_delay_p99_ms_median == 270.0
+    assert summary.execution_p95_ms_median == 21.0
+    assert summary.trials == tuple(trials)
+
+
+def test_scale_trial_summary_rejects_mixed_shapes() -> None:
+    with pytest.raises(ValueError, match="same worker and job counts"):
+        summarize_trials(
+            [
+                ScaleResult(2, 24, 24, 0, 1.0, 24.0, 1.0, 1.0, 1.0, 1.0),
+                ScaleResult(4, 24, 24, 0, 1.0, 24.0, 1.0, 1.0, 1.0, 1.0),
+            ]
+        )
+
+
 @pytest.mark.asyncio
 async def test_scale_harness_completes_without_errors_and_detects_safe_scaling() -> None:
     redis_url = os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
@@ -44,12 +73,8 @@ async def test_scale_harness_completes_without_errors_and_detects_safe_scaling()
     assert all(result.completed == 24 for result in results)
     assert all(result.true_errors == 0 for result in results)
 
-    # Two workers must demonstrate useful horizontal scaling over the qualified
-    # single-worker baseline. Four workers are currently a contention probe:
-    # they must remain stable rather than being forced to outperform two on a
-    # tiny synthetic Redis workload where optimistic claim contention can
-    # dominate. The benchmark output remains the source for deciding whether
-    # four workers are actually qualified for promotion.
+    # These are safety checks, not runtime throttles. The benchmark output is
+    # used for qualification; the application is not constrained by them.
     assert two.successful_workflows_per_second > one.successful_workflows_per_second
     assert four.successful_workflows_per_second >= two.successful_workflows_per_second * 0.75
     assert four.successful_workflows_per_second >= one.successful_workflows_per_second
