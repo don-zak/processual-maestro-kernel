@@ -37,12 +37,49 @@ class ScaleResult:
     execution_p95_ms: float
 
 
+@dataclass(frozen=True, slots=True)
+class ScaleSummary:
+    workers: int
+    jobs: int
+    repetitions: int
+    completed_min: int
+    true_errors_total: int
+    successful_workflows_per_second_median: float
+    queue_delay_p95_ms_median: float
+    queue_delay_p99_ms_median: float
+    execution_p95_ms_median: float
+    trials: tuple[ScaleResult, ...]
+
+
 def percentile(values: list[float], q: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(values)
     index = min(max(math.ceil(q * len(ordered)) - 1, 0), len(ordered) - 1)
     return ordered[index]
+
+
+def summarize_trials(trials: list[ScaleResult]) -> ScaleSummary:
+    if not trials:
+        raise ValueError("at least one scale trial is required")
+    workers = trials[0].workers
+    jobs = trials[0].jobs
+    if any(trial.workers != workers or trial.jobs != jobs for trial in trials):
+        raise ValueError("scale trials must use the same worker and job counts")
+    return ScaleSummary(
+        workers=workers,
+        jobs=jobs,
+        repetitions=len(trials),
+        completed_min=min(trial.completed for trial in trials),
+        true_errors_total=sum(trial.true_errors for trial in trials),
+        successful_workflows_per_second_median=statistics.median(
+            trial.successful_workflows_per_second for trial in trials
+        ),
+        queue_delay_p95_ms_median=statistics.median(trial.queue_delay_p95_ms for trial in trials),
+        queue_delay_p99_ms_median=statistics.median(trial.queue_delay_p99_ms for trial in trials),
+        execution_p95_ms_median=statistics.median(trial.execution_p95_ms for trial in trials),
+        trials=tuple(trials),
+    )
 
 
 async def run_scale_scenario(
@@ -146,25 +183,49 @@ async def run_scale_scenario(
     )
 
 
+async def run_scale_trials(
+    *,
+    redis_url: str,
+    workers: int,
+    jobs: int,
+    handler_delay_seconds: float,
+    repetitions: int,
+) -> ScaleSummary:
+    if repetitions < 1:
+        raise ValueError("repetitions must be positive")
+    trials = [
+        await run_scale_scenario(
+            redis_url=redis_url,
+            workers=workers,
+            jobs=jobs,
+            handler_delay_seconds=handler_delay_seconds,
+        )
+        for _ in range(repetitions)
+    ]
+    return summarize_trials(trials)
+
+
 async def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--redis-url", default="redis://127.0.0.1:6379/15")
     parser.add_argument("--workers", default="1,2,4")
     parser.add_argument("--jobs", type=int, default=48)
     parser.add_argument("--handler-delay-ms", type=float, default=20.0)
+    parser.add_argument("--repetitions", type=int, default=3)
     args = parser.parse_args()
 
-    results = []
+    summaries = []
     for workers in [int(value) for value in args.workers.split(",") if value.strip()]:
-        results.append(
-            await run_scale_scenario(
+        summaries.append(
+            await run_scale_trials(
                 redis_url=args.redis_url,
                 workers=workers,
                 jobs=args.jobs,
                 handler_delay_seconds=args.handler_delay_ms / 1000,
+                repetitions=args.repetitions,
             )
         )
-    print(json.dumps([asdict(result) for result in results], indent=2, sort_keys=True))
+    print(json.dumps([asdict(summary) for summary in summaries], indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
