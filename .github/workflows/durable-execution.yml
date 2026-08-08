@@ -10,6 +10,7 @@ on:
       - tests/test_durable_execution.py
       - tests/test_durable_worker.py
       - tests/test_durable_worker_pool.py
+      - tests/test_durable_execution_service.py
       - tests/test_redis_durable_execution.py
       - tests/test_execution_domain_capacity.py
       - .github/workflows/durable-execution.yml
@@ -50,6 +51,7 @@ jobs:
           tests/test_durable_execution.py
           tests/test_durable_worker.py
           tests/test_durable_worker_pool.py
+          tests/test_durable_execution_service.py
           tests/test_redis_durable_execution.py
           tests/test_execution_domain_capacity.py
 
@@ -59,5 +61,6 @@ jobs:
           tests/test_durable_execution.py
           tests/test_durable_worker.py
           tests/test_durable_worker_pool.py
+          tests/test_durable_execution_service.py
           tests/test_redis_durable_execution.py
           tests/test_execution_domain_capacity.py
