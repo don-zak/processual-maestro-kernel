@@ -27,9 +27,76 @@ from .redis_store import RedisDurableJobStore
 _TERMINAL = {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED}
 _PRIORITY_ORDER = tuple(sorted(ExecutionPriority, key=int))
 
+_ATOMIC_CLAIM_LUA = r"""
+local now = tonumber(ARGV[1])
+local worker_id = ARGV[2]
+local lease_expires_at = tonumber(ARGV[3])
+local lease_token = ARGV[4]
+local job_prefix = ARGV[5]
+local window = tonumber(ARGV[6])
+
+for priority_index = 1, 4 do
+  local ids = redis.call('ZRANGEBYSCORE', KEYS[priority_index], '-inf', now, 'LIMIT', 0, window)
+  for _, job_id in ipairs(ids) do
+    local job_key = job_prefix .. job_id
+    local status = redis.call('HGET', job_key, 'status')
+    if not status then
+      redis.call('ZREM', KEYS[priority_index], job_id)
+      redis.call('ZREM', KEYS[5], job_id)
+    elseif status ~= 'queued' and status ~= 'retry_wait' then
+      redis.call('ZREM', KEYS[priority_index], job_id)
+      redis.call('ZREM', KEYS[5], job_id)
+    else
+      local cancel_requested = redis.call('HGET', job_key, 'cancel_requested')
+      local available_at = tonumber(redis.call('HGET', job_key, 'available_at') or '0')
+      local spec_raw = redis.call('HGET', job_key, 'spec')
+      local deadline_at = nil
+      if spec_raw then
+        local spec = cjson.decode(spec_raw)
+        deadline_at = spec['deadline_at']
+      end
+
+      if cancel_requested == '1' then
+        redis.call('HSET', job_key,
+          'status', 'cancelled',
+          'updated_at', tostring(now),
+          'worker_id', '',
+          'lease_token', '',
+          'lease_expires_at', '')
+        redis.call('ZREM', KEYS[priority_index], job_id)
+        redis.call('ZREM', KEYS[5], job_id)
+      elseif deadline_at ~= nil and tonumber(deadline_at) <= now then
+        redis.call('HSET', job_key,
+          'status', 'failed',
+          'last_error', 'deadline_exceeded',
+          'updated_at', tostring(now),
+          'worker_id', '',
+          'lease_token', '',
+          'lease_expires_at', '')
+        redis.call('ZREM', KEYS[priority_index], job_id)
+        redis.call('ZREM', KEYS[5], job_id)
+      elseif available_at <= now then
+        redis.call('HINCRBY', job_key, 'attempt', 1)
+        redis.call('HSET', job_key,
+          'status', 'running',
+          'updated_at', tostring(now),
+          'worker_id', worker_id,
+          'lease_token', lease_token,
+          'lease_expires_at', tostring(lease_expires_at))
+        redis.call('ZREM', KEYS[priority_index], job_id)
+        redis.call('ZREM', KEYS[5], job_id)
+        redis.call('ZADD', KEYS[6], lease_expires_at, job_id)
+        return job_id
+      end
+    end
+  end
+end
+return false
+"""
+
 
 class OptimizedRedisDurableJobStore(RedisDurableJobStore):
-    """Redis store with priority indexes and job-local claim ownership."""
+    """Redis store with priority indexes and contention-reduced claims."""
 
     def __init__(
         self,
@@ -53,6 +120,11 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
     def _dequeue_job(self, pipe, job: ExecutionJob) -> None:
         pipe.zrem(self._queue_key, job.job_id)
         pipe.zrem(self._priority_queue_key(job.spec.priority), job.job_id)
+
+    def _supports_atomic_claim(self) -> bool:
+        start = self._prefix.find("{")
+        end = self._prefix.find("}", start + 1)
+        return start >= 0 and end > start + 1
 
     async def submit(self, spec: JobSpec) -> SubmitResult:
         idem_key = self._idem_key(spec.idempotency_key)
@@ -165,28 +237,38 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
                     continue
         return False
 
-    async def claim(
+    async def _claim_atomic(self, *, worker_id: str, lease_seconds: float) -> ExecutionJob | None:
+        now = await self._now()
+        lease_token = uuid.uuid4().hex
+        lease_expires_at = now + lease_seconds
+        job_id = await self._redis.eval(
+            _ATOMIC_CLAIM_LUA,
+            6,
+            *(self._priority_queue_key(priority) for priority in _PRIORITY_ORDER),
+            self._queue_key,
+            self._running_key,
+            now,
+            worker_id,
+            lease_expires_at,
+            lease_token,
+            f"{self._prefix}:job:",
+            self._candidate_window,
+        )
+        if not job_id:
+            return None
+        return await self.get(job_id)
+
+    async def _claim_watch(
         self,
         *,
         worker_id: str,
         lease_seconds: float,
-        domains: Sequence[str] | None = None,
+        domains: Sequence[str] | None,
     ) -> ExecutionJob | None:
-        if not worker_id.strip():
-            raise ValueError("worker_id cannot be empty")
-        if lease_seconds <= 0:
-            raise ValueError("lease_seconds must be positive")
         allowed = set(domains) if domains is not None else None
-
         for _ in range(12):
             now = await self._now()
             selected: ExecutionJob | None = None
-
-            # With no domain filter, each priority has its own availability-sorted
-            # index, so a small bounded window is sufficient while preserving the
-            # exact global priority ordering. Domain-filtered workers scan only the
-            # current priority index so they cannot skip an eligible higher-priority
-            # job merely because it appears deeper in that priority queue.
             for priority in _PRIORITY_ORDER:
                 candidate_ids = await self._candidate_ids(
                     priority=priority,
@@ -246,6 +328,25 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
                 except WatchError:
                     continue
         return None
+
+    async def claim(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: float,
+        domains: Sequence[str] | None = None,
+    ) -> ExecutionJob | None:
+        if not worker_id.strip():
+            raise ValueError("worker_id cannot be empty")
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        if domains is None and self._supports_atomic_claim():
+            return await self._claim_atomic(worker_id=worker_id, lease_seconds=lease_seconds)
+        return await self._claim_watch(
+            worker_id=worker_id,
+            lease_seconds=lease_seconds,
+            domains=domains,
+        )
 
     async def _mutate_claimed(
         self,
