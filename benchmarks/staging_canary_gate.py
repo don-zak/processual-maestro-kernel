@@ -5,8 +5,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from benchmarks.execution_mix_compare import compare as compare_execution_mix
-from benchmarks.topology_compare import compare as compare_topology
+try:
+    from benchmarks.execution_mix_compare import compare as compare_execution_mix
+    from benchmarks.topology_compare import compare as compare_topology
+except ModuleNotFoundError:
+    from execution_mix_compare import compare as compare_execution_mix
+    from topology_compare import compare as compare_topology
 
 
 @dataclass(frozen=True, slots=True)
