@@ -6,9 +6,7 @@ Scope: scale, adaptive capacity, resilience, and production qualification for du
 
 ## Purpose
 
-This document consolidates the completed Phase 2 durable-execution work so the subsystem can be reviewed as one coherent unit and the broader program review can move to another area without losing qualification context.
-
-The implementation remains intentionally opt-in. This document does **not** authorize changing production worker defaults, enabling optimized Redis globally, wiring durable execution into `main.py`, or enabling adaptive concurrency by default.
+This document is the authoritative handoff and go/no-go record for the durable-execution Phase 2 work. The implementation remains opt-in; this document does not authorize changing production worker defaults, enabling optimized Redis globally, wiring durable execution into `main.py`, or enabling adaptive concurrency by default.
 
 ## Invariants preserved
 
@@ -17,114 +15,111 @@ The implementation remains intentionally opt-in. This document does **not** auth
 - Optimized Redis durable storage remains opt-in.
 - Adaptive concurrency remains opt-in.
 - Production pool defaults remain `idle_poll_seconds=0.05` and `recovery_interval_seconds=1.0`.
-- Faster polling values are used only in tests/benchmarks.
-- Base CI qualification remains 1/2/4/8 workers. 16 workers is not part of the base gate.
-- No generic/global Redis lock is introduced.
-- No queue scan is added to the hot claim path.
+- Faster polling values are test/benchmark-only.
+- Base CI remains 1/2/4/8 workers; 16 workers is qualification-only and manual.
+- No generic/global Redis lock or queue scan is added to the hot claim path.
 - Capacity remains fail-closed.
-- Durable `RUNNING` means claimed/leased; it must not be interpreted as domain-capacity-admitted handler activity.
+- Durable `RUNNING` means claimed/leased, not necessarily handler-active.
 
-## Phase 2 qualification matrix
+## Code and CI qualification
 
-| Area | Qualification | Status | Evidence |
-|---|---|---|---|
-| Durable state machine | submit/claim/heartbeat/succeed/fail/cancel/recovery | PASS | durable execution contract tests |
-| Redis durability | shared state across store instances | PASS | Redis durable execution tests |
-| Idempotency | concurrent duplicate submit creates one durable job | PASS | concurrent Redis submit tests |
-| Duplicate execution | duplicate submissions execute once across multi-worker pool | PASS | `test_duplicate_submissions_execute_once_across_worker_pool` |
-| Lease ownership | two workers cannot claim the same job | PASS | Redis claim contract tests |
-| Stale ownership | old worker cannot complete after lease recovery | PASS | stale-owner Redis test |
-| Node loss / resume | cancelled worker leaves durable lease; replacement node recovers and completes | PASS | `test_cancelled_worker_is_recovered_by_replacement_node` |
-| Retry continuity | retry survives store/worker instance changes | PASS | Redis retry continuity test |
-| Deadline safety | queued and running deadline expiry remains fail-closed | PASS | Redis deadline tests |
-| Shared capacity | domain/global capacity shared across controllers/workers | PASS | Redis domain-capacity tests |
-| Cross-node quota | independent controllers enforce the same Redis-backed limits | PASS | shared-capacity qualification |
-| Emergency reserve | normal work cannot consume reserved emergency capacity | PASS | capacity policy tests |
-| Noisy neighbor | batch saturation does not starve NOC emergency work | PASS | real Redis 8-worker qualification |
-| Capacity attempts | saturated claim is requeued without burning an execution attempt | PASS | two-worker capacity test |
-| Capacity lease recovery | expired Redis capacity leases self-recover | PASS | capacity recovery test |
-| Adaptive controller | AIMD, EWMA, hysteresis, floor/ceiling | PASS | adaptive controller tests |
-| Hard provider pressure | timeout/429 causes immediate multiplicative decrease | PASS | adaptive controller/gate tests |
-| Slow provider | sustained latency pressure requires hysteresis before decrease | PASS | adaptive gate tests |
-| Recovery | healthy windows restore concurrency gradually | PASS | adaptive controller/gate tests |
-| Active-work safety | decreasing the limit does not cancel active work | PASS | adaptive gate test |
-| Wake-up behavior | increasing limit wakes blocked workers without polling | PASS | adaptive gate test |
-| Automatic telemetry | completed executions automatically produce control samples | PASS | sampler + pool feedback tests |
-| 429 classification | provider-specific classifier can mark rate-limited attempts | PASS | telemetry sampler tests |
-| Timeout classification | default classifier recognizes `TimeoutError` conservatively | PASS | telemetry sampler tests |
-| Infra/provider isolation | claim/Redis infrastructure errors do not feed provider pressure | PASS | `test_infrastructure_failure_does_not_feed_provider_pressure` |
-| Redis atomic claim path | optimized hash-tagged deployment uses Lua/EVAL | PASS | optimized Redis tests + benchmark telemetry |
-| Scale baseline | 1/2/4/8 worker benchmark completes all jobs with zero true errors | PASS | Durable Execution CI benchmark |
-| CI contract gate | Ruff + durable contracts + Redis qualification | PASS | Durable Execution workflow |
+| Area | Status | Evidence |
+|---|---|---|
+| Durable state machine and Redis persistence | PASS | durable contract + Redis tests |
+| Idempotent submit and duplicate execution | PASS | concurrent submit + multi-worker execution qualification |
+| Lease ownership and stale-owner protection | PASS | Redis ownership tests |
+| Node loss / resume | PASS | replacement-node recovery qualification |
+| Retry and deadline safety | PASS | Redis continuity/deadline tests |
+| Shared global/domain quota across workers | PASS | Redis capacity tests |
+| Emergency reserve and noisy-neighbor isolation | PASS | 8-worker real-Redis qualification |
+| Capacity lease recovery | PASS | Redis capacity recovery test |
+| Optimized atomic claim path | PASS | Lua/EVAL tests + telemetry |
+| Adaptive AIMD/EWMA/hysteresis | PASS | adaptive controller tests |
+| 429/timeout/slow-provider pressure | PASS | adaptive gate + telemetry tests |
+| Healthy recovery | PASS | adaptive recovery tests |
+| Active-work safety | PASS | limit decrease does not cancel active work |
+| Infrastructure/provider isolation | PASS | Redis/claim failure is not provider pressure |
+| Base scale qualification | PASS | 1/2/4/8 benchmark, zero true errors |
 
-## Latest CI qualification snapshot
+Latest expanded Durable Execution run #69: Ruff PASS, **109 tests passed**, 1/2/4/8 benchmark PASS, zero true errors.
 
-Durable Execution workflow run #69 completed the expanded resilience suite successfully:
+## Preproduction automation added
 
-- Ruff: PASS
-- Durable execution tests: **109 passed**
-- Benchmark: 1/2/4/8 workers, 96 jobs per trial, 3 repetitions
-- True errors: **0 at every worker count**
+`.github/workflows/durable-preproduction-qualification.yml` is a manual production-qualification workflow. It deliberately does not run as base CI. Defaults:
 
-Median benchmark snapshot from that run:
+- 8 workers only;
+- 384 jobs per trial;
+- 5 repetitions;
+- Redis telemetry enabled;
+- resilience/adaptive/capacity qualification tests rerun before scale measurement.
 
-| Workers | Successful workflows/s | Execution p95 | Queue p95 |
-|---:|---:|---:|---:|
-| 1 | 41.58/s | 20.91 ms | 2187.09 ms |
-| 2 | 75.75/s | 20.92 ms | 1172.42 ms |
-| 4 | 140.69/s | 20.94 ms | 615.06 ms |
-| 8 | 221.79/s | 21.33 ms | 368.64 ms |
+The optional `include_16_workers` input enables a 16-worker tier only for explicit qualification. Passing 16 workers is evidence for capacity exploration, not permission to change production defaults.
 
-These numbers are a CI-run snapshot, not a production capacity promise. Hosted-runner variance is expected; qualification depends on correctness, zero true errors, latency behavior, and repeated scaling evidence rather than one throughput number.
+## Existing wider-system qualification
 
-## What is now closed at code/CI qualification level
+The repository already contains separate workflows for wider runtime behavior:
 
-The following Phase 2 engineering concerns are now covered sufficiently to move the code-review focus elsewhere:
+- `staging-canary.yml`: repeated one-vs-two-worker workload and execution-mix canary with a median gate and uploaded evidence.
+- `orchestration-soak.yml`: sustained orchestration mix, widths through 16, multiple concurrency levels, repeated trials, and metrics verification.
+- `topology-benchmark.yml`: worker-topology comparisons for application workloads, fanout, execution mix, and staging gate evidence.
 
-1. Durable Redis execution semantics and ownership.
-2. Multi-worker and multi-controller correctness.
-3. Idempotency and duplicate-submit protection.
-4. Lease recovery after worker/node interruption.
-5. Shared domain/global capacity and emergency reserve.
-6. Real-Redis noisy-neighbor/NOC-reserve behavior.
-7. Optimized atomic Redis claim path under the opt-in store.
-8. Adaptive concurrency decision logic.
-9. Opt-in dynamic concurrency gating.
-10. Automatic latency/error telemetry feedback.
-11. Separation of infrastructure failures from provider-pressure feedback.
-12. Stable 1/2/4/8 worker CI qualification.
+Recent recorded staging-canary and orchestration-soak runs were green. They are useful preproduction evidence but run on GitHub-hosted infrastructure; they do not substitute for the target deployment topology.
 
-## Operational qualification still required before changing production defaults
+## Release-chain correction
 
-The items below are deliberately **not** treated as reasons to keep modifying the core implementation. They are deployment/staging qualification gates and should be executed in the target environment before any production-default change:
+Preproduction review found stale migration-head assumptions in the release path. They were corrected:
 
-- Repeated qualification runs on production-like infrastructure.
-- Noisy-neighbor tests with realistic traffic distributions and payload sizes.
-- NOC/emergency reserve validation with real operational traffic classes.
-- Slow-provider and real 429/timeout injection against provider adapters.
-- Redis degradation/failover testing using the actual deployment topology.
-- Process/node termination and restart under orchestration.
-- Extended soak with representative job mix and payload sizes.
-- Cross-node quota validation under the deployed Redis topology.
-- Canary/staging observation before any production-default activation.
+- `.github/workflows/release.yml` now requires Alembic head `20260807_0043` instead of `20260805_0029`.
+- `tests/test_migration_regression_lock_a3.py` now asserts `20260807_0043`.
+- `tests/test_sqlite_migration_chain.py` now asserts head `20260807_0043` and one-step downgrade to `20260807_0042`.
 
-These are environment-level acceptance exercises, not justification for speculative core rewrites.
+This prevents a release gate from certifying an obsolete schema head.
 
-## Activation rule
+## Production activation gate
 
-Do not change production defaults merely because this matrix is green. Activation should occur only after the operational qualification above is completed and reviewed. Until then:
+Production activation is **NO-GO** until every EXTERNAL item below is executed against the actual staging/production-like environment and evidence is reviewed.
 
-- keep optimized Redis explicit,
-- keep adaptive concurrency explicit,
-- keep current worker defaults,
-- keep durable execution startup explicit,
-- preserve existing fail-closed behavior.
+| Gate | State before activation | Required evidence |
+|---|---|---|
+| Code/CI durable contracts | READY | green Durable Execution workflow |
+| Repeated 8-worker qualification | READY TO RUN | manual durable-preproduction artifact |
+| 16-worker exploration | OPTIONAL | manual artifact; never a default gate |
+| Staging canary | READY TO RUN | canary artifacts from target candidate |
+| Extended soak | READY TO RUN | sustained workload artifact |
+| Redis topology failover/degradation | EXTERNAL | actual managed/self-hosted Redis failover evidence |
+| Orchestrator node/process termination | EXTERNAL | target platform termination/restart evidence |
+| Cross-node quota on deployed Redis | EXTERNAL | multiple deployed nodes sharing the target Redis topology |
+| Provider 429/timeout/slow injection | EXTERNAL | adapter-level fault injection against staging providers/mocks |
+| NOC/emergency traffic classes | EXTERNAL | production-like traffic mix evidence |
+| Secrets/configuration readiness | EXTERNAL | release gate with real staging secret/config set |
+| Database migration on staging clone | EXTERNAL | upgrade to `20260807_0043`, smoke verification, rollback/recovery plan |
+| Canary observation | EXTERNAL | agreed observation window with no correctness/SLO regression |
 
-## Review handoff
+## Go/no-go rules
 
-For subsequent program review, durable execution can now be treated as a consolidated Phase 2 subsystem with green code/CI qualification. Return to this area only for:
+Do not enable production defaults if any of the following is true:
 
-- a reproducible correctness regression,
-- an operational qualification failure,
-- a measured bottleneck with evidence,
-- or an explicit decision to begin staged production activation.
+1. any durable job is lost, duplicated, or completed by a stale owner;
+2. cross-node capacity exceeds configured global/domain limits;
+3. emergency traffic is starved under realistic noisy-neighbor load;
+4. Redis failure is misclassified as provider pressure or leaves unrecoverable state;
+5. provider 429/timeouts fail to reduce concurrency or healthy windows fail to recover it;
+6. migration head is not exactly `20260807_0043` for this release candidate;
+7. release/staging configuration is incomplete or fail-open;
+8. target-topology canary or soak shows unresolved correctness, saturation, or SLO regression.
+
+## Activation sequence after all gates are green
+
+1. Deploy the candidate to staging with current production defaults unchanged.
+2. Run migration verification and commercial staging smoke.
+3. Run durable preproduction 8-worker repeated qualification and archive evidence.
+4. Run target-topology Redis degradation, node-loss/resume, cross-node quota, provider-fault, noisy-neighbor, and soak exercises.
+5. Run staging canary and review metrics/errors/queue and execution latency together.
+6. If all evidence is green, enable optimized Redis only in the intended canary scope.
+7. Enable adaptive concurrency only in the intended canary scope with explicit policy bounds.
+8. Observe canary before increasing traffic or changing worker defaults.
+9. Change defaults only through a separate reviewed production-activation change.
+
+## Current decision
+
+Repository-side preparation is complete enough to execute preproduction qualification. **Production activation itself remains blocked on target-environment evidence and real secrets/topology.** This is intentional fail-closed behavior, not unfinished core development.
