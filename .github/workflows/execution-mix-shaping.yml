@@ -8,7 +8,10 @@ on:
     paths:
       - benchmarks/execution_mix_app.py
       - benchmarks/execution_mix_shape_probe.py
+      - benchmarks/execution_mix_planner_probe.py
+      - tests/test_fanout_planner.py
       - .github/workflows/execution-mix-shaping.yml
+      - processual_api/cgt_governor/policy/fanout_planner.py
       - processual_api/cgt_governor/adapters/execution_fanout.py
       - processual_api/cgt_governor/adapters/registry.py
 
@@ -60,8 +63,21 @@ jobs:
 
       - name: Lint shaping benchmark
         run: |
-          ruff check benchmarks/execution_mix_app.py benchmarks/execution_mix_shape_probe.py
-          flake8 benchmarks/execution_mix_app.py benchmarks/execution_mix_shape_probe.py
+          ruff check \
+            benchmarks/execution_mix_app.py \
+            benchmarks/execution_mix_shape_probe.py \
+            benchmarks/execution_mix_planner_probe.py \
+            processual_api/cgt_governor/policy/fanout_planner.py \
+            tests/test_fanout_planner.py
+          flake8 \
+            benchmarks/execution_mix_app.py \
+            benchmarks/execution_mix_shape_probe.py \
+            benchmarks/execution_mix_planner_probe.py \
+            processual_api/cgt_governor/policy/fanout_planner.py \
+            tests/test_fanout_planner.py
+
+      - name: Test selective fanout planner
+        run: pytest -q tests/test_fanout_planner.py
 
       - name: Start two-worker execution mix harness
         run: |
@@ -93,6 +109,14 @@ jobs:
             --requests 40 \
             --output shaping-results/shaping.json \
             | tee shaping-results/shaping.txt
+
+      - name: Benchmark selective fanout planner
+        run: |
+          python benchmarks/execution_mix_planner_probe.py \
+            --base-url http://127.0.0.1:8020 \
+            --requests 40 \
+            --output shaping-results/planner.json \
+            | tee shaping-results/planner.txt
 
       - name: Upload shaping benchmark
         if: always()
