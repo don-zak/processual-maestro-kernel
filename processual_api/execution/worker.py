@@ -29,6 +29,10 @@ class DurableWorker:
     When a domain-capacity controller is configured, a durable claim does not
     start its handler until domain capacity is admitted. Saturated claims are
     requeued without consuming an execution attempt.
+
+    Domain-filtered claims remain the default. A dedicated queue whose workers
+    can safely handle every job may opt into unfiltered claims so stores with an
+    atomic unfiltered claim path can avoid optimistic-transaction contention.
     """
 
     def __init__(
@@ -42,6 +46,7 @@ class DurableWorker:
         capacity: DomainCapacityController | None = None,
         capacity_heartbeat_interval_seconds: float = 5.0,
         capacity_requeue_delay_seconds: float = 0.05,
+        unfiltered_claims: bool = False,
     ) -> None:
         if not worker_id.strip():
             raise ValueError("worker_id cannot be empty")
@@ -68,6 +73,7 @@ class DurableWorker:
         self._capacity = capacity
         self._capacity_heartbeat_interval_seconds = capacity_heartbeat_interval_seconds
         self._capacity_requeue_delay_seconds = capacity_requeue_delay_seconds
+        self._unfiltered_claims = unfiltered_claims
 
     async def _heartbeat(self, job: ExecutionJob, lease_token: str) -> None:
         while True:
@@ -95,13 +101,18 @@ class DurableWorker:
         )
 
     async def run_once(self) -> ExecutionJob | None:
+        claim_domains = None if self._unfiltered_claims else tuple(self._handlers)
         job = await self._store.claim(
             worker_id=self._worker_id,
             lease_seconds=self._lease_seconds,
-            domains=tuple(self._handlers),
+            domains=claim_domains,
         )
         if job is None:
             return None
+        if job.spec.domain not in self._handlers:
+            raise RuntimeError(
+                f"unfiltered durable worker claimed unsupported domain: {job.spec.domain}"
+            )
         if job.lease_token is None:
             raise JobLeaseLostError(f"claimed job has no lease token: {job.job_id}")
 
