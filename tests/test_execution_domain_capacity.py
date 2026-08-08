@@ -13,7 +13,9 @@ from processual_api.execution.capacity import (
     InMemoryDomainCapacityBackend,
     RedisDomainCapacityBackend,
 )
-from processual_api.execution.durable import ExecutionPriority
+from processual_api.execution.durable import ExecutionPriority, JobSpec, JobStatus
+from processual_api.execution.redis_store import RedisDurableJobStore
+from processual_api.execution.worker import DurableWorker
 
 
 @pytest_asyncio.fixture
@@ -155,3 +157,83 @@ async def test_redis_expired_capacity_lease_self_recovers(redis_client) -> None:
     second = await short.acquire(domain="billing", priority=ExecutionPriority.NORMAL)
 
     assert second.lease_id != first.lease_id
+
+
+@pytest.mark.asyncio
+async def test_two_redis_workers_share_capacity_without_burning_attempts(redis_client) -> None:
+    store_prefix = f"test:durable-worker:{uuid.uuid4().hex}"
+    capacity_prefix = f"{{test-worker-capacity-{uuid.uuid4().hex}}}"
+    first_store = RedisDurableJobStore(redis_client, prefix=store_prefix)
+    second_store = RedisDurableJobStore(redis_client, prefix=store_prefix)
+    capacity_policy = DomainCapacityPolicy(
+        global_limit=1,
+        domain_limits={"network": 1},
+        emergency_reserve=0,
+    )
+    first_capacity = DomainCapacityController(
+        backend=RedisDomainCapacityBackend(redis_client, prefix=capacity_prefix),
+        policy=capacity_policy,
+        lease_seconds=0.5,
+        wait_seconds=0,
+        retry_seconds=0.01,
+    )
+    second_capacity = DomainCapacityController(
+        backend=RedisDomainCapacityBackend(redis_client, prefix=capacity_prefix),
+        policy=capacity_policy,
+        lease_seconds=0.5,
+        wait_seconds=0,
+        retry_seconds=0.01,
+    )
+    first_job = await first_store.submit(
+        JobSpec(idempotency_key="network-a", domain="network", payload={})
+    )
+    second_job = await first_store.submit(
+        JobSpec(idempotency_key="network-b", domain="network", payload={})
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocking_handler(job):
+        started.set()
+        await release.wait()
+        return job.spec.idempotency_key
+
+    async def fast_handler(job):
+        return job.spec.idempotency_key
+
+    first_worker = DurableWorker(
+        store=first_store,
+        worker_id="network-a",
+        handlers={"network": blocking_handler},
+        capacity=first_capacity,
+        capacity_heartbeat_interval_seconds=0.1,
+    )
+    second_worker = DurableWorker(
+        store=second_store,
+        worker_id="network-b",
+        handlers={"network": fast_handler},
+        capacity=second_capacity,
+        capacity_heartbeat_interval_seconds=0.1,
+        capacity_requeue_delay_seconds=0,
+    )
+
+    first_task = asyncio.create_task(first_worker.run_once())
+    await started.wait()
+
+    requeued = await second_worker.run_once()
+    assert requeued is not None
+    assert requeued.job_id == second_job.job.job_id
+    assert requeued.status is JobStatus.QUEUED
+    assert requeued.attempt == 0
+
+    release.set()
+    first_completed = await first_task
+    assert first_completed is not None
+    assert first_completed.job_id == first_job.job.job_id
+    assert first_completed.status is JobStatus.SUCCEEDED
+
+    second_completed = await second_worker.run_once()
+    assert second_completed is not None
+    assert second_completed.job_id == second_job.job.job_id
+    assert second_completed.status is JobStatus.SUCCEEDED
+    assert second_completed.attempt == 1
