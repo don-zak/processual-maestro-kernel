@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 
-from processual_api.execution.durable import InMemoryDurableJobStore, JobSpec, JobStatus
+from processual_api.execution.durable import InMemoryDurableJobStore, JobStatus
 from processual_api.execution.http import create_durable_execution_router
 from processual_api.execution.pool import DurableWorkerPool, DurableWorkerPoolPolicy
 from processual_api.execution.service import DurableExecutionService
