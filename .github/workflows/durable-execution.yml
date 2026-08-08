@@ -85,3 +85,4 @@ jobs:
           --workers 1,2,4,8
           --jobs 96
           --handler-delay-ms 20
+          --redis-telemetry
