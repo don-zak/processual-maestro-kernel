@@ -365,6 +365,33 @@ class RedisDurableJobStore(DurableJobStore):
             raise JobLeaseLostError(f"job deadline expired: {job_id}")
         return updated
 
+    async def release_unstarted_claim(
+        self,
+        *,
+        job_id: str,
+        worker_id: str,
+        lease_token: str,
+        delay_seconds: float = 0.0,
+    ) -> ExecutionJob:
+        if delay_seconds < 0:
+            raise ValueError("delay_seconds cannot be negative")
+
+        def mutate(job: ExecutionJob, now: float) -> None:
+            job.status = JobStatus.QUEUED
+            job.attempt = max(job.attempt - 1, 0)
+            job.available_at = now + delay_seconds
+            job.updated_at = now
+            job.worker_id = None
+            job.lease_token = None
+            job.lease_expires_at = None
+
+        return await self._mutate_claimed(
+            job_id=job_id,
+            worker_id=worker_id,
+            lease_token=lease_token,
+            mutate=mutate,
+        )
+
     async def succeed(
         self,
         *,
