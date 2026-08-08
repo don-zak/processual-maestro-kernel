@@ -9,6 +9,7 @@ from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
 from processual_api.cgt_governor.adapters.execution_fanout import (
     ExecutionFanoutSaturatedError,
 )
+from processual_api.cgt_governor.policy import orchestration_metrics
 from processual_api.main import metrics_endpoint
 from processual_api.routers import workflows
 
@@ -184,3 +185,27 @@ def test_http_saturation_is_exposed_through_metrics(monkeypatch) -> None:
         "maestro_llm_orchestration_latency_seconds_count",
         request_labels,
     ) >= 1.0
+
+
+def test_http_orchestration_succeeds_when_metrics_collector_breaks(monkeypatch) -> None:
+    client = _client(monkeypatch)
+
+    class BrokenCounter:
+        def labels(self, **_labels):
+            raise RuntimeError("metrics backend unavailable")
+
+    monkeypatch.setattr(orchestration_metrics, "_PROMETHEUS_AVAILABLE", True)
+    monkeypatch.setattr(orchestration_metrics, "ORCHESTRATION_REQUESTS", BrokenCounter())
+
+    response = client.post(
+        "/workflows/llm-orchestration",
+        json={
+            "provider": "http-metrics",
+            "prompts": ["prompt-0", "prompt-1", "prompt-2", "prompt-3"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["width"] == 4
+    assert all(item["status"] == "success" for item in payload["results"])
