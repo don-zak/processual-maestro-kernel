@@ -28,6 +28,15 @@ async def redis_client():
     await client.aclose()
 
 
+async def wait_for_succeeded(store, job_ids: list[str], *, timeout_seconds: float) -> None:
+    async with asyncio.timeout(timeout_seconds):
+        while True:
+            jobs = [await store.get(job_id) for job_id in job_ids]
+            if all(job.status is JobStatus.SUCCEEDED for job in jobs):
+                return
+            await asyncio.sleep(0)
+
+
 @pytest.mark.asyncio
 async def test_eight_redis_workers_preserve_emergency_capacity_under_batch_pressure(
     redis_client,
@@ -125,6 +134,7 @@ async def test_eight_redis_workers_preserve_emergency_capacity_under_batch_press
             noc_jobs.append(submitted.job.job_id)
 
         await asyncio.wait_for(noc_completed.wait(), timeout=1.0)
+        await wait_for_succeeded(store, noc_jobs, timeout_seconds=1.0)
 
         for job_id in noc_jobs:
             job = await store.get(job_id)
