@@ -43,7 +43,7 @@ def test_settings_r2_defines_five_independent_tabs() -> None:
     assert "panel.hidden = !active" in source
 
 
-def test_settings_r2_reconciles_late_rendered_cards() -> None:
+def test_settings_r2_reconciles_late_rendered_cards_without_retry_timers() -> None:
     source = _read(LAYOUT_JS)
 
     assert "function reconcile()" in source
@@ -53,9 +53,11 @@ def test_settings_r2_reconciles_late_rendered_cards() -> None:
     assert "childList: true" in source
     assert "subtree: true" in source
 
-    assert "window.setTimeout(reconcile, 100)" in source
-    assert "window.setTimeout(reconcile, 500)" in source
-    assert "window.setTimeout(reconcile, 1500)" in source
+    assert "let initialized = false" in source
+    assert "if (initialized)" in source
+    assert "window.setTimeout(reconcile, 100)" not in source
+    assert "window.setTimeout(reconcile, 500)" not in source
+    assert "window.setTimeout(reconcile, 1500)" not in source
 
 
 def test_settings_r2_keeps_only_selected_panel_visible() -> None:
