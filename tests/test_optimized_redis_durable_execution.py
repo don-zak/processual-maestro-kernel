@@ -7,6 +7,8 @@ import pytest
 import redis.asyncio as redis
 
 from processual_api.execution.durable import ExecutionPriority, JobSpec, JobStatus, RetryPolicy
+from processual_api.execution.redis_index_repair import rebuild_priority_indexes
+from processual_api.execution.redis_store import RedisDurableJobStore
 from processual_api.execution.redis_store_optimized import OptimizedRedisDurableJobStore
 
 
@@ -290,6 +292,111 @@ async def test_priority_index_tracks_retry_cancel_and_recovery() -> None:
         assert cancelled_job.status is JobStatus.CANCELLED
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_priority_indexes_makes_legacy_jobs_claimable() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-repair-legacy-{uuid.uuid4().hex}}}"
+    legacy = RedisDurableJobStore(client, prefix=prefix)
+    optimized = OptimizedRedisDurableJobStore(client, prefix=prefix)
+    try:
+        legacy_job = await legacy.submit(
+            JobSpec(
+                idempotency_key="legacy",
+                domain="network",
+                payload={},
+                priority=ExecutionPriority.EMERGENCY,
+            )
+        )
+        assert await optimized.claim(worker_id="before-repair", lease_seconds=1) is None
+
+        result = await rebuild_priority_indexes(client, prefix=prefix, batch_size=1)
+        claimed = await optimized.claim(worker_id="after-repair", lease_seconds=1)
+
+        assert result.scanned_shared == 1
+        assert result.indexed == 1
+        assert result.removed_stale_shared == 0
+        assert claimed is not None
+        assert claimed.job_id == legacy_job.job.job_id
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_priority_indexes_repairs_wrong_and_stale_membership() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-repair-stale-{uuid.uuid4().hex}}}"
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix)
+    try:
+        submitted = await store.submit(
+            JobSpec(
+                idempotency_key="repair",
+                domain="network",
+                payload={},
+                priority=ExecutionPriority.INTERACTIVE,
+            )
+        )
+        job_id = submitted.job.job_id
+        correct_key = f"{prefix}:queue:p{int(ExecutionPriority.INTERACTIVE)}"
+        wrong_key = f"{prefix}:queue:p{int(ExecutionPriority.BATCH)}"
+        stale_id = "missing-job"
+        await client.zrem(correct_key, job_id)
+        await client.zadd(wrong_key, {job_id: 0.0, stale_id: 0.0})
+
+        first = await rebuild_priority_indexes(client, prefix=prefix)
+        second = await rebuild_priority_indexes(client, prefix=prefix)
+
+        assert await client.zscore(correct_key, job_id) is not None
+        assert await client.zscore(wrong_key, job_id) is None
+        assert await client.zscore(wrong_key, stale_id) is None
+        assert first.indexed == 1
+        assert first.removed_stale_priority == 1
+        assert second.indexed == 1
+        assert second.removed_stale_priority == 0
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_priority_indexes_removes_non_queueable_shared_entries() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-repair-terminal-{uuid.uuid4().hex}}}"
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix)
+    try:
+        submitted = await store.submit(
+            JobSpec(idempotency_key="terminal", domain="network", payload={})
+        )
+        claimed = await store.claim(worker_id="worker", lease_seconds=1)
+        assert claimed is not None and claimed.lease_token is not None
+        await store.succeed(
+            job_id=claimed.job_id,
+            worker_id="worker",
+            lease_token=claimed.lease_token,
+            result={"ok": True},
+        )
+        await client.zadd(f"{prefix}:queue", {submitted.job.job_id: 0.0})
+
+        result = await rebuild_priority_indexes(client, prefix=prefix)
+
+        assert result.removed_stale_shared == 1
+        assert await client.zscore(f"{prefix}:queue", submitted.job.job_id) is None
+    finally:
+        await client.aclose()
+
+
+def test_rebuild_priority_indexes_requires_positive_batch_size() -> None:
+    with pytest.raises(ValueError, match="batch_size"):
+        asyncio.run(rebuild_priority_indexes(object(), batch_size=0))
 
 
 def test_candidate_window_must_be_positive() -> None:
