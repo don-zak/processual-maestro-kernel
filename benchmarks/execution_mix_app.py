@@ -81,8 +81,13 @@ async def execution_mix(
     request_id: int = Query(ge=0),
     width: int = Query(default=8, ge=1, le=32),
     providers: int = Query(default=2, ge=1, le=2),
+    local_parallelism: int = Query(default=0, ge=0, le=32),
 ) -> dict[str, int] | Response:
-    async def one(slot: int) -> str:
+    request_semaphore = (
+        asyncio.Semaphore(local_parallelism) if local_parallelism > 0 else None
+    )
+
+    async def provider_call(slot: int) -> str:
         provider_index = slot % providers
         provider_suffix = "a" if provider_index == 0 else "b"
         adapter = registry.get(f"benchmark-llm-{provider_suffix}")
@@ -95,6 +100,12 @@ async def execution_mix(
         except SimulatedProviderError:
             return "failure"
         return "success"
+
+    async def one(slot: int) -> str:
+        if request_semaphore is None:
+            return await provider_call(slot)
+        async with request_semaphore:
+            return await provider_call(slot)
 
     outcomes = await asyncio.gather(
         *(one(slot) for slot in range(width)),
