@@ -37,6 +37,7 @@ def spec(
     domain: str = "network",
     priority: ExecutionPriority = ExecutionPriority.NORMAL,
     retry: RetryPolicy | None = None,
+    deadline_at: float | None = None,
 ) -> JobSpec:
     return JobSpec(
         idempotency_key=key,
@@ -44,6 +45,7 @@ def spec(
         payload={"ticket": key},
         priority=priority,
         retry=retry or RetryPolicy(max_attempts=3, initial_backoff_seconds=0.01, max_backoff_seconds=0.02),
+        deadline_at=deadline_at,
     )
 
 
@@ -60,8 +62,9 @@ async def test_concurrent_idempotent_submit_creates_one_job(redis_client) -> Non
 
 @pytest.mark.asyncio
 async def test_two_workers_cannot_claim_same_job(redis_client) -> None:
-    first = store(redis_client)
-    second = RedisDurableJobStore(redis_client, prefix=first._prefix)
+    prefix = f"test:durable:{uuid.uuid4().hex}"
+    first = RedisDurableJobStore(redis_client, prefix=prefix)
+    second = RedisDurableJobStore(redis_client, prefix=prefix)
     submitted = await first.submit(spec("claim-once"))
 
     claims = await asyncio.gather(
@@ -158,8 +161,9 @@ async def test_stale_worker_cannot_complete_after_recovery(redis_client) -> None
 
 @pytest.mark.asyncio
 async def test_failure_retry_and_success_survive_store_instances(redis_client) -> None:
-    first = store(redis_client)
-    second = RedisDurableJobStore(redis_client, prefix=first._prefix)
+    prefix = f"test:durable:{uuid.uuid4().hex}"
+    first = RedisDurableJobStore(redis_client, prefix=prefix)
+    second = RedisDurableJobStore(redis_client, prefix=prefix)
     await first.submit(spec("retry"))
     claimed = await first.claim(worker_id="worker-a", lease_seconds=1)
     assert claimed is not None and claimed.lease_token is not None
@@ -197,3 +201,42 @@ async def test_queued_cancellation_removes_job_from_claimable_queue(redis_client
     assert cancelled.status is JobStatus.CANCELLED
     assert cancelled.cancel_requested is True
     assert await shared.claim(worker_id="worker-a", lease_seconds=1) is None
+
+
+@pytest.mark.asyncio
+async def test_expired_queued_deadline_is_persisted_as_failed(redis_client) -> None:
+    shared = store(redis_client)
+    seconds, micros = await redis_client.time()
+    redis_now = float(seconds) + float(micros) / 1_000_000
+    submitted = await shared.submit(spec("expired-queued", deadline_at=redis_now - 1))
+
+    assert await shared.claim(worker_id="worker-a", lease_seconds=1) is None
+
+    persisted = await shared.get(submitted.job.job_id)
+    assert persisted.status is JobStatus.FAILED
+    assert persisted.last_error == "deadline_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_persists_deadline_failure_before_losing_lease(redis_client) -> None:
+    shared = store(redis_client)
+    seconds, micros = await redis_client.time()
+    redis_now = float(seconds) + float(micros) / 1_000_000
+    submitted = await shared.submit(spec("deadline-heartbeat", deadline_at=redis_now + 0.08))
+    claimed = await shared.claim(worker_id="worker-a", lease_seconds=0.4)
+    assert claimed is not None and claimed.lease_token is not None
+
+    await asyncio.sleep(0.11)
+    with pytest.raises(JobLeaseLostError, match="deadline expired"):
+        await shared.heartbeat(
+            job_id=claimed.job_id,
+            worker_id="worker-a",
+            lease_token=claimed.lease_token,
+            lease_seconds=0.4,
+        )
+
+    persisted = await shared.get(submitted.job.job_id)
+    assert persisted.status is JobStatus.FAILED
+    assert persisted.last_error == "deadline_exceeded"
+    assert persisted.worker_id is None
+    assert persisted.lease_token is None
