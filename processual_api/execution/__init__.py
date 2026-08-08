@@ -13,11 +13,14 @@ from .durable import (
     RetryPolicy,
     SubmitResult,
 )
+from .pool import DurableWorkerPool, DurableWorkerPoolPolicy
 from .worker import DurableWorker, JobHandler
 
 __all__ = [
     "DurableJobStore",
     "DurableWorker",
+    "DurableWorkerPool",
+    "DurableWorkerPoolPolicy",
     "ExecutionJob",
     "ExecutionPriority",
     "IdempotencyConflictError",
