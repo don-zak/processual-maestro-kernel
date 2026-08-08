@@ -7,6 +7,7 @@ on:
       - feat/a3-admin-marketplace-original-offers
     paths:
       - benchmarks/topology_compare.py
+      - benchmarks/staging_canary_gate.py
       - benchmarks/fanout_app.py
       - benchmarks/fanout_probe.py
       - benchmarks/execution_mix_app.py
@@ -14,6 +15,7 @@ on:
       - benchmarks/execution_mix_compare.py
       - benchmarks/flush_redis.py
       - tests/test_topology_compare.py
+      - tests/test_staging_canary_gate.py
       - tests/test_fanout_probe.py
       - tests/test_execution_mix_benchmark.py
       - tests/test_execution_fanout.py
@@ -92,6 +94,7 @@ jobs:
         run: |
           PYTHONPATH=. python -m pytest \
             tests/test_topology_compare.py \
+            tests/test_staging_canary_gate.py \
             tests/test_fanout_probe.py \
             tests/test_execution_mix_benchmark.py \
             tests/test_execution_fanout.py \
@@ -117,9 +120,7 @@ jobs:
           python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 1 > topology-results/server-1w.log 2>&1 &
           echo $! > topology-results/server.pid
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then
-              exit 0
-            fi
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then exit 0; fi
             sleep 1
           done
           cat topology-results/server-1w.log
@@ -127,200 +128,109 @@ jobs:
 
       - name: Benchmark one worker
         run: |
-          python benchmarks/workload_probe.py \
-            --concurrency 1,5,10,20,40 \
-            --light-requests 100 \
-            --normal-requests 160 \
-            --heavy-requests 80 \
-            --governance-requests 40 \
-            --output topology-results/workloads-1w.json \
-            | tee topology-results/workloads-1w.txt
+          python benchmarks/workload_probe.py --concurrency 1,5,10,20,40 --light-requests 100 --normal-requests 160 --heavy-requests 80 --governance-requests 40 --output topology-results/workloads-1w.json | tee topology-results/workloads-1w.txt
 
       - name: Restart Maestro with two workers
         run: |
           kill "$(cat topology-results/server.pid)"
-          for attempt in $(seq 1 20); do
-            if ! kill -0 "$(cat topology-results/server.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat topology-results/server.pid)" 2>/dev/null; then break; fi; sleep 1; done
           python benchmarks/flush_redis.py
           python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 2 > topology-results/server-2w.log 2>&1 &
           echo $! > topology-results/server.pid
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 30); do if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then exit 0; fi; sleep 1; done
           cat topology-results/server-2w.log
           exit 1
 
       - name: Benchmark two workers
         run: |
-          python benchmarks/workload_probe.py \
-            --concurrency 1,5,10,20,40 \
-            --light-requests 100 \
-            --normal-requests 160 \
-            --heavy-requests 80 \
-            --governance-requests 40 \
-            --output topology-results/workloads-2w.json \
-            | tee topology-results/workloads-2w.txt
+          python benchmarks/workload_probe.py --concurrency 1,5,10,20,40 --light-requests 100 --normal-requests 160 --heavy-requests 80 --governance-requests 40 --output topology-results/workloads-2w.json | tee topology-results/workloads-2w.txt
 
       - name: Compare worker topologies
         run: |
-          python benchmarks/topology_compare.py \
-            topology-results/workloads-1w.json \
-            topology-results/workloads-2w.json \
-            --output topology-results/comparison.md \
-            | tee topology-results/comparison.txt
+          python benchmarks/topology_compare.py topology-results/workloads-1w.json topology-results/workloads-2w.json --output topology-results/comparison.md | tee topology-results/comparison.txt
           cat topology-results/comparison.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stop Maestro topology server
         run: |
           kill "$(cat topology-results/server.pid)" || true
-          for attempt in $(seq 1 20); do
-            if ! kill -0 "$(cat topology-results/server.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat topology-results/server.pid)" 2>/dev/null; then break; fi; sleep 1; done
 
       - name: Start fanout harness with one worker
         run: |
           python benchmarks/flush_redis.py
           CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 1 > topology-results/fanout-1w.log 2>&1 &
           echo $! > topology-results/fanout.pid
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 30); do if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then exit 0; fi; sleep 1; done
           cat topology-results/fanout-1w.log
           exit 1
 
       - name: Benchmark fanout with one worker
         run: |
-          python benchmarks/fanout_probe.py \
-            --base-url http://127.0.0.1:8010 \
-            --widths 1,4,8,16 \
-            --concurrency 5,10,20,40 \
-            --requests 120 \
-            --delay-ms 25 \
-            --output topology-results/fanout-1w.json \
-            | tee topology-results/fanout-1w.txt
+          python benchmarks/fanout_probe.py --base-url http://127.0.0.1:8010 --widths 1,4,8,16 --concurrency 5,10,20,40 --requests 120 --delay-ms 25 --output topology-results/fanout-1w.json | tee topology-results/fanout-1w.txt
 
       - name: Restart fanout harness with two workers
         run: |
           kill "$(cat topology-results/fanout.pid)"
-          for attempt in $(seq 1 20); do
-            if ! kill -0 "$(cat topology-results/fanout.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat topology-results/fanout.pid)" 2>/dev/null; then break; fi; sleep 1; done
           python benchmarks/flush_redis.py
           CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.fanout_app:app --host 127.0.0.1 --port 8010 --workers 2 > topology-results/fanout-2w.log 2>&1 &
           echo $! > topology-results/fanout.pid
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 30); do if curl --fail --silent http://127.0.0.1:8010/health/live >/dev/null; then exit 0; fi; sleep 1; done
           cat topology-results/fanout-2w.log
           exit 1
 
       - name: Benchmark fanout with two workers
         run: |
-          python benchmarks/fanout_probe.py \
-            --base-url http://127.0.0.1:8010 \
-            --widths 1,4,8,16 \
-            --concurrency 5,10,20,40 \
-            --requests 120 \
-            --delay-ms 25 \
-            --output topology-results/fanout-2w.json \
-            | tee topology-results/fanout-2w.txt
+          python benchmarks/fanout_probe.py --base-url http://127.0.0.1:8010 --widths 1,4,8,16 --concurrency 5,10,20,40 --requests 120 --delay-ms 25 --output topology-results/fanout-2w.json | tee topology-results/fanout-2w.txt
 
       - name: Stop fanout harness
         run: |
           kill "$(cat topology-results/fanout.pid)" || true
-          for attempt in $(seq 1 20); do
-            if ! kill -0 "$(cat topology-results/fanout.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat topology-results/fanout.pid)" 2>/dev/null; then break; fi; sleep 1; done
 
       - name: Start execution mix harness with one worker
         run: |
           python benchmarks/flush_redis.py
           CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.execution_mix_app:app --host 127.0.0.1 --port 8020 --workers 1 > topology-results/execution-mix-1w.log 2>&1 &
           echo $! > topology-results/execution-mix.pid
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 30); do if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then exit 0; fi; sleep 1; done
           cat topology-results/execution-mix-1w.log
           exit 1
 
       - name: Benchmark execution mix with one worker
         run: |
-          python benchmarks/execution_mix_probe.py \
-            --base-url http://127.0.0.1:8020 \
-            --workers 1 \
-            --providers 1,2 \
-            --widths 4,8,16 \
-            --concurrency 5,10,20,40 \
-            --requests 80 \
-            --output topology-results/execution-mix-1w.json \
-            | tee topology-results/execution-mix-1w.txt
+          python benchmarks/execution_mix_probe.py --base-url http://127.0.0.1:8020 --workers 1 --providers 1,2 --widths 4,8,16 --concurrency 5,10,20,40 --requests 80 --output topology-results/execution-mix-1w.json | tee topology-results/execution-mix-1w.txt
 
       - name: Restart execution mix harness with two workers
         run: |
           kill "$(cat topology-results/execution-mix.pid)"
-          for attempt in $(seq 1 20); do
-            if ! kill -0 "$(cat topology-results/execution-mix.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat topology-results/execution-mix.pid)" 2>/dev/null; then break; fi; sleep 1; done
           python benchmarks/flush_redis.py
           CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.execution_mix_app:app --host 127.0.0.1 --port 8020 --workers 2 > topology-results/execution-mix-2w.log 2>&1 &
           echo $! > topology-results/execution-mix.pid
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
+          for attempt in $(seq 1 30); do if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then exit 0; fi; sleep 1; done
           cat topology-results/execution-mix-2w.log
           exit 1
 
       - name: Benchmark execution mix with two workers
         run: |
-          python benchmarks/execution_mix_probe.py \
-            --base-url http://127.0.0.1:8020 \
-            --workers 2 \
-            --providers 1,2 \
-            --widths 4,8,16 \
-            --concurrency 5,10,20,40 \
-            --requests 80 \
-            --output topology-results/execution-mix-2w.json \
-            | tee topology-results/execution-mix-2w.txt
+          python benchmarks/execution_mix_probe.py --base-url http://127.0.0.1:8020 --workers 2 --providers 1,2 --widths 4,8,16 --concurrency 5,10,20,40 --requests 80 --output topology-results/execution-mix-2w.json | tee topology-results/execution-mix-2w.txt
 
       - name: Compare execution mix topologies
         run: |
-          python benchmarks/execution_mix_compare.py \
+          python benchmarks/execution_mix_compare.py topology-results/execution-mix-1w.json topology-results/execution-mix-2w.json --output topology-results/execution-mix-comparison.md | tee topology-results/execution-mix-comparison.txt
+          cat topology-results/execution-mix-comparison.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Gate two-worker staging canary
+        run: |
+          python benchmarks/staging_canary_gate.py \
+            topology-results/workloads-1w.json \
+            topology-results/workloads-2w.json \
             topology-results/execution-mix-1w.json \
             topology-results/execution-mix-2w.json \
-            --output topology-results/execution-mix-comparison.md \
-            | tee topology-results/execution-mix-comparison.txt
-          cat topology-results/execution-mix-comparison.md >> "$GITHUB_STEP_SUMMARY"
+            --output topology-results/staging-canary-gate.md \
+            | tee topology-results/staging-canary-gate.txt
+          cat topology-results/staging-canary-gate.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload topology benchmark
         if: always()
