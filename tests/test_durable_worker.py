@@ -52,6 +52,61 @@ async def test_worker_does_not_claim_unhandled_domain() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dedicated_worker_can_opt_into_unfiltered_claims() -> None:
+    store = InMemoryDurableJobStore()
+    submitted = await store.submit(JobSpec(idempotency_key="dedicated-1", domain="oss", payload={}))
+    captured_domains = object()
+    original_claim = store.claim
+
+    async def capturing_claim(**kwargs):
+        nonlocal captured_domains
+        captured_domains = kwargs["domains"]
+        return await original_claim(**kwargs)
+
+    store.claim = capturing_claim  # type: ignore[method-assign]
+
+    async def handler(job):
+        return job.job_id
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="dedicated-a",
+        handlers={"oss": handler},
+        unfiltered_claims=True,
+    )
+    completed = await worker.run_once()
+
+    assert captured_domains is None
+    assert completed is not None
+    assert completed.job_id == submitted.job.job_id
+    assert completed.status is JobStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_unfiltered_worker_fails_closed_on_unsupported_domain() -> None:
+    store = InMemoryDurableJobStore()
+    submitted = await store.submit(JobSpec(idempotency_key="wrong-domain", domain="billing", payload={}))
+
+    async def handler(job):
+        return job.job_id
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="dedicated-a",
+        handlers={"oss": handler},
+        unfiltered_claims=True,
+        lease_seconds=1,
+    )
+
+    with pytest.raises(RuntimeError, match="unsupported domain"):
+        await worker.run_once()
+
+    claimed = await store.get(submitted.job.job_id)
+    assert claimed.status is JobStatus.RUNNING
+    assert claimed.worker_id == "dedicated-a"
+
+
+@pytest.mark.asyncio
 async def test_worker_failure_is_sanitized_and_scheduled_for_retry() -> None:
     store = InMemoryDurableJobStore()
     submitted = await store.submit(
