@@ -11,6 +11,7 @@ from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 
+from .adaptive import AdaptiveConcurrencyGate
 from .durable import DurableJobStore
 from .worker import DurableWorker
 
@@ -37,6 +38,7 @@ class DurableWorkerPool:
         workers: Sequence[DurableWorker],
         policy: DurableWorkerPoolPolicy | None = None,
         on_worker_error: Callable[[BaseException], None] | None = None,
+        adaptive_gate: AdaptiveConcurrencyGate | None = None,
     ) -> None:
         if not workers:
             raise ValueError("at least one durable worker is required")
@@ -44,6 +46,7 @@ class DurableWorkerPool:
         self._workers = tuple(workers)
         self._policy = policy or DurableWorkerPoolPolicy()
         self._on_worker_error = on_worker_error
+        self._adaptive_gate = adaptive_gate
         self._stop = asyncio.Event()
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -51,10 +54,19 @@ class DurableWorkerPool:
     def running(self) -> bool:
         return bool(self._tasks) and not self._stop.is_set()
 
+    async def _run_worker_iteration(self, worker: DurableWorker):
+        if self._adaptive_gate is None:
+            return await worker.run_once()
+        await self._adaptive_gate.acquire()
+        try:
+            return await worker.run_once()
+        finally:
+            await self._adaptive_gate.release()
+
     async def _worker_loop(self, worker: DurableWorker) -> None:
         while not self._stop.is_set():
             try:
-                completed = await worker.run_once()
+                completed = await self._run_worker_iteration(worker)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
