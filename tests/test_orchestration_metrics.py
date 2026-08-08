@@ -3,6 +3,18 @@ from __future__ import annotations
 from processual_api.cgt_governor.policy import orchestration_metrics
 
 
+def _observation() -> orchestration_metrics.OrchestrationObservation:
+    return orchestration_metrics.OrchestrationObservation(
+        paced=True,
+        plan_reason="broad_single_provider",
+        width=16,
+        outcome="success",
+        latency_seconds=1.25,
+        success_items=16,
+        error_items=0,
+    )
+
+
 def test_metric_labels_are_bounded() -> None:
     assert orchestration_metrics._bounded_reason("broad_single_provider") == "broad_single_provider"
     assert orchestration_metrics._bounded_reason("provider-secret-name") == "unknown"
@@ -13,14 +25,15 @@ def test_metric_labels_are_bounded() -> None:
 def test_record_orchestration_is_safe_without_prometheus(monkeypatch) -> None:
     monkeypatch.setattr(orchestration_metrics, "_PROMETHEUS_AVAILABLE", False)
 
-    orchestration_metrics.record_orchestration(
-        orchestration_metrics.OrchestrationObservation(
-            paced=True,
-            plan_reason="broad_single_provider",
-            width=16,
-            outcome="success",
-            latency_seconds=1.25,
-            success_items=16,
-            error_items=0,
-        )
-    )
+    orchestration_metrics.record_orchestration(_observation())
+
+
+def test_record_orchestration_is_fail_open_when_collector_breaks(monkeypatch) -> None:
+    class BrokenCounter:
+        def labels(self, **_labels):
+            raise RuntimeError("metrics backend unavailable")
+
+    monkeypatch.setattr(orchestration_metrics, "_PROMETHEUS_AVAILABLE", True)
+    monkeypatch.setattr(orchestration_metrics, "ORCHESTRATION_REQUESTS", BrokenCounter())
+
+    orchestration_metrics.record_orchestration(_observation())
