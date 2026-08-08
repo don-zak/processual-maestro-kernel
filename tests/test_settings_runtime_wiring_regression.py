@@ -76,6 +76,21 @@ def test_operations_center_updates_sandbox_keys_locally_after_successful_mutatio
     assert "await load()" not in revoke_block
 
 
+def test_operations_center_mount_owns_initial_load_without_init_duplication() -> None:
+    operations_js = _read(STATIC / "js" / "settings_operations_18.js")
+
+    mount_block = operations_js.split("function mount()", 1)[1].split(
+        "function init()", 1
+    )[0]
+    init_block = operations_js.split("function init()", 1)[1].split(
+        "window.PMK_SETTINGS_OPERATIONS_18", 1
+    )[0]
+
+    assert "load();" in mount_block
+    assert "mount();" in init_block
+    assert "load();" not in init_block
+
+
 def test_current_client_settings_ui_uses_client_scoped_usage_summary() -> None:
     settings_js = _read(STATIC / "js" / "pages" / "settings.js")
 
