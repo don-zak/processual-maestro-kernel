@@ -59,12 +59,12 @@ class DurableWorkerPool:
         return bool(self._tasks) and not self._stop.is_set()
 
     async def _run_worker_iteration(self, worker: DurableWorker) -> ExecutionJob | None:
-        loop = asyncio.get_running_loop()
-        started_at = loop.time()
         if self._adaptive_gate is None:
             return await worker.run_once()
 
         await self._adaptive_gate.acquire()
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
         try:
             completed = await worker.run_once()
         finally:
