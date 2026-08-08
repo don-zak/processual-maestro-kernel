@@ -7,6 +7,7 @@ on:
       - feat/a3-admin-marketplace-original-offers
     paths:
       - processual_api/execution/**
+      - benchmarks/durable_worker_scale.py
       - tests/test_durable_execution.py
       - tests/test_durable_worker.py
       - tests/test_durable_worker_pool.py
@@ -14,6 +15,7 @@ on:
       - tests/test_durable_execution_http.py
       - tests/test_redis_durable_execution.py
       - tests/test_execution_domain_capacity.py
+      - tests/test_durable_worker_scale.py
       - .github/workflows/durable-execution.yml
 
 permissions:
@@ -49,6 +51,7 @@ jobs:
         run: >-
           python -m ruff check
           processual_api/execution
+          benchmarks/durable_worker_scale.py
           tests/test_durable_execution.py
           tests/test_durable_worker.py
           tests/test_durable_worker_pool.py
@@ -56,6 +59,7 @@ jobs:
           tests/test_durable_execution_http.py
           tests/test_redis_durable_execution.py
           tests/test_execution_domain_capacity.py
+          tests/test_durable_worker_scale.py
 
       - name: Verify durable execution contracts
         run: >-
@@ -67,3 +71,4 @@ jobs:
           tests/test_durable_execution_http.py
           tests/test_redis_durable_execution.py
           tests/test_execution_domain_capacity.py
+          tests/test_durable_worker_scale.py
