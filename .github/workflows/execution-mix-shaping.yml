@@ -9,8 +9,11 @@ on:
       - benchmarks/execution_mix_app.py
       - benchmarks/execution_mix_shape_probe.py
       - benchmarks/execution_mix_planner_probe.py
+      - benchmarks/orchestration_api_app.py
+      - benchmarks/orchestration_api_probe.py
       - tests/test_fanout_planner.py
       - tests/test_orchestration_metrics.py
+      - tests/test_orchestration_api_benchmark.py
       - tests/test_workflow_llm_orchestration.py
       - tests/test_workflow_llm_orchestration_http_metrics.py
       - .github/workflows/execution-mix-shaping.yml
@@ -72,22 +75,28 @@ jobs:
             benchmarks/execution_mix_app.py \
             benchmarks/execution_mix_shape_probe.py \
             benchmarks/execution_mix_planner_probe.py \
+            benchmarks/orchestration_api_app.py \
+            benchmarks/orchestration_api_probe.py \
             processual_api/cgt_governor/policy/fanout_planner.py \
             processual_api/cgt_governor/policy/orchestration_metrics.py \
             processual_api/routers/workflows.py \
             tests/test_fanout_planner.py \
             tests/test_orchestration_metrics.py \
+            tests/test_orchestration_api_benchmark.py \
             tests/test_workflow_llm_orchestration.py \
             tests/test_workflow_llm_orchestration_http_metrics.py
           flake8 \
             benchmarks/execution_mix_app.py \
             benchmarks/execution_mix_shape_probe.py \
             benchmarks/execution_mix_planner_probe.py \
+            benchmarks/orchestration_api_app.py \
+            benchmarks/orchestration_api_probe.py \
             processual_api/cgt_governor/policy/fanout_planner.py \
             processual_api/cgt_governor/policy/orchestration_metrics.py \
             processual_api/routers/workflows.py \
             tests/test_fanout_planner.py \
             tests/test_orchestration_metrics.py \
+            tests/test_orchestration_api_benchmark.py \
             tests/test_workflow_llm_orchestration.py \
             tests/test_workflow_llm_orchestration_http_metrics.py
 
@@ -96,6 +105,7 @@ jobs:
           pytest -q \
             tests/test_fanout_planner.py \
             tests/test_orchestration_metrics.py \
+            tests/test_orchestration_api_benchmark.py \
             tests/test_workflow_llm_orchestration.py \
             tests/test_workflow_llm_orchestration_http_metrics.py
 
@@ -138,6 +148,44 @@ jobs:
             --output shaping-results/planner.json \
             | tee shaping-results/planner.txt
 
+      - name: Start two-worker orchestration API harness
+        run: |
+          python benchmarks/flush_redis.py
+          python -m uvicorn benchmarks.orchestration_api_app:app \
+            --host 127.0.0.1 \
+            --port 8030 \
+            --workers 2 \
+            > shaping-results/orchestration-server.log 2>&1 &
+          echo $! > shaping-results/orchestration-server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8030/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat shaping-results/orchestration-server.log
+          exit 1
+
+      - name: Benchmark real orchestration API
+        run: |
+          python benchmarks/orchestration_api_probe.py \
+            --base-url http://127.0.0.1:8030 \
+            --workers 2 \
+            --widths 4,8,12,16 \
+            --concurrency 5,10,20,40 \
+            --requests 40 \
+            --max-error-rate 0 \
+            --output shaping-results/orchestration-api.json \
+            | tee shaping-results/orchestration-api.txt
+
+      - name: Verify orchestration metrics scrape
+        run: |
+          curl --fail --silent http://127.0.0.1:8030/metrics > shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_requests_total' shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_width' shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_latency_seconds' shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_item_outcomes_total' shaping-results/orchestration-metrics.txt
+
       - name: Upload shaping benchmark
         if: always()
         uses: actions/upload-artifact@v4
@@ -145,9 +193,12 @@ jobs:
           name: maestro-execution-mix-shaping
           path: shaping-results/
 
-      - name: Stop shaping harness
+      - name: Stop shaping harnesses
         if: always()
         run: |
           if [ -f shaping-results/server.pid ]; then
             kill "$(cat shaping-results/server.pid)" 2>/dev/null || true
+          fi
+          if [ -f shaping-results/orchestration-server.pid ]; then
+            kill "$(cat shaping-results/orchestration-server.pid)" 2>/dev/null || true
           fi
