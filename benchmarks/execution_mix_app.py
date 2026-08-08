@@ -7,6 +7,7 @@ from fastapi import FastAPI, Query, Response
 from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
 from processual_api.cgt_governor.adapters.execution_fanout import ExecutionFanoutSaturatedError
 from processual_api.cgt_governor.adapters.registry import LLMAdapterRegistry
+from processual_api.cgt_governor.policy.fanout_planner import plan_fanout_execution
 
 
 class SimulatedProviderError(RuntimeError):
@@ -82,9 +83,15 @@ async def execution_mix(
     width: int = Query(default=8, ge=1, le=32),
     providers: int = Query(default=2, ge=1, le=2),
     local_parallelism: int = Query(default=0, ge=0, le=32),
+    use_planner: bool = Query(default=False),
 ) -> dict[str, int] | Response:
+    effective_parallelism = local_parallelism
+    if use_planner:
+        plan = plan_fanout_execution(width=width, provider_count=providers)
+        effective_parallelism = plan.local_parallelism or 0
+
     request_semaphore = (
-        asyncio.Semaphore(local_parallelism) if local_parallelism > 0 else None
+        asyncio.Semaphore(effective_parallelism) if effective_parallelism > 0 else None
     )
 
     async def provider_call(slot: int) -> str:
