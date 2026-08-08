@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from dataclasses import asdict, dataclass
 import json
 import math
 import statistics
 import time
 import uuid
-from dataclasses import asdict, dataclass
 
 import redis.asyncio as redis
 
