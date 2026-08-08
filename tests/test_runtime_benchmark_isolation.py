@@ -8,7 +8,8 @@ RUNTIME_ROOT = Path("processual_api")
 
 
 def _benchmark_imports(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    source = path.read_text(encoding="utf-8-sig")
+    tree = ast.parse(source, filename=str(path))
     violations: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
