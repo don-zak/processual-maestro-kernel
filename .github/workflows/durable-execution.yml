@@ -76,12 +76,12 @@ jobs:
           tests/test_execution_domain_capacity.py
           tests/test_durable_worker_scale.py
 
-      - name: Emit 1-2-4 worker qualification metrics
+      - name: Emit 1-2-4-8 worker qualification metrics
         env:
           PYTHONPATH: .
         run: >-
           python benchmarks/durable_worker_scale.py
           --redis-url "$TEST_REDIS_URL"
-          --workers 1,2,4
-          --jobs 48
+          --workers 1,2,4,8
+          --jobs 96
           --handler-delay-ms 20
