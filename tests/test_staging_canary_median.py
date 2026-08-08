@@ -1,4 +1,4 @@
-from benchmarks.staging_canary_median import evaluate_median_canary
+from benchmarks.staging_canary_median import evaluate_median_canary, promotion_scope
 
 
 def workload_trial(
@@ -74,6 +74,8 @@ def test_median_canary_ignores_one_bad_outlier() -> None:
 
     assert result.passed is True
     assert result.violations == ()
+    assert "staging/canary only" in promotion_scope(result)
+    assert "Production remains at the existing 1-worker default" in promotion_scope(result)
 
 
 def test_median_canary_rejects_repeatable_heavy_regression() -> None:
@@ -112,3 +114,4 @@ def test_median_canary_rejects_repeatable_heavy_regression() -> None:
     assert result.passed is False
     assert any("heavy@c40: OCU/s regression" in item for item in result.violations)
     assert any("heavy@c40: p95 regression" in item for item in result.violations)
+    assert "not qualified for staging/canary" in promotion_scope(result)
