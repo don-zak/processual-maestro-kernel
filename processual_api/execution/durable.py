@@ -129,6 +129,15 @@ class DurableJobStore(Protocol):
         lease_seconds: float,
     ) -> ExecutionJob: ...
 
+    async def release_unstarted_claim(
+        self,
+        *,
+        job_id: str,
+        worker_id: str,
+        lease_token: str,
+        delay_seconds: float = 0.0,
+    ) -> ExecutionJob: ...
+
     async def succeed(
         self,
         *,
@@ -318,6 +327,27 @@ class InMemoryDurableJobStore:
                 raise JobLeaseLostError(f"job deadline expired: {job_id}")
             job.lease_expires_at = now + lease_seconds
             job.updated_at = now
+            return self._clone(job)
+
+    async def release_unstarted_claim(
+        self,
+        *,
+        job_id: str,
+        worker_id: str,
+        lease_token: str,
+        delay_seconds: float = 0.0,
+    ) -> ExecutionJob:
+        if delay_seconds < 0:
+            raise ValueError("delay_seconds cannot be negative")
+        async with self._lock:
+            now = self._clock()
+            job = self._get(job_id)
+            self._assert_lease(job, worker_id=worker_id, lease_token=lease_token, now=now)
+            job.status = JobStatus.QUEUED
+            job.attempt = max(job.attempt - 1, 0)
+            job.available_at = now + delay_seconds
+            job.updated_at = now
+            self._clear_lease(job)
             return self._clone(job)
 
     async def succeed(
