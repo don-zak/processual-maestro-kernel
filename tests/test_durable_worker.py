@@ -2,6 +2,11 @@ import asyncio
 
 import pytest
 
+from processual_api.execution.capacity import (
+    DomainCapacityController,
+    DomainCapacityPolicy,
+    InMemoryDomainCapacityBackend,
+)
 from processual_api.execution.durable import (
     InMemoryDurableJobStore,
     JobSpec,
@@ -157,3 +162,107 @@ async def test_worker_shutdown_leaves_job_recoverable_instead_of_cancelling_busi
     interrupted = await store.get(submitted.job.job_id)
     assert interrupted.status is JobStatus.RUNNING
     assert interrupted.cancel_requested is False
+
+
+def capacity_controller(*, global_limit: int = 1, domain_limit: int = 1) -> DomainCapacityController:
+    return DomainCapacityController(
+        backend=InMemoryDomainCapacityBackend(),
+        policy=DomainCapacityPolicy(
+            global_limit=global_limit,
+            domain_limits={"oss": domain_limit},
+        ),
+        lease_seconds=0.1,
+        wait_seconds=0,
+        retry_seconds=0.005,
+    )
+
+
+@pytest.mark.asyncio
+async def test_capacity_saturation_requeues_claim_without_running_handler_or_consuming_attempt() -> None:
+    store = InMemoryDurableJobStore()
+    submitted = await store.submit(JobSpec(idempotency_key="capacity-wait", domain="oss", payload={}))
+    capacity = capacity_controller()
+    held = await capacity.acquire(domain="oss", priority=submitted.job.spec.priority)
+    handler_calls = 0
+
+    async def handler(job):
+        nonlocal handler_calls
+        handler_calls += 1
+        return job.job_id
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="oss-a",
+        handlers={"oss": handler},
+        capacity=capacity,
+        capacity_requeue_delay_seconds=0,
+    )
+    requeued = await worker.run_once()
+
+    assert requeued is not None
+    assert requeued.status is JobStatus.QUEUED
+    assert requeued.attempt == 0
+    assert handler_calls == 0
+
+    await capacity.release(held)
+    completed = await worker.run_once()
+    assert completed is not None
+    assert completed.status is JobStatus.SUCCEEDED
+    assert completed.attempt == 1
+
+
+@pytest.mark.asyncio
+async def test_worker_releases_domain_capacity_after_completion() -> None:
+    store = InMemoryDurableJobStore()
+    await store.submit(JobSpec(idempotency_key="first-capacity", domain="oss", payload={}))
+    await store.submit(JobSpec(idempotency_key="second-capacity", domain="oss", payload={}))
+    capacity = capacity_controller()
+
+    async def handler(job):
+        return job.spec.idempotency_key
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="oss-a",
+        handlers={"oss": handler},
+        capacity=capacity,
+    )
+
+    first = await worker.run_once()
+    second = await worker.run_once()
+
+    assert first is not None and first.status is JobStatus.SUCCEEDED
+    assert second is not None and second.status is JobStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_worker_renews_domain_capacity_during_long_handler() -> None:
+    store = InMemoryDurableJobStore()
+    await store.submit(JobSpec(idempotency_key="capacity-heartbeat", domain="oss", payload={}))
+    backend = InMemoryDomainCapacityBackend()
+    capacity = DomainCapacityController(
+        backend=backend,
+        policy=DomainCapacityPolicy(global_limit=1, domain_limits={"oss": 1}),
+        lease_seconds=0.05,
+        wait_seconds=0,
+        retry_seconds=0.005,
+    )
+
+    async def handler(job):
+        await asyncio.sleep(0.12)
+        return job.job_id
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="oss-a",
+        handlers={"oss": handler},
+        lease_seconds=0.2,
+        heartbeat_interval_seconds=0.04,
+        capacity=capacity,
+        capacity_heartbeat_interval_seconds=0.01,
+    )
+
+    completed = await worker.run_once()
+
+    assert completed is not None
+    assert completed.status is JobStatus.SUCCEEDED
