@@ -24,6 +24,7 @@ class ExecutionMixResult:
     errors: int
     duration_seconds: float
     throughput_rps: float
+    successful_rps: float
     p50_ms: float
     p95_ms: float
     p99_ms: float
@@ -112,6 +113,7 @@ async def run_stage(
         errors=errors,
         duration_seconds=round(duration, 4),
         throughput_rps=round(requests / duration, 2),
+        successful_rps=round(success / duration, 2),
         p50_ms=round(statistics.median(latencies), 2),
         p95_ms=round(percentile(latencies, 0.95), 2),
         p99_ms=round(percentile(latencies, 0.99), 2),
@@ -160,12 +162,15 @@ async def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    print("| Workers | Providers | Fan-out | Concurrency | p95 ms | RPS | Backpressure | Errors |")
+    print(
+        "| Workers | Providers | Fan-out | Concurrency | p95 ms | "
+        "Successful RPS | Backpressure | Errors |"
+    )
     print("|---:|---:|---:|---:|---:|---:|---:|---:|")
     for result in results:
         print(
             f"| {result.workers} | {result.providers} | {result.width} | "
-            f"{result.concurrency} | {result.p95_ms:.2f} | {result.throughput_rps:.2f} | "
+            f"{result.concurrency} | {result.p95_ms:.2f} | {result.successful_rps:.2f} | "
             f"{result.backpressure_rate:.2%} | {result.error_rate:.2%} |"
         )
         if result.error_details:
