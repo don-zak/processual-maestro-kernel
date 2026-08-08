@@ -28,7 +28,9 @@ def change_pct(before: float, after: float) -> float:
     return ((after - before) / before) * 100.0
 
 
-def index_results(payload: list[dict[str, object]]) -> dict[tuple[int, int, int], dict[str, object]]:
+def index_results(
+    payload: list[dict[str, object]],
+) -> dict[tuple[int, int, int], dict[str, object]]:
     return {
         (
             int(item["providers"]),
@@ -82,12 +84,16 @@ def compare(
 
 
 def markdown(deltas: list[ExecutionMixDelta]) -> str:
+    header = (
+        "| Providers | Width | Concurrency | 1w p95 ms | 2w p95 ms | p95 delta | "
+        "1w RPS | 2w RPS | RPS delta | 1w BP | 2w BP | Max true errors |"
+    )
     lines = [
         "# Deterministic LLM execution-mix comparison",
         "",
         "Positive RPS change is better; negative p95 change is better.",
         "",
-        "| Providers | Width | Concurrency | 1w p95 ms | 2w p95 ms | p95 delta | 1w RPS | 2w RPS | RPS delta | 1w BP | 2w BP | Max true errors |",
+        header,
         "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for item in deltas:
@@ -97,7 +103,8 @@ def markdown(deltas: list[ExecutionMixDelta]) -> str:
             f"{item.p95_change_pct:+.2f}% | {item.one_worker_rps:.2f} | "
             f"{item.two_worker_rps:.2f} | {item.rps_change_pct:+.2f}% | "
             f"{item.one_worker_backpressure_rate:.2%} | "
-            f"{item.two_worker_backpressure_rate:.2%} | {item.true_error_rate_max:.2%} |"
+            f"{item.two_worker_backpressure_rate:.2%} | "
+            f"{item.true_error_rate_max:.2%} |"
         )
     return "\n".join(lines)
 
