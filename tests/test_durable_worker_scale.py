@@ -144,10 +144,10 @@ async def test_noisy_neighbor_domain_does_not_starve_critical_domain() -> None:
             await asyncio.sleep(0.005)
 
         assert status.attempt == 1
-        batch_running = sum(
-            (await store.get(job_id)).status is JobStatus.RUNNING
-            for job_id in batch_ids
-        )
+        batch_running = 0
+        for job_id in batch_ids:
+            if (await store.get(job_id)).status is JobStatus.RUNNING:
+                batch_running += 1
         assert batch_running <= 2
     finally:
         batch_release.set()
