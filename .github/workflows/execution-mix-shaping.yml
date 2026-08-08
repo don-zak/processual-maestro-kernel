@@ -61,7 +61,7 @@ jobs:
       - name: Install benchmark dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install '.[dev,api,cache,database]'
+          python -m pip install '.[dev,api,cache,database,security]'
 
       - name: Lint shaping benchmark
         run: |
