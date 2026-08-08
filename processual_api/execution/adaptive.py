@@ -7,6 +7,7 @@ callers must explicitly opt in to applying that recommendation.
 
 from __future__ import annotations
 
+import asyncio
 import math
 from dataclasses import dataclass
 
@@ -153,3 +154,47 @@ class AdaptiveConcurrencyController:
         if sample.timeouts > sample.requests or sample.rate_limited > sample.requests:
             return False
         return math.isfinite(sample.latency_p95_ms) and sample.latency_p95_ms >= 0
+
+
+class AdaptiveConcurrencyGate:
+    """Opt-in dynamic gate driven by an adaptive concurrency controller.
+
+    The gate limits concurrent worker iterations without cancelling work that is
+    already active. Limit increases wake blocked workers immediately; decreases
+    take effect naturally as active iterations complete.
+    """
+
+    def __init__(self, controller: AdaptiveConcurrencyController) -> None:
+        self._controller = controller
+        self._active = 0
+        self._condition = asyncio.Condition()
+
+    @property
+    def current_limit(self) -> int:
+        return self._controller.current_limit
+
+    @property
+    def active(self) -> int:
+        return self._active
+
+    async def acquire(self) -> None:
+        async with self._condition:
+            await self._condition.wait_for(
+                lambda: self._active < self._controller.current_limit
+            )
+            self._active += 1
+
+    async def release(self) -> None:
+        async with self._condition:
+            if self._active <= 0:
+                raise RuntimeError("adaptive concurrency gate released without acquire")
+            self._active -= 1
+            self._condition.notify_all()
+
+    async def observe(self, sample: AdaptiveConcurrencySample) -> int:
+        async with self._condition:
+            previous = self._controller.current_limit
+            current = self._controller.observe(sample)
+            if current != previous:
+                self._condition.notify_all()
+            return current
