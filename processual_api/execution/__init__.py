@@ -14,9 +14,12 @@ from .durable import (
     SubmitResult,
 )
 from .pool import DurableWorkerPool, DurableWorkerPoolPolicy
+from .service import DurableExecutionHealth, DurableExecutionService
 from .worker import DurableWorker, JobHandler
 
 __all__ = [
+    "DurableExecutionHealth",
+    "DurableExecutionService",
     "DurableJobStore",
     "DurableWorker",
     "DurableWorkerPool",
