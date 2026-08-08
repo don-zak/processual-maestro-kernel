@@ -50,44 +50,53 @@ class OrchestrationObservation:
 
 
 def record_orchestration(observation: OrchestrationObservation) -> None:
-    """Record one completed orchestration without high-cardinality labels."""
+    """Record one completed orchestration without affecting request success.
+
+    Metrics are observability only. Missing or malfunctioning Prometheus support
+    must never become an availability gate for orchestration traffic.
+    """
 
     if not _PROMETHEUS_AVAILABLE:
         return
 
-    paced = "true" if observation.paced else "false"
-    reason = _bounded_reason(observation.plan_reason)
-    outcome = _bounded_outcome(observation.outcome)
-    latency = max(observation.latency_seconds, 0.0)
-    width = max(observation.width, 0)
+    try:
+        paced = "true" if observation.paced else "false"
+        reason = _bounded_reason(observation.plan_reason)
+        outcome = _bounded_outcome(observation.outcome)
+        latency = max(observation.latency_seconds, 0.0)
+        width = max(observation.width, 0)
 
-    ORCHESTRATION_REQUESTS.labels(
-        paced=paced,
-        plan_reason=reason,
-        outcome=outcome,
-    ).inc()
-    ORCHESTRATION_WIDTH.labels(
-        paced=paced,
-        plan_reason=reason,
-    ).observe(width)
-    ORCHESTRATION_LATENCY.labels(
-        paced=paced,
-        plan_reason=reason,
-        outcome=outcome,
-    ).observe(latency)
-
-    if observation.success_items:
-        ORCHESTRATION_ITEM_OUTCOMES.labels(
+        ORCHESTRATION_REQUESTS.labels(
             paced=paced,
             plan_reason=reason,
-            outcome="success",
-        ).inc(observation.success_items)
-    if observation.error_items:
-        ORCHESTRATION_ITEM_OUTCOMES.labels(
+            outcome=outcome,
+        ).inc()
+        ORCHESTRATION_WIDTH.labels(
             paced=paced,
             plan_reason=reason,
-            outcome="error",
-        ).inc(observation.error_items)
+        ).observe(width)
+        ORCHESTRATION_LATENCY.labels(
+            paced=paced,
+            plan_reason=reason,
+            outcome=outcome,
+        ).observe(latency)
+
+        if observation.success_items:
+            ORCHESTRATION_ITEM_OUTCOMES.labels(
+                paced=paced,
+                plan_reason=reason,
+                outcome="success",
+            ).inc(observation.success_items)
+        if observation.error_items:
+            ORCHESTRATION_ITEM_OUTCOMES.labels(
+                paced=paced,
+                plan_reason=reason,
+                outcome="error",
+            ).inc(observation.error_items)
+    except Exception:
+        # Runtime traffic must not fail because the observability backend is
+        # unavailable or a metrics collector is unhealthy.
+        return
 
 
 def _bounded_reason(reason: str) -> str:
