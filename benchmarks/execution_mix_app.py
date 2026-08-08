@@ -7,7 +7,11 @@ from fastapi import FastAPI, Query, Response
 from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
 from processual_api.cgt_governor.adapters.execution_fanout import ExecutionFanoutSaturatedError
 from processual_api.cgt_governor.adapters.registry import LLMAdapterRegistry
-from processual_api.cgt_governor.policy.fanout_planner import plan_fanout_execution
+from processual_api.cgt_governor.policy.fanout_planner import (
+    FanoutExecutionPlan,
+    execute_fanout_plan,
+    plan_fanout_execution,
+)
 
 
 class SimulatedProviderError(RuntimeError):
@@ -85,14 +89,22 @@ async def execution_mix(
     local_parallelism: int = Query(default=0, ge=0, le=32),
     use_planner: bool = Query(default=False),
 ) -> dict[str, int] | Response:
-    effective_parallelism = local_parallelism
     if use_planner:
-        plan = plan_fanout_execution(width=width, provider_count=providers)
-        effective_parallelism = plan.local_parallelism or 0
-
-    request_semaphore = (
-        asyncio.Semaphore(effective_parallelism) if effective_parallelism > 0 else None
-    )
+        execution_plan = plan_fanout_execution(
+            width=width,
+            provider_count=providers,
+        )
+    else:
+        execution_plan = FanoutExecutionPlan(
+            width=width,
+            provider_count=providers,
+            local_parallelism=local_parallelism or None,
+            reason=(
+                "benchmark_local_override"
+                if local_parallelism > 0
+                else "benchmark_unshaped"
+            ),
+        )
 
     async def provider_call(slot: int) -> str:
         provider_index = slot % providers
@@ -108,15 +120,10 @@ async def execution_mix(
             return "failure"
         return "success"
 
-    async def one(slot: int) -> str:
-        if request_semaphore is None:
-            return await provider_call(slot)
-        async with request_semaphore:
-            return await provider_call(slot)
-
-    outcomes = await asyncio.gather(
-        *(one(slot) for slot in range(width)),
-        return_exceptions=True,
+    outcomes = await execute_fanout_plan(
+        list(range(width)),
+        provider_call,
+        execution_plan,
     )
     saturated = sum(isinstance(outcome, ExecutionFanoutSaturatedError) for outcome in outcomes)
     unexpected = [
