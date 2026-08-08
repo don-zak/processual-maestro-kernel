@@ -1,37 +1,119 @@
 """Contention-reduced Redis durable store.
 
 This implementation preserves RedisDurableJobStore semantics while optimizing
-only the claim path. It is opt-in until qualification proves it is safe to
-promote as the default durable Redis store.
+the claim path. It is opt-in until qualification proves it is safe to promote
+as the default durable Redis store.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from redis.exceptions import WatchError
 
-from .durable import ExecutionJob, JobStatus
+from .durable import (
+    ExecutionJob,
+    ExecutionPriority,
+    IdempotencyConflictError,
+    JobLeaseLostError,
+    JobNotFoundError,
+    JobSpec,
+    JobStatus,
+    SubmitResult,
+)
 from .redis_store import RedisDurableJobStore
+
+_TERMINAL = {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED}
+_PRIORITY_ORDER = tuple(sorted(ExecutionPriority, key=int))
 
 
 class OptimizedRedisDurableJobStore(RedisDurableJobStore):
-    """Redis store with pipelined candidate reads and job-local claim watches."""
+    """Redis store with priority indexes and job-local claim ownership."""
 
-    async def _candidate_jobs(self, now: float) -> list[ExecutionJob]:
-        candidate_ids = await self._redis.zrangebyscore(self._queue_key, "-inf", now)
-        if not candidate_ids:
+    def __init__(
+        self,
+        redis_client,
+        *,
+        prefix: str = "maestro:durable",
+        candidate_window: int = 16,
+    ) -> None:
+        super().__init__(redis_client, prefix=prefix)
+        if candidate_window < 1:
+            raise ValueError("candidate_window must be positive")
+        self._candidate_window = candidate_window
+
+    def _priority_queue_key(self, priority: ExecutionPriority) -> str:
+        return f"{self._prefix}:queue:p{int(priority)}"
+
+    def _queue_job(self, pipe, job: ExecutionJob) -> None:
+        pipe.zadd(self._queue_key, {job.job_id: job.available_at})
+        pipe.zadd(self._priority_queue_key(job.spec.priority), {job.job_id: job.available_at})
+
+    def _dequeue_job(self, pipe, job: ExecutionJob) -> None:
+        pipe.zrem(self._queue_key, job.job_id)
+        pipe.zrem(self._priority_queue_key(job.spec.priority), job.job_id)
+
+    async def submit(self, spec: JobSpec) -> SubmitResult:
+        idem_key = self._idem_key(spec.idempotency_key)
+        for _ in range(8):
+            async with self._redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(idem_key)
+                    existing_id = await pipe.get(idem_key)
+                    if existing_id:
+                        existing = await self.get(existing_id)
+                        if existing.spec != spec:
+                            raise IdempotencyConflictError(
+                                f"idempotency key already belongs to another job: {spec.idempotency_key}"
+                            )
+                        return SubmitResult(job=existing, created=False)
+
+                    now = await self._now()
+                    job = ExecutionJob(
+                        job_id=uuid.uuid4().hex,
+                        spec=spec,
+                        status=JobStatus.QUEUED,
+                        created_at=now,
+                        updated_at=now,
+                        available_at=now,
+                    )
+                    pipe.multi()
+                    pipe.hset(self._job_key(job.job_id), mapping=self._job_mapping(job))
+                    pipe.set(idem_key, job.job_id)
+                    self._queue_job(pipe, job)
+                    await pipe.execute()
+                    return SubmitResult(job=job, created=True)
+                except WatchError:
+                    continue
+        raise RuntimeError("durable submit contention exceeded retry budget")
+
+    async def _candidate_ids(
+        self,
+        *,
+        priority: ExecutionPriority,
+        now: float,
+        bounded: bool,
+    ) -> list[str]:
+        kwargs = {"start": 0, "num": self._candidate_window} if bounded else {}
+        return await self._redis.zrangebyscore(
+            self._priority_queue_key(priority),
+            "-inf",
+            now,
+            **kwargs,
+        )
+
+    async def _hydrate_candidates(self, job_ids: list[str]) -> list[ExecutionJob]:
+        if not job_ids:
             return []
-
         async with self._redis.pipeline(transaction=False) as pipe:
-            for job_id in candidate_ids:
+            for job_id in job_ids:
                 pipe.hgetall(self._job_key(job_id))
             raw_jobs = await pipe.execute()
 
-        stale_ids: list[str] = []
         jobs: list[ExecutionJob] = []
-        for job_id, raw in zip(candidate_ids, raw_jobs, strict=True):
+        stale_ids: list[str] = []
+        for job_id, raw in zip(job_ids, raw_jobs, strict=True):
             if not raw:
                 stale_ids.append(job_id)
                 continue
@@ -42,8 +124,46 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
             jobs.append(job)
 
         if stale_ids:
-            await self._redis.zrem(self._queue_key, *stale_ids)
+            async with self._redis.pipeline(transaction=False) as pipe:
+                pipe.zrem(self._queue_key, *stale_ids)
+                for priority in _PRIORITY_ORDER:
+                    pipe.zrem(self._priority_queue_key(priority), *stale_ids)
+                await pipe.execute()
         return jobs
+
+    async def _expire_queued_deadline(self, job_id: str, now: float) -> bool:
+        key = self._job_key(job_id)
+        for _ in range(8):
+            async with self._redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(key)
+                    data = await pipe.hgetall(key)
+                    if not data:
+                        pipe.multi()
+                        pipe.zrem(self._queue_key, job_id)
+                        for priority in _PRIORITY_ORDER:
+                            pipe.zrem(self._priority_queue_key(priority), job_id)
+                        await pipe.execute()
+                        return False
+                    job = self._job_from_hash(data)
+                    if job.status not in {JobStatus.QUEUED, JobStatus.RETRY_WAIT}:
+                        return False
+                    if job.spec.deadline_at is None or job.spec.deadline_at > now:
+                        return False
+                    job.status = JobStatus.FAILED
+                    job.last_error = "deadline_exceeded"
+                    job.updated_at = now
+                    job.worker_id = None
+                    job.lease_token = None
+                    job.lease_expires_at = None
+                    pipe.multi()
+                    pipe.hset(key, mapping=self._job_mapping(job))
+                    self._dequeue_job(pipe, job)
+                    await pipe.execute()
+                    return True
+                except WatchError:
+                    continue
+        return False
 
     async def claim(
         self,
@@ -60,41 +180,45 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
 
         for _ in range(12):
             now = await self._now()
-            candidates = []
-            for job in await self._candidate_jobs(now):
-                if job.cancel_requested:
-                    continue
-                if job.spec.deadline_at is not None and job.spec.deadline_at <= now:
-                    await self._expire_queued_deadline(job.job_id, now)
-                    continue
-                if allowed is not None and job.spec.domain not in allowed:
-                    continue
-                candidates.append(job)
+            selected: ExecutionJob | None = None
 
-            if not candidates:
+            # With no domain filter, each priority has its own availability-sorted
+            # index, so a small bounded window is sufficient while preserving the
+            # exact global priority ordering. Domain-filtered workers scan only the
+            # current priority index so they cannot skip an eligible higher-priority
+            # job merely because it appears deeper in that priority queue.
+            for priority in _PRIORITY_ORDER:
+                candidate_ids = await self._candidate_ids(
+                    priority=priority,
+                    now=now,
+                    bounded=allowed is None,
+                )
+                candidates = await self._hydrate_candidates(candidate_ids)
+                candidates.sort(key=lambda job: (job.available_at, job.created_at, job.job_id))
+                for job in candidates:
+                    if job.cancel_requested:
+                        continue
+                    if job.spec.priority is not priority:
+                        continue
+                    if job.spec.deadline_at is not None and job.spec.deadline_at <= now:
+                        await self._expire_queued_deadline(job.job_id, now)
+                        continue
+                    if allowed is not None and job.spec.domain not in allowed:
+                        continue
+                    selected = job
+                    break
+                if selected is not None:
+                    break
+
+            if selected is None:
                 return None
 
-            candidates.sort(
-                key=lambda job: (
-                    int(job.spec.priority),
-                    job.available_at,
-                    job.created_at,
-                    job.job_id,
-                )
-            )
-            selected = candidates[0]
             key = self._job_key(selected.job_id)
-
             async with self._redis.pipeline(transaction=True) as pipe:
                 try:
-                    # Job state is the ownership authority. Watching the shared
-                    # queue makes unrelated claims invalidate each other; watching
-                    # only the chosen job still prevents duplicate ownership while
-                    # allowing independent jobs to be claimed concurrently.
                     await pipe.watch(key)
                     current_data = await pipe.hgetall(key)
                     if not current_data:
-                        await self._redis.zrem(self._queue_key, selected.job_id)
                         continue
                     current = self._job_from_hash(current_data)
                     if current.status not in {JobStatus.QUEUED, JobStatus.RETRY_WAIT}:
@@ -114,7 +238,7 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
                     current.updated_at = now
 
                     pipe.multi()
-                    pipe.zrem(self._queue_key, current.job_id)
+                    self._dequeue_job(pipe, current)
                     pipe.zadd(self._running_key, {current.job_id: current.lease_expires_at})
                     pipe.hset(key, mapping=self._job_mapping(current))
                     await pipe.execute()
@@ -122,3 +246,125 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
                 except WatchError:
                     continue
         return None
+
+    async def _mutate_claimed(
+        self,
+        *,
+        job_id: str,
+        worker_id: str,
+        lease_token: str,
+        mutate: Callable[[ExecutionJob, float], None],
+    ) -> ExecutionJob:
+        key = self._job_key(job_id)
+        for _ in range(8):
+            now = await self._now()
+            async with self._redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(key, self._running_key)
+                    data = await pipe.hgetall(key)
+                    if not data:
+                        raise JobNotFoundError(job_id)
+                    job = self._job_from_hash(data)
+                    if (
+                        job.status is not JobStatus.RUNNING
+                        or job.worker_id != worker_id
+                        or job.lease_token != lease_token
+                        or job.lease_expires_at is None
+                        or job.lease_expires_at <= now
+                    ):
+                        raise JobLeaseLostError(f"job lease is not active: {job_id}")
+                    mutate(job, now)
+                    pipe.multi()
+                    pipe.hset(key, mapping=self._job_mapping(job))
+                    if job.status is JobStatus.RUNNING:
+                        if job.lease_expires_at is None:
+                            raise JobLeaseLostError(f"running job has no lease expiry: {job_id}")
+                        pipe.zadd(self._running_key, {job_id: job.lease_expires_at})
+                    else:
+                        pipe.zrem(self._running_key, job_id)
+                        self._dequeue_job(pipe, job)
+                        if job.status in {JobStatus.QUEUED, JobStatus.RETRY_WAIT}:
+                            self._queue_job(pipe, job)
+                    await pipe.execute()
+                    return job
+                except WatchError:
+                    continue
+        raise JobLeaseLostError(f"job lease changed during mutation: {job_id}")
+
+    async def request_cancel(self, job_id: str) -> ExecutionJob:
+        key = self._job_key(job_id)
+        for _ in range(8):
+            now = await self._now()
+            async with self._redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(key)
+                    data = await pipe.hgetall(key)
+                    if not data:
+                        raise JobNotFoundError(job_id)
+                    job = self._job_from_hash(data)
+                    if job.status in _TERMINAL:
+                        return job
+                    job.cancel_requested = True
+                    job.updated_at = now
+                    if job.status in {JobStatus.QUEUED, JobStatus.RETRY_WAIT}:
+                        job.status = JobStatus.CANCELLED
+                    pipe.multi()
+                    pipe.hset(key, mapping=self._job_mapping(job))
+                    if job.status is JobStatus.CANCELLED:
+                        self._dequeue_job(pipe, job)
+                    await pipe.execute()
+                    return job
+                except WatchError:
+                    continue
+        raise RuntimeError(f"cancel contention exceeded retry budget: {job_id}")
+
+    async def recover_expired_leases(self) -> int:
+        now = await self._now()
+        expired_ids = await self._redis.zrangebyscore(self._running_key, "-inf", now)
+        recovered = 0
+        for job_id in expired_ids:
+            key = self._job_key(job_id)
+            for _ in range(8):
+                async with self._redis.pipeline(transaction=True) as pipe:
+                    try:
+                        await pipe.watch(key, self._running_key)
+                        data = await pipe.hgetall(key)
+                        if not data:
+                            pipe.multi()
+                            pipe.zrem(self._running_key, job_id)
+                            await pipe.execute()
+                            break
+                        job = self._job_from_hash(data)
+                        if (
+                            job.status is not JobStatus.RUNNING
+                            or job.lease_expires_at is None
+                            or job.lease_expires_at > now
+                        ):
+                            break
+                        job.worker_id = None
+                        job.lease_token = None
+                        job.lease_expires_at = None
+                        job.updated_at = now
+                        job.last_error = "worker_lease_expired"
+                        if job.cancel_requested:
+                            job.status = JobStatus.CANCELLED
+                        elif job.spec.deadline_at is not None and job.spec.deadline_at <= now:
+                            job.status = JobStatus.FAILED
+                            job.last_error = "deadline_exceeded"
+                        elif job.attempt >= job.spec.retry.max_attempts:
+                            job.status = JobStatus.FAILED
+                        else:
+                            job.status = JobStatus.QUEUED
+                            job.available_at = now
+                        pipe.multi()
+                        pipe.hset(key, mapping=self._job_mapping(job))
+                        pipe.zrem(self._running_key, job_id)
+                        self._dequeue_job(pipe, job)
+                        if job.status is JobStatus.QUEUED:
+                            self._queue_job(pipe, job)
+                        await pipe.execute()
+                        recovered += 1
+                        break
+                    except WatchError:
+                        continue
+        return recovered
