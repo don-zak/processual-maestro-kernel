@@ -9,7 +9,7 @@ from processual_api.cgt_governor.adapters.execution_fanout import ExecutionFanou
 from processual_api.cgt_governor.adapters.registry import LLMAdapterRegistry
 
 
-class SimulatedProviderFailure(RuntimeError):
+class SimulatedProviderError(RuntimeError):
     pass
 
 
@@ -36,7 +36,7 @@ class DeterministicLLMAdapter(BaseLLMAdapter):
         if mode == "timeout":
             raise TimeoutError("simulated provider timeout")
         if mode == "failure":
-            raise SimulatedProviderFailure("simulated provider failure")
+            raise SimulatedProviderError("simulated provider failure")
         return mode
 
     def is_configured(self) -> bool:
@@ -92,7 +92,7 @@ async def execution_mix(
             await adapter.generate(f"benchmark:{request_id}:{slot}:{mode}")
         except TimeoutError:
             return "timeout"
-        except SimulatedProviderFailure:
+        except SimulatedProviderError:
             return "failure"
         return "success"
 
