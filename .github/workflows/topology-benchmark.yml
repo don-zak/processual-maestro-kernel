@@ -9,9 +9,12 @@ on:
       - benchmarks/topology_compare.py
       - benchmarks/fanout_app.py
       - benchmarks/fanout_probe.py
+      - benchmarks/execution_mix_app.py
+      - benchmarks/execution_mix_probe.py
       - benchmarks/flush_redis.py
       - tests/test_topology_compare.py
       - tests/test_fanout_probe.py
+      - tests/test_execution_mix_benchmark.py
       - tests/test_execution_fanout.py
       - tests/test_adapter_registry.py
       - .github/workflows/topology-benchmark.yml
@@ -26,7 +29,7 @@ permissions:
 jobs:
   compare-workers:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -89,6 +92,7 @@ jobs:
           PYTHONPATH=. python -m pytest \
             tests/test_topology_compare.py \
             tests/test_fanout_probe.py \
+            tests/test_execution_mix_benchmark.py \
             tests/test_execution_fanout.py \
             tests/test_adapter_registry.py \
             -q
@@ -239,9 +243,85 @@ jobs:
             --output topology-results/fanout-2w.json \
             | tee topology-results/fanout-2w.txt
 
+      - name: Stop fanout harness
+        run: |
+          kill "$(cat topology-results/fanout.pid)" || true
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$(cat topology-results/fanout.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Start execution mix harness with one worker
+        run: |
+          python benchmarks/flush_redis.py
+          CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.execution_mix_app:app --host 127.0.0.1 --port 8020 --workers 1 > topology-results/execution-mix-1w.log 2>&1 &
+          echo $! > topology-results/execution-mix.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat topology-results/execution-mix-1w.log
+          exit 1
+
+      - name: Benchmark execution mix with one worker
+        run: |
+          python benchmarks/execution_mix_probe.py \
+            --base-url http://127.0.0.1:8020 \
+            --workers 1 \
+            --providers 1,2 \
+            --widths 4,8,16 \
+            --concurrency 5,10,20,40 \
+            --requests 80 \
+            --output topology-results/execution-mix-1w.json \
+            | tee topology-results/execution-mix-1w.txt
+
+      - name: Restart execution mix harness with two workers
+        run: |
+          kill "$(cat topology-results/execution-mix.pid)"
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$(cat topology-results/execution-mix.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          python benchmarks/flush_redis.py
+          CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.execution_mix_app:app --host 127.0.0.1 --port 8020 --workers 2 > topology-results/execution-mix-2w.log 2>&1 &
+          echo $! > topology-results/execution-mix.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat topology-results/execution-mix-2w.log
+          exit 1
+
+      - name: Benchmark execution mix with two workers
+        run: |
+          python benchmarks/execution_mix_probe.py \
+            --base-url http://127.0.0.1:8020 \
+            --workers 2 \
+            --providers 1,2 \
+            --widths 4,8,16 \
+            --concurrency 5,10,20,40 \
+            --requests 80 \
+            --output topology-results/execution-mix-2w.json \
+            | tee topology-results/execution-mix-2w.txt
+
       - name: Upload topology benchmark
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: maestro-topology-benchmark
           path: topology-results/
+
+      - name: Stop benchmark processes
+        if: always()
+        run: |
+          if [ -f topology-results/server.pid ]; then kill "$(cat topology-results/server.pid)" 2>/dev/null || true; fi
+          if [ -f topology-results/fanout.pid ]; then kill "$(cat topology-results/fanout.pid)" 2>/dev/null || true; fi
+          if [ -f topology-results/execution-mix.pid ]; then kill "$(cat topology-results/execution-mix.pid)" 2>/dev/null || true; fi
