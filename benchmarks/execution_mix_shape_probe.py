@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import json
 import math
-import statistics
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
