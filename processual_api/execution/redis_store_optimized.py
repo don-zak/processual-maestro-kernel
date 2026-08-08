@@ -361,7 +361,7 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
             now = await self._now()
             async with self._redis.pipeline(transaction=True) as pipe:
                 try:
-                    await pipe.watch(key, self._running_key)
+                    await pipe.watch(key)
                     data = await pipe.hgetall(key)
                     if not data:
                         raise JobNotFoundError(job_id)
@@ -428,7 +428,7 @@ class OptimizedRedisDurableJobStore(RedisDurableJobStore):
             for _ in range(8):
                 async with self._redis.pipeline(transaction=True) as pipe:
                     try:
-                        await pipe.watch(key, self._running_key)
+                        await pipe.watch(key)
                         data = await pipe.hgetall(key)
                         if not data:
                             pipe.multi()
