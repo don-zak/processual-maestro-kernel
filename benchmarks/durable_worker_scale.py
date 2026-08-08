@@ -19,7 +19,7 @@ import redis.asyncio as redis
 
 from processual_api.execution.durable import JobSpec, JobStatus
 from processual_api.execution.pool import DurableWorkerPool, DurableWorkerPoolPolicy
-from processual_api.execution.redis_store import RedisDurableJobStore
+from processual_api.execution.redis_store_optimized import OptimizedRedisDurableJobStore
 from processual_api.execution.worker import DurableWorker
 
 
@@ -59,7 +59,7 @@ async def run_scale_scenario(
 
     client = redis.from_url(redis_url, decode_responses=True)
     prefix = f"{{durable-scale-{uuid.uuid4().hex}}}"
-    store = RedisDurableJobStore(client, prefix=prefix)
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix)
     started_at: dict[str, float] = {}
     finished_at: dict[str, float] = {}
 
@@ -106,7 +106,10 @@ async def run_scale_scenario(
         final_jobs = []
         while True:
             final_jobs = [await store.get(job_id) for job_id in submitted_at]
-            if all(job.status in {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED} for job in final_jobs):
+            if all(
+                job.status in {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED}
+                for job in final_jobs
+            ):
                 break
             if time.perf_counter() >= deadline:
                 raise TimeoutError("durable scale scenario did not finish")
