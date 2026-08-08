@@ -11,6 +11,7 @@ on:
       - benchmarks/fanout_probe.py
       - benchmarks/execution_mix_app.py
       - benchmarks/execution_mix_probe.py
+      - benchmarks/execution_mix_compare.py
       - benchmarks/flush_redis.py
       - tests/test_topology_compare.py
       - tests/test_fanout_probe.py
@@ -311,6 +312,15 @@ jobs:
             --requests 80 \
             --output topology-results/execution-mix-2w.json \
             | tee topology-results/execution-mix-2w.txt
+
+      - name: Compare execution mix topologies
+        run: |
+          python benchmarks/execution_mix_compare.py \
+            topology-results/execution-mix-1w.json \
+            topology-results/execution-mix-2w.json \
+            --output topology-results/execution-mix-comparison.md \
+            | tee topology-results/execution-mix-comparison.txt
+          cat topology-results/execution-mix-comparison.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload topology benchmark
         if: always()
