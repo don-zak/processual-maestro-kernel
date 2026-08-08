@@ -14,6 +14,7 @@
   let observer = null;
   let reconciling = false;
   let reconcileTimer = null;
+  let initialized = false;
 
   function settingsPage() {
     return document.getElementById('page-settings');
@@ -520,12 +521,14 @@
   }
 
   function init() {
+    if (initialized) {
+      reconcile();
+      return;
+    }
+
+    initialized = true;
     reconcile();
     observePage();
-
-    window.setTimeout(reconcile, 100);
-    window.setTimeout(reconcile, 500);
-    window.setTimeout(reconcile, 1500);
   }
 
   window.PMK_SETTINGS_LAYOUT_18 = {
