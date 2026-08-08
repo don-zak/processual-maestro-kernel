@@ -22,7 +22,6 @@ from processual_api.execution.pool import DurableWorkerPool, DurableWorkerPoolPo
 from processual_api.execution.redis_store_optimized import OptimizedRedisDurableJobStore
 from processual_api.execution.worker import DurableWorker
 
-
 _TELEMETRY_COMMANDS = (
     "eval",
     "hgetall",
