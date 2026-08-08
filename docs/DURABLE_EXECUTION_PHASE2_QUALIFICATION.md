@@ -95,6 +95,34 @@ Production activation is **NO-GO** until every EXTERNAL item below is executed a
 | Database migration on staging clone | EXTERNAL | upgrade to `20260807_0043`, smoke verification, rollback/recovery plan |
 | Canary observation | EXTERNAL | agreed observation window with no correctness/SLO regression |
 
+## Launch-review deficiencies checklist
+
+The following items are intentionally recorded as **open launch deficiencies**. They must be reviewed explicitly at release time and must not be inferred as complete from repository CI alone.
+
+| Launch deficiency | Current state | Closure evidence required at launch review |
+|---|---|---|
+| Repeated 8-worker preproduction qualification has not yet been archived for the final release candidate | OPEN | successful `durable-preproduction-qualification.yml` run for the exact release SHA, with artifact retained |
+| Target Redis failover/degradation has not been exercised on the real deployment topology | OPEN | documented failover/degradation run showing recovery, no lost/duplicated jobs, and no provider-pressure misclassification |
+| Real orchestrator node/process termination and replacement-node resume has not been proven on the deployment platform | OPEN | termination/restart exercise with durable lease recovery and successful resume evidence |
+| Cross-node quota/capacity has not been validated across actual deployed application nodes | OPEN | concurrent multi-node test against the target Redis topology proving global/domain limits are not exceeded |
+| Provider 429, timeout, and slow-response behavior has not been injected through the staging adapter path | OPEN | fault-injection evidence showing expected adaptive decrease, hysteresis, and healthy recovery |
+| NOC/emergency reserve has not been exercised with a production-like traffic distribution | OPEN | noisy-neighbor run proving emergency work remains serviceable while normal/batch load is saturated |
+| Extended soak has not been executed for the exact release candidate on production-like resources | OPEN | retained soak artifact covering representative job mix, payloads, concurrency, queue latency, execution latency, errors, and resource behavior |
+| Staging secrets and production-like configuration have not been certified for the final release candidate | OPEN | successful fail-closed release/configuration gate using the intended staging secret/config set; no secrets recorded in artifacts |
+| Database migration `20260807_0043` has not been rehearsed against a staging clone representative of production data | OPEN | upgrade verification, application smoke, data-integrity checks, and a reviewed rollback/recovery procedure |
+| Final staging canary observation has not been completed for the exact release candidate | OPEN | canary evidence over the agreed observation window with no unresolved correctness or SLO regression |
+| Optimized Redis activation has not been validated in a restricted real canary scope | OPEN / POST-GATE | enable only after preceding gates pass; compare correctness/latency/resource evidence against current path |
+| Adaptive concurrency activation has not been validated in a restricted real canary scope | OPEN / POST-GATE | enable only after preceding gates pass; confirm bounds, 429/timeout response, recovery, and no instability |
+| Production worker-count/default changes have not been qualified or approved | INTENTIONALLY DEFERRED | separate reviewed activation change after canary evidence; no default change is required to launch safely |
+
+### Launch review handling
+
+- Every `OPEN` row above is a **release blocker** until evidence is attached or the launch reviewer explicitly records a justified waiver.
+- `OPEN / POST-GATE` rows are activation steps after baseline staging qualification, not prerequisites for deploying the candidate with current safe defaults.
+- `INTENTIONALLY DEFERRED` is not a defect: production may launch with current defaults; any later default increase requires separate evidence and review.
+- Evidence must correspond to the exact release candidate SHA or a clearly documented equivalent build. Evidence from an older candidate is historical context only.
+- A green GitHub-hosted workflow cannot by itself close a row that explicitly requires target topology, real staging configuration, or provider/orchestrator behavior.
+
 ## Go/no-go rules
 
 Do not enable production defaults if any of the following is true:
