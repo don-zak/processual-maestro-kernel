@@ -143,6 +143,19 @@ def _load_json(paths: list[str]) -> list[Any]:
     return [json.loads(Path(path).read_text(encoding="utf-8")) for path in paths]
 
 
+def promotion_scope(result: CanaryGateResult) -> str:
+    if result.passed:
+        return (
+            "Promotion scope: **2 workers are qualified for staging/canary only.** "
+            "Production remains at the existing 1-worker default until a separate "
+            "production promotion decision is made."
+        )
+    return (
+        "Promotion scope: **2 workers are not qualified for staging/canary.** "
+        "Production remains at the existing 1-worker default."
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workloads-1w", nargs="+", required=True)
@@ -175,6 +188,7 @@ def main() -> int:
         1,
     )
     report += f"\n\nTrials per topology: **{len(args.workloads_1w)}**."
+    report += f"\n\n{promotion_scope(result)}"
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
