@@ -269,10 +269,11 @@ async def test_pool_automatically_throttles_on_rate_limit_then_recovers() -> Non
         async with asyncio.timeout(0.5):
             while gate.current_limit != 4:
                 await asyncio.sleep(0)
-        assert all(
-            (await store.get(job_id)).status is JobStatus.SUCCEEDED
+        healthy_statuses = [
+            (await store.get(job_id)).status
             for job_id in healthy_ids
-        )
+        ]
+        assert all(status is JobStatus.SUCCEEDED for status in healthy_statuses)
     finally:
         await pool.stop(graceful_timeout_seconds=0.5)
 
