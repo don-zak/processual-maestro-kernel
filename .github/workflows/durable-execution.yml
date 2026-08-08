@@ -17,6 +17,8 @@ on:
       - tests/test_optimized_redis_durable_execution.py
       - tests/test_execution_domain_capacity.py
       - tests/test_durable_worker_scale.py
+      - tests/test_adaptive_concurrency.py
+      - tests/test_durable_redis_qualification.py
       - .github/workflows/durable-execution.yml
 
 permissions:
@@ -62,6 +64,8 @@ jobs:
           tests/test_optimized_redis_durable_execution.py
           tests/test_execution_domain_capacity.py
           tests/test_durable_worker_scale.py
+          tests/test_adaptive_concurrency.py
+          tests/test_durable_redis_qualification.py
 
       - name: Verify durable execution contracts
         run: >-
@@ -75,6 +79,8 @@ jobs:
           tests/test_optimized_redis_durable_execution.py
           tests/test_execution_domain_capacity.py
           tests/test_durable_worker_scale.py
+          tests/test_adaptive_concurrency.py
+          tests/test_durable_redis_qualification.py
 
       - name: Emit 1-2-4-8 worker qualification metrics
         env:
