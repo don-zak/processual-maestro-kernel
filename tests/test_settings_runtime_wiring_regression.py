@@ -40,6 +40,16 @@ def test_current_client_settings_ui_uses_replacement_provider_routes() -> None:
     assert "/settings/llm-provider" not in settings_js
 
 
+def test_operations_center_reuses_primary_provider_status_without_duplicate_get() -> None:
+    operations_js = _read(STATIC / "js" / "settings_operations_18.js")
+
+    assert "providerSnapshotFromPage" in operations_js
+    assert "observeProviderStatus" in operations_js
+    assert "new MutationObserver(syncProviderFromPage)" in operations_js
+    assert "CLIENT.get('/settings/client/provider-connection')" not in operations_js
+    assert "CLIENT.get('/settings/provider-connection')" not in operations_js
+
+
 def test_current_client_settings_ui_uses_client_scoped_usage_summary() -> None:
     settings_js = _read(STATIC / "js" / "pages" / "settings.js")
 
