@@ -45,6 +45,7 @@ jobs:
           --health-retries=10
 
     env:
+      PYTHONPATH: "."
       ENVIRONMENT: development
       REDIS_URL: redis://127.0.0.1:6379/0
       JWT_SECRET: benchmark-only-not-production-jwt-secret
