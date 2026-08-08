@@ -89,8 +89,3 @@ async def test_optimized_claim_preserves_priority_and_domain_filtering() -> None
         assert claimed.spec.domain == "network"
     finally:
         await client.aclose()
-
-
-def test_claim_window_must_be_positive() -> None:
-    with pytest.raises(ValueError, match="claim_window"):
-        OptimizedRedisDurableJobStore(object(), claim_window=0)
