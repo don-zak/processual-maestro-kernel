@@ -88,6 +88,18 @@ def test_redis_telemetry_delta_reports_command_pressure() -> None:
     assert dict(delta.command_calls)["hgetall"] == 12
 
 
+def test_redis_telemetry_delta_is_safe_with_no_completed_workflows() -> None:
+    before = RedisTelemetrySnapshot(100, 1.0, 2.0, 1000, (("eval", 10),))
+    after = RedisTelemetrySnapshot(120, 1.1, 2.2, 900, (("eval", 15),))
+
+    delta = diff_redis_telemetry(before, after, completed=0)
+
+    assert delta.total_commands_processed == 20
+    assert delta.commands_per_completed_workflow == 0.0
+    assert delta.used_memory_delta == -100
+    assert dict(delta.command_calls)["eval"] == 5
+
+
 @pytest.mark.asyncio
 async def test_scale_harness_completes_without_errors_and_detects_safe_scaling() -> None:
     redis_url = os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
@@ -104,12 +116,33 @@ async def test_scale_harness_completes_without_errors_and_detects_safe_scaling()
     one, two, four = results
     assert all(result.completed == 24 for result in results)
     assert all(result.true_errors == 0 for result in results)
+    assert all(result.redis_telemetry is None for result in results)
 
     # These are safety checks, not runtime throttles. The benchmark output is
     # used for qualification; the application is not constrained by them.
     assert two.successful_workflows_per_second > one.successful_workflows_per_second
     assert four.successful_workflows_per_second >= two.successful_workflows_per_second * 0.75
     assert four.successful_workflows_per_second >= one.successful_workflows_per_second
+
+
+@pytest.mark.asyncio
+async def test_scale_harness_emits_redis_telemetry_when_enabled() -> None:
+    redis_url = os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
+
+    result = await run_scale_scenario(
+        redis_url=redis_url,
+        workers=2,
+        jobs=8,
+        handler_delay_seconds=0.005,
+        redis_telemetry=True,
+    )
+
+    assert result.completed == 8
+    assert result.true_errors == 0
+    assert result.redis_telemetry is not None
+    assert result.redis_telemetry.total_commands_processed > 0
+    assert result.redis_telemetry.commands_per_completed_workflow > 0
+    assert dict(result.redis_telemetry.command_calls)["eval"] > 0
 
 
 @pytest.mark.asyncio
