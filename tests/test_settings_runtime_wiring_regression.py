@@ -50,6 +50,32 @@ def test_operations_center_reuses_primary_provider_status_without_duplicate_get(
     assert "CLIENT.get('/settings/provider-connection')" not in operations_js
 
 
+def test_operations_center_updates_sandbox_keys_locally_after_successful_mutations() -> None:
+    operations_js = _read(STATIC / "js" / "settings_operations_18.js")
+
+    assert "function replaceSandboxKeys(keys)" in operations_js
+    assert "function appendSandboxKey(key)" in operations_js
+    assert "function replaceRotatedSandboxKey(keyId, key)" in operations_js
+    assert "function removeSandboxKey(keyId)" in operations_js
+    assert "appendSandboxKey(result.key)" in operations_js
+    assert "replaceRotatedSandboxKey(keyId, result.key)" in operations_js
+    assert "removeSandboxKey(keyId)" in operations_js
+
+    create_block = operations_js.split("async function createKey()", 1)[1].split(
+        "async function rotateKey", 1
+    )[0]
+    rotate_block = operations_js.split("async function rotateKey(keyId)", 1)[1].split(
+        "async function revokeKey", 1
+    )[0]
+    revoke_block = operations_js.split("async function revokeKey(keyId)", 1)[1].split(
+        "function openSection", 1
+    )[0]
+
+    assert "await load()" not in create_block
+    assert "await load()" not in rotate_block
+    assert "await load()" not in revoke_block
+
+
 def test_current_client_settings_ui_uses_client_scoped_usage_summary() -> None:
     settings_js = _read(STATIC / "js" / "pages" / "settings.js")
 
