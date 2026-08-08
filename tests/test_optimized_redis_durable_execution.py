@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import uuid
 
 import pytest
@@ -40,6 +41,80 @@ async def test_many_workers_claim_distinct_jobs_without_duplicates() -> None:
         assert len(claimed_ids) == 8
         assert len(set(claimed_ids)) == 8
         assert set(claimed_ids) == set(submitted)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_atomic_claim_expires_deadline_before_claiming_next_job() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-deadline-{uuid.uuid4().hex}}}"
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix)
+    try:
+        expired = await store.submit(
+            JobSpec(
+                idempotency_key="expired",
+                domain="network",
+                payload={},
+                priority=ExecutionPriority.EMERGENCY,
+                deadline_at=time.time() - 1,
+            )
+        )
+        ready = await store.submit(
+            JobSpec(
+                idempotency_key="ready",
+                domain="network",
+                payload={},
+                priority=ExecutionPriority.INTERACTIVE,
+            )
+        )
+
+        claimed = await store.claim(worker_id="worker", lease_seconds=1)
+        expired_job = await store.get(expired.job.job_id)
+
+        assert expired_job.status is JobStatus.FAILED
+        assert expired_job.last_error == "deadline_exceeded"
+        assert claimed is not None
+        assert claimed.job_id == ready.job.job_id
+        assert claimed.attempt == 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_atomic_claim_preserves_priority_order() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-atomic-priority-{uuid.uuid4().hex}}}"
+    store = OptimizedRedisDurableJobStore(client, prefix=prefix, candidate_window=2)
+    try:
+        for index in range(20):
+            await store.submit(
+                JobSpec(
+                    idempotency_key=f"batch-{index}",
+                    domain="billing",
+                    payload={},
+                    priority=ExecutionPriority.BATCH,
+                )
+            )
+        emergency = await store.submit(
+            JobSpec(
+                idempotency_key="alarm",
+                domain="network",
+                payload={},
+                priority=ExecutionPriority.EMERGENCY,
+            )
+        )
+
+        claimed = await store.claim(worker_id="noc-worker", lease_seconds=1)
+
+        assert claimed is not None
+        assert claimed.job_id == emergency.job.job_id
     finally:
         await client.aclose()
 
@@ -88,6 +163,28 @@ async def test_optimized_claim_preserves_priority_and_domain_filtering() -> None
         assert claimed is not None
         assert claimed.job_id == emergency.job.job_id
         assert claimed.spec.domain == "network"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_non_hash_tag_prefix_uses_safe_watch_fallback() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    store = OptimizedRedisDurableJobStore(
+        client,
+        prefix=f"optimized-fallback-{uuid.uuid4().hex}",
+    )
+    try:
+        submitted = await store.submit(
+            JobSpec(idempotency_key="fallback", domain="network", payload={})
+        )
+        claimed = await store.claim(worker_id="worker", lease_seconds=1)
+
+        assert claimed is not None
+        assert claimed.job_id == submitted.job.job_id
     finally:
         await client.aclose()
 
