@@ -11,6 +11,7 @@ on:
       - benchmarks/execution_mix_planner_probe.py
       - benchmarks/orchestration_api_app.py
       - benchmarks/orchestration_api_probe.py
+      - tests/test_execution_mix_shaping_workflow.py
       - tests/test_fanout_planner.py
       - tests/test_orchestration_metrics.py
       - tests/test_orchestration_api_benchmark.py
@@ -81,6 +82,7 @@ jobs:
             processual_api/cgt_governor/policy/fanout_planner.py \
             processual_api/cgt_governor/policy/orchestration_metrics.py \
             processual_api/routers/workflows.py \
+            tests/test_execution_mix_shaping_workflow.py \
             tests/test_fanout_planner.py \
             tests/test_orchestration_metrics.py \
             tests/test_orchestration_api_benchmark.py \
@@ -95,6 +97,7 @@ jobs:
             processual_api/cgt_governor/policy/fanout_planner.py \
             processual_api/cgt_governor/policy/orchestration_metrics.py \
             processual_api/routers/workflows.py \
+            tests/test_execution_mix_shaping_workflow.py \
             tests/test_fanout_planner.py \
             tests/test_orchestration_metrics.py \
             tests/test_orchestration_api_benchmark.py \
@@ -104,6 +107,7 @@ jobs:
       - name: Test selective fanout planner and orchestration
         run: |
           pytest -q \
+            tests/test_execution_mix_shaping_workflow.py \
             tests/test_fanout_planner.py \
             tests/test_orchestration_metrics.py \
             tests/test_orchestration_api_benchmark.py \
@@ -130,6 +134,8 @@ jobs:
           exit 1
 
       - name: Benchmark request-local shaping
+        id: request_local_shaping
+        continue-on-error: true
         run: |
           python benchmarks/execution_mix_shape_probe.py \
             --base-url http://127.0.0.1:8020 \
@@ -186,6 +192,16 @@ jobs:
           grep -q 'maestro_llm_orchestration_width' shaping-results/orchestration-metrics.txt
           grep -q 'maestro_llm_orchestration_latency_seconds' shaping-results/orchestration-metrics.txt
           grep -q 'maestro_llm_orchestration_item_outcomes_total' shaping-results/orchestration-metrics.txt
+
+      - name: Enforce shaping gates
+        if: always()
+        env:
+          REQUEST_LOCAL_SHAPING_OUTCOME: ${{ steps.request_local_shaping.outcome }}
+        run: |
+          if [ "$REQUEST_LOCAL_SHAPING_OUTCOME" != "success" ]; then
+            echo "request-local shaping gate failed: $REQUEST_LOCAL_SHAPING_OUTCOME"
+            exit 1
+          fi
 
       - name: Upload shaping benchmark
         if: always()
