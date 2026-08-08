@@ -7,9 +7,8 @@ or require the store. A caller must explicitly pass an initialized Redis client.
 from __future__ import annotations
 
 import json
-import time
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from redis.exceptions import WatchError
@@ -33,11 +32,14 @@ _TERMINAL = {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED}
 class RedisDurableJobStore(DurableJobStore):
     """Durable multi-worker store using Redis optimistic transactions.
 
-    Queue membership, job state, and lease expiry are persisted separately so a
-    dead worker can be recovered without depending on its process memory.
+    Redis server time is authoritative for leases and retry availability. Queue
+    membership, job state, and lease expiry are persisted separately so a dead
+    worker can be recovered without depending on its process memory.
     """
 
     def __init__(self, redis_client: Any, *, prefix: str = "maestro:durable") -> None:
+        if not prefix.strip(":"):
+            raise ValueError("prefix cannot be empty")
         self._redis = redis_client
         self._prefix = prefix.rstrip(":")
 
@@ -56,11 +58,8 @@ class RedisDurableJobStore(DurableJobStore):
         return f"{self._prefix}:idem:{key}"
 
     async def _now(self) -> float:
-        try:
-            seconds, micros = await self._redis.time()
-            return float(seconds) + float(micros) / 1_000_000
-        except Exception:
-            return time.time()
+        seconds, micros = await self._redis.time()
+        return float(seconds) + float(micros) / 1_000_000
 
     @staticmethod
     def _spec_json(spec: JobSpec) -> str:
@@ -178,6 +177,38 @@ class RedisDurableJobStore(DurableJobStore):
             raise JobNotFoundError(job_id)
         return self._job_from_hash(data)
 
+    async def _expire_queued_deadline(self, job_id: str, now: float) -> bool:
+        key = self._job_key(job_id)
+        for _ in range(8):
+            async with self._redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(key, self._queue_key)
+                    data = await pipe.hgetall(key)
+                    if not data:
+                        pipe.multi()
+                        pipe.zrem(self._queue_key, job_id)
+                        await pipe.execute()
+                        return False
+                    job = self._job_from_hash(data)
+                    if job.status not in {JobStatus.QUEUED, JobStatus.RETRY_WAIT}:
+                        return False
+                    if job.spec.deadline_at is None or job.spec.deadline_at > now:
+                        return False
+                    job.status = JobStatus.FAILED
+                    job.last_error = "deadline_exceeded"
+                    job.updated_at = now
+                    job.worker_id = None
+                    job.lease_token = None
+                    job.lease_expires_at = None
+                    pipe.multi()
+                    pipe.hset(key, mapping=self._job_mapping(job))
+                    pipe.zrem(self._queue_key, job_id)
+                    await pipe.execute()
+                    return True
+                except WatchError:
+                    continue
+        return False
+
     async def claim(
         self,
         *,
@@ -196,14 +227,20 @@ class RedisDurableJobStore(DurableJobStore):
             candidate_ids = await self._redis.zrangebyscore(self._queue_key, "-inf", now)
             candidates: list[ExecutionJob] = []
             for job_id in candidate_ids:
-                job = await self.get(job_id)
+                try:
+                    job = await self.get(job_id)
+                except JobNotFoundError:
+                    await self._redis.zrem(self._queue_key, job_id)
+                    continue
                 if job.status not in {JobStatus.QUEUED, JobStatus.RETRY_WAIT}:
+                    await self._redis.zrem(self._queue_key, job_id)
                     continue
                 if job.cancel_requested:
                     continue
-                if allowed is not None and job.spec.domain not in allowed:
-                    continue
                 if job.spec.deadline_at is not None and job.spec.deadline_at <= now:
+                    await self._expire_queued_deadline(job_id, now)
+                    continue
+                if allowed is not None and job.spec.domain not in allowed:
                     continue
                 candidates.append(job)
             if not candidates:
@@ -229,6 +266,10 @@ class RedisDurableJobStore(DurableJobStore):
                         continue
                     if current.available_at > now or current.cancel_requested:
                         continue
+                    if current.spec.deadline_at is not None and current.spec.deadline_at <= now:
+                        continue
+                    if allowed is not None and current.spec.domain not in allowed:
+                        continue
                     token = uuid.uuid4().hex
                     current.status = JobStatus.RUNNING
                     current.attempt += 1
@@ -252,14 +293,14 @@ class RedisDurableJobStore(DurableJobStore):
         job_id: str,
         worker_id: str,
         lease_token: str,
-        mutate: Any,
+        mutate: Callable[[ExecutionJob, float], None],
     ) -> ExecutionJob:
         key = self._job_key(job_id)
         for _ in range(8):
             now = await self._now()
             async with self._redis.pipeline(transaction=True) as pipe:
                 try:
-                    await pipe.watch(key)
+                    await pipe.watch(key, self._running_key)
                     data = await pipe.hgetall(key)
                     if not data:
                         raise JobNotFoundError(job_id)
@@ -276,6 +317,8 @@ class RedisDurableJobStore(DurableJobStore):
                     pipe.multi()
                     pipe.hset(key, mapping=self._job_mapping(job))
                     if job.status is JobStatus.RUNNING:
+                        if job.lease_expires_at is None:
+                            raise JobLeaseLostError(f"running job has no lease expiry: {job_id}")
                         pipe.zadd(self._running_key, {job_id: job.lease_expires_at})
                     else:
                         pipe.zrem(self._running_key, job_id)
@@ -304,19 +347,23 @@ class RedisDurableJobStore(DurableJobStore):
             if job.spec.deadline_at is not None and job.spec.deadline_at <= now:
                 job.status = JobStatus.FAILED
                 job.last_error = "deadline_exceeded"
+                job.updated_at = now
                 job.worker_id = None
                 job.lease_token = None
                 job.lease_expires_at = None
-                raise JobLeaseLostError(f"job deadline expired: {job.job_id}")
+                return
             job.lease_expires_at = now + lease_seconds
             job.updated_at = now
 
-        return await self._mutate_claimed(
+        updated = await self._mutate_claimed(
             job_id=job_id,
             worker_id=worker_id,
             lease_token=lease_token,
             mutate=mutate,
         )
+        if updated.status is JobStatus.FAILED and updated.last_error == "deadline_exceeded":
+            raise JobLeaseLostError(f"job deadline expired: {job_id}")
+        return updated
 
     async def succeed(
         self,
@@ -342,7 +389,10 @@ class RedisDurableJobStore(DurableJobStore):
             job.lease_expires_at = None
 
         return await self._mutate_claimed(
-            job_id=job_id, worker_id=worker_id, lease_token=lease_token, mutate=mutate
+            job_id=job_id,
+            worker_id=worker_id,
+            lease_token=lease_token,
+            mutate=mutate,
         )
 
     async def fail(
@@ -378,7 +428,10 @@ class RedisDurableJobStore(DurableJobStore):
             job.available_at = retry_at
 
         return await self._mutate_claimed(
-            job_id=job_id, worker_id=worker_id, lease_token=lease_token, mutate=mutate
+            job_id=job_id,
+            worker_id=worker_id,
+            lease_token=lease_token,
+            mutate=mutate,
         )
 
     async def request_cancel(self, job_id: str) -> ExecutionJob:
@@ -387,7 +440,7 @@ class RedisDurableJobStore(DurableJobStore):
             now = await self._now()
             async with self._redis.pipeline(transaction=True) as pipe:
                 try:
-                    await pipe.watch(key)
+                    await pipe.watch(key, self._queue_key)
                     data = await pipe.hgetall(key)
                     if not data:
                         raise JobNotFoundError(job_id)
@@ -424,7 +477,10 @@ class RedisDurableJobStore(DurableJobStore):
             job.lease_expires_at = None
 
         return await self._mutate_claimed(
-            job_id=job_id, worker_id=worker_id, lease_token=lease_token, mutate=mutate
+            job_id=job_id,
+            worker_id=worker_id,
+            lease_token=lease_token,
+            mutate=mutate,
         )
 
     async def recover_expired_leases(self) -> int:
@@ -450,7 +506,6 @@ class RedisDurableJobStore(DurableJobStore):
                             or job.lease_expires_at > now
                         ):
                             break
-                        recovered += 1
                         job.worker_id = None
                         job.lease_token = None
                         job.lease_expires_at = None
@@ -472,6 +527,7 @@ class RedisDurableJobStore(DurableJobStore):
                         if job.status is JobStatus.QUEUED:
                             pipe.zadd(self._queue_key, {job_id: now})
                         await pipe.execute()
+                        recovered += 1
                         break
                     except WatchError:
                         continue
