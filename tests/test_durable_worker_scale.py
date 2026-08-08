@@ -3,7 +3,14 @@ import os
 
 import pytest
 
-from benchmarks.durable_worker_scale import ScaleResult, percentile, run_scale_scenario, summarize_trials
+from benchmarks.durable_worker_scale import (
+    RedisTelemetrySnapshot,
+    ScaleResult,
+    diff_redis_telemetry,
+    percentile,
+    run_scale_scenario,
+    summarize_trials,
+)
 from processual_api.execution.capacity import (
     DomainCapacityController,
     DomainCapacityPolicy,
@@ -54,6 +61,31 @@ def test_scale_trial_summary_rejects_mixed_shapes() -> None:
                 ScaleResult(4, 24, 24, 0, 1.0, 24.0, 1.0, 1.0, 1.0, 1.0),
             ]
         )
+
+
+def test_redis_telemetry_delta_reports_command_pressure() -> None:
+    before = RedisTelemetrySnapshot(
+        total_commands_processed=100,
+        used_cpu_sys=1.0,
+        used_cpu_user=2.0,
+        used_memory=1000,
+        command_calls=(("eval", 10), ("hgetall", 20)),
+    )
+    after = RedisTelemetrySnapshot(
+        total_commands_processed=148,
+        used_cpu_sys=1.3,
+        used_cpu_user=2.5,
+        used_memory=1120,
+        command_calls=(("eval", 14), ("hgetall", 32)),
+    )
+
+    delta = diff_redis_telemetry(before, after, completed=12)
+
+    assert delta.total_commands_processed == 48
+    assert delta.commands_per_completed_workflow == 4.0
+    assert delta.used_memory_delta == 120
+    assert dict(delta.command_calls)["eval"] == 4
+    assert dict(delta.command_calls)["hgetall"] == 12
 
 
 @pytest.mark.asyncio
