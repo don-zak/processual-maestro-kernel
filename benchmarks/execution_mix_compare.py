@@ -14,9 +14,9 @@ class ExecutionMixDelta:
     one_worker_p95_ms: float
     two_worker_p95_ms: float
     p95_change_pct: float
-    one_worker_rps: float
-    two_worker_rps: float
-    rps_change_pct: float
+    one_worker_successful_rps: float
+    two_worker_successful_rps: float
+    successful_rps_change_pct: float
     one_worker_backpressure_rate: float
     two_worker_backpressure_rate: float
     true_error_rate_max: float
@@ -58,8 +58,8 @@ def compare(
         after = two_index[key]
         before_p95 = float(before.get("p95_ms", 0.0))
         after_p95 = float(after.get("p95_ms", 0.0))
-        before_rps = float(before.get("throughput_rps", 0.0))
-        after_rps = float(after.get("throughput_rps", 0.0))
+        before_successful_rps = float(before.get("successful_rps", 0.0))
+        after_successful_rps = float(after.get("successful_rps", 0.0))
         before_bp = float(before.get("backpressure_rate", 0.0))
         after_bp = float(after.get("backpressure_rate", 0.0))
         before_errors = float(before.get("error_rate", 0.0))
@@ -72,9 +72,12 @@ def compare(
                 one_worker_p95_ms=before_p95,
                 two_worker_p95_ms=after_p95,
                 p95_change_pct=change_pct(before_p95, after_p95),
-                one_worker_rps=before_rps,
-                two_worker_rps=after_rps,
-                rps_change_pct=change_pct(before_rps, after_rps),
+                one_worker_successful_rps=before_successful_rps,
+                two_worker_successful_rps=after_successful_rps,
+                successful_rps_change_pct=change_pct(
+                    before_successful_rps,
+                    after_successful_rps,
+                ),
                 one_worker_backpressure_rate=before_bp,
                 two_worker_backpressure_rate=after_bp,
                 true_error_rate_max=max(before_errors, after_errors),
@@ -86,12 +89,13 @@ def compare(
 def markdown(deltas: list[ExecutionMixDelta]) -> str:
     header = (
         "| Providers | Width | Concurrency | 1w p95 ms | 2w p95 ms | p95 delta | "
-        "1w RPS | 2w RPS | RPS delta | 1w BP | 2w BP | Max true errors |"
+        "1w Success RPS | 2w Success RPS | Success RPS delta | 1w BP | 2w BP | "
+        "Max true errors |"
     )
     lines = [
         "# Deterministic LLM execution-mix comparison",
         "",
-        "Positive RPS change is better; negative p95 change is better.",
+        "Positive successful-RPS change is better; negative p95 change is better.",
         "",
         header,
         "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -100,8 +104,9 @@ def markdown(deltas: list[ExecutionMixDelta]) -> str:
         lines.append(
             f"| {item.providers} | {item.width} | {item.concurrency} | "
             f"{item.one_worker_p95_ms:.2f} | {item.two_worker_p95_ms:.2f} | "
-            f"{item.p95_change_pct:+.2f}% | {item.one_worker_rps:.2f} | "
-            f"{item.two_worker_rps:.2f} | {item.rps_change_pct:+.2f}% | "
+            f"{item.p95_change_pct:+.2f}% | {item.one_worker_successful_rps:.2f} | "
+            f"{item.two_worker_successful_rps:.2f} | "
+            f"{item.successful_rps_change_pct:+.2f}% | "
             f"{item.one_worker_backpressure_rate:.2%} | "
             f"{item.two_worker_backpressure_rate:.2%} | "
             f"{item.true_error_rate_max:.2%} |"
