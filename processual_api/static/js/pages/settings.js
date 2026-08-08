@@ -9,6 +9,11 @@ PAGES.settings = (() => {
   };
 
   let settingsInitDone = false;
+  let tunisianDirectOrderIdempotencyKey = null;
+  let tunisianContractIdempotencyKey = null;
+  let tunisianPendingOrder = null;
+  let tunisianPaymentOrder = null;
+  let tunisianPaymentReportIdempotencyKey = null;
 
   function setText(id, value) {
     const el = document.getElementById(id);
@@ -222,6 +227,205 @@ PAGES.settings = (() => {
       applyUsageSummary(summary);
     } catch (e) {
       setText('set-usage-latest-status', 'Usage summary unavailable');
+    }
+  }
+
+  function uniqueRequestKey(prefix) {
+    const random = window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+    return prefix + '-' + random;
+  }
+
+  function hideTunisiaDirectPayment() {
+    const card = document.getElementById('set-tunisia-direct-payment-card');
+    if (card) card.style.display = 'none';
+  }
+
+  async function loadTunisiaDirectPaymentOption() {
+    hideTunisiaDirectPayment();
+    try {
+      const option = await CLIENT.get('/billing/subscription-preparation/payment-options');
+      if (!option || option.visible !== true) return;
+      const card = document.getElementById('set-tunisia-direct-payment-card');
+      if (!card) return;
+      setText('set-tn-payment-offer', option.offer_display_name || option.offer_ref);
+      setText(
+        'set-tn-payment-billing',
+        String(option.amount) + ' ' + option.currency + ' / ' + option.billing_period
+      );
+      setText('set-tn-payment-address', option.country_code + ' / ' + option.address_status);
+      setText('set-tn-payment-status', 'Validated payment option');
+      card.style.display = '';
+    } catch (_) {
+      hideTunisiaDirectPayment();
+    }
+  }
+
+  function showTunisiaContractAction(order) {
+    tunisianPendingOrder = order;
+    tunisianContractIdempotencyKey = null;
+    setText('set-tn-contract-version', order.contract_version);
+    const accepted = document.getElementById('set-tn-contract-accepted');
+    const complete = document.getElementById('set-tn-contract-complete');
+    const action = document.getElementById('set-tn-contract-action');
+    if (accepted) accepted.checked = false;
+    if (complete) complete.disabled = true;
+    if (action) action.style.display = '';
+  }
+
+  function renderTunisiaPaymentInstructions(order) {
+    const destination = order.payment_destination || {};
+    const result = document.getElementById('set-tn-payment-result');
+    if (!result) return;
+    result.textContent = [
+      'Order: ' + order.order_ref,
+      'Contract: ' + (order.contract_ref || order.contract_status || '-'),
+      'Payment reference: ' + (order.payment_reference || '-'),
+      'Amount: ' + order.total_amount + ' ' + order.currency,
+      'Destination: ' + (destination.display_name || '-'),
+      'Institution: ' + (destination.institution_name || '-'),
+      'Account holder: ' + (destination.account_holder_name || '-'),
+      'Account: ' + (destination.masked_identifier || '-'),
+      'Instructions: ' + (destination.instructions || 'Use the payment reference above.'),
+    ].join('\n');
+    result.style.display = '';
+    tunisianPaymentOrder = order;
+    tunisianPaymentReportIdempotencyKey = null;
+    const reportForm = document.getElementById('set-tn-payment-report-form');
+    const amount = document.getElementById('set-tn-payment-report-amount');
+    const currency = document.getElementById('set-tn-payment-report-currency');
+    const reference = document.getElementById('set-tn-payment-report-reference');
+    const transferReference = document.getElementById('set-tn-payment-transfer-reference');
+    if (amount) amount.value = order.total_amount;
+    if (currency) currency.value = order.currency;
+    if (reference) reference.value = order.payment_reference || '';
+    if (transferReference) transferReference.value = '';
+    if (reportForm) reportForm.style.display = '';
+  }
+
+  async function createTunisiaDirectOrder() {
+    const button = document.getElementById('set-tn-payment-create-order');
+    if (button) button.disabled = true;
+    setText('set-tn-payment-status', 'Creating order...');
+    tunisianDirectOrderIdempotencyKey = tunisianDirectOrderIdempotencyKey || uniqueRequestKey('tn-order');
+    try {
+      const order = await CLIENT.request(
+        'POST',
+        '/billing/subscription-preparation/maestro-direct/orders',
+        {},
+        {
+          'X-Correlation-ID': uniqueRequestKey('tn-payment-ui'),
+          'Idempotency-Key': tunisianDirectOrderIdempotencyKey,
+        }
+      );
+      showTunisiaContractAction(order);
+      setText('set-tn-payment-status', 'Order created — contract acceptance required');
+      tunisianDirectOrderIdempotencyKey = null;
+    } catch (error) {
+      const detail = typeof error.detail === 'string'
+        ? error.detail
+        : (error.detail && error.detail.message) || error.message;
+      setText('set-tn-payment-status', 'Order unavailable: ' + detail);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function completeTunisiaDirectContract() {
+    if (!tunisianPendingOrder) return;
+    const accepted = document.getElementById('set-tn-contract-accepted');
+    const button = document.getElementById('set-tn-contract-complete');
+    if (!accepted || accepted.checked !== true) return;
+    button.disabled = true;
+    setText('set-tn-payment-status', 'Completing contract...');
+    tunisianContractIdempotencyKey = tunisianContractIdempotencyKey || uniqueRequestKey('tn-contract');
+    try {
+      const completion = await CLIENT.request(
+        'POST',
+        '/billing/subscription-preparation/maestro-direct/orders/' +
+          encodeURIComponent(tunisianPendingOrder.order_ref) + '/contract/complete',
+        {
+          accepted: true,
+          contract_version: tunisianPendingOrder.contract_version,
+        },
+        {
+          'X-Correlation-ID': uniqueRequestKey('tn-contract-ui'),
+          'Idempotency-Key': tunisianContractIdempotencyKey,
+        }
+      );
+      renderTunisiaPaymentInstructions(Object.assign({}, tunisianPendingOrder, completion));
+      setText('set-tn-payment-status', 'Contract completed — payment instructions ready');
+      document.getElementById('set-tn-contract-action').style.display = 'none';
+      tunisianPendingOrder = null;
+      tunisianContractIdempotencyKey = null;
+    } catch (error) {
+      const detail = typeof error.detail === 'string' ? error.detail : error.message;
+      setText('set-tn-payment-status', 'Contract unavailable: ' + detail);
+      button.disabled = false;
+    }
+  }
+
+  async function reportTunisiaDirectPayment(event) {
+    event.preventDefault();
+    if (!tunisianPaymentOrder) return;
+    const form = document.getElementById('set-tn-payment-report-form');
+    const button = document.getElementById('set-tn-payment-report-submit');
+    const transferInput = document.getElementById('set-tn-payment-transfer-reference');
+    if (!form || !form.reportValidity()) return;
+    if (button) button.disabled = true;
+    tunisianPaymentReportIdempotencyKey = tunisianPaymentReportIdempotencyKey || uniqueRequestKey('tn-payment-report');
+    try {
+      const report = await CLIENT.request(
+        'POST',
+        '/billing/subscription-preparation/maestro-direct/orders/' +
+          encodeURIComponent(tunisianPaymentOrder.order_ref) + '/payment/report',
+        {
+          actual_amount: document.getElementById('set-tn-payment-report-amount').value,
+          currency: document.getElementById('set-tn-payment-report-currency').value,
+          payment_reference: document.getElementById('set-tn-payment-report-reference').value,
+          transfer_reference: transferInput.value,
+        },
+        {
+          'X-Correlation-ID': uniqueRequestKey('tn-payment-report-ui'),
+          'Idempotency-Key': tunisianPaymentReportIdempotencyKey,
+        }
+      );
+      setText(
+        'set-tn-payment-status',
+        report.status === 'matched'
+          ? 'Payment reported and matched — awaiting administrator verification'
+          : 'Payment reported — administrator review required'
+      );
+      tunisianPaymentReportIdempotencyKey = null;
+      tunisianPaymentOrder = null;
+      form.style.display = 'none';
+    } catch (error) {
+      const detail = typeof error.detail === 'string' ? error.detail : error.message;
+      setText('set-tn-payment-status', 'Payment report unavailable: ' + detail);
+    } finally {
+      if (transferInput) transferInput.value = '';
+      if (button) button.disabled = false;
+    }
+  }
+
+  function initTunisiaDirectPayment() {
+    const button = document.getElementById('set-tn-payment-create-order');
+    if (button) button.onclick = createTunisiaDirectOrder;
+    const accepted = document.getElementById('set-tn-contract-accepted');
+    const complete = document.getElementById('set-tn-contract-complete');
+    if (accepted && complete) {
+      accepted.onchange = function () {
+        complete.disabled = accepted.checked !== true;
+      };
+      complete.onclick = completeTunisiaDirectContract;
+    }
+    const reportForm = document.getElementById('set-tn-payment-report-form');
+    if (reportForm) {
+      reportForm.onsubmit = reportTunisiaDirectPayment;
+      reportForm.oninput = function () {
+        tunisianPaymentReportIdempotencyKey = null;
+      };
     }
   }
 
@@ -1377,6 +1581,7 @@ function initCollapsibleSettingsSections() {
       if (settings && settings.subscription) applySubscription(settings.subscription);
     }
     await loadUsageSummary();
+    await loadTunisiaDirectPaymentOption();
     await loadApiKeyIntegration();
     await loadProviderConnection();
   }
@@ -1387,6 +1592,7 @@ function initCollapsibleSettingsSections() {
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
       initIntegrationKeyRequestWorkflow();
+      initTunisiaDirectPayment();
     initClientLaunchActions();
       refresh();
       return;
@@ -1418,6 +1624,7 @@ function initCollapsibleSettingsSections() {
   initSettingsSectionNavigation();
       initUsageReviewRequestWorkflow();
       initIntegrationKeyRequestWorkflow();
+    initTunisiaDirectPayment();
     initClientLaunchActions();
 
     document.getElementById('set-sub-manage')?.addEventListener('click', () => {

@@ -137,7 +137,7 @@ async def _register(
             subjects={"ip": client_ip},
             rules=_rules_for_dimension(rules, "ip"),
         )
-    except AuthRateLimitUnavailableError, ValueError:
+    except (AuthRateLimitUnavailableError, ValueError):
         _audit(request, mode=mode, result="authority_unavailable")
         return JSONResponse(status_code=503, content={"detail": GENERIC_UNAVAILABLE})
 
@@ -184,6 +184,8 @@ async def _register(
                 display_name=payload.full_name,
                 password=payload.password,
                 accepted_terms_version=payload.accepted_terms_version,
+                selected_plan_id=payload.selected_plan_id,
+                billing_period=payload.billing_period,
                 organization_name=organization_name,
             )
         )
@@ -270,7 +272,7 @@ async def verify_email(
             subjects={"ip": _client_ip(request, runtime), "token": payload.token},
             rules=EMAIL_VERIFICATION_RULES,
         )
-    except AuthRateLimitUnavailableError, ValueError:
+    except (AuthRateLimitUnavailableError, ValueError):
         _verification_audit(request, action="verify", result="authority_unavailable")
         return JSONResponse(status_code=503, content={"detail": GENERIC_UNAVAILABLE})
     if not decision.allowed:
@@ -318,7 +320,7 @@ async def resend_email_verification(
             subjects={"ip": client_ip},
             rules=_rules_for_dimension(EMAIL_VERIFICATION_RESEND_RULES, "ip"),
         )
-    except AuthRateLimitUnavailableError, ValueError:
+    except (AuthRateLimitUnavailableError, ValueError):
         _verification_audit(request, action="resend", result="authority_unavailable")
         return JSONResponse(status_code=503, content={"detail": GENERIC_UNAVAILABLE})
     if not ip_decision.allowed:

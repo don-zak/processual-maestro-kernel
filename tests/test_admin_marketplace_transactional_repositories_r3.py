@@ -234,3 +234,18 @@ def test_transactional_repositories_have_no_generic_mutation_api(
             "upsert",
         }
     )
+
+
+@pytest.mark.asyncio
+async def test_subscription_conflict_lookup_uses_row_lock() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemySubscriptionRepository(session)
+
+    await repository.get_active_by_customer_ref(
+        "customer_001",
+        for_update=True,
+    )
+
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "admin_market_subscriptions.status" in sql
+    assert "FOR UPDATE" in sql

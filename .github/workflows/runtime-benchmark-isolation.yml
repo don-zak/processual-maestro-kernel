@@ -1,0 +1,31 @@
+name: Runtime Benchmark Isolation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - processual_api/**
+      - tests/test_runtime_benchmark_isolation.py
+      - .github/workflows/runtime-benchmark-isolation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install static-test dependency
+        run: python -m pip install pytest
+
+      - name: Verify benchmark code stays outside runtime imports
+        run: python -m pytest -q tests/test_runtime_benchmark_isolation.py

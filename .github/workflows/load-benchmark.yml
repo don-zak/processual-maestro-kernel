@@ -1,0 +1,155 @@
+name: Load Benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - benchmarks/load_probe.py
+      - benchmarks/workload_probe.py
+      - benchmarks/performance_guard.py
+      - processual_api/middleware/runtime_capacity.py
+      - processual_api/middleware/runtime_capacity_metrics.py
+      - processual_api/middleware/subscription.py
+      - .github/workflows/load-benchmark.yml
+
+permissions:
+  contents: read
+
+jobs:
+  saturation-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: benchmark-password
+          POSTGRES_DB: maestro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://maestro:benchmark-password@127.0.0.1:5432/maestro
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: benchmark-only-not-production-jwt-secret
+      API_KEYS: benchmark-only-api-key
+      POSTGRES_PASSWORD: benchmark-password
+      REDIS_PASSWORD: benchmark-password
+      GRAFANA_ADMIN_PASSWORD: benchmark-password
+      RATE_LIMIT_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Capture runner envelope
+        run: |
+          mkdir -p benchmark-results
+          {
+            echo "# Runner envelope"
+            echo
+            echo '```text'
+            uname -a
+            lscpu
+            free -h
+            echo '```'
+          } > benchmark-results/runner.md
+
+      - name: Install Maestro and benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[api,security,database,cache,observability]'
+
+      - name: Start Maestro
+        run: |
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 > benchmark-results/server.log 2>&1 &
+          echo $! > benchmark-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat benchmark-results/server.log
+          exit 1
+
+      - name: Probe HTTP and middleware ceiling
+        run: |
+          python benchmarks/load_probe.py \
+            --name http-live \
+            --path /health/live \
+            --concurrency 1,5,10,20,40,80,120 \
+            --requests 300 \
+            --output benchmark-results/http-live.json \
+            | tee benchmark-results/http-live.txt
+
+      - name: Probe dependency-check ceiling
+        run: |
+          python benchmarks/load_probe.py \
+            --name dependency-ready \
+            --path /health/ready \
+            --concurrency 1,5,10,20,40,80,120 \
+            --requests 200 \
+            --output benchmark-results/dependency-ready.json \
+            | tee benchmark-results/dependency-ready.txt
+
+      - name: Probe realistic Maestro workloads
+        run: |
+          python benchmarks/workload_probe.py \
+            --concurrency 1,5,10,20,40 \
+            --light-requests 200 \
+            --normal-requests 160 \
+            --heavy-requests 80 \
+            --output benchmark-results/workloads.json \
+            | tee benchmark-results/workloads.txt
+
+      - name: Enforce performance regression budgets
+        run: python benchmarks/performance_guard.py benchmark-results/workloads.json
+
+      - name: Build benchmark summary
+        if: always()
+        run: |
+          {
+            cat benchmark-results/runner.md || true
+            echo
+            cat benchmark-results/http-live.md || true
+            echo
+            cat benchmark-results/dependency-ready.md || true
+            echo
+            cat benchmark-results/workloads.md || true
+            echo
+            echo "## Server tail"
+            echo '```text'
+            tail -n 100 benchmark-results/server.log || true
+            echo '```'
+          } > benchmark-results/summary.md
+          cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-load-benchmark
+          path: benchmark-results/

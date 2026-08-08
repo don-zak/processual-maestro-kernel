@@ -244,6 +244,7 @@
         target.pathname.startsWith('/settings/') ||
         target.pathname.startsWith('/adapters/') ||
         target.pathname.startsWith('/applications') ||
+        target.pathname.startsWith('/admin-marketplace') ||
         target.pathname.startsWith('/billing') ||
         target.pathname.startsWith('/health/')
       );

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,10 +12,14 @@ from processual_api.admin_marketplace.models import (
     AdminMarketChannelEligibility,
     AdminMarketChannelSelection,
     AdminMarketCommercialDecision,
+    AdminMarketContract,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
     AdminMarketOffer,
     AdminMarketOrder,
+    AdminMarketPaymentDestination,
+    AdminMarketPaymentEvidence,
+    AdminMarketPaymentReconciliationCase,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -31,11 +36,15 @@ class SqlAlchemyPlanRepository:
     async def get_by_id(
         self,
         plan_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> AdminMarketPlan | None:
-        return await self._session.get(
-            AdminMarketPlan,
-            plan_id,
+        statement = select(AdminMarketPlan).where(
+            AdminMarketPlan.id == plan_id,
         )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
 
     def add(
         self,
@@ -65,6 +74,42 @@ class SqlAlchemyOfferRepository:
 
         return await self._session.scalar(statement)
 
+    async def get_published_direct_for_plan_code(
+        self,
+        *,
+        plan_code: str,
+        billing_period: str,
+        now: datetime,
+        for_update: bool = False,
+    ) -> AdminMarketOffer | None:
+        statement = (
+            select(AdminMarketOffer)
+            .join(
+                AdminMarketPlan,
+                AdminMarketPlan.id == AdminMarketOffer.plan_id,
+            )
+            .where(
+                AdminMarketPlan.plan_code == plan_code.strip().lower(),
+                AdminMarketOffer.billing_period == billing_period,
+                AdminMarketOffer.sales_channel == "maestro_direct",
+                AdminMarketOffer.currency == "TND",
+                AdminMarketOffer.status == "published",
+                (
+                    AdminMarketOffer.effective_at.is_(None)
+                    | (AdminMarketOffer.effective_at <= now)
+                ),
+                (
+                    AdminMarketOffer.expires_at.is_(None)
+                    | (AdminMarketOffer.expires_at > now)
+                ),
+            )
+            .order_by(AdminMarketOffer.updated_at.desc())
+            .limit(1)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
     def add(
         self,
         offer: AdminMarketOffer,
@@ -77,6 +122,22 @@ class SqlAlchemySubscriptionRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketSubscription]:
+        statement = (
+            select(AdminMarketSubscription)
+            .order_by(
+                AdminMarketSubscription.created_at.desc(),
+                AdminMarketSubscription.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
 
     async def get_by_id(
         self,
@@ -91,6 +152,20 @@ class SqlAlchemySubscriptionRepository:
         if for_update:
             statement = statement.with_for_update()
 
+        return await self._session.scalar(statement)
+
+    async def get_active_by_customer_ref(
+        self,
+        customer_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None:
+        statement = select(AdminMarketSubscription).where(
+            AdminMarketSubscription.customer_ref == customer_ref,
+            AdminMarketSubscription.status == "active",
+        )
+        if for_update:
+            statement = statement.with_for_update()
         return await self._session.scalar(statement)
 
     def add(
@@ -134,6 +209,15 @@ class SqlAlchemyOrderRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_recent(self, *, limit: int = 100) -> Sequence[AdminMarketOrder]:
+        statement = (
+            select(AdminMarketOrder)
+            .order_by(AdminMarketOrder.created_at.desc(), AdminMarketOrder.id.desc())
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     async def get_by_id(
         self,
         order_id: uuid.UUID,
@@ -149,11 +233,178 @@ class SqlAlchemyOrderRepository:
 
         return await self._session.scalar(statement)
 
+    async def get_by_ref(
+        self,
+        order_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None:
+        statement = select(AdminMarketOrder).where(
+            AdminMarketOrder.order_ref == order_ref.strip().lower(),
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None:
+        statement = select(AdminMarketOrder).where(
+            AdminMarketOrder.creation_idempotency_key_hash == key_hash,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
     def add(
         self,
         order: AdminMarketOrder,
     ) -> None:
         self._session.add(order)
+
+
+class SqlAlchemyContractRepository:
+    """Persistence for immutable order-contract completion records."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketContract]:
+        statement = (
+            select(AdminMarketContract)
+            .order_by(
+                AdminMarketContract.completed_at.desc(),
+                AdminMarketContract.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None:
+        statement = select(AdminMarketContract).where(
+            AdminMarketContract.order_id == order_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_completion_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None:
+        statement = select(AdminMarketContract).where(
+            AdminMarketContract.completion_idempotency_key_hash == key_hash,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    def add(self, contract: AdminMarketContract) -> None:
+        self._session.add(contract)
+
+
+class SqlAlchemyPaymentDestinationRepository:
+    """Persistence operations for Tunisian payment destinations."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_all(
+        self,
+    ) -> Sequence[AdminMarketPaymentDestination]:
+        statement = select(AdminMarketPaymentDestination).order_by(
+            AdminMarketPaymentDestination.created_at.desc(),
+            AdminMarketPaymentDestination.id.desc(),
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_id(
+        self,
+        destination_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.id == destination_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_by_ref(
+        self,
+        destination_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.destination_ref
+            == destination_ref.strip().lower(),
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.creation_idempotency_key_hash
+            == key_hash,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_active_default(
+        self,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None:
+        statement = select(AdminMarketPaymentDestination).where(
+            AdminMarketPaymentDestination.sales_channel == "maestro_direct",
+            AdminMarketPaymentDestination.country_code == "TN",
+            AdminMarketPaymentDestination.currency == "TND",
+            AdminMarketPaymentDestination.status == "active",
+            AdminMarketPaymentDestination.is_active.is_(True),
+            AdminMarketPaymentDestination.is_default.is_(True),
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    def add(
+        self,
+        destination: AdminMarketPaymentDestination,
+    ) -> None:
+        self._session.add(destination)
 
 
 class SqlAlchemyPaymentVerificationRepository:
@@ -177,11 +428,137 @@ class SqlAlchemyPaymentVerificationRepository:
 
         return await self._session.scalar(statement)
 
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentVerification | None:
+        statement = select(AdminMarketPaymentVerification).where(
+            AdminMarketPaymentVerification.order_id == order_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
     def add(
         self,
         verification: AdminMarketPaymentVerification,
     ) -> None:
         self._session.add(verification)
+
+
+class SqlAlchemyPaymentEvidenceRepository:
+    """Persistence for safe payment-evidence metadata and match results."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentEvidence]:
+        statement = (
+            select(AdminMarketPaymentEvidence)
+            .order_by(
+                AdminMarketPaymentEvidence.reported_at.desc(),
+                AdminMarketPaymentEvidence.id.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def list_by_order_id(
+        self,
+        order_id: uuid.UUID,
+    ) -> Sequence[AdminMarketPaymentEvidence]:
+        statement = (
+            select(AdminMarketPaymentEvidence)
+            .where(AdminMarketPaymentEvidence.order_id == order_id)
+            .order_by(
+                AdminMarketPaymentEvidence.reported_at.desc(),
+                AdminMarketPaymentEvidence.id.desc(),
+            )
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_ref(
+        self,
+        evidence_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentEvidence | None:
+        statement = select(AdminMarketPaymentEvidence).where(
+            AdminMarketPaymentEvidence.evidence_ref == evidence_ref.strip().lower(),
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_submission_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentEvidence | None:
+        statement = select(AdminMarketPaymentEvidence).where(
+            AdminMarketPaymentEvidence.submission_idempotency_key_hash == key_hash,
+        )
+        return await self._session.scalar(statement)
+
+    def add(self, evidence: AdminMarketPaymentEvidence) -> None:
+        self._session.add(evidence)
+
+
+class SqlAlchemyPaymentReconciliationRepository:
+    """Persistence for MFA-gated payment reconciliation cases."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentReconciliationCase]:
+        statement = (
+            select(AdminMarketPaymentReconciliationCase)
+            .order_by(
+                AdminMarketPaymentReconciliationCase.updated_at.desc(),
+                AdminMarketPaymentReconciliationCase.id.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
+    async def get_by_evidence_id(
+        self,
+        evidence_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentReconciliationCase | None:
+        statement = select(AdminMarketPaymentReconciliationCase).where(
+            AdminMarketPaymentReconciliationCase.evidence_id == evidence_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentReconciliationCase | None:
+        return await self._session.scalar(
+            select(AdminMarketPaymentReconciliationCase).where(
+                AdminMarketPaymentReconciliationCase.decision_idempotency_key_hash
+                == key_hash,
+            )
+        )
+
+    def add(self, case: AdminMarketPaymentReconciliationCase) -> None:
+        self._session.add(case)
 
 
 class SqlAlchemyInvoiceRepository:
@@ -218,6 +595,22 @@ class SqlAlchemyEntitlementActivationRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketEntitlementActivation]:
+        statement = (
+            select(AdminMarketEntitlementActivation)
+            .order_by(
+                AdminMarketEntitlementActivation.created_at.desc(),
+                AdminMarketEntitlementActivation.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     async def get_by_id(
         self,
         activation_id: uuid.UUID,
@@ -231,6 +624,28 @@ class SqlAlchemyEntitlementActivationRepository:
         if for_update:
             statement = statement.with_for_update()
 
+        return await self._session.scalar(statement)
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None:
+        statement = select(AdminMarketEntitlementActivation).where(
+            AdminMarketEntitlementActivation.order_id == order_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketEntitlementActivation | None:
+        statement = select(AdminMarketEntitlementActivation).where(
+            AdminMarketEntitlementActivation.activation_idempotency_key_hash == key_hash,
+        )
         return await self._session.scalar(statement)
 
     def add(
@@ -254,6 +669,21 @@ class SqlAlchemyChannelEligibilityRepository:
     ) -> AdminMarketChannelEligibility | None:
         statement = select(AdminMarketChannelEligibility).where(
             AdminMarketChannelEligibility.id == eligibility_id,
+        )
+
+        if for_update:
+            statement = statement.with_for_update()
+
+        return await self._session.scalar(statement)
+
+    async def get_by_customer_ref(
+        self,
+        customer_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketChannelEligibility | None:
+        statement = select(AdminMarketChannelEligibility).where(
+            AdminMarketChannelEligibility.customer_ref == customer_ref,
         )
 
         if for_update:
@@ -372,10 +802,13 @@ __all__ = [
     "SqlAlchemyChannelSelectionRepository",
     "SqlAlchemyCommercialAuditRepository",
     "SqlAlchemyCommercialDecisionRepository",
+    "SqlAlchemyContractRepository",
     "SqlAlchemyEntitlementActivationRepository",
     "SqlAlchemyInvoiceRepository",
     "SqlAlchemyOfferRepository",
     "SqlAlchemyOrderRepository",
+    "SqlAlchemyPaymentDestinationRepository",
+    "SqlAlchemyPaymentEvidenceRepository",
     "SqlAlchemyPaymentVerificationRepository",
     "SqlAlchemyPlanRepository",
     "SqlAlchemySubscriptionRepository",

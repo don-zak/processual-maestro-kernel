@@ -18,6 +18,7 @@ def test_public_plan_cards_exclude_internal_plans() -> None:
     assert "internal" not in plan_ids
     assert "pilot_starter" not in plan_ids
     assert "enterprise_integration" not in plan_ids
+    assert "academic" not in plan_ids
 
 
 def test_prices_are_public_through_enterprise_pilot() -> None:
@@ -25,46 +26,37 @@ def test_prices_are_public_through_enterprise_pilot() -> None:
     by_id = {plan["plan_id"]: plan for plan in payload["plans"]}
 
     expected_prices = {
-        "academic": "29",
-        "starter": "49",
-        "business": "519",
-        "enterprise_integration_starter": "259",
-        "enterprise_pilot": "2790",
+        "academic_individual": "29.00",
+        "starter": "49.00",
+        "business": "519.00",
+        "enterprise_pilot": "2790.00",
     }
 
     for plan_id, expected_price in expected_prices.items():
         assert by_id[plan_id]["monthly_price_usd"] == expected_price
-        assert by_id[plan_id]["price_visibility"] == "public"
-        assert by_id[plan_id]["requires_assessment"] is False
         assert by_id[plan_id]["registration_available"] is True
         assert by_id[plan_id]["action"] == "start_registration"
 
 
-def test_prices_after_pilot_are_hidden_for_assessment() -> None:
+def test_assessment_plans_do_not_publish_prices_or_direct_registration() -> None:
     payload = public_plan_journey_catalog()
     by_id = {plan["plan_id"]: plan for plan in payload["plans"]}
 
     for plan_id in (
+        "academic_institution",
+        "enterprise_integration_starter",
         "enterprise_core",
         "enterprise_scale",
         "enterprise_strategic",
     ):
         assert by_id[plan_id]["monthly_price_usd"] is None
-        assert by_id[plan_id]["price_visibility"] == "assessment"
+        assert by_id[plan_id]["annual_price_usd"] is None
         assert by_id[plan_id]["requires_assessment"] is True
         assert by_id[plan_id]["registration_available"] is False
         assert by_id[plan_id]["action"] == "request_assessment"
 
 
-def test_checkout_remains_fail_closed() -> None:
+def test_public_plan_journey_contains_nine_plans() -> None:
     payload = public_plan_journey_catalog()
 
-    assert payload["checkout_enabled"] is False
-    assert payload["provider_cost_included"] is False
-    assert payload["public_price_ceiling_plan"] == "enterprise_pilot"
-
-
-def test_public_plan_journey_contains_eight_plans() -> None:
-    payload = public_plan_journey_catalog()
-
-    assert len(payload["plans"]) == 8
+    assert len(payload["plans"]) == 9

@@ -57,7 +57,7 @@ class PasswordService:
             return PasswordVerification(valid=False)
         try:
             valid = self._hasher.verify(encoded_hash, password)
-        except InvalidHashError, VerificationError, VerifyMismatchError:
+        except (InvalidHashError, VerificationError, VerifyMismatchError):
             return PasswordVerification(valid=False)
         if not valid:
             return PasswordVerification(valid=False)

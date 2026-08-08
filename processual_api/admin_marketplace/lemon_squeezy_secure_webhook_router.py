@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import os
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.routing import APIRoute
+
+from processual_api.admin_marketplace.lemon_squeezy_context_loader import (
+    lemon_squeezy_reconciliation_context_loader_factory,
+)
+from processual_api.admin_marketplace.lemon_squeezy_ingestion_service import (
+    ingest_lemon_squeezy_webhook_request_factory,
+)
+from processual_api.admin_marketplace.lemon_squeezy_reconciliation_processor import (
+    process_lemon_squeezy_reconciliation_factory,
+)
+from processual_api.admin_marketplace.lemon_squeezy_top_up_processor import (
+    TOP_UP_OFFER_REF,
+    process_lemon_squeezy_top_up_factory,
+)
+from processual_api.admin_marketplace.lemon_squeezy_top_up_refund_processor import (
+    process_lemon_squeezy_top_up_refund_factory,
+)
+from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
+    LemonSqueezyWebhookError,
+)
+from processual_api.admin_marketplace.persistence.unit_of_work import (
+    SqlAlchemyAdminMarketplaceUnitOfWork,
+)
+from processual_api.db.session import get_session_factory
+from processual_api.settings import settings
+
+_MAX_BODY_BYTES = 1_048_576
+_MIN_SECRET_LENGTH = 32
+_secure_router = APIRouter(prefix="/billing", tags=["billing"])
+
+
+def _webhook_configuration() -> tuple[str, str]:
+    signing_secret = os.environ.get("LEMONSQUEEZY_WEBHOOK_SECRET", "").strip()
+    store_id = os.environ.get("LEMONSQUEEZY_STORE_ID", "").strip()
+    if len(signing_secret) < _MIN_SECRET_LENGTH:
+        raise HTTPException(status_code=503, detail="Webhook processing is unavailable.")
+    if not store_id.isdigit() or int(store_id) <= 0:
+        raise HTTPException(status_code=503, detail="Webhook processing is unavailable.")
+    return signing_secret, store_id
+
+
+def _uow_factory() -> SqlAlchemyAdminMarketplaceUnitOfWork:
+    return SqlAlchemyAdminMarketplaceUnitOfWork(get_session_factory())
+
+
+def _production_mode() -> bool:
+    environment = settings.environment.strip().lower()
+    if environment in {"production", "prod"}:
+        return True
+    if environment in {"development", "dev", "test", "testing", "staging"}:
+        return False
+    raise HTTPException(status_code=503, detail="Webhook processing is unavailable.")
+
+
+@_secure_router.post("/webhook", include_in_schema=True)
+async def secure_lemon_squeezy_webhook(request: Request) -> dict[str, object]:
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared_length = int(content_length)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid webhook request.") from exc
+        if declared_length < 0:
+            raise HTTPException(status_code=400, detail="Invalid webhook request.")
+        if declared_length > _MAX_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Webhook request is too large.")
+
+    signing_secret, expected_store_id = _webhook_configuration()
+    production_mode = _production_mode()
+    signature = request.headers.get("X-Signature", "")
+    event_header = request.headers.get("X-Event-Name", "")
+    raw_body = await request.body()
+    if len(raw_body) > _MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Webhook request is too large.")
+
+    ingest = ingest_lemon_squeezy_webhook_request_factory(uow_factory=_uow_factory)
+    try:
+        result = await ingest(
+            raw_body=raw_body,
+            signature=signature,
+            signing_secret=signing_secret,
+            event_header=event_header,
+            expected_store_id=expected_store_id,
+        )
+    except LemonSqueezyWebhookError as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook request.") from exc
+
+    if result.entry.offer_ref == TOP_UP_OFFER_REF:
+        if result.entry.event_name == "order_refunded":
+            process_refund = process_lemon_squeezy_top_up_refund_factory(
+                uow_factory=_uow_factory
+            )
+            try:
+                refund = await process_refund(inbox_id=result.entry.id)
+            except LemonSqueezyWebhookError as exc:
+                raise HTTPException(status_code=409, detail="Top-up refund reconciliation failed.") from exc
+            return {
+                "received": True,
+                "replayed": result.replayed or refund.replayed,
+                "inbox_id": str(result.entry.id),
+                "reconciliation_action": (
+                    "top_up_refunded"
+                    if refund.outcome == "reversed"
+                    else "top_up_refund_manual_review"
+                ),
+                "top_up_order_id": str(refund.order_id),
+                "top_up_reversal_id": (
+                    None if refund.reversal_id is None else str(refund.reversal_id)
+                ),
+            }
+
+        process_top_up = process_lemon_squeezy_top_up_factory(uow_factory=_uow_factory)
+        try:
+            top_up = await process_top_up(inbox_id=result.entry.id)
+        except LemonSqueezyWebhookError as exc:
+            raise HTTPException(status_code=409, detail="Top-up reconciliation failed.") from exc
+        return {
+            "received": True,
+            "replayed": result.replayed,
+            "inbox_id": str(result.entry.id),
+            "reconciliation_action": "top_up_granted",
+            "top_up_order_id": str(top_up.order_id),
+            "top_up_grant_id": str(top_up.grant_id),
+            "top_up_units": top_up.units,
+        }
+
+    process = process_lemon_squeezy_reconciliation_factory(
+        uow_factory=_uow_factory,
+        context_loader=lemon_squeezy_reconciliation_context_loader_factory(
+            production_mode=production_mode,
+        ),
+    )
+    try:
+        decision = await process(inbox_id=result.entry.id)
+    except LemonSqueezyWebhookError as exc:
+        raise HTTPException(status_code=409, detail="Webhook reconciliation failed.") from exc
+
+    return {
+        "received": True,
+        "replayed": result.replayed,
+        "inbox_id": str(result.entry.id),
+        "reconciliation_action": decision.action,
+        "reconciliation_reason": decision.reason_code,
+    }
+
+
+def install_secure_lemon_squeezy_webhook_route(target_router: APIRouter) -> None:
+    target_router.routes[:] = [
+        route
+        for route in target_router.routes
+        if not (
+            isinstance(route, APIRoute)
+            and route.path == "/billing/webhook"
+            and "POST" in route.methods
+        )
+    ]
+    for route in reversed(_secure_router.routes):
+        target_router.routes.insert(0, route)

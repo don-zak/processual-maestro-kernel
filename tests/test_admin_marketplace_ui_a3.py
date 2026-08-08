@@ -1,0 +1,184 @@
+from pathlib import Path
+
+STATIC = Path("processual_api/static")
+ADMIN_HTML = STATIC / "admin.html"
+ADMIN_MARKETPLACE_JS = STATIC / "js" / "admin_marketplace.js"
+ADMIN_MARKETPLACE_CSS = STATIC / "css" / "admin_marketplace.css"
+ADMIN_NAV_JS = STATIC / "js" / "admin_nav.js"
+ADMIN_AUTH_BRIDGE_JS = STATIC / "js" / "admin_auth_bridge.js"
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_admin_marketplace_is_registered_inside_existing_admin_shell() -> None:
+    html = _read(ADMIN_HTML)
+    nav = _read(ADMIN_NAV_JS)
+
+    assert 'id="admin-marketplace-nav"' in html
+    assert 'data-admin-page="admin-marketplace"' in html
+    assert 'id="page-admin-marketplace"' in html
+    assert "'admin-marketplace': 'page-admin-marketplace'" in nav
+    assert "/console/css/admin_marketplace.css?v=a3-phase7b-1" in html
+    assert "/console/js/admin_marketplace.js?v=a3-phase13-14" in html
+
+
+def test_admin_marketplace_shell_contains_every_approved_section() -> None:
+    html = _read(ADMIN_HTML)
+
+    for section in (
+        "overview",
+        "catalog",
+        "payment-destinations",
+        "orders",
+        "contracts",
+        "payments",
+        "reconciliation",
+        "subscriptions",
+        "audit",
+    ):
+        assert f'data-am-panel="{section}"' in html
+
+    assert 'id="am-order-list"' in html
+    assert 'id="am-contract-list"' in html
+    assert 'id="am-reconciliation-list"' in html
+    assert "Payment audit API pending" in html
+
+
+def test_reconciliation_workspace_is_mfa_gated_and_keeps_verification_separate() -> None:
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert "function renderPaymentReconciliations()" in script
+    assert "function reconcilePayment(" in script
+    assert "await withMfaRetry(operation)" in script
+    assert "payment-reconciliations" in script
+    assert "Accept match does not verify payment" in script
+    assert "Final verification remains separate" in script
+
+
+def test_payment_destination_form_uses_atomic_create_validate_contract() -> None:
+    html = _read(ADMIN_HTML)
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    for field in (
+        "destination_ref",
+        "display_name",
+        "destination_type",
+        "institution_name",
+        "account_holder_name",
+        "raw_account_identifier",
+        "instructions",
+    ):
+        assert f'name="{field}"' in html
+
+    assert "Create &amp; Validate" in html
+    assert "TN" in html
+    assert "TND" in html
+    assert "maestro_direct" in html
+    assert "API_ROOT + '/create-and-validate'" in script
+    assert "'Idempotency-Key': pendingCreateKey" in script
+    assert "'X-Correlation-ID': uniqueKey('admin-market-ui')" in script
+
+
+def test_payment_destination_ui_handles_recent_mfa_and_safe_retry() -> None:
+    html = _read(ADMIN_HTML)
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert 'id="am-mfa-dialog"' in html
+    assert "error.status === 428" in script
+    assert "await request('/auth/mfa/verify'" in script
+    assert "pendingMfaOperation = operation" in script
+    assert "codeInput.value = ''" in script
+
+
+def test_destination_renderer_only_uses_safe_response_fields() -> None:
+    script = _read(ADMIN_MARKETPLACE_JS)
+    renderer = script.split("function renderDestinations()", 1)[1].split("async function loadDestinations", 1)[0]
+
+    assert "masked_identifier" in renderer
+    assert "raw_account_identifier" not in renderer
+    assert "identifier_ciphertext" not in renderer
+    assert "identifier_key_version" not in renderer
+    assert "innerHTML" in renderer
+    assert "escapeHtml" in renderer
+
+
+def test_identifier_is_cleared_on_success_navigation_and_page_exit() -> None:
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert "function clearIdentifier()" in script
+    assert "if (name !== 'payment-destinations') clearIdentifier()" in script
+    assert "window.addEventListener('pagehide', clearIdentifier)" in script
+    assert "form.reset()" in script
+
+
+def test_admin_auth_bridge_covers_admin_marketplace_requests() -> None:
+    bridge = _read(ADMIN_AUTH_BRIDGE_JS)
+
+    assert "target.pathname.startsWith('/admin-marketplace')" in bridge
+    assert "X-Supervisor-Session-Key" in bridge
+
+
+def test_admin_marketplace_layout_has_responsive_rules() -> None:
+    css = _read(ADMIN_MARKETPLACE_CSS)
+
+    assert ".am-payment-layout" in css
+    assert "@media (max-width: 1000px)" in css
+    assert "@media (max-width: 700px)" in css
+    assert ".am-dialog::backdrop" in css
+
+
+def test_order_and_contract_sections_use_live_read_only_apis() -> None:
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert "ADMIN_MARKET_ROOT + '/' + kind" in script
+    assert "loadCommercialList('orders')" in script
+    assert "loadCommercialList('contracts')" in script
+    assert "function renderOrders()" in script
+    assert "function renderContracts()" in script
+    assert "escapeHtml(item.customer_ref)" in script
+    assert "item.evidence_reference" in script
+    order_renderer = script.split("function renderOrders()", 1)[1].split("function renderContracts()", 1)[0]
+    contract_renderer = script.split("function renderContracts()", 1)[1].split("async function loadCommercialList", 1)[
+        0
+    ]
+    assert "raw_account_identifier" not in order_renderer
+    assert "raw_account_identifier" not in contract_renderer
+
+
+def test_payment_section_uses_safe_evidence_and_mfa_gated_verification() -> None:
+    html = _read(ADMIN_HTML)
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert 'id="am-payment-evidence-list"' in html
+    assert "function renderPaymentEvidence()" in script
+    assert "item.safe_source_reference" in script
+    assert "item.source_reference_hash" not in script
+    assert "data-am-payment-verify" in script
+    assert "await withMfaRetry(operation)" in script
+    assert "decision: 'verified'" in script
+    assert "loadCommercialList('payment-evidence')" in script
+
+
+def test_customer_payment_report_form_never_claims_final_verification() -> None:
+    html = _read(STATIC / "index.html")
+    script = _read(STATIC / "js" / "pages" / "settings.js")
+
+    assert 'id="set-tn-payment-report-form"' in html
+    assert "does not confirm payment by itself" in html
+    assert "/payment/report" in script
+    assert "awaiting administrator verification" in script
+    assert "transferInput.value = ''" in script
+
+
+def test_subscription_section_renders_only_server_activated_records() -> None:
+    html = _read(ADMIN_HTML)
+    script = _read(ADMIN_MARKETPLACE_JS)
+
+    assert 'id="am-subscription-activation-list"' in html
+    assert "function renderSubscriptionActivations()" in script
+    assert "loadCommercialList('subscription-activations')" in script
+    assert "item.entitlement_profile_ref" in script
+    assert "item.automatic_activation_allowed" in script
+    assert "Payment verified and subscription activated automatically." in script

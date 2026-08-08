@@ -17,12 +17,15 @@ branch_labels = None
 depends_on = None
 
 
+def _replace_authority_constraint(expression: str) -> None:
+    with op.batch_alter_table("identity_platform_authorities") as batch_op:
+        batch_op.drop_constraint("authority_allowed", type_="check")
+        batch_op.create_check_constraint("authority_allowed", expression)
+
+
 def upgrade() -> None:
-    op.drop_constraint("authority_allowed", "identity_platform_authorities", type_="check")
-    op.create_check_constraint(
-        "authority_allowed",
-        "identity_platform_authorities",
-        "authority IN ('platform_admin', 'platform_supervisor')",
+    _replace_authority_constraint(
+        "authority IN ('platform_admin', 'platform_supervisor')"
     )
     op.create_table(
         "identity_user_email_addresses",
@@ -33,14 +36,38 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=24), server_default="pending", nullable=False),
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.CheckConstraint("purpose IN ('recovery')", name="purpose_allowed"),
-        sa.CheckConstraint("status IN ('pending', 'verified', 'revoked')", name="status_allowed"),
-        sa.ForeignKeyConstraint(["user_id"], ["identity_users.id"], ondelete="CASCADE"),
+        sa.CheckConstraint(
+            "status IN ('pending', 'verified', 'revoked')",
+            name="status_allowed",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["identity_users.id"],
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("email_normalized", name="uq_identity_user_email_address_email"),
-        sa.UniqueConstraint("user_id", "purpose", name="uq_identity_user_email_address_user_purpose"),
+        sa.UniqueConstraint(
+            "email_normalized",
+            name="uq_identity_user_email_address_email",
+        ),
+        sa.UniqueConstraint(
+            "user_id",
+            "purpose",
+            name="uq_identity_user_email_address_user_purpose",
+        ),
     )
     op.create_index(
         "ix_identity_user_email_addresses_user_status",
@@ -51,11 +78,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_identity_user_email_addresses_user_status", table_name="identity_user_email_addresses")
-    op.drop_table("identity_user_email_addresses")
-    op.drop_constraint("authority_allowed", "identity_platform_authorities", type_="check")
-    op.create_check_constraint(
-        "authority_allowed",
-        "identity_platform_authorities",
-        "authority IN ('platform_admin')",
+    op.drop_index(
+        "ix_identity_user_email_addresses_user_status",
+        table_name="identity_user_email_addresses",
     )
+    op.drop_table("identity_user_email_addresses")
+    _replace_authority_constraint("authority IN ('platform_admin')")

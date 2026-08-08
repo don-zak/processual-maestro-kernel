@@ -38,16 +38,14 @@ def test_migration_extends_and_restores_constraints():
         / "20260723_0008_recovery_email_verification_tokens.py",
     ]
 
-    migration = next(
-        path for path in candidates if path.is_file()
-    )
-
+    migration = next(path for path in candidates if path.is_file())
     source = migration.read_text(encoding="utf-8")
 
     assert 'revision = "20260723_0008"' in source
     assert 'down_revision = "20260723_0007"' in source
     assert "verify_recovery_email" in source
     assert "purpose_allowed" in source
+
     spec = importlib.util.spec_from_file_location(
         "auth_r8d_0008_migration",
         migration,
@@ -58,14 +56,8 @@ def test_migration_extends_and_restores_constraints():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert module.ACTION_CONSTRAINT == (
-        "ck_auth_action_tokens_"
-        "ck_auth_action_tokens_purpose_allowed"
-    )
-    assert module.DELIVERY_CONSTRAINT == (
-        "ck_auth_delivery_outbox_"
-        "ck_auth_delivery_outbox_event_t_8c12"
-    )
+    assert module.ACTION_CONSTRAINT == "ck_auth_action_tokens_purpose_allowed"
+    assert module.DELIVERY_CONSTRAINT == "ck_auth_delivery_outbox_event_type_allowed"
 
 
 def test_repository_and_service_never_persist_raw_token():

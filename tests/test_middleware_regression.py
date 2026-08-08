@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime, timedelta
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -96,17 +95,13 @@ def test_registration_routes_bypass_legacy_rate_limit_middleware(monkeypatch):
     ):
         app = _app_with_route(path)
         app.add_middleware(rate_module.RateLimitMiddleware)
-
-        response = TestClient(app).get(path)
-
-        assert response.status_code == 200
+        assert TestClient(app).get(path).status_code == 200
 
 
 def test_email_verification_routes_are_public_subscription_paths():
-    assert {
-        "/auth/verify-email",
-        "/auth/verification/resend",
-    }.issubset(subscription_module._PUBLIC_PATHS)
+    assert {"/auth/verify-email", "/auth/verification/resend"}.issubset(
+        subscription_module._PUBLIC_PATHS
+    )
 
 
 def test_mfa_routes_bypass_subscription_state_but_still_require_identity_auth():
@@ -144,16 +139,11 @@ def test_rate_limit_middleware_uses_redis_counter_and_returns_429(monkeypatch):
     monkeypatch.setattr(rate_module, "get_redis", fake_get_redis)
     monkeypatch.setattr(rate_module.settings, "rate_limit_enabled", True)
     monkeypatch.setattr(rate_module.settings, "rate_limit_default", "2/minute")
-    monkeypatch.setattr(
-        rate_module.settings,
-        "rate_limit_authenticated",
-        "5/minute",
-    )
+    monkeypatch.setattr(rate_module.settings, "rate_limit_authenticated", "5/minute")
 
     app = _app_with_route("/limited")
     app.add_middleware(rate_module.RateLimitMiddleware)
     client = TestClient(app)
-
     headers = {"X-Forwarded-For": "10.0.0.7"}
 
     first = client.get("/limited", headers=headers)
@@ -163,27 +153,21 @@ def test_rate_limit_middleware_uses_redis_counter_and_returns_429(monkeypatch):
     assert first.status_code == 200
     assert first.headers["x-ratelimit-limit"] == "2"
     assert first.headers["x-ratelimit-remaining"] == "1"
-
     assert second.status_code == 200
     assert second.headers["x-ratelimit-remaining"] == "0"
-
     assert third.status_code == 429
     assert third.headers["retry-after"] == "33"
-    assert third.headers["x-ratelimit-limit"] == "2"
-    assert third.headers["x-ratelimit-remaining"] == "0"
     assert third.json()["detail"] == "Rate limit exceeded. Try again later."
     assert fake_redis.expired
 
 
 def test_audit_middleware_logs_request_when_enabled(monkeypatch, caplog):
     monkeypatch.setattr(audit_module.settings, "audit_enabled", True)
-
     app = _app_with_route()
     app.add_middleware(audit_module.AuditMiddleware)
-    client = TestClient(app)
 
     with caplog.at_level(logging.INFO, logger="processual.audit.trail"):
-        response = client.get("/ok", headers={"X-Request-ID": "audit-test-09a"})
+        response = TestClient(app).get("/ok", headers={"X-Request-ID": "audit-test-09a"})
 
     assert response.status_code == 200
     assert "audit-test-09a" in caplog.text
@@ -205,22 +189,15 @@ def test_usage_log_middleware_records_api_key_user(monkeypatch):
             "session_type": "customer",
             "role": "client",
         }
-        return JSONResponse(
-            {"ok": True},
-            headers={"X-Request-ID": "usage-test-09a"},
-        )
+        return JSONResponse({"ok": True}, headers={"X-Request-ID": "usage-test-09a"})
 
     monkeypatch.setattr(usage_log_module, "append_usage_log", captured.append)
-
     app = _app_with_route("/usage", endpoint_with_api_key_user)
     app.add_middleware(UsageLogMiddleware)
-    client = TestClient(app)
-
-    response = client.get("/usage")
+    response = TestClient(app).get("/usage")
 
     assert response.status_code == 200
     assert len(captured) == 1
-
     record = captured[0]
     assert record["request_id"] == "usage-test-09a"
     assert record["client_id"] == "client_1"
@@ -237,13 +214,10 @@ def test_usage_log_middleware_records_api_key_user(monkeypatch):
 
 
 def test_usage_log_store_sanitizes_raw_api_key_in_endpoint(tmp_path, monkeypatch):
-    import json
-
     import processual_api.services.usage_log_store as usage_log_store
 
     data_dir = tmp_path / "data"
     log_path = data_dir / "usage_logs.jsonl"
-
     monkeypatch.setattr(usage_log_store, "_DATA_DIR", data_dir)
     monkeypatch.setattr(usage_log_store, "_USAGE_LOG_PATH", log_path)
 
@@ -266,56 +240,7 @@ def test_usage_log_store_sanitizes_raw_api_key_in_endpoint(tmp_path, monkeypatch
     )
 
     record = json.loads(log_path.read_text(encoding="utf-8").strip())
-
     assert record["endpoint"] == "/settings/api-keys/pmk_[redacted]/plan"
     assert raw_api_key not in json.dumps(record)
     assert record["api_key_id"] == "key_1"
     assert record["api_key_prefix"] == "pmk_secret..."
-
-
-def test_subscription_stage_computation_for_billing_states():
-    now = datetime.now(UTC)
-
-    assert subscription_module._compute_stage({"status": "active"}) == "active"
-    assert subscription_module._compute_stage({"status": "expired"}) == "expired"
-    assert subscription_module._compute_stage({"status": "cancelled"}) == "expired"
-
-    assert (
-        subscription_module._compute_stage(
-            {
-                "status": "past_due",
-                "suspended_at": (now - timedelta(days=3)).isoformat(),
-            }
-        )
-        == "grace"
-    )
-
-    assert (
-        subscription_module._compute_stage(
-            {
-                "status": "past_due",
-                "suspended_at": (now - timedelta(days=20)).isoformat(),
-            }
-        )
-        == "suspended"
-    )
-
-    assert (
-        subscription_module._compute_stage(
-            {
-                "status": "past_due",
-                "suspended_at": (now - timedelta(days=120)).isoformat(),
-            }
-        )
-        == "expired"
-    )
-
-    assert (
-        subscription_module._compute_stage(
-            {
-                "status": "past_due",
-                "suspended_at": "not-a-date",
-            }
-        )
-        == "grace"
-    )

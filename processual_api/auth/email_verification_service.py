@@ -37,6 +37,13 @@ class EmailVerificationRepository(Protocol):
         invalidated_at: datetime,
     ) -> None: ...
 
+    async def mark_registration_plan_intent_verified(
+        self,
+        user_id: uuid.UUID,
+        *,
+        verified_at: datetime,
+    ) -> None: ...
+
     def add_verification_delivery(self, **values) -> None: ...
 
 
@@ -84,9 +91,7 @@ class EmailVerificationService:
         token_hash = self._token_digester.digest(raw_token, purpose="verify_email")
         now = self._now()
         async with self._unit_of_work_factory() as unit_of_work:
-            principals = await unit_of_work.repository.verification_principals_for_update(
-                token_hash
-            )
+            principals = await unit_of_work.repository.verification_principals_for_update(token_hash)
             if principals is None:
                 return VerificationOutcome()
             action_token, user = principals
@@ -101,6 +106,10 @@ class EmailVerificationService:
             if user.status == "pending_verification":
                 user.status = "active"
                 user.email_verified_at = now
+            await unit_of_work.repository.mark_registration_plan_intent_verified(
+                user.id,
+                verified_at=now,
+            )
             await unit_of_work.commit()
         return VerificationOutcome()
 

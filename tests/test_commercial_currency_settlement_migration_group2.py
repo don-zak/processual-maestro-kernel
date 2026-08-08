@@ -16,13 +16,10 @@ def test_migration_revision_chain_is_linear() -> None:
     for node in tree.body:
         if not isinstance(node, ast.AnnAssign):
             continue
-
         if not isinstance(node.target, ast.Name):
             continue
-
         if not isinstance(node.value, ast.Constant):
             continue
-
         assignments[node.target.id] = node.value.value
 
     assert assignments["revision"] == "20260729_0014"
@@ -77,13 +74,30 @@ def test_migration_downgrade_restores_original_shape() -> None:
     source = _source()
 
     assert 'new_column_name="verified_amount_usd"' in source
-    assert 'op.drop_column(ORDER_TABLE, "settlement_currency")' in source
-    assert 'op.drop_column(ORDER_TABLE, "settlement_amount")' in source
+    assert 'batch_op.drop_column("settlement_currency")' in source
+    assert 'batch_op.drop_column("settlement_amount")' in source
 
 
 def test_payment_amount_constraint_uses_final_database_name() -> None:
     source = _source()
 
     assert source.count("op.f(PAYMENT_AMOUNT_CHECK)") == 4
-    assert source.count("op.drop_constraint(\n        PAYMENT_AMOUNT_CHECK,") == 0
-    assert source.count("op.create_check_constraint(\n        PAYMENT_AMOUNT_CHECK,") == 0
+    assert source.count("batch_op.drop_constraint(op.f(PAYMENT_AMOUNT_CHECK)") == 2
+    assert source.count("batch_op.create_check_constraint(") >= 5
+    assert "verified_amount IS NULL OR verified_amount > 0" in source
+    assert "verified_amount_usd IS NULL OR verified_amount_usd > 0" in source
+
+
+def test_sqlite_sensitive_schema_changes_use_batch_mode() -> None:
+    source = _source()
+
+    assert source.count("with op.batch_alter_table(ORDER_TABLE)") == 3
+    assert source.count("with op.batch_alter_table(PAYMENT_TABLE)") == 2
+    assert "batch_op.alter_column(" in source
+    assert "batch_op.drop_constraint(" in source
+    assert "batch_op.create_check_constraint(" in source
+    assert "batch_op.drop_column(" in source
+    assert "\n    op.alter_column(" not in source
+    assert "\n    op.drop_constraint(" not in source
+    assert "\n    op.create_check_constraint(" not in source
+    assert "\n    op.drop_column(" not in source

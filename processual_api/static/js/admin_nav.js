@@ -1,6 +1,7 @@
 (function () {
   const pageIds = {
     home: 'page-admin-home',
+    'admin-marketplace': 'page-admin-marketplace',
     adapters: 'page-admin-adapters',
     'api-keys': 'page-admin-api-keys',
     'operator-pilot-handoff': 'page-operator-pilot-handoff',
@@ -14,6 +15,7 @@
   const labelToPage = {
     'admin home': 'home',
     home: 'home',
+    'admin market': 'admin-marketplace',
     adapters: 'adapters',
     'api keys': 'api-keys',
     clients: 'clients',
@@ -55,6 +57,7 @@
 
     if (labelToPage[text]) return labelToPage[text];
     if (text.includes('admin home')) return 'home';
+    if (text.includes('admin market')) return 'admin-marketplace';
     if (text.includes('adapters')) return 'adapters';
     if (text.includes('api keys')) return 'api-keys';
     if (text.includes('clients')) return 'clients';

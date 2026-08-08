@@ -1,0 +1,25 @@
+include README.md
+include pyproject.toml
+
+prune tests
+prune docs
+prune scripts
+prune data
+prune build
+prune dist
+prune .github
+prune .venv
+prune venv
+
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.egg-info
+global-exclude .env
+global-exclude .env.*
+global-exclude *.sqlite
+global-exclude *.sqlite3
+global-exclude *.db
+global-exclude *.jsonl
+global-exclude subscriptions.json
+global-exclude usage_logs.jsonl
+global-exclude settings_*.json

@@ -1,0 +1,223 @@
+name: Execution Mix Shaping
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - benchmarks/execution_mix_app.py
+      - benchmarks/execution_mix_shape_probe.py
+      - benchmarks/execution_mix_planner_probe.py
+      - benchmarks/orchestration_api_app.py
+      - benchmarks/orchestration_api_probe.py
+      - tests/test_execution_mix_shaping_workflow.py
+      - tests/test_fanout_planner.py
+      - tests/test_orchestration_metrics.py
+      - tests/test_orchestration_api_benchmark.py
+      - tests/test_workflow_llm_orchestration.py
+      - tests/test_workflow_llm_orchestration_http_metrics.py
+      - .github/workflows/execution-mix-shaping.yml
+      - processual_api/cgt_governor/policy/fanout_planner.py
+      - processual_api/cgt_governor/policy/orchestration_metrics.py
+      - processual_api/cgt_governor/adapters/execution_fanout.py
+      - processual_api/cgt_governor/adapters/registry.py
+      - processual_api/routers/workflows.py
+
+permissions:
+  contents: read
+
+jobs:
+  shaping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PYTHONPATH: "."
+      ENVIRONMENT: development
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: benchmark-only-not-production-jwt-secret
+      API_KEYS: benchmark-only-api-key
+      RATE_LIMIT_ENABLED: "false"
+      CAPACITY_GUARD_ENABLED: "false"
+      EXECUTION_FANOUT_ENABLED: "true"
+      EXECUTION_FANOUT_GLOBAL_LIMIT: "16"
+      EXECUTION_FANOUT_PROVIDER_LIMIT: "8"
+      EXECUTION_FANOUT_WAIT_MS: "250"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,cache,database,security,observability]'
+
+      - name: Lint shaping benchmark
+        run: |
+          ruff check \
+            benchmarks/execution_mix_app.py \
+            benchmarks/execution_mix_shape_probe.py \
+            benchmarks/execution_mix_planner_probe.py \
+            benchmarks/orchestration_api_app.py \
+            benchmarks/orchestration_api_probe.py \
+            processual_api/cgt_governor/policy/fanout_planner.py \
+            processual_api/cgt_governor/policy/orchestration_metrics.py \
+            processual_api/routers/workflows.py \
+            tests/test_execution_mix_shaping_workflow.py \
+            tests/test_fanout_planner.py \
+            tests/test_orchestration_metrics.py \
+            tests/test_orchestration_api_benchmark.py \
+            tests/test_workflow_llm_orchestration.py \
+            tests/test_workflow_llm_orchestration_http_metrics.py
+          flake8 \
+            benchmarks/execution_mix_app.py \
+            benchmarks/execution_mix_shape_probe.py \
+            benchmarks/execution_mix_planner_probe.py \
+            benchmarks/orchestration_api_app.py \
+            benchmarks/orchestration_api_probe.py \
+            processual_api/cgt_governor/policy/fanout_planner.py \
+            processual_api/cgt_governor/policy/orchestration_metrics.py \
+            processual_api/routers/workflows.py \
+            tests/test_execution_mix_shaping_workflow.py \
+            tests/test_fanout_planner.py \
+            tests/test_orchestration_metrics.py \
+            tests/test_orchestration_api_benchmark.py \
+            tests/test_workflow_llm_orchestration.py \
+            tests/test_workflow_llm_orchestration_http_metrics.py
+
+      - name: Test selective fanout planner and orchestration
+        run: |
+          pytest -q \
+            tests/test_execution_mix_shaping_workflow.py \
+            tests/test_fanout_planner.py \
+            tests/test_orchestration_metrics.py \
+            tests/test_orchestration_api_benchmark.py \
+            tests/test_workflow_llm_orchestration.py \
+            tests/test_workflow_llm_orchestration_http_metrics.py
+
+      - name: Start two-worker execution mix harness
+        run: |
+          mkdir -p shaping-results
+          python benchmarks/flush_redis.py
+          python -m uvicorn benchmarks.execution_mix_app:app \
+            --host 127.0.0.1 \
+            --port 8020 \
+            --workers 2 \
+            --timeout-keep-alive 30 \
+            > shaping-results/server.log 2>&1 &
+          echo $! > shaping-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat shaping-results/server.log
+          exit 1
+
+      - name: Benchmark request-local shaping
+        id: request_local_shaping
+        continue-on-error: true
+        run: |
+          python benchmarks/execution_mix_shape_probe.py \
+            --base-url http://127.0.0.1:8020 \
+            --local-parallelism 0,2,4,8 \
+            --providers 1,2 \
+            --widths 8,16 \
+            --concurrency 20,40 \
+            --requests 40 \
+            --output shaping-results/shaping.json \
+            | tee shaping-results/shaping.txt
+
+      - name: Benchmark selective fanout planner
+        run: |
+          python benchmarks/execution_mix_planner_probe.py \
+            --base-url http://127.0.0.1:8020 \
+            --requests 40 \
+            --output shaping-results/planner.json \
+            | tee shaping-results/planner.txt
+
+      - name: Start two-worker orchestration API harness
+        run: |
+          python benchmarks/flush_redis.py
+          python -m uvicorn benchmarks.orchestration_api_app:app \
+            --host 127.0.0.1 \
+            --port 8030 \
+            --workers 2 \
+            --timeout-keep-alive 30 \
+            > shaping-results/orchestration-server.log 2>&1 &
+          echo $! > shaping-results/orchestration-server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8030/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat shaping-results/orchestration-server.log
+          exit 1
+
+      - name: Benchmark real orchestration API
+        run: |
+          python benchmarks/orchestration_api_probe.py \
+            --base-url http://127.0.0.1:8030 \
+            --workers 2 \
+            --widths 4,8,12,16 \
+            --concurrency 5,10,20,40 \
+            --requests 40 \
+            --max-error-rate 0 \
+            --output shaping-results/orchestration-api.json \
+            | tee shaping-results/orchestration-api.txt
+
+      - name: Verify orchestration metrics scrape
+        run: |
+          curl --fail --silent http://127.0.0.1:8030/metrics > shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_requests_total' shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_width' shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_latency_seconds' shaping-results/orchestration-metrics.txt
+          grep -q 'maestro_llm_orchestration_item_outcomes_total' shaping-results/orchestration-metrics.txt
+
+      - name: Enforce shaping gates
+        if: always()
+        env:
+          REQUEST_LOCAL_SHAPING_OUTCOME: ${{ steps.request_local_shaping.outcome }}
+        run: |
+          if [ "$REQUEST_LOCAL_SHAPING_OUTCOME" != "success" ]; then
+            echo "request-local shaping gate failed: $REQUEST_LOCAL_SHAPING_OUTCOME"
+            exit 1
+          fi
+
+      - name: Upload shaping benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-execution-mix-shaping
+          path: shaping-results/
+
+      - name: Stop shaping harnesses
+        if: always()
+        run: |
+          if [ -f shaping-results/server.pid ]; then
+            kill "$(cat shaping-results/server.pid)" 2>/dev/null || true
+          fi
+          if [ -f shaping-results/orchestration-server.pid ]; then
+            kill "$(cat shaping-results/orchestration-server.pid)" 2>/dev/null || true
+          fi

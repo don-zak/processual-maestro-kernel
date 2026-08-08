@@ -1,4 +1,3 @@
-
 (function () {
   function installStyle() {
     if (document.getElementById('admin-home-layout-style')) return;
@@ -49,7 +48,6 @@
     surface.setAttribute('data-admin-runtime-grid', '1');
 
     const anchor = findOverviewAnchor(home);
-
     if (anchor && anchor.parentElement) {
       anchor.insertAdjacentElement('afterend', surface);
     } else {
@@ -66,7 +64,6 @@
   function moveHomeRuntimeCards() {
     const home = homePage();
     const surface = ensureSurface();
-
     if (!home || !surface) return;
 
     Array.from(home.querySelectorAll('#admin-runtime-home-summary,#admin-runtime-auth-state')).forEach((card) => {
@@ -83,31 +80,69 @@
     });
   }
 
-  function removeHomeRuntimeDuplicatesAndEmptyGrids() {
+  function removeLegacyReadinessSurfaces() {
+    const integrationCenter = document.getElementById('page-admin-integration-center');
+    if (!integrationCenter) return;
+
+    [
+      'admin-integration-readiness-card',
+      'admin-integration-readiness-case-management-host',
+    ].forEach((id) => {
+      const duplicate = document.getElementById(id);
+      if (duplicate && !integrationCenter.contains(duplicate)) {
+        duplicate.remove();
+      }
+    });
+  }
+
+  function removeLegacyUsagePlaceholder() {
+    const usagePage = document.getElementById('page-admin-usage');
+    const analyticsHost = document.getElementById('admin-subscription-analytics-host');
+    if (!usagePage || !analyticsHost || !usagePage.contains(analyticsHost)) return;
+
+    usagePage.querySelectorAll('.card').forEach((card) => {
+      const text = card.textContent || '';
+      if (
+        text.includes('Planned usage view:') ||
+        text.includes('evaluations used, evaluations remaining')
+      ) {
+        const wrapper = card.parentElement;
+        card.remove();
+        if (wrapper && wrapper !== usagePage && !wrapper.querySelector('.card')) {
+          const heading = wrapper.querySelector('.sec-hdr');
+          if (heading) heading.remove();
+          if (!wrapper.textContent.trim()) wrapper.remove();
+        }
+      }
+    });
+  }
+
+  function removeHomeDuplicatesAndEmptyGrids() {
     const home = homePage();
     const surface = document.getElementById('admin-home-runtime-surface');
-
     if (!home || !surface) return;
 
     home.querySelectorAll('.card').forEach((card) => {
       if (isWantedHomeRuntimeCard(card)) return;
 
       const text = card.textContent || '';
-      const isLegacy =
+      const isLegacyAuthCard =
         text.includes('PROTECTED AREA') ||
         text.includes('Protected Area') ||
         text.includes('Checking admin session') ||
         text.includes('Admin auth token missing') ||
         text.includes('Backend scopes remain the authority');
+      const isDuplicateNavigationCard =
+        card.id === 'admin-supervisor-home-console' ||
+        text.includes('Supervisor Operations Center');
 
-      if (isLegacy) {
+      if (isLegacyAuthCard || isDuplicateNavigationCard) {
         card.remove();
       }
     });
 
     home.querySelectorAll('[data-admin-runtime-grid]').forEach((grid) => {
       if (grid.id === 'admin-home-runtime-surface') return;
-
       if (!grid.querySelector('.card')) {
         grid.remove();
       }
@@ -117,18 +152,34 @@
   function cleanHomeLayout() {
     installStyle();
     moveHomeRuntimeCards();
-    removeHomeRuntimeDuplicatesAndEmptyGrids();
+    removeHomeDuplicatesAndEmptyGrids();
+    removeLegacyReadinessSurfaces();
+    removeLegacyUsagePlaceholder();
+  }
+
+  function observeLegacySurfaceRecreation() {
+    if (!document.body || window.PMK_ADMIN_SURFACE_OWNERSHIP_OBSERVER) return;
+
+    const observer = new MutationObserver(() => {
+      removeLegacyReadinessSurfaces();
+      removeLegacyUsagePlaceholder();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.PMK_ADMIN_SURFACE_OWNERSHIP_OBSERVER = observer;
   }
 
   window.PMK_ADMIN_HOME_LAYOUT = {
     cleanHomeLayout,
     ensureSurface,
     moveHomeRuntimeCards,
+    removeLegacyReadinessSurfaces,
+    removeLegacyUsagePlaceholder,
   };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       cleanHomeLayout();
+      observeLegacySurfaceRecreation();
       setTimeout(cleanHomeLayout, 200);
       setTimeout(cleanHomeLayout, 800);
       setTimeout(cleanHomeLayout, 2000);
@@ -136,6 +187,7 @@
     });
   } else {
     cleanHomeLayout();
+    observeLegacySurfaceRecreation();
     setTimeout(cleanHomeLayout, 200);
     setTimeout(cleanHomeLayout, 800);
     setTimeout(cleanHomeLayout, 2000);

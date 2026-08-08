@@ -1,4 +1,4 @@
-"""LLM Adapter Registry â€” discovers and manages all configured providers.
+"""LLM Adapter Registry — discovers and manages all configured providers.
 
 Usage:
     from processual_api.cgt_governor.adapters.registry import adapter_registry
@@ -12,10 +12,51 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from .base import BaseLLMAdapter
+from .execution_fanout import run_with_execution_fanout
 
 logger = logging.getLogger("maestro.adapters")
+
+
+class _GovernedLLMAdapter(BaseLLMAdapter):
+    """Transparent adapter proxy that enforces cross-worker execution fan-out."""
+
+    def __init__(self, adapter: BaseLLMAdapter) -> None:
+        self._adapter = adapter
+
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        **kwargs: Any,
+    ) -> str:
+        async def operation() -> str:
+            return await self._adapter.generate(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                **kwargs,
+            )
+
+        return await run_with_execution_fanout(self.provider_name, operation)
+
+    def is_configured(self) -> bool:
+        return self._adapter.is_configured()
+
+    async def is_available(self) -> bool:
+        return await self._adapter.is_available()
+
+    @property
+    def provider_name(self) -> str:
+        return self._adapter.provider_name
+
+    @property
+    def default_model(self) -> str:
+        return self._adapter.default_model
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._adapter, name)
 
 
 class LLMAdapterRegistry:
@@ -32,9 +73,10 @@ class LLMAdapterRegistry:
         self._adapters: dict[str, BaseLLMAdapter] = {}
 
     def register(self, adapter: BaseLLMAdapter) -> None:
-        """Register an adapter instance."""
-        name = adapter.provider_name.lower().replace(" ", "_")
-        self._adapters[name] = adapter
+        """Register an adapter instance behind the execution fan-out governor."""
+        governed = adapter if isinstance(adapter, _GovernedLLMAdapter) else _GovernedLLMAdapter(adapter)
+        name = governed.provider_name.lower().replace(" ", "_")
+        self._adapters[name] = governed
         logger.debug("Adapter registered: %s", name)
 
     def get(self, name: str) -> BaseLLMAdapter | None:

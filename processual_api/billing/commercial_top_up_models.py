@@ -102,27 +102,50 @@ class CommercialTopUpOrder(Base):
             """,
             name="state_allowed",
         ),
+        CheckConstraint(
+            "checkout_creation_status IN ('not_started','creating','ready','uncertain')",
+            name="checkout_creation_status_allowed",
+        ),
+        CheckConstraint(
+            "(checkout_creation_status = 'ready' AND provider_checkout_id IS NOT NULL) "
+            "OR checkout_creation_status != 'ready'",
+            name="ready_checkout_has_provider_id",
+        ),
         UniqueConstraint(
             "idempotency_key",
             name="uq_commercial_top_up_orders_idempotency_key",
+        ),
+        UniqueConstraint(
+            "provider_checkout_id",
+            name="uq_commercial_top_up_orders_provider_checkout_id",
         ),
         Index(
             "ix_commercial_top_up_orders_account_state",
             "account_id",
             "state",
         ),
+        Index(
+            "ix_commercial_top_up_orders_customer_state",
+            "customer_ref",
+            "state",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _uuid_column()
-    account_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        nullable=False,
-    )
+    account_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
+        ForeignKey("admin_market_subscriptions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    quota_cycle_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_subscription_quota_cycles.id", ondelete="RESTRICT"),
         nullable=False,
     )
     plan_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    plan_catalog_version: Mapped[str] = mapped_column(String(64), nullable=False)
     requested_units: Mapped[int] = mapped_column(nullable=False)
     bundle_count: Mapped[int] = mapped_column(nullable=False)
     total_price_usd: Mapped[Decimal] = mapped_column(
@@ -153,6 +176,13 @@ class CommercialTopUpOrder(Base):
         DateTime(timezone=True),
     )
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_variant_id: Mapped[str | None] = mapped_column(String(128))
+    provider_checkout_id: Mapped[str | None] = mapped_column(String(128))
+    checkout_creation_status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="not_started",
+    )
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     state: Mapped[str] = mapped_column(
         String(40),
