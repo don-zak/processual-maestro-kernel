@@ -84,7 +84,8 @@ async def execution_mix(
 ) -> dict[str, int] | Response:
     async def one(slot: int) -> str:
         provider_index = slot % providers
-        adapter = registry.get(f"benchmark-llm-{'a' if provider_index == 0 else 'b'}")
+        provider_suffix = "a" if provider_index == 0 else "b"
+        adapter = registry.get(f"benchmark-llm-{provider_suffix}")
         assert adapter is not None
         mode = mode_for_call(request_id, slot)
         try:
@@ -100,7 +101,12 @@ async def execution_mix(
         return_exceptions=True,
     )
     saturated = sum(isinstance(outcome, ExecutionFanoutSaturatedError) for outcome in outcomes)
-    unexpected = [outcome for outcome in outcomes if isinstance(outcome, Exception) and not isinstance(outcome, ExecutionFanoutSaturatedError)]
+    unexpected = [
+        outcome
+        for outcome in outcomes
+        if isinstance(outcome, Exception)
+        and not isinstance(outcome, ExecutionFanoutSaturatedError)
+    ]
     if unexpected:
         raise unexpected[0]
     if saturated:
