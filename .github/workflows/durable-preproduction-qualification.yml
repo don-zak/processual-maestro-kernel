@@ -1,0 +1,19 @@
+name: Durable Preproduction Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_16_workers:
+        description: Run the qualification-only 16-worker tier
+        required: false
+        default: false
+        type: boolean
+      jobs:
+        description: Jobs per qualification trial
+        required: false
+        default: "384"
+        type: string
+      repetitions:
+        description: Repetitions per worker tier
+        required: false
+        default: "5
