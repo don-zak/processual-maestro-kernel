@@ -113,6 +113,7 @@ async def run_scale_scenario(
             handlers={"qualification": handler},
             lease_seconds=max(handler_delay_seconds * 5, 1.0),
             heartbeat_interval_seconds=max(min(handler_delay_seconds, 0.1), 0.01),
+            unfiltered_claims=True,
         )
         for index in range(workers)
     ]
