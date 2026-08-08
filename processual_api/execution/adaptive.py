@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
+
+from .durable import ExecutionJob, JobStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +158,90 @@ class AdaptiveConcurrencyController:
         if sample.timeouts > sample.requests or sample.rate_limited > sample.requests:
             return False
         return math.isfinite(sample.latency_p95_ms) and sample.latency_p95_ms >= 0
+
+
+class AdaptiveFailureKind(StrEnum):
+    ERROR = "error"
+    TIMEOUT = "timeout"
+    RATE_LIMITED = "rate_limited"
+
+
+AdaptiveFailureClassifier = Callable[[ExecutionJob], AdaptiveFailureKind]
+
+
+def classify_adaptive_failure(job: ExecutionJob) -> AdaptiveFailureKind:
+    """Conservative default classification for completed failed attempts.
+
+    Callers that have provider-specific exception names should inject a custom
+    classifier. The default only recognizes Python's TimeoutError and treats
+    all other failures as ordinary errors; it never guesses rate-limit status.
+    """
+
+    if job.last_error == "TimeoutError":
+        return AdaptiveFailureKind.TIMEOUT
+    return AdaptiveFailureKind.ERROR
+
+
+class AdaptiveTelemetrySampler:
+    """Aggregate completed worker attempts into deterministic control samples."""
+
+    def __init__(
+        self,
+        *,
+        window_size: int = 16,
+        failure_classifier: AdaptiveFailureClassifier | None = None,
+    ) -> None:
+        if window_size < 1:
+            raise ValueError("window_size must be at least 1")
+        self._window_size = window_size
+        self._failure_classifier = failure_classifier or classify_adaptive_failure
+        self._latencies_ms: list[float] = []
+        self._errors = 0
+        self._timeouts = 0
+        self._rate_limited = 0
+
+    @property
+    def pending(self) -> int:
+        return len(self._latencies_ms)
+
+    def record(
+        self,
+        job: ExecutionJob,
+        *,
+        latency_ms: float,
+    ) -> AdaptiveConcurrencySample | None:
+        if not math.isfinite(latency_ms) or latency_ms < 0:
+            return None
+        if job.status not in {JobStatus.SUCCEEDED, JobStatus.RETRY_WAIT, JobStatus.FAILED}:
+            return None
+
+        self._latencies_ms.append(latency_ms)
+        if job.status is not JobStatus.SUCCEEDED:
+            failure_kind = self._failure_classifier(job)
+            if failure_kind is AdaptiveFailureKind.TIMEOUT:
+                self._timeouts += 1
+            elif failure_kind is AdaptiveFailureKind.RATE_LIMITED:
+                self._rate_limited += 1
+            else:
+                self._errors += 1
+
+        if len(self._latencies_ms) < self._window_size:
+            return None
+
+        ordered = sorted(self._latencies_ms)
+        p95_index = max(math.ceil(0.95 * len(ordered)) - 1, 0)
+        sample = AdaptiveConcurrencySample(
+            requests=len(ordered),
+            latency_p95_ms=ordered[p95_index],
+            errors=self._errors,
+            timeouts=self._timeouts,
+            rate_limited=self._rate_limited,
+        )
+        self._latencies_ms.clear()
+        self._errors = 0
+        self._timeouts = 0
+        self._rate_limited = 0
+        return sample
 
 
 class AdaptiveConcurrencyGate:
