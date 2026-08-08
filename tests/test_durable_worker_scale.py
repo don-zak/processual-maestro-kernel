@@ -18,6 +18,9 @@ from processual_api.execution.capacity import (
 )
 from processual_api.execution.durable import ExecutionPriority, InMemoryDurableJobStore, JobSpec, JobStatus
 from processual_api.execution.pool import DurableWorkerPool, DurableWorkerPoolPolicy
+from processual_api.execution.redis_activation import build_redis_durable_store
+from processual_api.execution.redis_store import RedisDurableJobStore
+from processual_api.execution.redis_store_optimized import OptimizedRedisDurableJobStore
 from processual_api.execution.worker import DurableWorker
 
 
@@ -98,6 +101,26 @@ def test_redis_telemetry_delta_is_safe_with_no_completed_workflows() -> None:
     assert delta.commands_per_completed_workflow == 0.0
     assert delta.used_memory_delta == -100
     assert dict(delta.command_calls)["eval"] == 5
+
+
+def test_redis_activation_keeps_safe_store_as_default() -> None:
+    redis_client = object()
+
+    store = build_redis_durable_store(redis_client)
+
+    assert type(store) is RedisDurableJobStore
+
+
+def test_redis_activation_enables_optimized_store_explicitly() -> None:
+    redis_client = object()
+
+    store = build_redis_durable_store(
+        redis_client,
+        prefix="{qualified}:durable",
+        optimized=True,
+    )
+
+    assert type(store) is OptimizedRedisDurableJobStore
 
 
 @pytest.mark.asyncio
