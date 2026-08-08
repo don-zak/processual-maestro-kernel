@@ -110,6 +110,8 @@ class JobNotFoundError(LookupError):
 class DurableJobStore(Protocol):
     async def submit(self, spec: JobSpec) -> SubmitResult: ...
 
+    async def get(self, job_id: str) -> ExecutionJob: ...
+
     async def claim(
         self,
         *,
