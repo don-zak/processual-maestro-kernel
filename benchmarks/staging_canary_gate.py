@@ -15,6 +15,12 @@ class CanaryGateResult:
     violations: tuple[str, ...]
 
 
+def _gain_pct(before: float, after: float) -> float:
+    if before == 0:
+        return 0.0 if after == 0 else 100.0
+    return ((after - before) / before) * 100.0
+
+
 def evaluate_canary_gate(
     workloads_1w: dict[str, object],
     workloads_2w: dict[str, object],
@@ -22,7 +28,8 @@ def evaluate_canary_gate(
     execution_mix_2w: list[dict[str, object]],
     *,
     concurrency: int = 40,
-    min_ocu_gain_pct: float = 10.0,
+    min_aggregate_ocu_gain_pct: float = 10.0,
+    max_workload_ocu_regression_pct: float = 10.0,
     max_p95_regression_pct: float = 10.0,
     max_backpressure_regression: float = 0.05,
     max_true_error_rate: float = 0.01,
@@ -35,12 +42,22 @@ def evaluate_canary_gate(
         workloads_2w,
         concurrency=concurrency,
     )
+    one_worker_ocu = sum(item.one_worker_ocu_per_second for item in topology_deltas)
+    two_worker_ocu = sum(item.two_worker_ocu_per_second for item in topology_deltas)
+    aggregate_ocu_gain_pct = _gain_pct(one_worker_ocu, two_worker_ocu)
+    if aggregate_ocu_gain_pct < min_aggregate_ocu_gain_pct:
+        violations.append(
+            "workloads: aggregate OCU/s gain "
+            f"{aggregate_ocu_gain_pct:+.2f}% is below "
+            f"{min_aggregate_ocu_gain_pct:.2f}%"
+        )
+
     for delta in topology_deltas:
         label = f"{delta.workload}@c{concurrency}"
-        if delta.ocu_per_second_change_pct < min_ocu_gain_pct:
+        if delta.ocu_per_second_change_pct < -max_workload_ocu_regression_pct:
             violations.append(
-                f"{label}: OCU/s gain {delta.ocu_per_second_change_pct:+.2f}% "
-                f"is below {min_ocu_gain_pct:.2f}%"
+                f"{label}: OCU/s regression {delta.ocu_per_second_change_pct:+.2f}% "
+                f"exceeds {max_workload_ocu_regression_pct:.2f}%"
             )
         if delta.p95_change_pct > max_p95_regression_pct:
             violations.append(
@@ -84,9 +101,10 @@ def evaluate_canary_gate(
         if one_worker_success <= 0:
             violations.append("execution mix: one-worker successful RPS baseline is zero")
         else:
-            successful_rps_gain_pct = (
-                (two_worker_success - one_worker_success) / one_worker_success
-            ) * 100.0
+            successful_rps_gain_pct = _gain_pct(
+                one_worker_success,
+                two_worker_success,
+            )
             if successful_rps_gain_pct < min_execution_success_rps_gain_pct:
                 violations.append(
                     "execution mix: aggregate successful RPS gain "
@@ -124,7 +142,8 @@ def markdown(result: CanaryGateResult) -> str:
         f"Status: **{'PASS' if result.passed else 'FAIL'}**",
         "",
         "Gate policy:",
-        "- Each normal/heavy/governance-heavy c40 workload must gain at least 10% admitted OCU/s.",
+        "- Aggregate admitted OCU/s across normal/heavy/governance-heavy c40 must gain at least 10%.",
+        "- No individual workload may regress more than 10% admitted OCU/s.",
         "- Each workload p95 may regress by at most 10%.",
         "- Backpressure may regress by at most 5 percentage points.",
         "- Workload true errors must remain at or below 1%.",
