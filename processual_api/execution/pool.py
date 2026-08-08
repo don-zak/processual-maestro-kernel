@@ -11,8 +11,8 @@ from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 
-from .adaptive import AdaptiveConcurrencyGate
-from .durable import DurableJobStore
+from .adaptive import AdaptiveConcurrencyGate, AdaptiveTelemetrySampler
+from .durable import DurableJobStore, ExecutionJob
 from .worker import DurableWorker
 
 
@@ -39,14 +39,18 @@ class DurableWorkerPool:
         policy: DurableWorkerPoolPolicy | None = None,
         on_worker_error: Callable[[BaseException], None] | None = None,
         adaptive_gate: AdaptiveConcurrencyGate | None = None,
+        adaptive_sampler: AdaptiveTelemetrySampler | None = None,
     ) -> None:
         if not workers:
             raise ValueError("at least one durable worker is required")
+        if adaptive_sampler is not None and adaptive_gate is None:
+            raise ValueError("adaptive_sampler requires adaptive_gate")
         self._store = store
         self._workers = tuple(workers)
         self._policy = policy or DurableWorkerPoolPolicy()
         self._on_worker_error = on_worker_error
         self._adaptive_gate = adaptive_gate
+        self._adaptive_sampler = adaptive_sampler
         self._stop = asyncio.Event()
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -54,14 +58,26 @@ class DurableWorkerPool:
     def running(self) -> bool:
         return bool(self._tasks) and not self._stop.is_set()
 
-    async def _run_worker_iteration(self, worker: DurableWorker):
+    async def _run_worker_iteration(self, worker: DurableWorker) -> ExecutionJob | None:
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
         if self._adaptive_gate is None:
             return await worker.run_once()
+
         await self._adaptive_gate.acquire()
         try:
-            return await worker.run_once()
+            completed = await worker.run_once()
         finally:
             await self._adaptive_gate.release()
+
+        if completed is not None and self._adaptive_sampler is not None:
+            sample = self._adaptive_sampler.record(
+                completed,
+                latency_ms=(loop.time() - started_at) * 1000.0,
+            )
+            if sample is not None:
+                await self._adaptive_gate.observe(sample)
+        return completed
 
     async def _worker_loop(self, worker: DurableWorker) -> None:
         while not self._stop.is_set():
