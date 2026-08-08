@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
+from processual_api.cgt_governor.adapters.execution_fanout import (
+    ExecutionFanoutSaturatedError,
+)
 from processual_api.main import metrics_endpoint
 from processual_api.routers import workflows
 
@@ -41,7 +44,7 @@ def _metric_value(text: str, metric: str, labels: dict[str, str]) -> float:
     return 0.0
 
 
-def test_http_orchestration_is_exposed_through_metrics(monkeypatch) -> None:
+def _client(monkeypatch) -> TestClient:
     adapter = HTTPMetricsAdapter()
     monkeypatch.setattr(workflows.adapter_registry, "get", lambda provider: adapter)
 
@@ -49,7 +52,11 @@ def test_http_orchestration_is_exposed_through_metrics(monkeypatch) -> None:
     app.include_router(workflows.router)
     app.add_api_route("/metrics", metrics_endpoint, methods=["GET"])
     app.dependency_overrides[workflows.get_current_user] = lambda: "metrics-test-user"
-    client = TestClient(app)
+    return TestClient(app)
+
+
+def test_http_orchestration_is_exposed_through_metrics(monkeypatch) -> None:
+    client = _client(monkeypatch)
 
     labels = {
         "paced": "true",
@@ -117,3 +124,63 @@ def test_http_orchestration_is_exposed_through_metrics(monkeypatch) -> None:
         "maestro_llm_orchestration_item_outcomes_total",
         item_labels,
     ) >= 12.0
+
+
+def test_http_saturation_is_exposed_through_metrics(monkeypatch) -> None:
+    client = _client(monkeypatch)
+
+    async def saturated_executor(items, worker, plan):
+        del worker, plan
+        return [ExecutionFanoutSaturatedError("provider") for _item in items]
+
+    monkeypatch.setattr(workflows, "execute_fanout_plan", saturated_executor)
+
+    request_labels = {
+        "paced": "false",
+        "plan_reason": "shared_governor_only",
+        "outcome": "saturated",
+    }
+    error_labels = {
+        "paced": "false",
+        "plan_reason": "shared_governor_only",
+        "outcome": "error",
+    }
+    before = client.get("/metrics")
+    before_requests = _metric_value(
+        before.text,
+        "maestro_llm_orchestration_requests_total",
+        request_labels,
+    )
+    before_errors = _metric_value(
+        before.text,
+        "maestro_llm_orchestration_item_outcomes_total",
+        error_labels,
+    )
+
+    response = client.post(
+        "/workflows/llm-orchestration",
+        json={
+            "provider": "http-metrics",
+            "prompts": ["prompt-0", "prompt-1"],
+        },
+    )
+
+    assert response.status_code == 429
+    assert response.headers["X-Maestro-Capacity-Reason"] == "execution_fanout"
+
+    after = client.get("/metrics")
+    assert _metric_value(
+        after.text,
+        "maestro_llm_orchestration_requests_total",
+        request_labels,
+    ) == before_requests + 1.0
+    assert _metric_value(
+        after.text,
+        "maestro_llm_orchestration_item_outcomes_total",
+        error_labels,
+    ) == before_errors + 2.0
+    assert _metric_value(
+        after.text,
+        "maestro_llm_orchestration_latency_seconds_count",
+        request_labels,
+    ) >= 1.0
