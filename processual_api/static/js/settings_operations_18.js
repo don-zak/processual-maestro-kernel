@@ -348,7 +348,6 @@
 
   function init() {
     mount();
-    load();
   }
 
   window.PMK_SETTINGS_OPERATIONS_18 = { init, refresh: load };
