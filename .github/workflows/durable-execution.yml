@@ -1,0 +1,42 @@
+name: Durable Execution
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - processual_api/execution/**
+      - tests/test_durable_execution.py
+      - tests/test_durable_worker.py
+      - .github/workflows/durable-execution.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install contract-test dependencies
+        run: python -m pip install pytest pytest-asyncio ruff
+
+      - name: Lint durable execution slice
+        run: >-
+          python -m ruff check
+          processual_api/execution
+          tests/test_durable_execution.py
+          tests/test_durable_worker.py
+
+      - name: Verify durable execution contracts
+        run: >-
+          python -m pytest -q
+          tests/test_durable_execution.py
+          tests/test_durable_worker.py
