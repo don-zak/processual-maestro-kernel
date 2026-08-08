@@ -2,7 +2,7 @@
 
 Status date: 2026-08-08
 Branch: `feat/a3-admin-marketplace-original-offers`
-Scope: the client/admin Settings space, its runtime dependencies, UI assets, API surface, operational qualifications, and staged retirement candidates.
+Scope: the client/admin Settings space, its runtime dependencies, UI assets, API surface, operational qualifications, output quality, load behavior, and staged retirement candidates.
 
 ## Review rule
 
@@ -22,6 +22,8 @@ The Settings runtime is currently composed through:
 - `processual_api/main.py` -> includes `processual_api.routers.settings.router`;
 - `processual_api/settings.py` -> process/environment configuration and production fail-closed checks;
 - `processual_api/routers/settings.py` -> Settings HTTP API and client/admin operational actions;
+- `processual_api/routers/client_api_keys_18.py` -> client self-service sandbox key operations attached to the Settings router;
+- `processual_api/routers/client_provider_alias_18.py` -> deprecated provider-status compatibility alias attached to the Settings router;
 - `processual_api/schemas/settings.py` -> Settings request/response models;
 - `processual_api/static/index.html` -> Settings console surface and `js/pages/settings.js` load;
 - `processual_api/static/js/pages/settings.js` -> primary current client Settings behavior;
@@ -29,7 +31,7 @@ The Settings runtime is currently composed through:
 - `processual_api/static/js/settings_layout_18.js` and `processual_api/static/css/settings_layout_18.css` -> active Settings layout behavior/style;
 - `processual_api/static/js/settings_operations_18.js` and `processual_api/static/css/settings_operations_18.css` -> active Settings operational behavior/style.
 
-These files are **ACTIVE / DO NOT DELETE** until composition is intentionally replaced.
+All entries above except the explicitly deprecated alias are **ACTIVE / DO NOT DELETE** until composition is intentionally replaced.
 
 ## Active runtime dependencies
 
@@ -50,7 +52,7 @@ Commercial Settings top-up contract modules are not dead files. In particular, `
 
 ## Current client UI contract
 
-The current `pages/settings.js` uses the provider-connection API:
+The primary `pages/settings.js` uses the provider-connection API:
 
 - `GET /settings/provider-connection`
 - `PUT /settings/provider-connection/setup`
@@ -61,7 +63,48 @@ It also uses the client-scoped usage summary:
 
 - `GET /settings/client/usage-summary`
 
-The current UI does **not** call the legacy `/settings/llm-provider*` paths and does **not** call `/settings/usage-summary`.
+The current primary UI does **not** call the legacy `/settings/llm-provider*` paths and does **not** call `/settings/usage-summary`.
+
+The Operations Center previously issued a second provider-status GET through `/settings/client/provider-connection`. That duplicate request has been removed. `settings_operations_18.js` now reuses the provider state rendered by the primary Settings surface and tracks subsequent changes with a targeted `MutationObserver`.
+
+## Page readiness and output quality
+
+The page currently exposes operational flows for:
+
+- account/session identity;
+- general preferences;
+- subscription and billing status;
+- usage/quota summary;
+- Tunisia direct subscription preparation/payment workflow;
+- BYOK provider setup, encrypted save, removal, and connection test;
+- enterprise integration readiness;
+- client self-service sandbox API-key issue/rotate/revoke;
+- client requests, status timeline, admin follow-up, and supervisor messages;
+- launch/readiness checklist and guided next actions.
+
+Quality/safety properties verified in the current code and tests include:
+
+- provider secrets are not returned by provider-status output;
+- sandbox API keys expose raw key material once at creation/rotation and return only safe metadata afterwards;
+- production/runtime connector permissions remain false for self-service sandbox keys;
+- client usage summary is client-scoped;
+- replacement provider endpoints are the current UI contract;
+- active Settings JS/CSS assets are explicitly wired;
+- top-up checkout contracts remain referenced by the active application service;
+- page layout initialization is now idempotent rather than relying on repeated delayed reconciliation.
+
+## Load and runtime findings
+
+### Completed reductions
+
+1. `settings_layout_18.js` previously ran reconciliation immediately and again at 100ms, 500ms, and 1500ms, in addition to a `MutationObserver`. The fixed timers were removed. Initialization is now idempotent, with late DOM changes handled by the observer/debounced reconciliation path.
+2. `settings_operations_18.js` previously fetched provider status independently even though `pages/settings.js` already fetched and rendered the same state. The duplicate provider GET is removed; Operations now reuses the primary page state.
+
+### Remaining load opportunity
+
+`pages/settings.js::loadClientSettings()` still loads several independent resources largely in sequence: account, base settings, subscription, usage summary, Tunisia payment option, API-key integration, and provider status. This is the largest remaining client-side latency optimization opportunity. It should be parallelized only after preserving current partial-failure behavior with explicit tests.
+
+The Operations Center still needs its own detailed integration-profile payload because that information is not fully represented by the primary page DOM; this request is therefore not classified as duplicate yet.
 
 ## Retirement candidates
 
@@ -69,6 +112,7 @@ These are candidates for staged retirement, not immediate deletion.
 
 | Candidate | Current classification | Reason | Required next step before removal |
 |---|---|---|---|
+| `GET /settings/client/provider-connection` / `client_provider_alias_18.py` | **DEPRECATED COMPATIBILITY** | Operations Center no longer consumes it; direct provider endpoint is canonical | inventory external consumers and remove only after compatibility window |
 | `PUT /settings/llm-provider` | LEGACY COMPATIBILITY | superseded in current UI by `/provider-connection/setup` | add/retain replacement-path tests, inventory external consumers, then deprecate |
 | `DELETE /settings/llm-provider` | LEGACY COMPATIBILITY | current UI uses `/provider-connection/setup` delete | same as above |
 | `POST /settings/llm-provider/test` | LEGACY COMPATIBILITY | current UI uses `/provider-connection/test`; provider-connection currently delegates to legacy test function internally | first extract shared provider-test service/helper, then deprecate endpoint |
@@ -82,6 +126,7 @@ The following looked old by naming/version but are currently active and must not
 
 - `settings_layout_18.js` / `settings_layout_18.css`: dynamically loaded by `app.js` and initialized when Settings is opened;
 - `settings_operations_18.js` / `settings_operations_18.css`: dynamically loaded by `app.js` and initialized when Settings is opened;
+- `client_api_keys_18.py`: implements the self-service sandbox API-key actions used by Operations Center;
 - `commercial_settings_top_up_checkout_contracts.py`: imported by the active top-up application service;
 - `commercial_settings_top_up_ui_contracts.py`: imported by the checkout contract;
 - `schemas/settings.py`: imported by the Settings router;
@@ -89,22 +134,39 @@ The following looked old by naming/version but are currently active and must not
 
 ## Operational qualification matrix
 
-| Area | Current state | Qualification needed |
+| Area | Current state | Qualification evidence / remaining need |
 |---|---|---|
-| Main router wiring | ACTIVE | regression test that main includes Settings router |
-| Settings SPA wiring | ACTIVE | regression test for index -> pages/settings.js and app -> Stage-18 assets |
-| Provider connection | ACTIVE | API security, encrypted-secret, setup/clear/test regression |
-| Client usage summary | ACTIVE | authenticated-client isolation and UI contract tests |
-| Subscription status | ACTIVE | billing-backed state and fail-closed subscription tests |
+| Main router wiring | QUALIFIED | regression test that main includes Settings router |
+| Settings SPA wiring | QUALIFIED | index -> pages/settings.js and app -> Stage-18 asset guardrails |
+| Browser JavaScript syntax | QUALIFIED IN SETTINGS CI | `node --check` for app/settings/layout/operations assets |
+| Layout startup/load behavior | QUALIFIED | idempotent init + observer-based late reconciliation regression |
+| Provider connection | QUALIFIED / ACTIVE | API security, secret non-disclosure, setup/clear/test, current UI contract |
+| Provider compatibility alias | DEPRECATED | retained only for compatibility; no current Operations UI dependency |
+| Client usage summary | QUALIFIED / ACTIVE | authenticated-client isolation and UI contract tests |
+| Subscription status | ACTIVE | billing-backed state and fail-closed subscription tests; staging commercial smoke still required for launch |
 | API-key administration | ACTIVE | admin scope/RBAC, create/update/revoke regression |
+| Client sandbox API keys | ACTIVE | fail-closed profile restrictions and safe one-time secret semantics; keep route extension in Settings CI |
 | Client requests | ACTIVE | client isolation, admin review, status and supervisor-response regression |
 | Integration readiness | ACTIVE | client/admin readiness regression |
 | Supervisor session keys | ACTIVE | issuance/list/revocation and scope regression |
 | General preferences | ACTIVE | persistence/default merge regression |
 | Notifications | REVIEW REQUIRED | determine supported product use before keeping or retiring |
-| Legacy LLM-provider endpoints | DEPRECATION CANDIDATE | external-consumer audit + compatibility window |
+| Legacy LLM-provider endpoints | DEPRECATION CANDIDATE | external-consumer audit + shared-test helper extraction + compatibility window |
 | Legacy usage-summary endpoint | DEPRECATION CANDIDATE | external-consumer audit + semantic replacement decision |
 | File-backed Settings persistence | TECHNICAL DEBT / ACTIVE | corruption, atomic replace, backup, multi-process/storage-topology qualification |
+
+## Dedicated Settings CI
+
+`.github/workflows/settings-space.yml` is the focused gate for this subsystem. It now covers:
+
+- Settings Python/config/router/schema files;
+- provider alias and sandbox API-key extension routers;
+- active browser assets;
+- Ruff on the Settings Python slice;
+- Node 22 syntax checks for `app.js`, `pages/settings.js`, `settings_layout_18.js`, and `settings_operations_18.js`;
+- Settings runtime/UI/security regression suites, including the provider endpoint contract.
+
+This workflow is the required gate after each staged cleanup change.
 
 ## Persistence risk
 
@@ -114,38 +176,40 @@ No storage rewrite is authorized by this review alone.
 
 ## Staged cleanup plan
 
-### Stage 0 — inventory and guardrails
+### Stage 0 — inventory and guardrails — COMPLETE
 
-- Keep all current runtime files.
-- Add a wiring regression test protecting the active Settings composition and replacement endpoints.
-- Record retirement candidates without changing external behavior.
+- Active composition and route extensions inventoried.
+- Runtime wiring guardrail added.
+- Dedicated Settings CI added.
+- JavaScript syntax validation added.
 
-### Stage 1 — remove internal duplication safely
+### Stage 1 — load reduction and internal duplication — IN PROGRESS
 
-- Extract provider connection testing into one private/shared helper so `/provider-connection/test` no longer depends on the legacy endpoint function.
-- Add tests proving encrypted secrets are never returned and provider test behavior is unchanged.
-- Keep legacy HTTP routes temporarily as compatibility wrappers.
+- Fixed-delay layout reconciliation removed and initialization made idempotent.
+- Duplicate Operations provider-status GET removed.
+- Next: protect partial-failure semantics and parallelize independent `loadClientSettings()` reads.
+- Next: extract provider connection testing into one private/shared helper so `/provider-connection/test` no longer depends on the legacy endpoint function.
 
-### Stage 2 — explicit endpoint deprecation
+### Stage 2 — explicit endpoint deprecation — STARTED
 
-- Mark legacy `/llm-provider*` and, if confirmed, `/usage-summary` as deprecated compatibility routes.
-- Ensure the current UI contains no calls to them.
-- Run API/contract CI and inventory external consumers.
+- `/settings/client/provider-connection` alias marked deprecated after removing its current UI consumer.
+- Next: audit external consumers.
+- Then mark confirmed `/llm-provider*` and `/usage-summary` routes deprecated as appropriate.
 
-### Stage 3 — first removals
+### Stage 3 — first removals — NOT STARTED
 
-- Remove only legacy routes that have zero supported consumers after the compatibility window.
-- Remove their route-specific tests and replace them with negative route-absence tests only when removal is intentional.
+- Remove only legacy routes/files that have zero supported consumers after the compatibility window.
+- Remove route-specific compatibility tests only when removal is intentional, replacing them with the canonical route contract where appropriate.
 - Do not delete shared crypto/provider helpers that remain used by current paths.
 
-### Stage 4 — file cleanup
+### Stage 4 — file cleanup — NOT STARTED
 
 - Re-run repository reference inventory.
 - Delete files only when no runtime import, static load, test contract, migration, or supported compatibility requirement remains.
-- One file or tightly coupled pair per change, followed by targeted tests and CI review.
+- One file or tightly coupled pair per change, followed by targeted tests and Settings CI review.
 
 ## Current decision
 
-The Settings space is active and operationally broad. The first review found **no Settings-named runtime file that is safe to delete immediately**. Several endpoints are credible retirement candidates, but deleting them now would mix compatibility cleanup with runtime refactoring.
+The Settings page is operationally substantial and its core page/API/task wiring is now protected by a dedicated qualification gate. Two concrete load reductions are complete, and one compatibility endpoint has entered explicit deprecation without breaking callers.
 
-The safe next implementation step is Stage 1: decouple the current provider-connection test path from the legacy `/llm-provider/test` endpoint function, protect the replacement contract with tests, and only then begin endpoint retirement.
+No active Settings runtime file is currently justified for immediate deletion. The first likely file deletion is `client_provider_alias_18.py`, but only after its external compatibility window is closed. The next engineering priority is to reduce initial Settings load latency while preserving partial-failure behavior, then separate legacy provider-test compatibility from the canonical provider connection implementation so the legacy endpoints can be retired cleanly.
