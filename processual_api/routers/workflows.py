@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
@@ -13,6 +15,10 @@ from ..cgt_governor.adapters.registry import adapter_registry
 from ..cgt_governor.policy.fanout_planner import (
     execute_fanout_plan,
     plan_fanout_execution,
+)
+from ..cgt_governor.policy.orchestration_metrics import (
+    OrchestrationObservation,
+    record_orchestration,
 )
 from ..dependencies import get_kernel
 
@@ -133,6 +139,7 @@ async def orchestrate_llm(
         raise HTTPException(status_code=409, detail=f"LLM provider is not configured: {req.provider}")
 
     plan = plan_fanout_execution(width=width, provider_count=1)
+    started = time.perf_counter()
 
     async def generate(prompt: str) -> str:
         return await adapter.generate(
@@ -143,12 +150,24 @@ async def orchestrate_llm(
         )
 
     outcomes = await execute_fanout_plan(req.prompts, generate, plan)
+    latency_seconds = time.perf_counter() - started
     saturated = [
         outcome
         for outcome in outcomes
         if isinstance(outcome, ExecutionFanoutSaturatedError)
     ]
     if saturated:
+        record_orchestration(
+            OrchestrationObservation(
+                paced=plan.is_paced,
+                plan_reason=plan.reason,
+                width=width,
+                outcome="saturated",
+                latency_seconds=latency_seconds,
+                success_items=0,
+                error_items=len(outcomes),
+            )
+        )
         return Response(
             status_code=429,
             headers={
@@ -158,8 +177,11 @@ async def orchestrate_llm(
         )
 
     results: list[dict[str, object]] = []
+    success_items = 0
+    error_items = 0
     for index, outcome in enumerate(outcomes):
         if isinstance(outcome, BaseException):
+            error_items += 1
             results.append(
                 {
                     "index": index,
@@ -168,6 +190,7 @@ async def orchestrate_llm(
                 }
             )
         else:
+            success_items += 1
             results.append(
                 {
                     "index": index,
@@ -175,6 +198,18 @@ async def orchestrate_llm(
                     "response": outcome,
                 }
             )
+
+    record_orchestration(
+        OrchestrationObservation(
+            paced=plan.is_paced,
+            plan_reason=plan.reason,
+            width=width,
+            outcome="partial_error" if error_items else "success",
+            latency_seconds=latency_seconds,
+            success_items=success_items,
+            error_items=error_items,
+        )
+    )
 
     return {
         "provider": req.provider,
