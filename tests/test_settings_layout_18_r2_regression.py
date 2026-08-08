@@ -63,15 +63,18 @@ def test_settings_r2_reconciles_late_rendered_cards_without_retry_timers() -> No
 
 def test_settings_r2_disconnects_observer_during_own_dom_reconciliation() -> None:
     source = _read(LAYOUT_JS)
+    reconcile_block = source.split("function reconcile()", 1)[1].split(
+        "function scheduleReconcile()", 1
+    )[0]
 
-    assert "const resumeObserver = Boolean(observer)" in source
-    assert "observer?.disconnect()" in source
-    assert "if (resumeObserver)" in source
-    assert "observePageMutations(page)" in source
+    assert "const resumeObserver = Boolean(observer)" in reconcile_block
+    assert "observer?.disconnect()" in reconcile_block
+    assert "if (resumeObserver)" in reconcile_block
+    assert "observePageMutations(page)" in reconcile_block
 
-    disconnect_pos = source.index("observer?.disconnect()")
-    shell_pos = source.index("ensureLayoutShell(page)")
-    resume_pos = source.index("if (resumeObserver)")
+    disconnect_pos = reconcile_block.index("observer?.disconnect()")
+    shell_pos = reconcile_block.index("ensureLayoutShell(page)")
+    resume_pos = reconcile_block.index("if (resumeObserver)")
 
     assert disconnect_pos < shell_pos < resume_pos
 
