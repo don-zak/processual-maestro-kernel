@@ -7,8 +7,15 @@ from processual_api.execution.adaptive import (
     AdaptiveConcurrencyGate,
     AdaptiveConcurrencyPolicy,
     AdaptiveConcurrencySample,
+    AdaptiveFailureKind,
+    AdaptiveTelemetrySampler,
 )
-from processual_api.execution.durable import InMemoryDurableJobStore, JobSpec, JobStatus
+from processual_api.execution.durable import (
+    InMemoryDurableJobStore,
+    JobSpec,
+    JobStatus,
+    RetryPolicy,
+)
 from processual_api.execution.pool import DurableWorkerPool, DurableWorkerPoolPolicy
 from processual_api.execution.worker import DurableWorker
 
@@ -194,3 +201,96 @@ async def test_worker_pool_respects_opt_in_adaptive_gate() -> None:
 
     jobs = [await store.get(job_id) for job_id in store._jobs]  # type: ignore[attr-defined]
     assert all(job.status in {JobStatus.SUCCEEDED, JobStatus.QUEUED} for job in jobs)
+
+
+@pytest.mark.asyncio
+async def test_pool_automatically_throttles_on_rate_limit_then_recovers() -> None:
+    class RateLimitedError(RuntimeError):
+        pass
+
+    store = InMemoryDurableJobStore()
+    gate = adaptive_gate(initial_limit=4)
+    sampler = AdaptiveTelemetrySampler(
+        window_size=1,
+        failure_classifier=lambda job: (
+            AdaptiveFailureKind.RATE_LIMITED
+            if job.last_error == "RateLimitedError"
+            else AdaptiveFailureKind.ERROR
+        ),
+    )
+
+    async def handler(job):
+        if job.spec.payload.get("rate_limited"):
+            raise RateLimitedError("provider returned 429")
+        return job.job_id
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="adaptive-feedback",
+        handlers={"provider": handler},
+    )
+    pool = DurableWorkerPool(
+        store=store,
+        workers=[worker],
+        adaptive_gate=gate,
+        adaptive_sampler=sampler,
+        policy=DurableWorkerPoolPolicy(
+            idle_poll_seconds=0.005,
+            recovery_interval_seconds=0.02,
+        ),
+    )
+
+    limited = await store.submit(
+        JobSpec(
+            idempotency_key="provider-429",
+            domain="provider",
+            payload={"rate_limited": True},
+            retry=RetryPolicy(max_attempts=1),
+        )
+    )
+    await pool.start()
+    try:
+        async with asyncio.timeout(0.5):
+            while gate.current_limit != 2:
+                await asyncio.sleep(0)
+        assert (await store.get(limited.job.job_id)).status is JobStatus.FAILED
+
+        healthy_ids = []
+        for index in range(4):
+            submitted = await store.submit(
+                JobSpec(
+                    idempotency_key=f"provider-healthy-{index}",
+                    domain="provider",
+                    payload={},
+                )
+            )
+            healthy_ids.append(submitted.job.job_id)
+
+        async with asyncio.timeout(0.5):
+            while gate.current_limit != 4:
+                await asyncio.sleep(0)
+        assert all(
+            (await store.get(job_id)).status is JobStatus.SUCCEEDED
+            for job_id in healthy_ids
+        )
+    finally:
+        await pool.stop(graceful_timeout_seconds=0.5)
+
+
+def test_pool_rejects_sampler_without_adaptive_gate() -> None:
+    store = InMemoryDurableJobStore()
+
+    async def handler(job):
+        return job.job_id
+
+    worker = DurableWorker(
+        store=store,
+        worker_id="adaptive-validation",
+        handlers={"provider": handler},
+    )
+    with pytest.raises(ValueError, match="adaptive_sampler requires adaptive_gate"):
+        DurableWorkerPool(
+            store=store,
+            workers=[worker],
+            adaptive_sampler=AdaptiveTelemetrySampler(window_size=1),
+        )
