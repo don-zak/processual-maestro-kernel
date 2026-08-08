@@ -65,7 +65,7 @@ for priority_index = 1, 4 do
           'lease_expires_at', '')
         redis.call('ZREM', KEYS[priority_index], job_id)
         redis.call('ZREM', KEYS[5], job_id)
-      elseif deadline_at ~= nil and tonumber(deadline_at) <= now then
+      elseif deadline_at ~= nil and deadline_at ~= cjson.null and tonumber(deadline_at) <= now then
         redis.call('HSET', job_key,
           'status', 'failed',
           'last_error', 'deadline_exceeded',
