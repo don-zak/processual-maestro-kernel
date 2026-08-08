@@ -6,7 +6,10 @@ from processual_api.execution.adaptive import (
     AdaptiveConcurrencyController,
     AdaptiveConcurrencyPolicy,
     AdaptiveConcurrencySample,
+    AdaptiveFailureKind,
+    AdaptiveTelemetrySampler,
 )
+from processual_api.execution.durable import ExecutionJob, JobSpec, JobStatus
 
 
 def controller(*, initial_limit: int = 4) -> AdaptiveConcurrencyController:
@@ -29,6 +32,18 @@ def controller(*, initial_limit: int = 4) -> AdaptiveConcurrencyController:
 
 def healthy() -> AdaptiveConcurrencySample:
     return AdaptiveConcurrencySample(requests=100, latency_p95_ms=60.0)
+
+
+def completed_job(*, status: JobStatus, error: str | None = None) -> ExecutionJob:
+    return ExecutionJob(
+        job_id="sample-job",
+        spec=JobSpec(idempotency_key="sample", domain="provider", payload={}),
+        status=status,
+        created_at=0.0,
+        updated_at=0.0,
+        available_at=0.0,
+        last_error=error,
+    )
 
 
 def test_healthy_windows_increase_gradually() -> None:
@@ -133,3 +148,66 @@ def test_intermittent_pressure_does_not_oscillate_limit() -> None:
     assert adaptive.observe(pressure) == 6
     assert adaptive.observe(healthy()) == 6
     assert adaptive.current_limit == 6
+
+
+def test_telemetry_sampler_emits_p95_window_and_resets() -> None:
+    sampler = AdaptiveTelemetrySampler(window_size=4)
+    succeeded = completed_job(status=JobStatus.SUCCEEDED)
+
+    assert sampler.record(succeeded, latency_ms=10.0) is None
+    assert sampler.record(succeeded, latency_ms=30.0) is None
+    assert sampler.record(succeeded, latency_ms=20.0) is None
+    sample = sampler.record(succeeded, latency_ms=40.0)
+
+    assert sample == AdaptiveConcurrencySample(requests=4, latency_p95_ms=40.0)
+    assert sampler.pending == 0
+
+
+def test_telemetry_sampler_classifies_timeout_and_custom_rate_limit() -> None:
+    def classify(job: ExecutionJob) -> AdaptiveFailureKind:
+        if job.last_error == "RateLimitedError":
+            return AdaptiveFailureKind.RATE_LIMITED
+        if job.last_error == "TimeoutError":
+            return AdaptiveFailureKind.TIMEOUT
+        return AdaptiveFailureKind.ERROR
+
+    sampler = AdaptiveTelemetrySampler(window_size=3, failure_classifier=classify)
+    assert sampler.record(
+        completed_job(status=JobStatus.RETRY_WAIT, error="TimeoutError"),
+        latency_ms=50.0,
+    ) is None
+    assert sampler.record(
+        completed_job(status=JobStatus.RETRY_WAIT, error="RateLimitedError"),
+        latency_ms=60.0,
+    ) is None
+    sample = sampler.record(
+        completed_job(status=JobStatus.FAILED, error="RuntimeError"),
+        latency_ms=70.0,
+    )
+
+    assert sample == AdaptiveConcurrencySample(
+        requests=3,
+        latency_p95_ms=70.0,
+        errors=1,
+        timeouts=1,
+        rate_limited=1,
+    )
+
+
+def test_telemetry_sampler_ignores_invalid_latency_and_nonterminal_states() -> None:
+    sampler = AdaptiveTelemetrySampler(window_size=1)
+
+    assert sampler.record(
+        completed_job(status=JobStatus.SUCCEEDED),
+        latency_ms=math.nan,
+    ) is None
+    assert sampler.record(
+        completed_job(status=JobStatus.RUNNING),
+        latency_ms=10.0,
+    ) is None
+    assert sampler.pending == 0
+
+
+def test_telemetry_sampler_validates_window_size() -> None:
+    with pytest.raises(ValueError):
+        AdaptiveTelemetrySampler(window_size=0)
