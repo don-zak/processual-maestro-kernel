@@ -49,7 +49,8 @@ def test_settings_r2_reconciles_late_rendered_cards_without_retry_timers() -> No
     assert "function reconcile()" in source
     assert "function scheduleReconcile()" in source
     assert "new MutationObserver" in source
-    assert "observer.observe(page" in source
+    assert "function observePageMutations(page)" in source
+    assert "observer?.observe(page" in source
     assert "childList: true" in source
     assert "subtree: true" in source
 
@@ -58,6 +59,21 @@ def test_settings_r2_reconciles_late_rendered_cards_without_retry_timers() -> No
     assert "window.setTimeout(reconcile, 100)" not in source
     assert "window.setTimeout(reconcile, 500)" not in source
     assert "window.setTimeout(reconcile, 1500)" not in source
+
+
+def test_settings_r2_disconnects_observer_during_own_dom_reconciliation() -> None:
+    source = _read(LAYOUT_JS)
+
+    assert "const resumeObserver = Boolean(observer)" in source
+    assert "observer?.disconnect()" in source
+    assert "if (resumeObserver)" in source
+    assert "observePageMutations(page)" in source
+
+    disconnect_pos = source.index("observer?.disconnect()")
+    shell_pos = source.index("ensureLayoutShell(page)")
+    resume_pos = source.index("if (resumeObserver)")
+
+    assert disconnect_pos < shell_pos < resume_pos
 
 
 def test_settings_r2_keeps_only_selected_panel_visible() -> None:
