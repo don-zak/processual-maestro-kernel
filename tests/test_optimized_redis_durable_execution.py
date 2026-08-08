@@ -46,6 +46,53 @@ async def test_many_workers_claim_distinct_jobs_without_duplicates() -> None:
 
 
 @pytest.mark.asyncio
+async def test_parallel_lease_completions_remain_independent() -> None:
+    client = redis.from_url(
+        os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
+        decode_responses=True,
+    )
+    prefix = f"{{optimized-complete-{uuid.uuid4().hex}}}"
+    stores = [OptimizedRedisDurableJobStore(client, prefix=prefix) for _ in range(8)]
+    try:
+        for index in range(8):
+            await stores[0].submit(
+                JobSpec(
+                    idempotency_key=f"complete-{index}",
+                    domain="network",
+                    payload={"index": index},
+                )
+            )
+
+        claims = await asyncio.gather(
+            *(
+                store.claim(worker_id=f"worker-{index}", lease_seconds=2)
+                for index, store in enumerate(stores)
+            )
+        )
+        assert all(claim is not None and claim.lease_token is not None for claim in claims)
+
+        completed = await asyncio.gather(
+            *(
+                stores[index].succeed(
+                    job_id=claim.job_id,
+                    worker_id=f"worker-{index}",
+                    lease_token=claim.lease_token,
+                    result={"worker": index},
+                )
+                for index, claim in enumerate(claims)
+                if claim is not None and claim.lease_token is not None
+            )
+        )
+
+        assert len(completed) == 8
+        assert all(job.status is JobStatus.SUCCEEDED for job in completed)
+        assert all(job.attempt == 1 for job in completed)
+        assert len({job.job_id for job in completed}) == 8
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_atomic_claim_expires_deadline_before_claiming_next_job() -> None:
     client = redis.from_url(
         os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
