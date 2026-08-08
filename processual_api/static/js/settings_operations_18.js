@@ -87,6 +87,35 @@
     return Array.isArray(state.sandboxKeys?.keys) ? state.sandboxKeys.keys : [];
   }
 
+  function replaceSandboxKeys(keys) {
+    state.sandboxKeys = {
+      ...(state.sandboxKeys || {}),
+      keys,
+      key_count: keys.length,
+      max_active_keys: state.sandboxKeys?.max_active_keys || 3,
+    };
+  }
+
+  function appendSandboxKey(key) {
+    if (!key) return;
+    replaceSandboxKeys(activeKeys().concat([key]));
+  }
+
+  function replaceRotatedSandboxKey(keyId, key) {
+    if (!key) return;
+    replaceSandboxKeys(
+      activeKeys()
+        .filter((item) => item.key_id !== keyId)
+        .concat([key])
+    );
+  }
+
+  function removeSandboxKey(keyId) {
+    replaceSandboxKeys(
+      activeKeys().filter((item) => item.key_id !== keyId)
+    );
+  }
+
   function keyRows() {
     if (state.integration?.enabled !== true) {
       return '<div class="sops-note">Sandbox API self-service is unavailable for the current plan. Upgrade or activate Enterprise Integration before issuing client-managed keys.</div>';
@@ -227,8 +256,9 @@
         expires_in_days: expires,
       });
       state.secretOnce = result.api_key || '';
+      appendSandboxKey(result.key);
       state.message = 'Sandbox key created successfully.';
-      await load();
+      render();
     } catch (error) {
       state.message = '';
       state.error = error?.detail || error?.message || 'Key creation failed.';
@@ -243,8 +273,9 @@
     try {
       const result = await CLIENT.post(`/settings/client/api-keys/${encodeURIComponent(keyId)}/rotate`, { expires_in_days: 30 });
       state.secretOnce = result.api_key || '';
+      replaceRotatedSandboxKey(keyId, result.key);
       state.message = 'Key rotated. The previous key is revoked.';
-      await load();
+      render();
     } catch (error) {
       state.message = '';
       state.error = error?.detail || error?.message || 'Key rotation failed.';
@@ -259,8 +290,9 @@
     render();
     try {
       await CLIENT.del(`/settings/client/api-keys/${encodeURIComponent(keyId)}`);
+      removeSandboxKey(keyId);
       state.message = 'Sandbox key revoked.';
-      await load();
+      render();
     } catch (error) {
       state.message = '';
       state.error = error?.detail || error?.message || 'Key revocation failed.';
