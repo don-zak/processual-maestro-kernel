@@ -20,6 +20,7 @@ on:
       - tests/test_adaptive_concurrency.py
       - tests/test_adaptive_pool_gate.py
       - tests/test_durable_redis_qualification.py
+      - tests/test_durable_resilience_qualification.py
       - .github/workflows/durable-execution.yml
 
 permissions:
@@ -68,6 +69,7 @@ jobs:
           tests/test_adaptive_concurrency.py
           tests/test_adaptive_pool_gate.py
           tests/test_durable_redis_qualification.py
+          tests/test_durable_resilience_qualification.py
 
       - name: Verify durable execution contracts
         run: >-
@@ -84,6 +86,7 @@ jobs:
           tests/test_adaptive_concurrency.py
           tests/test_adaptive_pool_gate.py
           tests/test_durable_redis_qualification.py
+          tests/test_durable_resilience_qualification.py
 
       - name: Emit 1-2-4-8 worker qualification metrics
         env:
