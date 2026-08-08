@@ -10,9 +10,11 @@ on:
       - benchmarks/execution_mix_shape_probe.py
       - benchmarks/execution_mix_planner_probe.py
       - tests/test_fanout_planner.py
+      - tests/test_orchestration_metrics.py
       - tests/test_workflow_llm_orchestration.py
       - .github/workflows/execution-mix-shaping.yml
       - processual_api/cgt_governor/policy/fanout_planner.py
+      - processual_api/cgt_governor/policy/orchestration_metrics.py
       - processual_api/cgt_governor/adapters/execution_fanout.py
       - processual_api/cgt_governor/adapters/registry.py
       - processual_api/routers/workflows.py
@@ -70,22 +72,27 @@ jobs:
             benchmarks/execution_mix_shape_probe.py \
             benchmarks/execution_mix_planner_probe.py \
             processual_api/cgt_governor/policy/fanout_planner.py \
+            processual_api/cgt_governor/policy/orchestration_metrics.py \
             processual_api/routers/workflows.py \
             tests/test_fanout_planner.py \
+            tests/test_orchestration_metrics.py \
             tests/test_workflow_llm_orchestration.py
           flake8 \
             benchmarks/execution_mix_app.py \
             benchmarks/execution_mix_shape_probe.py \
             benchmarks/execution_mix_planner_probe.py \
             processual_api/cgt_governor/policy/fanout_planner.py \
+            processual_api/cgt_governor/policy/orchestration_metrics.py \
             processual_api/routers/workflows.py \
             tests/test_fanout_planner.py \
+            tests/test_orchestration_metrics.py \
             tests/test_workflow_llm_orchestration.py
 
       - name: Test selective fanout planner and orchestration
         run: |
           pytest -q \
             tests/test_fanout_planner.py \
+            tests/test_orchestration_metrics.py \
             tests/test_workflow_llm_orchestration.py
 
       - name: Start two-worker execution mix harness
