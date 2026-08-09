@@ -123,13 +123,20 @@ def consume_quota(
                 continue
 
             subscription = raw.get("subscription", {})
-            plan_id = resolve_plan_id(
+            raw_plan_id = (
                 key.get("plan_id")
                 or key.get("plan")
                 or subscription.get("plan_id")
                 or subscription.get("plan")
                 or "Starter"
             )
+            try:
+                plan_id = resolve_plan_id(raw_plan_id)
+            except KeyError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="API key subscription plan is not recognized.",
+                ) from exc
 
             existing_policy = key.get("quota_policy", {})
             policy_source = (
