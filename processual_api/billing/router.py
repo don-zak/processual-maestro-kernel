@@ -20,6 +20,9 @@ from processual_api.billing.direct_checkout_router import (
     router as direct_checkout_router,
 )
 from processual_api.billing.offer_pricebook import public_offer_pricebook
+from processual_api.billing.plan_capability_router import (
+    router as plan_capability_router,
+)
 from processual_api.billing.public_plan_journey import public_plan_journey_catalog
 from processual_api.billing.subscription_catalog import public_subscription_catalog
 from processual_api.billing.subscription_preparation import (
@@ -35,6 +38,7 @@ from processual_api.db.session import get_session_factory
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 router.routes.extend(direct_checkout_router.routes)
+router.routes.extend(plan_capability_router.routes)
 
 _VARIANTS = {
     "starter": os.environ.get("LS_VARIANT_STARTER", ""),
