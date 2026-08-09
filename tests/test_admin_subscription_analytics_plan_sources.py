@@ -43,7 +43,7 @@ def test_admin_subscription_analytics_rolls_up_canonical_enterprise_request_plan
     tmp_path,
 ):
     _write_json(
-        tmp_path / "settings-enterprise-request-client.json",
+        tmp_path / "settings_enterprise-request-client.json",
         {
             "client_id": "enterprise-request-client",
             "client_requests": [
