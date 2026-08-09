@@ -7,7 +7,7 @@ from datetime import datetime
 
 from processual_api.billing.commercial_quota_top_up_contracts import (
     TopUpPurchaseState,
-    quote_top_up,
+    quote_top_up_for_runtime,
 )
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_CATALOG_VERSION,
@@ -79,7 +79,9 @@ def evaluate_subscription_top_up_eligibility_factory(
 
             plan = await uow.plans.get_by_id(subscription.plan_id, for_update=True)
             if plan is None:
-                raise SubscriptionTopUpEligibilityError("subscription plan was not found.")
+                raise SubscriptionTopUpEligibilityError(
+                    "subscription plan was not found."
+                )
             try:
                 spec = get_plan_fulfillment_spec(plan.plan_code)
             except KeyError as exc:
@@ -123,11 +125,10 @@ def evaluate_subscription_top_up_eligibility_factory(
                     "top-up purchase requires at least 80% consumption of the monthly base quota."
                 )
 
-            quote = quote_top_up(spec.plan_code, command.requested_units)
+            quote = quote_top_up_for_runtime(spec.plan_code, command.requested_units)
             if quote.state not in {
                 TopUpPurchaseState.READY_FOR_REVIEW,
                 TopUpPurchaseState.UPGRADE_RECOMMENDED,
-                TopUpPurchaseState.DISABLED,
             }:
                 raise SubscriptionTopUpEligibilityError(
                     f"top-up request is not purchasable: {quote.state.value}."
