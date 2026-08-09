@@ -35,6 +35,13 @@ class PlanRepository(Protocol):
         for_update: bool = False,
     ) -> AdminMarketPlan | None: ...
 
+    async def get_by_code(
+        self,
+        plan_code: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPlan | None: ...
+
     def add(
         self,
         plan: AdminMarketPlan,
