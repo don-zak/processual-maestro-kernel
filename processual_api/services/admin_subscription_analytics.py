@@ -17,6 +17,13 @@ PLAN_BUCKETS = (
     "unknown",
 )
 
+ENTERPRISE_INTEGRATION_ANALYTICS_ROLLUP = {
+    "enterprise_pilot": "enterprise_integration",
+    "enterprise_core": "enterprise_integration",
+    "enterprise_scale": "enterprise_integration",
+    "enterprise_strategic": "enterprise_integration",
+}
+
 SUBSCRIPTION_BUCKETS = (
     "active",
     "trial",
@@ -107,7 +114,9 @@ def _normalize_plan(value: Any) -> str:
         normalized = normalize_plan_id(raw)
     except (TypeError, ValueError):
         normalized = raw.lower().strip()
-    return normalized if normalized in PLAN_BUCKETS else "unknown"
+    if normalized in PLAN_BUCKETS:
+        return normalized
+    return ENTERPRISE_INTEGRATION_ANALYTICS_ROLLUP.get(normalized, "unknown")
 
 
 def _plan_allowance(plan_id: str) -> int:
