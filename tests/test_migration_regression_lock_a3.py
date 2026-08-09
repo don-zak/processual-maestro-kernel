@@ -155,7 +155,7 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
             "context.is_offline_mode()",
         ),
         "20260805_0026_lemon_squeezy_webhook_inbox.py": (
-            "Downgrade blocked: commercial notification outbox rows exist",
+            "Downgrade blocked: Lemon Squeezy webhook inbox rows exist",
             "context.is_offline_mode()",
         ),
         "20260805_0027_lemon_squeezy_reconciliation_decisions.py": (
