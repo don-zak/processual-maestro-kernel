@@ -3,6 +3,9 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Final
 
+from processual_api.billing.assessment_plan_fulfillment import (
+    assessment_plan_fulfillment_payload,
+)
 from processual_api.billing.commercial_catalog_contracts import build_catalog_plan_contracts
 from processual_api.billing.commercial_quota_top_up_contracts import build_top_up_policies
 from processual_api.billing.maestro_group1_selected_pricing import (
@@ -245,6 +248,24 @@ def _included_quota(plan_id: str) -> int | None:
     return None if contract is None else contract.included_maestro_units
 
 
+def _assessment_public_metadata(plan_id: str) -> dict[str, object]:
+    if plan_id != "academic_institution":
+        return {}
+
+    fulfillment = assessment_plan_fulfillment_payload(plan_id)
+    return {
+        "assessment_required": True,
+        "entitlement_source_plan_code": fulfillment["entitlement_source_plan_code"],
+        "entitlement_baseline_codes": list(fulfillment["entitlement_codes"]),
+        "quota_source": "assessment",
+        "quota_determined_after_assessment": True,
+        "price_sources": ["assessment", "contract"],
+        "price_determined_after_assessment": True,
+        "activation_mode": "assessment",
+        "activation_controlled": True,
+    }
+
+
 def resolve_direct_registration_plan(plan_id: str | None) -> str | None:
     if plan_id is None:
         return None
@@ -312,52 +333,52 @@ def public_plan_journey_catalog() -> dict[str, Any]:
             action = "start_registration"
             registration_path = f"/register/{account_type}"
 
-        plans.append(
-            {
-                "plan_id": plan_id,
-                "display_name": definition["display_name"],
-                "audience": definition["audience"],
-                "description": definition["description"],
-                "position": position,
-                "account_type": account_type,
-                "member_policy": "unlimited_within_quota",
-                "included_quota_units": _included_quota(plan_id),
-                "monthly_price_usd": _money(monthly_price) if monthly_price is not None else None,
-                "annual_price_usd": _money(annual_price) if annual_price is not None else None,
-                "annual_discount_percent": (
-                    int(ANNUAL_DISCOUNT_PERCENT)
-                    if monthly_price is not None
-                    else None
+        plan_payload = {
+            "plan_id": plan_id,
+            "display_name": definition["display_name"],
+            "audience": definition["audience"],
+            "description": definition["description"],
+            "position": position,
+            "account_type": account_type,
+            "member_policy": "unlimited_within_quota",
+            "included_quota_units": _included_quota(plan_id),
+            "monthly_price_usd": _money(monthly_price) if monthly_price is not None else None,
+            "annual_price_usd": _money(annual_price) if annual_price is not None else None,
+            "annual_discount_percent": (
+                int(ANNUAL_DISCOUNT_PERCENT)
+                if monthly_price is not None
+                else None
+            ),
+            "price_visibility": "public" if monthly_price is not None else "assessment",
+            "requires_assessment": requires_assessment,
+            "registration_available": not requires_assessment,
+            "registration_path": registration_path,
+            "action": action,
+            "features": list(definition["features"]),
+            "byok": {
+                "required": True,
+                "provider_cost_included": False,
+                "summary": (
+                    "Connect and pay your selected providers directly. Maestro covers "
+                    "governance, orchestration, monitoring, and the included Maestro quota."
                 ),
-                "price_visibility": "public" if monthly_price is not None else "assessment",
-                "requires_assessment": requires_assessment,
-                "registration_available": not requires_assessment,
-                "registration_path": registration_path,
-                "action": action,
-                "features": list(definition["features"]),
-                "byok": {
-                    "required": True,
-                    "provider_cost_included": False,
-                    "summary": (
-                        "Connect and pay your selected providers directly. Maestro covers "
-                        "governance, orchestration, monitoring, and the included Maestro quota."
-                    ),
-                    "excluded_costs": [
-                        "AI model and API provider charges",
-                        "Telecom and external service charges",
-                        "Customer-side storage and custom integration work",
-                    ],
-                },
-                "quota_add_ons": _quota_add_ons(plan_id),
-                "quota_add_ons_policy": {
-                    "purchase_model": "on_demand",
-                    "recurring": False,
-                    "annual_discount_applies": False,
-                    "status": "awaiting_approved_public_package_prices",
-                },
-                "trial": definition["trial"],
-            }
-        )
+                "excluded_costs": [
+                    "AI model and API provider charges",
+                    "Telecom and external service charges",
+                    "Customer-side storage and custom integration work",
+                ],
+            },
+            "quota_add_ons": _quota_add_ons(plan_id),
+            "quota_add_ons_policy": {
+                "purchase_model": "on_demand",
+                "recurring": False,
+                "annual_discount_applies": False,
+                "status": "awaiting_approved_public_package_prices",
+            },
+            "trial": definition["trial"],
+        }
+        plan_payload.update(_assessment_public_metadata(plan_id))
+        plans.append(plan_payload)
 
     return {
         "version": "2026-08-commercial-plan-pages-v1",
