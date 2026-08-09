@@ -1,13 +1,14 @@
 """Client-safe Enterprise Integration console contract for Settings.
 
 This route extension composes existing authoritative plan capability, API-key,
-operational-profile, and declarative readiness primitives into one payload for
-the client Settings surface. It does not issue credentials, call external
-services, approve production connectors, or expose stored secrets.
+operational-profile, scope-catalog, and declarative readiness primitives into
+one payload for the client Settings surface. It does not issue credentials,
+call external services, approve production connectors, or expose stored secrets.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from fastapi import Depends
@@ -18,6 +19,7 @@ from processual_api.integrations.integration_readiness import (
     list_integration_readiness_checks,
     summarize_integration_readiness,
 )
+from processual_api.integrations.scope_catalog import list_integration_scopes
 
 from . import settings as settings_module
 
@@ -50,10 +52,45 @@ def _safe_readiness_checks() -> list[dict[str, Any]]:
     ]
 
 
+def _scope_posture(*, enabled: bool) -> dict[str, Any]:
+    if not enabled:
+        return {
+            "enabled": False,
+            "total": 0,
+            "read": 0,
+            "write": 0,
+            "restricted": 0,
+            "read_only_pilot": 0,
+            "supervisor_approval_required": 0,
+            "production_allowed_without_approval": 0,
+        }
+
+    scopes = list_integration_scopes()
+    by_access = Counter(scope.access_level for scope in scopes)
+    return {
+        "enabled": True,
+        "total": len(scopes),
+        "read": by_access.get("read", 0),
+        "write": by_access.get("write", 0),
+        "restricted": by_access.get("restricted", 0),
+        "read_only_pilot": sum(
+            1 for scope in scopes if scope.allowed_in_read_only_pilot
+        ),
+        "supervisor_approval_required": sum(
+            1 for scope in scopes if scope.requires_supervisor_approval
+        ),
+        "production_allowed_without_approval": sum(
+            1 for scope in scopes if scope.production_allowed_without_approval
+        ),
+    }
+
+
 def _console_sections(
     *,
     enabled: bool,
     key_count: int,
+    operational_profile_count: int,
+    scope_posture: dict[str, Any],
     readiness: dict[str, int],
 ) -> list[dict[str, Any]]:
     if not enabled:
@@ -67,6 +104,11 @@ def _console_sections(
         ]
 
     keys_status = "ready" if key_count > 0 else "action_required"
+    profile_status = (
+        "ready"
+        if operational_profile_count > 0 and int(scope_posture.get("total", 0)) > 0
+        else "action_required"
+    )
     sandbox_ready = int(readiness.get("sandbox_ready", 0))
     readiness_status = "ready" if sandbox_ready > 0 else "action_required"
 
@@ -85,6 +127,16 @@ def _console_sections(
                 "Review active integration keys."
                 if key_count > 0
                 else "Provision a sandbox integration key or request supervised issuance."
+            ),
+        },
+        {
+            "id": "integration_profile",
+            "label": "Profiles & scope posture",
+            "status": profile_status,
+            "next_action": (
+                "Review read, write, and restricted scope posture before sandbox use."
+                if profile_status == "ready"
+                else "Complete the integration profile and scope policy before sandbox use."
             ),
         },
         {
@@ -110,12 +162,15 @@ def _next_action(
     *,
     enabled: bool,
     key_count: int,
+    operational_profile_count: int,
     readiness: dict[str, int],
 ) -> str:
     if not enabled:
         return "Upgrade to an eligible Enterprise Integration plan."
     if key_count == 0:
         return "Provision a sandbox integration key or request supervised issuance."
+    if operational_profile_count == 0:
+        return "Complete the integration profile and scope policy before sandbox use."
     if int(readiness.get("sandbox_ready", 0)) == 0:
         return "Complete required integration inputs and security controls."
     return "Proceed to supervised sandbox review; production remains blocked."
@@ -143,6 +198,7 @@ def enterprise_integration_console_payload(
     operational = settings_module._client_api_key_operational_profiles_payload(
         enabled=enabled
     )
+    scope_posture = _scope_posture(enabled=enabled)
     readiness_checks = _safe_readiness_checks() if enabled else []
     readiness = (
         summarize_integration_readiness(list_integration_readiness_checks())
@@ -157,11 +213,15 @@ def enterprise_integration_console_payload(
     )
 
     key_count = len(keys)
+    operational_profile_count = int(operational["operational_profile_count"])
     return {
         "enabled": enabled,
         "status": capability["status"],
         "plan_id": capability["plan_id"],
         "normalized_plan_id": capability["normalized_plan_id"],
+        "canonical_plan_id": capability.get(
+            "canonical_plan_id", capability["normalized_plan_id"]
+        ),
         "legacy_compatibility": capability["legacy_compatibility"],
         "eligible_plans": capability["eligible_plans"],
         "environment": "sandbox",
@@ -173,20 +233,22 @@ def enterprise_integration_console_payload(
         "operational_profiles_enabled": operational[
             "operational_profiles_enabled"
         ],
-        "operational_profile_count": operational[
-            "operational_profile_count"
-        ],
+        "operational_profile_count": operational_profile_count,
         "operational_profiles": operational["operational_profiles"],
+        "scope_posture": scope_posture,
         "readiness": readiness,
         "readiness_checks": readiness_checks,
         "sections": _console_sections(
             enabled=enabled,
             key_count=key_count,
+            operational_profile_count=operational_profile_count,
+            scope_posture=scope_posture,
             readiness=readiness,
         ),
         "next_action": _next_action(
             enabled=enabled,
             key_count=key_count,
+            operational_profile_count=operational_profile_count,
             readiness=readiness,
         ),
     }
