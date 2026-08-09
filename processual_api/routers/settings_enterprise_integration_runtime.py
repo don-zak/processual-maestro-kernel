@@ -1,9 +1,10 @@
 """Client-safe Enterprise Integration console contract for Settings.
 
 This route extension composes existing authoritative plan capability, API-key,
-operational-profile, scope-catalog, and declarative readiness primitives into
-one payload for the client Settings surface. It does not issue credentials,
-call external services, approve production connectors, or expose stored secrets.
+operational-profile, scope-catalog, declarative readiness, and identifiers-only
+qualification persistence primitives into one Settings surface. It does not issue
+credentials, call external services, approve security controls or production
+connectors, or expose stored secrets.
 """
 
 from __future__ import annotations
@@ -16,6 +17,11 @@ from pydantic import BaseModel, Field
 
 from processual_api.auth.security import get_current_user
 from processual_api.billing.usage_pricing import enterprise_integration_capability
+from processual_api.integrations.enterprise_qualification_drafts import (
+    safe_qualification_draft,
+    save_qualification_draft,
+    submit_qualification_draft,
+)
 from processual_api.integrations.enterprise_sandbox_qualification import (
     build_customer_sandbox_qualification,
     build_sandbox_qualification_catalog,
@@ -59,6 +65,14 @@ def _client_enterprise_capability(
         current_user,
     )
     return user_id, raw, enterprise_integration_capability(plan_id)
+
+
+def _require_enterprise_entitlement(capability: dict[str, Any]) -> None:
+    if not bool(capability["enabled"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Enterprise Integration entitlement is required.",
+        )
 
 
 def _safe_readiness_checks(checks: list[Any]) -> list[dict[str, Any]]:
@@ -271,6 +285,7 @@ def enterprise_integration_console_payload(
     )
     key_count = len(keys)
     operational_profile_count = int(operational["operational_profile_count"])
+    qualification_draft = safe_qualification_draft(raw) if enabled else None
     return {
         "enabled": enabled,
         "status": capability["status"],
@@ -295,6 +310,7 @@ def enterprise_integration_console_payload(
         "operational_profiles": operational["operational_profiles"],
         "scope_posture": scope_posture,
         "qualification_catalog": _qualification_catalog(enabled=enabled),
+        "qualification_draft": qualification_draft,
         "readiness": readiness,
         "readiness_checks": readiness_checks,
         "sections": _console_sections(
@@ -329,11 +345,7 @@ async def evaluate_enterprise_sandbox_qualification(
     current_user: dict = Depends(get_current_user),
 ):
     _, _, capability = _client_enterprise_capability(current_user=current_user)
-    if not bool(capability["enabled"]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Enterprise Integration entitlement is required.",
-        )
+    _require_enterprise_entitlement(capability)
 
     try:
         qualification = build_customer_sandbox_qualification(
@@ -356,9 +368,71 @@ async def evaluate_enterprise_sandbox_qualification(
     }
 
 
+@settings_module.router.put(
+    "/enterprise-integration/sandbox-qualification/draft",
+    response_model=dict,
+)
+async def save_enterprise_sandbox_qualification_draft(
+    body: EnterpriseSandboxQualificationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id, raw, capability = _client_enterprise_capability(
+        current_user=current_user
+    )
+    _require_enterprise_entitlement(capability)
+    try:
+        qualification = save_qualification_draft(
+            raw,
+            credential_profile_id=body.credential_profile_id,
+            requested_scope_ids=body.requested_scope_ids,
+            provided_input_ids=body.provided_input_ids,
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    settings_module._save_raw(user_id, raw)
+    return {
+        **qualification,
+        "environment": "sandbox",
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
+
+
+@settings_module.router.post(
+    "/enterprise-integration/sandbox-qualification/draft/submit",
+    response_model=dict,
+)
+async def submit_enterprise_sandbox_qualification_draft(
+    current_user: dict = Depends(get_current_user),
+):
+    user_id, raw, capability = _client_enterprise_capability(
+        current_user=current_user
+    )
+    _require_enterprise_entitlement(capability)
+    try:
+        qualification = submit_qualification_draft(raw)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    settings_module._save_raw(user_id, raw)
+    return {
+        **qualification,
+        "environment": "sandbox",
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
+
+
 __all__ = [
     "EnterpriseSandboxQualificationRequest",
     "enterprise_integration_console_payload",
     "evaluate_enterprise_sandbox_qualification",
     "get_enterprise_integration_console",
+    "save_enterprise_sandbox_qualification_draft",
+    "submit_enterprise_sandbox_qualification_draft",
 ]
