@@ -2,33 +2,53 @@ from __future__ import annotations
 
 import pytest
 
+from processual_api.integrations.adapter_contracts import get_adapter_contract
 from processual_api.integrations.credential_profiles import (
     COMMON_REQUIRED_CUSTOMER_INPUTS,
+    get_credential_profile,
 )
 from processual_api.integrations.enterprise_sandbox_qualification import (
     build_customer_sandbox_qualification,
+    build_sandbox_qualification_catalog,
 )
-from processual_api.integrations.scope_catalog import list_integration_scopes
+from processual_api.integrations.scope_catalog import (
+    get_integration_scope,
+    list_integration_scopes,
+)
 
 
 def _profile_id() -> str:
     return "enterprise_core_api_reference"
 
 
+def _profile_scope_ids() -> tuple[str, ...]:
+    profile = get_credential_profile(_profile_id())
+    return tuple(
+        sorted(
+            {
+                scope_id
+                for contract_id in profile.adapter_contract_ids
+                for scope_id in get_adapter_contract(contract_id).all_scopes
+            }
+        )
+    )
+
+
 def _read_scope_id() -> str:
     return next(
-        scope.scope_id
-        for scope in list_integration_scopes()
-        if scope.access_level == "read" and scope.allowed_in_read_only_pilot
+        scope_id
+        for scope_id in _profile_scope_ids()
+        if get_integration_scope(scope_id).access_level == "read"
+        and get_integration_scope(scope_id).allowed_in_read_only_pilot
     )
 
 
 def _supervised_scope_id() -> str:
     return next(
-        scope.scope_id
-        for scope in list_integration_scopes()
-        if scope.access_level in {"write", "restricted"}
-        and scope.requires_supervisor_approval
+        scope_id
+        for scope_id in _profile_scope_ids()
+        if get_integration_scope(scope_id).access_level in {"write", "restricted"}
+        and get_integration_scope(scope_id).requires_supervisor_approval
     )
 
 
@@ -72,7 +92,9 @@ def test_complete_customer_inputs_stop_at_supervised_security_boundary() -> None
         check["status"] == "blocked_missing_security_controls"
         for check in payload["readiness_checks"]
     )
-    assert all(check["missing_security_controls"] for check in payload["readiness_checks"])
+    assert all(
+        check["missing_security_controls"] for check in payload["readiness_checks"]
+    )
     assert payload["production_allowed"] is False
     assert payload["runtime_connector_approved"] is False
 
@@ -82,6 +104,22 @@ def test_sandbox_qualification_rejects_unknown_scope() -> None:
         build_customer_sandbox_qualification(
             credential_profile_id=_profile_id(),
             requested_scope_ids=["unknown:scope"],
+            provided_input_ids=[],
+        )
+
+
+def test_sandbox_qualification_rejects_catalog_scope_outside_profile_contracts() -> None:
+    allowed = set(_profile_scope_ids())
+    incompatible = next(
+        scope.scope_id
+        for scope in list_integration_scopes()
+        if scope.scope_id not in allowed
+    )
+
+    with pytest.raises(ValueError, match="not supported by credential profile"):
+        build_customer_sandbox_qualification(
+            credential_profile_id=_profile_id(),
+            requested_scope_ids=[incompatible],
             provided_input_ids=[],
         )
 
@@ -124,6 +162,21 @@ def test_supervised_scope_is_not_read_only_pilot_eligible() -> None:
     assert posture["read_only_pilot_eligible"] is False
     assert payload["production_allowed"] is False
     assert payload["runtime_connector_approved"] is False
+
+
+def test_qualification_catalog_declares_profile_compatible_scope_ids() -> None:
+    catalog = build_sandbox_qualification_catalog()
+    profile = next(
+        item
+        for item in catalog["profiles"]
+        if item["credential_profile_id"] == _profile_id()
+    )
+
+    assert set(profile["allowed_scope_ids"]) == set(_profile_scope_ids())
+    assert profile["runtime_connector_approved"] is False
+    assert catalog["security_controls_client_approvable"] is False
+    assert catalog["production_allowed"] is False
+    assert catalog["runtime_connector_approved"] is False
 
 
 def test_qualification_payload_contains_identifiers_not_secret_values() -> None:
