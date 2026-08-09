@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -46,6 +47,9 @@ class AdminMarketAssessmentQuotaProfile(Base):
     customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     public_plan_id: Mapped[str] = mapped_column(String(128), nullable=False)
     entitlement_source_plan_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    approved_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    approval_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    entitlement_codes_json: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     metric_code: Mapped[str] = mapped_column(String(128), nullable=False)
     limit_units: Mapped[int] = mapped_column(BigInteger, nullable=False)
     cycle_kind: Mapped[str] = mapped_column(String(32), nullable=False)
