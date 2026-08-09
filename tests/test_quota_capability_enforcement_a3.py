@@ -14,13 +14,13 @@ def test_authoritative_plan_capability_allows_counted_governance_endpoint() -> N
 
 
 def test_authoritative_capability_denial_is_fail_closed(monkeypatch) -> None:
-    class Denied(PermissionError):
+    class DeniedError(PermissionError):
         pass
 
-    monkeypatch.setattr(quota_store, "PlanEntitlementDeniedError", Denied)
+    monkeypatch.setattr(quota_store, "PlanEntitlementDeniedError", DeniedError)
 
     def deny(*args, **kwargs):
-        raise Denied("denied")
+        raise DeniedError("denied")
 
     monkeypatch.setattr(quota_store, "require_plan_entitlement", deny)
 
