@@ -11,7 +11,9 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from processual_api.integrations.adapter_contracts import get_adapter_contract
 from processual_api.integrations.credential_profiles import (
+    CredentialProfile,
     get_credential_profile,
     list_credential_profiles,
 )
@@ -32,6 +34,14 @@ def _unique_ids(values: list[str] | tuple[str, ...]) -> tuple[str, ...]:
         if str(value).strip()
     }
     return tuple(sorted(normalized))
+
+
+def _profile_scope_ids(profile: CredentialProfile) -> tuple[str, ...]:
+    scope_ids: set[str] = set()
+    for contract_id in profile.adapter_contract_ids:
+        contract = get_adapter_contract(contract_id)
+        scope_ids.update(contract.all_scopes)
+    return tuple(sorted(scope_ids))
 
 
 def build_sandbox_qualification_catalog() -> dict[str, Any]:
@@ -55,9 +65,17 @@ def build_sandbox_qualification_catalog() -> dict[str, Any]:
             {
                 "credential_profile_id": profile.credential_profile_id,
                 "display_name": profile.display_name,
+                "description": profile.description,
                 "required_input_ids": list(profile.required_customer_inputs),
+                "required_security_control_ids": list(
+                    profile.required_security_controls
+                ),
+                "allowed_scope_ids": list(_profile_scope_ids(profile)),
                 "supported_auth_methods": list(profile.supported_auth_methods),
                 "sandbox_required": profile.sandbox_required,
+                "production_credential_approval_required": (
+                    profile.production_credential_approval_required
+                ),
                 "runtime_connector_approved": False,
             }
             for profile in profiles
@@ -65,6 +83,8 @@ def build_sandbox_qualification_catalog() -> dict[str, Any]:
         "scopes": [
             {
                 "scope_id": scope.scope_id,
+                "domain": scope.domain,
+                "action": scope.action,
                 "access_level": scope.access_level,
                 "risk_level": scope.risk_level,
                 "allowed_in_read_only_pilot": scope.allowed_in_read_only_pilot,
@@ -91,8 +111,10 @@ def build_customer_sandbox_qualification(
 ) -> dict[str, Any]:
     """Build a safe, client-specific sandbox qualification snapshot.
 
-    Only known catalog/profile identifiers are accepted. Security-control approval
-    is deliberately not an input to this function: that boundary is supervised.
+    Only known catalog/profile identifiers are accepted. Requested scopes must
+    also belong to an adapter contract supported by the selected credential
+    profile. Security-control approval is deliberately not an input to this
+    function: that boundary is supervised.
     """
 
     normalized_profile_id = str(credential_profile_id or "").strip().lower()
@@ -104,14 +126,26 @@ def build_customer_sandbox_qualification(
     if not scope_ids:
         raise ValueError("at least one requested scope is required")
 
+    allowed_scope_ids = set(_profile_scope_ids(profile))
     scopes = []
+    incompatible_scope_ids: list[str] = []
     for scope_id in scope_ids:
         try:
-            scopes.append(get_integration_scope(scope_id))
+            scope = get_integration_scope(scope_id)
         except KeyError as exc:
             raise ValueError(
                 f"unsupported integration scope: {scope_id}"
             ) from exc
+        if scope_id not in allowed_scope_ids:
+            incompatible_scope_ids.append(scope_id)
+        scopes.append(scope)
+
+    if incompatible_scope_ids:
+        raise ValueError(
+            "scope identifiers are not supported by credential profile "
+            f"{profile.credential_profile_id}: "
+            + ", ".join(incompatible_scope_ids)
+        )
 
     provided_inputs = _unique_ids(provided_input_ids)
     required_inputs = tuple(profile.required_customer_inputs)
