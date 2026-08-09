@@ -158,13 +158,19 @@ def consume_quota(
                 continue
 
             subscription = raw.get("subscription", {})
+            if not isinstance(subscription, dict):
+                subscription = {}
             raw_plan_id = (
                 key.get("plan_id")
                 or key.get("plan")
                 or subscription.get("plan_id")
                 or subscription.get("plan")
-                or "Starter"
             )
+            if not isinstance(raw_plan_id, str) or not raw_plan_id.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="API key subscription plan authority is missing.",
+                )
             try:
                 plan_id = resolve_plan_id(raw_plan_id)
             except KeyError as exc:
