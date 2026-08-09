@@ -81,6 +81,7 @@ const APP = (() => {
       PAGES.settings?.init?.();
       window.PMK_SETTINGS_OPERATIONS_18?.init?.();
       setTimeout(() => window.PMK_SETTINGS_LAYOUT_18?.init?.(), 0);
+      setTimeout(() => window.PMK_SETTINGS_ENTERPRISE_CONSOLE_18?.init?.(), 0);
     }
     if (pg === 'institution') { PAGES.institution?.init?.(); }
     if (pg === 'gateway') {
@@ -273,6 +274,22 @@ const APP = (() => {
     const script = document.createElement('script');
     script.src = 'js/settings_layout_18.js?v=settingslayout1';
     script.dataset.sl18Script = 'true';
+    document.body.appendChild(script);
+  }
+})();
+
+(function bootstrapSettingsEnterpriseConsole18() {
+  if (!document.querySelector('link[data-se18-style]')) {
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.href = 'css/settings_enterprise_console_18.css?v=enterpriseconsole1';
+    style.dataset.se18Style = 'true';
+    document.head.appendChild(style);
+  }
+  if (!document.querySelector('script[data-se18-script]')) {
+    const script = document.createElement('script');
+    script.src = 'js/settings_enterprise_console_18.js?v=enterpriseconsole1';
+    script.dataset.se18Script = 'true';
     document.body.appendChild(script);
   }
 })();
