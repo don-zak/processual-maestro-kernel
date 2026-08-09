@@ -3,7 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Uuid, func, select
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,19 +22,52 @@ from processual_api.db.base import Base
 
 class AdminMarketAssessmentSubscriptionBinding(Base):
     __tablename__ = "admin_market_assessment_subscription_bindings"
+    __table_args__ = (
+        CheckConstraint(
+            "length(assessment_binding_hash) = 64",
+            name="assessment_binding_hash_length",
+        ),
+        CheckConstraint(
+            "length(activation_idempotency_key_hash) = 64",
+            name="activation_idempotency_hash_length",
+        ),
+        UniqueConstraint(
+            "binding_ref",
+            name="uq_assessment_subscription_binding_ref",
+        ),
+        UniqueConstraint(
+            "subscription_id",
+            name="uq_assessment_subscription_binding_subscription",
+        ),
+        UniqueConstraint(
+            "assessment_binding_hash",
+            name="uq_assessment_subscription_binding_assessment_hash",
+        ),
+        UniqueConstraint(
+            "activation_idempotency_key_hash",
+            name="uq_assessment_subscription_binding_idempotency_hash",
+        ),
+        Index(
+            "ix_assessment_subscription_binding_customer",
+            "customer_ref",
+            "created_at",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    binding_ref: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    binding_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("admin_market_subscriptions.id", ondelete="CASCADE"),
+        ForeignKey(
+            "admin_market_subscriptions.id",
+            name="fk_assessment_subscription_binding_subscription",
+            ondelete="CASCADE",
+        ),
         nullable=False,
-        unique=True,
     )
     assessment_binding_hash: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        unique=True,
     )
     assessment_id: Mapped[str] = mapped_column(String(128), nullable=False)
     customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -32,7 +75,11 @@ class AdminMarketAssessmentSubscriptionBinding(Base):
     entitlement_source_plan_code: Mapped[str] = mapped_column(String(128), nullable=False)
     entitlement_plan_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("admin_market_plans.id", ondelete="RESTRICT"),
+        ForeignKey(
+            "admin_market_plans.id",
+            name="fk_assessment_subscription_binding_plan",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
     )
     entitlement_profile_ref: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -40,6 +87,7 @@ class AdminMarketAssessmentSubscriptionBinding(Base):
         String(128),
         ForeignKey(
             "admin_market_assessment_quota_profiles.profile_ref",
+            name="fk_assessment_subscription_binding_quota_profile",
             ondelete="RESTRICT",
         ),
         nullable=False,
@@ -47,7 +95,6 @@ class AdminMarketAssessmentSubscriptionBinding(Base):
     activation_idempotency_key_hash: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        unique=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
