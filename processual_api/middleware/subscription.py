@@ -8,7 +8,12 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from processual_api.admin_marketplace.subscription_access import (
+    SubscriptionAccessSnapshot,
     resolve_subscription_access,
+)
+from processual_api.billing.plan_entitlement_gate import (
+    PlanEntitlementDeniedError,
+    require_plan_entitlement,
 )
 from processual_api.middleware.runtime_capacity import RuntimeCapacityMiddleware
 
@@ -44,6 +49,9 @@ _PUBLIC_PATHS = {
 
 _SUSPENSION_ALLOWED_PREFIXES = {"/billing"}
 _READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
+_SERVER_AUTHORITATIVE_CAPABILITIES: dict[tuple[str, str], str] = {
+    ("POST", "/cgt/govern"): "maestro_execution",
+}
 _JWT_SECRET = None
 _JWT_ALGORITHM = "HS256"
 
@@ -87,6 +95,41 @@ def _extract_customer_ref(request: Request) -> str | None:
         return None
 
 
+def _required_server_authoritative_capability(
+    *,
+    method: str,
+    path: str,
+) -> str | None:
+    normalized_path = path if path == "/" else path.rstrip("/")
+    return _SERVER_AUTHORITATIVE_CAPABILITIES.get(
+        (method.upper(), normalized_path)
+    )
+
+
+def _enforce_server_authoritative_capability(
+    *,
+    access: SubscriptionAccessSnapshot,
+    method: str,
+    path: str,
+) -> Response | None:
+    capability_code = _required_server_authoritative_capability(
+        method=method,
+        path=path,
+    )
+    if capability_code is None:
+        return None
+
+    try:
+        require_plan_entitlement(access.plan_code, capability_code)
+    except PlanEntitlementDeniedError:
+        return _json_response(
+            status_code=403,
+            detail="Subscription plan does not permit this operation.",
+            stage=access.access_stage,
+        )
+    return None
+
+
 class _SubscriptionAccessMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
@@ -120,6 +163,13 @@ class _SubscriptionAccessMiddleware(BaseHTTPMiddleware):
 
         stage = access.access_stage
         if stage == "active":
+            capability_denial = _enforce_server_authoritative_capability(
+                access=access,
+                method=request.method,
+                path=path,
+            )
+            if capability_denial is not None:
+                return capability_denial
             return await call_next(request)
 
         if stage == "grace":
@@ -129,6 +179,13 @@ class _SubscriptionAccessMiddleware(BaseHTTPMiddleware):
                     detail="Payment overdue. Service is read-only until billing is restored.",
                     stage="grace",
                 )
+            capability_denial = _enforce_server_authoritative_capability(
+                access=access,
+                method=request.method,
+                path=path,
+            )
+            if capability_denial is not None:
+                return capability_denial
             return await call_next(request)
 
         if stage == "suspended":
