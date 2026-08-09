@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 
 from processual_api.admin_marketplace.assessment_quota_profile_persistence import (
@@ -44,7 +42,12 @@ class _FakeRepository:
     def __init__(self) -> None:
         self.records: dict[str, AdminMarketAssessmentQuotaProfile] = {}
 
-    async def get_by_profile_ref(self, profile_ref: str, *, for_update: bool = False):
+    async def get_by_profile_ref(
+        self,
+        profile_ref: str,
+        *,
+        for_update: bool = False,
+    ):
         return self.records.get(profile_ref)
 
     async def get_by_binding_hash(
@@ -96,7 +99,11 @@ async def test_assessment_quota_profile_uses_exact_approved_quota_and_canonical_
     assert result.record.limit_units != 5_000
     assert result.record.metric_code == QUOTA_METRIC_CODE == "credits"
     assert result.record.cycle_kind == ASSESSMENT_QUOTA_CYCLE_KIND == "calendar_month"
-    assert result.record.compatibility_period_days == MONTHLY_COMPATIBILITY_PERIOD_DAYS == 30
+    assert (
+        result.record.compatibility_period_days
+        == MONTHLY_COMPATIBILITY_PERIOD_DAYS
+        == 30
+    )
     assert result.runtime_profile.profile_ref == result.record.profile_ref
     assert result.runtime_profile.period_days == 30
     assert result.runtime_profile.metrics[0].metric_code == "credits"
