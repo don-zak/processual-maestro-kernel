@@ -11,6 +11,7 @@ from processual_api.admin_marketplace.subscription_access import (
     SubscriptionAccessSnapshot,
     resolve_subscription_access,
 )
+from processual_api.billing.plan_capability_matrix import required_execution_capability
 from processual_api.billing.plan_entitlement_gate import (
     PlanEntitlementDeniedError,
     require_plan_entitlement,
@@ -49,9 +50,6 @@ _PUBLIC_PATHS = {
 
 _SUSPENSION_ALLOWED_PREFIXES = {"/billing"}
 _READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
-_SERVER_AUTHORITATIVE_CAPABILITIES: dict[tuple[str, str], str] = {
-    ("POST", "/cgt/govern"): "maestro_execution",
-}
 _JWT_SECRET = None
 _JWT_ALGORITHM = "HS256"
 
@@ -100,10 +98,7 @@ def _required_server_authoritative_capability(
     method: str,
     path: str,
 ) -> str | None:
-    normalized_path = path if path == "/" else path.rstrip("/")
-    return _SERVER_AUTHORITATIVE_CAPABILITIES.get(
-        (method.upper(), normalized_path)
-    )
+    return required_execution_capability(method, path)
 
 
 def _enforce_server_authoritative_capability(
