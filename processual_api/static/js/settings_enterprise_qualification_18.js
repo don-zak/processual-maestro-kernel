@@ -4,6 +4,8 @@
   const ROOT_ID = 'seq18-workspace';
   const ENDPOINT = '/settings/enterprise-integration';
   const QUALIFY_ENDPOINT = '/settings/enterprise-integration/sandbox-qualification';
+  const DRAFT_ENDPOINT = '/settings/enterprise-integration/sandbox-qualification/draft';
+  const SUBMIT_ENDPOINT = `${DRAFT_ENDPOINT}/submit`;
   let initialized = false;
   let loading = false;
   let observer = null;
@@ -31,7 +33,16 @@
     return element('span', 'seq18-field-label', text);
   }
 
-  function renderResult(root, result) {
+  function metric(label, value) {
+    const item = element('div', 'seq18-result-metric');
+    item.append(
+      element('span', '', label),
+      element('strong', '', String(value))
+    );
+    return item;
+  }
+
+  function renderResult(root, result, heading) {
     let panel = root.querySelector('[data-seq18-result]');
     if (!panel) {
       panel = element('section', 'seq18-result');
@@ -43,13 +54,17 @@
     panel.replaceChildren();
 
     const ready = result?.sandbox_ready === true;
+    const draftStatus = result?.draft_status || '';
+    const title = heading || (
+      draftStatus === 'pending_review'
+        ? 'Submitted for supervised review'
+        : ready
+          ? 'Ready for sandbox review'
+          : 'Qualification remains blocked'
+    );
     panel.append(
-      element('span', 'seq18-eyebrow', 'Server evaluation'),
-      element(
-        'h5',
-        'seq18-result-title',
-        ready ? 'Ready for sandbox review' : 'Qualification remains blocked'
-      ),
+      element('span', 'seq18-eyebrow', 'Server state'),
+      element('h5', 'seq18-result-title', title),
       element(
         'p',
         'seq18-result-copy',
@@ -64,6 +79,12 @@
       metric('Write scopes', result?.scope_posture?.write || 0),
       metric('Restricted scopes', result?.scope_posture?.restricted || 0)
     );
+    if (result?.persisted === true) {
+      metrics.append(
+        metric('Draft revision', result?.revision || 0),
+        metric('Review state', draftStatus || 'draft')
+      );
+    }
     panel.appendChild(metrics);
     panel.appendChild(
       element(
@@ -74,22 +95,13 @@
     );
   }
 
-  function metric(label, value) {
-    const item = element('div', 'seq18-result-metric');
-    item.append(
-      element('span', '', label),
-      element('strong', '', String(value))
-    );
-    return item;
-  }
-
   function selectedValues(root, selector) {
     return Array.from(root.querySelectorAll(selector + ':checked')).map(
       (node) => node.value
     );
   }
 
-  async function submit(root, profileSelect, button) {
+  function requestPayload(root, profileSelect) {
     const requestedScopeIds = selectedValues(
       root,
       '[data-seq18-scope] input'
@@ -102,18 +114,29 @@
       renderResult(root, {
         next_action: 'Choose one credential profile and at least one compatible catalog scope.',
       });
-      return;
+      return null;
     }
+    return {
+      credential_profile_id: profileSelect.value,
+      requested_scope_ids: requestedScopeIds,
+      provided_input_ids: providedInputIds,
+    };
+  }
 
-    button.disabled = true;
-    button.setAttribute('aria-busy', 'true');
+  function setBusy(buttons, busy) {
+    buttons.forEach((button) => {
+      button.disabled = busy;
+      button.setAttribute('aria-busy', busy ? 'true' : 'false');
+    });
+  }
+
+  async function evaluate(root, profileSelect, buttons) {
+    const payload = requestPayload(root, profileSelect);
+    if (!payload) return;
+    setBusy(buttons, true);
     try {
-      const result = await CLIENT.post(QUALIFY_ENDPOINT, {
-        credential_profile_id: profileSelect.value,
-        requested_scope_ids: requestedScopeIds,
-        provided_input_ids: providedInputIds,
-      });
-      renderResult(root, result);
+      const result = await CLIENT.post(QUALIFY_ENDPOINT, payload);
+      renderResult(root, result, 'Sandbox qualification evaluated');
     } catch (error) {
       renderResult(root, {
         next_action:
@@ -121,9 +144,54 @@
           'Qualification could not be evaluated. No approval was inferred.',
       });
     } finally {
-      button.disabled = false;
-      button.setAttribute('aria-busy', 'false');
+      setBusy(buttons, false);
     }
+  }
+
+  async function saveDraft(root, profileSelect, buttons) {
+    const payload = requestPayload(root, profileSelect);
+    if (!payload) return null;
+    setBusy(buttons, true);
+    try {
+      const result = await CLIENT.put(DRAFT_ENDPOINT, payload);
+      renderResult(root, result, 'Qualification draft saved');
+      return result;
+    } catch (error) {
+      renderResult(root, {
+        next_action:
+          error?.detail ||
+          'Draft could not be saved. No review or approval was inferred.',
+      });
+      return null;
+    } finally {
+      setBusy(buttons, false);
+    }
+  }
+
+  async function submitForReview(root, profileSelect, buttons) {
+    const payload = requestPayload(root, profileSelect);
+    if (!payload) return;
+    setBusy(buttons, true);
+    try {
+      await CLIENT.put(DRAFT_ENDPOINT, payload);
+      const result = await CLIENT.post(SUBMIT_ENDPOINT, {});
+      renderResult(root, result, 'Submitted for supervised review');
+    } catch (error) {
+      renderResult(root, {
+        next_action:
+          error?.detail ||
+          'Draft could not be submitted. No review or approval was inferred.',
+      });
+    } finally {
+      setBusy(buttons, false);
+    }
+  }
+
+  function restoreChecked(root, selector, values) {
+    const selected = new Set(values || []);
+    root.querySelectorAll(selector).forEach((node) => {
+      node.checked = selected.has(node.value);
+    });
   }
 
   function render(payload) {
@@ -211,10 +279,12 @@
       );
     }
 
-    function syncProfile() {
+    function syncProfile(options = {}) {
       inputList.replaceChildren();
       scopeList.replaceChildren();
-      root.querySelector('[data-seq18-result]')?.remove();
+      if (options.keepResult !== true) {
+        root.querySelector('[data-seq18-result]')?.remove();
+      }
 
       const profile = selectedProfile();
       const allowed = new Set(profile?.allowed_scope_ids || []);
@@ -243,7 +313,7 @@
         profile?.description ||
         'Profile requirements are supplied by the server catalog.';
     }
-    profileSelect.addEventListener('change', syncProfile);
+    profileSelect.addEventListener('change', () => syncProfile());
 
     root.appendChild(grid);
 
@@ -251,19 +321,63 @@
     const boundary = element(
       'p',
       'seq18-boundary',
-      'Evaluation is not persisted and cannot approve security controls, runtime connectors, or production access.'
+      'Draft persistence stores catalog identifiers and input-presence declarations only. Submission requests supervised review; it does not approve security controls, runtime connectors, or production access.'
     );
-    const button = element(
+    const buttonRow = element('div', 'seq18-action-row');
+    const evaluateButton = element(
       'button',
       'seq18-evaluate',
-      'Evaluate sandbox qualification'
+      'Evaluate qualification'
     );
-    button.type = 'button';
-    button.addEventListener('click', () =>
-      submit(root, profileSelect, button)
+    const saveButton = element(
+      'button',
+      'seq18-evaluate',
+      'Save draft'
     );
-    actions.append(boundary, button);
+    const submitButton = element(
+      'button',
+      'seq18-evaluate',
+      'Submit for supervised review'
+    );
+    const buttons = [evaluateButton, saveButton, submitButton];
+    buttons.forEach((button) => {
+      button.type = 'button';
+    });
+    evaluateButton.addEventListener('click', () =>
+      evaluate(root, profileSelect, buttons)
+    );
+    saveButton.addEventListener('click', () =>
+      saveDraft(root, profileSelect, buttons)
+    );
+    submitButton.addEventListener('click', () =>
+      submitForReview(root, profileSelect, buttons)
+    );
+    buttonRow.append(evaluateButton, saveButton, submitButton);
+    actions.append(boundary, buttonRow);
     root.appendChild(actions);
+
+    const draft = payload?.qualification_draft;
+    if (draft?.persisted === true) {
+      profileSelect.value = draft.credential_profile_id || '';
+      syncProfile({ keepResult: true });
+      restoreChecked(
+        root,
+        '[data-seq18-scope] input',
+        draft.requested_scope_ids
+      );
+      restoreChecked(
+        root,
+        '[data-seq18-input] input',
+        draft.provided_input_ids
+      );
+      renderResult(
+        root,
+        draft,
+        draft.draft_status === 'pending_review'
+          ? 'Submitted for supervised review'
+          : 'Saved qualification draft'
+      );
+    }
 
     const safety = document.getElementById('set-enterprise-console-safety');
     if (safety) host.insertBefore(root, safety);
