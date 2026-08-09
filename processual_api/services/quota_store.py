@@ -245,7 +245,6 @@ def consume_quota(
             updated_user["quota"] = {
                 "scope": quota_scope,
                 "plan_id": key.get("plan_id"),
-                "policy_source": effective_policy.get("source"),
                 "limit": quota_limit,
                 "used": quota_used,
                 "requested": amount,
