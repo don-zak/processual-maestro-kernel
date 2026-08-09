@@ -35,13 +35,21 @@ PLAN_MONTHLY_UNIT_ALLOWANCES: Final[dict[str, int]] = {
     "enterprise_integration": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
 }
 
-ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
+CANONICAL_ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
     {
         "enterprise_integration_starter",
         "enterprise_pilot",
         "enterprise_core",
         "enterprise_scale",
         "enterprise_strategic",
+    }
+)
+ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
+    {
+        *CANONICAL_ENTERPRISE_INTEGRATION_PLANS,
+        "enterprise",
+        "enterprise_integration",
+        "enterprise_custom",
     }
 )
 LEGACY_ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
@@ -93,32 +101,44 @@ def normalize_endpoint(endpoint: str) -> str:
 
 
 def normalize_plan_id(plan_id: str | None) -> str:
+    """Preserve the public plan identifier contract used by billing callers."""
+    return str(plan_id or "").strip().lower().replace(" ", "_")
+
+
+def canonical_plan_id(plan_id: str | None) -> str:
+    """Return the fulfillment-catalog identifier without changing public IDs."""
     return normalize_plan_code(plan_id)
 
 
 def monthly_unit_allowance(plan_id: str | None) -> int:
-    return PLAN_MONTHLY_UNIT_ALLOWANCES.get(normalize_plan_id(plan_id), 0)
+    normalized = normalize_plan_id(plan_id)
+    if normalized in PLAN_MONTHLY_UNIT_ALLOWANCES:
+        return PLAN_MONTHLY_UNIT_ALLOWANCES[normalized]
+    return PLAN_MONTHLY_UNIT_ALLOWANCES.get(canonical_plan_id(plan_id), 0)
 
 
 def allows_enterprise_integration(plan_id: str | None) -> bool:
-    raw_plan_id = str(plan_id or "").strip().lower().replace(" ", "_")
+    normalized = normalize_plan_id(plan_id)
+    canonical = canonical_plan_id(plan_id)
     return (
-        normalize_plan_id(plan_id) in ENTERPRISE_INTEGRATION_PLANS
-        or raw_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
+        normalized in ENTERPRISE_INTEGRATION_PLANS
+        or normalized in LEGACY_ENTERPRISE_INTEGRATION_PLANS
+        or canonical in CANONICAL_ENTERPRISE_INTEGRATION_PLANS
     )
 
 
 def enterprise_integration_capability(plan_id: str | None) -> dict[str, Any]:
-    raw_plan_id = str(plan_id or "").strip().lower().replace(" ", "_")
     normalized_plan_id = normalize_plan_id(plan_id)
-    legacy = raw_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
+    canonical = canonical_plan_id(plan_id)
+    legacy = normalized_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
     enabled = allows_enterprise_integration(plan_id)
 
     return {
         "enabled": enabled,
         "status": "available" if enabled else "locked",
-        "plan_id": raw_plan_id or normalized_plan_id or "unknown",
+        "plan_id": normalized_plan_id or "unknown",
         "normalized_plan_id": normalized_plan_id or "unknown",
+        "canonical_plan_id": canonical or normalized_plan_id or "unknown",
         "legacy_compatibility": legacy,
         "eligible_plans": sorted(ENTERPRISE_INTEGRATION_PLANS),
     }
