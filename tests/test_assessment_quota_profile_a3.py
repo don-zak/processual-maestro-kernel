@@ -11,6 +11,7 @@ from processual_api.admin_marketplace.assessment_quota_profile_service import (
     AssessmentQuotaProfileConflictError,
     AssessmentQuotaProfileIntegrityError,
     ensure_assessment_quota_profile_factory,
+    ensure_assessment_quota_profile_in_unit,
     resolve_assessment_quota_profile_factory,
 )
 from processual_api.billing.assessment_activation_preparation import (
@@ -114,6 +115,21 @@ async def test_assessment_quota_profile_uses_exact_approved_quota_and_canonical_
 
 
 @pytest.mark.asyncio
+async def test_assessment_quota_profile_in_unit_defers_commit_to_outer_transaction() -> None:
+    repository = _FakeRepository()
+    unit = _FakeUnitOfWork(repository)
+
+    result = await ensure_assessment_quota_profile_in_unit(
+        outcome=_outcome(),
+        unit=unit,
+    )
+
+    assert result.replayed is False
+    assert result.record.profile_ref in repository.records
+    assert unit.commit_count == 0
+
+
+@pytest.mark.asyncio
 async def test_same_assessment_binding_replays_same_durable_profile() -> None:
     repository = _FakeRepository()
     unit = _FakeUnitOfWork(repository)
@@ -158,6 +174,9 @@ async def test_same_profile_ref_with_different_payload_fails_closed() -> None:
         customer_ref=first.record.customer_ref,
         public_plan_id=first.record.public_plan_id,
         entitlement_source_plan_code=first.record.entitlement_source_plan_code,
+        approved_by=first.record.approved_by,
+        approval_reference=first.record.approval_reference,
+        entitlement_codes_json=list(first.record.entitlement_codes_json),
         metric_code=first.record.metric_code,
         limit_units=5_000,
         cycle_kind=first.record.cycle_kind,
@@ -188,6 +207,9 @@ async def test_binding_hash_under_different_profile_ref_fails_closed() -> None:
             customer_ref=outcome.customer_ref.lower(),
             public_plan_id=outcome.public_plan_id,
             entitlement_source_plan_code="academic",
+            approved_by=outcome.approved_by,
+            approval_reference=outcome.approval_reference,
+            entitlement_codes_json=list(outcome.approved_entitlement_codes),
             metric_code="credits",
             limit_units=outcome.approved_quota_units,
             cycle_kind="calendar_month",
