@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+from fastapi import HTTPException
 from fastapi.routing import APIRoute
 
+from processual_api.integrations.credential_profiles import (
+    COMMON_REQUIRED_CUSTOMER_INPUTS,
+)
+from processual_api.integrations.scope_catalog import list_integration_scopes
 from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_enterprise_integration_runtime as enterprise_runtime
 from processual_api.routers.settings_enterprise_integration_runtime import (
+    EnterpriseSandboxQualificationRequest,
     enterprise_integration_console_payload,
+    evaluate_enterprise_sandbox_qualification,
 )
 
 
@@ -21,6 +29,14 @@ def _client(plan_id: str = "enterprise_integration") -> dict:
     }
 
 
+def _read_scope_id() -> str:
+    return next(
+        scope.scope_id
+        for scope in list_integration_scopes()
+        if scope.access_level == "read" and scope.allowed_in_read_only_pilot
+    )
+
+
 def test_enterprise_integration_console_route_is_registered() -> None:
     paths = {
         route.path
@@ -29,6 +45,7 @@ def test_enterprise_integration_console_route_is_registered() -> None:
     }
 
     assert "/settings/enterprise-integration" in paths
+    assert "/settings/enterprise-integration/sandbox-qualification" in paths
 
 
 def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
@@ -248,3 +265,75 @@ def test_endpoint_payload_has_no_secret_markers(monkeypatch) -> None:
     assert "hashed_key" not in text
     assert "raw_secret" in text
     assert payload["raw_secret_visible"] is False
+
+
+def test_sandbox_qualification_route_rejects_locked_plan(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "starter"}},
+    )
+    body = EnterpriseSandboxQualificationRequest(
+        credential_profile_id="enterprise_core_api_reference",
+        requested_scope_ids=[_read_scope_id()],
+        provided_input_ids=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            evaluate_enterprise_sandbox_qualification(body, _client("starter"))
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_sandbox_qualification_route_rejects_unknown_identifier(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "enterprise_core"}},
+    )
+    body = EnterpriseSandboxQualificationRequest(
+        credential_profile_id="enterprise_core_api_reference",
+        requested_scope_ids=["unknown:scope"],
+        provided_input_ids=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            evaluate_enterprise_sandbox_qualification(body, _client("enterprise_core"))
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+def test_sandbox_qualification_route_is_evaluate_only_and_fail_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "enterprise_core"}},
+    )
+    body = EnterpriseSandboxQualificationRequest(
+        credential_profile_id="enterprise_core_api_reference",
+        requested_scope_ids=[_read_scope_id()],
+        provided_input_ids=list(COMMON_REQUIRED_CUSTOMER_INPUTS),
+    )
+
+    payload = asyncio.run(
+        evaluate_enterprise_sandbox_qualification(
+            body,
+            _client("enterprise_core"),
+        )
+    )
+
+    assert payload["environment"] == "sandbox"
+    assert payload["persisted"] is False
+    assert payload["missing_input_ids"] == []
+    assert payload["security_controls_approved"] == 0
+    assert payload["sandbox_ready"] is False
+    assert payload["production_allowed"] is False
+    assert payload["runtime_connector_approved"] is False
+    assert all(
+        check["status"] == "blocked_missing_security_controls"
+        for check in payload["readiness_checks"]
+    )
