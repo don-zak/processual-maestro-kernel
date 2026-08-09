@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import select
 
+from processual_api.admin_marketplace.models import AdminMarketPlan, AdminMarketSubscription
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
     AdminMarketSubscriptionRuntime,
 )
@@ -18,6 +19,7 @@ class SubscriptionAccessSnapshot:
     subscription_id: uuid.UUID
     customer_ref: str
     access_stage: str
+    plan_code: str
     entitlement_profile_ref: str
     quota_profile_ref: str
     effective_at: datetime
@@ -34,7 +36,20 @@ async def resolve_subscription_access(
     session_factory = get_session_factory()
     async with session_factory() as session:
         statement = (
-            select(AdminMarketSubscriptionRuntime)
+            select(
+                AdminMarketSubscriptionRuntime,
+                AdminMarketSubscription.plan_id,
+                AdminMarketPlan.plan_code,
+            )
+            .join(
+                AdminMarketSubscription,
+                AdminMarketSubscription.id
+                == AdminMarketSubscriptionRuntime.subscription_id,
+            )
+            .join(
+                AdminMarketPlan,
+                AdminMarketPlan.id == AdminMarketSubscription.plan_id,
+            )
             .where(AdminMarketSubscriptionRuntime.customer_ref == normalized)
             .order_by(
                 AdminMarketSubscriptionRuntime.effective_at.desc(),
@@ -42,20 +57,26 @@ async def resolve_subscription_access(
             )
             .limit(2)
         )
-        result = await session.scalars(statement)
-        rows = tuple(result.all())
+        rows = tuple((await session.execute(statement)).all())
 
     if not rows:
         return None
     if len(rows) != 1:
         raise RuntimeError("multiple subscription runtime rows found for customer")
 
-    runtime = rows[0]
+    runtime, subscription_plan_id, plan_code = rows[0]
+    if not isinstance(subscription_plan_id, uuid.UUID):
+        raise RuntimeError("subscription plan identity is unavailable")
+    normalized_plan_code = str(plan_code or "").strip().lower()
+    if not normalized_plan_code:
+        raise RuntimeError("subscription plan identity is unavailable")
+
     return SubscriptionAccessSnapshot(
         runtime_id=runtime.id,
         subscription_id=runtime.subscription_id,
         customer_ref=runtime.customer_ref,
         access_stage=runtime.access_stage,
+        plan_code=normalized_plan_code,
         entitlement_profile_ref=runtime.entitlement_profile_ref,
         quota_profile_ref=runtime.quota_profile_ref,
         effective_at=runtime.effective_at,
