@@ -23,6 +23,11 @@ function money(value) {
   }).format(amount);
 }
 
+function discountPercent(plan) {
+  const amount = Number(plan.annual_discount_percent);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 function replaceList(element, values) {
   const items = Array.isArray(values) ? values : [];
   element.replaceChildren(...items.map((value) => {
@@ -43,6 +48,7 @@ function render(plan) {
 
   const monthly = money(plan.monthly_price_usd);
   const annual = money(plan.annual_price_usd);
+  const annualDiscount = discountPercent(plan);
   const assessmentOnly =
     plan.requires_assessment || !plan.registration_available;
 
@@ -60,7 +66,9 @@ function render(plan) {
     annualSavings.textContent = "";
   } else {
     annualPrice.textContent = `${annual} / year`;
-    annualSavings.textContent = "Save 20% on the base annual plan.";
+    annualSavings.textContent = annualDiscount
+      ? `Save ${annualDiscount}% on the base annual plan.`
+      : "Annual billing uses the published base plan price.";
   }
 
   replaceList(byId("offer-features"), plan.features);
