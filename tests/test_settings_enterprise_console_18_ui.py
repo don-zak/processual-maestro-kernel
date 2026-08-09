@@ -55,6 +55,8 @@ def test_enterprise_console_has_accessible_live_status_and_fail_closed_error() -
     assert "role', 'status'" in source
     assert "No production access has been inferred or granted" in source
     assert "Maestro fails closed" in source
+    assert "enhancedState === 'error'" in source
+    assert "refresh(force = false)" in source
 
 
 def test_enterprise_console_styles_are_responsive_and_rtl_safe() -> None:
