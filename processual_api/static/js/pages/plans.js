@@ -25,6 +25,11 @@ function quota(value) {
     : "Quota defined during assessment";
 }
 
+function discountPercent(plan) {
+  const amount = Number(plan.annual_discount_percent);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 function createPlanCard(plan) {
   const link = document.createElement("a");
   link.className = "plan-choice-card";
@@ -51,8 +56,9 @@ function createPlanCard(plan) {
 
   const annual = document.createElement("p");
   annual.className = "plan-annual";
+  const discount = discountPercent(plan);
   annual.textContent = plan.annual_price_usd
-    ? `${money(plan.annual_price_usd)} / year - save 20%`
+    ? `${money(plan.annual_price_usd)} / year${discount ? ` - save ${discount}%` : ""}`
     : "Commercial terms defined after assessment";
 
   const quotaText = document.createElement("p");
