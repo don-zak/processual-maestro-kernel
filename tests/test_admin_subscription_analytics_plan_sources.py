@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from processual_api.services.admin_subscription_analytics import (
     build_admin_subscription_analytics,
 )
@@ -70,6 +72,48 @@ def test_admin_subscription_analytics_rolls_up_canonical_enterprise_request_plan
         and item["client_id"] == "enterprise-request-client"
         for item in summary["risk"]
     )
+
+
+@pytest.mark.parametrize(
+    ("plan_id", "expected_allowance"),
+    [
+        ("enterprise_integration_starter", 50_000),
+        ("enterprise_pilot", 500_000),
+        ("enterprise_core", 1_500_000),
+        ("enterprise_scale", 3_000_000),
+        ("enterprise_strategic", 5_000_000),
+    ],
+)
+def test_admin_subscription_analytics_preserves_canonical_enterprise_allowance(
+    tmp_path,
+    plan_id,
+    expected_allowance,
+):
+    client_id = f"allowance-{plan_id}"
+    _write_json(
+        tmp_path / f"settings_{client_id}.json",
+        {
+            "client_id": client_id,
+            "client_requests": [
+                {
+                    "status": "approved",
+                    "requested_plan": "enterprise",
+                    "approved_plan": plan_id,
+                    "plan_source": "client_requests",
+                    "plan_applied": True,
+                }
+            ],
+            "api_keys": [],
+        },
+    )
+
+    summary = build_admin_subscription_analytics(tmp_path)
+
+    assert summary["plans"]["enterprise_integration"] == 1
+    assert summary["plans"]["unknown"] == 0
+    assert summary["usage"]["monthly_units_allowance"] == expected_allowance
+    assert summary["plan_sources"]["client_requests"] == 1
+    assert summary["plan_sources"]["missing"] == 0
 
 
 def test_admin_subscription_analytics_keeps_blank_request_plan_unknown(tmp_path):
