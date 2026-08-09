@@ -14,6 +14,11 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from processual_api.billing.plan_entitlement_gate import (
+    PlanEntitlementDeniedError,
+    require_plan_entitlement,
+)
+
 from .plan_store import get_plan_policy, quota_limit_for_plan, resolve_plan_id
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
@@ -22,9 +27,10 @@ DEFAULT_API_KEY_QUOTA_LIMIT = int(
     os.environ.get("PMK_DEFAULT_API_KEY_QUOTA_LIMIT", "50")
 )
 
-COUNTED_ENDPOINTS: set[tuple[str, str]] = {
-    ("POST", "/cgt/govern"),
+COUNTED_ENDPOINT_CAPABILITIES: dict[tuple[str, str], str] = {
+    ("POST", "/cgt/govern"): "maestro_execution",
 }
+COUNTED_ENDPOINTS: set[tuple[str, str]] = set(COUNTED_ENDPOINT_CAPABILITIES)
 
 
 def _now_iso() -> str:
@@ -41,6 +47,12 @@ def _normalize_endpoint(endpoint: str) -> str:
 def is_quota_counted(method: str, endpoint: str) -> bool:
     """Return True only for endpoints that should consume commercial quota."""
     return (method.upper(), _normalize_endpoint(endpoint)) in COUNTED_ENDPOINTS
+
+
+def _required_capability(method: str, endpoint: str) -> str | None:
+    return COUNTED_ENDPOINT_CAPABILITIES.get(
+        (method.upper(), _normalize_endpoint(endpoint))
+    )
 
 
 def _iter_settings_files() -> list[Path]:
@@ -78,6 +90,29 @@ def _as_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _enforce_authoritative_capability(
+    *,
+    plan_id: str,
+    policy: dict[str, Any],
+    method: str,
+    endpoint: str,
+) -> None:
+    if policy.get("source") != "authoritative_fulfillment_catalog":
+        return
+
+    capability_code = _required_capability(method, endpoint)
+    if capability_code is None:
+        return
+
+    try:
+        require_plan_entitlement(plan_id, capability_code)
+    except PlanEntitlementDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Subscription plan does not permit this operation.",
+        ) from exc
 
 
 def consume_quota(
@@ -151,14 +186,27 @@ def consume_quota(
                     manual_limit if manual_limit is not None else key.get("quota_limit"),
                     DEFAULT_API_KEY_QUOTA_LIMIT,
                 )
+                effective_policy = (
+                    existing_policy
+                    if isinstance(existing_policy, dict)
+                    else {"source": "manual"}
+                )
             else:
                 quota_limit = quota_limit_for_plan(
                     plan_id,
                     quota_scope,
                     DEFAULT_API_KEY_QUOTA_LIMIT,
                 )
+                effective_policy = get_plan_policy(plan_id)
                 key["plan_id"] = plan_id
-                key["quota_policy"] = get_plan_policy(plan_id)
+                key["quota_policy"] = effective_policy
+
+            _enforce_authoritative_capability(
+                plan_id=plan_id,
+                policy=effective_policy,
+                method=method,
+                endpoint=endpoint,
+            )
 
             quota_used = _as_int(key.get("quota_used"), 0)
 
@@ -197,6 +245,7 @@ def consume_quota(
             updated_user["quota"] = {
                 "scope": quota_scope,
                 "plan_id": key.get("plan_id"),
+                "policy_source": effective_policy.get("source"),
                 "limit": quota_limit,
                 "used": quota_used,
                 "requested": amount,
