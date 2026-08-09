@@ -44,6 +44,11 @@ ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
         "enterprise_strategic",
     }
 )
+LEGACY_ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
+    {
+        "enterprise_private",
+    }
+)
 
 FREE_OPERATIONAL_ENDPOINTS: Final[frozenset[str]] = frozenset(
     {
@@ -96,7 +101,27 @@ def monthly_unit_allowance(plan_id: str | None) -> int:
 
 
 def allows_enterprise_integration(plan_id: str | None) -> bool:
-    return normalize_plan_id(plan_id) in ENTERPRISE_INTEGRATION_PLANS
+    raw_plan_id = str(plan_id or "").strip().lower().replace(" ", "_")
+    return (
+        normalize_plan_id(plan_id) in ENTERPRISE_INTEGRATION_PLANS
+        or raw_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
+    )
+
+
+def enterprise_integration_capability(plan_id: str | None) -> dict[str, Any]:
+    raw_plan_id = str(plan_id or "").strip().lower().replace(" ", "_")
+    normalized_plan_id = normalize_plan_id(plan_id)
+    legacy = raw_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
+    enabled = allows_enterprise_integration(plan_id)
+
+    return {
+        "enabled": enabled,
+        "status": "available" if enabled else "locked",
+        "plan_id": raw_plan_id or normalized_plan_id or "unknown",
+        "normalized_plan_id": normalized_plan_id or "unknown",
+        "legacy_compatibility": legacy,
+        "eligible_plans": sorted(ENTERPRISE_INTEGRATION_PLANS),
+    }
 
 
 def endpoint_class(endpoint: str) -> str:
