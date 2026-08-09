@@ -11,7 +11,7 @@ from processual_api.admin_marketplace.assessment_commercial_terms_persistence im
     AdminMarketAssessmentCommercialTerms,
 )
 from processual_api.admin_marketplace.assessment_quota_profile_service import (
-    AssessmentQuotaProfileUnitOfWork,
+    AssessmentQuotaProfileRepository,
     ensure_assessment_quota_profile_in_unit,
 )
 from processual_api.billing.assessment_activation_preparation import ApprovedAssessmentOutcome
@@ -66,8 +66,13 @@ class _AssessmentCommercialTermsRepository(Protocol):
     def add(self, terms: AdminMarketAssessmentCommercialTerms) -> None: ...
 
 
-class AssessmentCommercialTermsUnitOfWork(AssessmentQuotaProfileUnitOfWork, Protocol):
+class AssessmentCommercialTermsUnitOfWork(Protocol):
+    assessment_quota_profiles: AssessmentQuotaProfileRepository
     assessment_commercial_terms: _AssessmentCommercialTermsRepository
+
+    async def __aenter__(self) -> AssessmentCommercialTermsUnitOfWork: ...
+    async def __aexit__(self, exc_type, exc, traceback) -> None: ...
+    async def commit(self) -> None: ...
 
 
 def _required(value: str, name: str) -> str:
@@ -228,7 +233,7 @@ async def ensure_assessment_commercial_terms_in_unit(
 
 def ensure_assessment_commercial_terms_factory(
     unit_of_work_factory: Callable[[], AssessmentCommercialTermsUnitOfWork],
-) -> Callable[..., object]:
+):
     async def ensure(
         *,
         outcome: ApprovedAssessmentOutcome,
