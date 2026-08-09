@@ -5,6 +5,7 @@ from typing import Any
 from processual_api.billing.usage_pricing import (
     canonical_plan_id,
     monthly_unit_allowance,
+    normalize_plan_id,
 )
 
 VERIFIED_CLIENT_REQUEST_PLAN_SOURCE = 'client_requests'
@@ -23,7 +24,7 @@ def _text(value: Any) -> str:
 
 
 def supported_verified_plan(plan_value: Any) -> tuple[str, int]:
-    plan_id = canonical_plan_id(_text(plan_value))
+    plan_id = normalize_plan_id(_text(plan_value))
     allowance = monthly_unit_allowance(plan_id)
     if not plan_id or allowance <= 0:
         return '', 0
@@ -80,8 +81,11 @@ def apply_verified_client_request_plan(
     if request_status not in ELIGIBLE_PLAN_REQUEST_STATUSES:
         raise ClientRequestPlanApplyError('request_not_approved')
 
-    plan_id, allowance = supported_verified_plan(request_plan_candidate(entry))
-    if not plan_id or allowance <= 0:
+    verified_plan_id, allowance = supported_verified_plan(
+        request_plan_candidate(entry)
+    )
+    plan_id = canonical_plan_id(verified_plan_id)
+    if not verified_plan_id or not plan_id or allowance <= 0:
         raise ClientRequestPlanApplyError('unsupported_plan')
 
     actor_text = _text(actor) or 'admin'
