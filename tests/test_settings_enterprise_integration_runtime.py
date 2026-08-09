@@ -31,7 +31,6 @@ def test_enterprise_integration_console_route_is_registered() -> None:
 
 
 def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",
@@ -71,7 +70,6 @@ def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
 
 
 def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",
@@ -132,7 +130,6 @@ def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch)
 
 
 def test_enterprise_private_remains_legacy_compatible(monkeypatch) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",
@@ -152,7 +149,6 @@ def test_enterprise_private_remains_legacy_compatible(monkeypatch) -> None:
 
 
 def test_endpoint_payload_has_no_secret_markers(monkeypatch) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",
