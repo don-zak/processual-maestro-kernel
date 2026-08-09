@@ -30,6 +30,7 @@ def make_result(
         p99_ms=p95_ms,
         backpressure_rate=backpressure_rate,
         error_rate=errors / requests,
+        error_breakdown=({"exception:ReadTimeout": errors} if errors else {}),
     )
 
 
