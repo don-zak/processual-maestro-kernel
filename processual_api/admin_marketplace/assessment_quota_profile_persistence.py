@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Integer, String, UniqueConstraint, func, select
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,8 +22,14 @@ class AdminMarketAssessmentQuotaProfile(Base):
     __tablename__ = "admin_market_assessment_quota_profiles"
     __table_args__ = (
         CheckConstraint("limit_units > 0", name="limit_units_positive"),
-        CheckConstraint("cycle_kind = 'calendar_month'", name="cycle_kind_calendar_month"),
-        CheckConstraint("compatibility_period_days = 30", name="compatibility_period_days_monthly"),
+        CheckConstraint(
+            "cycle_kind = 'calendar_month'",
+            name="cycle_kind_calendar_month",
+        ),
+        CheckConstraint(
+            "compatibility_period_days = 30",
+            name="compatibility_period_days_monthly",
+        ),
         CheckConstraint(
             "length(assessment_binding_hash) = 64 AND length(payload_digest) = 64",
             name="digests_length",
@@ -56,6 +71,20 @@ class SqlAlchemyAssessmentQuotaProfileRepository:
     ) -> AdminMarketAssessmentQuotaProfile | None:
         statement = select(AdminMarketAssessmentQuotaProfile).where(
             AdminMarketAssessmentQuotaProfile.profile_ref == profile_ref
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_by_binding_hash(
+        self,
+        assessment_binding_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketAssessmentQuotaProfile | None:
+        statement = select(AdminMarketAssessmentQuotaProfile).where(
+            AdminMarketAssessmentQuotaProfile.assessment_binding_hash
+            == assessment_binding_hash
         )
         if for_update:
             statement = statement.with_for_update()
