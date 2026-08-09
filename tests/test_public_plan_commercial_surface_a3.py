@@ -1,6 +1,10 @@
 from decimal import Decimal
 
+from processual_api.billing.maestro_group1_selected_pricing import (
+    DEFAULT_YEARLY_DISCOUNT_PERCENT,
+)
 from processual_api.billing.public_plan_journey import (
+    ANNUAL_DISCOUNT_PERCENT,
     PUBLIC_PLAN_ORDER,
     public_plan_journey_catalog,
     resolve_direct_registration_plan,
@@ -18,8 +22,12 @@ def test_catalog_separates_academic_individual_and_institution() -> None:
     assert by_id["academic_institution"]["requires_assessment"] is True
 
 
-def test_annual_discount_is_twenty_percent_on_base_plan() -> None:
+def test_annual_discount_uses_selected_pricing_authority_on_base_plan() -> None:
     payload = public_plan_journey_catalog()
+    multiplier = Decimal("1") - DEFAULT_YEARLY_DISCOUNT_PERCENT / Decimal("100")
+
+    assert ANNUAL_DISCOUNT_PERCENT == DEFAULT_YEARLY_DISCOUNT_PERCENT
+    assert payload["annual_discount_percent"] == int(DEFAULT_YEARLY_DISCOUNT_PERCENT)
 
     for plan in payload["plans"]:
         monthly = plan["monthly_price_usd"]
@@ -28,9 +36,9 @@ def test_annual_discount_is_twenty_percent_on_base_plan() -> None:
             assert annual is None
             continue
 
-        expected = (Decimal(monthly) * Decimal("12") * Decimal("0.80")).quantize(Decimal("0.01"))
+        expected = (Decimal(monthly) * Decimal("12") * multiplier).quantize(Decimal("0.01"))
         assert Decimal(annual) == expected
-        assert plan["annual_discount_percent"] == 20
+        assert plan["annual_discount_percent"] == int(DEFAULT_YEARLY_DISCOUNT_PERCENT)
 
 
 def test_quota_add_ons_are_on_demand_and_never_discounted() -> None:
