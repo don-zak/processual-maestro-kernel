@@ -92,6 +92,12 @@ def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
         "supervisor_approval_required": 0,
         "production_allowed_without_approval": 0,
     }
+    assert payload["qualification_catalog"] == {
+        "enabled": False,
+        "source": "catalog",
+        "profiles": [],
+        "scopes": [],
+    }
     assert payload["sections"] == [
         {
             "id": "entitlement",
@@ -153,6 +159,19 @@ def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch)
     assert payload["scope_posture"]["read_only_pilot"] >= 1
     assert payload["scope_posture"]["supervisor_approval_required"] >= 1
     assert payload["scope_posture"]["production_allowed_without_approval"] == 0
+    catalog = payload["qualification_catalog"]
+    assert catalog["enabled"] is True
+    assert catalog["source"] == "catalog"
+    assert catalog["profiles"]
+    assert catalog["scopes"]
+    assert catalog["security_controls_client_approvable"] is False
+    assert catalog["production_allowed"] is False
+    assert catalog["runtime_connector_approved"] is False
+    assert all(profile["allowed_scope_ids"] for profile in catalog["profiles"])
+    assert all(
+        profile["runtime_connector_approved"] is False
+        for profile in catalog["profiles"]
+    )
     assert payload["readiness"]["total"] >= 1
     assert payload["readiness"]["production_allowed"] == 0
     assert payload["readiness"]["runtime_connector_approved"] == 0
