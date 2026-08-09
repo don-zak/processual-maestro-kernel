@@ -59,6 +59,18 @@ def test_enterprise_console_has_accessible_live_status_and_fail_closed_error() -
     assert "refresh(force = false)" in source
 
 
+def test_enterprise_console_retry_invalidates_previous_success_signature() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    failure_start = source.index("function renderFailure()")
+    refresh_start = source.index("async function refresh", failure_start)
+    failure_source = source[failure_start:refresh_start]
+
+    assert "lastRenderedSignature = '';" in failure_source
+    assert "refresh(force = false)" in source
+    assert "if (!force && (enhancedState === 'true' || enhancedState === 'error')) return;" in source
+
+
 def test_enterprise_console_styles_are_responsive_and_rtl_safe() -> None:
     source = STYLE.read_text(encoding="utf-8")
 
