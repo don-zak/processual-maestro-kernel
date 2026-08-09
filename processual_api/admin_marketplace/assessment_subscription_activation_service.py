@@ -8,6 +8,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from processual_api.admin_marketplace.assessment_commercial_terms_service import (
+    ApprovedAssessmentCommercialTerms,
+    AssessmentCommercialTermsUnitOfWork,
+    ensure_assessment_commercial_terms_in_unit,
+)
 from processual_api.admin_marketplace.assessment_quota_profile_service import (
     AssessmentQuotaProfileUnitOfWork,
     ensure_assessment_quota_profile_in_unit,
@@ -109,6 +114,7 @@ class _CommercialAuditRepository(Protocol):
 
 class AssessmentSubscriptionActivationUnitOfWork(
     AssessmentQuotaProfileUnitOfWork,
+    AssessmentCommercialTermsUnitOfWork,
     SubscriptionRuntimeBootstrapUnitOfWork,
     Protocol,
 ):
@@ -128,6 +134,7 @@ class AssessmentSubscriptionActivationResult:
     public_plan_id: str
     entitlement_source_plan_code: str
     quota_profile_ref: str
+    commercial_terms_ref: str
     activated_at: datetime
     replayed: bool
 
@@ -158,6 +165,7 @@ def _result(
     *,
     subscription: AdminMarketSubscription,
     binding: AdminMarketAssessmentSubscriptionBinding,
+    commercial_terms_ref: str,
     replayed: bool,
 ) -> AssessmentSubscriptionActivationResult:
     activated_at = subscription.starts_at or subscription.created_at
@@ -169,6 +177,7 @@ def _result(
         public_plan_id=binding.public_plan_id,
         entitlement_source_plan_code=binding.entitlement_source_plan_code,
         quota_profile_ref=binding.quota_profile_ref,
+        commercial_terms_ref=commercial_terms_ref,
         activated_at=activated_at,
         replayed=replayed,
     )
@@ -207,6 +216,7 @@ async def _load_replay(
     entitlement_plan_id: uuid.UUID,
     entitlement_profile_ref: str,
     quota_profile_ref: str,
+    commercial_terms_ref: str,
 ) -> AssessmentSubscriptionActivationResult:
     if not _binding_matches(
         binding,
@@ -234,7 +244,12 @@ async def _load_replay(
         raise AssessmentSubscriptionActivationConflictError(
             "assessment activation binding references an invalid subscription"
         )
-    return _result(subscription=subscription, binding=binding, replayed=True)
+    return _result(
+        subscription=subscription,
+        binding=binding,
+        commercial_terms_ref=commercial_terms_ref,
+        replayed=True,
+    )
 
 
 class AssessmentSubscriptionActivationService:
@@ -255,6 +270,7 @@ class AssessmentSubscriptionActivationService:
         self,
         *,
         outcome: ApprovedAssessmentOutcome,
+        commercial_terms: ApprovedAssessmentCommercialTerms,
         entitlement_plan_id: uuid.UUID,
         correlation_id: str,
         idempotency_key: str,
@@ -273,6 +289,17 @@ class AssessmentSubscriptionActivationService:
                 unit=unit,
             )
             record = quota.record
+            commercial = await ensure_assessment_commercial_terms_in_unit(
+                outcome=outcome,
+                terms=commercial_terms,
+                unit=unit,
+            )
+            terms_record = commercial.record
+            if terms_record.assessment_binding_hash != record.assessment_binding_hash:
+                raise AssessmentSubscriptionActivationConflictError(
+                    "commercial terms are not bound to the assessment activation"
+                )
+
             customer_ref = record.customer_ref
             assessment_binding_hash = record.assessment_binding_hash
             public_plan_id = record.public_plan_id
@@ -306,6 +333,7 @@ class AssessmentSubscriptionActivationService:
                     entitlement_plan_id=plan.id,
                     entitlement_profile_ref=entitlement_profile_ref,
                     quota_profile_ref=record.profile_ref,
+                    commercial_terms_ref=terms_record.terms_ref,
                 )
 
             by_assessment = await unit.assessment_subscription_bindings.get_by_assessment_binding_hash(
@@ -323,6 +351,7 @@ class AssessmentSubscriptionActivationService:
                     entitlement_plan_id=plan.id,
                     entitlement_profile_ref=entitlement_profile_ref,
                     quota_profile_ref=record.profile_ref,
+                    commercial_terms_ref=terms_record.terms_ref,
                 )
 
             active = await unit.subscriptions.get_active_by_customer_ref(
@@ -347,6 +376,7 @@ class AssessmentSubscriptionActivationService:
                         entitlement_plan_id=plan.id,
                         entitlement_profile_ref=entitlement_profile_ref,
                         quota_profile_ref=record.profile_ref,
+                        commercial_terms_ref=terms_record.terms_ref,
                     )
                 raise AssessmentSubscriptionActivationConflictError(
                     "customer already has an active subscription from another activation source"
@@ -420,6 +450,12 @@ class AssessmentSubscriptionActivationService:
                 "entitlement_source_plan_code": source_plan_code,
                 "entitlement_profile_ref": entitlement_profile_ref,
                 "quota_profile_ref": record.profile_ref,
+                "commercial_terms_ref": terms_record.terms_ref,
+                "price_source": terms_record.price_source,
+                "price_source_reference": terms_record.source_reference,
+                "currency": terms_record.currency,
+                "billing_interval": terms_record.billing_interval,
+                "amount_minor_units": terms_record.amount_minor_units,
             }
             audit = CommercialAuditRecord(
                 event_id=str(self._event_id_factory()),
@@ -440,6 +476,9 @@ class AssessmentSubscriptionActivationService:
                     "public_plan_id": public_plan_id,
                     "entitlement_source_plan_code": source_plan_code,
                     "quota_profile_ref": record.profile_ref,
+                    "commercial_terms_ref": terms_record.terms_ref,
+                    "price_source": terms_record.price_source,
+                    "price_source_reference": terms_record.source_reference,
                     "binding_ref": binding.binding_ref,
                 },
             )
@@ -464,7 +503,12 @@ class AssessmentSubscriptionActivationService:
                 )
             )
             await unit.commit()
-            return _result(subscription=subscription, binding=binding, replayed=False)
+            return _result(
+                subscription=subscription,
+                binding=binding,
+                commercial_terms_ref=terms_record.terms_ref,
+                replayed=False,
+            )
 
 
 __all__ = [
