@@ -24,6 +24,8 @@ def upgrade() -> None:
         sa.Column("customer_ref", sa.String(length=128), nullable=False),
         sa.Column("public_plan_id", sa.String(length=128), nullable=False),
         sa.Column("terms_version", sa.String(length=64), nullable=False),
+        sa.Column("price_source", sa.String(length=24), nullable=False),
+        sa.Column("source_reference", sa.String(length=128), nullable=False),
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("billing_interval", sa.String(length=24), nullable=False),
         sa.Column("amount_minor_units", sa.BigInteger(), nullable=False),
@@ -40,6 +42,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "amount_minor_units >= 0",
             name=op.f("ck_admin_market_assessment_commercial_terms_amount_nonnegative"),
+        ),
+        sa.CheckConstraint(
+            "price_source IN ('assessment', 'contract')",
+            name=op.f("ck_admin_market_assessment_commercial_terms_price_source_allowed"),
         ),
         sa.CheckConstraint(
             "length(currency) = 3",
