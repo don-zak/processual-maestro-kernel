@@ -18,6 +18,7 @@ PLAN_BUCKETS = (
 )
 
 ENTERPRISE_INTEGRATION_ANALYTICS_ROLLUP = {
+    "enterprise_integration_starter": "enterprise_integration",
     "enterprise_pilot": "enterprise_integration",
     "enterprise_core": "enterprise_integration",
     "enterprise_scale": "enterprise_integration",
@@ -114,9 +115,15 @@ def _normalize_plan(value: Any) -> str:
         normalized = normalize_plan_id(raw)
     except (TypeError, ValueError):
         normalized = raw.lower().strip()
-    if normalized in PLAN_BUCKETS:
+    if normalized in PLAN_BUCKETS or normalized in ENTERPRISE_INTEGRATION_ANALYTICS_ROLLUP:
         return normalized
-    return ENTERPRISE_INTEGRATION_ANALYTICS_ROLLUP.get(normalized, "unknown")
+    return "unknown"
+
+
+def _analytics_plan_bucket(plan_id: str) -> str:
+    if plan_id in PLAN_BUCKETS:
+        return plan_id
+    return ENTERPRISE_INTEGRATION_ANALYTICS_ROLLUP.get(plan_id, "unknown")
 
 
 def _plan_allowance(plan_id: str) -> int:
@@ -276,7 +283,6 @@ def _empty_summary() -> dict:
     }
 
 
-
 def _client_request_plan_is_accepted(record: dict[str, Any]) -> bool:
     status = _first_text(
         record,
@@ -314,7 +320,6 @@ def _resolve_plan_from_settings(record: dict[str, Any]) -> tuple[str, str]:
     return "unknown", "missing"
 
 
-
 def _append_risk(
     risks: list[dict[str, Any]],
     *,
@@ -344,6 +349,7 @@ def _append_risk(
 
     risks.append(item)
 
+
 def _assert_no_forbidden_values(value: Any) -> None:
     forbidden_keys = {
         "api_key",
@@ -368,6 +374,7 @@ def _assert_no_forbidden_values(value: Any) -> None:
         for nested in value:
             _assert_no_forbidden_values(nested)
         return
+
 
 def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> dict:
     base_dir = Path(data_dir or "processual_api/data")
@@ -468,7 +475,6 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
                 message="Subscription is suspended or disabled.",
             )
 
-
     current_period = datetime.now(UTC).strftime("%Y-%m")
     for record in _read_usage_records(base_dir) or []:
         if not _is_current_period(record, current_period):
@@ -501,7 +507,7 @@ def build_admin_subscription_analytics(data_dir: str | Path | None = None) -> di
 
         summary["clients"]["total"] += 1
         summary["clients"][status] = summary["clients"].get(status, 0) + 1
-        summary["plans"][plan_id if plan_id in PLAN_BUCKETS else "unknown"] += 1
+        summary["plans"][_analytics_plan_bucket(plan_id)] += 1
 
         used = client_usage.get(client_id, 0)
         limit = client_limits.get(client_id) or _plan_allowance(plan_id)
