@@ -241,6 +241,77 @@ def _trusted_runtime_profile(
     )
 
 
+async def ensure_assessment_quota_profile_in_unit(
+    *,
+    outcome: ApprovedAssessmentOutcome,
+    unit: AssessmentQuotaProfileUnitOfWork,
+) -> AssessmentQuotaProfileResult:
+    """Ensure an assessment quota profile without owning the transaction boundary."""
+
+    definition, runtime_profile = _definition_from_outcome(outcome)
+    profile_ref = str(definition["profile_ref"])
+    binding_hash = str(definition["assessment_binding_hash"])
+
+    existing = await unit.assessment_quota_profiles.get_by_profile_ref(
+        profile_ref,
+        for_update=True,
+    )
+    if existing is not None:
+        if not _record_matches(existing, definition):
+            raise AssessmentQuotaProfileConflictError(
+                "assessment quota profile reference conflicts with its durable definition."
+            )
+        return AssessmentQuotaProfileResult(
+            record=existing,
+            runtime_profile=_trusted_runtime_profile(existing),
+            replayed=True,
+        )
+
+    binding_existing = await unit.assessment_quota_profiles.get_by_binding_hash(
+        binding_hash,
+        for_update=True,
+    )
+    if binding_existing is not None:
+        raise AssessmentQuotaProfileConflictError(
+            "assessment quota binding already exists under a different profile reference."
+        )
+
+    record = AdminMarketAssessmentQuotaProfile(**definition)
+    unit.assessment_quota_profiles.add(record)
+    return AssessmentQuotaProfileResult(
+        record=record,
+        runtime_profile=runtime_profile,
+        replayed=False,
+    )
+
+
+async def resolve_assessment_quota_profile_in_unit(
+    *,
+    profile_ref: str,
+    unit: AssessmentQuotaProfileUnitOfWork,
+) -> SubscriptionQuotaProfile:
+    """Resolve a trusted assessment quota profile inside an existing transaction."""
+
+    normalized_ref = profile_ref.strip().lower()
+    if not normalized_ref:
+        raise AssessmentQuotaProfileIntegrityError(
+            "assessment quota profile reference is required."
+        )
+    record = await unit.assessment_quota_profiles.get_by_profile_ref(
+        normalized_ref,
+        for_update=False,
+    )
+    if record is None:
+        raise AssessmentQuotaProfileIntegrityError(
+            "assessment quota profile was not found."
+        )
+    if record.profile_ref != normalized_ref:
+        raise AssessmentQuotaProfileIntegrityError(
+            "assessment quota profile reference is not canonical."
+        )
+    return _trusted_runtime_profile(record)
+
+
 def ensure_assessment_quota_profile_factory(
     *,
     unit_of_work_factory: Callable[[], AssessmentQuotaProfileUnitOfWork],
@@ -248,43 +319,14 @@ def ensure_assessment_quota_profile_factory(
     async def ensure(
         outcome: ApprovedAssessmentOutcome,
     ) -> AssessmentQuotaProfileResult:
-        definition, runtime_profile = _definition_from_outcome(outcome)
-        profile_ref = str(definition["profile_ref"])
-        binding_hash = str(definition["assessment_binding_hash"])
-
         async with unit_of_work_factory() as unit:
-            existing = await unit.assessment_quota_profiles.get_by_profile_ref(
-                profile_ref,
-                for_update=True,
+            result = await ensure_assessment_quota_profile_in_unit(
+                outcome=outcome,
+                unit=unit,
             )
-            if existing is not None:
-                if not _record_matches(existing, definition):
-                    raise AssessmentQuotaProfileConflictError(
-                        "assessment quota profile reference conflicts with its durable definition."
-                    )
-                return AssessmentQuotaProfileResult(
-                    record=existing,
-                    runtime_profile=_trusted_runtime_profile(existing),
-                    replayed=True,
-                )
-
-            binding_existing = await unit.assessment_quota_profiles.get_by_binding_hash(
-                binding_hash,
-                for_update=True,
-            )
-            if binding_existing is not None:
-                raise AssessmentQuotaProfileConflictError(
-                    "assessment quota binding already exists under a different profile reference."
-                )
-
-            record = AdminMarketAssessmentQuotaProfile(**definition)
-            unit.assessment_quota_profiles.add(record)
-            await unit.commit()
-            return AssessmentQuotaProfileResult(
-                record=record,
-                runtime_profile=runtime_profile,
-                replayed=False,
-            )
+            if not result.replayed:
+                await unit.commit()
+            return result
 
     return ensure
 
@@ -294,25 +336,11 @@ def resolve_assessment_quota_profile_factory(
     unit_of_work_factory: Callable[[], AssessmentQuotaProfileUnitOfWork],
 ):
     async def resolve(profile_ref: str) -> SubscriptionQuotaProfile:
-        normalized_ref = profile_ref.strip().lower()
-        if not normalized_ref:
-            raise AssessmentQuotaProfileIntegrityError(
-                "assessment quota profile reference is required."
-            )
         async with unit_of_work_factory() as unit:
-            record = await unit.assessment_quota_profiles.get_by_profile_ref(
-                normalized_ref,
-                for_update=False,
+            return await resolve_assessment_quota_profile_in_unit(
+                profile_ref=profile_ref,
+                unit=unit,
             )
-            if record is None:
-                raise AssessmentQuotaProfileIntegrityError(
-                    "assessment quota profile was not found."
-                )
-            if record.profile_ref != normalized_ref:
-                raise AssessmentQuotaProfileIntegrityError(
-                    "assessment quota profile reference is not canonical."
-                )
-            return _trusted_runtime_profile(record)
 
     return resolve
 
@@ -325,5 +353,7 @@ __all__ = [
     "AssessmentQuotaProfileIntegrityError",
     "AssessmentQuotaProfileResult",
     "ensure_assessment_quota_profile_factory",
+    "ensure_assessment_quota_profile_in_unit",
     "resolve_assessment_quota_profile_factory",
+    "resolve_assessment_quota_profile_in_unit",
 ]
