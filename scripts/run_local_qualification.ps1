@@ -21,6 +21,7 @@ $RedisRuntimeUrl = "redis://127.0.0.1:$RedisPort/0"
 $DatabaseUrl = "postgresql+asyncpg://maestro:local-benchmark-password@127.0.0.1:$PostgresPort/maestro"
 $LoadBaseUrl = "http://127.0.0.1:$LoadPort"
 $SoakBaseUrl = "http://127.0.0.1:$SoakPort"
+$BenchmarkApiKey = 'benchmark-only-api-key'
 
 New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
 
@@ -175,8 +176,8 @@ function Run-LoadQualification {
     $env:ENVIRONMENT = 'development'
     $env:DATABASE_URL = $DatabaseUrl
     $env:REDIS_URL = $RedisRuntimeUrl
-    $env:JWT_SECRET = 'local-benchmark-only-jwt-secret'
-    $env:API_KEYS = 'local-benchmark-only-api-key'
+    $env:JWT_SECRET = 'benchmark-only-not-production-jwt-secret'
+    $env:API_KEYS = $BenchmarkApiKey
     $env:POSTGRES_PASSWORD = 'local-benchmark-password'
     $env:REDIS_PASSWORD = 'local-benchmark-password'
     $env:GRAFANA_ADMIN_PASSWORD = 'local-benchmark-password'
@@ -219,8 +220,8 @@ function Run-SoakQualification {
     $env:PYTHONPATH = '.'
     $env:ENVIRONMENT = 'development'
     $env:REDIS_URL = $RedisRuntimeUrl
-    $env:JWT_SECRET = 'local-benchmark-only-jwt-secret'
-    $env:API_KEYS = 'local-benchmark-only-api-key'
+    $env:JWT_SECRET = 'benchmark-only-not-production-jwt-secret'
+    $env:API_KEYS = $BenchmarkApiKey
     $env:RATE_LIMIT_ENABLED = 'false'
     $env:CAPACITY_GUARD_ENABLED = 'false'
     $env:EXECUTION_FANOUT_ENABLED = 'true'
