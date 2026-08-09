@@ -11,10 +11,14 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 from processual_api.auth.security import get_current_user
 from processual_api.billing.usage_pricing import enterprise_integration_capability
+from processual_api.integrations.enterprise_sandbox_qualification import (
+    build_customer_sandbox_qualification,
+)
 from processual_api.integrations.integration_readiness import (
     list_integration_readiness_checks,
     summarize_integration_readiness,
@@ -22,6 +26,14 @@ from processual_api.integrations.integration_readiness import (
 from processual_api.integrations.scope_catalog import list_integration_scopes
 
 from . import settings as settings_module
+
+
+class EnterpriseSandboxQualificationRequest(BaseModel):
+    """Identifiers-only customer input for sandbox qualification evaluation."""
+
+    credential_profile_id: str = Field(min_length=1)
+    requested_scope_ids: list[str] = Field(min_length=1)
+    provided_input_ids: list[str] = Field(default_factory=list)
 
 
 def _identity(current_user: dict[str, Any]) -> tuple[str, str]:
@@ -32,6 +44,20 @@ def _identity(current_user: dict[str, Any]) -> tuple[str, str]:
     )
     client_id = str(current_user.get("client_id") or user_id)
     return user_id, client_id
+
+
+def _client_enterprise_capability(
+    *,
+    current_user: dict[str, Any],
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    user_id, _ = _identity(current_user)
+    raw = settings_module._load_raw(user_id)
+    plan_id = settings_module._resolve_client_api_key_integration_plan_id(
+        user_id,
+        raw,
+        current_user,
+    )
+    return user_id, raw, enterprise_integration_capability(plan_id)
 
 
 def _safe_readiness_checks(checks: list[Any]) -> list[dict[str, Any]]:
@@ -182,13 +208,7 @@ def enterprise_integration_console_payload(
     current_user: dict[str, Any],
 ) -> dict[str, Any]:
     user_id, client_id = _identity(current_user)
-    raw = settings_module._load_raw(user_id)
-    plan_id = settings_module._resolve_client_api_key_integration_plan_id(
-        user_id,
-        raw,
-        current_user,
-    )
-    capability = enterprise_integration_capability(plan_id)
+    _, raw, capability = _client_enterprise_capability(current_user=current_user)
     enabled = bool(capability["enabled"])
 
     keys = (
@@ -263,7 +283,45 @@ async def get_enterprise_integration_console(
     return enterprise_integration_console_payload(current_user=current_user)
 
 
+@settings_module.router.post(
+    "/enterprise-integration/sandbox-qualification",
+    response_model=dict,
+)
+async def evaluate_enterprise_sandbox_qualification(
+    body: EnterpriseSandboxQualificationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    _, _, capability = _client_enterprise_capability(current_user=current_user)
+    if not bool(capability["enabled"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Enterprise Integration entitlement is required.",
+        )
+
+    try:
+        qualification = build_customer_sandbox_qualification(
+            credential_profile_id=body.credential_profile_id,
+            requested_scope_ids=body.requested_scope_ids,
+            provided_input_ids=body.provided_input_ids,
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        **qualification,
+        "environment": "sandbox",
+        "persisted": False,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
+
+
 __all__ = [
+    "EnterpriseSandboxQualificationRequest",
     "enterprise_integration_console_payload",
+    "evaluate_enterprise_sandbox_qualification",
     "get_enterprise_integration_console",
 ]
