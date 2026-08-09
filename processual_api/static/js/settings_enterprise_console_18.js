@@ -246,7 +246,8 @@
   async function refresh(force = false) {
     const card = document.getElementById('set-enterprise-console-card');
     if (!card || loading) return;
-    if (!force && card.dataset.se18Enhanced === 'true') return;
+    const enhancedState = card.dataset.se18Enhanced;
+    if (!force && (enhancedState === 'true' || enhancedState === 'error')) return;
 
     loading = true;
     card.setAttribute('aria-busy', 'true');
