@@ -121,8 +121,20 @@ function Invoke-WithTee {
         [Parameter(Mandatory)][string[]]$Arguments,
         [Parameter(Mandatory)][string]$FailureMessage
     )
-    & $PythonBin @Arguments 2>&1 | Tee-Object -FilePath $OutputPath
-    if ($LASTEXITCODE -ne 0) { throw $FailureMessage }
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $PythonBin @Arguments 2>&1 | Tee-Object -FilePath $OutputPath
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -ne 0) {
+        throw "$FailureMessage Exit code: $exitCode"
+    }
 }
 
 function Run-DurableQualification {
