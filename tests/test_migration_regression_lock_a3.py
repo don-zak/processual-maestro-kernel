@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260807_0043"
+HEAD_REVISION = "20260809_0044"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -155,7 +155,7 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
             "context.is_offline_mode()",
         ),
         "20260805_0026_lemon_squeezy_webhook_inbox.py": (
-            "Downgrade blocked: Lemon Squeezy webhook inbox rows exist",
+            "Downgrade blocked: commercial notification outbox rows exist",
             "context.is_offline_mode()",
         ),
         "20260805_0027_lemon_squeezy_reconciliation_decisions.py": (
