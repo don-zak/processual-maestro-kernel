@@ -10,8 +10,8 @@ Runtime connector approved: `false`.
 
 The Enterprise Integration area in client Settings is a client-safe control and
 readiness surface. It composes existing plan entitlement, API/service identity,
-operational profile, and declarative readiness primitives without creating a
-second integration lifecycle.
+operational profile, scope-catalog, and declarative readiness primitives without
+creating a second integration lifecycle.
 
 The authoritative client contract is:
 
@@ -22,9 +22,10 @@ The authoritative client contract is:
 The Settings console may expose:
 
 - enterprise entitlement status;
-- normalized plan identity and legacy compatibility state;
+- public and canonical plan identity plus legacy compatibility state;
 - active client-safe integration key metadata;
 - operational profile metadata already approved for client visibility;
+- aggregate scope posture for read, write, restricted, pilot, and approval state;
 - declarative integration readiness summaries and blocking reasons;
 - sandbox environment posture;
 - the next safe action.
@@ -46,17 +47,18 @@ The Settings console must never expose:
 ### Locked
 
 Non-eligible plans receive an upgrade-only contract. Key metadata, operational
-profiles, and readiness details are not returned as actionable Enterprise
-content.
+profiles, scope posture details, and readiness details are not returned as
+actionable Enterprise content.
 
 ### Available
 
-Eligible Enterprise Integration plans receive the console sections:
+Eligible Enterprise Integration plans receive the console lifecycle:
 
 1. Enterprise entitlement.
 2. API & service identity.
-3. Integration readiness.
-4. Production approval.
+3. Profiles & scope posture.
+4. Integration readiness.
+5. Production approval.
 
 Production approval remains `blocked` in the Settings contract.
 
@@ -66,13 +68,42 @@ Eligibility is derived from the centralized
 `enterprise_integration_capability()` contract in
 `processual_api.billing.usage_pricing`.
 
-Current authoritative Enterprise Integration plans remain the plan-fulfillment
-catalog plans exposed through that capability contract. `enterprise_private`
-is retained only as an explicit legacy compatibility plan while compatibility
-remains required.
+The public plan identifier and canonical plan identifier are intentionally
+separate concepts. Historical/public aliases such as `enterprise` and
+`enterprise_integration` remain stable where compatibility requires them, while
+`canonical_plan_id` resolves the fulfillment-catalog identity used by workflows
+that require canonical plan application.
+
+`enterprise_custom` remains Enterprise-eligible without implying a fixed catalog
+quota. `enterprise_private` remains an explicit legacy compatibility plan while
+that compatibility is required.
 
 The client UI must not infer Enterprise eligibility from plan-name prefixes as
 a security or entitlement boundary. Server responses remain authoritative.
+
+## Scope posture authority
+
+Scope posture is derived from the existing integration scope catalog. The
+Settings contract exposes aggregate counts only; it does not invent a second
+scope catalog or grant scopes.
+
+The aggregate posture covers:
+
+- read scopes;
+- write scopes;
+- restricted scopes;
+- read-only pilot eligibility;
+- supervisor approval requirements;
+- production-without-approval posture.
+
+The following invariant remains mandatory:
+
+```text
+production_allowed_without_approval = 0
+```
+
+Write and restricted activity remains subject to the existing approval and
+sandbox requirements declared by the scope catalog.
 
 ## Readiness authority
 
@@ -89,33 +120,43 @@ runtime_connector_approved = false
 
 ## UI/UX requirements
 
-The Settings Integration tab must follow the existing Stage 18 layout system.
-It must keep semantic tab/tabpanel relationships, keyboard navigation, visible
-focus, responsive behavior, and reduced-motion support.
+The Settings Integration tab follows the existing Stage 18 layout system and
+consumes `/settings/enterprise-integration` as the server-authoritative overview
+source.
 
-The Enterprise console should present status, blockers, and the next safe action
-before implementation details. Raw secret material must never be rendered.
+It must keep semantic tab/tabpanel relationships, keyboard navigation, visible
+focus, responsive behavior, and reduced-motion support. The overview presents
+status, lifecycle stages, blockers, and the next safe action before detailed
+implementation information. Raw secret material must never be rendered.
+
+Existing detailed Integration cards may remain temporarily for compatibility,
+but they must not override server-authoritative entitlement or production state.
 
 ## Tests
 
 The stage is protected by tests covering:
 
 - centralized Enterprise capability aliases and legacy compatibility;
+- separation of public and canonical plan identities;
+- `enterprise_custom` compatibility;
 - locked-plan data minimization;
 - client-key isolation;
 - secret redaction;
+- scope-count consistency;
+- zero production scopes without approval;
 - production/runtime fail-closed invariants;
 - route registration;
 - Settings tab ARIA relationships;
 - keyboard navigation and roving tab index;
-- mobile and reduced-motion layout behavior.
+- mobile and reduced-motion layout behavior;
+- server-authoritative console loading without plan-prefix guessing.
 
 ## Next stage
 
-After Public CI is green, extend the Settings UI to consume
-`/settings/enterprise-integration` directly for the Enterprise overview and
-next-action summary. Existing detailed cards may remain temporarily for
-compatibility while the console becomes the authoritative presentation layer.
+The next controlled stage is to refine the client presentation of profile and
+scope posture, then connect customer-specific configuration to sandbox
+qualification without enabling production execution.
 
-Customer-specific connector activation remains a later supervised qualification
-stage and is not approved by this document.
+Customer-specific connector activation, real credentials, runtime connector
+approval, and production canary remain later supervised qualification stages
+and are not approved by this document.
