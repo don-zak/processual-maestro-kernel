@@ -6,10 +6,11 @@ import pytest
 from fastapi import HTTPException
 from fastapi.routing import APIRoute
 
+from processual_api.integrations.adapter_contracts import get_adapter_contract
 from processual_api.integrations.credential_profiles import (
     COMMON_REQUIRED_CUSTOMER_INPUTS,
+    get_credential_profile,
 )
-from processual_api.integrations.scope_catalog import list_integration_scopes
 from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_enterprise_integration_runtime as enterprise_runtime
 from processual_api.routers.settings_enterprise_integration_runtime import (
@@ -29,12 +30,15 @@ def _client(plan_id: str = "enterprise_integration") -> dict:
     }
 
 
-def _read_scope_id() -> str:
-    return next(
-        scope.scope_id
-        for scope in list_integration_scopes()
-        if scope.access_level == "read" and scope.allowed_in_read_only_pilot
-    )
+def _profile_scope_id(
+    profile_id: str = "enterprise_core_api_reference",
+) -> str:
+    profile = get_credential_profile(profile_id)
+    for contract_id in profile.adapter_contract_ids:
+        contract = get_adapter_contract(contract_id)
+        if contract.required_scopes:
+            return contract.required_scopes[0]
+    raise AssertionError(f"Profile {profile_id} has no required adapter scope")
 
 
 def test_enterprise_integration_console_route_is_registered() -> None:
@@ -275,7 +279,7 @@ def test_sandbox_qualification_route_rejects_locked_plan(monkeypatch) -> None:
     )
     body = EnterpriseSandboxQualificationRequest(
         credential_profile_id="enterprise_core_api_reference",
-        requested_scope_ids=[_read_scope_id()],
+        requested_scope_ids=[_profile_scope_id()],
         provided_input_ids=[],
     )
 
@@ -315,7 +319,7 @@ def test_sandbox_qualification_route_is_evaluate_only_and_fail_closed(monkeypatc
     )
     body = EnterpriseSandboxQualificationRequest(
         credential_profile_id="enterprise_core_api_reference",
-        requested_scope_ids=[_read_scope_id()],
+        requested_scope_ids=[_profile_scope_id()],
         provided_input_ids=list(COMMON_REQUIRED_CUSTOMER_INPUTS),
     )
 
