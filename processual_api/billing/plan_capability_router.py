@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from processual_api.billing.plan_capability_matrix import plan_capability_payload
 
-router = APIRouter()
+router = APIRouter(prefix="/billing")
 
 
 @router.get("/plan-capabilities/{plan_code}")
