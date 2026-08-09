@@ -6,6 +6,9 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from processual_api.admin_marketplace.assessment_subscription_activation_service import (
+    AssessmentSubscriptionActivationService,
+)
 from processual_api.admin_marketplace.commercial_read_service import (
     AdminMarketplaceCommercialReadService,
 )
@@ -49,6 +52,7 @@ class AdminMarketplaceRuntime:
     commercial_read_service: AdminMarketplaceCommercialReadService
     payment_verification_service: AdminPaymentVerificationService
     subscription_activation_service: SubscriptionActivationOrchestrator
+    assessment_subscription_activation_service: AssessmentSubscriptionActivationService
     payment_reconciliation_service: PaymentReconciliationService
 
 
@@ -110,6 +114,10 @@ async def build_admin_marketplace_runtime(
             unit_of_work_factory=unit_of_work_factory,
             clock=lambda: datetime.now(UTC),
         )
+        assessment_subscription_activation_service = AssessmentSubscriptionActivationService(
+            unit_of_work_factory=unit_of_work_factory,
+            clock=lambda: datetime.now(UTC),
+        )
         payment_reconciliation_service = PaymentReconciliationService(
             unit_of_work_factory=unit_of_work_factory,
             clock=lambda: datetime.now(UTC),
@@ -139,6 +147,7 @@ async def build_admin_marketplace_runtime(
         commercial_read_service=commercial_read_service,
         payment_verification_service=payment_verification_service,
         subscription_activation_service=subscription_activation_service,
+        assessment_subscription_activation_service=assessment_subscription_activation_service,
         payment_reconciliation_service=payment_reconciliation_service,
     )
 
