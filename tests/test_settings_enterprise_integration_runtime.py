@@ -5,6 +5,7 @@ import asyncio
 from fastapi.routing import APIRoute
 
 from processual_api.routers import settings as settings_router
+from processual_api.routers import settings_enterprise_integration_runtime as enterprise_runtime
 from processual_api.routers.settings_enterprise_integration_runtime import (
     enterprise_integration_console_payload,
 )
@@ -61,6 +62,7 @@ def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
     assert payload["raw_secret_visible"] is False
     assert payload["scope_posture"] == {
         "enabled": False,
+        "source": "catalog",
         "total": 0,
         "read": 0,
         "write": 0,
@@ -122,6 +124,7 @@ def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch)
     assert "api_key" not in payload["keys"][0]
     assert payload["operational_profile_count"] >= 1
     assert payload["scope_posture"]["enabled"] is True
+    assert payload["scope_posture"]["source"] == "catalog"
     assert payload["scope_posture"]["total"] >= 1
     assert payload["scope_posture"]["read"] >= 1
     assert payload["scope_posture"]["write"] >= 1
@@ -164,12 +167,44 @@ def test_scope_posture_counts_are_internally_consistent(monkeypatch) -> None:
     )
     posture = payload["scope_posture"]
 
+    assert posture["source"] == "catalog"
     assert posture["total"] == posture["read"] + posture["write"] + posture["restricted"]
     assert posture["read_only_pilot"] == posture["read"]
     assert posture["supervisor_approval_required"] == (
         posture["write"] + posture["restricted"]
     )
     assert posture["production_allowed_without_approval"] == 0
+
+
+def test_enterprise_console_evaluates_readiness_once(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_core"},
+            "api_keys": [],
+        },
+    )
+    original = enterprise_runtime.list_integration_readiness_checks
+    calls = 0
+
+    def counted_readiness_checks():
+        nonlocal calls
+        calls += 1
+        return original()
+
+    monkeypatch.setattr(
+        enterprise_runtime,
+        "list_integration_readiness_checks",
+        counted_readiness_checks,
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_core")
+    )
+
+    assert calls == 1
+    assert payload["readiness"]["total"] == len(payload["readiness_checks"])
 
 
 def test_enterprise_private_remains_legacy_compatible(monkeypatch) -> None:
