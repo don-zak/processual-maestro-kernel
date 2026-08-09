@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
+from processual_api.billing.maestro_group1_selected_pricing import (
+    DEFAULT_YEARLY_DISCOUNT_PERCENT,
+)
 from processual_api.billing.public_plan_journey import (
     ANNUAL_DISCOUNT_PERCENT,
     PLAN_DEFINITIONS,
@@ -20,6 +25,11 @@ def test_public_plan_catalog_has_unique_complete_order() -> None:
     assert CATALOG["annual_discount_percent"] == int(ANNUAL_DISCOUNT_PERCENT)
     assert CATALOG["annual_discount_scope"] == "base_plan_only"
     assert CATALOG["checkout_enabled"] is False
+
+
+def test_public_journey_uses_selected_pricing_discount_authority() -> None:
+    assert ANNUAL_DISCOUNT_PERCENT == DEFAULT_YEARLY_DISCOUNT_PERCENT
+    assert Decimal(str(CATALOG["annual_discount_percent"])) == DEFAULT_YEARLY_DISCOUNT_PERCENT
 
 
 @pytest.mark.parametrize("plan_id", PUBLIC_PLAN_ORDER)
@@ -58,16 +68,18 @@ def test_each_plan_has_exactly_one_safe_entry_path(plan_id: str) -> None:
 
 
 def test_annual_prices_apply_the_declared_base_plan_discount() -> None:
+    multiplier = Decimal("1") - DEFAULT_YEARLY_DISCOUNT_PERCENT / Decimal("100")
+
     for plan in PLANS.values():
         if plan["monthly_price_usd"] is None:
             continue
 
-        monthly = float(plan["monthly_price_usd"])
-        annual = float(plan["annual_price_usd"])
-        expected = round(monthly * 12 * 0.80, 2)
+        monthly = Decimal(plan["monthly_price_usd"])
+        annual = Decimal(plan["annual_price_usd"])
+        expected = (monthly * Decimal("12") * multiplier).quantize(Decimal("0.01"))
 
         assert annual == expected
-        assert plan["annual_discount_percent"] == 20
+        assert plan["annual_discount_percent"] == int(DEFAULT_YEARLY_DISCOUNT_PERCENT)
         assert plan["quota_add_ons_policy"]["annual_discount_applies"] is False
 
 
