@@ -16,6 +16,7 @@ from processual_api.admin_marketplace.subscription_quota_profiles import (
 )
 from processual_api.billing.assessment_activation_preparation import (
     ApprovedAssessmentOutcome,
+    AssessmentActivationPreparationError,
     build_assessment_activation_profile,
 )
 from processual_api.billing.plan_fulfillment_catalog import QUOTA_METRIC_CODE
@@ -99,11 +100,19 @@ def _definition_from_outcome(
     profile_ref = str(activation["quota_profile_ref"]).strip().lower()
     binding_hash = str(activation["assessment_binding_hash"]).strip().lower()
     approved_quota_units = activation["approved_quota_units"]
+    entitlement_codes = activation["entitlement_codes"]
+    approval = activation["approval"]
     if isinstance(approved_quota_units, bool) or not isinstance(
         approved_quota_units,
         int,
     ):
         raise ValueError("approved assessment quota must be an integer")
+    if not isinstance(entitlement_codes, list) or not all(
+        isinstance(code, str) for code in entitlement_codes
+    ):
+        raise ValueError("approved assessment entitlements are invalid")
+    if not isinstance(approval, dict):
+        raise ValueError("approved assessment approval metadata is invalid")
 
     definition: dict[str, object] = {
         "profile_ref": profile_ref,
@@ -114,6 +123,9 @@ def _definition_from_outcome(
         "entitlement_source_plan_code": str(
             activation["entitlement_source_plan_code"]
         ).strip().lower(),
+        "approved_by": str(approval["approved_by"]).strip(),
+        "approval_reference": str(approval["approval_reference"]).strip(),
+        "entitlement_codes_json": list(entitlement_codes),
         "metric_code": QUOTA_METRIC_CODE,
         "limit_units": approved_quota_units,
         "cycle_kind": ASSESSMENT_QUOTA_CYCLE_KIND,
@@ -135,6 +147,9 @@ def _record_payload(record: AdminMarketAssessmentQuotaProfile) -> dict[str, obje
         "customer_ref": record.customer_ref,
         "public_plan_id": record.public_plan_id,
         "entitlement_source_plan_code": record.entitlement_source_plan_code,
+        "approved_by": record.approved_by,
+        "approval_reference": record.approval_reference,
+        "entitlement_codes_json": list(record.entitlement_codes_json),
         "metric_code": record.metric_code,
         "limit_units": record.limit_units,
         "cycle_kind": record.cycle_kind,
@@ -150,10 +165,46 @@ def _record_matches(
     return all(getattr(record, field) == value for field, value in definition.items())
 
 
+def _verify_assessment_binding(record: AdminMarketAssessmentQuotaProfile) -> None:
+    try:
+        rebuilt = build_assessment_activation_profile(
+            ApprovedAssessmentOutcome(
+                assessment_id=record.assessment_id,
+                customer_ref=record.customer_ref,
+                public_plan_id=record.public_plan_id,
+                approval_status="approved",
+                approved_quota_units=record.limit_units,
+                approved_entitlement_codes=tuple(record.entitlement_codes_json),
+                approved_by=record.approved_by,
+                approval_reference=record.approval_reference,
+            )
+        )
+    except (AssessmentActivationPreparationError, KeyError, TypeError, ValueError) as exc:
+        raise AssessmentQuotaProfileIntegrityError(
+            "assessment quota profile cannot reproduce an authoritative approved assessment."
+        ) from exc
+
+    if (
+        rebuilt["assessment_binding_hash"] != record.assessment_binding_hash
+        or rebuilt["quota_profile_ref"] != record.profile_ref
+        or rebuilt["public_plan_id"] != record.public_plan_id
+        or rebuilt["entitlement_source_plan_code"]
+        != record.entitlement_source_plan_code
+    ):
+        raise AssessmentQuotaProfileIntegrityError(
+            "assessment quota profile binding does not match the authoritative assessment template."
+        )
+
+
 def _trusted_runtime_profile(
     record: AdminMarketAssessmentQuotaProfile,
 ) -> SubscriptionQuotaProfile:
-    payload = _record_payload(record)
+    try:
+        payload = _record_payload(record)
+    except (TypeError, ValueError) as exc:
+        raise AssessmentQuotaProfileIntegrityError(
+            "assessment quota profile payload is malformed."
+        ) from exc
     expected_digest = _payload_digest(payload)
     if record.payload_digest != expected_digest:
         raise AssessmentQuotaProfileIntegrityError(
@@ -175,10 +226,15 @@ def _trusted_runtime_profile(
         raise AssessmentQuotaProfileIntegrityError(
             "assessment quota profile definition version is not supported."
         )
-    if isinstance(record.limit_units, bool) or record.limit_units <= 0:
+    if (
+        isinstance(record.limit_units, bool)
+        or not isinstance(record.limit_units, int)
+        or record.limit_units <= 0
+    ):
         raise AssessmentQuotaProfileIntegrityError(
             "assessment quota profile limit is invalid."
         )
+    _verify_assessment_binding(record)
     return _runtime_profile(
         profile_ref=record.profile_ref,
         limit_units=record.limit_units,
