@@ -6,7 +6,9 @@ param(
     [string]$PythonBin = 'python',
     [string]$ResultsDir = 'local-qualification-results',
     [int]$RedisPort = 16379,
-    [int]$PostgresPort = 15432
+    [int]$PostgresPort = 15432,
+    [int]$LoadPort = 18080,
+    [int]$SoakPort = 18030
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +19,8 @@ $PostgresContainer = 'pmk-local-qualification-postgres'
 $RedisQualificationUrl = "redis://127.0.0.1:$RedisPort/15"
 $RedisRuntimeUrl = "redis://127.0.0.1:$RedisPort/0"
 $DatabaseUrl = "postgresql+asyncpg://maestro:local-benchmark-password@127.0.0.1:$PostgresPort/maestro"
+$LoadBaseUrl = "http://127.0.0.1:$LoadPort"
+$SoakBaseUrl = "http://127.0.0.1:$SoakPort"
 
 New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
 
@@ -40,12 +44,10 @@ function Invoke-Checked {
 
 function Remove-DockerContainerIfExists {
     param([Parameter(Mandatory)][string]$Name)
-
     $existing = & docker ps -a --filter "name=^/$Name$" --format '{{.Names}}'
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to inspect Docker container: $Name"
     }
-
     if ($existing -contains $Name) {
         Invoke-Checked docker @('rm', '-f', $Name)
     }
@@ -121,7 +123,6 @@ function Invoke-WithTee {
         [Parameter(Mandatory)][string[]]$Arguments,
         [Parameter(Mandatory)][string]$FailureMessage
     )
-
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
@@ -131,7 +132,6 @@ function Invoke-WithTee {
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
-
     if ($exitCode -ne 0) {
         throw "$FailureMessage Exit code: $exitCode"
     }
@@ -153,30 +153,22 @@ function Run-DurableQualification {
     )
 
     Invoke-WithTee -OutputPath (Join-Path $ResultsDir 'durable-1-2-4-8.json') -FailureMessage 'Durable scale qualification failed.' -Arguments @(
-        'benchmarks/durable_worker_scale.py',
-        '--redis-url', $RedisQualificationUrl,
-        '--workers', '1,2,4,8',
-        '--jobs', '384',
-        '--handler-delay-ms', '20',
-        '--repetitions', '5',
-        '--redis-telemetry'
+        'benchmarks/durable_worker_scale.py', '--redis-url', $RedisQualificationUrl,
+        '--workers', '1,2,4,8', '--jobs', '384', '--handler-delay-ms', '20',
+        '--repetitions', '5', '--redis-telemetry'
     )
 
     if ($Include16Workers) {
         Invoke-WithTee -OutputPath (Join-Path $ResultsDir 'durable-16.json') -FailureMessage '16-worker qualification failed.' -Arguments @(
-            'benchmarks/durable_worker_scale.py',
-            '--redis-url', $RedisQualificationUrl,
-            '--workers', '16',
-            '--jobs', '384',
-            '--handler-delay-ms', '20',
-            '--repetitions', '5',
-            '--redis-telemetry'
+            'benchmarks/durable_worker_scale.py', '--redis-url', $RedisQualificationUrl,
+            '--workers', '16', '--jobs', '384', '--handler-delay-ms', '20',
+            '--repetitions', '5', '--redis-telemetry'
         )
     }
 }
 
 function Run-LoadQualification {
-    Write-Host '== Local HTTP/load qualification =='
+    Write-Host "== Local HTTP/load qualification on $LoadBaseUrl =="
     Start-QualificationRedis
     Start-QualificationPostgres
 
@@ -192,23 +184,23 @@ function Run-LoadQualification {
 
     $server = $null
     try {
-        $server = Start-PythonServer -Arguments @('-m', 'uvicorn', 'processual_api.main:app', '--host', '127.0.0.1', '--port', '8000') -StdoutPath (Join-Path $ResultsDir 'load-server.stdout.log') -StderrPath (Join-Path $ResultsDir 'load-server.stderr.log')
-        Wait-HttpReady -Url 'http://127.0.0.1:8000/health/live'
+        $server = Start-PythonServer -Arguments @('-m', 'uvicorn', 'processual_api.main:app', '--host', '127.0.0.1', '--port', [string]$LoadPort) -StdoutPath (Join-Path $ResultsDir 'load-server.stdout.log') -StderrPath (Join-Path $ResultsDir 'load-server.stderr.log')
+        Wait-HttpReady -Url "$LoadBaseUrl/health/live"
 
         Invoke-WithTee -OutputPath (Join-Path $ResultsDir 'http-live.txt') -FailureMessage 'HTTP live load probe failed.' -Arguments @(
-            'benchmarks/load_probe.py', '--name', 'http-live', '--path', '/health/live',
+            'benchmarks/load_probe.py', '--base-url', $LoadBaseUrl, '--name', 'http-live', '--path', '/health/live',
             '--concurrency', '1,5,10,20,40,80,120', '--requests', '300',
             '--output', (Join-Path $ResultsDir 'http-live.json')
         )
 
         Invoke-WithTee -OutputPath (Join-Path $ResultsDir 'dependency-ready.txt') -FailureMessage 'Dependency-ready load probe failed.' -Arguments @(
-            'benchmarks/load_probe.py', '--name', 'dependency-ready', '--path', '/health/ready',
+            'benchmarks/load_probe.py', '--base-url', $LoadBaseUrl, '--name', 'dependency-ready', '--path', '/health/ready',
             '--concurrency', '1,5,10,20,40,80,120', '--requests', '200',
             '--output', (Join-Path $ResultsDir 'dependency-ready.json')
         )
 
         Invoke-WithTee -OutputPath (Join-Path $ResultsDir 'workloads.txt') -FailureMessage 'Workload probe failed.' -Arguments @(
-            'benchmarks/workload_probe.py', '--concurrency', '1,5,10,20,40',
+            'benchmarks/workload_probe.py', '--base-url', $LoadBaseUrl, '--concurrency', '1,5,10,20,40',
             '--light-requests', '200', '--normal-requests', '160', '--heavy-requests', '80',
             '--output', (Join-Path $ResultsDir 'workloads.json')
         )
@@ -221,7 +213,7 @@ function Run-LoadQualification {
 }
 
 function Run-SoakQualification {
-    Write-Host '== Multi-process orchestration soak =='
+    Write-Host "== Multi-process orchestration soak on $SoakBaseUrl =="
     Start-QualificationRedis
 
     $env:PYTHONPATH = '.'
@@ -244,20 +236,20 @@ function Run-SoakQualification {
     $server = $null
     try {
         $server = Start-PythonServer -Arguments @(
-            '-m', 'uvicorn', 'benchmarks.orchestration_api_app:app', '--host', '127.0.0.1', '--port', '8030',
+            '-m', 'uvicorn', 'benchmarks.orchestration_api_app:app', '--host', '127.0.0.1', '--port', [string]$SoakPort,
             '--workers', '2', '--timeout-keep-alive', '30'
         ) -StdoutPath (Join-Path $ResultsDir 'orchestration-server.stdout.log') -StderrPath (Join-Path $ResultsDir 'orchestration-server.stderr.log')
 
-        Wait-HttpReady -Url 'http://127.0.0.1:8030/health/live'
+        Wait-HttpReady -Url "$SoakBaseUrl/health/live"
 
         Invoke-WithTee -OutputPath (Join-Path $ResultsDir 'orchestration-soak.txt') -FailureMessage 'Orchestration soak benchmark failed.' -Arguments @(
-            'benchmarks/orchestration_api_soak.py', '--base-url', 'http://127.0.0.1:8030',
+            'benchmarks/orchestration_api_soak.py', '--base-url', $SoakBaseUrl,
             '--workers', '2', '--widths', '4,8,12,16', '--concurrency', '10,20',
             '--trials', '3', '--requests', '120', '--output', (Join-Path $ResultsDir 'orchestration-soak.json')
         )
 
         $metricsPath = Join-Path $ResultsDir 'orchestration-metrics.txt'
-        $metrics = (Invoke-WebRequest -Uri 'http://127.0.0.1:8030/metrics' -UseBasicParsing).Content
+        $metrics = (Invoke-WebRequest -Uri "$SoakBaseUrl/metrics" -UseBasicParsing).Content
         Set-Content -Path $metricsPath -Value $metrics -Encoding UTF8
         if ($metrics -notmatch 'maestro_llm_orchestration_requests_total') { throw 'Missing maestro_llm_orchestration_requests_total metric.' }
         if ($metrics -notmatch 'maestro_llm_orchestration_latency_seconds') { throw 'Missing maestro_llm_orchestration_latency_seconds metric.' }
