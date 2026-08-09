@@ -37,7 +37,9 @@ def test_assessment_subscription_activation_migration_allows_offerless_binding(
     database_path = tmp_path / "assessment-subscription.db"
     database_url = f"sqlite+aiosqlite:///{database_path.as_posix()}"
 
-    _run(database_url, "upgrade", "head")
+    # This test owns the 0045 contract specifically. Newer head migrations have
+    # their own tests and must not change the expected downgrade target here.
+    _run(database_url, "upgrade", REVISION)
 
     with sqlite3.connect(database_path) as connection:
         current = connection.execute("SELECT version_num FROM alembic_version").fetchone()
