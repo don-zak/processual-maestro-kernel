@@ -1,5 +1,10 @@
+from decimal import Decimal
+
 from fastapi.testclient import TestClient
 
+from processual_api.billing.maestro_group1_selected_pricing import (
+    DEFAULT_YEARLY_DISCOUNT_PERCENT,
+)
 from processual_api.main import app
 
 
@@ -13,7 +18,7 @@ def test_public_plan_journey_route_returns_catalog() -> None:
     assert payload["version"] == "2026-08-commercial-plan-pages-v1"
     assert payload["currency"] == "USD"
     assert payload["billing_periods"] == ["monthly", "annual"]
-    assert payload["annual_discount_percent"] == 20
+    assert payload["annual_discount_percent"] == int(DEFAULT_YEARLY_DISCOUNT_PERCENT)
     assert payload["annual_discount_scope"] == "base_plan_only"
     assert payload["public_price_ceiling_plan"] == "enterprise_pilot"
     assert payload["checkout_enabled"] is False
@@ -26,11 +31,16 @@ def test_public_plan_journey_route_exposes_expected_prices() -> None:
     payload = response.json()
 
     by_id = {plan["plan_id"]: plan for plan in payload["plans"]}
+    multiplier = Decimal("1") - DEFAULT_YEARLY_DISCOUNT_PERCENT / Decimal("100")
 
     assert by_id["academic_individual"]["monthly_price_usd"] == "29.00"
-    assert by_id["academic_individual"]["annual_price_usd"] == "278.40"
+    assert Decimal(by_id["academic_individual"]["annual_price_usd"]) == (
+        Decimal("29") * Decimal("12") * multiplier
+    ).quantize(Decimal("0.01"))
     assert by_id["starter"]["monthly_price_usd"] == "49.00"
-    assert by_id["starter"]["annual_price_usd"] == "470.40"
+    assert Decimal(by_id["starter"]["annual_price_usd"]) == (
+        Decimal("49") * Decimal("12") * multiplier
+    ).quantize(Decimal("0.01"))
     assert by_id["business"]["monthly_price_usd"] == "519.00"
     assert by_id["enterprise_pilot"]["monthly_price_usd"] == "2790.00"
 
