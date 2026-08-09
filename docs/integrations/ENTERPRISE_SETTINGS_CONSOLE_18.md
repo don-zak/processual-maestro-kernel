@@ -85,7 +85,15 @@ a security or entitlement boundary. Server responses remain authoritative.
 
 Scope posture is derived from the existing integration scope catalog. The
 Settings contract exposes aggregate counts only; it does not invent a second
-scope catalog or grant scopes.
+scope catalog or grant scopes. The payload explicitly marks this provenance as:
+
+```text
+scope_posture.source = catalog
+```
+
+That field is descriptive provenance, not a customer authorization decision.
+The client UI labels the surface as `Catalog scope posture` and explicitly states
+that the counts are not granted client permissions.
 
 The aggregate posture covers:
 
@@ -108,7 +116,9 @@ sandbox requirements declared by the scope catalog.
 ## Readiness authority
 
 Readiness data comes from the existing declarative integration readiness
-catalog. The Settings console does not itself approve a connector.
+catalog. The Settings console does not itself approve a connector. Readiness
+checks are evaluated once for each console response so the detailed checks and
+aggregate summary represent the same evaluation snapshot.
 
 A readiness check may indicate sandbox readiness, but all client-facing records
 continue to enforce:
@@ -124,10 +134,23 @@ The Settings Integration tab follows the existing Stage 18 layout system and
 consumes `/settings/enterprise-integration` as the server-authoritative overview
 source.
 
-It must keep semantic tab/tabpanel relationships, keyboard navigation, visible
-focus, responsive behavior, and reduced-motion support. The overview presents
-status, lifecycle stages, blockers, and the next safe action before detailed
-implementation information. Raw secret material must never be rendered.
+The Enterprise control-plane enhancement presents four information layers:
+
+1. Enterprise identity, separating public and canonical catalog identity.
+2. Catalog scope posture, with explicit provenance and least-privilege language.
+3. Qualification readiness, including checks, sandbox-ready count, blockers, and
+   the next safe action.
+4. A persistent production boundary showing that production and runtime approval
+   remain blocked.
+
+The enhancement is read-only. It adds no production activation control and uses
+safe text rendering for response-derived values. Failure to load the contract is
+displayed as a fail-closed state rather than inferring entitlement or approval.
+
+The surface must keep semantic tab/tabpanel relationships, keyboard navigation,
+visible focus in the parent Settings system, responsive behavior, RTL-safe
+logical layout, accessible live status, tabular numeric metrics, and
+reduced-motion support. Raw secret material must never be rendered.
 
 Existing detailed Integration cards may remain temporarily for compatibility,
 but they must not override server-authoritative entitlement or production state.
@@ -142,20 +165,25 @@ The stage is protected by tests covering:
 - locked-plan data minimization;
 - client-key isolation;
 - secret redaction;
+- explicit catalog provenance;
 - scope-count consistency;
+- single-snapshot readiness evaluation;
 - zero production scopes without approval;
 - production/runtime fail-closed invariants;
+- canonical Enterprise analytics roll-up without losing `client_requests` source;
 - route registration;
 - Settings tab ARIA relationships;
 - keyboard navigation and roving tab index;
-- mobile and reduced-motion layout behavior;
+- responsive, RTL-safe, and reduced-motion control-plane layout behavior;
+- safe text rendering and accessible live status;
 - server-authoritative console loading without plan-prefix guessing.
 
 ## Next stage
 
-The next controlled stage is to refine the client presentation of profile and
-scope posture, then connect customer-specific configuration to sandbox
-qualification without enabling production execution.
+The next controlled stage is customer-specific sandbox qualification: connect
+approved customer configuration to the existing profile, scope, and readiness
+contracts while keeping all runtime execution and production activation behind
+supervised gates.
 
 Customer-specific connector activation, real credentials, runtime connector
 approval, and production canary remain later supervised qualification stages
