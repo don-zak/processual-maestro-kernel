@@ -39,6 +39,39 @@ def test_admin_subscription_analytics_resolves_plan_from_approved_client_request
     )
 
 
+def test_admin_subscription_analytics_rolls_up_canonical_enterprise_request_plan(
+    tmp_path,
+):
+    _write_json(
+        tmp_path / "settings-enterprise-request-client.json",
+        {
+            "client_id": "enterprise-request-client",
+            "client_requests": [
+                {
+                    "status": "approved",
+                    "requested_plan": "enterprise",
+                    "approved_plan": "enterprise_pilot",
+                    "plan_source": "client_requests",
+                    "plan_applied": True,
+                }
+            ],
+            "api_keys": [],
+        },
+    )
+
+    summary = build_admin_subscription_analytics(tmp_path)
+
+    assert summary["plans"]["enterprise_integration"] == 1
+    assert summary["plans"]["unknown"] == 0
+    assert summary["plan_sources"]["client_requests"] == 1
+    assert summary["plan_sources"]["missing"] == 0
+    assert not any(
+        item["kind"] == "unknown_plan"
+        and item["client_id"] == "enterprise-request-client"
+        for item in summary["risk"]
+    )
+
+
 def test_admin_subscription_analytics_keeps_blank_request_plan_unknown(tmp_path):
     _write_json(
         tmp_path / "settings_blank-request-client.json",
