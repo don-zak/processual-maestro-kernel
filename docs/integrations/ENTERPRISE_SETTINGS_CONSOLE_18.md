@@ -81,6 +81,37 @@ that compatibility is required.
 The client UI must not infer Enterprise eligibility from plan-name prefixes as
 a security or entitlement boundary. Server responses remain authoritative.
 
+## Analytics identity and quota authority
+
+Admin subscription analytics intentionally separates the display bucket from the
+fulfillment identity used to calculate quota.
+
+Canonical Enterprise Integration tiers are displayed under the aggregate
+`enterprise_integration` analytics bucket, but their canonical plan identifiers
+are preserved until allowance calculation. The display roll-up therefore must
+not collapse all Enterprise tiers onto the allowance of the public
+`enterprise_integration` alias.
+
+The authoritative fixed monthly allowances are:
+
+| Canonical plan | Monthly units |
+| --- | ---: |
+| `enterprise_integration_starter` | 50,000 |
+| `enterprise_pilot` | 500,000 |
+| `enterprise_core` | 1,500,000 |
+| `enterprise_scale` | 3,000,000 |
+| `enterprise_strategic` | 5,000,000 |
+
+Public aliases such as `enterprise` and `enterprise_integration` continue to
+resolve through the fulfillment catalog to `enterprise_pilot`, preserving the
+500,000-unit compatibility allowance. Canonical tiers keep their own allowance
+even though their analytics display count is rolled up to
+`plans.enterprise_integration`.
+
+`enterprise_custom` must not be assigned an invented fixed allowance. When no
+authoritative fixed catalog quota exists, analytics must remain fail-closed
+rather than borrowing an allowance from another Enterprise tier.
+
 ## Scope posture authority
 
 Scope posture is derived from the existing integration scope catalog. The
@@ -146,6 +177,9 @@ The Enterprise control-plane enhancement presents four information layers:
 The enhancement is read-only. It adds no production activation control and uses
 safe text rendering for response-derived values. Failure to load the contract is
 displayed as a fail-closed state rather than inferring entitlement or approval.
+A forced retry after a failed refresh must invalidate the previous render
+signature so that a successful response can restore the normal console even when
+its payload matches the last successfully rendered snapshot.
 
 The surface must keep semantic tab/tabpanel relationships, keyboard navigation,
 visible focus in the parent Settings system, responsive behavior, RTL-safe
@@ -171,11 +205,13 @@ The stage is protected by tests covering:
 - zero production scopes without approval;
 - production/runtime fail-closed invariants;
 - canonical Enterprise analytics roll-up without losing `client_requests` source;
+- canonical Enterprise tier allowances after analytics roll-up;
 - route registration;
 - Settings tab ARIA relationships;
 - keyboard navigation and roving tab index;
 - responsive, RTL-safe, and reduced-motion control-plane layout behavior;
 - safe text rendering and accessible live status;
+- recovery from fail-closed UI state after an explicit retry;
 - server-authoritative console loading without plan-prefix guessing.
 
 ## Next stage
