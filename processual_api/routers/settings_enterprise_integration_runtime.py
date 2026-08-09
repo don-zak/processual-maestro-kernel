@@ -16,9 +16,9 @@ from pydantic import BaseModel, Field
 
 from processual_api.auth.security import get_current_user
 from processual_api.billing.usage_pricing import enterprise_integration_capability
-from processual_api.integrations.credential_profiles import list_credential_profiles
 from processual_api.integrations.enterprise_sandbox_qualification import (
     build_customer_sandbox_qualification,
+    build_sandbox_qualification_catalog,
 )
 from processual_api.integrations.integration_readiness import (
     list_integration_readiness_checks,
@@ -38,15 +38,26 @@ class EnterpriseSandboxQualificationRequest(BaseModel):
 
 
 def _identity(current_user: dict[str, Any]) -> tuple[str, str]:
-    user_id = str(current_user.get("user_id") or current_user.get("sub") or "default")
+    user_id = str(
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or "default"
+    )
     client_id = str(current_user.get("client_id") or user_id)
     return user_id, client_id
 
 
-def _client_enterprise_capability(*, current_user: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+def _client_enterprise_capability(
+    *,
+    current_user: dict[str, Any],
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
     user_id, _ = _identity(current_user)
     raw = settings_module._load_raw(user_id)
-    plan_id = settings_module._resolve_client_api_key_integration_plan_id(user_id, raw, current_user)
+    plan_id = settings_module._resolve_client_api_key_integration_plan_id(
+        user_id,
+        raw,
+        current_user,
+    )
     return user_id, raw, enterprise_integration_capability(plan_id)
 
 
@@ -90,94 +101,174 @@ def _scope_posture(*, enabled: bool) -> dict[str, Any]:
         "read": by_access.get("read", 0),
         "write": by_access.get("write", 0),
         "restricted": by_access.get("restricted", 0),
-        "read_only_pilot": sum(1 for scope in scopes if scope.allowed_in_read_only_pilot),
-        "supervisor_approval_required": sum(1 for scope in scopes if scope.requires_supervisor_approval),
-        "production_allowed_without_approval": sum(1 for scope in scopes if scope.production_allowed_without_approval),
+        "read_only_pilot": sum(
+            1 for scope in scopes if scope.allowed_in_read_only_pilot
+        ),
+        "supervisor_approval_required": sum(
+            1 for scope in scopes if scope.requires_supervisor_approval
+        ),
+        "production_allowed_without_approval": sum(
+            1 for scope in scopes if scope.production_allowed_without_approval
+        ),
     }
 
 
 def _qualification_catalog(*, enabled: bool) -> dict[str, Any]:
     if not enabled:
-        return {"enabled": False, "source": "catalog", "profiles": [], "scopes": []}
+        return {
+            "enabled": False,
+            "source": "catalog",
+            "profiles": [],
+            "scopes": [],
+        }
 
     return {
         "enabled": True,
-        "source": "catalog",
-        "profiles": [
-            {
-                "credential_profile_id": profile.credential_profile_id,
-                "display_name": profile.display_name,
-                "description": profile.description,
-                "required_input_ids": list(profile.required_customer_inputs),
-                "required_security_control_ids": list(profile.required_security_controls),
-                "supported_auth_methods": list(profile.supported_auth_methods),
-                "sandbox_required": profile.sandbox_required,
-                "production_credential_approval_required": profile.production_credential_approval_required,
-                "runtime_connector_approved": False,
-            }
-            for profile in list_credential_profiles()
-        ],
-        "scopes": [
-            {
-                "scope_id": scope.scope_id,
-                "domain": scope.domain,
-                "action": scope.action,
-                "access_level": scope.access_level,
-                "risk_level": scope.risk_level,
-                "allowed_in_read_only_pilot": scope.allowed_in_read_only_pilot,
-                "requires_supervisor_approval": scope.requires_supervisor_approval,
-                "production_allowed_without_approval": False,
-            }
-            for scope in list_integration_scopes()
-        ],
+        **build_sandbox_qualification_catalog(),
     }
 
 
-def _console_sections(*, enabled: bool, key_count: int, operational_profile_count: int, scope_posture: dict[str, Any], readiness: dict[str, int]) -> list[dict[str, Any]]:
+def _console_sections(
+    *,
+    enabled: bool,
+    key_count: int,
+    operational_profile_count: int,
+    scope_posture: dict[str, Any],
+    readiness: dict[str, int],
+) -> list[dict[str, Any]]:
     if not enabled:
-        return [{"id": "entitlement", "label": "Enterprise entitlement", "status": "locked", "next_action": "Upgrade to an eligible Enterprise Integration plan."}]
+        return [
+            {
+                "id": "entitlement",
+                "label": "Enterprise entitlement",
+                "status": "locked",
+                "next_action": (
+                    "Upgrade to an eligible Enterprise Integration plan."
+                ),
+            }
+        ]
 
     keys_status = "ready" if key_count > 0 else "action_required"
-    profile_status = "ready" if operational_profile_count > 0 and int(scope_posture.get("total", 0)) > 0 else "action_required"
+    profile_status = (
+        "ready"
+        if operational_profile_count > 0
+        and int(scope_posture.get("total", 0)) > 0
+        else "action_required"
+    )
     sandbox_ready = int(readiness.get("sandbox_ready", 0))
     readiness_status = "ready" if sandbox_ready > 0 else "action_required"
+
     return [
-        {"id": "entitlement", "label": "Enterprise entitlement", "status": "ready", "next_action": "Review integration credentials and sandbox readiness."},
-        {"id": "api_keys", "label": "API & service identity", "status": keys_status, "next_action": "Review active integration keys." if key_count > 0 else "Provision a sandbox integration key or request supervised issuance."},
-        {"id": "integration_profile", "label": "Profiles & scope posture", "status": profile_status, "next_action": "Review read, write, and restricted scope posture before sandbox use." if profile_status == "ready" else "Complete the integration profile and scope policy before sandbox use."},
-        {"id": "readiness", "label": "Integration readiness", "status": readiness_status, "next_action": "Proceed with supervised sandbox review." if sandbox_ready > 0 else "Complete required customer inputs and security controls."},
-        {"id": "production", "label": "Production approval", "status": "blocked", "next_action": "Production remains blocked until supervised qualification is complete."},
+        {
+            "id": "entitlement",
+            "label": "Enterprise entitlement",
+            "status": "ready",
+            "next_action": (
+                "Review integration credentials and sandbox readiness."
+            ),
+        },
+        {
+            "id": "api_keys",
+            "label": "API & service identity",
+            "status": keys_status,
+            "next_action": (
+                "Review active integration keys."
+                if key_count > 0
+                else (
+                    "Provision a sandbox integration key or request "
+                    "supervised issuance."
+                )
+            ),
+        },
+        {
+            "id": "integration_profile",
+            "label": "Profiles & scope posture",
+            "status": profile_status,
+            "next_action": (
+                "Review read, write, and restricted scope posture "
+                "before sandbox use."
+                if profile_status == "ready"
+                else (
+                    "Complete the integration profile and scope policy "
+                    "before sandbox use."
+                )
+            ),
+        },
+        {
+            "id": "readiness",
+            "label": "Integration readiness",
+            "status": readiness_status,
+            "next_action": (
+                "Proceed with supervised sandbox review."
+                if sandbox_ready > 0
+                else "Complete required customer inputs and security controls."
+            ),
+        },
+        {
+            "id": "production",
+            "label": "Production approval",
+            "status": "blocked",
+            "next_action": (
+                "Production remains blocked until supervised qualification "
+                "is complete."
+            ),
+        },
     ]
 
 
-def _next_action(*, enabled: bool, key_count: int, operational_profile_count: int, readiness: dict[str, int]) -> str:
+def _next_action(
+    *,
+    enabled: bool,
+    key_count: int,
+    operational_profile_count: int,
+    readiness: dict[str, int],
+) -> str:
     if not enabled:
         return "Upgrade to an eligible Enterprise Integration plan."
     if key_count == 0:
-        return "Provision a sandbox integration key or request supervised issuance."
+        return (
+            "Provision a sandbox integration key or request supervised issuance."
+        )
     if operational_profile_count == 0:
-        return "Complete the integration profile and scope policy before sandbox use."
+        return (
+            "Complete the integration profile and scope policy before sandbox use."
+        )
     if int(readiness.get("sandbox_ready", 0)) == 0:
         return "Complete required integration inputs and security controls."
     return "Proceed to supervised sandbox review; production remains blocked."
 
 
-def enterprise_integration_console_payload(*, current_user: dict[str, Any]) -> dict[str, Any]:
+def enterprise_integration_console_payload(
+    *,
+    current_user: dict[str, Any],
+) -> dict[str, Any]:
     _, client_id = _identity(current_user)
-    _, raw, capability = _client_enterprise_capability(current_user=current_user)
+    _, raw, capability = _client_enterprise_capability(
+        current_user=current_user
+    )
     enabled = bool(capability["enabled"])
-    keys = settings_module._active_client_integration_keys(raw, client_id) if enabled else []
-    operational = settings_module._client_api_key_operational_profiles_payload(enabled=enabled)
+    keys = (
+        settings_module._active_client_integration_keys(raw, client_id)
+        if enabled
+        else []
+    )
+    operational = settings_module._client_api_key_operational_profiles_payload(
+        enabled=enabled
+    )
     scope_posture = _scope_posture(enabled=enabled)
     readiness_source = list_integration_readiness_checks() if enabled else []
     readiness_checks = _safe_readiness_checks(readiness_source)
-    readiness = summarize_integration_readiness(readiness_source) if enabled else {
-        "total": 0,
-        "blocked": 0,
-        "sandbox_ready": 0,
-        "production_allowed": 0,
-        "runtime_connector_approved": 0,
-    }
+    readiness = (
+        summarize_integration_readiness(readiness_source)
+        if enabled
+        else {
+            "total": 0,
+            "blocked": 0,
+            "sandbox_ready": 0,
+            "production_allowed": 0,
+            "runtime_connector_approved": 0,
+        }
+    )
     key_count = len(keys)
     operational_profile_count = int(operational["operational_profile_count"])
     return {
@@ -185,7 +276,10 @@ def enterprise_integration_console_payload(*, current_user: dict[str, Any]) -> d
         "status": capability["status"],
         "plan_id": capability["plan_id"],
         "normalized_plan_id": capability["normalized_plan_id"],
-        "canonical_plan_id": capability.get("canonical_plan_id", capability["normalized_plan_id"]),
+        "canonical_plan_id": capability.get(
+            "canonical_plan_id",
+            capability["normalized_plan_id"],
+        ),
         "legacy_compatibility": capability["legacy_compatibility"],
         "eligible_plans": capability["eligible_plans"],
         "environment": "sandbox",
@@ -194,28 +288,52 @@ def enterprise_integration_console_payload(*, current_user: dict[str, Any]) -> d
         "raw_secret_visible": False,
         "key_count": key_count,
         "keys": keys,
-        "operational_profiles_enabled": operational["operational_profiles_enabled"],
+        "operational_profiles_enabled": operational[
+            "operational_profiles_enabled"
+        ],
         "operational_profile_count": operational_profile_count,
         "operational_profiles": operational["operational_profiles"],
         "scope_posture": scope_posture,
         "qualification_catalog": _qualification_catalog(enabled=enabled),
         "readiness": readiness,
         "readiness_checks": readiness_checks,
-        "sections": _console_sections(enabled=enabled, key_count=key_count, operational_profile_count=operational_profile_count, scope_posture=scope_posture, readiness=readiness),
-        "next_action": _next_action(enabled=enabled, key_count=key_count, operational_profile_count=operational_profile_count, readiness=readiness),
+        "sections": _console_sections(
+            enabled=enabled,
+            key_count=key_count,
+            operational_profile_count=operational_profile_count,
+            scope_posture=scope_posture,
+            readiness=readiness,
+        ),
+        "next_action": _next_action(
+            enabled=enabled,
+            key_count=key_count,
+            operational_profile_count=operational_profile_count,
+            readiness=readiness,
+        ),
     }
 
 
 @settings_module.router.get("/enterprise-integration", response_model=dict)
-async def get_enterprise_integration_console(current_user: dict = Depends(get_current_user)):
+async def get_enterprise_integration_console(
+    current_user: dict = Depends(get_current_user),
+):
     return enterprise_integration_console_payload(current_user=current_user)
 
 
-@settings_module.router.post("/enterprise-integration/sandbox-qualification", response_model=dict)
-async def evaluate_enterprise_sandbox_qualification(body: EnterpriseSandboxQualificationRequest, current_user: dict = Depends(get_current_user)):
+@settings_module.router.post(
+    "/enterprise-integration/sandbox-qualification",
+    response_model=dict,
+)
+async def evaluate_enterprise_sandbox_qualification(
+    body: EnterpriseSandboxQualificationRequest,
+    current_user: dict = Depends(get_current_user),
+):
     _, _, capability = _client_enterprise_capability(current_user=current_user)
     if not bool(capability["enabled"]):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Enterprise Integration entitlement is required.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Enterprise Integration entitlement is required.",
+        )
 
     try:
         qualification = build_customer_sandbox_qualification(
@@ -224,7 +342,10 @@ async def evaluate_enterprise_sandbox_qualification(body: EnterpriseSandboxQuali
             provided_input_ids=body.provided_input_ids,
         )
     except (KeyError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
     return {
         **qualification,
