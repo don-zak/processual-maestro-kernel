@@ -8,7 +8,6 @@ services, approve production connectors, or expose stored secrets.
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 
 from fastapi import Depends
