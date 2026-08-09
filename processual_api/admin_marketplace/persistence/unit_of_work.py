@@ -6,6 +6,9 @@ from types import TracebackType
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.admin_marketplace.assessment_quota_profile_persistence import (
+    SqlAlchemyAssessmentQuotaProfileRepository,
+)
 from processual_api.admin_marketplace.lemon_squeezy_binding_persistence import (
     SqlAlchemyLemonSqueezyBindingRepository,
 )
@@ -104,6 +107,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
             SqlAlchemyLemonSqueezyReconciliationDecisionRepository(session)
         )
         self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
+        self.assessment_quota_profiles = SqlAlchemyAssessmentQuotaProfileRepository(session)
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_delinquency = SqlAlchemySubscriptionDelinquencyRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
