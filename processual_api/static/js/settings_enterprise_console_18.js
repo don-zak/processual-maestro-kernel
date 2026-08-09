@@ -229,6 +229,7 @@
   function renderFailure() {
     const card = document.getElementById('set-enterprise-console-card');
     if (!card) return;
+    lastRenderedSignature = '';
     document.getElementById(ROOT_ID)?.remove();
     const root = element('div', 'se18-control-plane se18-control-plane-error');
     root.id = ROOT_ID;
