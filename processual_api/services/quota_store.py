@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from processual_api.billing.plan_capability_matrix import required_execution_capability
 from processual_api.billing.plan_entitlement_gate import (
     PlanEntitlementDeniedError,
     require_plan_entitlement,
@@ -26,11 +27,6 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_API_KEY_QUOTA_LIMIT = int(
     os.environ.get("PMK_DEFAULT_API_KEY_QUOTA_LIMIT", "50")
 )
-
-COUNTED_ENDPOINT_CAPABILITIES: dict[tuple[str, str], str] = {
-    ("POST", "/cgt/govern"): "maestro_execution",
-}
-COUNTED_ENDPOINTS: set[tuple[str, str]] = set(COUNTED_ENDPOINT_CAPABILITIES)
 
 
 def _now_iso() -> str:
@@ -45,14 +41,8 @@ def _normalize_endpoint(endpoint: str) -> str:
 
 
 def is_quota_counted(method: str, endpoint: str) -> bool:
-    """Return True only for endpoints that should consume commercial quota."""
-    return (method.upper(), _normalize_endpoint(endpoint)) in COUNTED_ENDPOINTS
-
-
-def _required_capability(method: str, endpoint: str) -> str | None:
-    return COUNTED_ENDPOINT_CAPABILITIES.get(
-        (method.upper(), _normalize_endpoint(endpoint))
-    )
+    """Return True only for endpoints with a centralized execution policy."""
+    return required_execution_capability(method, _normalize_endpoint(endpoint)) is not None
 
 
 def _iter_settings_files() -> list[Path]:
@@ -102,7 +92,7 @@ def _enforce_authoritative_capability(
     if policy.get("source") != "authoritative_fulfillment_catalog":
         return
 
-    capability_code = _required_capability(method, endpoint)
+    capability_code = required_execution_capability(method, endpoint)
     if capability_code is None:
         return
 
