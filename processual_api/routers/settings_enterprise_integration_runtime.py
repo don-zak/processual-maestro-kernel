@@ -1,10 +1,10 @@
 """Client-safe Enterprise Integration console contract for Settings.
 
 This route extension composes existing authoritative plan capability, API-key,
-operational-profile, scope-catalog, declarative readiness, and identifiers-only
-qualification persistence primitives into one Settings surface. It does not issue
-credentials, call external services, approve security controls or production
-connectors, or expose stored secrets.
+operational-profile, scope-catalog, declarative readiness, identifiers-only
+qualification persistence, and supervised revision primitives into one Settings
+surface. It does not issue credentials, call external services, approve security
+controls or production connectors, or expose stored secrets.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from processual_api.auth.security import get_current_user
@@ -21,6 +21,10 @@ from processual_api.integrations.enterprise_qualification_drafts import (
     safe_qualification_draft,
     save_qualification_draft,
     submit_qualification_draft,
+)
+from processual_api.integrations.enterprise_qualification_review import (
+    request_qualification_revision,
+    safe_qualification_review,
 )
 from processual_api.integrations.enterprise_sandbox_qualification import (
     build_customer_sandbox_qualification,
@@ -31,6 +35,15 @@ from processual_api.integrations.integration_readiness import (
     summarize_integration_readiness,
 )
 from processual_api.integrations.scope_catalog import list_integration_scopes
+from processual_api.services.supervisor_session_write_guard import (
+    SupervisorSessionWriteGuardError,
+    require_validated_supervisor_write_session,
+)
+from processual_api.supervision_rbac import (
+    QUALIFICATION_READ_SCOPE,
+    QUALIFICATION_REVIEW_SCOPE,
+    require_supervision_scope,
+)
 
 from . import settings as settings_module
 
@@ -41,6 +54,12 @@ class EnterpriseSandboxQualificationRequest(BaseModel):
     credential_profile_id: str = Field(min_length=1)
     requested_scope_ids: list[str] = Field(min_length=1)
     provided_input_ids: list[str] = Field(default_factory=list)
+
+
+class EnterpriseQualificationRevisionRequest(BaseModel):
+    """Fixed reason identifier for a supervised revision request."""
+
+    reason_code: str = Field(min_length=1, max_length=80)
 
 
 def _identity(current_user: dict[str, Any]) -> tuple[str, str]:
@@ -73,6 +92,62 @@ def _require_enterprise_entitlement(capability: dict[str, Any]) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Enterprise Integration entitlement is required.",
         )
+
+
+def _require_supervision_permission(
+    current_user: dict[str, Any],
+    required_scope: str,
+) -> None:
+    try:
+        require_supervision_scope(current_user, required_scope)
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
+def _require_supervisor_write_session(
+    request: Request,
+    required_scope: str,
+) -> dict[str, object]:
+    try:
+        return require_validated_supervisor_write_session(
+            request,
+            {required_scope},
+            guard_name="enterprise_settings_qualification_review",
+        )
+    except SupervisorSessionWriteGuardError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.detail,
+        ) from exc
+
+
+def _safe_target_user_id(value: str) -> str:
+    target = str(value or "").strip()
+    if (
+        not target
+        or len(target) > 200
+        or "/" in target
+        or "\\" in target
+        or target in {".", ".."}
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid qualification target user identifier.",
+        )
+    return target
+
+
+def _supervisor_actor(current_user: dict[str, Any]) -> str:
+    return str(
+        current_user.get("email")
+        or current_user.get("user_id")
+        or current_user.get("sub")
+        or current_user.get("role")
+        or "supervisor"
+    ).strip() or "supervisor"
 
 
 def _safe_readiness_checks(checks: list[Any]) -> list[dict[str, Any]]:
@@ -286,6 +361,7 @@ def enterprise_integration_console_payload(
     key_count = len(keys)
     operational_profile_count = int(operational["operational_profile_count"])
     qualification_draft = safe_qualification_draft(raw) if enabled else None
+    qualification_review = safe_qualification_review(raw) if enabled else None
     return {
         "enabled": enabled,
         "status": capability["status"],
@@ -311,6 +387,7 @@ def enterprise_integration_console_payload(
         "scope_posture": scope_posture,
         "qualification_catalog": _qualification_catalog(enabled=enabled),
         "qualification_draft": qualification_draft,
+        "qualification_review": qualification_review,
         "readiness": readiness,
         "readiness_checks": readiness_checks,
         "sections": _console_sections(
@@ -428,11 +505,83 @@ async def submit_enterprise_sandbox_qualification_draft(
     }
 
 
+@settings_module.router.get(
+    "/admin/enterprise-integration/qualification-drafts/{user_id}",
+    response_model=dict,
+)
+async def get_admin_enterprise_qualification_draft(
+    user_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_supervision_permission(current_user, QUALIFICATION_READ_SCOPE)
+    target_user_id = _safe_target_user_id(user_id)
+    raw = settings_module._load_raw(target_user_id)
+    draft = safe_qualification_draft(raw)
+    if draft is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Enterprise qualification draft not found.",
+        )
+    return {
+        "status": "ready",
+        "user_id": target_user_id,
+        "qualification_draft": draft,
+        "qualification_review": safe_qualification_review(raw),
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "raw_secret_visible": False,
+    }
+
+
+@settings_module.router.post(
+    "/admin/enterprise-integration/qualification-drafts/{user_id}/request-revision",
+    response_model=dict,
+)
+async def request_admin_enterprise_qualification_revision(
+    user_id: str,
+    body: EnterpriseQualificationRevisionRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_supervision_permission(current_user, QUALIFICATION_REVIEW_SCOPE)
+    session = _require_supervisor_write_session(
+        request,
+        QUALIFICATION_REVIEW_SCOPE,
+    )
+    target_user_id = _safe_target_user_id(user_id)
+    raw = settings_module._load_raw(target_user_id)
+    try:
+        review = request_qualification_revision(
+            raw,
+            reason_code=body.reason_code,
+            reviewer_id=_supervisor_actor(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    settings_module._save_raw(target_user_id, raw)
+    return {
+        "status": "revision_requested",
+        "user_id": target_user_id,
+        "qualification_draft": safe_qualification_draft(raw),
+        "qualification_review": review,
+        "supervisor_session_validated": bool(session["session_validated"]),
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "raw_secret_visible": False,
+    }
+
+
 __all__ = [
+    "EnterpriseQualificationRevisionRequest",
     "EnterpriseSandboxQualificationRequest",
     "enterprise_integration_console_payload",
     "evaluate_enterprise_sandbox_qualification",
+    "get_admin_enterprise_qualification_draft",
     "get_enterprise_integration_console",
+    "request_admin_enterprise_qualification_revision",
     "save_enterprise_sandbox_qualification_draft",
     "submit_enterprise_sandbox_qualification_draft",
 ]
