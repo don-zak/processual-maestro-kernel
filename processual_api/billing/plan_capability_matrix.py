@@ -11,7 +11,7 @@ from processual_api.billing.plan_fulfillment_catalog import (
     normalize_plan_code,
 )
 
-PLAN_CAPABILITY_MATRIX_VERSION: Final = "2026-08-plan-capabilities-v1"
+PLAN_CAPABILITY_MATRIX_VERSION: Final = "2026-08-plan-capabilities-v2"
 
 
 class CapabilityStatus(StrEnum):
@@ -35,6 +35,16 @@ class ToolCapability:
         payload = asdict(self)
         payload["status"] = self.status.value
         return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionCapabilityPolicy:
+    method: str
+    path: str
+    capability_code: str
+    quota_metric: str
+    quota_cost: int
+    production_required: bool = False
 
 
 _TOOL_CAPABILITIES = {
@@ -108,6 +118,46 @@ _TOOL_CAPABILITIES = {
 
 TOOL_CAPABILITIES: Final = MappingProxyType(_TOOL_CAPABILITIES)
 
+_EXECUTION_POLICIES = {
+    ("POST", "/cgt/govern"): ExecutionCapabilityPolicy(
+        method="POST",
+        path="/cgt/govern",
+        capability_code="maestro_execution",
+        quota_metric="credits",
+        quota_cost=1,
+    ),
+}
+
+EXECUTION_CAPABILITY_POLICIES: Final = MappingProxyType(_EXECUTION_POLICIES)
+
+
+def _normalize_path(path: str) -> str:
+    normalized = str(path or "").strip() or "/"
+    if normalized != "/":
+        normalized = normalized.rstrip("/")
+    return normalized
+
+
+def execution_policy_for_request(
+    method: str,
+    path: str,
+) -> ExecutionCapabilityPolicy | None:
+    return EXECUTION_CAPABILITY_POLICIES.get(
+        (str(method or "").upper(), _normalize_path(path))
+    )
+
+
+def required_execution_capability(method: str, path: str) -> str | None:
+    policy = execution_policy_for_request(method, path)
+    return None if policy is None else policy.capability_code
+
+
+def execution_quota_cost(method: str, path: str) -> tuple[str, int] | None:
+    policy = execution_policy_for_request(method, path)
+    if policy is None:
+        return None
+    return policy.quota_metric, policy.quota_cost
+
 
 def capabilities_for_plan(plan_code: str | None) -> tuple[ToolCapability, ...]:
     spec = get_plan_fulfillment_spec(plan_code)
@@ -157,6 +207,9 @@ def plan_capability_payload(plan_code: str | None) -> dict[str, object]:
         "matrix_version": PLAN_CAPABILITY_MATRIX_VERSION,
         "plan_code": canonical,
         "capabilities": [capability.to_dict() for capability in capabilities],
+        "execution_policies": [
+            asdict(policy) for policy in EXECUTION_CAPABILITY_POLICIES.values()
+        ],
         "production_advanced_integration_allowed": plan_can_execute(
             canonical,
             "advanced_integration",
@@ -181,6 +234,16 @@ def validate_plan_capability_matrix() -> None:
     for plan_code in PLAN_FULFILLMENT_SPECS:
         capabilities_for_plan(plan_code)
 
+    for policy in EXECUTION_CAPABILITY_POLICIES.values():
+        if policy.capability_code not in TOOL_CAPABILITIES:
+            raise ValueError(
+                f"execution policy references unknown capability: {policy.capability_code}"
+            )
+        if policy.quota_metric != "credits":
+            raise ValueError("execution quota metric must remain canonical credits")
+        if policy.quota_cost <= 0:
+            raise ValueError("execution quota cost must be positive")
+
     advanced = TOOL_CAPABILITIES["advanced_integration"]
     if advanced.production_allowed or advanced.status is not CapabilityStatus.SANDBOX_ONLY:
         raise ValueError("advanced integration must remain sandbox-only")
@@ -191,11 +254,16 @@ validate_plan_capability_matrix()
 
 __all__ = [
     "CapabilityStatus",
+    "EXECUTION_CAPABILITY_POLICIES",
+    "ExecutionCapabilityPolicy",
     "PLAN_CAPABILITY_MATRIX_VERSION",
     "TOOL_CAPABILITIES",
     "ToolCapability",
     "capabilities_for_plan",
+    "execution_policy_for_request",
+    "execution_quota_cost",
     "plan_can_execute",
     "plan_capability_payload",
+    "required_execution_capability",
     "validate_plan_capability_matrix",
 ]
