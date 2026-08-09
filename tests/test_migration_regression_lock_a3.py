@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260809_0044"
+HEAD_REVISION = "20260809_0045"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -168,6 +168,10 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260805_0029_subscription_runtime_transitions.py": (
             "Downgrade blocked: subscription runtime transitions exist",
+            "context.is_offline_mode()",
+        ),
+        "20260809_0045_assessment_subscription_activation.py": (
+            "Downgrade blocked: assessment subscription activation bindings exist",
             "context.is_offline_mode()",
         ),
     }
