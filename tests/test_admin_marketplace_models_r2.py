@@ -103,6 +103,14 @@ def test_subscription_and_order_status_are_constrained() -> None:
     assert any("maestro_direct" in expression and "lemon_squeezy" in expression for expression in order_checks)
 
 
+def test_assessment_activation_allows_offerless_subscription_only() -> None:
+    subscription_offer = AdminMarketSubscription.__table__.columns["offer_id"]
+    order_offer = AdminMarketOrder.__table__.columns["offer_id"]
+
+    assert subscription_offer.nullable is True
+    assert order_offer.nullable is False
+
+
 def test_commercial_amounts_are_fixed_precision() -> None:
     for model, expected_scale in (
         (AdminMarketOffer, 3),
