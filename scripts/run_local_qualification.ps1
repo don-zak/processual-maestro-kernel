@@ -38,12 +38,26 @@ function Invoke-Checked {
     }
 }
 
+function Remove-DockerContainerIfExists {
+    param([Parameter(Mandatory)][string]$Name)
+
+    $existing = & docker ps -a --filter "name=^/$Name$" --format '{{.Names}}'
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to inspect Docker container: $Name"
+    }
+
+    if ($existing -contains $Name) {
+        Invoke-Checked docker @('rm', '-f', $Name)
+    }
+}
+
 function Stop-QualificationContainers {
-    & docker rm -f $RedisContainer $PostgresContainer *> $null
+    Remove-DockerContainerIfExists $RedisContainer
+    Remove-DockerContainerIfExists $PostgresContainer
 }
 
 function Start-QualificationRedis {
-    & docker rm -f $RedisContainer *> $null
+    Remove-DockerContainerIfExists $RedisContainer
     Invoke-Checked docker @('run', '-d', '--name', $RedisContainer, '-p', "${RedisPort}:6379", 'redis:7')
     for ($attempt = 1; $attempt -le 30; $attempt++) {
         $pong = & docker exec $RedisContainer redis-cli ping 2>$null
@@ -54,7 +68,7 @@ function Start-QualificationRedis {
 }
 
 function Start-QualificationPostgres {
-    & docker rm -f $PostgresContainer *> $null
+    Remove-DockerContainerIfExists $PostgresContainer
     Invoke-Checked docker @(
         'run', '-d', '--name', $PostgresContainer,
         '-e', 'POSTGRES_USER=maestro',
