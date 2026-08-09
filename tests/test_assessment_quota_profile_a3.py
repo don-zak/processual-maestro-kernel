@@ -9,7 +9,9 @@ from processual_api.admin_marketplace.assessment_quota_profile_service import (
     ASSESSMENT_QUOTA_CYCLE_KIND,
     MONTHLY_COMPATIBILITY_PERIOD_DAYS,
     AssessmentQuotaProfileConflictError,
+    AssessmentQuotaProfileIntegrityError,
     ensure_assessment_quota_profile_factory,
+    resolve_assessment_quota_profile_factory,
 )
 from processual_api.billing.assessment_activation_preparation import (
     ApprovedAssessmentOutcome,
@@ -199,3 +201,43 @@ async def test_binding_hash_under_different_profile_ref_fails_closed() -> None:
         await ensure(outcome)
 
     assert unit.commit_count == 0
+
+
+@pytest.mark.asyncio
+async def test_durable_profile_resolves_to_exact_runtime_quota() -> None:
+    repository = _FakeRepository()
+    unit = _FakeUnitOfWork(repository)
+    ensure = ensure_assessment_quota_profile_factory(unit_of_work_factory=lambda: unit)
+    resolve = resolve_assessment_quota_profile_factory(unit_of_work_factory=lambda: unit)
+
+    created = await ensure(_outcome())
+    resolved = await resolve(created.record.profile_ref)
+
+    assert resolved.profile_ref == created.record.profile_ref
+    assert resolved.period_days == 30
+    assert resolved.metrics[0].metric_code == "credits"
+    assert resolved.metrics[0].limit_units == 125_000
+
+
+@pytest.mark.asyncio
+async def test_durable_profile_tampering_fails_closed_on_resolution() -> None:
+    repository = _FakeRepository()
+    unit = _FakeUnitOfWork(repository)
+    ensure = ensure_assessment_quota_profile_factory(unit_of_work_factory=lambda: unit)
+    resolve = resolve_assessment_quota_profile_factory(unit_of_work_factory=lambda: unit)
+
+    created = await ensure(_outcome())
+    created.record.limit_units = 5_000
+
+    with pytest.raises(AssessmentQuotaProfileIntegrityError):
+        await resolve(created.record.profile_ref)
+
+
+@pytest.mark.asyncio
+async def test_missing_durable_profile_fails_closed_on_resolution() -> None:
+    repository = _FakeRepository()
+    unit = _FakeUnitOfWork(repository)
+    resolve = resolve_assessment_quota_profile_factory(unit_of_work_factory=lambda: unit)
+
+    with pytest.raises(AssessmentQuotaProfileIntegrityError):
+        await resolve("assessment_quota_missing")
