@@ -6,6 +6,9 @@ from types import TracebackType
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.admin_marketplace.assessment_commercial_terms_persistence import (
+    SqlAlchemyAssessmentCommercialTermsRepository,
+)
 from processual_api.admin_marketplace.assessment_quota_profile_persistence import (
     SqlAlchemyAssessmentQuotaProfileRepository,
 )
@@ -111,6 +114,7 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         )
         self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
         self.assessment_quota_profiles = SqlAlchemyAssessmentQuotaProfileRepository(session)
+        self.assessment_commercial_terms = SqlAlchemyAssessmentCommercialTermsRepository(session)
         self.assessment_subscription_bindings = (
             SqlAlchemyAssessmentSubscriptionBindingRepository(session)
         )
