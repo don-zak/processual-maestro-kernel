@@ -28,6 +28,7 @@ class OrchestrationAPIResult:
     p99_ms: float
     backpressure_rate: float
     error_rate: float
+    error_breakdown: dict[str, int]
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -49,6 +50,13 @@ def classify_response(response: httpx.Response) -> str:
     return "error"
 
 
+def response_error_key(response: httpx.Response) -> str:
+    reason = response.headers.get("X-Maestro-Capacity-Reason")
+    if reason:
+        return f"status:{response.status_code}:{reason}"
+    return f"status:{response.status_code}"
+
+
 async def run_stage(
     *,
     client: httpx.AsyncClient,
@@ -63,6 +71,10 @@ async def run_stage(
     success = 0
     backpressure = 0
     errors = 0
+    error_breakdown: dict[str, int] = {}
+
+    def record_error(key: str) -> None:
+        error_breakdown[key] = error_breakdown.get(key, 0) + 1
 
     async def one(request_id: int) -> None:
         nonlocal success, backpressure, errors
@@ -86,8 +98,10 @@ async def run_stage(
                     backpressure += 1
                 else:
                     errors += 1
-            except Exception:
+                    record_error(response_error_key(response))
+            except Exception as exc:
                 errors += 1
+                record_error(f"exception:{type(exc).__name__}")
             finally:
                 latencies.append((time.perf_counter() - started) * 1000)
 
@@ -109,6 +123,7 @@ async def run_stage(
         p99_ms=round(percentile(latencies, 0.99), 2),
         backpressure_rate=backpressure / requests,
         error_rate=errors / requests,
+        error_breakdown=dict(sorted(error_breakdown.items())),
     )
 
 
@@ -155,6 +170,8 @@ async def main() -> None:
             f"{result.p95_ms:.2f} | {result.successful_rps:.2f} | "
             f"{result.backpressure_rate:.2%} | {result.error_rate:.2%} |"
         )
+        if result.error_breakdown:
+            print(f"error breakdown: {json.dumps(result.error_breakdown, sort_keys=True)}")
 
     violations = [result for result in results if result.error_rate > args.max_error_rate]
     if violations:
