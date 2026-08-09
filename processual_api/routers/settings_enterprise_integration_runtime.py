@@ -34,8 +34,7 @@ def _identity(current_user: dict[str, Any]) -> tuple[str, str]:
     return user_id, client_id
 
 
-def _safe_readiness_checks() -> list[dict[str, Any]]:
-    checks = list_integration_readiness_checks()
+def _safe_readiness_checks(checks: list[Any]) -> list[dict[str, Any]]:
     return [
         {
             "readiness_check_id": check.readiness_check_id,
@@ -199,9 +198,10 @@ def enterprise_integration_console_payload(
         enabled=enabled
     )
     scope_posture = _scope_posture(enabled=enabled)
-    readiness_checks = _safe_readiness_checks() if enabled else []
+    readiness_source = list_integration_readiness_checks() if enabled else []
+    readiness_checks = _safe_readiness_checks(readiness_source)
     readiness = (
-        summarize_integration_readiness(list_integration_readiness_checks())
+        summarize_integration_readiness(readiness_source)
         if enabled
         else {
             "total": 0,
