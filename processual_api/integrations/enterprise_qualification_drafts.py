@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from processual_api.integrations.credential_profiles import get_credential_profile
 from processual_api.integrations.enterprise_sandbox_qualification import (
     build_customer_sandbox_qualification,
 )
@@ -37,6 +38,21 @@ def _revision(entry: dict[str, Any] | None) -> int:
         return 0
     value = entry.get("revision")
     return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _profile_ordered_input_ids(
+    profile_id: str,
+    provided_input_ids: list[str],
+) -> list[str]:
+    """Persist validated inputs in the credential profile's contract order."""
+
+    profile = get_credential_profile(profile_id)
+    provided = set(provided_input_ids)
+    return [
+        input_id
+        for input_id in profile.required_customer_inputs
+        if input_id in provided
+    ]
 
 
 def _rebuild_qualification(entry: dict[str, Any]) -> dict[str, Any]:
@@ -108,6 +124,11 @@ def save_qualification_draft(
         requested_scope_ids=requested_scope_ids,
         provided_input_ids=provided_input_ids,
     )
+    profile_id = str(qualification["credential_profile_id"])
+    stored_input_ids = _profile_ordered_input_ids(
+        profile_id,
+        list(qualification["provided_input_ids"]),
+    )
     existing = _stored_entry(raw)
     timestamp = _timestamp(now)
     created_at = (
@@ -119,9 +140,9 @@ def save_qualification_draft(
         "schema_version": DRAFT_SCHEMA_VERSION,
         "status": "draft",
         "revision": _revision(existing) + 1,
-        "credential_profile_id": qualification["credential_profile_id"],
+        "credential_profile_id": profile_id,
         "requested_scope_ids": list(qualification["requested_scope_ids"]),
-        "provided_input_ids": list(qualification["provided_input_ids"]),
+        "provided_input_ids": stored_input_ids,
         "created_at": created_at,
         "updated_at": timestamp,
     }
@@ -142,14 +163,19 @@ def submit_qualification_draft(
     if entry is None:
         raise ValueError("qualification draft is required before submission")
     qualification = _rebuild_qualification(entry)
+    profile_id = str(qualification["credential_profile_id"])
+    stored_input_ids = _profile_ordered_input_ids(
+        profile_id,
+        list(qualification["provided_input_ids"]),
+    )
     timestamp = _timestamp(now)
     raw[DRAFT_STORAGE_KEY] = {
         "schema_version": DRAFT_SCHEMA_VERSION,
         "status": "pending_review",
         "revision": _revision(entry) + 1,
-        "credential_profile_id": qualification["credential_profile_id"],
+        "credential_profile_id": profile_id,
         "requested_scope_ids": list(qualification["requested_scope_ids"]),
-        "provided_input_ids": list(qualification["provided_input_ids"]),
+        "provided_input_ids": stored_input_ids,
         "created_at": str(entry.get("created_at") or timestamp),
         "updated_at": timestamp,
         "submitted_at": timestamp,
