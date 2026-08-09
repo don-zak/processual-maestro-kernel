@@ -45,8 +45,16 @@
     const ready = result?.sandbox_ready === true;
     panel.append(
       element('span', 'seq18-eyebrow', 'Server evaluation'),
-      element('h5', 'seq18-result-title', ready ? 'Ready for sandbox review' : 'Qualification remains blocked'),
-      element('p', 'seq18-result-copy', result?.next_action || 'Review the remaining qualification requirements.')
+      element(
+        'h5',
+        'seq18-result-title',
+        ready ? 'Ready for sandbox review' : 'Qualification remains blocked'
+      ),
+      element(
+        'p',
+        'seq18-result-copy',
+        result?.next_action || 'Review the remaining qualification requirements.'
+      )
     );
 
     const metrics = element('div', 'seq18-result-metrics');
@@ -57,26 +65,43 @@
       metric('Restricted scopes', result?.scope_posture?.restricted || 0)
     );
     panel.appendChild(metrics);
-
-    const guard = element('p', 'seq18-guard-copy', 'Production remains blocked. Runtime connector approval cannot be granted from this workspace.');
-    panel.appendChild(guard);
+    panel.appendChild(
+      element(
+        'p',
+        'seq18-guard-copy',
+        'Production remains blocked. Runtime connector approval cannot be granted from this workspace.'
+      )
+    );
   }
 
   function metric(label, value) {
     const item = element('div', 'seq18-result-metric');
-    item.append(element('span', '', label), element('strong', '', String(value)));
+    item.append(
+      element('span', '', label),
+      element('strong', '', String(value))
+    );
     return item;
   }
 
   function selectedValues(root, selector) {
-    return Array.from(root.querySelectorAll(selector + ':checked')).map((node) => node.value);
+    return Array.from(root.querySelectorAll(selector + ':checked')).map(
+      (node) => node.value
+    );
   }
 
   async function submit(root, profileSelect, button) {
-    const requestedScopeIds = selectedValues(root, '[data-seq18-scope] input');
-    const providedInputIds = selectedValues(root, '[data-seq18-input] input');
+    const requestedScopeIds = selectedValues(
+      root,
+      '[data-seq18-scope] input'
+    );
+    const providedInputIds = selectedValues(
+      root,
+      '[data-seq18-input] input'
+    );
     if (!profileSelect.value || requestedScopeIds.length === 0) {
-      renderResult(root, { next_action: 'Choose one credential profile and at least one catalog scope.' });
+      renderResult(root, {
+        next_action: 'Choose one credential profile and at least one compatible catalog scope.',
+      });
       return;
     }
 
@@ -90,7 +115,11 @@
       });
       renderResult(root, result);
     } catch (error) {
-      renderResult(root, { next_action: error?.detail || 'Qualification could not be evaluated. No approval was inferred.' });
+      renderResult(root, {
+        next_action:
+          error?.detail ||
+          'Qualification could not be evaluated. No approval was inferred.',
+      });
     } finally {
       button.disabled = false;
       button.setAttribute('aria-busy', 'false');
@@ -113,7 +142,11 @@
     header.append(
       element('span', 'seq18-eyebrow', 'Sandbox qualification'),
       element('h4', 'seq18-title', 'Prepare a supervised sandbox review'),
-      element('p', 'seq18-copy', 'Select catalog identifiers only. Do not enter API keys, passwords, tokens, certificate material, or endpoint secrets.')
+      element(
+        'p',
+        'seq18-copy',
+        'Select catalog identifiers only. Do not enter API keys, passwords, tokens, certificate material, or endpoint secrets.'
+      )
     );
     header.querySelector('.seq18-title').id = 'seq18-title';
     root.appendChild(header);
@@ -136,45 +169,99 @@
     });
     profileField.appendChild(profileSelect);
 
-    const profileInfo = element('p', 'seq18-help', 'Profile requirements are supplied by the server catalog.');
+    const profileInfo = element(
+      'p',
+      'seq18-help',
+      'Profile requirements are supplied by the server catalog.'
+    );
     profileField.appendChild(profileInfo);
     grid.appendChild(profileField);
 
     const scopeField = element('fieldset', 'seq18-field seq18-fieldset');
     scopeField.dataset.seq18Scope = 'true';
-    scopeField.appendChild(element('legend', 'seq18-field-label', 'Requested catalog scopes'));
+    scopeField.appendChild(
+      element('legend', 'seq18-field-label', 'Requested compatible scopes')
+    );
     const scopeList = element('div', 'seq18-choice-list');
-    (catalog.scopes || []).forEach((scope) => {
-      const hint = `${scope.access_level} · ${scope.risk_level}${scope.requires_supervisor_approval ? ' · supervised' : ''}`;
-      scopeList.appendChild(checkbox(scope.scope_id, scope.scope_id, hint));
-    });
     scopeField.appendChild(scopeList);
     grid.appendChild(scopeField);
 
-    const inputField = element('fieldset', 'seq18-field seq18-fieldset seq18-field-wide');
+    const inputField = element(
+      'fieldset',
+      'seq18-field seq18-fieldset seq18-field-wide'
+    );
     inputField.dataset.seq18Input = 'true';
-    inputField.appendChild(element('legend', 'seq18-field-label', 'Customer inputs already available'));
-    const inputList = element('div', 'seq18-choice-list seq18-choice-list-inputs');
+    inputField.appendChild(
+      element(
+        'legend',
+        'seq18-field-label',
+        'Customer inputs already available'
+      )
+    );
+    const inputList = element(
+      'div',
+      'seq18-choice-list seq18-choice-list-inputs'
+    );
     inputField.appendChild(inputList);
     grid.appendChild(inputField);
 
-    function syncProfileInputs() {
-      inputList.replaceChildren();
-      const profile = (catalog.profiles || []).find((item) => item.credential_profile_id === profileSelect.value);
-      (profile?.required_input_ids || []).forEach((inputId) => {
-        inputList.appendChild(checkbox(inputId, inputId.replaceAll('_', ' '), 'Presence only — never paste the underlying value.'));
-      });
-      profileInfo.textContent = profile?.description || 'Profile requirements are supplied by the server catalog.';
+    function selectedProfile() {
+      return (catalog.profiles || []).find(
+        (item) => item.credential_profile_id === profileSelect.value
+      );
     }
-    profileSelect.addEventListener('change', syncProfileInputs);
+
+    function syncProfile() {
+      inputList.replaceChildren();
+      scopeList.replaceChildren();
+      root.querySelector('[data-seq18-result]')?.remove();
+
+      const profile = selectedProfile();
+      const allowed = new Set(profile?.allowed_scope_ids || []);
+      (catalog.scopes || [])
+        .filter((scope) => allowed.has(scope.scope_id))
+        .forEach((scope) => {
+          const supervision = scope.requires_supervisor_approval
+            ? ' · supervised'
+            : '';
+          const hint = `${scope.access_level} · ${scope.risk_level}${supervision}`;
+          scopeList.appendChild(
+            checkbox(scope.scope_id, scope.scope_id, hint)
+          );
+        });
+
+      (profile?.required_input_ids || []).forEach((inputId) => {
+        inputList.appendChild(
+          checkbox(
+            inputId,
+            inputId.replaceAll('_', ' '),
+            'Presence only — never paste the underlying value.'
+          )
+        );
+      });
+      profileInfo.textContent =
+        profile?.description ||
+        'Profile requirements are supplied by the server catalog.';
+    }
+    profileSelect.addEventListener('change', syncProfile);
 
     root.appendChild(grid);
 
     const actions = element('div', 'seq18-actions');
-    const boundary = element('p', 'seq18-boundary', 'Evaluation is not persisted and cannot approve security controls, runtime connectors, or production access.');
-    const button = element('button', 'seq18-evaluate', 'Evaluate sandbox qualification');
+    const boundary = element(
+      'p',
+      'seq18-boundary',
+      'Evaluation is not persisted and cannot approve security controls, runtime connectors, or production access.'
+    );
+    const button = element(
+      'button',
+      'seq18-evaluate',
+      'Evaluate sandbox qualification'
+    );
     button.type = 'button';
-    button.addEventListener('click', () => submit(root, profileSelect, button));
+    button.addEventListener('click', () =>
+      submit(root, profileSelect, button)
+    );
     actions.append(boundary, button);
     root.appendChild(actions);
 
@@ -199,7 +286,12 @@
   function watch() {
     if (observer || !document.body) return;
     observer = new MutationObserver(() => {
-      if (document.getElementById('set-enterprise-console-card') && !document.getElementById(ROOT_ID)) refresh();
+      if (
+        document.getElementById('set-enterprise-console-card') &&
+        !document.getElementById(ROOT_ID)
+      ) {
+        refresh();
+      }
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
