@@ -27,8 +27,22 @@ def test_qualification_workspace_uses_server_catalog_and_server_evaluation() -> 
     assert "credential_profile_id" in source
     assert "requested_scope_ids" in source
     assert "provided_input_ids" in source
-    assert "Evaluation is not persisted" in source
     assert "Runtime connector approval cannot be granted" in source
+
+
+def test_qualification_workspace_supports_safe_draft_and_review_submission() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    assert "payload?.qualification_draft" in source
+    assert "CLIENT.put(DRAFT_ENDPOINT, payload)" in source
+    assert "CLIENT.post(SUBMIT_ENDPOINT, {})" in source
+    assert "Save draft" in source
+    assert "Submit for supervised review" in source
+    assert "Draft persistence stores catalog identifiers" in source
+    assert "draft.draft_status === 'pending_review'" in source
+    assert "restoreChecked(" in source
+    assert "draft.requested_scope_ids" in source
+    assert "draft.provided_input_ids" in source
 
 
 def test_qualification_workspace_has_no_secret_value_fields_or_approval_controls() -> None:
@@ -38,9 +52,12 @@ def test_qualification_workspace_has_no_secret_value_fields_or_approval_controls
     assert "document.createElement('select')" in source
     assert "input.type = 'text'" not in source
     assert "input.type = 'password'" not in source
-    post_body = source.split("CLIENT.post(QUALIFY_ENDPOINT", 1)[1].split("});", 1)[0]
-    assert "security_controls_approved" not in post_body
-    assert "required_security_control_ids" not in post_body
+    request_body = source.split("return {", 1)[1].split("};", 1)[0]
+    assert "credential_profile_id" in request_body
+    assert "requested_scope_ids" in request_body
+    assert "provided_input_ids" in request_body
+    assert "security_controls_approved" not in request_body
+    assert "required_security_control_ids" not in request_body
     assert "Do not enter API keys, passwords, tokens" in source
     assert "never paste the underlying value" in source
     assert ".innerHTML =" not in source
@@ -55,6 +72,7 @@ def test_qualification_workspace_is_accessible_responsive_and_fail_closed() -> N
     assert "aria-busy" in source
     assert "No approval was inferred" in source
     assert "Production remains blocked" in source
+    assert ".seq18-action-row" in style
     assert "@media (max-width: 760px)" in style
     assert "@media (prefers-reduced-motion: reduce)" in style
     assert "border-inline-start" in style
