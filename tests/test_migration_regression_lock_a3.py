@@ -85,6 +85,10 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260805_0028:20260805_0027"),
         ("upgrade", "20260805_0028:20260805_0029"),
         ("downgrade", "20260805_0029:20260805_0028"),
+        ("upgrade", "20260807_0043:20260809_0044"),
+        ("downgrade", "20260809_0044:20260807_0043"),
+        ("upgrade", "20260809_0044:20260809_0045"),
+        ("downgrade", "20260809_0045:20260809_0044"),
     )
 
     for command, revision_range in ranges:
