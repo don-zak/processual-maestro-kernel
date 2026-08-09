@@ -133,6 +133,14 @@
 
 .seq18-boundary { max-width: 68ch; }
 
+.seq18-action-row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .seq18-evaluate {
   flex: 0 0 auto;
   padding: 0 15px;
@@ -189,6 +197,7 @@
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .seq18-guard-copy {
@@ -205,6 +214,7 @@
 
   .seq18-field-wide { grid-column: auto; }
   .seq18-actions { align-items: stretch; flex-direction: column; }
+  .seq18-action-row { display: grid; grid-template-columns: 1fr; }
   .seq18-evaluate { width: 100%; }
 }
 
