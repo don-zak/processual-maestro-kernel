@@ -6,6 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from processual_api.admin_marketplace.assessment_commercial_terms_service import (
+    ApprovedAssessmentCommercialTerms,
+    AssessmentCommercialTermsError,
+)
 from processual_api.admin_marketplace.assessment_subscription_activation_service import (
     AssessmentSubscriptionActivationError,
     AssessmentSubscriptionActivationService,
@@ -41,6 +45,39 @@ class _AssessmentQuotaRepository:
 
     def add(self, record) -> None:
         self.records[record.profile_ref] = record
+
+
+class _CommercialTermsRepository:
+    def __init__(self) -> None:
+        self.records = {}
+
+    async def get_by_binding_hash(self, binding_hash, *, for_update=False):
+        return next(
+            (
+                record
+                for record in self.records.values()
+                if record.assessment_binding_hash == binding_hash
+            ),
+            None,
+        )
+
+    async def get_by_approval_reference(
+        self,
+        approval_reference,
+        *,
+        for_update=False,
+    ):
+        return next(
+            (
+                record
+                for record in self.records.values()
+                if record.approval_reference == approval_reference
+            ),
+            None,
+        )
+
+    def add(self, record) -> None:
+        self.records[record.terms_ref] = record
 
 
 class _PlanRepository:
@@ -175,6 +212,7 @@ class _AuditRepository:
 class _UnitOfWork:
     def __init__(self, plan) -> None:
         self.assessment_quota_profiles = _AssessmentQuotaRepository()
+        self.assessment_commercial_terms = _CommercialTermsRepository()
         self.plans = _PlanRepository(plan)
         self.subscriptions = _SubscriptionRepository()
         self.entitlement_activations = _ActivationRepository()
@@ -210,6 +248,21 @@ def _outcome() -> ApprovedAssessmentOutcome:
     )
 
 
+def _commercial_terms(**overrides) -> ApprovedAssessmentCommercialTerms:
+    values = {
+        "price_source": "contract",
+        "source_reference": "institution-contract-2026-001",
+        "currency": "USD",
+        "billing_interval": "annual",
+        "amount_minor_units": 240_000,
+        "approved_by": "commercial-reviewer",
+        "approval_reference": "commercial-approval-2026-08-001",
+        "effective_at": datetime(2026, 8, 9, 19, 0, tzinfo=UTC),
+    }
+    values.update(overrides)
+    return ApprovedAssessmentCommercialTerms(**values)
+
+
 def _plan(*, plan_code: str = "academic"):
     return SimpleNamespace(
         id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
@@ -242,6 +295,7 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
 
     result = await service.activate(
         outcome=_outcome(),
+        commercial_terms=_commercial_terms(),
         entitlement_plan_id=plan.id,
         correlation_id="corr-assessment-001",
         idempotency_key="idem-assessment-001",
@@ -249,6 +303,7 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
 
     subscription = unit.subscriptions.by_id[result.subscription_id]
     binding = unit.assessment_subscription_bindings.by_subscription[result.subscription_id]
+    terms = next(iter(unit.assessment_commercial_terms.records.values()))
     assert result.replayed is False
     assert unit.commit_count == 1
     assert subscription.order_id is None
@@ -258,6 +313,10 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
     assert binding.entitlement_source_plan_code == "academic"
     assert binding.quota_profile_ref.startswith("assessment_quota_")
     assert binding.quota_profile_ref != plan.quota_profile_ref
+    assert result.commercial_terms_ref == terms.terms_ref
+    assert terms.price_source == "contract"
+    assert terms.source_reference == "institution-contract-2026-001"
+    assert terms.amount_minor_units == 240_000
     assert len(unit.subscription_quotas.added) == 1
     quota_account = unit.subscription_quotas.added[0]
     assert quota_account.metric_code == "credits"
@@ -267,6 +326,7 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
     assert unit.entitlement_activations.added[0].order_id is None
     assert unit.entitlement_activations.added[0].automatic_activation_allowed is False
     assert len(unit.commercial_audit.added) == 1
+    assert unit.commercial_audit.added[0].metadata_json["commercial_terms_ref"] == terms.terms_ref
 
 
 @pytest.mark.asyncio
@@ -280,6 +340,7 @@ async def test_assessment_subscription_runtime_enforces_exact_quota() -> None:
     )
     activation = await activation_service.activate(
         outcome=_outcome(),
+        commercial_terms=_commercial_terms(),
         entitlement_plan_id=plan.id,
         correlation_id="corr-assessment-runtime",
         idempotency_key="idem-assessment-runtime",
@@ -327,12 +388,14 @@ async def test_same_assessment_replays_without_second_subscription_or_commit() -
 
     first = await service.activate(
         outcome=_outcome(),
+        commercial_terms=_commercial_terms(),
         entitlement_plan_id=plan.id,
         correlation_id="corr-assessment-001",
         idempotency_key="idem-assessment-001",
     )
     replay = await service.activate(
         outcome=_outcome(),
+        commercial_terms=_commercial_terms(),
         entitlement_plan_id=plan.id,
         correlation_id="corr-assessment-002",
         idempotency_key="idem-assessment-001",
@@ -341,7 +404,9 @@ async def test_same_assessment_replays_without_second_subscription_or_commit() -
     assert replay.replayed is True
     assert replay.subscription_id == first.subscription_id
     assert replay.binding_ref == first.binding_ref
+    assert replay.commercial_terms_ref == first.commercial_terms_ref
     assert len(unit.subscriptions.by_id) == 1
+    assert len(unit.assessment_commercial_terms.records) == 1
     assert unit.commit_count == 1
 
 
@@ -357,6 +422,7 @@ async def test_assessment_activation_rejects_wrong_entitlement_source_plan() -> 
     with pytest.raises(AssessmentSubscriptionActivationError):
         await service.activate(
             outcome=_outcome(),
+            commercial_terms=_commercial_terms(),
             entitlement_plan_id=plan.id,
             correlation_id="corr-assessment-001",
             idempotency_key="idem-assessment-001",
@@ -365,3 +431,28 @@ async def test_assessment_activation_rejects_wrong_entitlement_source_plan() -> 
     assert unit.commit_count == 0
     assert unit.subscriptions.by_id == {}
     assert unit.subscription_runtime.by_subscription == {}
+
+
+@pytest.mark.asyncio
+async def test_assessment_activation_rejects_non_authoritative_price_source() -> None:
+    plan = _plan()
+    unit = _UnitOfWork(plan)
+    service = AssessmentSubscriptionActivationService(
+        unit_of_work_factory=lambda: unit,
+        clock=lambda: datetime(2026, 8, 9, 20, 0, tzinfo=UTC),
+    )
+
+    with pytest.raises(AssessmentCommercialTermsError, match="price_source"):
+        await service.activate(
+            outcome=_outcome(),
+            commercial_terms=_commercial_terms(
+                price_source="catalog",
+                source_reference="academic",
+            ),
+            entitlement_plan_id=plan.id,
+            correlation_id="corr-assessment-invalid-price",
+            idempotency_key="idem-assessment-invalid-price",
+        )
+
+    assert unit.commit_count == 0
+    assert unit.subscriptions.by_id == {}
