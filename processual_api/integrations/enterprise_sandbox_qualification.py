@@ -11,17 +11,76 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from processual_api.integrations.credential_profiles import get_credential_profile
+from processual_api.integrations.credential_profiles import (
+    get_credential_profile,
+    list_credential_profiles,
+)
 from processual_api.integrations.integration_readiness import (
     evaluate_integration_readiness,
     summarize_integration_readiness,
 )
-from processual_api.integrations.scope_catalog import get_integration_scope
+from processual_api.integrations.scope_catalog import (
+    get_integration_scope,
+    list_integration_scopes,
+)
 
 
 def _unique_ids(values: list[str] | tuple[str, ...]) -> tuple[str, ...]:
-    normalized = {str(value).strip().lower() for value in values if str(value).strip()}
+    normalized = {
+        str(value).strip().lower()
+        for value in values
+        if str(value).strip()
+    }
     return tuple(sorted(normalized))
+
+
+def build_sandbox_qualification_catalog() -> dict[str, Any]:
+    """Return client-safe identifiers needed to submit qualification input."""
+
+    profiles = list_credential_profiles()
+    scopes = list_integration_scopes()
+    input_ids = tuple(
+        sorted(
+            {
+                input_id
+                for profile in profiles
+                for input_id in profile.required_customer_inputs
+            }
+        )
+    )
+
+    return {
+        "source": "catalog",
+        "profiles": [
+            {
+                "credential_profile_id": profile.credential_profile_id,
+                "display_name": profile.display_name,
+                "required_input_ids": list(profile.required_customer_inputs),
+                "supported_auth_methods": list(profile.supported_auth_methods),
+                "sandbox_required": profile.sandbox_required,
+                "runtime_connector_approved": False,
+            }
+            for profile in profiles
+        ],
+        "scopes": [
+            {
+                "scope_id": scope.scope_id,
+                "access_level": scope.access_level,
+                "risk_level": scope.risk_level,
+                "allowed_in_read_only_pilot": scope.allowed_in_read_only_pilot,
+                "requires_supervisor_approval": scope.requires_supervisor_approval,
+                "requires_sandbox_before_production": (
+                    scope.requires_sandbox_before_production
+                ),
+                "production_allowed_without_approval": False,
+            }
+            for scope in scopes
+        ],
+        "customer_input_ids": list(input_ids),
+        "security_controls_client_approvable": False,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
 
 
 def build_customer_sandbox_qualification(
@@ -50,7 +109,9 @@ def build_customer_sandbox_qualification(
         try:
             scopes.append(get_integration_scope(scope_id))
         except KeyError as exc:
-            raise ValueError(f"unsupported integration scope: {scope_id}") from exc
+            raise ValueError(
+                f"unsupported integration scope: {scope_id}"
+            ) from exc
 
     provided_inputs = _unique_ids(provided_input_ids)
     required_inputs = tuple(profile.required_customer_inputs)
@@ -109,7 +170,8 @@ def build_customer_sandbox_qualification(
             }
             for check in checks
         ],
-        "sandbox_ready": bool(checks) and all(check.sandbox_ready for check in checks),
+        "sandbox_ready": bool(checks)
+        and all(check.sandbox_ready for check in checks),
         "production_allowed": False,
         "runtime_connector_approved": False,
         "next_action": (
@@ -120,4 +182,7 @@ def build_customer_sandbox_qualification(
     }
 
 
-__all__ = ["build_customer_sandbox_qualification"]
+__all__ = [
+    "build_customer_sandbox_qualification",
+    "build_sandbox_qualification_catalog",
+]
