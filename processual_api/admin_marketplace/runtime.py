@@ -6,6 +6,9 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from processual_api.admin_marketplace.assessment_commercial_read_service import (
+    AssessmentSubscriptionCommercialReadService,
+)
 from processual_api.admin_marketplace.assessment_subscription_activation_service import (
     AssessmentSubscriptionActivationService,
 )
@@ -50,6 +53,7 @@ class AdminMarketplaceRuntime:
     eligibility_service: AdminMarketplaceEligibilityService
     payment_destination_service: PaymentDestinationAdministrationService | None
     commercial_read_service: AdminMarketplaceCommercialReadService
+    assessment_commercial_read_service: AssessmentSubscriptionCommercialReadService
     payment_verification_service: AdminPaymentVerificationService
     subscription_activation_service: SubscriptionActivationOrchestrator
     assessment_subscription_activation_service: AssessmentSubscriptionActivationService
@@ -106,6 +110,9 @@ async def build_admin_marketplace_runtime(
         commercial_read_service = AdminMarketplaceCommercialReadService(
             unit_of_work_factory=unit_of_work_factory,
         )
+        assessment_commercial_read_service = AssessmentSubscriptionCommercialReadService(
+            unit_of_work_factory=unit_of_work_factory,
+        )
         payment_verification_service = AdminPaymentVerificationService(
             unit_of_work_factory=unit_of_work_factory,
             clock=lambda: datetime.now(UTC),
@@ -145,6 +152,7 @@ async def build_admin_marketplace_runtime(
         eligibility_service=eligibility_service,
         payment_destination_service=payment_destination_service,
         commercial_read_service=commercial_read_service,
+        assessment_commercial_read_service=assessment_commercial_read_service,
         payment_verification_service=payment_verification_service,
         subscription_activation_service=subscription_activation_service,
         assessment_subscription_activation_service=assessment_subscription_activation_service,
