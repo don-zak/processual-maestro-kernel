@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from processual_api.billing.usage_pricing import monthly_unit_allowance, normalize_plan_id
+from processual_api.billing.usage_pricing import (
+    canonical_plan_id,
+    monthly_unit_allowance,
+)
 
 VERIFIED_CLIENT_REQUEST_PLAN_SOURCE = 'client_requests'
 PLAN_APPLIED_EVENT = 'plan_applied'
@@ -20,7 +23,7 @@ def _text(value: Any) -> str:
 
 
 def supported_verified_plan(plan_value: Any) -> tuple[str, int]:
-    plan_id = normalize_plan_id(_text(plan_value))
+    plan_id = canonical_plan_id(_text(plan_value))
     allowance = monthly_unit_allowance(plan_id)
     if not plan_id or allowance <= 0:
         return '', 0
@@ -87,7 +90,7 @@ def apply_verified_client_request_plan(
 
     already_applied = (
         entry.get('plan_applied') is True
-        and normalize_plan_id(entry.get('approved_plan')) == plan_id
+        and canonical_plan_id(entry.get('approved_plan')) == plan_id
         and _text(entry.get('plan_source')) == VERIFIED_CLIENT_REQUEST_PLAN_SOURCE
     )
 
