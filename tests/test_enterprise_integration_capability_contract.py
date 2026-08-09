@@ -22,8 +22,18 @@ def test_enterprise_integration_capability_preserves_public_aliases() -> None:
         capability = enterprise_integration_capability(plan_id)
 
         assert capability["enabled"] is True
-        assert capability["normalized_plan_id"] == "enterprise_pilot"
+        assert capability["normalized_plan_id"] == plan_id
+        assert capability["canonical_plan_id"] == "enterprise_pilot"
         assert capability["legacy_compatibility"] is False
+
+
+def test_enterprise_custom_remains_eligible_without_catalog_quota() -> None:
+    capability = enterprise_integration_capability("enterprise_custom")
+
+    assert capability["enabled"] is True
+    assert capability["normalized_plan_id"] == "enterprise_custom"
+    assert capability["canonical_plan_id"] == "enterprise_custom"
+    assert capability["legacy_compatibility"] is False
 
 
 def test_enterprise_integration_capability_preserves_legacy_private_plan() -> None:
@@ -34,6 +44,7 @@ def test_enterprise_integration_capability_preserves_legacy_private_plan() -> No
         "status": "available",
         "plan_id": "enterprise_private",
         "normalized_plan_id": "enterprise_private",
+        "canonical_plan_id": "enterprise_private",
         "legacy_compatibility": True,
         "eligible_plans": sorted(ENTERPRISE_INTEGRATION_PLANS),
     }
@@ -55,4 +66,5 @@ def test_enterprise_integration_capability_normalizes_human_entered_plan_ids() -
 
     assert capability["enabled"] is True
     assert capability["plan_id"] == "enterprise_integration"
-    assert capability["normalized_plan_id"] == "enterprise_pilot"
+    assert capability["normalized_plan_id"] == "enterprise_integration"
+    assert capability["canonical_plan_id"] == "enterprise_pilot"
