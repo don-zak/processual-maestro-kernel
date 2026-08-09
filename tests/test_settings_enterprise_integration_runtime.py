@@ -59,6 +59,16 @@ def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
     assert payload["production_allowed"] is False
     assert payload["runtime_connector_approved"] is False
     assert payload["raw_secret_visible"] is False
+    assert payload["scope_posture"] == {
+        "enabled": False,
+        "total": 0,
+        "read": 0,
+        "write": 0,
+        "restricted": 0,
+        "read_only_pilot": 0,
+        "supervisor_approval_required": 0,
+        "production_allowed_without_approval": 0,
+    }
     assert payload["sections"] == [
         {
             "id": "entitlement",
@@ -110,6 +120,15 @@ def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch)
     assert payload["keys"][0]["client_id"] == "client-a"
     assert "hashed" not in payload["keys"][0]
     assert "api_key" not in payload["keys"][0]
+    assert payload["operational_profile_count"] >= 1
+    assert payload["scope_posture"]["enabled"] is True
+    assert payload["scope_posture"]["total"] >= 1
+    assert payload["scope_posture"]["read"] >= 1
+    assert payload["scope_posture"]["write"] >= 1
+    assert payload["scope_posture"]["restricted"] >= 1
+    assert payload["scope_posture"]["read_only_pilot"] >= 1
+    assert payload["scope_posture"]["supervisor_approval_required"] >= 1
+    assert payload["scope_posture"]["production_allowed_without_approval"] == 0
     assert payload["readiness"]["total"] >= 1
     assert payload["readiness"]["production_allowed"] == 0
     assert payload["readiness"]["runtime_connector_approved"] == 0
@@ -124,9 +143,33 @@ def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch)
     assert [section["id"] for section in payload["sections"]] == [
         "entitlement",
         "api_keys",
+        "integration_profile",
         "readiness",
         "production",
     ]
+
+
+def test_scope_posture_counts_are_internally_consistent(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_core"},
+            "api_keys": [],
+        },
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_core")
+    )
+    posture = payload["scope_posture"]
+
+    assert posture["total"] == posture["read"] + posture["write"] + posture["restricted"]
+    assert posture["read_only_pilot"] == posture["read"]
+    assert posture["supervisor_approval_required"] == (
+        posture["write"] + posture["restricted"]
+    )
+    assert posture["production_allowed_without_approval"] == 0
 
 
 def test_enterprise_private_remains_legacy_compatible(monkeypatch) -> None:
