@@ -36,6 +36,10 @@
   outline: none;
 }
 
+.sl18-tab:focus-visible {
+  box-shadow: 0 0 0 3px rgba(74, 174, 245, .24);
+}
+
 .sl18-tab.active {
   border-color: rgba(245, 166, 35, .42);
   background: rgba(245, 166, 35, .12);
@@ -76,6 +80,54 @@
   max-height: 220px;
   overflow: auto;
   border-radius: 12px;
+}
+
+.sl18-panel[data-sl18-panel="integration"] {
+  gap: 18px;
+}
+
+.sl18-panel[data-sl18-panel="integration"] >
+:is(
+  #set-enterprise-integration-eligibility-card,
+  #set-api-key-integration-card,
+  #set-integration-readiness-card,
+  #set-client-integration-guide-card
+) {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(74, 174, 245, .2);
+  background:
+    linear-gradient(135deg, rgba(74, 174, 245, .055), transparent 42%),
+    var(--card, rgba(8, 15, 27, .72));
+}
+
+.sl18-panel[data-sl18-panel="integration"] >
+:is(
+  #set-enterprise-integration-eligibility-card,
+  #set-api-key-integration-card,
+  #set-integration-readiness-card,
+  #set-client-integration-guide-card
+)::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgba(74, 174, 245, .68);
+  pointer-events: none;
+}
+
+#set-api-key-integration-card .mono-block,
+#set-integration-readiness-card .mono-block {
+  border: 1px solid rgba(138, 163, 200, .14);
+  background: rgba(3, 9, 18, .36);
+}
+
+#set-api-key-integration-card button:focus-visible,
+#set-integration-readiness-card button:focus-visible,
+#set-client-integration-guide-card button:focus-visible,
+#set-enterprise-integration-eligibility-card button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(74, 174, 245, .24);
 }
 
 .sl18-panel[data-sl18-panel="support"] {
@@ -140,17 +192,35 @@
   line-height: 1.6;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .sl18-tab {
+    transition: none;
+  }
+}
+
 @media (max-width: 900px) {
   .sl18-tabs {
     overflow-x: auto;
     justify-content: flex-start;
+    scroll-snap-type: x proximity;
   }
 
   .sl18-tab {
     flex: 0 0 auto;
+    scroll-snap-align: start;
   }
 
   .sl18-panel .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sl18-panel[data-sl18-panel="integration"] >
+  :is(
+    #set-enterprise-integration-eligibility-card,
+    #set-api-key-integration-card,
+    #set-integration-readiness-card,
+    #set-client-integration-guide-card
+  ) {
+    border-radius: 14px;
   }
 }
