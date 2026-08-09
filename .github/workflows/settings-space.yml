@@ -6,7 +6,9 @@ on:
       - feat/a3-admin-marketplace-original-offers
     paths:
       - processual_api/settings.py
+      - processual_api/routers/__init__.py
       - processual_api/routers/settings.py
+      - processual_api/routers/settings_provider_test_runtime.py
       - processual_api/routers/settings_subscription_runtime.py
       - processual_api/routers/client_provider_alias_18.py
       - processual_api/routers/client_api_keys_18.py
@@ -22,6 +24,7 @@ on:
       - processual_api/billing/commercial_settings_top_up_checkout_contracts.py
       - processual_api/billing/commercial_top_up_application_service.py
       - tests/test_settings_runtime_wiring_regression.py
+      - tests/test_settings_provider_test_runtime_regression.py
       - tests/test_settings_subscription_runtime_regression.py
       - tests/test_settings_layout_18_ui.py
       - tests/test_settings_layout_18_r2_regression.py
@@ -68,7 +71,9 @@ jobs:
         run: |
           ruff check \
             processual_api/settings.py \
+            processual_api/routers/__init__.py \
             processual_api/routers/settings.py \
+            processual_api/routers/settings_provider_test_runtime.py \
             processual_api/routers/settings_subscription_runtime.py \
             processual_api/routers/client_provider_alias_18.py \
             processual_api/routers/client_api_keys_18.py \
@@ -77,6 +82,7 @@ jobs:
             processual_api/billing/commercial_settings_top_up_checkout_contracts.py \
             processual_api/billing/commercial_top_up_application_service.py \
             tests/test_settings_runtime_wiring_regression.py \
+            tests/test_settings_provider_test_runtime_regression.py \
             tests/test_settings_subscription_runtime_regression.py
 
       - name: JavaScript syntax contracts
@@ -90,6 +96,7 @@ jobs:
         run: |
           pytest -q \
             tests/test_settings_runtime_wiring_regression.py \
+            tests/test_settings_provider_test_runtime_regression.py \
             tests/test_settings_subscription_runtime_regression.py \
             tests/test_settings_layout_18_ui.py \
             tests/test_settings_layout_18_r2_regression.py \
