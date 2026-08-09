@@ -29,9 +29,14 @@ def _run_offline_alembic(*arguments: str) -> str:
         [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), *arguments],
         cwd=ROOT,
         env=environment,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
+    )
+    assert result.returncode == 0, (
+        f"alembic {' '.join(arguments)} failed\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
     )
     return result.stdout
 
