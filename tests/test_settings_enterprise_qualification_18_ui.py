@@ -21,6 +21,8 @@ def test_qualification_workspace_uses_server_catalog_and_server_evaluation() -> 
     assert "payload?.qualification_catalog" in source
     assert "catalog.profiles" in source
     assert "catalog.scopes" in source
+    assert "profile?.allowed_scope_ids" in source
+    assert ".filter((scope) => allowed.has(scope.scope_id))" in source
     assert "CLIENT.post(QUALIFY_ENDPOINT" in source
     assert "credential_profile_id" in source
     assert "requested_scope_ids" in source
@@ -36,7 +38,9 @@ def test_qualification_workspace_has_no_secret_value_fields_or_approval_controls
     assert "document.createElement('select')" in source
     assert "input.type = 'text'" not in source
     assert "input.type = 'password'" not in source
-    assert "security_controls_approved" not in source.split("CLIENT.post(QUALIFY_ENDPOINT", 1)[1].split("});", 1)[0]
+    post_body = source.split("CLIENT.post(QUALIFY_ENDPOINT", 1)[1].split("});", 1)[0]
+    assert "security_controls_approved" not in post_body
+    assert "required_security_control_ids" not in post_body
     assert "Do not enter API keys, passwords, tokens" in source
     assert "never paste the underlying value" in source
     assert ".innerHTML =" not in source
