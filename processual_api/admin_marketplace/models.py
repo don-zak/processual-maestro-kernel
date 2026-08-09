@@ -257,13 +257,13 @@ class AdminMarketSubscription(Base):
             ondelete="RESTRICT",
         ),
     )
-    offer_id: Mapped[uuid.UUID] = mapped_column(
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
             "admin_market_offers.id",
             ondelete="RESTRICT",
         ),
-        nullable=False,
+        nullable=True,
     )
     plan_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
