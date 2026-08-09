@@ -16,6 +16,7 @@ from processual_api.admin_marketplace.subscription_runtime import SubscriptionRu
 from processual_api.admin_marketplace.subscription_runtime_bootstrap import (
     SubscriptionRuntimeBootstrapInput,
     bootstrap_subscription_runtime_factory,
+    bootstrap_subscription_runtime_in_unit,
 )
 
 
@@ -140,6 +141,23 @@ async def test_bootstrap_creates_runtime_and_all_quota_accounts_with_one_commit(
     }
     assert all(item.customer_ref == "customer-1" for item in result.quota_accounts)
     assert all(item.used_units == 0 for item in result.quota_accounts)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_in_unit_defers_commit_to_outer_transaction() -> None:
+    uow = Uow()
+    source = _source()
+
+    result = await bootstrap_subscription_runtime_in_unit(
+        source=source,
+        quota_profile=_profile(),
+        uow=uow,
+    )
+
+    assert result.replayed is False
+    assert uow.commit_count == 0
+    assert len(uow.subscription_runtime.added) == 1
+    assert len(uow.subscription_quotas.added) == 2
 
 
 @pytest.mark.asyncio
