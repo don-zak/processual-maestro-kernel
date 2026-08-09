@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.admin_marketplace.assessment_quota_profile_persistence import (
     SqlAlchemyAssessmentQuotaProfileRepository,
 )
+from processual_api.admin_marketplace.assessment_subscription_persistence import (
+    SqlAlchemyAssessmentSubscriptionBindingRepository,
+)
 from processual_api.admin_marketplace.lemon_squeezy_binding_persistence import (
     SqlAlchemyLemonSqueezyBindingRepository,
 )
@@ -108,6 +111,9 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         )
         self.lemon_squeezy_bindings = SqlAlchemyLemonSqueezyBindingRepository(session)
         self.assessment_quota_profiles = SqlAlchemyAssessmentQuotaProfileRepository(session)
+        self.assessment_subscription_bindings = (
+            SqlAlchemyAssessmentSubscriptionBindingRepository(session)
+        )
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_delinquency = SqlAlchemySubscriptionDelinquencyRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
