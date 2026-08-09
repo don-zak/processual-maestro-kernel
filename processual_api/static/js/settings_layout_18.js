@@ -46,6 +46,7 @@
     }
 
     if (
+      id === 'set-enterprise-integration-eligibility-card' ||
       id === 'set-api-key-integration-card' ||
       id === 'set-client-integration-guide-card' ||
       id === 'set-integration-readiness-card'
@@ -103,6 +104,61 @@
     return 'account';
   }
 
+  function tabId(key) {
+    return `sl18-tab-${key}`;
+  }
+
+  function panelId(key) {
+    return `sl18-panel-${key}`;
+  }
+
+  function moveTabFocus(tabs, currentIndex, direction) {
+    if (!tabs.length) {
+      return;
+    }
+
+    const nextIndex = (
+      currentIndex + direction + tabs.length
+    ) % tabs.length;
+    tabs[nextIndex].focus();
+  }
+
+  function handleTabKeydown(event, tabs) {
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      moveTabFocus(tabs, currentIndex, 1);
+      return;
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      moveTabFocus(tabs, currentIndex, -1);
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      tabs[0]?.focus();
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      tabs[tabs.length - 1]?.focus();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activate(event.currentTarget.dataset.sl18Tab, true);
+    }
+  }
+
   function ensureLayoutShell(page) {
     let tabs = page.querySelector(':scope > .sl18-tabs');
     let panelsRoot = page.querySelector(':scope > .sl18-panels');
@@ -117,8 +173,10 @@
         <button
           type="button"
           class="sl18-tab"
+          id="${tabId(tab.key)}"
           role="tab"
           aria-selected="false"
+          aria-controls="${panelId(tab.key)}"
           data-sl18-tab="${tab.key}"
         >${tab.label}</button>
       `).join('');
@@ -140,10 +198,15 @@
       if (!panel) {
         panel = document.createElement('section');
         panel.className = 'sl18-panel';
+        panel.id = panelId(tab.key);
         panel.dataset.sl18Panel = tab.key;
         panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', tabId(tab.key));
         panel.hidden = true;
         panelsRoot.appendChild(panel);
+      } else {
+        panel.id = panelId(tab.key);
+        panel.setAttribute('aria-labelledby', tabId(tab.key));
       }
     });
 
@@ -157,6 +220,15 @@
 
         event.preventDefault();
         activate(button.dataset.sl18Tab, true);
+      });
+
+      const tabButtons = Array.from(
+        tabs.querySelectorAll('[data-sl18-tab]')
+      );
+      tabButtons.forEach((button) => {
+        button.addEventListener('keydown', (event) => {
+          handleTabKeydown(event, tabButtons);
+        });
       });
 
       tabs.dataset.sl18Bound = '1';
