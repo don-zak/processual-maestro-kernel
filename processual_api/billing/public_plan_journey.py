@@ -6,11 +6,14 @@ from typing import Any, Final
 from processual_api.billing.commercial_catalog_contracts import build_catalog_plan_contracts
 from processual_api.billing.commercial_quota_top_up_contracts import build_top_up_policies
 from processual_api.billing.maestro_group1_selected_pricing import (
+    DEFAULT_YEARLY_DISCOUNT_PERCENT,
     SELECTED_MONTHLY_PRICES,
 )
 
-ANNUAL_DISCOUNT_PERCENT: Final[Decimal] = Decimal("20")
-ANNUAL_MULTIPLIER: Final[Decimal] = Decimal("0.80")
+ANNUAL_DISCOUNT_PERCENT: Final[Decimal] = DEFAULT_YEARLY_DISCOUNT_PERCENT
+ANNUAL_MULTIPLIER: Final[Decimal] = Decimal("1") - (
+    ANNUAL_DISCOUNT_PERCENT / Decimal("100")
+)
 
 PUBLIC_PLAN_ORDER: Final[tuple[str, ...]] = (
     "academic_individual",
@@ -321,7 +324,11 @@ def public_plan_journey_catalog() -> dict[str, Any]:
                 "included_quota_units": _included_quota(plan_id),
                 "monthly_price_usd": _money(monthly_price) if monthly_price is not None else None,
                 "annual_price_usd": _money(annual_price) if annual_price is not None else None,
-                "annual_discount_percent": 20 if monthly_price is not None else None,
+                "annual_discount_percent": (
+                    int(ANNUAL_DISCOUNT_PERCENT)
+                    if monthly_price is not None
+                    else None
+                ),
                 "price_visibility": "public" if monthly_price is not None else "assessment",
                 "requires_assessment": requires_assessment,
                 "registration_available": not requires_assessment,
@@ -356,7 +363,7 @@ def public_plan_journey_catalog() -> dict[str, Any]:
         "version": "2026-08-commercial-plan-pages-v1",
         "currency": "USD",
         "billing_periods": ["monthly", "annual"],
-        "annual_discount_percent": 20,
+        "annual_discount_percent": int(ANNUAL_DISCOUNT_PERCENT),
         "annual_discount_scope": "base_plan_only",
         "provider_cost_included": False,
         "checkout_enabled": False,
