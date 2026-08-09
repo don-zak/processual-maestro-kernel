@@ -10,6 +10,10 @@ from processual_api.admin_marketplace.assessment_subscription_activation_service
     AssessmentSubscriptionActivationError,
     AssessmentSubscriptionActivationService,
 )
+from processual_api.admin_marketplace.subscription_runtime import SubscriptionRuntimeError
+from processual_api.admin_marketplace.subscription_usage_service import (
+    record_subscription_usage_factory,
+)
 from processual_api.billing.assessment_activation_preparation import (
     ApprovedAssessmentOutcome,
 )
@@ -147,6 +151,19 @@ class _QuotaAccountRepository:
         self.added.append(account)
 
 
+class _UsageRepository:
+    def __init__(self) -> None:
+        self.by_hash = {}
+        self.added = []
+
+    async def get_by_idempotency_hash(self, key_hash, *, for_update=False):
+        return self.by_hash.get(key_hash)
+
+    def add(self, usage) -> None:
+        self.added.append(usage)
+        self.by_hash[usage.idempotency_key_hash] = usage
+
+
 class _AuditRepository:
     def __init__(self) -> None:
         self.added = []
@@ -164,6 +181,7 @@ class _UnitOfWork:
         self.assessment_subscription_bindings = _BindingRepository()
         self.subscription_runtime = _RuntimeRepository()
         self.subscription_quotas = _QuotaAccountRepository()
+        self.subscription_usage = _UsageRepository()
         self.commercial_audit = _AuditRepository()
         self.commit_count = 0
 
@@ -249,6 +267,52 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
     assert unit.entitlement_activations.added[0].order_id is None
     assert unit.entitlement_activations.added[0].automatic_activation_allowed is False
     assert len(unit.commercial_audit.added) == 1
+
+
+@pytest.mark.asyncio
+async def test_assessment_subscription_runtime_enforces_exact_quota() -> None:
+    plan = _plan()
+    unit = _UnitOfWork(plan)
+    now = datetime(2026, 8, 9, 20, 0, tzinfo=UTC)
+    activation_service = AssessmentSubscriptionActivationService(
+        unit_of_work_factory=lambda: unit,
+        clock=lambda: now,
+    )
+    activation = await activation_service.activate(
+        outcome=_outcome(),
+        entitlement_plan_id=plan.id,
+        correlation_id="corr-assessment-runtime",
+        idempotency_key="idem-assessment-runtime",
+    )
+    record_usage = record_subscription_usage_factory(uow_factory=lambda: unit)
+
+    await record_usage(
+        subscription_id=activation.subscription_id,
+        customer_ref=activation.customer_ref,
+        metric_code="credits",
+        units=125_000,
+        idempotency_key="usage-exact-limit",
+        dimensions={"source": "assessment-e2e"},
+        occurred_at=now,
+    )
+
+    quota_account = unit.subscription_quotas.added[0]
+    assert quota_account.limit_units == 125_000
+    assert quota_account.used_units == 125_000
+
+    with pytest.raises(SubscriptionRuntimeError):
+        await record_usage(
+            subscription_id=activation.subscription_id,
+            customer_ref=activation.customer_ref,
+            metric_code="credits",
+            units=1,
+            idempotency_key="usage-over-limit",
+            dimensions={"source": "assessment-e2e"},
+            occurred_at=now,
+        )
+
+    assert quota_account.used_units == 125_000
+    assert len(unit.subscription_usage.added) == 1
 
 
 @pytest.mark.asyncio
