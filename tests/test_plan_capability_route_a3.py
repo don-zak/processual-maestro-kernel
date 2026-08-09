@@ -10,6 +10,24 @@ from processual_api.billing import router as billing_router
 from processual_api.billing.plan_capability_router import get_plan_capabilities
 
 
+SAFE_CAPABILITY_FIELDS = {
+    "capability_code",
+    "entitlement_code",
+    "status",
+    "execution_surface",
+    "customer_executable",
+    "production_allowed",
+    "notes",
+}
+SENSITIVE_CAPABILITY_FIELDS = {
+    "credential_value",
+    "secret",
+    "api_key",
+    "token",
+    "authorization",
+}
+
+
 def test_plan_capability_route_is_registered() -> None:
     paths = {
         route.path
@@ -25,8 +43,13 @@ def test_plan_capability_route_returns_safe_enterprise_boundary() -> None:
 
     assert payload["plan_code"] == "enterprise_scale"
     assert payload["production_advanced_integration_allowed"] is False
-    assert all("credential" not in str(item).lower() for item in payload["capabilities"])
-    assert all("secret" not in str(item).lower() for item in payload["capabilities"])
+
+    capabilities = payload["capabilities"]
+    assert isinstance(capabilities, list)
+    for item in capabilities:
+        assert isinstance(item, dict)
+        assert set(item) == SAFE_CAPABILITY_FIELDS
+        assert SENSITIVE_CAPABILITY_FIELDS.isdisjoint(item)
 
 
 def test_plan_capability_route_rejects_unknown_plan() -> None:
