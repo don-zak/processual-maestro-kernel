@@ -55,6 +55,7 @@ def _scope_posture(*, enabled: bool) -> dict[str, Any]:
     if not enabled:
         return {
             "enabled": False,
+            "source": "catalog",
             "total": 0,
             "read": 0,
             "write": 0,
@@ -68,6 +69,7 @@ def _scope_posture(*, enabled: bool) -> dict[str, Any]:
     by_access = Counter(scope.access_level for scope in scopes)
     return {
         "enabled": True,
+        "source": "catalog",
         "total": len(scopes),
         "read": by_access.get("read", 0),
         "write": by_access.get("write", 0),
