@@ -5,7 +5,7 @@ from processual_api.api_readiness_gate import (
 from processual_api.main import app
 
 
-APPROVED_ROUTE_INVENTORY_DIGEST = "capture-from-ci"
+APPROVED_ROUTE_INVENTORY_DIGEST = "bf8be19563df11aa0798d65d38aa21b5da0580eac14355bdd82dcf94fbdb79d4"
 
 
 def test_all_mounted_relevant_routes_are_readiness_classified() -> None:
