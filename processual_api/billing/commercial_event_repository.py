@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +37,7 @@ class SqlAlchemyCommercialEventRepository:
     async def list_for_aggregate(
         self,
         aggregate: CommercialAggregate,
-        aggregate_id,
+        aggregate_id: UUID,
     ) -> tuple[CommercialEvent, ...]:
         result = await self._session.scalars(
             select(CommercialEventRecord)
