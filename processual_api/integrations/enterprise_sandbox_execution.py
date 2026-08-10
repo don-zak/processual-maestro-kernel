@@ -24,6 +24,11 @@ from processual_api.integrations.enterprise_endpoint_bindings import (
     validate_endpoint_binding,
 )
 from processual_api.integrations.integration_task_catalog import get_integration_task
+from processual_api.integrations.integration_task_injection import (
+    TASK_INJECTION_SCHEMA_VERSION,
+    TaskInjectionError,
+    build_task_injection_envelope,
+)
 
 MAX_SANDBOX_RESPONSE_BYTES = 1_048_576
 _ALLOWED_CREDENTIAL_HEADERS = frozenset({"authorization", "x-api-key"})
@@ -189,7 +194,7 @@ async def execute_sandbox_binding(
     transport: httpx.AsyncBaseTransport | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Execute one governed sandbox request and return redacted proof evidence."""
+    """Execute one governed sandbox request and prove canonical task handoff."""
 
     validation = validate_endpoint_binding(spec)
     task = get_integration_task(spec.task_id)
@@ -273,7 +278,12 @@ async def execute_sandbox_binding(
 
     try:
         mapped = map_response_to_task_input(spec, response_payload)
-    except EndpointBindingError as exc:
+        task_injection = build_task_injection_envelope(
+            task_id=spec.task_id,
+            binding_id=spec.binding_id,
+            canonical_input=mapped["canonical_input"],
+        )
+    except (EndpointBindingError, TaskInjectionError) as exc:
         raise SandboxExecutionError(str(exc)) from exc
 
     canonical_input = mapped["canonical_input"]
@@ -292,9 +302,11 @@ async def execute_sandbox_binding(
         "http_status": response.status_code,
         "content_type": content_type or "application/json",
         "response_sha256": hashlib.sha256(content).hexdigest(),
-        "canonical_input_sha256": _digest(canonical_input),
+        "canonical_input_sha256": task_injection["payload_sha256"],
+        "task_injection_sha256": task_injection["injection_sha256"],
         "request_body_sha256": _digest(request_body) if request_body is not None else None,
         "mapping_valid": True,
+        "task_injection_ready": True,
         "credential_source": envelope.source,
         "completed_at": completed_at,
     }
@@ -309,7 +321,10 @@ async def execute_sandbox_binding(
         "required_scope_ids": validation["required_scope_ids"],
         "output_slot": mapped["output_slot"],
         "canonical_input": canonical_input,
-        "canonical_input_sha256": evidence_material["canonical_input_sha256"],
+        "canonical_input_sha256": task_injection["payload_sha256"],
+        "task_injection_schema_version": TASK_INJECTION_SCHEMA_VERSION,
+        "task_injection_sha256": task_injection["injection_sha256"],
+        "ready_for_task_consumption": task_injection["ready_for_task_consumption"],
         "request_body_sha256": evidence_material["request_body_sha256"],
         "request_body_included_in_evidence": False,
         "http_status": response.status_code,
