@@ -33,6 +33,7 @@ def test_verification_bundle_references_all_required_contract_layers() -> None:
         "test_enterprise_endpoint_failure_review.py",
         "test_settings_enterprise_endpoint_failure_review_runtime.py",
         "test_settings_enterprise_failure_review_ui.py",
+        "test_admin_enterprise_failure_review_ui.py",
         "test_settings_enterprise_endpoints_ui.py",
         "test_settings_enterprise_sandbox_proof_ui.py",
         "test_settings_enterprise_integration_runtime.py",
@@ -41,7 +42,7 @@ def test_verification_bundle_references_all_required_contract_layers() -> None:
         "test_api_readiness_app_coverage_b1.py",
     }
     assert all(name in text for name in required)
-    assert len(required) >= 19
+    assert len(required) >= 20
     for name in required:
         assert (ROOT / "tests" / name).is_file(), name
 
