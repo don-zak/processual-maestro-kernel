@@ -4,7 +4,9 @@
   const ROOT_ID = 'see-endpoint-bindings';
   const TASKS_ENDPOINT = '/settings/enterprise-integration/task-catalog';
   const BINDINGS_ENDPOINT = '/settings/enterprise-integration/endpoint-bindings';
+  const EVIDENCE_ENDPOINT = '/settings/enterprise-integration/sandbox-evidence';
   const CONSOLE_ENDPOINT = '/settings/enterprise-integration';
+  const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
   let initialized = false;
   let observer = null;
   let loading = false;
@@ -18,9 +20,9 @@
     return node;
   }
 
-  function field(label, input) {
+  function field(label, inputNode) {
     const wrap = el('label', 'see-field');
-    wrap.append(el('span', 'see-label', label), input);
+    wrap.append(el('span', 'see-label', label), inputNode);
     return wrap;
   }
 
@@ -75,7 +77,14 @@
     node.textContent = copy;
   }
 
-  function renderBindings(root, bindings) {
+  function activeGrantFor(evidencePayload, bindingId) {
+    const grants = evidencePayload?.grants || [];
+    return [...grants].reverse().find(grant => (
+      grant.binding_id === bindingId && grant.status === 'active'
+    ));
+  }
+
+  function renderBindings(root, bindings, evidencePayload = {}) {
     const region = root.querySelector('[data-see-bindings]');
     if (!region) return;
     region.replaceChildren();
@@ -88,7 +97,9 @@
       const head = el('div', 'see-binding-head');
       const title = el('strong', 'see-binding-title', binding.display_name || binding.binding_id);
       const state = el('span', 'see-pill', binding.validation?.lifecycle_state || 'validated');
+      const grant = activeGrantFor(evidencePayload, binding.binding_id);
       head.append(title, state);
+      if (grant) head.appendChild(el('span', 'see-pill', 'Sandbox grant active'));
       const task = el('code', 'see-code', binding.task_id);
       const endpoint = el('code', 'see-code', `${binding.method} ${binding.base_url}${binding.path}`);
       const meta = el('p', 'see-meta', `${contractLabel(binding.adapter_contract_id)} · ${binding.credential_profile_id}`);
@@ -97,12 +108,42 @@
     });
   }
 
-  function renderMappingFields(form, task) {
+  function renderEvidence(root, evidencePayload) {
+    const region = root.querySelector('[data-see-evidence]');
+    if (!region) return;
+    region.replaceChildren();
+    const evidence = [...(evidencePayload?.evidence || [])].reverse();
+    if (!evidence.length) {
+      region.appendChild(el('p', 'see-empty', 'No live sandbox proof has been recorded yet.'));
+      return;
+    }
+    evidence.slice(0, 10).forEach(item => {
+      const card = el('article', 'see-binding-card');
+      const head = el('div', 'see-binding-head');
+      head.append(
+        el('strong', 'see-binding-title', item.task_id || item.binding_id),
+        el('span', 'see-pill', item.network_request_executed ? 'Network crossed' : 'Not executed')
+      );
+      const digest = el('code', 'see-code', `SHA-256 ${item.evidence_sha256 || '—'}`);
+      const detail = el(
+        'p',
+        'see-meta',
+        `${item.destination_host || 'sandbox'} · HTTP ${item.http_status || '—'} · ${item.completed_at || '—'}`
+      );
+      card.append(head, digest, detail);
+      region.appendChild(card);
+    });
+  }
+
+  function renderResponseMappingFields(form, task) {
     const region = form.querySelector('[data-see-mapping]');
     region.replaceChildren();
     if (!task) return;
-    const intro = el('p', 'see-help', 'Map customer API JSON paths to Maestro canonical fields. Required fields must be mapped before saving.');
-    region.appendChild(intro);
+    region.appendChild(el(
+      'p',
+      'see-help',
+      'Map customer API JSON paths to Maestro canonical fields. Required fields must be mapped before saving.'
+    ));
     const grid = el('div', 'see-mapping-grid');
     const required = new Set(task.required_input_fields || []);
     [...(task.required_input_fields || []), ...(task.optional_input_fields || [])].forEach(name => {
@@ -112,6 +153,35 @@
       grid.appendChild(field(`${name}${required.has(name) ? ' *' : ''}`, source));
     });
     region.appendChild(grid);
+  }
+
+  function renderRequestBodyMappingFields(form, task) {
+    const region = form.querySelector('[data-see-request-mapping]');
+    region.replaceChildren();
+    if (!task || !BODY_METHODS.has(form.elements.method.value)) {
+      region.appendChild(el('p', 'see-help', 'This endpoint method does not send a JSON request body.'));
+      return;
+    }
+    region.appendChild(el(
+      'p',
+      'see-help',
+      'Map canonical Maestro task fields to customer API JSON body paths. Required task fields must be represented.'
+    ));
+    const grid = el('div', 'see-mapping-grid');
+    const required = new Set(task.required_input_fields || []);
+    [...(task.required_input_fields || []), ...(task.optional_input_fields || [])].forEach(name => {
+      const externalPath = input('text', `body:${name}`, name);
+      externalPath.dataset.bodyField = name;
+      externalPath.dataset.required = required.has(name) ? 'true' : 'false';
+      grid.appendChild(field(`${name} → external path${required.has(name) ? ' *' : ''}`, externalPath));
+    });
+    region.appendChild(grid);
+  }
+
+  function taskInputSkeleton(task) {
+    const result = {};
+    (task?.required_input_fields || []).forEach(name => { result[name] = ''; });
+    return JSON.stringify(result, null, 2);
   }
 
   function syncTaskControls(form) {
@@ -132,11 +202,29 @@
     });
     if (profileSelect.options.length === 2) profileSelect.selectedIndex = 1;
     form.elements.method.value = task?.operation_class === 'approval_gated_write' ? 'POST' : 'GET';
-    renderMappingFields(form, task);
-    const taskHint = form.querySelector('[data-see-task-hint]');
-    taskHint.textContent = task
+    renderResponseMappingFields(form, task);
+    renderRequestBodyMappingFields(form, task);
+    form.elements.task_input.placeholder = taskInputSkeleton(task);
+    const hint = form.querySelector('[data-see-task-hint]');
+    hint.textContent = task
       ? `${task.safe_operation} · scopes: ${(task.required_scope_ids || []).join(', ')} · output: ${task.output_slot}`
       : 'Choose a declared Maestro task.';
+  }
+
+  function pathParameterMapping(path, task) {
+    const mapping = {};
+    const canonical = new Set([
+      ...(task?.required_input_fields || []),
+      ...(task?.optional_input_fields || []),
+    ]);
+    for (const match of String(path || '').matchAll(/\{([A-Za-z0-9_.:-]+)\}/g)) {
+      const name = match[1];
+      if (!canonical.has(name)) {
+        throw new Error(`Path parameter ${name} is not a canonical field for the selected task.`);
+      }
+      mapping[name] = `$task.${name}`;
+    }
+    return mapping;
   }
 
   function bindingPayload(form) {
@@ -150,9 +238,9 @@
         throw new Error(`Required mapping missing: ${node.dataset.canonicalField}`);
       }
     });
-    const bindingId = form.elements.binding_id.value.trim();
+    const path = form.elements.path.value.trim();
     return {
-      binding_id: bindingId,
+      binding_id: form.elements.binding_id.value.trim(),
       display_name: form.elements.display_name.value.trim(),
       adapter_contract_id: form.elements.adapter_contract_id.value,
       task_id: task.task_id,
@@ -160,30 +248,74 @@
       environment: 'sandbox',
       base_url: form.elements.base_url.value.trim(),
       method: form.elements.method.value,
-      path: form.elements.path.value.trim(),
+      path,
       required_scope_ids: task.required_scope_ids,
-      path_parameters: {},
+      path_parameters: pathParameterMapping(path, task),
       query_parameters: {},
       request_headers: { Accept: 'application/json' },
       response_format: 'json',
       response_data_path: form.elements.response_data_path.value.trim() || '$',
       field_mapping: mapping,
-      success_codes: [200],
+      success_codes: form.elements.method.value === 'POST' ? [200, 201, 202] : [200],
       timeout_seconds: 15,
     };
   }
 
+  function requestMappingPayload(form, binding) {
+    const body_mapping = {};
+    if (BODY_METHODS.has(binding.method)) {
+      form.querySelectorAll('[data-body-field]').forEach(node => {
+        const externalPath = node.value.trim();
+        if (node.dataset.required === 'true' && !externalPath) {
+          throw new Error(`Required request mapping missing: ${node.dataset.bodyField}`);
+        }
+        if (externalPath) body_mapping[externalPath] = `$task.${node.dataset.bodyField}`;
+      });
+    }
+    return { binding_id: binding.binding_id, body_mapping };
+  }
+
+  function parseTaskInput(form) {
+    const raw = form.elements.task_input.value.trim();
+    if (!raw) throw new Error('Provide canonical task input JSON for the sandbox proof.');
+    const value = JSON.parse(raw);
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      throw new Error('Canonical task input must be a JSON object.');
+    }
+    return value;
+  }
+
+  async function persistBindingAndRequestMapping(form) {
+    const binding = bindingPayload(form);
+    if (!binding.binding_id || !binding.display_name || !binding.base_url || !binding.path || !binding.credential_profile_id) {
+      throw new Error('Complete the binding name, ID, credential profile, base URL, and endpoint path.');
+    }
+    await CLIENT.put(`${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}`, binding);
+    if (BODY_METHODS.has(binding.method)) {
+      const requestMapping = requestMappingPayload(form, binding);
+      await CLIENT.put(
+        `${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}/request-mapping`,
+        requestMapping
+      );
+    }
+    return binding;
+  }
+
+  async function reloadState(root) {
+    const [bindingsPayload, evidencePayload] = await Promise.all([
+      CLIENT.get(BINDINGS_ENDPOINT),
+      CLIENT.get(EVIDENCE_ENDPOINT),
+    ]);
+    renderBindings(root, bindingsPayload.bindings || [], evidencePayload);
+    renderEvidence(root, evidencePayload);
+  }
+
   async function saveBinding(root, form) {
     try {
-      const payload = bindingPayload(form);
-      if (!payload.binding_id || !payload.display_name || !payload.base_url || !payload.path || !payload.credential_profile_id) {
-        throw new Error('Complete the binding name, ID, credential profile, base URL, and endpoint path.');
-      }
-      status(root, 'Validating and saving endpoint binding…');
-      await CLIENT.put(`${BINDINGS_ENDPOINT}/${encodeURIComponent(payload.binding_id)}`, payload);
-      status(root, 'Endpoint binding saved and schema-validated for sandbox configuration.', 'success');
-      const listed = await CLIENT.get(BINDINGS_ENDPOINT);
-      renderBindings(root, listed.bindings || []);
+      status(root, 'Validating endpoint, request mapping, and canonical response mapping…');
+      await persistBindingAndRequestMapping(form);
+      await reloadState(root);
+      status(root, 'Endpoint binding saved and schema-validated for sandbox execution.', 'success');
     } catch (error) {
       status(root, error?.message || 'Endpoint binding could not be saved.', 'error');
     }
@@ -191,15 +323,12 @@
 
   async function previewMapping(root, form) {
     try {
-      const payload = bindingPayload(form);
-      if (!payload.binding_id) throw new Error('Save or provide a binding ID before previewing mapping.');
-      await CLIENT.put(`${BINDINGS_ENDPOINT}/${encodeURIComponent(payload.binding_id)}`, payload);
+      const binding = await persistBindingAndRequestMapping(form);
       const raw = form.elements.sample_response.value.trim();
       if (!raw) throw new Error('Paste a sandbox/sample JSON response to preview the mapping.');
-      const responsePayload = JSON.parse(raw);
       const mapped = await CLIENT.post(
-        `${BINDINGS_ENDPOINT}/${encodeURIComponent(payload.binding_id)}/mapping-preview`,
-        { response_payload: responsePayload }
+        `${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}/mapping-preview`,
+        { response_payload: JSON.parse(raw) }
       );
       const output = root.querySelector('[data-see-preview]');
       output.textContent = JSON.stringify(mapped.canonical_input || {}, null, 2);
@@ -210,24 +339,67 @@
     }
   }
 
-  function buildWorkspace(consolePayload, bindingsPayload) {
+  async function previewRequest(root, form) {
+    try {
+      const binding = await persistBindingAndRequestMapping(form);
+      const preview = await CLIENT.post(
+        `${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}/request-preview`,
+        { task_input: parseTaskInput(form) }
+      );
+      const output = root.querySelector('[data-see-preview]');
+      output.textContent = JSON.stringify(preview, null, 2);
+      output.hidden = false;
+      status(root, 'Sandbox request preview built from canonical task input without network execution.', 'success');
+    } catch (error) {
+      status(root, error?.message || 'Request preview failed.', 'error');
+    }
+  }
+
+  async function runLiveSandboxProof(root, form) {
+    try {
+      const binding = await persistBindingAndRequestMapping(form);
+      status(root, 'Executing governed live sandbox proof…');
+      const result = await CLIENT.post(
+        `${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}/sandbox-execute`,
+        { task_input: parseTaskInput(form) }
+      );
+      const output = root.querySelector('[data-see-preview]');
+      output.textContent = JSON.stringify({
+        status: result.status,
+        task_id: result.task_id,
+        canonical_input: result.canonical_input,
+        canonical_input_sha256: result.canonical_input_sha256,
+        evidence_sha256: result.evidence_sha256,
+        http_status: result.http_status,
+        destination_host: result.destination_host,
+        completed_at: result.completed_at,
+      }, null, 2);
+      output.hidden = false;
+      await reloadState(root);
+      status(root, `Live sandbox proof passed for ${result.task_id}. Evidence SHA-256: ${result.evidence_sha256}`, 'success');
+    } catch (error) {
+      status(root, error?.message || 'Live sandbox proof failed or requires a supervisor sandbox grant.', 'error');
+    }
+  }
+
+  function buildWorkspace(consolePayload, bindingsPayload, evidencePayload) {
     const root = el('section', 'see-workspace');
     root.id = ROOT_ID;
     root.setAttribute('aria-labelledby', 'see-title');
 
     const header = el('div', 'see-header');
     const copy = el('div', '');
-    const eyebrow = el('span', 'see-eyebrow', 'Endpoint → Canonical task binding');
-    const title = el('h4', 'see-title', 'Enterprise API endpoint configuration');
-    title.id = 'see-title';
-    const description = el(
-      'p',
-      'see-copy',
-      'Define customer API endpoints and map their JSON fields into the exact Maestro tasks declared for CRM, billing, banking, government, network, research, university, documents, orders, and support.'
+    copy.append(
+      el('span', 'see-eyebrow', 'Endpoint → Canonical task binding'),
+      el('h4', 'see-title', 'Enterprise API endpoint configuration'),
+      el('p', 'see-copy', 'Configure customer sandbox APIs, map data into declared Maestro tasks, and produce a governed live proof with SHA-256 evidence.')
     );
-    copy.append(eyebrow, title, description);
+    copy.querySelector('.see-title').id = 'see-title';
     const guard = el('div', 'see-guard');
-    guard.append(el('span', 'see-pill', 'Sandbox configuration'), el('span', 'see-pill see-pill-blocked', 'Production blocked'));
+    guard.append(
+      el('span', 'see-pill', 'Sandbox configuration'),
+      el('span', 'see-pill see-pill-blocked', 'Production blocked')
+    );
     header.append(copy, guard);
     root.appendChild(header);
 
@@ -246,7 +418,8 @@
     const task = select('task_id');
     const credential = select('credential_profile_id');
     const method = select('method');
-    ['GET', 'POST'].forEach(item => method.appendChild(option(item, item)));
+    ['GET', 'POST', 'PUT', 'PATCH'].forEach(item => method.appendChild(option(item, item)));
+
     const topGrid = el('div', 'see-grid');
     topGrid.append(
       field('Integration domain', contract),
@@ -260,44 +433,73 @@
       field('Response data path', input('text', 'response_data_path', '$.data'))
     );
     form.appendChild(topGrid);
-    const taskHint = el('p', 'see-task-hint', 'Choose a declared Maestro task.');
-    taskHint.dataset.seeTaskHint = 'true';
-    form.appendChild(taskHint);
 
-    const mapping = el('div', 'see-mapping');
-    mapping.dataset.seeMapping = 'true';
-    form.appendChild(mapping);
+    const hint = el('p', 'see-task-hint', 'Choose a declared Maestro task.');
+    hint.dataset.seeTaskHint = 'true';
+    form.appendChild(hint);
+
+    const requestMapping = el('section', 'see-mapping');
+    requestMapping.dataset.seeRequestMapping = 'true';
+    requestMapping.setAttribute('aria-label', 'Request body mapping');
+    form.appendChild(requestMapping);
+
+    const responseMapping = el('section', 'see-mapping');
+    responseMapping.dataset.seeMapping = 'true';
+    responseMapping.setAttribute('aria-label', 'Response mapping');
+    form.appendChild(responseMapping);
+
+    const taskInput = document.createElement('textarea');
+    taskInput.name = 'task_input';
+    taskInput.rows = 7;
+    taskInput.placeholder = '{\n  "customer_id": "..."\n}';
+    form.appendChild(field('Canonical task input for request preview / live proof', taskInput));
 
     const sample = document.createElement('textarea');
     sample.name = 'sample_response';
     sample.rows = 7;
     sample.placeholder = '{\n  "data": { "id": "..." }\n}';
-    form.appendChild(field('Sandbox/sample JSON response', sample));
+    form.appendChild(field('Sandbox/sample JSON response for mapping preview', sample));
 
     const actions = el('div', 'see-actions');
-    const save = el('button', 'see-btn see-btn-primary', 'Save validated binding');
-    save.type = 'button';
-    save.addEventListener('click', () => saveBinding(root, form));
-    const preview = el('button', 'see-btn', 'Preview canonical mapping');
-    preview.type = 'button';
-    preview.addEventListener('click', () => previewMapping(root, form));
-    actions.append(save, preview);
+    [
+      ['Save validated binding', 'see-btn see-btn-primary', () => saveBinding(root, form)],
+      ['Preview request', 'see-btn', () => previewRequest(root, form)],
+      ['Preview canonical mapping', 'see-btn', () => previewMapping(root, form)],
+      ['Run live sandbox proof', 'see-btn see-btn-primary', () => runLiveSandboxProof(root, form)],
+    ].forEach(([label, className, handler]) => {
+      const button = el('button', className, label);
+      button.type = 'button';
+      button.addEventListener('click', handler);
+      actions.appendChild(button);
+    });
     form.appendChild(actions);
+
     const previewOutput = el('pre', 'see-preview');
     previewOutput.dataset.seePreview = 'true';
     previewOutput.hidden = true;
     form.appendChild(previewOutput);
     root.appendChild(form);
 
-    const bindingsTitle = el('h5', 'see-bindings-title', 'Validated endpoint bindings');
-    root.appendChild(bindingsTitle);
+    root.appendChild(el('h5', 'see-bindings-title', 'Validated endpoint bindings'));
     const bindings = el('div', 'see-bindings');
     bindings.dataset.seeBindings = 'true';
     root.appendChild(bindings);
-    renderBindings(root, bindingsPayload.bindings || []);
+
+    root.appendChild(el('h5', 'see-bindings-title', 'Live sandbox proof evidence'));
+    const evidence = el('div', 'see-bindings');
+    evidence.dataset.seeEvidence = 'true';
+    evidence.setAttribute('aria-live', 'polite');
+    root.appendChild(evidence);
+
+    renderBindings(root, bindingsPayload.bindings || [], evidencePayload);
+    renderEvidence(root, evidencePayload);
 
     contract.addEventListener('change', () => syncTaskControls(form));
     task.addEventListener('change', () => syncTaskControls(form));
+    method.addEventListener('change', () => {
+      const selectedTask = taskCatalog.find(item => item.task_id === task.value);
+      renderRequestBodyMappingFields(form, selectedTask);
+    });
     if (contract.options.length > 1) {
       contract.selectedIndex = 1;
       syncTaskControls(form);
@@ -311,15 +513,16 @@
     if (!force && document.getElementById(ROOT_ID)) return;
     loading = true;
     try {
-      const [consolePayload, tasksPayload, bindingsPayload] = await Promise.all([
+      const [consolePayload, tasksPayload, bindingsPayload, evidencePayload] = await Promise.all([
         CLIENT.get(CONSOLE_ENDPOINT),
         CLIENT.get(TASKS_ENDPOINT),
         CLIENT.get(BINDINGS_ENDPOINT),
+        CLIENT.get(EVIDENCE_ENDPOINT),
       ]);
       taskCatalog = tasksPayload.tasks || [];
       qualificationProfiles = consolePayload.qualification_catalog?.profiles || [];
       document.getElementById(ROOT_ID)?.remove();
-      const workspace = buildWorkspace(consolePayload, bindingsPayload);
+      const workspace = buildWorkspace(consolePayload, bindingsPayload, evidencePayload);
       const safety = document.getElementById('set-enterprise-console-safety');
       if (safety) card.insertBefore(workspace, safety);
       else card.appendChild(workspace);
