@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260807_0039"
 down_revision: str | None = "20260806_0038"
@@ -55,6 +55,10 @@ _ENTITLEMENTS_BY_PLAN = {
 }
 
 
+def _offline_literal(value: str) -> str:
+    return value.replace("'", "''")
+
+
 def upgrade() -> None:
     with op.batch_alter_table(CYCLE_TABLE) as batch:
         batch.add_column(
@@ -75,45 +79,63 @@ def upgrade() -> None:
         )
         batch.create_check_constraint("top_up_nonnegative", "top_up_units >= 0")
 
-    connection = op.get_bind()
-    for plan_code, entitlements_json in _ENTITLEMENTS_BY_PLAN.items():
-        connection.execute(
+    if context.is_offline_mode():
+        for plan_code, entitlements_json in _ENTITLEMENTS_BY_PLAN.items():
+            op.execute(
+                sa.text(
+                    f"""
+                    UPDATE {CYCLE_TABLE}
+                    SET entitlement_codes = '{_offline_literal(entitlements_json)}',
+                        plan_catalog_version = '{_offline_literal(CATALOG_VERSION)}'
+                    WHERE plan_code = '{_offline_literal(plan_code)}'
+                      AND (
+                          entitlement_codes IS NULL
+                          OR entitlement_codes = '[]'
+                          OR entitlement_codes = 'null'
+                      )
+                    """
+                )
+            )
+    else:
+        connection = op.get_bind()
+        for plan_code, entitlements_json in _ENTITLEMENTS_BY_PLAN.items():
+            connection.execute(
+                sa.text(
+                    f"""
+                    UPDATE {CYCLE_TABLE}
+                    SET entitlement_codes = :entitlements,
+                        plan_catalog_version = :version
+                    WHERE plan_code = :plan_code
+                      AND (
+                          entitlement_codes IS NULL
+                          OR entitlement_codes = '[]'
+                          OR entitlement_codes = 'null'
+                      )
+                    """
+                ),
+                {
+                    "entitlements": entitlements_json,
+                    "version": CATALOG_VERSION,
+                    "plan_code": plan_code,
+                },
+            )
+
+        unresolved = connection.execute(
             sa.text(
                 f"""
-                UPDATE {CYCLE_TABLE}
-                SET entitlement_codes = :entitlements,
-                    plan_catalog_version = :version
-                WHERE plan_code = :plan_code
-                  AND (
-                      entitlement_codes IS NULL
-                      OR entitlement_codes = '[]'
-                      OR entitlement_codes = 'null'
-                  )
+                SELECT plan_code
+                FROM {CYCLE_TABLE}
+                WHERE entitlement_codes IS NULL
+                   OR entitlement_codes = '[]'
+                   OR entitlement_codes = 'null'
+                LIMIT 1
                 """
-            ),
-            {
-                "entitlements": entitlements_json,
-                "version": CATALOG_VERSION,
-                "plan_code": plan_code,
-            },
-        )
-
-    unresolved = connection.execute(
-        sa.text(
-            f"""
-            SELECT plan_code
-            FROM {CYCLE_TABLE}
-            WHERE entitlement_codes IS NULL
-               OR entitlement_codes = '[]'
-               OR entitlement_codes = 'null'
-            LIMIT 1
-            """
-        )
-    ).first()
-    if unresolved:
-        raise RuntimeError(
-            "Top-up migration found quota cycles without authoritative entitlements"
-        )
+            )
+        ).first()
+        if unresolved:
+            raise RuntimeError(
+                "Top-up migration found quota cycles without authoritative entitlements"
+            )
 
     op.create_table(
         GRANT_TABLE,
