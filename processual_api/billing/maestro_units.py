@@ -6,6 +6,7 @@ from typing import Final
 
 MAESTRO_UNIT_CONTRACT_VERSION: Final = "2026-08-maestro-units-v1"
 MAESTRO_UNIT_METRIC: Final = "maestro_units"
+LEGACY_CREDIT_METRIC: Final = "credits"
 LEGACY_CREDIT_ALIAS_RATIO: Final = 1
 
 
@@ -86,6 +87,18 @@ _METERED_RULES = {
 MAESTRO_UNIT_RULES: Final = MappingProxyType({**_FREE_RULES, **_METERED_RULES})
 
 
+def normalize_maestro_metric_code(metric_code: str | None) -> str:
+    """Normalize historical quota metric names to the canonical Maestro metric.
+
+    ``credits`` is accepted only as a migration/read compatibility alias. All
+    authoritative writes and public commercial contracts use ``maestro_units``.
+    """
+    normalized = str(metric_code or "").strip().lower()
+    if normalized in {MAESTRO_UNIT_METRIC, LEGACY_CREDIT_METRIC}:
+        return MAESTRO_UNIT_METRIC
+    return normalized
+
+
 def normalize_maestro_endpoint(endpoint: str) -> str:
     path = str(endpoint or "/").split("?", 1)[0].strip() or "/"
     if len(path) > 1:
@@ -139,6 +152,7 @@ def credits_from_maestro_units(units: int) -> int:
 
 __all__ = [
     "LEGACY_CREDIT_ALIAS_RATIO",
+    "LEGACY_CREDIT_METRIC",
     "MAESTRO_UNIT_CONTRACT_VERSION",
     "MAESTRO_UNIT_METRIC",
     "MAESTRO_UNIT_RULES",
@@ -150,4 +164,5 @@ __all__ = [
     "maestro_unit_rule",
     "maestro_units_for_endpoint",
     "normalize_maestro_endpoint",
+    "normalize_maestro_metric_code",
 ]
