@@ -74,12 +74,18 @@ def _digest(value: bytes) -> str:
 
 
 def _event_identity(webhook: VerifiedLemonSqueezyWebhook) -> str:
+    effective_at = webhook.evidence.effective_at
+    if effective_at.tzinfo is None:
+        raise LemonSqueezyWebhookError(
+            "verified webhook provider effective time must be timezone-aware."
+        )
     canonical = "\x1f".join(
         (
             webhook.store_id,
             webhook.event_name,
             webhook.resource_type,
             webhook.external_resource_id,
+            effective_at.isoformat(),
         )
     ).encode("utf-8")
     return _digest(canonical)
