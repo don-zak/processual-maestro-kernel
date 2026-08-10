@@ -39,14 +39,14 @@ def teardown_function() -> None:
     clear_execution_observations_for_tests()
 
 
-def _client(monkeypatch) -> TestClient:
+def _client(monkeypatch, *, raise_server_exceptions: bool = True) -> TestClient:
     adapter = ExecutionObservabilityAdapter()
     monkeypatch.setattr(workflows.adapter_registry, "get", lambda provider: adapter)
 
     test_app = FastAPI()
     test_app.include_router(workflows.router)
     test_app.dependency_overrides[workflows.get_current_user] = lambda: "observability-test-user"
-    return TestClient(test_app)
+    return TestClient(test_app, raise_server_exceptions=raise_server_exceptions)
 
 
 def _settings_client(user: dict[str, object]) -> TestClient:
@@ -123,7 +123,7 @@ def test_llm_orchestration_records_canonical_execution_and_returns_id(monkeypatc
     assert recent["items_succeeded"] == 3
 
 
-def test_llm_orchestration_saturation_records_failure_evidence(monkeypatch) -> None:
+def test_llm_orchestration_saturation_returns_same_execution_id(monkeypatch) -> None:
     client = _client(monkeypatch)
 
     async def saturated_executor(items, worker, plan):
@@ -141,11 +141,42 @@ def test_llm_orchestration_saturation_records_failure_evidence(monkeypatch) -> N
     )
 
     assert response.status_code == 429
+    payload = response.json()
+    assert payload["execution_id"].startswith("exec_")
     snapshot = execution_observability_snapshot(limit=10)
     assert snapshot["record_count"] == 1
     assert snapshot["summary"]["executions_failed"] == 1
     assert snapshot["summary"]["items_failed"] == 2
     recent = snapshot["recent_executions"][0]
+    assert recent["execution_id"] == payload["execution_id"]
     assert recent["status"] == "saturated"
     assert recent["failure_stage"] == "execution"
     assert recent["failure_code"] == "execution_fanout_saturated"
+
+
+def test_llm_orchestration_unexpected_failure_records_exactly_one_terminal_record(monkeypatch) -> None:
+    client = _client(monkeypatch, raise_server_exceptions=False)
+
+    async def broken_executor(items, worker, plan):
+        del items, worker, plan
+        raise RuntimeError("unexpected execution failure")
+
+    monkeypatch.setattr(workflows, "execute_fanout_plan", broken_executor)
+
+    response = client.post(
+        "/workflows/llm-orchestration",
+        json={
+            "provider": "execution-observability",
+            "prompts": ["one", "two"],
+        },
+    )
+
+    assert response.status_code == 500
+    snapshot = execution_observability_snapshot(limit=10)
+    assert snapshot["record_count"] == 1
+    assert snapshot["summary"]["executions_failed"] == 1
+    assert snapshot["summary"]["items_failed"] == 2
+    recent = snapshot["recent_executions"][0]
+    assert recent["status"] == "failed"
+    assert recent["failure_stage"] == "execution"
+    assert recent["failure_code"] == "execution_unexpected_error"

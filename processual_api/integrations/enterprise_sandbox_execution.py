@@ -317,6 +317,7 @@ async def execute_sandbox_binding(
         execution_kind="sandbox_proof",
         task_id=spec.task_id,
         binding_id=spec.binding_id,
+        provider=spec.adapter_contract_id,
         status="success",
         duration_ms=(time.perf_counter() - started) * 1000.0,
         items_total=1,

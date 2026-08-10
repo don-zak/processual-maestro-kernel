@@ -89,6 +89,41 @@ def test_record_rejects_outcomes_exceeding_total() -> None:
         raise AssertionError("invalid execution outcomes must fail closed")
 
 
+def test_record_rejects_non_terminal_status() -> None:
+    try:
+        record_execution_observation(
+            execution_kind="task",
+            task_id="invalid",
+            status="running",
+            duration_ms=1,
+            items_total=1,
+        )
+    except ValueError as exc:
+        assert "status must be terminal" in str(exc)
+    else:
+        raise AssertionError("non-terminal execution status must fail closed")
+
+
+def test_record_rejects_inconsistent_terminal_outcome_semantics() -> None:
+    cases = [
+        {"status": "success", "items_succeeded": 0, "items_failed": 1},
+        {"status": "failed", "items_succeeded": 0, "items_failed": 0},
+        {"status": "partial_error", "items_succeeded": 1, "items_failed": 0},
+    ]
+    for case in cases:
+        try:
+            record_execution_observation(
+                execution_kind="task",
+                task_id="invalid",
+                duration_ms=1,
+                items_total=1,
+                **case,
+            )
+        except ValueError:
+            continue
+        raise AssertionError(f"inconsistent terminal outcome must fail closed: {case}")
+
+
 def test_snapshot_recent_limit_does_not_change_aggregate_truth() -> None:
     for index in range(5):
         record_execution_observation(

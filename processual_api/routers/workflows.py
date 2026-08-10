@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from processual_kernel import AgentSpec, ProcessualMaestroKernel, WorkflowPlan, WorkflowStep
@@ -111,7 +112,7 @@ async def orchestrate_llm(
     req: LLMOrchestrationRequest,
     _user: str = Depends(get_current_user),
 ) -> dict[str, object] | Response:
-    """Fan out workflow prompts and record the same execution used by console KPIs."""
+    """Fan out workflow prompts and record exactly one terminal execution outcome."""
     width = len(req.prompts)
     if width < 1 or width > 32:
         raise HTTPException(status_code=400, detail="prompts must contain between 1 and 32 items")
@@ -139,7 +140,37 @@ async def orchestrate_llm(
             temperature=req.temperature,
         )
 
-    outcomes = await execute_fanout_plan(req.prompts, generate, plan)
+    try:
+        outcomes = await execute_fanout_plan(req.prompts, generate, plan)
+    except Exception:
+        latency_seconds = time.perf_counter() - started
+        record_orchestration(
+            OrchestrationObservation(
+                paced=plan.is_paced,
+                plan_reason=plan.reason,
+                width=width,
+                outcome="failed",
+                latency_seconds=latency_seconds,
+                success_items=0,
+                error_items=width,
+            )
+        )
+        record_execution_observation(
+            execution_kind="workflow",
+            task_id="workflow.llm_orchestration",
+            provider=req.provider,
+            status="failed",
+            duration_ms=latency_seconds * 1000.0,
+            items_total=width,
+            items_succeeded=0,
+            items_failed=width,
+            paced=plan.is_paced,
+            plan_reason=plan.reason,
+            failure_stage="execution",
+            failure_code="execution_unexpected_error",
+        )
+        raise
+
     latency_seconds = time.perf_counter() - started
     saturated = [outcome for outcome in outcomes if isinstance(outcome, ExecutionFanoutSaturatedError)]
     if saturated:
@@ -154,7 +185,7 @@ async def orchestrate_llm(
                 error_items=len(outcomes),
             )
         )
-        record_execution_observation(
+        execution = record_execution_observation(
             execution_kind="workflow",
             task_id="workflow.llm_orchestration",
             provider=req.provider,
@@ -168,11 +199,15 @@ async def orchestrate_llm(
             failure_stage="execution",
             failure_code="execution_fanout_saturated",
         )
-        return Response(
+        return JSONResponse(
             status_code=429,
             headers={
                 "Retry-After": "1",
                 "X-Maestro-Capacity-Reason": "execution_fanout",
+            },
+            content={
+                "execution_id": execution["execution_id"],
+                "detail": "execution fanout saturated",
             },
         )
 
