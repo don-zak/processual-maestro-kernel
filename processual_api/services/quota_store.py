@@ -131,7 +131,7 @@ def consume_quota(
     *,
     method: str,
     endpoint: str,
-    quota_scope: str = MAESTRO_UNIT_METRIC,
+    quota_scope: str = "evaluation",
     amount: int = 1,
 ) -> dict[str, Any]:
     if current_user.get("auth_method") != "api_key":
@@ -175,7 +175,7 @@ def consume_quota(
                 quota_limit = _as_int(manual_limit if manual_limit is not None else key.get("quota_limit"), DEFAULT_API_KEY_QUOTA_LIMIT)
                 effective_policy = existing_policy if isinstance(existing_policy, dict) else {"source": "manual"}
             else:
-                quota_limit = quota_limit_for_plan(plan_id, "evaluation", DEFAULT_API_KEY_QUOTA_LIMIT)
+                quota_limit = quota_limit_for_plan(plan_id, quota_scope, DEFAULT_API_KEY_QUOTA_LIMIT)
                 effective_policy = get_plan_policy(plan_id)
                 key["plan_id"] = plan_id
                 key["quota_policy"] = effective_policy
@@ -185,7 +185,7 @@ def consume_quota(
             quota_used = _as_int(key.get("quota_used"), 0)
 
             key["quota_limit"] = quota_limit
-            key["quota_scope"] = MAESTRO_UNIT_METRIC
+            key["quota_scope"] = quota_scope
             key["quota_metric"] = MAESTRO_UNIT_METRIC
             if quota_limit >= 0 and quota_used + amount > quota_limit:
                 key["quota_last_rejected_at"] = now
@@ -196,7 +196,7 @@ def consume_quota(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
                         "error": "quota_exceeded",
-                        "quota_scope": MAESTRO_UNIT_METRIC,
+                        "quota_scope": quota_scope,
                         "quota_metric": MAESTRO_UNIT_METRIC,
                         "quota_period": key["quota_period"],
                         "plan_id": plan_id,
@@ -215,7 +215,7 @@ def consume_quota(
 
             updated_user = dict(current_user)
             updated_user["quota"] = {
-                "scope": MAESTRO_UNIT_METRIC,
+                "scope": quota_scope,
                 "metric": MAESTRO_UNIT_METRIC,
                 "period": key["quota_period"],
                 "plan_id": key.get("plan_id") or plan_id,
