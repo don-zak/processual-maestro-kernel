@@ -118,12 +118,23 @@ def _enforce_authoritative_capability(*, plan_id: str, policy: dict[str, Any], e
 def _reset_monthly_period_if_needed(key: dict[str, Any], *, now: datetime) -> None:
     current_period = _period_id(now)
     stored_period = str(key.get("quota_period") or "")
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    # Legacy quota records predate period metadata. Establish the current monthly
+    # period without erasing usage already accumulated in that record. A reset is
+    # performed only after a record has an explicit prior period to compare.
+    if not stored_period:
+        key["quota_period"] = current_period
+        key["quota_period_started_at"] = period_start
+        return
+
     if stored_period == current_period:
         return
+
     key["quota_period"] = current_period
     key["quota_used"] = 0
     key["quota_rejected_count"] = 0
-    key["quota_period_started_at"] = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    key["quota_period_started_at"] = period_start
 
 
 def consume_quota(
