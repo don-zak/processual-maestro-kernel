@@ -4,7 +4,6 @@ import pytest
 
 from processual_api.billing.plan_fulfillment_catalog import PLAN_FULFILLMENT_SPECS
 from processual_api.services.plan_store import (
-    DEFAULT_API_PLAN_ID,
     get_plan_policy,
     quota_limit_for_plan,
     resolve_plan_id,
@@ -35,9 +34,10 @@ def test_legacy_private_plan_remains_explicit_only() -> None:
     assert get_plan_policy("enterprise_private")["source"] == "legacy_plan"
 
 
-def test_blank_plan_preserves_historical_default_only() -> None:
-    assert resolve_plan_id(None) == DEFAULT_API_PLAN_ID
-    assert resolve_plan_id("") == DEFAULT_API_PLAN_ID
+@pytest.mark.parametrize("value", (None, "", "   "))
+def test_blank_plan_authority_fails_closed(value) -> None:
+    with pytest.raises(KeyError, match="API quota plan authority is required"):
+        resolve_plan_id(value)
 
 
 def test_unknown_nonblank_plan_fails_closed() -> None:
