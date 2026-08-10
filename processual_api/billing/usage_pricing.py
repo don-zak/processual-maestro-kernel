@@ -43,14 +43,22 @@ PLAN_MONTHLY_UNIT_ALLOWANCES: Final[dict[str, int]] = {
     "enterprise_integration": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
 }
 
-# Compatibility view only. The authoritative decision remains plan_can_execute()
-# against the fulfillment catalog. This exported name is retained for existing
-# settings/runtime callers that import it, but its membership is derived solely
-# from current advanced_integration entitlements.
+# Advanced Integration execution authority. Membership is derived solely from
+# the authoritative plan capability matrix; public aliases do not promote a plan.
 ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
     code
     for code in PLAN_FULFILLMENT_SPECS
     if plan_can_execute(code, "advanced_integration")
+)
+
+# Sandbox qualification is deliberately broader than Advanced Integration
+# execution. Enterprise governance tiers may enter the qualification workflow
+# without receiving the advanced_integration entitlement itself.
+ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS: Final[frozenset[str]] = frozenset(
+    code
+    for code in PLAN_FULFILLMENT_SPECS
+    if plan_can_execute(code, "advanced_integration")
+    or plan_can_execute(code, "enterprise_governance")
 )
 
 LEGACY_ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
@@ -101,10 +109,20 @@ def monthly_unit_allowance(plan_id: str | None) -> int:
 
 
 def allows_enterprise_integration(plan_id: str | None) -> bool:
+    """Return Advanced Integration execution entitlement, not qualification."""
     normalized = normalize_plan_id(plan_id)
     if normalized in LEGACY_ENTERPRISE_INTEGRATION_PLANS:
         return True
     return plan_can_execute(plan_id, "advanced_integration")
+
+
+def allows_enterprise_integration_qualification(plan_id: str | None) -> bool:
+    """Return sandbox qualification eligibility without promoting execution."""
+    normalized = normalize_plan_id(plan_id)
+    if normalized in LEGACY_ENTERPRISE_INTEGRATION_PLANS:
+        return True
+    canonical = canonical_plan_id(plan_id)
+    return canonical in ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS
 
 
 def enterprise_integration_capability(plan_id: str | None) -> dict[str, Any]:
@@ -120,6 +138,27 @@ def enterprise_integration_capability(plan_id: str | None) -> dict[str, Any]:
         "canonical_plan_id": canonical or normalized_plan_id or "unknown",
         "legacy_compatibility": legacy,
         "eligible_plans": sorted(ENTERPRISE_INTEGRATION_PLANS),
+    }
+
+
+def enterprise_integration_qualification_capability(
+    plan_id: str | None,
+) -> dict[str, Any]:
+    normalized_plan_id = normalize_plan_id(plan_id)
+    canonical = canonical_plan_id(plan_id)
+    legacy = normalized_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
+    qualification_enabled = allows_enterprise_integration_qualification(plan_id)
+    execution_enabled = allows_enterprise_integration(plan_id)
+    return {
+        "enabled": qualification_enabled,
+        "status": "available" if qualification_enabled else "locked",
+        "plan_id": normalized_plan_id or "unknown",
+        "normalized_plan_id": normalized_plan_id or "unknown",
+        "canonical_plan_id": canonical or normalized_plan_id or "unknown",
+        "legacy_compatibility": legacy,
+        "eligible_plans": sorted(ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS),
+        "advanced_integration_enabled": execution_enabled,
+        "production_allowed": False,
     }
 
 
@@ -146,6 +185,7 @@ __all__ = [
     "BUSINESS_UNIT_ALLOWANCE",
     "DEVELOPER_UNIT_ALLOWANCE",
     "ENTERPRISE_INTEGRATION_PLANS",
+    "ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS",
     "ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE",
     "ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE",
     "FIXED_ENDPOINT_UNIT_COSTS",
@@ -157,9 +197,11 @@ __all__ = [
     "STARTER_UNIT_ALLOWANCE",
     "PricingDecision",
     "allows_enterprise_integration",
+    "allows_enterprise_integration_qualification",
     "canonical_plan_id",
     "endpoint_class",
     "enterprise_integration_capability",
+    "enterprise_integration_qualification_capability",
     "monthly_unit_allowance",
     "normalize_endpoint",
     "normalize_plan_id",
