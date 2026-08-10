@@ -9,10 +9,12 @@ from fastapi import HTTPException
 import processual_api.services.quota_store as quota_store
 from processual_api.billing.maestro_units import (
     LEGACY_CREDIT_ALIAS_RATIO,
+    LEGACY_CREDIT_METRIC,
     MAESTRO_UNIT_METRIC,
     credits_from_maestro_units,
     maestro_capability_for_endpoint,
     maestro_units_for_endpoint,
+    normalize_maestro_metric_code,
 )
 from processual_api.billing.plan_capability_matrix import plan_can_execute
 from processual_api.billing.plan_fulfillment_catalog import (
@@ -65,6 +67,13 @@ def test_maestro_units_are_the_single_quota_metric() -> None:
     assert BILLING_SCOPE == MAESTRO_UNIT_METRIC
     assert LEGACY_CREDIT_ALIAS_RATIO == 1
     assert credits_from_maestro_units(17) == 17
+
+
+def test_legacy_credits_are_read_compatibility_only() -> None:
+    assert LEGACY_CREDIT_METRIC == "credits"
+    assert normalize_maestro_metric_code("credits") == MAESTRO_UNIT_METRIC
+    assert normalize_maestro_metric_code("maestro_units") == MAESTRO_UNIT_METRIC
+    assert normalize_maestro_metric_code("seats") == "seats"
 
 
 @pytest.mark.parametrize(
