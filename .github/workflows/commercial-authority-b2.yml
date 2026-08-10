@@ -9,11 +9,13 @@ on:
       - "processual_api/billing/commercial_event_contracts.py"
       - "processual_api/billing/commercial_top_up_transition_authority.py"
       - "processual_api/billing/commercial_top_up_event_ledger.py"
+      - "processual_api/billing/commercial_top_up_application_service.py"
       - "processual_api/billing/commercial_top_up_order_grant_contracts.py"
       - "tests/test_commercial_state_machine_b2.py"
       - "tests/test_commercial_event_contracts_b2.py"
       - "tests/test_commercial_top_up_transition_authority_b2.py"
       - "tests/test_commercial_top_up_event_ledger_b2.py"
+      - "tests/test_commercial_top_up_application_service_group2.py"
       - "tests/test_commercial_top_up*.py"
       - ".github/workflows/commercial-authority-b2.yml"
 
@@ -40,10 +42,12 @@ jobs:
             processual_api/billing/commercial_event_contracts.py \
             processual_api/billing/commercial_top_up_transition_authority.py \
             processual_api/billing/commercial_top_up_event_ledger.py \
+            processual_api/billing/commercial_top_up_application_service.py \
             tests/test_commercial_state_machine_b2.py \
             tests/test_commercial_event_contracts_b2.py \
             tests/test_commercial_top_up_transition_authority_b2.py \
             tests/test_commercial_top_up_event_ledger_b2.py \
+            tests/test_commercial_top_up_application_service_group2.py \
             --output-format=github
 
       - name: Focused commercial authority tests
