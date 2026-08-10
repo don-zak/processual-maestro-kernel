@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Final, Iterable
+from typing import Final
 
 PROVIDER_ASSURANCE_VERSION: Final = "2026-08-b4-provider-assurance-v1"
 PRODUCTION_PROVIDER_EXECUTION_ENABLED: Final = False
