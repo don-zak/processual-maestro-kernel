@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "20260807_0040"
 down_revision: str | None = "20260807_0039"
@@ -28,46 +28,47 @@ def upgrade() -> None:
         batch.add_column(sa.Column("quota_cycle_id", sa.Uuid()))
         batch.add_column(sa.Column("plan_catalog_version", sa.String(64)))
 
-    connection = op.get_bind()
-    connection.execute(
-        sa.text(
-            f"""
-            UPDATE {ORDER_TABLE}
-            SET customer_ref = (
-                    SELECT s.customer_ref
-                    FROM admin_market_subscriptions s
-                    WHERE s.id = {ORDER_TABLE}.subscription_id
-                ),
-                quota_cycle_id = (
-                    SELECT q.id
-                    FROM admin_market_subscription_quota_cycles q
-                    WHERE q.subscription_id = {ORDER_TABLE}.subscription_id
-                      AND q.period_start <= {ORDER_TABLE}.created_at
-                      AND {ORDER_TABLE}.created_at < q.period_end
-                    ORDER BY q.period_start DESC
-                    LIMIT 1
-                ),
-                plan_catalog_version = :version
-            """
-        ),
-        {"version": CATALOG_VERSION},
+    update_statement = sa.text(
+        f"""
+        UPDATE {ORDER_TABLE}
+        SET customer_ref = (
+                SELECT s.customer_ref
+                FROM admin_market_subscriptions s
+                WHERE s.id = {ORDER_TABLE}.subscription_id
+            ),
+            quota_cycle_id = (
+                SELECT q.id
+                FROM admin_market_subscription_quota_cycles q
+                WHERE q.subscription_id = {ORDER_TABLE}.subscription_id
+                  AND q.period_start <= {ORDER_TABLE}.created_at
+                  AND {ORDER_TABLE}.created_at < q.period_end
+                ORDER BY q.period_start DESC
+                LIMIT 1
+            ),
+            plan_catalog_version = '{CATALOG_VERSION}'
+        """
     )
 
-    unresolved = connection.execute(
-        sa.text(
-            f"""
-            SELECT 1 FROM {ORDER_TABLE}
-            WHERE customer_ref IS NULL
-               OR quota_cycle_id IS NULL
-               OR plan_catalog_version IS NULL
-            LIMIT 1
-            """
-        )
-    ).first()
-    if unresolved:
-        raise RuntimeError(
-            "Top-up order authority migration found an order without a resolvable subscription cycle"
-        )
+    if context.is_offline_mode():
+        op.execute(update_statement)
+    else:
+        connection = op.get_bind()
+        connection.execute(update_statement)
+        unresolved = connection.execute(
+            sa.text(
+                f"""
+                SELECT 1 FROM {ORDER_TABLE}
+                WHERE customer_ref IS NULL
+                   OR quota_cycle_id IS NULL
+                   OR plan_catalog_version IS NULL
+                LIMIT 1
+                """
+            )
+        ).first()
+        if unresolved:
+            raise RuntimeError(
+                "Top-up order authority migration found an order without a resolvable subscription cycle"
+            )
 
     with op.batch_alter_table(ORDER_TABLE) as batch:
         batch.alter_column(
