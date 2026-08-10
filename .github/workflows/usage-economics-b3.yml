@@ -1,0 +1,50 @@
+name: Usage Economics B3
+
+on:
+  pull_request:
+    branches:
+      - feat/b2-commercial-authority-core
+    paths:
+      - "processual_api/billing/usage_pricing.py"
+      - "processual_api/billing/usage_economics.py"
+      - "processual_api/billing/unit_cost_assumptions.py"
+      - "processual_api/services/usage_log_store.py"
+      - "processual_api/services/client_usage_summary.py"
+      - "processual_api/services/customer_360.py"
+      - "tests/test_usage_economics_stage3.py"
+      - ".github/workflows/usage-economics-b3.yml"
+
+jobs:
+  usage-economics-stage3-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install public package
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Ruff Stage 3 usage economics bundle
+        run: |
+          ruff check \
+            processual_api/billing/usage_pricing.py \
+            processual_api/billing/usage_economics.py \
+            processual_api/billing/unit_cost_assumptions.py \
+            processual_api/services/usage_log_store.py \
+            processual_api/services/client_usage_summary.py \
+            processual_api/services/customer_360.py \
+            tests/test_usage_economics_stage3.py \
+            --output-format=github
+
+      - name: Stage 3 usage economics closure tests
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -q \
+            tests/test_usage_economics_stage3.py
