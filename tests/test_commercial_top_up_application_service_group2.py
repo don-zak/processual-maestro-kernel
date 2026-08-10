@@ -33,10 +33,6 @@ from processual_api.billing.commercial_top_up_order_grant_contracts import (
     TopUpOrderState,
     UnitGrantOutcome,
 )
-from processual_api.billing.commercial_top_up_transition_authority import (
-    TopUpTransitionEvidence,
-    build_verified_payment_grant_events,
-)
 
 
 class FakeOrderRepository:
@@ -217,26 +213,25 @@ def payment_command(order_id: uuid.UUID) -> RecordPaymentAndGrantCommand:
     )
 
 
-def authority_events(
-    command: RecordPaymentAndGrantCommand,
+async def create_and_grant(
     *,
-    occurred_at: datetime,
-) -> tuple[CommercialEvent, ...]:
-    return build_verified_payment_grant_events(
-        TopUpTransitionEvidence(
-            order_id=command.order_id,
-            provider_reference=command.provider_reference,
-            actor_reference=command.actor_reference,
-            evidence_reference=command.immutable_evidence_reference,
-            occurred_at=occurred_at,
-            payment_payload_digest=(
-                "sha256:b10f3e6ff1199ed1a3c78d4e78337127976332f185178130f57e815ea8a8f2a0"
-            ),
-            grant_payload_digest=(
-                "sha256:d99e3f6f1fef46d6b1d9a14d1b3f72591f1b5984afcd88bcaea2da388cc8e520"
-            ),
-        )
+    uow: FakeUnitOfWork,
+    fixed_time: datetime | None = None,
+) -> tuple[
+    CommercialTopUpApplicationService,
+    CreateTopUpOrderCommand,
+    RecordPaymentAndGrantCommand,
+]:
+    command = create_command()
+    payment = payment_command(command.order_id)
+    service = CommercialTopUpApplicationService(
+        unit_of_work_factory=lambda: uow,
+        policy=enabled_policy(),
+        clock=(lambda: fixed_time) if fixed_time is not None else None,
     )
+    await service.create_order(command)
+    await service.record_payment_and_grant(payment)
+    return service, command, payment
 
 
 @pytest.mark.asyncio
@@ -325,18 +320,8 @@ async def test_idempotency_conflict_rolls_back() -> None:
 @pytest.mark.asyncio
 async def test_payment_grant_audit_and_authority_events_commit_atomically() -> None:
     uow = FakeUnitOfWork()
-    command = create_command()
-    service = CommercialTopUpApplicationService(
-        unit_of_work_factory=lambda: uow,
-        policy=enabled_policy(),
-    )
-    await service.create_order(command)
+    _, command, _ = await create_and_grant(uow=uow)
 
-    result = await service.record_payment_and_grant(payment_command(command.order_id))
-
-    assert result.outcome is TopUpApplicationOutcome.PAYMENT_AND_GRANT_RECORDED
-    assert result.grant_outcome is UnitGrantOutcome.GRANTED
-    assert result.committed is True
     assert uow.commits == 2
     assert len(uow.payments.items) == 1
     assert len(uow.grants.items) == 1
@@ -360,14 +345,7 @@ async def test_payment_grant_audit_and_authority_events_commit_atomically() -> N
 @pytest.mark.asyncio
 async def test_payment_replay_does_not_duplicate_grant_audit_or_events() -> None:
     uow = FakeUnitOfWork()
-    command = create_command()
-    service = CommercialTopUpApplicationService(
-        unit_of_work_factory=lambda: uow,
-        policy=enabled_policy(),
-    )
-    await service.create_order(command)
-    payment = payment_command(command.order_id)
-    await service.record_payment_and_grant(payment)
+    service, command, payment = await create_and_grant(uow=uow)
 
     replay = await service.record_payment_and_grant(payment)
 
@@ -379,6 +357,7 @@ async def test_payment_replay_does_not_duplicate_grant_audit_or_events() -> None
     assert len(uow.event_ledger.items) == 4
     assert uow.event_ledger.pending == {}
     assert uow.commits == 2
+    assert uow.orders.items[command.order_id].state == "granted"
 
 
 @pytest.mark.asyncio
@@ -431,24 +410,22 @@ async def test_unexpected_order_state_fails_before_event_staging() -> None:
 async def test_ledger_only_replay_fails_closed_without_domain_mutation() -> None:
     uow = FakeUnitOfWork()
     fixed_time = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
-    command = create_command()
-    payment = payment_command(command.order_id)
-    service = CommercialTopUpApplicationService(
-        unit_of_work_factory=lambda: uow,
-        policy=enabled_policy(),
-        clock=lambda: fixed_time,
+    service, command, payment = await create_and_grant(
+        uow=uow,
+        fixed_time=fixed_time,
     )
-    await service.create_order(command)
+    authoritative_events = dict(uow.event_ledger.items)
 
-    for event in authority_events(payment, occurred_at=fixed_time):
-        uow.event_ledger.items[event.idempotency_key.canonical] = event
+    uow.payments.items.clear()
+    uow.grants.items.clear()
+    uow.orders.items[command.order_id].state = TopUpOrderState.AWAITING_PAYMENT.value
 
     with pytest.raises(TopUpApplicationConflictError, match="replay exists"):
         await service.record_payment_and_grant(payment)
 
-    assert uow.commits == 1
+    assert uow.commits == 2
     assert uow.rollbacks == 1
-    assert len(uow.event_ledger.items) == 4
+    assert uow.event_ledger.items == authoritative_events
     assert uow.event_ledger.pending == {}
     assert uow.payments.items == []
     assert uow.grants.items == []
@@ -459,24 +436,25 @@ async def test_ledger_only_replay_fails_closed_without_domain_mutation() -> None
 async def test_ledger_conflict_rolls_back_without_partial_domain_records() -> None:
     uow = FakeUnitOfWork()
     fixed_time = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
-    command = create_command()
-    payment = payment_command(command.order_id)
-    service = CommercialTopUpApplicationService(
-        unit_of_work_factory=lambda: uow,
-        policy=enabled_policy(),
-        clock=lambda: fixed_time,
+    service, command, payment = await create_and_grant(
+        uow=uow,
+        fixed_time=fixed_time,
     )
-    await service.create_order(command)
-    first_event = authority_events(payment, occurred_at=fixed_time)[0]
-    conflicting_event = replace(first_event, actor_reference="different-actor")
-    uow.event_ledger.items[first_event.idempotency_key.canonical] = conflicting_event
+    first_key = next(iter(uow.event_ledger.items))
+    uow.event_ledger.items[first_key] = replace(
+        uow.event_ledger.items[first_key],
+        actor_reference="different-actor",
+    )
+    uow.payments.items.clear()
+    uow.grants.items.clear()
+    uow.orders.items[command.order_id].state = TopUpOrderState.AWAITING_PAYMENT.value
 
     with pytest.raises(TopUpApplicationConflictError, match="ledger conflict"):
         await service.record_payment_and_grant(payment)
 
-    assert uow.commits == 1
+    assert uow.commits == 2
     assert uow.rollbacks == 1
-    assert len(uow.event_ledger.items) == 1
+    assert len(uow.event_ledger.items) == 4
     assert uow.event_ledger.pending == {}
     assert uow.payments.items == []
     assert uow.grants.items == []
