@@ -87,7 +87,7 @@ def test_supervisor_billing_workspace_has_search_issue_verify_and_pdf():
 def test_admin_analytics_bootstraps_billing_workspace():
     source = _text(STATIC / "js" / "admin_subscription_analytics.js")
     assert "admin_billing_statements.js" in source
-    assert "data-admin-billing-statements" in source
+    assert "dataset.adminBillingStatements" in source
     assert "bootstrapBillingStatements()" in source
 
 
