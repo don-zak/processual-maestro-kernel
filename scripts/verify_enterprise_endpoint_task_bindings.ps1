@@ -26,13 +26,18 @@ function Invoke-Checked {
 function Get-JUnitSummary {
     param([Parameter(Mandatory)][string]$Path)
     [xml]$document = Get-Content -LiteralPath $Path -Raw
-    $suiteNodes = if ($null -ne $document.testsuites) {
-        @($document.testsuites.testsuite)
+
+    # Windows PowerShell 5.1 unwraps a single object emitted by an if-expression.
+    # Keep this variable explicitly array-typed so .Count remains valid for both
+    # one-suite and multi-suite JUnit documents under Set-StrictMode.
+    [object[]]$suiteNodes = @()
+    if ($null -ne $document.testsuites) {
+        $suiteNodes += @($document.testsuites.testsuite)
     } elseif ($null -ne $document.testsuite) {
-        @($document.testsuite)
-    } else {
-        @()
+        $suiteNodes += @($document.testsuite)
     }
+    $suiteNodes = @($suiteNodes | Where-Object { $null -ne $_ })
+
     if ($suiteNodes.Count -eq 0) {
         throw "Unable to read JUnit test suites from $Path"
     }
