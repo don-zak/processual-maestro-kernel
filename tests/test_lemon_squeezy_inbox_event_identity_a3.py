@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 
 import pytest
@@ -48,7 +48,11 @@ class FakeInboxRepository:
         self.by_payload[entry.payload_digest] = entry
 
 
-def _evidence(*, status: str = "active") -> LemonSqueezyVerifiedEvidence:
+def _evidence(
+    *,
+    status: str = "active",
+    effective_at: datetime = NOW,
+) -> LemonSqueezyVerifiedEvidence:
     return LemonSqueezyVerifiedEvidence(
         schema_version=1,
         provider_customer_id="5001",
@@ -60,7 +64,7 @@ def _evidence(*, status: str = "active") -> LemonSqueezyVerifiedEvidence:
         total_amount=None,
         refunded_amount=None,
         status=status,
-        effective_at=NOW,
+        effective_at=effective_at,
     )
 
 
@@ -70,6 +74,7 @@ def _webhook(
     order_ref: str = "order_001",
     offer_ref: str = "starter_monthly",
     status: str = "active",
+    effective_at: datetime = NOW,
 ) -> VerifiedLemonSqueezyWebhook:
     return VerifiedLemonSqueezyWebhook(
         event_name="subscription_updated",
@@ -80,7 +85,7 @@ def _webhook(
         order_ref=order_ref,
         offer_ref=offer_ref,
         test_mode=False,
-        evidence=_evidence(status=status),
+        evidence=_evidence(status=status, effective_at=effective_at),
         payload=MappingProxyType({"verified": True}),
     )
 
@@ -116,15 +121,16 @@ async def test_successive_updates_for_same_subscription_are_distinct_events() ->
 
     first = await ingest_verified_lemon_squeezy_webhook(
         repository=repository,
-        webhook=_webhook(status="active"),
+        webhook=_webhook(status="active", effective_at=NOW),
         raw_body=b'{"event":"subscription_updated","status":"active"}',
         received_at=NOW,
     )
+    second_time = NOW + timedelta(minutes=1)
     second = await ingest_verified_lemon_squeezy_webhook(
         repository=repository,
-        webhook=_webhook(status="paused"),
+        webhook=_webhook(status="paused", effective_at=second_time),
         raw_body=b'{"event":"subscription_updated","status":"paused"}',
-        received_at=NOW,
+        received_at=second_time,
     )
 
     assert first.replayed is False
