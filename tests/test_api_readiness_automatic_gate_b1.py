@@ -8,6 +8,7 @@ from processual_api.api_readiness_gate import (
     normalize_route_method,
     normalize_route_path,
     readiness_report,
+    route_inventory_digest,
     validate_mounted_route_readiness,
 )
 
@@ -66,6 +67,27 @@ def test_unknown_route_fails_closed() -> None:
         assert "GET /new-unclassified-api" in str(exc)
     else:
         raise AssertionError("unknown mounted route must fail closed")
+
+
+def test_inventory_change_fails_even_under_known_surface_prefix() -> None:
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.get("/workflows")
+    async def workflows() -> dict[str, bool]:
+        return {"ok": True}
+
+    approved_digest = route_inventory_digest(app)
+
+    @app.post("/workflows/new-endpoint")
+    async def new_workflow_endpoint() -> dict[str, bool]:
+        return {"ok": True}
+
+    try:
+        validate_mounted_route_readiness(app, expected_inventory_digest=approved_digest)
+    except ValueError as exc:
+        assert "mounted API route inventory changed" in str(exc)
+    else:
+        raise AssertionError("new route under a known prefix must require inventory review")
 
 
 def test_duplicate_method_and_path_is_rejected() -> None:
@@ -127,7 +149,11 @@ def test_explicit_system_routes_are_ignored_not_promoted() -> None:
         return {"ok": True}
 
     audit = audit_mounted_routes(app)
-    ignored = {(record.method, record.path): record for record in audit.records if record.ignored}
+    ignored = {
+        (record.method, record.path): record
+        for record in audit.records
+        if record.ignored
+    }
 
     assert ("GET", "/") in SYSTEM_ROUTE_POLICIES
     assert ignored[("GET", "/")].production_allowed is False
@@ -148,6 +174,7 @@ def test_report_is_machine_readable_and_fail_closed() -> None:
 
     report = readiness_report(app)
     assert report["valid"] is False
+    assert isinstance(report["inventory_digest"], str)
     assert report["duplicate_routes"] == []
     assert report["unknown_routes"] == [
         {
