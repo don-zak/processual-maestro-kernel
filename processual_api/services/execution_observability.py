@@ -11,7 +11,7 @@ from uuid import uuid4
 
 _MAX_RECORDS = 500
 _LOCK = RLock()
-_RECORDS: deque["ExecutionObservation"] = deque(maxlen=_MAX_RECORDS)
+_RECORDS: deque[ExecutionObservation] = deque(maxlen=_MAX_RECORDS)
 
 
 @dataclass(frozen=True, slots=True)
