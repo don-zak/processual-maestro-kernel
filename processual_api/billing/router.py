@@ -207,6 +207,7 @@ async def get_offer_pricebook() -> dict[str, object]:
 
 @router.get("/unit-cost-assumptions")
 async def get_unit_cost_assumptions() -> dict[str, object]:
+    """Return the public-safe draft unit cost assumptions model."""
     return build_unit_cost_assumptions()
 
 
