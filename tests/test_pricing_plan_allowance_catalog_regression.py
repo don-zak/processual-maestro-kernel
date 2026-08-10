@@ -4,6 +4,7 @@ from processual_api.billing.usage_pricing import (
     ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE,
     ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
     allows_enterprise_integration,
+    allows_enterprise_integration_qualification,
     monthly_unit_allowance,
 )
 
@@ -32,14 +33,21 @@ def test_50k_is_enterprise_integration_starter_not_main_enterprise():
     assert monthly_unit_allowance("enterprise_integration") == 500_000
 
 
-def test_enterprise_custom_allows_integration_without_fixed_catalog_quota():
-    assert allows_enterprise_integration("enterprise_custom") is True
+def test_enterprise_custom_requires_explicit_catalog_integration_entitlement():
+    assert allows_enterprise_integration("enterprise_custom") is False
+    assert allows_enterprise_integration_qualification("enterprise_custom") is False
     assert monthly_unit_allowance("enterprise_custom") == 0
 
 
-def test_enterprise_integration_entitlement_plans_include_starter_and_main():
+def test_advanced_integration_execution_does_not_follow_public_aliases():
     assert allows_enterprise_integration("enterprise_integration_starter")
-    assert allows_enterprise_integration("enterprise_integration")
-    assert allows_enterprise_integration("enterprise")
+    assert allows_enterprise_integration("enterprise_scale")
+    assert allows_enterprise_integration("enterprise_strategic")
+
+    assert not allows_enterprise_integration("enterprise_integration")
+    assert not allows_enterprise_integration("enterprise")
+    assert allows_enterprise_integration_qualification("enterprise_integration")
+    assert allows_enterprise_integration_qualification("enterprise")
+
     assert not allows_enterprise_integration("business")
     assert not allows_enterprise_integration("starter")
