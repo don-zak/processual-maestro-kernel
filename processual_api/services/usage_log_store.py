@@ -126,7 +126,12 @@ def _quota_status(*, quota_limit: int | None, quota_remaining: int | None, rejec
     return "ok"
 
 
-def summarize_usage_logs(*, client_id: str | None = None, api_key_id: str | None = None, latest_limit: int = 10) -> dict[str, Any]:
+def summarize_usage_logs(
+    *,
+    client_id: str | None = None,
+    api_key_id: str | None = None,
+    latest_limit: int = 10,
+) -> dict[str, Any]:
     records = _iter_usage_log_records()
     if client_id:
         records = [record for record in records if str(record.get("client_id", "")) == client_id]
