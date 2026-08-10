@@ -9,6 +9,7 @@ import json
 import os
 import re
 import socket
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -29,6 +30,7 @@ from processual_api.integrations.integration_task_injection import (
     TaskInjectionError,
     build_task_injection_envelope,
 )
+from processual_api.services.execution_observability import record_execution_observation
 
 MAX_SANDBOX_RESPONSE_BYTES = 1_048_576
 _ALLOWED_CREDENTIAL_HEADERS = frozenset({"authorization", "x-api-key"})
@@ -196,6 +198,7 @@ async def execute_sandbox_binding(
 ) -> dict[str, Any]:
     """Execute one governed sandbox request and prove canonical task handoff."""
 
+    started = time.perf_counter()
     validation = validate_endpoint_binding(spec)
     task = get_integration_task(spec.task_id)
     approval = str(approval_reference or "").strip()
@@ -310,9 +313,21 @@ async def execute_sandbox_binding(
         "credential_source": envelope.source,
         "completed_at": completed_at,
     }
+    observation = record_execution_observation(
+        execution_kind="sandbox_proof",
+        task_id=spec.task_id,
+        binding_id=spec.binding_id,
+        status="success",
+        duration_ms=(time.perf_counter() - started) * 1000.0,
+        items_total=1,
+        items_succeeded=1,
+        environment="sandbox",
+        completed_at=completed_at,
+    )
 
     return {
         "status": "sandbox_proof_passed",
+        "execution_id": observation["execution_id"],
         "environment": "sandbox",
         "binding_id": spec.binding_id,
         "task_id": spec.task_id,
