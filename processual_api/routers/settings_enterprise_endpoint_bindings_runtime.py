@@ -16,6 +16,13 @@ from processual_api.integrations.enterprise_endpoint_bindings import (
     map_response_to_task_input,
     safe_binding_payload,
 )
+from processual_api.integrations.enterprise_endpoint_request_mapping import (
+    REQUEST_MAPPING_STORAGE_KEY,
+    EndpointRequestMappingError,
+    EnterpriseEndpointRequestMappingSpec,
+    build_external_request_body,
+    validate_request_mapping,
+)
 from processual_api.integrations.enterprise_sandbox_execution import (
     SandboxExecutionError,
     execute_sandbox_binding,
@@ -38,6 +45,7 @@ from . import settings as settings_module
 from . import settings_enterprise_integration_runtime as enterprise_runtime
 
 SANDBOX_EVIDENCE_STORAGE_KEY = "enterprise_endpoint_sandbox_evidence_v1"
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 
 
 class EndpointMappingPreviewRequest(BaseModel):
@@ -97,6 +105,28 @@ def _find_binding(raw: dict[str, Any], binding_id: str) -> EnterpriseEndpointBin
     )
 
 
+def _stored_request_mappings(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    items = raw.get(REQUEST_MAPPING_STORAGE_KEY, [])
+    return [dict(item) for item in items if isinstance(item, dict)]
+
+
+def _find_request_mapping(
+    raw: dict[str, Any],
+    binding_id: str,
+) -> EnterpriseEndpointRequestMappingSpec | None:
+    for item in _stored_request_mappings(raw):
+        if str(item.get("binding_id") or "") != binding_id:
+            continue
+        try:
+            return EnterpriseEndpointRequestMappingSpec(**item)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Stored request mapping is invalid.",
+            ) from exc
+    return None
+
+
 def _require_supervisor_approval_session(request: Request) -> dict[str, Any]:
     try:
         return require_validated_supervisor_write_session(
@@ -128,10 +158,7 @@ def _safe_evidence(raw: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(item) for item in items if isinstance(item, dict)][-50:]
 
 
-@settings_module.router.get(
-    "/enterprise-integration/task-catalog",
-    response_model=dict,
-)
+@settings_module.router.get("/enterprise-integration/task-catalog", response_model=dict)
 async def get_enterprise_task_catalog(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -139,10 +166,7 @@ async def get_enterprise_task_catalog(
     return task_catalog_payload()
 
 
-@settings_module.router.get(
-    "/enterprise-integration/endpoint-bindings",
-    response_model=dict,
-)
+@settings_module.router.get("/enterprise-integration/endpoint-bindings", response_model=dict)
 async def list_enterprise_endpoint_bindings(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -184,13 +208,11 @@ async def save_enterprise_endpoint_binding(
 
     items = _stored_bindings(raw)
     replacement = body.model_dump()
-    replaced = False
     for index, item in enumerate(items):
         if str(item.get("binding_id") or "") == binding_id:
             items[index] = replacement
-            replaced = True
             break
-    if not replaced:
+    else:
         items.append(replacement)
     raw[BINDING_STORAGE_KEY] = items
     settings_module._save_raw(user_id, raw)
@@ -223,10 +245,94 @@ async def delete_enterprise_endpoint_binding(
             detail="Endpoint binding not found.",
         )
     raw[BINDING_STORAGE_KEY] = retained
+    raw[REQUEST_MAPPING_STORAGE_KEY] = [
+        item for item in _stored_request_mappings(raw)
+        if str(item.get("binding_id") or "") != binding_id
+    ]
     settings_module._save_raw(user_id, raw)
     return {
         "status": "deleted",
         "binding_id": binding_id,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
+
+
+@settings_module.router.get(
+    "/enterprise-integration/endpoint-bindings/{binding_id}/request-mapping",
+    response_model=dict,
+)
+async def get_enterprise_endpoint_request_mapping(
+    binding_id: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _, raw = _require_enterprise(current_user)
+    binding = _find_binding(raw, binding_id)
+    mapping = _find_request_mapping(raw, binding_id)
+    if mapping is None:
+        mapping = EnterpriseEndpointRequestMappingSpec(binding_id=binding_id)
+    try:
+        validation = validate_request_mapping(binding, mapping)
+    except EndpointRequestMappingError as exc:
+        if binding.method in _BODY_METHODS:
+            return {
+                "binding_id": binding_id,
+                "configured": False,
+                "body_mapping": {},
+                "blocking_reason": str(exc),
+                "production_allowed": False,
+                "runtime_connector_approved": False,
+            }
+        raise
+    return {
+        "binding_id": binding_id,
+        "configured": bool(mapping.body_mapping),
+        "body_mapping": mapping.body_mapping,
+        "validation": validation,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+    }
+
+
+@settings_module.router.put(
+    "/enterprise-integration/endpoint-bindings/{binding_id}/request-mapping",
+    response_model=dict,
+)
+async def save_enterprise_endpoint_request_mapping(
+    binding_id: str,
+    body: EnterpriseEndpointRequestMappingSpec,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    user_id, raw = _require_enterprise(current_user)
+    binding = _find_binding(raw, binding_id)
+    if body.binding_id != binding_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path binding id must match request mapping binding id.",
+        )
+    try:
+        validation = validate_request_mapping(binding, body)
+    except (ValueError, KeyError, EndpointBindingError, EndpointRequestMappingError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    items = _stored_request_mappings(raw)
+    replacement = body.model_dump()
+    for index, item in enumerate(items):
+        if str(item.get("binding_id") or "") == binding_id:
+            items[index] = replacement
+            break
+    else:
+        items.append(replacement)
+    raw[REQUEST_MAPPING_STORAGE_KEY] = items
+    settings_module._save_raw(user_id, raw)
+    return {
+        "status": "saved",
+        "persisted": True,
+        "request_mapping": replacement,
+        "validation": validation,
         "production_allowed": False,
         "runtime_connector_approved": False,
     }
@@ -244,8 +350,22 @@ async def preview_enterprise_endpoint_request(
     _, raw = _require_enterprise(current_user)
     spec = _find_binding(raw, binding_id)
     try:
-        return build_request_preview(spec, body.task_input)
-    except (ValueError, KeyError, EndpointBindingError) as exc:
+        preview = build_request_preview(spec, body.task_input)
+        mapping = _find_request_mapping(raw, binding_id)
+        request_body = (
+            build_external_request_body(spec, mapping, body.task_input)
+            if mapping is not None
+            else None
+        )
+        preview["request_body"] = request_body
+        preview["request_body_includes_credentials"] = False
+        return preview
+    except (
+        ValueError,
+        KeyError,
+        EndpointBindingError,
+        EndpointRequestMappingError,
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -273,7 +393,7 @@ async def preview_enterprise_endpoint_mapping(
 
 
 @settings_module.router.post(
-    "/admin/enterprise-integration/{client_id}/endpoint-bindings/{binding_id}/sandbox-grant",
+    "/admin/integration-tasks/{client_id}/endpoint-bindings/{binding_id}/sandbox-grant",
     response_model=dict,
 )
 async def grant_enterprise_endpoint_sandbox_execution(
@@ -350,9 +470,20 @@ async def execute_enterprise_endpoint_sandbox_proof(
             binding_id=spec.binding_id,
             task_id=spec.task_id,
         )
+        request_mapping = _find_request_mapping(raw, binding_id)
+        if spec.method in _BODY_METHODS and request_mapping is None:
+            raise EndpointRequestMappingError(
+                "sandbox request body mapping is required for this endpoint method"
+            )
+        request_body = (
+            build_external_request_body(spec, request_mapping, body.task_input)
+            if request_mapping is not None
+            else None
+        )
         result = await execute_sandbox_binding(
             spec,
             task_input=body.task_input,
+            request_body=request_body,
             approved_operation_classes=set(grant["approved_operation_classes"]),
             approval_reference=str(grant["grant_id"]),
         )
@@ -360,6 +491,7 @@ async def execute_enterprise_endpoint_sandbox_proof(
         ValueError,
         KeyError,
         EndpointBindingError,
+        EndpointRequestMappingError,
         SandboxGrantError,
         SandboxExecutionError,
     ) as exc:
@@ -389,6 +521,7 @@ __all__ = [
     "SANDBOX_EVIDENCE_STORAGE_KEY",
     "delete_enterprise_endpoint_binding",
     "execute_enterprise_endpoint_sandbox_proof",
+    "get_enterprise_endpoint_request_mapping",
     "get_enterprise_task_catalog",
     "grant_enterprise_endpoint_sandbox_execution",
     "list_enterprise_endpoint_bindings",
@@ -396,4 +529,5 @@ __all__ = [
     "preview_enterprise_endpoint_mapping",
     "preview_enterprise_endpoint_request",
     "save_enterprise_endpoint_binding",
+    "save_enterprise_endpoint_request_mapping",
 ]
