@@ -14,7 +14,10 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from processual_api.billing.plan_capability_matrix import required_execution_capability
+from processual_api.billing.plan_capability_matrix import (
+    EXECUTION_CAPABILITY_POLICIES,
+    required_execution_capability,
+)
 from processual_api.billing.plan_entitlement_gate import (
     PlanEntitlementDeniedError,
     require_plan_entitlement,
@@ -27,6 +30,14 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_API_KEY_QUOTA_LIMIT = int(
     os.environ.get("PMK_DEFAULT_API_KEY_QUOTA_LIMIT", "50")
 )
+
+# Compatibility views for callers/tests that still import these names. They are
+# derived from the centralized capability matrix and are not independent policy.
+COUNTED_ENDPOINT_CAPABILITIES: dict[tuple[str, str], str] = {
+    key: policy.capability_code
+    for key, policy in EXECUTION_CAPABILITY_POLICIES.items()
+}
+COUNTED_ENDPOINTS: set[tuple[str, str]] = set(COUNTED_ENDPOINT_CAPABILITIES)
 
 
 def _now_iso() -> str:
