@@ -21,11 +21,7 @@ def _as_int_or_none(value: object) -> int | None:
         return None
 
 
-def _quota_usage_record(
-    current_user: dict,
-    *,
-    units_charged: int,
-) -> dict[str, object]:
+def _quota_usage_record(current_user: dict, *, units_charged: int) -> dict[str, object]:
     quota = current_user.get("quota")
     if not isinstance(quota, dict):
         return {}
@@ -41,6 +37,8 @@ def _quota_usage_record(
 
     return {
         "quota_scope": quota.get("scope", ""),
+        "quota_metric": quota.get("metric", ""),
+        "quota_period": quota.get("period", ""),
         "quota_limit": _as_int_or_none(quota.get("limit")),
         "quota_used": quota_after,
         "quota_requested": quota_requested,
@@ -48,10 +46,7 @@ def _quota_usage_record(
         "quota_before": quota_before,
         "quota_after": quota_after,
         "plan_id": quota.get("plan_id") or current_user.get("plan_id", ""),
-        "quota_rejected": bool(
-            current_user.get("quota_rejected", False)
-            or quota.get("rejected", False)
-        ),
+        "quota_rejected": bool(current_user.get("quota_rejected", False) or quota.get("rejected", False)),
     }
 
 
@@ -64,7 +59,6 @@ class UsageLogMiddleware(BaseHTTPMiddleware):
         current_user = getattr(request.state, "current_user", None)
         if not isinstance(current_user, dict):
             return response
-
         if current_user.get("auth_method") != "api_key":
             return response
 
@@ -72,16 +66,10 @@ class UsageLogMiddleware(BaseHTTPMiddleware):
         if not isinstance(pricing_item_count, int):
             pricing_item_count = None
 
-        pricing_record = pricing_decision(
-            request.url.path,
-            item_count=pricing_item_count,
-        ).to_usage_record()
+        pricing_record = pricing_decision(request.url.path, item_count=pricing_item_count).to_usage_record()
         pricing_record.pop("endpoint", None)
         units_charged = int(pricing_record["units_charged"])
-        quota_record = _quota_usage_record(
-            current_user,
-            units_charged=units_charged,
-        )
+        quota_record = _quota_usage_record(current_user, units_charged=units_charged)
 
         append_usage_log({
             "created_at": datetime.now(UTC).isoformat(),
