@@ -13,6 +13,7 @@ from processual_api.auth.security import get_current_user
 from processual_api.billing.usage_pricing import normalize_plan_id
 from processual_api.routers import settings as settings_module
 from processual_api.schemas.settings import SubscriptionInfo
+from processual_api.services.plan_store import DEFAULT_API_PLAN_ID
 
 settings_router = settings_module.router
 _runtime_router = APIRouter(prefix="/settings", tags=["settings"])
@@ -60,14 +61,29 @@ def resolve_current_plan_without_legacy_storage(
     user_id: str,
     raw: dict[str, Any],
 ) -> str:
+    """Resolve the plan assigned when provisioning a legacy settings API key.
+
+    This function is installed only at the API-key creation boundary. Existing
+    authoritative subscription metadata wins. If that metadata is absent, the
+    legacy API-key product explicitly provisions its historical default plan so
+    the assignment is persisted on the key. Runtime consumption does not use
+    this fallback: missing/unknown key plan identity still fails closed there.
+    """
+
     del user_id
     subscription = raw.get("subscription", {})
     if not isinstance(subscription, dict):
         subscription = {}
-    return _first_verified_plan(
+
+    for candidate in (
         subscription.get("plan_id"),
         subscription.get("plan"),
-    )
+    ):
+        value = str(candidate or "").strip()
+        if value:
+            return normalize_plan_id(value)
+
+    return DEFAULT_API_PLAN_ID
 
 
 @_runtime_router.get("/subscription", response_model=SubscriptionInfo)
