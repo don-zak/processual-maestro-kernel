@@ -13,6 +13,7 @@ class ApiVisibility(StrEnum):
     CUSTOMER = "customer"
     ADMIN = "admin"
     INTERNAL = "internal"
+    MIXED = "mixed"
 
 
 class ApiReadiness(StrEnum):
@@ -55,6 +56,26 @@ def _sandbox_integration_surface(
         audit_required=True,
         external_dependency="qualified_external_connector",
         capability_code="advanced_integration",
+        production_allowed=False,
+    )
+
+
+def _unqualified_mixed_surface(surface_id: str, path_prefix: str) -> ApiSurfacePolicy:
+    """Classify optional/full-install route families without promoting them.
+
+    These prefixes contain heterogeneous public, customer, admin, or internal routes.
+    Stage B1 must still account for every mounted route, but no family may inherit a
+    production-ready claim merely because optional dependencies caused it to mount.
+    More-specific qualified policies continue to win through longest-prefix matching.
+    """
+
+    return ApiSurfacePolicy(
+        surface_id=surface_id,
+        path_prefix=path_prefix,
+        visibility=ApiVisibility.MIXED,
+        readiness=ApiReadiness.DISABLED,
+        auth_required=False,
+        audit_required=True,
         production_allowed=False,
     )
 
@@ -216,6 +237,25 @@ _API_SURFACE_POLICIES = {
         external_dependency="payment_channel_readiness",
         production_allowed=False,
     ),
+    "full_install_adapters": _unqualified_mixed_surface(
+        "full_install_adapters", "/adapters"
+    ),
+    "full_install_applications": _unqualified_mixed_surface(
+        "full_install_applications", "/applications"
+    ),
+    "full_install_auth": _unqualified_mixed_surface("full_install_auth", "/auth"),
+    "full_install_billing": _unqualified_mixed_surface(
+        "full_install_billing", "/billing"
+    ),
+    "full_install_discord": _unqualified_mixed_surface(
+        "full_install_discord", "/discord"
+    ),
+    "full_install_settings": _unqualified_mixed_surface(
+        "full_install_settings", "/settings"
+    ),
+    "full_install_telemetry": _unqualified_mixed_surface(
+        "full_install_telemetry", "/telemetry"
+    ),
 }
 
 API_SURFACE_POLICIES: Final = MappingProxyType(_API_SURFACE_POLICIES)
@@ -301,6 +341,26 @@ def validate_api_readiness_registry() -> None:
             is not CapabilityStatus.SANDBOX_ONLY
         ):
             raise ValueError(f"advanced integration surface must remain sandbox-only: {surface_id}")
+
+    unqualified_full_install_surfaces = (
+        "full_install_adapters",
+        "full_install_applications",
+        "full_install_auth",
+        "full_install_billing",
+        "full_install_discord",
+        "full_install_settings",
+        "full_install_telemetry",
+    )
+    for surface_id in unqualified_full_install_surfaces:
+        policy = API_SURFACE_POLICIES[surface_id]
+        if (
+            policy.visibility is not ApiVisibility.MIXED
+            or policy.readiness is not ApiReadiness.DISABLED
+            or policy.production_allowed
+        ):
+            raise ValueError(
+                f"unqualified full-install surface must remain disabled: {surface_id}"
+            )
 
     durable = API_SURFACE_POLICIES["durable_execution"]
     if (
