@@ -34,9 +34,13 @@ def test_failure_review_ui_exposes_actionable_lifecycle_not_raw_errors() -> None
     assert "Recommended correction" in js
     assert "successful retest" in lowered
     assert "Raw errors hidden" in js
+    assert "authorization" in lowered  # safe lifecycle stage name
     assert "raw exception" not in lowered
-    assert "authorization" not in lowered
     assert "bearer " not in lowered
+    assert "authorization:" not in lowered
+    assert "authorization':" not in lowered
+    assert "x-api-key" not in lowered
+    assert "api_key_value" not in lowered
 
 
 def test_failure_review_ui_has_progressive_disclosure_and_accessibility() -> None:
