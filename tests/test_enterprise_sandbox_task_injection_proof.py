@@ -14,6 +14,10 @@ from processual_api.integrations.enterprise_sandbox_execution import (
 from processual_api.integrations.integration_task_injection import (
     TASK_INJECTION_SCHEMA_VERSION,
 )
+from processual_api.services.execution_observability import (
+    clear_execution_observations_for_tests,
+    execution_observability_snapshot,
+)
 
 
 class _Resolver:
@@ -25,6 +29,7 @@ class _Resolver:
 
 
 def test_sandbox_proof_includes_validated_task_injection_digest(monkeypatch) -> None:
+    clear_execution_observations_for_tests()
     spec = EnterpriseEndpointBindingSpec(
         binding_id="billing.account",
         display_name="Billing account",
@@ -70,6 +75,7 @@ def test_sandbox_proof_includes_validated_task_injection_digest(monkeypatch) -> 
     )
 
     assert result["status"] == "sandbox_proof_passed"
+    assert result["execution_id"].startswith("exec_")
     assert result["ready_for_task_consumption"] is True
     assert result["task_injection_schema_version"] == TASK_INJECTION_SCHEMA_VERSION
     assert len(result["task_injection_sha256"]) == 64
@@ -77,3 +83,17 @@ def test_sandbox_proof_includes_validated_task_injection_digest(monkeypatch) -> 
     assert result["network_request_executed"] is True
     assert result["mapping_valid"] is True
     assert "never-return-this" not in repr(result)
+
+    snapshot = execution_observability_snapshot(limit=10)
+    assert snapshot["record_count"] == 1
+    assert snapshot["by_execution_kind"] == {"sandbox_proof": 1}
+    assert snapshot["by_environment"] == {"sandbox": 1}
+    assert snapshot["by_task"] == {"billing.account_context": 1}
+    recent = snapshot["recent_executions"][0]
+    assert recent["execution_id"] == result["execution_id"]
+    assert recent["binding_id"] == "billing.account"
+    assert recent["execution_kind"] == "sandbox_proof"
+    assert recent["environment"] == "sandbox"
+    assert recent["status"] == "success"
+
+    clear_execution_observations_for_tests()
