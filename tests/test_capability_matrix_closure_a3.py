@@ -16,13 +16,13 @@ def test_all_plan_entitlements_resolve_to_capabilities() -> None:
             assert entitlement_code in TOOL_CAPABILITIES
 
 
-def test_execution_policies_use_customer_capabilities_and_canonical_credits() -> None:
+def test_execution_policies_use_customer_capabilities_and_canonical_maestro_units() -> None:
     assert EXECUTION_CAPABILITY_POLICIES
 
     for policy in EXECUTION_CAPABILITY_POLICIES.values():
         capability = TOOL_CAPABILITIES[policy.capability_code]
         assert capability.customer_executable is True
-        assert policy.quota_metric == "credits"
+        assert policy.quota_metric == "maestro_units"
         assert policy.quota_cost > 0
 
 

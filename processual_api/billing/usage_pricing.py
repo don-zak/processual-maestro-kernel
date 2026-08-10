@@ -3,14 +3,22 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Final
 
+from processual_api.billing.maestro_units import (
+    MAESTRO_UNIT_METRIC,
+    MAESTRO_UNIT_RULES,
+    maestro_endpoint_class,
+    maestro_units_for_endpoint,
+    normalize_maestro_endpoint,
+)
+from processual_api.billing.plan_capability_matrix import plan_can_execute
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_SPECS,
     normalize_plan_code,
 )
 
-PRICING_VERSION: Final = "2026-07-byok-v1"
+PRICING_VERSION: Final = "2026-08-maestro-units-v1"
 BILLING_POLICY: Final = "byok"
-BILLING_SCOPE: Final = "maestro_usage_units"
+BILLING_SCOPE: Final = MAESTRO_UNIT_METRIC
 PROVIDER_COST_INCLUDED: Final = False
 
 DEVELOPER_UNIT_ALLOWANCE: Final = 2_000
@@ -35,47 +43,35 @@ PLAN_MONTHLY_UNIT_ALLOWANCES: Final[dict[str, int]] = {
     "enterprise_integration": ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE,
 }
 
-CANONICAL_ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
-    {
-        "enterprise_integration_starter",
-        "enterprise_pilot",
-        "enterprise_core",
-        "enterprise_scale",
-        "enterprise_strategic",
-    }
-)
+# Advanced Integration execution authority. Membership is derived solely from
+# the authoritative plan capability matrix; public aliases do not promote a plan.
 ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
-    {
-        *CANONICAL_ENTERPRISE_INTEGRATION_PLANS,
-        "enterprise",
-        "enterprise_integration",
-        "enterprise_custom",
-    }
+    code
+    for code in PLAN_FULFILLMENT_SPECS
+    if plan_can_execute(code, "advanced_integration")
 )
+
+# Sandbox qualification is deliberately broader than Advanced Integration
+# execution. Enterprise governance tiers may enter the qualification workflow
+# without receiving the advanced_integration entitlement itself.
+ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS: Final[frozenset[str]] = frozenset(
+    code
+    for code in PLAN_FULFILLMENT_SPECS
+    if plan_can_execute(code, "advanced_integration")
+    or plan_can_execute(code, "enterprise_governance")
+)
+
 LEGACY_ENTERPRISE_INTEGRATION_PLANS: Final[frozenset[str]] = frozenset(
-    {
-        "enterprise_private",
-    }
+    {"enterprise_private"}
 )
 
 FREE_OPERATIONAL_ENDPOINTS: Final[frozenset[str]] = frozenset(
-    {
-        "/health/live",
-        "/health/ready",
-        "/adapters/status",
-        "/cgt/govern/status",
-        "/settings/subscription",
-    }
+    path for path, rule in MAESTRO_UNIT_RULES.items() if rule.free
 )
-
 FIXED_ENDPOINT_UNIT_COSTS: Final[dict[str, int]] = {
-    "/cgt/analyze": 1,
-    "/cgt/govern": 1,
-    "/cgt/govern/compare": 2,
-    "/cgt/govern/report": 3,
-    "/reports/fate": 2,
-    "/reports/generate-llm": 5,
-    "/cgt/govern/auto-repair": 5,
+    path: rule.units
+    for path, rule in MAESTRO_UNIT_RULES.items()
+    if not rule.free and not rule.variable_by_item_count
 }
 
 
@@ -94,19 +90,14 @@ class PricingDecision:
 
 
 def normalize_endpoint(endpoint: str) -> str:
-    path = str(endpoint or "/").split("?", 1)[0].strip() or "/"
-    if len(path) > 1:
-        path = path.rstrip("/")
-    return path
+    return normalize_maestro_endpoint(endpoint)
 
 
 def normalize_plan_id(plan_id: str | None) -> str:
-    """Preserve the public plan identifier contract used by billing callers."""
     return str(plan_id or "").strip().lower().replace(" ", "_")
 
 
 def canonical_plan_id(plan_id: str | None) -> str:
-    """Return the fulfillment-catalog identifier without changing public IDs."""
     return normalize_plan_code(plan_id)
 
 
@@ -118,66 +109,95 @@ def monthly_unit_allowance(plan_id: str | None) -> int:
 
 
 def allows_enterprise_integration(plan_id: str | None) -> bool:
+    """Return Advanced Integration execution entitlement, not qualification."""
     normalized = normalize_plan_id(plan_id)
+    if normalized in LEGACY_ENTERPRISE_INTEGRATION_PLANS:
+        return True
+    return plan_can_execute(plan_id, "advanced_integration")
+
+
+def allows_enterprise_integration_qualification(plan_id: str | None) -> bool:
+    """Return sandbox qualification eligibility without promoting execution."""
+    normalized = normalize_plan_id(plan_id)
+    if normalized in LEGACY_ENTERPRISE_INTEGRATION_PLANS:
+        return True
     canonical = canonical_plan_id(plan_id)
-    return (
-        normalized in ENTERPRISE_INTEGRATION_PLANS
-        or normalized in LEGACY_ENTERPRISE_INTEGRATION_PLANS
-        or canonical in CANONICAL_ENTERPRISE_INTEGRATION_PLANS
-    )
+    return canonical in ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS
 
 
 def enterprise_integration_capability(plan_id: str | None) -> dict[str, Any]:
+    """Return Settings console/sandbox qualification eligibility.
+
+    This deliberately does not grant Advanced Integration execution. Call
+    allows_enterprise_integration() for the execution entitlement decision.
+    """
     normalized_plan_id = normalize_plan_id(plan_id)
     canonical = canonical_plan_id(plan_id)
     legacy = normalized_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
-    enabled = allows_enterprise_integration(plan_id)
-
+    qualification_enabled = allows_enterprise_integration_qualification(plan_id)
+    execution_enabled = allows_enterprise_integration(plan_id)
     return {
-        "enabled": enabled,
-        "status": "available" if enabled else "locked",
+        "enabled": qualification_enabled,
+        "status": "available" if qualification_enabled else "locked",
         "plan_id": normalized_plan_id or "unknown",
         "normalized_plan_id": normalized_plan_id or "unknown",
         "canonical_plan_id": canonical or normalized_plan_id or "unknown",
         "legacy_compatibility": legacy,
-        "eligible_plans": sorted(ENTERPRISE_INTEGRATION_PLANS),
+        "eligible_plans": sorted(ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS),
+        "advanced_integration_enabled": execution_enabled,
+        "production_allowed": False,
     }
 
 
+def enterprise_integration_qualification_capability(
+    plan_id: str | None,
+) -> dict[str, Any]:
+    return enterprise_integration_capability(plan_id)
+
+
 def endpoint_class(endpoint: str) -> str:
-    path = normalize_endpoint(endpoint)
-
-    if path in FREE_OPERATIONAL_ENDPOINTS:
-        return "free_operational_check"
-    if path == "/cgt/govern/batch":
-        return "batch_governance_evaluation"
-    if path.startswith("/reports/"):
-        return "report_generation"
-    if path.startswith("/cgt/govern"):
-        return "governance_evaluation"
-    if path.startswith("/cgt/analyze"):
-        return "analysis_evaluation"
-
-    return "metered_api_request"
+    return maestro_endpoint_class(endpoint)
 
 
 def units_for_endpoint(endpoint: str, item_count: int | None = None) -> int:
-    path = normalize_endpoint(endpoint)
-
-    if path in FREE_OPERATIONAL_ENDPOINTS:
-        return 0
-
-    if path == "/cgt/govern/batch":
-        return max(int(item_count or 1), 1)
-
-    return FIXED_ENDPOINT_UNIT_COSTS.get(path, 1)
+    return maestro_units_for_endpoint(endpoint, item_count=item_count)
 
 
 def pricing_decision(endpoint: str, item_count: int | None = None) -> PricingDecision:
     path = normalize_endpoint(endpoint)
-
     return PricingDecision(
         endpoint=path,
         endpoint_class=endpoint_class(path),
         units_charged=units_for_endpoint(path, item_count=item_count),
     )
+
+
+__all__ = [
+    "BILLING_POLICY",
+    "BILLING_SCOPE",
+    "BUSINESS_UNIT_ALLOWANCE",
+    "DEVELOPER_UNIT_ALLOWANCE",
+    "ENTERPRISE_INTEGRATION_PLANS",
+    "ENTERPRISE_INTEGRATION_QUALIFICATION_PLANS",
+    "ENTERPRISE_INTEGRATION_STARTER_UNIT_ALLOWANCE",
+    "ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE",
+    "FIXED_ENDPOINT_UNIT_COSTS",
+    "FREE_OPERATIONAL_ENDPOINTS",
+    "LEGACY_ENTERPRISE_INTEGRATION_PLANS",
+    "PLAN_MONTHLY_UNIT_ALLOWANCES",
+    "PRICING_VERSION",
+    "PROVIDER_COST_INCLUDED",
+    "STARTER_UNIT_ALLOWANCE",
+    "PricingDecision",
+    "allows_enterprise_integration",
+    "allows_enterprise_integration_qualification",
+    "canonical_plan_id",
+    "endpoint_class",
+    "enterprise_integration_capability",
+    "enterprise_integration_qualification_capability",
+    "monthly_unit_allowance",
+    "normalize_endpoint",
+    "normalize_plan_id",
+    "pricing_decision",
+    "units_for_endpoint",
+]

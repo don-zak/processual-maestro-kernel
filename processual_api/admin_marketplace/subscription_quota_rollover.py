@@ -11,6 +11,7 @@ from processual_api.admin_marketplace.subscription_billing_period import (
 from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
     AdminMarketSubscriptionQuotaCycle,
 )
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_CATALOG_VERSION,
     QUOTA_METRIC_CODE,
@@ -68,7 +69,7 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 raise SubscriptionQuotaRolloverError(
                     "quota consumption cannot be seat based."
                 )
-            if command.metric_code.strip().lower() != QUOTA_METRIC_CODE:
+            if normalize_maestro_metric_code(command.metric_code) != QUOTA_METRIC_CODE:
                 raise SubscriptionQuotaRolloverError(
                     "quota metric conflicts with the authoritative plan."
                 )
@@ -107,7 +108,7 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 raise SubscriptionQuotaRolloverError("source quota cycle was not found.")
             if (
                 source.subscription_id != command.subscription_id
-                or source.metric_code != QUOTA_METRIC_CODE
+                or normalize_maestro_metric_code(source.metric_code) != QUOTA_METRIC_CODE
                 or source.customer_ref != subscription.customer_ref
                 or source.plan_code != plan_spec.plan_code
                 or source.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
@@ -163,7 +164,7 @@ def _assert_replay_matches(
     if (
         existing.subscription_id != command.subscription_id
         or existing.source_cycle_id != command.source_cycle_id
-        or existing.metric_code != QUOTA_METRIC_CODE
+        or normalize_maestro_metric_code(existing.metric_code) != QUOTA_METRIC_CODE
         or existing.plan_code != plan_code
         or existing.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
         or existing.period_start != command.period_start

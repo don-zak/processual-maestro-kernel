@@ -175,9 +175,9 @@ def test_usage_log_store_persists_rejection_audit_metadata(
     record = json.loads(usage_log_path.read_text(encoding="utf-8").splitlines()[0])
 
     assert record["status_code"] == 429
-    assert record["pricing_version"] == "2026-07-byok-v1"
+    assert record["pricing_version"] == "2026-08-maestro-units-v1"
     assert record["billing_policy"] == "byok"
-    assert record["billing_scope"] == "maestro_usage_units"
+    assert record["billing_scope"] == "maestro_units"
     assert record["provider_cost_included"] is False
     assert record["endpoint_class"] == "governance_evaluation"
     assert record["units_charged"] == 5

@@ -4,8 +4,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final
 
-PLAN_FULFILLMENT_CATALOG_VERSION: Final = "2026-08-plan-fulfillment-v1"
-QUOTA_METRIC_CODE: Final = "credits"
+from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC
+
+PLAN_FULFILLMENT_CATALOG_VERSION: Final = "2026-08-plan-fulfillment-v2"
+QUOTA_METRIC_CODE: Final = MAESTRO_UNIT_METRIC
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,95 +32,51 @@ _PLAN_SPECS = {
     "academic": PlanFulfillmentSpec(
         plan_code="academic",
         monthly_unit_allowance=5_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "standard_support",
-            "academic_use",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "standard_support", "academic_use"),
     ),
     "starter": PlanFulfillmentSpec(
         plan_code="starter",
         monthly_unit_allowance=10_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "standard_support",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "standard_support"),
     ),
     "enterprise_integration_starter": PlanFulfillmentSpec(
         plan_code="enterprise_integration_starter",
         monthly_unit_allowance=50_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "business_support",
-            "advanced_integration",
-            "enterprise_governance",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "business_support", "advanced_integration", "enterprise_governance"),
     ),
     "business": PlanFulfillmentSpec(
         plan_code="business",
         monthly_unit_allowance=100_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "business_support",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "business_support"),
     ),
     "enterprise_pilot": PlanFulfillmentSpec(
         plan_code="enterprise_pilot",
         monthly_unit_allowance=500_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "business_support",
-            "enterprise_governance",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "business_support", "enterprise_governance"),
     ),
     "enterprise_core": PlanFulfillmentSpec(
         plan_code="enterprise_core",
         monthly_unit_allowance=1_500_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "business_support",
-            "enterprise_governance",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "business_support", "enterprise_governance"),
     ),
     "enterprise_scale": PlanFulfillmentSpec(
         plan_code="enterprise_scale",
         monthly_unit_allowance=3_000_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "business_support",
-            "enterprise_governance",
-            "advanced_integration",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "business_support", "enterprise_governance", "advanced_integration"),
     ),
     "enterprise_strategic": PlanFulfillmentSpec(
         plan_code="enterprise_strategic",
         monthly_unit_allowance=5_000_000,
-        entitlement_codes=(
-            "maestro_execution",
-            "byok_provider_connection",
-            "business_support",
-            "enterprise_governance",
-            "advanced_integration",
-        ),
+        entitlement_codes=("maestro_execution", "byok_provider_connection", "business_support", "enterprise_governance", "advanced_integration"),
     ),
 }
 
 PLAN_FULFILLMENT_SPECS: Final = MappingProxyType(_PLAN_SPECS)
-
-PLAN_CODE_ALIASES: Final = MappingProxyType(
-    {
-        "pilot_starter": "starter",
-        "enterprise": "enterprise_pilot",
-        "enterprise_integration": "enterprise_pilot",
-    }
-)
+PLAN_CODE_ALIASES: Final = MappingProxyType({
+    "pilot_starter": "starter",
+    "enterprise": "enterprise_pilot",
+    "enterprise_integration": "enterprise_pilot",
+})
 
 
 def normalize_plan_code(value: str | None) -> str:

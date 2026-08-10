@@ -45,7 +45,7 @@ def test_api_key_integration_is_locked_for_non_enterprise_plan(monkeypatch) -> N
     assert result["key_count"] == 0
 
 
-def test_api_key_integration_is_enabled_for_enterprise_integration_plan(
+def test_api_key_integration_is_enabled_for_explicit_integration_plan(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -53,7 +53,7 @@ def test_api_key_integration_is_enabled_for_enterprise_integration_plan(
         "_load_raw",
         lambda user_id: {
             "subscription": {
-                "plan_id": "enterprise_integration",
+                "plan_id": "enterprise_integration_starter",
             },
             "api_keys": [
                 {
@@ -64,7 +64,7 @@ def test_api_key_integration_is_enabled_for_enterprise_integration_plan(
                     "client_id": "client-a",
                     "status": "enabled",
                     "scopes": ["read:health", "run:govern"],
-                    "quota_limit": 500000,
+                    "quota_limit": 50000,
                     "quota_used": 12,
                     "quota_rejected_count": 1,
                     "last_used_at": "2026-07-03T10:00:00+00:00",
@@ -91,15 +91,15 @@ def test_api_key_integration_is_enabled_for_enterprise_integration_plan(
 
     assert result["enabled"] is True
     assert result["status"] == "available"
-    assert result["plan_id"] == "enterprise_integration"
+    assert result["plan_id"] == "enterprise_integration_starter"
     assert result["key_count"] == 1
 
     key = result["keys"][0]
     assert key["key_id"] == "key-a"
     assert key["prefix"] == "pmk_safe..."
-    assert key["quota_limit"] == 500000
+    assert key["quota_limit"] == 50000
     assert key["quota_used"] == 12
-    assert key["quota_remaining"] == 499988
+    assert key["quota_remaining"] == 49988
     assert "hashed" not in key
     assert "api_key" not in key
     assert "hashed_key" not in key

@@ -100,7 +100,7 @@ async def test_assessment_quota_profile_uses_exact_approved_quota_and_canonical_
     assert result.record.entitlement_source_plan_code == "academic"
     assert result.record.limit_units == 125_000
     assert result.record.limit_units != 5_000
-    assert result.record.metric_code == QUOTA_METRIC_CODE == "credits"
+    assert result.record.metric_code == QUOTA_METRIC_CODE == "maestro_units"
     assert result.record.cycle_kind == ASSESSMENT_QUOTA_CYCLE_KIND == "calendar_month"
     assert (
         result.record.compatibility_period_days
@@ -109,7 +109,7 @@ async def test_assessment_quota_profile_uses_exact_approved_quota_and_canonical_
     )
     assert result.runtime_profile.profile_ref == result.record.profile_ref
     assert result.runtime_profile.period_days == 30
-    assert result.runtime_profile.metrics[0].metric_code == "credits"
+    assert result.runtime_profile.metrics[0].metric_code == "maestro_units"
     assert result.runtime_profile.metrics[0].limit_units == 125_000
     assert unit.commit_count == 1
 
@@ -210,7 +210,7 @@ async def test_binding_hash_under_different_profile_ref_fails_closed() -> None:
             approved_by=outcome.approved_by,
             approval_reference=outcome.approval_reference,
             entitlement_codes_json=list(outcome.approved_entitlement_codes),
-            metric_code="credits",
+            metric_code="maestro_units",
             limit_units=outcome.approved_quota_units,
             cycle_kind="calendar_month",
             compatibility_period_days=30,
@@ -237,7 +237,7 @@ async def test_durable_profile_resolves_to_exact_runtime_quota() -> None:
 
     assert resolved.profile_ref == created.record.profile_ref
     assert resolved.period_days == 30
-    assert resolved.metrics[0].metric_code == "credits"
+    assert resolved.metrics[0].metric_code == "maestro_units"
     assert resolved.metrics[0].limit_units == 125_000
 
 

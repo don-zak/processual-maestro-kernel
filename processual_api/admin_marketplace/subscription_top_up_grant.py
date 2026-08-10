@@ -13,6 +13,7 @@ from processual_api.admin_marketplace.subscription_top_up_grant_persistence impo
     AdminMarketSubscriptionTopUpGrant,
 )
 from processual_api.billing.commercial_quota_top_up_contracts import quote_top_up
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_CATALOG_VERSION,
     QUOTA_METRIC_CODE,
@@ -122,7 +123,7 @@ async def apply_verified_subscription_top_up_in_uow(
     if (
         cycle.subscription_id != subscription.id
         or cycle.customer_ref != command.customer_ref
-        or cycle.metric_code != QUOTA_METRIC_CODE
+        or normalize_maestro_metric_code(cycle.metric_code) != QUOTA_METRIC_CODE
     ):
         raise SubscriptionTopUpGrantError(
             "quota cycle conflicts with the top-up grant."

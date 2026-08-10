@@ -9,6 +9,7 @@ from processual_api.billing.commercial_quota_top_up_contracts import (
     TopUpPurchaseState,
     quote_top_up_for_runtime,
 )
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_CATALOG_VERSION,
     QUOTA_METRIC_CODE,
@@ -98,7 +99,7 @@ def evaluate_subscription_top_up_eligibility_factory(
             if (
                 cycle.subscription_id != subscription.id
                 or cycle.customer_ref != customer_ref
-                or cycle.metric_code != QUOTA_METRIC_CODE
+                or normalize_maestro_metric_code(cycle.metric_code) != QUOTA_METRIC_CODE
             ):
                 raise SubscriptionTopUpEligibilityError(
                     "quota cycle conflicts with the subscription."

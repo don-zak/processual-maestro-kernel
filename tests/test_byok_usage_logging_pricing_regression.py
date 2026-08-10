@@ -50,9 +50,9 @@ def test_usage_log_middleware_attaches_byok_pricing_metadata(monkeypatch):
     record = captured[0]
 
     assert record["endpoint"] == "/cgt/govern"
-    assert record["pricing_version"] == "2026-07-byok-v1"
+    assert record["pricing_version"] == "2026-08-maestro-units-v1"
     assert record["billing_policy"] == "byok"
-    assert record["billing_scope"] == "maestro_usage_units"
+    assert record["billing_scope"] == "maestro_units"
     assert record["provider_cost_included"] is False
     assert record["endpoint_class"] == "governance_evaluation"
     assert record["units_charged"] == 1
@@ -88,9 +88,9 @@ def test_usage_log_store_persists_byok_pricing_metadata(tmp_path, monkeypatch):
     record = records[0]
 
     assert record["endpoint"] == "/settings/subscription"
-    assert record["pricing_version"] == "2026-07-byok-v1"
+    assert record["pricing_version"] == "2026-08-maestro-units-v1"
     assert record["billing_policy"] == "byok"
-    assert record["billing_scope"] == "maestro_usage_units"
+    assert record["billing_scope"] == "maestro_units"
     assert record["provider_cost_included"] is False
     assert record["endpoint_class"] == "free_operational_check"
     assert record["units_charged"] == 0

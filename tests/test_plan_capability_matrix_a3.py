@@ -72,11 +72,11 @@ def test_execution_route_authority_is_centralized_and_canonical() -> None:
 
     assert policy is not None
     assert policy.capability_code == "maestro_execution"
-    assert policy.quota_metric == "credits"
+    assert policy.quota_metric == "maestro_units"
     assert policy.quota_cost == 1
     assert policy.production_required is False
     assert required_execution_capability("post", "/cgt/govern") == "maestro_execution"
-    assert execution_quota_cost("POST", "/cgt/govern") == ("credits", 1)
+    assert execution_quota_cost("POST", "/cgt/govern") == ("maestro_units", 1)
 
 
 def test_unknown_execution_route_has_no_implicit_capability_or_quota() -> None:
@@ -96,7 +96,7 @@ def test_payload_keeps_production_integration_boundary_closed() -> None:
     assert payload["plan_code"] == "enterprise_scale"
     assert payload["production_advanced_integration_allowed"] is False
     execution_policy = payload["execution_policies"][0]
-    assert execution_policy["quota_metric"] == "credits"
+    assert execution_policy["quota_metric"] == "maestro_units"
     assert execution_policy["quota_cost"] == 1
     advanced = next(
         item

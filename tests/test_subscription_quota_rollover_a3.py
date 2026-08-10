@@ -150,6 +150,7 @@ async def test_active_subscription_rolls_authoritative_plan_quota() -> None:
 
     assert cycle.plan_code == "starter"
     assert cycle.plan_catalog_version == PLAN_FULFILLMENT_CATALOG_VERSION
+    assert cycle.metric_code == "maestro_units"
     assert cycle.base_limit_units == 10_000
     assert cycle.rollover_units == 5_000
     assert cycle.top_up_units == 0

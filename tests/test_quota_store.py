@@ -113,8 +113,12 @@ def test_counted_endpoint_increments_quota_used(
 
     assert stored_key["quota_used"] == 2
     assert stored_key["quota_last_used_at"]
+    assert stored_key["quota_metric"] == "maestro_units"
+    assert stored_key["quota_period"]
     assert result["quota"] == {
         "scope": "evaluation",
+        "metric": "maestro_units",
+        "period": stored_key["quota_period"],
         "plan_id": "starter",
         "limit": 3,
         "used": 2,
@@ -164,6 +168,8 @@ def test_exhausted_quota_raises_429_and_tracks_rejection(
 
     assert exc.value.status_code == 429
     assert exc.value.detail["error"] == "quota_exceeded"
+    assert exc.value.detail["quota_metric"] == "maestro_units"
+    assert exc.value.detail["quota_period"] == stored_key["quota_period"]
     assert exc.value.detail["quota_limit"] == 2
     assert exc.value.detail["quota_used"] == 2
     assert stored_key["quota_used"] == 2

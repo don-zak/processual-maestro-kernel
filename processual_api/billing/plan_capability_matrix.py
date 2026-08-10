@@ -5,13 +5,14 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
+from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_SPECS,
     get_plan_fulfillment_spec,
     normalize_plan_code,
 )
 
-PLAN_CAPABILITY_MATRIX_VERSION: Final = "2026-08-plan-capabilities-v3"
+PLAN_CAPABILITY_MATRIX_VERSION: Final = "2026-08-plan-capabilities-v4"
 
 
 class CapabilityStatus(StrEnum):
@@ -52,10 +53,10 @@ _TOOL_CAPABILITIES = {
         capability_code="maestro_execution",
         entitlement_code="maestro_execution",
         status=CapabilityStatus.READY,
-        execution_surface="/workflows and /workflows/llm-orchestration",
+        execution_surface="/workflows and metered core execution surfaces",
         customer_executable=True,
         production_allowed=True,
-        notes="Interactive governed workflow execution is mounted and authenticated.",
+        notes="Interactive governed execution uses the canonical Maestro Unit meter.",
     ),
     "durable_execution_internal": ToolCapability(
         capability_code="durable_execution_internal",
@@ -64,10 +65,7 @@ _TOOL_CAPABILITIES = {
         execution_surface="/internal/execution",
         customer_executable=False,
         production_allowed=False,
-        notes=(
-            "Durable execution is an internal control surface. It requires an explicit "
-            "authorization dependency and is not a customer plan entitlement."
-        ),
+        notes="Durable execution is an internal control surface and not a customer plan entitlement.",
     ),
     "byok_provider_connection": ToolCapability(
         capability_code="byok_provider_connection",
@@ -100,10 +98,10 @@ _TOOL_CAPABILITIES = {
         capability_code="enterprise_governance",
         entitlement_code="enterprise_governance",
         status=CapabilityStatus.READY,
-        execution_surface="/cgt/govern and governance reporting surfaces",
+        execution_surface="advanced governance comparison, reporting, and repair surfaces",
         customer_executable=True,
         production_allowed=True,
-        notes="Governance evaluation, reporting, and repair surfaces are implemented.",
+        notes="Advanced governance operations require an explicit enterprise-governance entitlement.",
     ),
     "advanced_integration": ToolCapability(
         capability_code="advanced_integration",
@@ -112,10 +110,7 @@ _TOOL_CAPABILITIES = {
         execution_surface="/settings/enterprise-integration",
         customer_executable=True,
         production_allowed=False,
-        notes=(
-            "Customer-specific qualification and supervised review are available; "
-            "external production runtime connectors remain disabled."
-        ),
+        notes="Customer-specific qualification is available while production connectors remain disabled.",
     ),
     "academic_use": ToolCapability(
         capability_code="academic_use",
@@ -135,8 +130,29 @@ _EXECUTION_POLICIES = {
         method="POST",
         path="/cgt/govern",
         capability_code="maestro_execution",
-        quota_metric="credits",
+        quota_metric=MAESTRO_UNIT_METRIC,
         quota_cost=1,
+    ),
+    ("POST", "/cgt/govern/compare"): ExecutionCapabilityPolicy(
+        method="POST",
+        path="/cgt/govern/compare",
+        capability_code="enterprise_governance",
+        quota_metric=MAESTRO_UNIT_METRIC,
+        quota_cost=2,
+    ),
+    ("POST", "/cgt/govern/report"): ExecutionCapabilityPolicy(
+        method="POST",
+        path="/cgt/govern/report",
+        capability_code="enterprise_governance",
+        quota_metric=MAESTRO_UNIT_METRIC,
+        quota_cost=3,
+    ),
+    ("POST", "/cgt/govern/auto-repair"): ExecutionCapabilityPolicy(
+        method="POST",
+        path="/cgt/govern/auto-repair",
+        capability_code="enterprise_governance",
+        quota_metric=MAESTRO_UNIT_METRIC,
+        quota_cost=5,
     ),
 }
 
@@ -150,13 +166,8 @@ def _normalize_path(path: str) -> str:
     return normalized
 
 
-def execution_policy_for_request(
-    method: str,
-    path: str,
-) -> ExecutionCapabilityPolicy | None:
-    return EXECUTION_CAPABILITY_POLICIES.get(
-        (str(method or "").upper(), _normalize_path(path))
-    )
+def execution_policy_for_request(method: str, path: str) -> ExecutionCapabilityPolicy | None:
+    return EXECUTION_CAPABILITY_POLICIES.get((str(method or "").upper(), _normalize_path(path)))
 
 
 def required_execution_capability(method: str, path: str) -> str | None:
@@ -177,19 +188,12 @@ def capabilities_for_plan(plan_code: str | None) -> tuple[ToolCapability, ...]:
     for entitlement_code in spec.entitlement_codes:
         capability = TOOL_CAPABILITIES.get(entitlement_code)
         if capability is None:
-            raise KeyError(
-                f"missing tool capability mapping for entitlement: {entitlement_code}"
-            )
+            raise KeyError(f"missing tool capability mapping for entitlement: {entitlement_code}")
         capabilities.append(capability)
     return tuple(capabilities)
 
 
-def plan_can_execute(
-    plan_code: str | None,
-    capability_code: str,
-    *,
-    require_production: bool = False,
-) -> bool:
+def plan_can_execute(plan_code: str | None, capability_code: str, *, require_production: bool = False) -> bool:
     normalized_capability = str(capability_code or "").strip().lower()
     if not normalized_capability:
         return False
@@ -197,7 +201,6 @@ def plan_can_execute(
         capabilities = capabilities_for_plan(plan_code)
     except KeyError:
         return False
-
     for capability in capabilities:
         if capability.capability_code != normalized_capability:
             continue
@@ -205,10 +208,7 @@ def plan_can_execute(
             return False
         if require_production and not capability.production_allowed:
             return False
-        return capability.status in {
-            CapabilityStatus.READY,
-            CapabilityStatus.SANDBOX_ONLY,
-        }
+        return capability.status in {CapabilityStatus.READY, CapabilityStatus.SANDBOX_ONLY}
     return False
 
 
@@ -218,15 +218,10 @@ def plan_capability_payload(plan_code: str | None) -> dict[str, object]:
     return {
         "matrix_version": PLAN_CAPABILITY_MATRIX_VERSION,
         "plan_code": canonical,
+        "quota_metric": MAESTRO_UNIT_METRIC,
         "capabilities": [capability.to_dict() for capability in capabilities],
-        "execution_policies": [
-            asdict(policy) for policy in EXECUTION_CAPABILITY_POLICIES.values()
-        ],
-        "production_advanced_integration_allowed": plan_can_execute(
-            canonical,
-            "advanced_integration",
-            require_production=True,
-        ),
+        "execution_policies": [asdict(policy) for policy in EXECUTION_CAPABILITY_POLICIES.values()],
+        "production_advanced_integration_allowed": plan_can_execute(canonical, "advanced_integration", require_production=True),
     }
 
 
@@ -238,21 +233,16 @@ def validate_plan_capability_matrix() -> None:
     }
     missing = entitlement_codes - set(TOOL_CAPABILITIES)
     if missing:
-        raise ValueError(
-            "plan capability matrix is missing entitlement mappings: "
-            + ", ".join(sorted(missing))
-        )
+        raise ValueError("plan capability matrix is missing entitlement mappings: " + ", ".join(sorted(missing)))
 
     for plan_code in PLAN_FULFILLMENT_SPECS:
         capabilities_for_plan(plan_code)
 
     for policy in EXECUTION_CAPABILITY_POLICIES.values():
         if policy.capability_code not in TOOL_CAPABILITIES:
-            raise ValueError(
-                f"execution policy references unknown capability: {policy.capability_code}"
-            )
-        if policy.quota_metric != "credits":
-            raise ValueError("execution quota metric must remain canonical credits")
+            raise ValueError(f"execution policy references unknown capability: {policy.capability_code}")
+        if policy.quota_metric != MAESTRO_UNIT_METRIC:
+            raise ValueError("execution quota metric must remain canonical Maestro Units")
         if policy.quota_cost <= 0:
             raise ValueError("execution quota cost must be positive")
 
@@ -261,16 +251,9 @@ def validate_plan_capability_matrix() -> None:
         raise ValueError("advanced integration must remain sandbox-only")
 
     durable = TOOL_CAPABILITIES["durable_execution_internal"]
-    if (
-        durable.status is not CapabilityStatus.INTERNAL_ONLY
-        or durable.customer_executable
-        or durable.production_allowed
-    ):
+    if durable.status is not CapabilityStatus.INTERNAL_ONLY or durable.customer_executable or durable.production_allowed:
         raise ValueError("durable execution must remain internal-only")
-    if any(
-        "durable_execution_internal" in spec.entitlement_codes
-        for spec in PLAN_FULFILLMENT_SPECS.values()
-    ):
+    if any("durable_execution_internal" in spec.entitlement_codes for spec in PLAN_FULFILLMENT_SPECS.values()):
         raise ValueError("durable execution must not become a customer plan entitlement")
 
 
