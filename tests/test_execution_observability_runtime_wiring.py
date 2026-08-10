@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 
 from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
 from processual_api.cgt_governor.adapters.execution_fanout import ExecutionFanoutSaturatedError
-from processual_api.main import app
-from processual_api.routers import execution_observability, workflows
+from processual_api.routers import execution_observability, settings, workflows
 from processual_api.services.execution_observability import (
     clear_execution_observations_for_tests,
     execution_observability_snapshot,
@@ -58,9 +57,10 @@ def _settings_client(user: dict[str, object]) -> TestClient:
 
 
 def test_execution_observability_summary_route_is_registered_once() -> None:
+    assert execution_observability.router is settings.router
     paths = [
         path
-        for route in app.routes
+        for route in settings.router.routes
         if (path := getattr(route, "path", None)) is not None
     ]
     assert paths.count("/settings/execution-observability/summary") == 1
