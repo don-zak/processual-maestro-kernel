@@ -9,6 +9,9 @@ from . import (  # noqa: F401,E402
     settings_enterprise_endpoint_bindings_runtime as _settings_enterprise_endpoint_bindings_runtime,
 )
 from . import (  # noqa: F401,E402
+    settings_enterprise_endpoint_failure_review_runtime as _settings_enterprise_endpoint_failure_review_runtime,
+)
+from . import (  # noqa: F401,E402
     settings_enterprise_integration_runtime as _settings_enterprise_integration_runtime,
 )
 from . import settings_provider_test_runtime as _settings_provider_test_runtime  # noqa: F401,E402
