@@ -35,7 +35,7 @@ def _first_verified_plan(*candidates: Any) -> str:
         value = str(candidate or "").strip()
         if value:
             return normalize_plan_id(value)
-    return "starter"
+    raise ValueError("authoritative subscription plan is required")
 
 
 def resolve_client_integration_plan_without_legacy_storage(
@@ -63,7 +63,7 @@ def resolve_current_plan_without_legacy_storage(
     del user_id
     subscription = raw.get("subscription", {})
     if not isinstance(subscription, dict):
-        return "starter"
+        subscription = {}
     return _first_verified_plan(
         subscription.get("plan_id"),
         subscription.get("plan"),
