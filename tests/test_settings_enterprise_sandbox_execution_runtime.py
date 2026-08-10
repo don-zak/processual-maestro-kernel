@@ -139,7 +139,12 @@ def test_live_route_persists_only_redacted_evidence(monkeypatch) -> None:
     assert "canonical_input" not in evidence
     assert evidence["canonical_input_sha256"] == "a" * 64
     assert evidence["raw_response_included"] is False
-    assert "secret" not in repr(evidence).lower()
+    assert evidence["raw_secret_visible"] is False
+    serialized = repr(evidence).lower()
+    assert "bearer " not in serialized
+    assert "authorization':" not in serialized
+    assert "x-api-key" not in serialized
+    assert "api_key_value" not in serialized
 
 
 def test_evidence_listing_is_customer_safe(monkeypatch) -> None:
