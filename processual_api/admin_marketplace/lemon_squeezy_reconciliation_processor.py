@@ -92,14 +92,24 @@ def _as_record(existing: object) -> LemonSqueezyReconciliationDecisionRecord:
 
 async def _advance_binding_watermark(uow: object, inbox: object) -> object:
     provider_order_id = getattr(inbox, "provider_order_id", None)
+    provider_subscription_id = getattr(inbox, "provider_subscription_id", None)
     provider_effective_at = getattr(inbox, "provider_effective_at", None)
-    if not provider_order_id or provider_effective_at is None:
+    if provider_effective_at is None:
         raise LemonSqueezyWebhookError("reconciliation binding evidence is incomplete.")
 
-    binding = await uow.lemon_squeezy_bindings.get_by_provider_order_id(
-        provider_order_id,
-        for_update=True,
-    )
+    if provider_order_id:
+        binding = await uow.lemon_squeezy_bindings.get_by_provider_order_id(
+            provider_order_id,
+            for_update=True,
+        )
+    elif provider_subscription_id:
+        binding = await uow.lemon_squeezy_bindings.get_by_provider_subscription_id(
+            provider_subscription_id,
+            for_update=True,
+        )
+    else:
+        raise LemonSqueezyWebhookError("reconciliation binding evidence is incomplete.")
+
     if binding is None:
         raise LemonSqueezyWebhookError("authoritative Lemon Squeezy binding was not found.")
 
@@ -112,7 +122,7 @@ async def _advance_binding_watermark(uow: object, inbox: object) -> object:
             "authoritative Lemon Squeezy binding conflicts with verified evidence."
         )
 
-    incoming_subscription_id = getattr(inbox, "provider_subscription_id", None)
+    incoming_subscription_id = provider_subscription_id
     if binding.provider_subscription_id not in {None, incoming_subscription_id}:
         raise LemonSqueezyWebhookError(
             "provider subscription conflicts with authoritative binding."
