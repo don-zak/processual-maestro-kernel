@@ -61,7 +61,8 @@ class ApiReadinessAudit:
             "inventory_digest": self.inventory_digest,
             "unknown_routes": [record.to_dict() for record in self.unknown_records],
             "duplicate_routes": [
-                {"method": method, "path": path} for method, path in self.duplicate_route_keys
+                {"method": method, "path": path}
+                for method, path in self.duplicate_route_keys
             ],
             "routes": [record.to_dict() for record in self.records],
         }
@@ -109,12 +110,21 @@ def enumerate_mounted_routes(app: FastAPI) -> tuple[MountedRoute, ...]:
             method = normalize_route_method(raw_method)
             if not method or method in _EXCLUDED_METHODS:
                 continue
-            mounted.append(MountedRoute(method, path, str(route.name or ""), bool(route.include_in_schema)))
+            mounted.append(
+                MountedRoute(
+                    method,
+                    path,
+                    str(route.name or ""),
+                    bool(route.include_in_schema),
+                )
+            )
     return tuple(sorted(mounted, key=lambda item: (item.path, item.method, item.name)))
 
 
 def route_inventory_digest(app: FastAPI) -> str:
-    material = "\n".join(f"{route.method} {route.path}" for route in enumerate_mounted_routes(app))
+    material = "\n".join(
+        f"{route.method} {route.path}" for route in enumerate_mounted_routes(app)
+    )
     return sha256(material.encode("utf-8")).hexdigest()
 
 
@@ -128,7 +138,16 @@ def _system_route_reason(route: MountedRoute) -> str | None:
 
 
 def _record_for_policy(route: MountedRoute, policy: ApiSurfacePolicy) -> RouteReadinessRecord:
-    return RouteReadinessRecord(route.method, route.path, route.name, policy.surface_id, policy.readiness, policy.production_allowed, False, "classified")
+    return RouteReadinessRecord(
+        route.method,
+        route.path,
+        route.name,
+        policy.surface_id,
+        policy.readiness,
+        policy.production_allowed,
+        False,
+        "classified",
+    )
 
 
 def audit_mounted_routes(app: FastAPI) -> ApiReadinessAudit:
@@ -142,27 +161,61 @@ def audit_mounted_routes(app: FastAPI) -> ApiReadinessAudit:
         seen.add(route.key)
         system_reason = _system_route_reason(route)
         if system_reason is not None:
-            records.append(RouteReadinessRecord(route.method, route.path, route.name, None, None, False, True, system_reason))
+            records.append(
+                RouteReadinessRecord(
+                    route.method,
+                    route.path,
+                    route.name,
+                    None,
+                    None,
+                    False,
+                    True,
+                    system_reason,
+                )
+            )
             continue
         policy = readiness_for_path(route.path)
         if policy is None:
-            records.append(RouteReadinessRecord(route.method, route.path, route.name, None, None, False, False, "unclassified"))
+            records.append(
+                RouteReadinessRecord(
+                    route.method,
+                    route.path,
+                    route.name,
+                    None,
+                    None,
+                    False,
+                    False,
+                    "unclassified",
+                )
+            )
             continue
         records.append(_record_for_policy(route, policy))
-    return ApiReadinessAudit(tuple(records), tuple(sorted(duplicates)), route_inventory_digest(app))
+    return ApiReadinessAudit(
+        tuple(records),
+        tuple(sorted(duplicates)),
+        route_inventory_digest(app),
+    )
 
 
 def readiness_report(app: FastAPI) -> dict[str, object]:
     return audit_mounted_routes(app).to_dict()
 
 
-def validate_mounted_route_readiness(app: FastAPI, *, expected_inventory_digest: str | None = None) -> None:
+def validate_mounted_route_readiness(
+    app: FastAPI,
+    *,
+    expected_inventory_digest: str | None = None,
+) -> None:
     audit = audit_mounted_routes(app)
     if audit.duplicate_route_keys:
-        rendered = ", ".join(f"{method} {path}" for method, path in audit.duplicate_route_keys)
+        rendered = ", ".join(
+            f"{method} {path}" for method, path in audit.duplicate_route_keys
+        )
         raise ValueError(f"duplicate mounted API route policies: {rendered}")
     if audit.unknown_records:
-        rendered = ", ".join(f"{record.method} {record.path}" for record in audit.unknown_records)
+        rendered = ", ".join(
+            f"{record.method} {record.path}" for record in audit.unknown_records
+        )
         raise ValueError(f"unclassified mounted API routes: {rendered}")
     if expected_inventory_digest is not None and audit.inventory_digest != expected_inventory_digest:
         raise ValueError(
@@ -171,12 +224,25 @@ def validate_mounted_route_readiness(app: FastAPI, *, expected_inventory_digest:
         )
 
 
-def classified_records(records: Iterable[RouteReadinessRecord]) -> tuple[RouteReadinessRecord, ...]:
-    return tuple(record for record in records if not record.ignored and record.surface_id is not None)
+def classified_records(
+    records: Iterable[RouteReadinessRecord],
+) -> tuple[RouteReadinessRecord, ...]:
+    return tuple(
+        record for record in records if not record.ignored and record.surface_id is not None
+    )
 
 
 __all__ = [
-    "ApiReadinessAudit", "MountedRoute", "RouteReadinessRecord", "SYSTEM_ROUTE_POLICIES",
-    "audit_mounted_routes", "classified_records", "enumerate_mounted_routes", "normalize_route_method",
-    "normalize_route_path", "readiness_report", "route_inventory_digest", "validate_mounted_route_readiness",
+    "ApiReadinessAudit",
+    "MountedRoute",
+    "RouteReadinessRecord",
+    "SYSTEM_ROUTE_POLICIES",
+    "audit_mounted_routes",
+    "classified_records",
+    "enumerate_mounted_routes",
+    "normalize_route_method",
+    "normalize_route_path",
+    "readiness_report",
+    "route_inventory_digest",
+    "validate_mounted_route_readiness",
 ]
