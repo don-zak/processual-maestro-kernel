@@ -5,9 +5,10 @@ import io
 import json
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from processual_api.billing.maestro_units import (
     MAESTRO_UNIT_CONTRACT_VERSION,
@@ -238,7 +239,10 @@ def _validate_top_ups(
             raise BillingStatementIntegrityError(
                 "reversed top-up must have zero net units"
             )
-        if package_status in {"active", "manual_review"} and net_units_added <= 0:
+        if (
+            package_status in {"active", "manual_review"}
+            and net_units_added <= 0
+        ):
             raise BillingStatementIntegrityError(
                 "active top-up must retain positive net units"
             )
@@ -617,12 +621,25 @@ def render_statement_pdf(statement: dict[str, Any]) -> bytes:
         "Included plan allowance     "
         f"{balance['base_allowance_units']:,} MU"
     )
-    line(f"Rollover                    {balance['rollover_units']:,} MU")
-    line(f"Additional packages (net)   {balance['top_up_units']:,} MU")
-    line(f"Available                   {balance['available_units']:,} MU")
-    line(f"Consumed                    {balance['consumed_units']:,} MU")
     line(
-        f"Closing balance             {balance['remaining_units']:,} MU",
+        f"Rollover                    "
+        f"{balance['rollover_units']:,} MU"
+    )
+    line(
+        f"Additional packages (net)   "
+        f"{balance['top_up_units']:,} MU"
+    )
+    line(
+        f"Available                   "
+        f"{balance['available_units']:,} MU"
+    )
+    line(
+        f"Consumed                    "
+        f"{balance['consumed_units']:,} MU"
+    )
+    line(
+        f"Closing balance             "
+        f"{balance['remaining_units']:,} MU",
         gap=20,
     )
 
@@ -636,7 +653,8 @@ def render_statement_pdf(statement: dict[str, Any]) -> bytes:
             )
             line(
                 f"Status {package.get('package_status', 'active')} | "
-                f"Net {package.get('net_units_added', package['units_added']):,} MU"
+                f"Net "
+                f"{package.get('net_units_added', package['units_added']):,} MU"
             )
             line(
                 f"Purchase {package['purchase_ref']} | "
