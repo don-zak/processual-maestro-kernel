@@ -136,31 +136,7 @@
     return card;
   }
 
-  function ensureSupervisorHomeConsole() {
-    const existing = document.getElementById('admin-supervisor-home-console');
-    if (existing) return existing;
-
-    const overviewHost = ensureHost();
-    if (!overviewHost || !overviewHost.parentNode) return null;
-
-    const consoleCard = document.createElement('div');
-    consoleCard.className = 'card';
-    consoleCard.id = 'admin-supervisor-home-console';
-    consoleCard.innerHTML = `
-      <div class="sec-hdr">
-        <div class="sh-title">Supervisor Operations Center</div>
-        <div class="sh-sub">A visibility hub for supervisor operations</div>
-      </div>
-      <div class="muted">
-        Backend enforcement remains authoritative; this surface exposes no raw keys or provider secrets.
-      </div>
-    `;
-    overviewHost.parentNode.insertBefore(consoleCard, overviewHost);
-    return consoleCard;
-  }
-
   function renderSummary(summary) {
-    ensureSupervisorHomeConsole();
     const host = ensureHost();
     if (!host) return;
 
@@ -186,7 +162,6 @@
   }
 
   function renderError(error) {
-    ensureSupervisorHomeConsole();
     const host = ensureHost();
     if (!host) return;
     host.innerHTML = `
@@ -201,7 +176,6 @@
   }
 
   async function refreshSupervisorOverviewCounters() {
-    ensureSupervisorHomeConsole();
     const host = ensureHost();
     if (!host) return;
 
@@ -231,6 +205,5 @@
     summarizeRequests,
   };
 
-  ensureSupervisorHomeConsole();
   scheduleRefresh();
 })();
