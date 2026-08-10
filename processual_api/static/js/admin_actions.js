@@ -52,6 +52,24 @@
     document.head.appendChild(script);
   }
 
+  function loadEnterpriseFailureReview() {
+    if (!document.querySelector('link[data-admin-enterprise-failure-review-style]')) {
+      const style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = '/console/css/admin_enterprise_failure_review.css?v=enterprise-failure-review1';
+      style.dataset.adminEnterpriseFailureReviewStyle = 'true';
+      document.head.appendChild(style);
+    }
+
+    if (!document.querySelector('script[data-admin-enterprise-failure-review-script]')) {
+      const script = document.createElement('script');
+      script.src = '/console/js/admin_enterprise_failure_review.js?v=enterprise-failure-review1';
+      script.defer = true;
+      script.dataset.adminEnterpriseFailureReviewScript = 'true';
+      document.body.appendChild(script);
+    }
+  }
+
   function bindAdminActions() {
     const clientButton = document.getElementById('admin-client-console-btn');
     const logoutButton = document.getElementById('admin-logout-btn');
@@ -71,12 +89,14 @@
     }
 
     loadAdminMarketplaceCatalog();
+    loadEnterpriseFailureReview();
   }
 
   window.PMK_ADMIN_ACTIONS = {
     bindAdminActions,
     clearAuthState,
     loadAdminMarketplaceCatalog,
+    loadEnterpriseFailureReview,
     logout,
     openClientConsole,
   };
