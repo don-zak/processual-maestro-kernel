@@ -41,6 +41,8 @@ def test_usage_log_middleware_attaches_quota_metadata(monkeypatch):
         "role": "service",
         "quota": {
             "scope": "evaluation",
+            "metric": "maestro_units",
+            "period": "2026-08",
             "plan_id": "enterprise_integration",
             "limit": 500_000,
             "used": 125,
@@ -64,6 +66,8 @@ def test_usage_log_middleware_attaches_quota_metadata(monkeypatch):
     assert record["endpoint"] == "/cgt/govern/auto-repair"
     assert record["units_charged"] == 5
     assert record["quota_scope"] == "evaluation"
+    assert record["quota_metric"] == "maestro_units"
+    assert record["quota_period"] == "2026-08"
     assert record["quota_limit"] == 500_000
     assert record["quota_used"] == 125
     assert record["quota_requested"] == 5
@@ -94,6 +98,8 @@ def test_usage_log_store_persists_quota_metadata(tmp_path, monkeypatch):
         "role": "service",
         "units_charged": 5,
         "quota_scope": "evaluation",
+        "quota_metric": "maestro_units",
+        "quota_period": "2026-08",
         "quota_limit": 500_000,
         "quota_used": 125,
         "quota_requested": 5,
@@ -111,13 +117,15 @@ def test_usage_log_store_persists_quota_metadata(tmp_path, monkeypatch):
     assert len(records) == 1
     record = records[0]
 
-    assert record["pricing_version"] == "2026-07-byok-v1"
+    assert record["pricing_version"] == "2026-08-maestro-units-v1"
     assert record["billing_policy"] == "byok"
-    assert record["billing_scope"] == "maestro_usage_units"
+    assert record["billing_scope"] == "maestro_units"
     assert record["provider_cost_included"] is False
     assert record["endpoint_class"] == "governance_evaluation"
     assert record["units_charged"] == 5
     assert record["quota_scope"] == "evaluation"
+    assert record["quota_metric"] == "maestro_units"
+    assert record["quota_period"] == "2026-08"
     assert record["quota_limit"] == 500_000
     assert record["quota_used"] == 125
     assert record["quota_requested"] == 5
