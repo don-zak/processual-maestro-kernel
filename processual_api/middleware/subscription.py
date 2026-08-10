@@ -48,6 +48,9 @@ _PUBLIC_PATHS = {
     "/favicon.ico",
 }
 
+# Administrative authorization is resolved by the route's identity/scope authority.
+# It must not be coupled to a customer subscription lookup.
+_SUBSCRIPTION_EXEMPT_PREFIXES = {"/settings/admin/"}
 _SUSPENSION_ALLOWED_PREFIXES = {"/billing"}
 _READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
 _JWT_SECRET = None
@@ -133,6 +136,7 @@ class _SubscriptionAccessMiddleware(BaseHTTPMiddleware):
             path in _PUBLIC_PATHS
             or path.startswith("/static/")
             or path.startswith("/console/")
+            or any(path.startswith(prefix) for prefix in _SUBSCRIPTION_EXEMPT_PREFIXES)
         ):
             return await call_next(request)
 
