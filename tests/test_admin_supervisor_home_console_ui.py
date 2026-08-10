@@ -44,12 +44,13 @@ def test_supervisor_operations_center_preserves_safe_boundaries() -> None:
     assert "provider_secret" not in fragment
     assert "encrypted_key" not in fragment
 
-def test_supervisor_home_console_is_rehydrated_by_admin_runtime() -> None:
+
+def test_supervisor_home_console_is_not_recreated_by_admin_runtime() -> None:
     source = read_text("processual_api/static/js/admin_supervisor_stats.js")
 
-    assert "ensureSupervisorHomeConsole" in source
-    assert "admin-supervisor-home-console" in source
-    assert "Supervisor Operations Center" in source
-    assert "visibility hub for supervisor operations" in source
-    assert "insertBefore(consoleCard, overviewHost)" in source
-    assert "ensureSupervisorHomeConsole();" in source
+    assert "ensureSupervisorHomeConsole" not in source
+    assert "admin-supervisor-home-console" not in source
+    assert "Supervisor Operations Center" not in source
+    assert "insertBefore(consoleCard, overviewHost)" not in source
+    assert "document.getElementById(HOST_ID)" in source
+    assert "scheduleRefresh" in source
