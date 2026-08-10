@@ -95,7 +95,16 @@ def _as_int(value: Any, default: int) -> int:
         return default
 
 
-def _enforce_authoritative_capability(*, plan_id: str, policy: dict[str, Any], endpoint: str) -> None:
+def _enforce_authoritative_capability(
+    *,
+    plan_id: str,
+    policy: dict[str, Any],
+    endpoint: str,
+    method: str | None = None,
+) -> None:
+    # method is intentionally accepted for backwards-compatible direct callers;
+    # endpoint capability authority is method-agnostic in the Maestro contract.
+    del method
     if policy.get("source") != "authoritative_fulfillment_catalog":
         return
     capability_code = maestro_capability_for_endpoint(endpoint)
@@ -120,9 +129,6 @@ def _reset_monthly_period_if_needed(key: dict[str, Any], *, now: datetime) -> No
     stored_period = str(key.get("quota_period") or "")
     period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-    # Legacy quota records predate period metadata. Establish the current monthly
-    # period without erasing usage already accumulated in that record. A reset is
-    # performed only after a record has an explicit prior period to compare.
     if not stored_period:
         key["quota_period"] = current_period
         key["quota_period_started_at"] = period_start
@@ -191,7 +197,12 @@ def consume_quota(
                 key["plan_id"] = plan_id
                 key["quota_policy"] = effective_policy
 
-            _enforce_authoritative_capability(plan_id=plan_id, policy=effective_policy, endpoint=endpoint)
+            _enforce_authoritative_capability(
+                plan_id=plan_id,
+                policy=effective_policy,
+                method=method,
+                endpoint=endpoint,
+            )
             _reset_monthly_period_if_needed(key, now=now_dt)
             quota_used = _as_int(key.get("quota_used"), 0)
 
