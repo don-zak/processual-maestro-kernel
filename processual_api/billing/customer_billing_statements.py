@@ -12,6 +12,7 @@ from typing import Any, Iterable
 from processual_api.billing.maestro_units import (
     MAESTRO_UNIT_CONTRACT_VERSION,
     MAESTRO_UNIT_METRIC,
+    is_maestro_metered_endpoint,
     normalize_maestro_metric_code,
 )
 from processual_api.billing.usage_pricing import (
@@ -88,9 +89,11 @@ def _record_period(record: dict[str, Any]) -> str:
 
 
 def _is_billable(record: dict[str, Any]) -> bool:
+    endpoint = str(record.get("endpoint") or "")
     status_code = _as_int(record.get("status_code"), 0)
     return (
-        200 <= status_code < 400
+        is_maestro_metered_endpoint(endpoint)
+        and 200 <= status_code < 400
         and not bool(record.get("quota_rejected", False))
     )
 
@@ -183,7 +186,7 @@ def _validate_top_ups(
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     seen_purchase_refs: set[str] = set()
-    total = 0
+    net_total = 0
 
     for raw in top_ups:
         if not isinstance(raw, dict):
@@ -195,8 +198,16 @@ def _validate_top_ups(
         purchase_ref = str(item.get("purchase_ref") or "").strip()
         grant_ref = str(item.get("grant_ref") or "").strip()
         units_added = _as_int(item.get("units_added"), 0)
+        net_units_added = _as_int(
+            item.get("net_units_added"),
+            units_added,
+        )
+        reversal_units = _as_int(item.get("reversal_units"), 0)
         bundle_count = _as_int(item.get("bundle_count"), 0)
         bundle_units = _as_int(item.get("bundle_units"), 0)
+        package_status = str(
+            item.get("package_status") or "active"
+        )
 
         if (
             not purchase_ref
@@ -215,14 +226,30 @@ def _validate_top_ups(
             raise BillingStatementIntegrityError(
                 "top-up bundle geometry does not reconcile"
             )
+        if (
+            reversal_units < 0
+            or reversal_units > units_added
+            or net_units_added != units_added - reversal_units
+        ):
+            raise BillingStatementIntegrityError(
+                "top-up reversal geometry does not reconcile"
+            )
+        if package_status == "reversed" and net_units_added != 0:
+            raise BillingStatementIntegrityError(
+                "reversed top-up must have zero net units"
+            )
+        if package_status in {"active", "manual_review"} and net_units_added <= 0:
+            raise BillingStatementIntegrityError(
+                "active top-up must retain positive net units"
+            )
 
         seen_purchase_refs.add(purchase_ref)
-        total += units_added
+        net_total += net_units_added
         items.append(item)
 
-    if total != expected_units:
+    if net_total != expected_units:
         raise BillingStatementIntegrityError(
-            "granted top-up detail does not reconcile "
+            "granted top-up detail and reversals do not reconcile "
             "to authoritative top-up units"
         )
     return items
@@ -346,7 +373,15 @@ def build_billing_statement(
         0,
     )
     detailed_top_up_units = sum(
-        item["units_added"]
+        _as_int(item.get("net_units_added"), 0)
+        for item in top_up_items
+    )
+    purchased_top_up_units = sum(
+        _as_int(item.get("units_added"), 0)
+        for item in top_up_items
+    )
+    reversed_top_up_units = sum(
+        _as_int(item.get("reversal_units"), 0)
         for item in top_up_items
     )
 
@@ -405,6 +440,8 @@ def build_billing_statement(
             "reconciled": item_total == authoritative_used,
             "unattributed_units": unattributed,
             "authoritative_top_up_units": top_up_units,
+            "purchased_top_up_units": purchased_top_up_units,
+            "reversed_top_up_units": reversed_top_up_units,
             "detailed_top_up_units": detailed_top_up_units,
             "top_ups_reconciled": (
                 detailed_top_up_units == top_up_units
@@ -581,7 +618,7 @@ def render_statement_pdf(statement: dict[str, Any]) -> bytes:
         f"{balance['base_allowance_units']:,} MU"
     )
     line(f"Rollover                    {balance['rollover_units']:,} MU")
-    line(f"Additional packages         {balance['top_up_units']:,} MU")
+    line(f"Additional packages (net)   {balance['top_up_units']:,} MU")
     line(f"Available                   {balance['available_units']:,} MU")
     line(f"Consumed                    {balance['consumed_units']:,} MU")
     line(
@@ -595,7 +632,11 @@ def render_statement_pdf(statement: dict[str, Any]) -> bytes:
             line(
                 f"{package['bundle_count']} x "
                 f"{package['bundle_units']:,} MU | "
-                f"{package['units_added']:,} MU added"
+                f"{package['units_added']:,} MU purchased"
+            )
+            line(
+                f"Status {package.get('package_status', 'active')} | "
+                f"Net {package.get('net_units_added', package['units_added']):,} MU"
             )
             line(
                 f"Purchase {package['purchase_ref']} | "
@@ -603,6 +644,12 @@ def render_statement_pdf(statement: dict[str, Any]) -> bytes:
                 f"{package['settlement_amount']} "
                 f"{package['settlement_currency']}"
             )
+            if package.get("reversal_ref"):
+                line(
+                    f"Adjustment {package['reversal_ref']} | "
+                    f"-{package.get('reversal_units', 0):,} MU | "
+                    f"{package.get('reversal_reason') or 'reversal'}"
+                )
             line(f"Granted {package['granted_at']}", gap=18)
 
     line("Usage breakdown", bold=True)
