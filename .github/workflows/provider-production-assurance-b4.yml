@@ -9,6 +9,7 @@ on:
       - "processual_api/integrations/provider_event_inbox.py"
       - "tests/test_provider_production_assurance_stage4.py"
       - "tests/test_provider_event_inbox_stage4.py"
+      - "tests/test_provider_assurance_hardening_stage4.py"
       - "tests/test_client_provider_connection_endpoint_regression.py"
       - "tests/test_external_connectivity_r10_document_and_exports.py"
       - ".github/workflows/provider-production-assurance-b4.yml"
@@ -36,6 +37,7 @@ jobs:
             processual_api/integrations/provider_event_inbox.py \
             tests/test_provider_production_assurance_stage4.py \
             tests/test_provider_event_inbox_stage4.py \
+            tests/test_provider_assurance_hardening_stage4.py \
             --output-format=github
 
       - name: Stage 4 provider production assurance closure tests
@@ -45,5 +47,6 @@ jobs:
           python -m pytest -q \
             tests/test_provider_production_assurance_stage4.py \
             tests/test_provider_event_inbox_stage4.py \
+            tests/test_provider_assurance_hardening_stage4.py \
             tests/test_client_provider_connection_endpoint_regression.py \
             tests/test_external_connectivity_r10_document_and_exports.py
