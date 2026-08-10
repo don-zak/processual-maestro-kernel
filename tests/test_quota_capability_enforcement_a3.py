@@ -33,7 +33,12 @@ def test_authoritative_capability_denial_is_fail_closed(monkeypatch) -> None:
         )
 
     assert captured.value.status_code == 403
-    assert captured.value.detail == "Subscription plan does not permit this operation."
+    assert captured.value.detail == {
+        "error": "plan_capability_denied",
+        "plan_id": "business",
+        "capability_code": "maestro_execution",
+        "maestro_unit_metric": "maestro_units",
+    }
 
 
 def test_legacy_policy_is_not_forced_through_new_entitlement_contract(monkeypatch) -> None:
@@ -74,10 +79,13 @@ def test_manual_policy_is_not_forced_through_new_entitlement_contract(monkeypatc
     assert called is False
 
 
-def test_counted_endpoint_has_declared_capability() -> None:
-    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES == {
-        ("POST", "/cgt/govern"): "maestro_execution"
-    }
-    assert quota_store.COUNTED_ENDPOINTS == set(
-        quota_store.COUNTED_ENDPOINT_CAPABILITIES
-    )
+def test_counted_endpoints_have_declared_capabilities() -> None:
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/cgt/govern")] == "maestro_execution"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/cgt/analyze")] == "maestro_execution"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/cgt/govern/batch")] == "maestro_execution"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/cgt/govern/compare")] == "enterprise_governance"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/cgt/govern/report")] == "enterprise_governance"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/cgt/govern/auto-repair")] == "enterprise_governance"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/reports/fate")] == "maestro_execution"
+    assert quota_store.COUNTED_ENDPOINT_CAPABILITIES[("POST", "/reports/generate-llm")] == "maestro_execution"
+    assert quota_store.COUNTED_ENDPOINTS == set(quota_store.COUNTED_ENDPOINT_CAPABILITIES)
