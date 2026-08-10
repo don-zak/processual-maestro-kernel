@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import TracebackType
@@ -8,6 +9,7 @@ from typing import Self
 
 import pytest
 
+from processual_api.billing.commercial_event_contracts import CommercialEvent
 from processual_api.billing.commercial_settings_top_up_checkout_contracts import (
     TopUpCheckoutChannel,
 )
@@ -28,7 +30,12 @@ from processual_api.billing.commercial_top_up_models import (
     CommercialTopUpPaymentEvidence,
 )
 from processual_api.billing.commercial_top_up_order_grant_contracts import (
+    TopUpOrderState,
     UnitGrantOutcome,
+)
+from processual_api.billing.commercial_top_up_transition_authority import (
+    TopUpTransitionEvidence,
+    build_verified_payment_grant_events,
 )
 
 
@@ -66,10 +73,7 @@ class FakePaymentRepository:
         self,
         order_id: uuid.UUID,
     ) -> CommercialTopUpPaymentEvidence | None:
-        return next(
-            (item for item in self.items if item.order_id == order_id),
-            None,
-        )
+        return next((item for item in self.items if item.order_id == order_id), None)
 
     async def get_by_provider_reference(
         self,
@@ -95,17 +99,18 @@ class FakeGrantRepository:
         for_update: bool = False,
     ) -> CommercialTopUpGrant | None:
         assert isinstance(for_update, bool)
-        return next(
-            (item for item in self.items if item.order_id == order_id),
-            None,
-        )
+        return next((item for item in self.items if item.order_id == order_id), None)
 
     async def get_by_idempotency_key(
         self,
         grant_idempotency_key: str,
     ) -> CommercialTopUpGrant | None:
         return next(
-            (item for item in self.items if item.grant_idempotency_key == grant_idempotency_key),
+            (
+                item
+                for item in self.items
+                if item.grant_idempotency_key == grant_idempotency_key
+            ),
             None,
         )
 
@@ -121,12 +126,32 @@ class FakeAuditRepository:
         self.items.append(record)
 
 
+class FakeEventLedgerRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, CommercialEvent] = {}
+        self.pending: dict[str, CommercialEvent] = {}
+
+    async def get_by_idempotency_key(self, canonical_key: str) -> CommercialEvent | None:
+        return self.pending.get(canonical_key) or self.items.get(canonical_key)
+
+    def append(self, event: CommercialEvent) -> None:
+        self.pending[event.idempotency_key.canonical] = event
+
+    def commit(self) -> None:
+        self.items.update(self.pending)
+        self.pending.clear()
+
+    def rollback(self) -> None:
+        self.pending.clear()
+
+
 class FakeUnitOfWork:
     def __init__(self) -> None:
         self.orders = FakeOrderRepository()
         self.payments = FakePaymentRepository()
         self.grants = FakeGrantRepository()
         self.audit = FakeAuditRepository()
+        self.event_ledger = FakeEventLedgerRepository()
         self.commits = 0
         self.rollbacks = 0
 
@@ -140,16 +165,19 @@ class FakeUnitOfWork:
         traceback: TracebackType | None,
     ) -> None:
         if exc_type is not None or self.commits == 0:
+            self.event_ledger.rollback()
             self.rollbacks += 1
 
     async def commit(self) -> None:
+        self.event_ledger.commit()
         self.commits += 1
 
     async def rollback(self) -> None:
+        self.event_ledger.rollback()
         self.rollbacks += 1
 
 
-def enabled_policy() -> TopUpApplicationPolicy:
+def enabled_policy(*, event_ledger_enabled: bool = True) -> TopUpApplicationPolicy:
     return TopUpApplicationPolicy(
         order_creation_enabled=True,
         payment_verification_enabled=True,
@@ -158,13 +186,11 @@ def enabled_policy() -> TopUpApplicationPolicy:
         payment_storage_enabled=True,
         grant_storage_enabled=True,
         audit_storage_enabled=True,
+        event_ledger_enabled=event_ledger_enabled,
     )
 
 
-def create_command(
-    *,
-    order_id: uuid.UUID | None = None,
-) -> CreateTopUpOrderCommand:
+def create_command(*, order_id: uuid.UUID | None = None) -> CreateTopUpOrderCommand:
     return CreateTopUpOrderCommand(
         order_id=order_id or uuid.uuid4(),
         account_id=uuid.uuid4(),
@@ -191,17 +217,34 @@ def payment_command(order_id: uuid.UUID) -> RecordPaymentAndGrantCommand:
     )
 
 
+def authority_events(
+    command: RecordPaymentAndGrantCommand,
+    *,
+    occurred_at: datetime,
+) -> tuple[CommercialEvent, ...]:
+    return build_verified_payment_grant_events(
+        TopUpTransitionEvidence(
+            order_id=command.order_id,
+            provider_reference=command.provider_reference,
+            actor_reference=command.actor_reference,
+            evidence_reference=command.immutable_evidence_reference,
+            occurred_at=occurred_at,
+            payment_payload_digest=(
+                "sha256:b10f3e6ff1199ed1a3c78d4e78337127976332f185178130f57e815ea8a8f2a0"
+            ),
+            grant_payload_digest=(
+                "sha256:d99e3f6f1fef46d6b1d9a14d1b3f72591f1b5984afcd88bcaea2da388cc8e520"
+            ),
+        )
+    )
+
+
 @pytest.mark.asyncio
 async def test_default_policy_fails_closed_before_opening_uow() -> None:
     uow = FakeUnitOfWork()
-    service = CommercialTopUpApplicationService(
-        unit_of_work_factory=lambda: uow,
-    )
+    service = CommercialTopUpApplicationService(unit_of_work_factory=lambda: uow)
 
-    with pytest.raises(
-        TopUpApplicationServiceDisabledError,
-        match="order creation",
-    ):
+    with pytest.raises(TopUpApplicationServiceDisabledError, match="order creation"):
         await service.create_order(create_command())
 
     assert uow.commits == 0
@@ -227,6 +270,7 @@ async def test_order_creation_and_audit_commit_once() -> None:
     assert uow.rollbacks == 0
     assert uow.orders.items[command.order_id].state == "awaiting_payment"
     assert [item.action for item in uow.audit.items] == ["order_created"]
+    assert uow.event_ledger.items == {}
 
 
 @pytest.mark.asyncio
@@ -279,7 +323,7 @@ async def test_idempotency_conflict_rolls_back() -> None:
 
 
 @pytest.mark.asyncio
-async def test_payment_grant_and_two_audits_commit_atomically() -> None:
+async def test_payment_grant_audit_and_authority_events_commit_atomically() -> None:
     uow = FakeUnitOfWork()
     command = create_command()
     service = CommercialTopUpApplicationService(
@@ -296,6 +340,15 @@ async def test_payment_grant_and_two_audits_commit_atomically() -> None:
     assert uow.commits == 2
     assert len(uow.payments.items) == 1
     assert len(uow.grants.items) == 1
+    assert len(uow.event_ledger.items) == 4
+    assert uow.event_ledger.pending == {}
+    events = tuple(uow.event_ledger.items.values())
+    assert [(event.current_state, event.next_state) for event in events] == [
+        ("awaiting_payment", "payment_pending"),
+        ("payment_pending", "payment_verified"),
+        ("payment_verified", "grant_pending"),
+        ("grant_pending", "granted"),
+    ]
     assert [item.action for item in uow.audit.items] == [
         "order_created",
         "payment_verified",
@@ -305,7 +358,7 @@ async def test_payment_grant_and_two_audits_commit_atomically() -> None:
 
 
 @pytest.mark.asyncio
-async def test_payment_replay_does_not_duplicate_grant_or_audit() -> None:
+async def test_payment_replay_does_not_duplicate_grant_audit_or_events() -> None:
     uow = FakeUnitOfWork()
     command = create_command()
     service = CommercialTopUpApplicationService(
@@ -323,11 +376,115 @@ async def test_payment_replay_does_not_duplicate_grant_or_audit() -> None:
     assert len(uow.payments.items) == 1
     assert len(uow.grants.items) == 1
     assert len(uow.audit.items) == 3
+    assert len(uow.event_ledger.items) == 4
+    assert uow.event_ledger.pending == {}
     assert uow.commits == 2
 
 
 @pytest.mark.asyncio
-async def test_amount_mismatch_rolls_back_without_partial_records() -> None:
+async def test_event_ledger_disabled_fails_before_payment_unit_of_work() -> None:
+    uow = FakeUnitOfWork()
+    command = create_command()
+    creator = CommercialTopUpApplicationService(
+        unit_of_work_factory=lambda: uow,
+        policy=enabled_policy(),
+    )
+    await creator.create_order(command)
+    service = CommercialTopUpApplicationService(
+        unit_of_work_factory=lambda: uow,
+        policy=enabled_policy(event_ledger_enabled=False),
+    )
+
+    with pytest.raises(TopUpApplicationServiceDisabledError, match="event ledger"):
+        await service.record_payment_and_grant(payment_command(command.order_id))
+
+    assert uow.commits == 1
+    assert uow.rollbacks == 0
+    assert uow.event_ledger.items == {}
+    assert uow.payments.items == []
+    assert uow.grants.items == []
+
+
+@pytest.mark.asyncio
+async def test_unexpected_order_state_fails_before_event_staging() -> None:
+    uow = FakeUnitOfWork()
+    command = create_command()
+    service = CommercialTopUpApplicationService(
+        unit_of_work_factory=lambda: uow,
+        policy=enabled_policy(),
+    )
+    await service.create_order(command)
+    uow.orders.items[command.order_id].state = TopUpOrderState.PAYMENT_PENDING.value
+
+    with pytest.raises(TopUpApplicationConflictError, match="awaiting_payment"):
+        await service.record_payment_and_grant(payment_command(command.order_id))
+
+    assert uow.commits == 1
+    assert uow.rollbacks == 1
+    assert uow.event_ledger.items == {}
+    assert uow.event_ledger.pending == {}
+    assert uow.payments.items == []
+    assert uow.grants.items == []
+
+
+@pytest.mark.asyncio
+async def test_ledger_only_replay_fails_closed_without_domain_mutation() -> None:
+    uow = FakeUnitOfWork()
+    fixed_time = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
+    command = create_command()
+    payment = payment_command(command.order_id)
+    service = CommercialTopUpApplicationService(
+        unit_of_work_factory=lambda: uow,
+        policy=enabled_policy(),
+        clock=lambda: fixed_time,
+    )
+    await service.create_order(command)
+
+    for event in authority_events(payment, occurred_at=fixed_time):
+        uow.event_ledger.items[event.idempotency_key.canonical] = event
+
+    with pytest.raises(TopUpApplicationConflictError, match="replay exists"):
+        await service.record_payment_and_grant(payment)
+
+    assert uow.commits == 1
+    assert uow.rollbacks == 1
+    assert len(uow.event_ledger.items) == 4
+    assert uow.event_ledger.pending == {}
+    assert uow.payments.items == []
+    assert uow.grants.items == []
+    assert uow.orders.items[command.order_id].state == "awaiting_payment"
+
+
+@pytest.mark.asyncio
+async def test_ledger_conflict_rolls_back_without_partial_domain_records() -> None:
+    uow = FakeUnitOfWork()
+    fixed_time = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
+    command = create_command()
+    payment = payment_command(command.order_id)
+    service = CommercialTopUpApplicationService(
+        unit_of_work_factory=lambda: uow,
+        policy=enabled_policy(),
+        clock=lambda: fixed_time,
+    )
+    await service.create_order(command)
+    first_event = authority_events(payment, occurred_at=fixed_time)[0]
+    conflicting_event = replace(first_event, actor_reference="different-actor")
+    uow.event_ledger.items[first_event.idempotency_key.canonical] = conflicting_event
+
+    with pytest.raises(TopUpApplicationConflictError, match="ledger conflict"):
+        await service.record_payment_and_grant(payment)
+
+    assert uow.commits == 1
+    assert uow.rollbacks == 1
+    assert len(uow.event_ledger.items) == 1
+    assert uow.event_ledger.pending == {}
+    assert uow.payments.items == []
+    assert uow.grants.items == []
+    assert uow.orders.items[command.order_id].state == "awaiting_payment"
+
+
+@pytest.mark.asyncio
+async def test_amount_mismatch_rolls_back_without_partial_records_or_events() -> None:
     uow = FakeUnitOfWork()
     command = create_command()
     service = CommercialTopUpApplicationService(
@@ -353,6 +510,8 @@ async def test_amount_mismatch_rolls_back_without_partial_records() -> None:
     assert len(uow.payments.items) == 0
     assert len(uow.grants.items) == 0
     assert len(uow.audit.items) == 1
+    assert len(uow.event_ledger.items) == 0
+    assert uow.event_ledger.pending == {}
     assert uow.commits == 1
     assert uow.rollbacks == 1
 
@@ -363,6 +522,7 @@ def test_runtime_status_remains_fully_disabled() -> None:
     assert status["status"] == "draft_review"
     assert status["fail_closed_by_default"] is True
     assert status["atomic_payment_grant_audit_required"] is True
+    assert status["atomic_payment_grant_audit_event_ledger_required"] is True
     for key in (
         "order_creation_enabled",
         "payment_verification_enabled",
@@ -371,5 +531,6 @@ def test_runtime_status_remains_fully_disabled() -> None:
         "payment_storage_enabled",
         "grant_storage_enabled",
         "audit_storage_enabled",
+        "event_ledger_enabled",
     ):
         assert status[key] is False
