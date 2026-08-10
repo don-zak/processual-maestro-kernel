@@ -24,6 +24,15 @@ def canonical_payload_digest(payload: dict[str, object]) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def _validate_sha256_digest(value: str, *, field_name: str) -> None:
+    if len(value) != 64:
+        raise ValueError(f"{field_name} must be a sha256 hex digest")
+    try:
+        int(value, 16)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a sha256 hex digest") from exc
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderInboxEvent:
     provider_id: str
@@ -47,12 +56,7 @@ class ProviderInboxEvent:
             raise ValueError("provider event timestamps must be timezone-aware")
         if self.received_at < self.occurred_at:
             raise ValueError("received_at must not be before occurred_at")
-        if len(self.payload_digest) != 64:
-            raise ValueError("payload_digest must be a sha256 hex digest")
-        try:
-            int(self.payload_digest, 16)
-        except ValueError as exc:
-            raise ValueError("payload_digest must be a sha256 hex digest") from exc
+        _validate_sha256_digest(self.payload_digest, field_name="payload_digest")
 
     @property
     def canonical_idempotency_key(self) -> str:
@@ -85,8 +89,7 @@ def provider_event_chain_digest(
     *,
     genesis_digest: str = GENESIS_DIGEST,
 ) -> str:
-    if len(genesis_digest) != 64:
-        raise ValueError("genesis_digest must be a sha256 hex digest")
+    _validate_sha256_digest(genesis_digest, field_name="genesis_digest")
     previous = genesis_digest
     for event in events:
         material = "|".join(
