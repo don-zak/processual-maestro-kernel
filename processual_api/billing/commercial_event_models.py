@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, UniqueConstraint, Uuid, event, func
+from sqlalchemy import DateTime, Index, Integer, String, UniqueConstraint, Uuid, event, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from processual_api.db.base import Base
@@ -19,20 +19,29 @@ class CommercialEventRecord(Base):
     __tablename__ = "commercial_events"
     __table_args__ = (
         UniqueConstraint(
+            "event_id",
+            name="uq_commercial_events_event_id",
+        ),
+        UniqueConstraint(
             "canonical_idempotency_key",
             name="uq_commercial_events_canonical_idempotency_key",
         ),
         Index(
-            "ix_commercial_events_aggregate_time",
+            "ix_commercial_events_aggregate_sequence",
             "aggregate",
             "aggregate_id",
-            "occurred_at",
+            "ledger_sequence",
         ),
     )
 
+    ledger_sequence: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
     event_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        primary_key=True,
+        nullable=False,
     )
     aggregate: Mapped[str] = mapped_column(String(48), nullable=False)
     aggregate_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
