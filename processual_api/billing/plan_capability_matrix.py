@@ -11,7 +11,7 @@ from processual_api.billing.plan_fulfillment_catalog import (
     normalize_plan_code,
 )
 
-PLAN_CAPABILITY_MATRIX_VERSION: Final = "2026-08-plan-capabilities-v2"
+PLAN_CAPABILITY_MATRIX_VERSION: Final = "2026-08-plan-capabilities-v3"
 
 
 class CapabilityStatus(StrEnum):
@@ -56,6 +56,18 @@ _TOOL_CAPABILITIES = {
         customer_executable=True,
         production_allowed=True,
         notes="Interactive governed workflow execution is mounted and authenticated.",
+    ),
+    "durable_execution_internal": ToolCapability(
+        capability_code="durable_execution_internal",
+        entitlement_code="durable_execution_internal",
+        status=CapabilityStatus.INTERNAL_ONLY,
+        execution_surface="/internal/execution",
+        customer_executable=False,
+        production_allowed=False,
+        notes=(
+            "Durable execution is an internal control surface. It requires an explicit "
+            "authorization dependency and is not a customer plan entitlement."
+        ),
     ),
     "byok_provider_connection": ToolCapability(
         capability_code="byok_provider_connection",
@@ -247,6 +259,19 @@ def validate_plan_capability_matrix() -> None:
     advanced = TOOL_CAPABILITIES["advanced_integration"]
     if advanced.production_allowed or advanced.status is not CapabilityStatus.SANDBOX_ONLY:
         raise ValueError("advanced integration must remain sandbox-only")
+
+    durable = TOOL_CAPABILITIES["durable_execution_internal"]
+    if (
+        durable.status is not CapabilityStatus.INTERNAL_ONLY
+        or durable.customer_executable
+        or durable.production_allowed
+    ):
+        raise ValueError("durable execution must remain internal-only")
+    if any(
+        "durable_execution_internal" in spec.entitlement_codes
+        for spec in PLAN_FULFILLMENT_SPECS.values()
+    ):
+        raise ValueError("durable execution must not become a customer plan entitlement")
 
 
 validate_plan_capability_matrix()
