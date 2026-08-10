@@ -69,6 +69,12 @@ _RESOURCE_TYPES_BY_EVENT = {
     "subscription_payment_refunded": "subscription-invoices",
 }
 
+_EVIDENCE_SCHEMA_BY_RESOURCE = {
+    "orders": 3,
+    "subscriptions": 1,
+    "subscription-invoices": 1,
+}
+
 
 def _review(reason_code: str) -> LemonSqueezyReconciliationDecision:
     return LemonSqueezyReconciliationDecision(
@@ -126,7 +132,8 @@ def classify_lemon_squeezy_reconciliation(
     if not context.production_mode and not entry.test_mode:
         return _review("live_event_in_test_environment")
 
-    if entry.evidence_schema_version != 1:
+    expected_schema = _EVIDENCE_SCHEMA_BY_RESOURCE.get(entry.resource_type)
+    if expected_schema is None or entry.evidence_schema_version != expected_schema:
         return _review("verified_evidence_missing")
     if entry.provider_effective_at is None or not _is_aware(entry.provider_effective_at):
         return _review("provider_effective_at_invalid")
