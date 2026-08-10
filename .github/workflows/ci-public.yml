@@ -99,6 +99,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Prepare local verification runtime
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .verification-runtime/python .verification-runtime/bin
+          redis_package="$(python -c 'import pathlib, redis; print(pathlib.Path(redis.__file__).parent)')"
+          cp -R "$redis_package" .verification-runtime/python/redis
+          cp "$(command -v redis-server)" .verification-runtime/bin/redis-server
+          cp "$(command -v redis-cli)" .verification-runtime/bin/redis-cli
+
       - name: Upload public verification snapshot
         if: always()
         uses: actions/upload-artifact@v4
