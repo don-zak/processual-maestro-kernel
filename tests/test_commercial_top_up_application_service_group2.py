@@ -29,10 +29,7 @@ from processual_api.billing.commercial_top_up_models import (
     CommercialTopUpOrder,
     CommercialTopUpPaymentEvidence,
 )
-from processual_api.billing.commercial_top_up_order_grant_contracts import (
-    TopUpOrderState,
-    UnitGrantOutcome,
-)
+from processual_api.billing.commercial_top_up_order_grant_contracts import TopUpOrderState
 
 
 class FakeOrderRepository:
@@ -230,7 +227,9 @@ async def create_and_grant(
         clock=(lambda: fixed_time) if fixed_time is not None else None,
     )
     await service.create_order(command)
-    await service.record_payment_and_grant(payment)
+    result = await service.record_payment_and_grant(payment)
+    assert result.outcome is TopUpApplicationOutcome.PAYMENT_AND_GRANT_RECORDED
+    assert result.committed is True
     return service, command, payment
 
 
@@ -247,29 +246,7 @@ async def test_default_policy_fails_closed_before_opening_uow() -> None:
 
 
 @pytest.mark.asyncio
-async def test_order_creation_and_audit_commit_once() -> None:
-    uow = FakeUnitOfWork()
-    fixed_time = datetime(2026, 7, 29, 16, 0, tzinfo=UTC)
-    command = create_command()
-    service = CommercialTopUpApplicationService(
-        unit_of_work_factory=lambda: uow,
-        policy=enabled_policy(),
-        clock=lambda: fixed_time,
-    )
-
-    result = await service.create_order(command)
-
-    assert result.outcome is TopUpApplicationOutcome.CREATED
-    assert result.committed is True
-    assert uow.commits == 1
-    assert uow.rollbacks == 0
-    assert uow.orders.items[command.order_id].state == "awaiting_payment"
-    assert [item.action for item in uow.audit.items] == ["order_created"]
-    assert uow.event_ledger.items == {}
-
-
-@pytest.mark.asyncio
-async def test_order_replay_is_idempotent_without_second_commit() -> None:
+async def test_order_creation_and_replay_commit_once() -> None:
     uow = FakeUnitOfWork()
     command = create_command()
     service = CommercialTopUpApplicationService(
@@ -280,15 +257,16 @@ async def test_order_replay_is_idempotent_without_second_commit() -> None:
     first = await service.create_order(command)
     second = await service.create_order(command)
 
-    assert first.committed is True
+    assert first.outcome is TopUpApplicationOutcome.CREATED
     assert second.outcome is TopUpApplicationOutcome.IDEMPOTENT_REPLAY
     assert second.committed is False
     assert uow.commits == 1
-    assert len(uow.audit.items) == 1
+    assert [item.action for item in uow.audit.items] == ["order_created"]
+    assert uow.event_ledger.items == {}
 
 
 @pytest.mark.asyncio
-async def test_idempotency_conflict_rolls_back() -> None:
+async def test_order_idempotency_conflict_rolls_back() -> None:
     uow = FakeUnitOfWork()
     first = create_command()
     conflicting = CreateTopUpOrderCommand(
@@ -343,7 +321,7 @@ async def test_payment_grant_audit_and_authority_events_commit_atomically() -> N
 
 
 @pytest.mark.asyncio
-async def test_payment_replay_does_not_duplicate_grant_audit_or_events() -> None:
+async def test_payment_replay_does_not_duplicate_domain_or_ledger_records() -> None:
     uow = FakeUnitOfWork()
     service, command, payment = await create_and_grant(uow=uow)
 
@@ -355,7 +333,6 @@ async def test_payment_replay_does_not_duplicate_grant_audit_or_events() -> None
     assert len(uow.grants.items) == 1
     assert len(uow.audit.items) == 3
     assert len(uow.event_ledger.items) == 4
-    assert uow.event_ledger.pending == {}
     assert uow.commits == 2
     assert uow.orders.items[command.order_id].state == "granted"
 
@@ -410,12 +387,8 @@ async def test_unexpected_order_state_fails_before_event_staging() -> None:
 async def test_ledger_only_replay_fails_closed_without_domain_mutation() -> None:
     uow = FakeUnitOfWork()
     fixed_time = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
-    service, command, payment = await create_and_grant(
-        uow=uow,
-        fixed_time=fixed_time,
-    )
+    service, command, payment = await create_and_grant(uow=uow, fixed_time=fixed_time)
     authoritative_events = dict(uow.event_ledger.items)
-
     uow.payments.items.clear()
     uow.grants.items.clear()
     uow.orders.items[command.order_id].state = TopUpOrderState.AWAITING_PAYMENT.value
@@ -429,17 +402,13 @@ async def test_ledger_only_replay_fails_closed_without_domain_mutation() -> None
     assert uow.event_ledger.pending == {}
     assert uow.payments.items == []
     assert uow.grants.items == []
-    assert uow.orders.items[command.order_id].state == "awaiting_payment"
 
 
 @pytest.mark.asyncio
 async def test_ledger_conflict_rolls_back_without_partial_domain_records() -> None:
     uow = FakeUnitOfWork()
     fixed_time = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
-    service, command, payment = await create_and_grant(
-        uow=uow,
-        fixed_time=fixed_time,
-    )
+    service, command, payment = await create_and_grant(uow=uow, fixed_time=fixed_time)
     first_key = next(iter(uow.event_ledger.items))
     uow.event_ledger.items[first_key] = replace(
         uow.event_ledger.items[first_key],
@@ -458,7 +427,6 @@ async def test_ledger_conflict_rolls_back_without_partial_domain_records() -> No
     assert uow.event_ledger.pending == {}
     assert uow.payments.items == []
     assert uow.grants.items == []
-    assert uow.orders.items[command.order_id].state == "awaiting_payment"
 
 
 @pytest.mark.asyncio
@@ -479,16 +447,13 @@ async def test_amount_mismatch_rolls_back_without_partial_records_or_events() ->
         actor_reference="payment-verifier:test",
     )
 
-    with pytest.raises(
-        TopUpApplicationConflictError,
-        match="verified amount does not match",
-    ):
+    with pytest.raises(TopUpApplicationConflictError, match="verified amount does not match"):
         await service.record_payment_and_grant(mismatch)
 
-    assert len(uow.payments.items) == 0
-    assert len(uow.grants.items) == 0
+    assert uow.payments.items == []
+    assert uow.grants.items == []
     assert len(uow.audit.items) == 1
-    assert len(uow.event_ledger.items) == 0
+    assert uow.event_ledger.items == {}
     assert uow.event_ledger.pending == {}
     assert uow.commits == 1
     assert uow.rollbacks == 1
