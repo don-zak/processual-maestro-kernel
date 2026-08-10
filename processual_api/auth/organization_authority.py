@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 
@@ -74,6 +75,25 @@ async def resolve_active_organization_authority(
     )
 
 
+async def resolve_current_organization_authority(
+    current_user: dict[str, Any],
+) -> OrganizationAuthority:
+    """Resolve organization authority from authenticated identity, never role claims."""
+
+    if current_user.get("session_type") != "identity_user":
+        raise OrganizationAuthorityError("identity user session required")
+
+    user_id = str(current_user.get("user_id") or current_user.get("sub") or "").strip()
+    organization_id = str(current_user.get("organization_id") or "").strip()
+    if not user_id or not organization_id:
+        raise OrganizationAuthorityError("organization identity is required")
+
+    return await resolve_active_organization_authority(
+        user_id=user_id,
+        organization_id=organization_id,
+    )
+
+
 def require_organization_role(
     authority: OrganizationAuthority,
     *allowed_roles: str,
@@ -89,4 +109,5 @@ __all__ = [
     "OrganizationAuthorityError",
     "require_organization_role",
     "resolve_active_organization_authority",
+    "resolve_current_organization_authority",
 ]
