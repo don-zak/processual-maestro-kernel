@@ -20,7 +20,7 @@ from processual_api.billing.maestro_units import (
 from processual_api.billing.usage_pricing import PRICING_VERSION, monthly_unit_allowance
 from processual_api.services.client_usage_summary import resolve_client_plan
 
-BILLING_STATEMENT_SCHEMA_VERSION = "2026-08-customer-billing-statement-v1"
+BILLING_STATEMENT_SCHEMA_VERSION = "2026-08-customer-billing-statement-v2"
 _SAFE_REF = re.compile(r"[^A-Za-z0-9_.-]+")
 
 _LINE_ITEM_LABELS = {
@@ -45,12 +45,7 @@ def _as_int(value: Any, default: int = 0) -> int:
 
 
 def _canonical_json(payload: dict[str, Any]) -> bytes:
-    return json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def statement_sha256(payload: dict[str, Any]) -> str:
@@ -67,29 +62,19 @@ def _period_bounds(period: str) -> tuple[str, str]:
             raise ValueError
     except (ValueError, AttributeError):
         raise ValueError("billing period must use YYYY-MM") from None
-
     start = f"{year:04d}-{month:02d}-01T00:00:00+00:00"
-    if month == 12:
-        end = f"{year + 1:04d}-01-01T00:00:00+00:00"
-    else:
-        end = f"{year:04d}-{month + 1:02d}-01T00:00:00+00:00"
+    end = f"{year + 1:04d}-01-01T00:00:00+00:00" if month == 12 else f"{year:04d}-{month + 1:02d}-01T00:00:00+00:00"
     return start, end
 
 
 def _record_period(record: dict[str, Any]) -> str:
     explicit = str(record.get("quota_period") or "").strip()
-    if explicit:
-        return explicit[:7]
-    return str(record.get("created_at") or "")[:7]
+    return explicit[:7] if explicit else str(record.get("created_at") or "")[:7]
 
 
 def _is_billable(record: dict[str, Any]) -> bool:
     status_code = _as_int(record.get("status_code"), 0)
     return 200 <= status_code < 400 and not bool(record.get("quota_rejected", False))
-
-
-def _client_record(record: dict[str, Any], client_id: str) -> bool:
-    return str(record.get("client_id") or "").strip() == client_id
 
 
 def _statement_ref(client_id: str, period: str, digest: str) -> str:
@@ -103,7 +88,6 @@ def read_usage_records(data_dir: Path) -> list[dict[str, Any]]:
         lines = path.read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         return []
-
     records: list[dict[str, Any]] = []
     for line in lines:
         if not line.strip():
@@ -130,17 +114,15 @@ def _line_items(records: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]]
     grouped: dict[str, dict[str, int]] = defaultdict(lambda: {"requests": 0, "units": 0})
     rejected_requests = 0
     rejected_attempted_units = 0
-
     for record in records:
         units = max(_as_int(record.get("units_charged"), 0), 0)
         if _is_billable(record):
-            endpoint_class = str(record.get("endpoint_class") or "metered_api_request")
-            grouped[endpoint_class]["requests"] += 1
-            grouped[endpoint_class]["units"] += units
+            code = str(record.get("endpoint_class") or "metered_api_request")
+            grouped[code]["requests"] += 1
+            grouped[code]["units"] += units
         elif bool(record.get("quota_rejected", False)) or _as_int(record.get("status_code"), 0) == 429:
             rejected_requests += 1
             rejected_attempted_units += units
-
     items = [
         {
             "code": code,
@@ -151,10 +133,32 @@ def _line_items(records: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]]
         for code, values in sorted(grouped.items())
         if values["units"] > 0
     ]
-    return items, {
-        "rejected_requests": rejected_requests,
-        "rejected_attempted_units": rejected_attempted_units,
-    }
+    return items, {"rejected_requests": rejected_requests, "rejected_attempted_units": rejected_attempted_units}
+
+
+def _validate_top_ups(top_ups: Iterable[dict[str, Any]], *, expected_units: int) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    total = 0
+    for raw in top_ups:
+        if not isinstance(raw, dict):
+            raise BillingStatementIntegrityError("top-up detail must be an object")
+        item = dict(raw)
+        purchase_ref = str(item.get("purchase_ref") or "").strip()
+        grant_ref = str(item.get("grant_ref") or "").strip()
+        units_added = _as_int(item.get("units_added"), 0)
+        bundle_count = _as_int(item.get("bundle_count"), 0)
+        bundle_units = _as_int(item.get("bundle_units"), 0)
+        if not purchase_ref or not grant_ref or purchase_ref in seen:
+            raise BillingStatementIntegrityError("invalid or duplicate granted top-up references")
+        if units_added <= 0 or bundle_count <= 0 or bundle_units <= 0 or bundle_count * bundle_units != units_added:
+            raise BillingStatementIntegrityError("top-up bundle geometry does not reconcile")
+        seen.add(purchase_ref)
+        total += units_added
+        items.append(item)
+    if total != expected_units:
+        raise BillingStatementIntegrityError("granted top-up detail does not reconcile to authoritative top-up units")
+    return items
 
 
 def build_billing_statement(
@@ -165,77 +169,62 @@ def build_billing_statement(
     usage_records: Iterable[dict[str, Any]],
     raw_settings: dict[str, Any] | None = None,
     quota_cycle: dict[str, Any] | None = None,
+    granted_top_ups: Iterable[dict[str, Any]] = (),
     issued_at: str | None = None,
 ) -> dict[str, Any]:
     period_start, period_end = _period_bounds(period)
     matching = [
         record
         for record in usage_records
-        if _client_record(record, client_id) and _record_period(record) == period
+        if str(record.get("client_id") or "").strip() == client_id and _record_period(record) == period
     ]
-
     items, rejected = _line_items(matching)
     attributed_units = sum(item["maestro_units"] for item in items)
 
     settings_payload = raw_settings if isinstance(raw_settings, dict) else {}
     resolved_plan, plan_source = resolve_client_plan(settings_payload)
     cycle = quota_cycle if isinstance(quota_cycle, dict) else {}
-    plan_id = str(cycle.get("plan_code") or resolved_plan or "unknown")
-    if not plan_id:
-        plan_id = "unknown"
-
+    plan_id = str(cycle.get("plan_code") or resolved_plan or "unknown") or "unknown"
     metric = normalize_maestro_metric_code(cycle.get("metric_code") or MAESTRO_UNIT_METRIC)
     if metric and metric != MAESTRO_UNIT_METRIC:
         raise BillingStatementIntegrityError("quota cycle does not use Maestro Units")
 
-    base_limit = max(
-        _as_int(cycle.get("base_limit_units"), monthly_unit_allowance(plan_id)),
-        0,
-    )
+    base_limit = max(_as_int(cycle.get("base_limit_units"), monthly_unit_allowance(plan_id)), 0)
     rollover_units = max(_as_int(cycle.get("rollover_units"), 0), 0)
     top_up_units = max(_as_int(cycle.get("top_up_units"), 0), 0)
+    top_up_items = _validate_top_ups(granted_top_ups, expected_units=top_up_units)
     available_units = base_limit + rollover_units + top_up_units
 
-    if cycle:
-        authoritative_used = max(_as_int(cycle.get("used_units"), 0), 0)
-        if attributed_units > authoritative_used:
-            raise BillingStatementIntegrityError(
-                "billable ledger units exceed authoritative quota-cycle usage"
-            )
-    else:
-        authoritative_used = attributed_units
-
+    authoritative_used = max(_as_int(cycle.get("used_units"), attributed_units), 0) if cycle else attributed_units
+    if attributed_units > authoritative_used:
+        raise BillingStatementIntegrityError("billable ledger units exceed authoritative quota-cycle usage")
     unattributed = authoritative_used - attributed_units
     if unattributed > 0:
-        items.append(
-            {
-                "code": "unattributed_authoritative_usage",
-                "label": _LINE_ITEM_LABELS["unattributed_authoritative_usage"],
-                "request_count": 0,
-                "maestro_units": unattributed,
-            }
-        )
+        items.append({
+            "code": "unattributed_authoritative_usage",
+            "label": _LINE_ITEM_LABELS["unattributed_authoritative_usage"],
+            "request_count": 0,
+            "maestro_units": unattributed,
+        })
 
     item_total = sum(item["maestro_units"] for item in items)
     if item_total != authoritative_used:
         raise BillingStatementIntegrityError("billing line items do not reconcile to quota usage")
+    for item in items:
+        item["usage_percent"] = 0.0 if authoritative_used <= 0 else round((item["maestro_units"] / authoritative_used) * 100, 2)
 
     closing_units = max(available_units - authoritative_used, 0)
-    issued_timestamp = issued_at or datetime.now(UTC).isoformat()
-    cycle_start = str(cycle.get("period_start") or period_start)
-    cycle_end = str(cycle.get("period_end") or period_end)
-
     statement: dict[str, Any] = {
         "schema_version": BILLING_STATEMENT_SCHEMA_VERSION,
         "statement_ref": "",
         "statement_sha256": "",
-        "issued_at": issued_timestamp,
+        "issued_at": issued_at or datetime.now(UTC).isoformat(),
         "client_id": client_id,
         "user_id": user_id,
         "billing_period": {
             "period": period,
-            "period_start": cycle_start,
-            "period_end": cycle_end,
+            "period_start": str(cycle.get("period_start") or period_start),
+            "period_end": str(cycle.get("period_end") or period_end),
         },
         "commercial_contract": {
             "metric": MAESTRO_UNIT_METRIC,
@@ -243,11 +232,7 @@ def build_billing_statement(
             "pricing_version": PRICING_VERSION,
             "plan_catalog_version": str(cycle.get("plan_catalog_version") or ""),
         },
-        "plan": {
-            "plan_id": plan_id,
-            "source": "quota_cycle" if cycle else plan_source,
-            "base_allowance_units": base_limit,
-        },
+        "plan": {"plan_id": plan_id, "source": "quota_cycle" if cycle else plan_source, "base_allowance_units": base_limit},
         "balance": {
             "base_allowance_units": base_limit,
             "rollover_units": rollover_units,
@@ -256,6 +241,7 @@ def build_billing_statement(
             "consumed_units": authoritative_used,
             "remaining_units": closing_units,
         },
+        "additional_packages": top_up_items,
         "usage_line_items": items,
         "non_billable_activity": rejected,
         "reconciliation": {
@@ -263,11 +249,13 @@ def build_billing_statement(
             "line_item_units": item_total,
             "reconciled": item_total == authoritative_used,
             "unattributed_units": unattributed,
+            "authoritative_top_up_units": top_up_units,
+            "detailed_top_up_units": sum(item["units_added"] for item in top_up_items),
+            "top_ups_reconciled": sum(item["units_added"] for item in top_up_items) == top_up_units,
         },
     }
-
-    provisional_digest = statement_sha256(statement)
-    statement["statement_ref"] = _statement_ref(client_id, period, provisional_digest)
+    provisional = statement_sha256(statement)
+    statement["statement_ref"] = _statement_ref(client_id, period, provisional)
     statement["statement_sha256"] = statement_sha256(statement)
     return statement
 
@@ -279,14 +267,11 @@ def _statement_dir(data_dir: Path) -> Path:
 
 
 def persist_statement(data_dir: Path, statement: dict[str, Any]) -> dict[str, Any]:
-    expected = statement_sha256(statement)
-    if statement.get("statement_sha256") != expected:
+    if statement.get("statement_sha256") != statement_sha256(statement):
         raise BillingStatementIntegrityError("statement SHA-256 does not match canonical payload")
-
     ref = str(statement.get("statement_ref") or "")
     if not ref or _SAFE_REF.sub("", ref) != ref:
         raise BillingStatementIntegrityError("invalid statement reference")
-
     path = _statement_dir(data_dir) / f"{ref}.json"
     canonical = json.dumps(statement, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
     if path.exists():
@@ -294,7 +279,6 @@ def persist_statement(data_dir: Path, statement: dict[str, Any]) -> dict[str, An
         if existing != statement:
             raise BillingStatementIntegrityError("immutable statement reference already exists")
         return existing
-
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(canonical, encoding="utf-8")
     tmp.replace(path)
@@ -305,11 +289,8 @@ def load_statement(data_dir: Path, statement_ref: str) -> dict[str, Any]:
     safe_ref = str(statement_ref or "").strip()
     if not safe_ref or _SAFE_REF.sub("", safe_ref) != safe_ref:
         raise FileNotFoundError(statement_ref)
-    path = _statement_dir(data_dir) / f"{safe_ref}.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise BillingStatementIntegrityError("invalid statement snapshot")
-    if payload.get("statement_sha256") != statement_sha256(payload):
+    payload = json.loads((_statement_dir(data_dir) / f"{safe_ref}.json").read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("statement_sha256") != statement_sha256(payload):
         raise BillingStatementIntegrityError("stored statement SHA-256 verification failed")
     return payload
 
@@ -321,9 +302,7 @@ def list_statements(data_dir: Path, *, client_id: str | None = None) -> list[dic
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if not isinstance(payload, dict):
-            continue
-        if client_id and str(payload.get("client_id") or "") != client_id:
+        if not isinstance(payload, dict) or (client_id and str(payload.get("client_id") or "") != client_id):
             continue
         try:
             if payload.get("statement_sha256") != statement_sha256(payload):
@@ -337,56 +316,70 @@ def list_statements(data_dir: Path, *, client_id: str | None = None) -> list[dic
 def render_statement_pdf(statement: dict[str, Any]) -> bytes:
     if statement.get("statement_sha256") != statement_sha256(statement):
         raise BillingStatementIntegrityError("cannot render a statement with invalid SHA-256")
-
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    x = 48
-    y = height - 54
+    x, y = 48, height - 52
 
-    def line(text: str, *, gap: int = 16, bold: bool = False) -> None:
+    def line(text: str, *, gap: int = 15, bold: bool = False, size: int = 10) -> None:
         nonlocal y
-        if y < 60:
+        if y < 62:
             pdf.showPage()
-            y = height - 54
-        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", 10 if not bold else 11)
-        pdf.drawString(x, y, text[:115])
+            y = height - 52
+        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+        pdf.drawString(x, y, str(text)[:118])
         y -= gap
 
-    line("Maestro Usage Statement", gap=22, bold=True)
-    line(f"Statement: {statement['statement_ref']}")
-    line(f"SHA-256: {statement['statement_sha256']}", gap=22)
-    line(f"Client: {statement['client_id']}")
-    line(f"Period: {statement['billing_period']['period']}")
-    line(f"Plan: {statement['plan']['plan_id']}", gap=22)
+    line("MAESTRO", gap=18, bold=True, size=15)
+    line("Usage & Billing Statement", gap=24, bold=True, size=13)
+    line(f"Statement {statement['statement_ref']}")
+    line(f"Billing period {statement['billing_period']['period']}")
+    line(f"Issued {statement['issued_at']}", gap=20)
+    line("Account", bold=True)
+    line(f"Client {statement['client_id']}")
+    line(f"Plan {statement['plan']['plan_id']}", gap=20)
 
     balance = statement["balance"]
-    line("Balance", bold=True)
-    line(f"Base allowance: {balance['base_allowance_units']:,} Maestro Units")
-    line(f"Rollover: {balance['rollover_units']:,} Maestro Units")
-    line(f"Top-ups: {balance['top_up_units']:,} Maestro Units")
-    line(f"Available: {balance['available_units']:,} Maestro Units")
-    line(f"Consumed: {balance['consumed_units']:,} Maestro Units")
-    line(f"Remaining: {balance['remaining_units']:,} Maestro Units", gap=22)
+    line("Balance reconciliation", bold=True)
+    line(f"Included plan allowance     {balance['base_allowance_units']:,} MU")
+    line(f"Rollover                    {balance['rollover_units']:,} MU")
+    line(f"Additional packages         {balance['top_up_units']:,} MU")
+    line(f"Available                   {balance['available_units']:,} MU")
+    line(f"Consumed                    {balance['consumed_units']:,} MU")
+    line(f"Closing balance             {balance['remaining_units']:,} MU", gap=20)
 
-    line("Usage", bold=True)
+    if statement["additional_packages"]:
+        line("Additional Maestro Unit packages", bold=True)
+        for package in statement["additional_packages"]:
+            line(f"{package['bundle_count']} x {package['bundle_units']:,} MU | {package['units_added']:,} MU added")
+            line(f"Purchase {package['purchase_ref']} | {package['channel']} | {package['settlement_amount']} {package['settlement_currency']}")
+            line(f"Granted {package['granted_at']}", gap=18)
+
+    line("Usage breakdown", bold=True)
     for item in statement["usage_line_items"]:
-        line(
-            f"{item['label']}: {item['request_count']:,} requests | "
-            f"{item['maestro_units']:,} Maestro Units"
-        )
+        line(f"{item['label']}: {item['request_count']:,} operations | {item['maestro_units']:,} MU | {item['usage_percent']:.2f}%")
 
     non_billable = statement["non_billable_activity"]
-    y -= 8
-    line("Rejected / non-billable activity", bold=True)
-    line(f"Rejected requests: {non_billable['rejected_requests']:,}")
-    line(f"Attempted units not deducted: {non_billable['rejected_attempted_units']:,}", gap=22)
+    pdf.setLineWidth(0.35)
+    pdf.line(48, y, width - 48, y)
+    y -= 12
+    line("Non-billable activity", bold=True)
+    line(f"Rejected requests           {non_billable['rejected_requests']:,}")
+    line(f"Attempted units not charged {non_billable['rejected_attempted_units']:,} MU", gap=20)
 
-    line("Integrity", bold=True)
-    line(f"Reconciled: {statement['reconciliation']['reconciled']}")
-    line(f"Maestro Unit contract: {statement['commercial_contract']['maestro_unit_contract_version']}")
-    line(f"Pricing version: {statement['commercial_contract']['pricing_version']}")
-
+    reconciliation = statement["reconciliation"]
+    line("Integrity & reconciliation", bold=True)
+    line(f"Usage reconciled            {str(reconciliation['reconciled']).lower()}")
+    line(f"Top-ups reconciled          {str(reconciliation['top_ups_reconciled']).lower()}")
+    line(f"Maestro Unit contract       {statement['commercial_contract']['maestro_unit_contract_version']}")
+    line(f"Pricing version             {statement['commercial_contract']['pricing_version']}", gap=20)
+    line("SHA-256", bold=True)
+    digest = statement["statement_sha256"]
+    line(digest[:32])
+    line(digest[32:], gap=18)
+    line("This digest verifies the canonical statement snapshot. Any change produces a different fingerprint.", size=8)
+    pdf.setTitle(f"Maestro Billing Statement {statement['statement_ref']}")
+    pdf.setSubject("Maestro Units usage, additional packages, balance reconciliation, and SHA-256 integrity")
     pdf.save()
     return buffer.getvalue()
 
