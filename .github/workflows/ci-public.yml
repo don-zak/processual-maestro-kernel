@@ -21,6 +21,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Start Redis service
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+          redis-cli ping
+
       - name: Strip private modules (public build)
         run: |
           rm -rf cgtlib/private/
@@ -42,6 +49,10 @@ jobs:
               print('OK: private modules correctly excluded')
           "
 
+      - name: Verify Redis service
+        run: |
+          python -c "import redis; r=redis.Redis(host='127.0.0.1', port=6379); assert r.ping()"
+
       - name: Ruff check
         run: ruff check . --output-format=github
 
@@ -58,11 +69,35 @@ jobs:
             --ignore-missing-imports \
             --follow-imports=skip
 
-      - name: Unit tests
+      - name: Capacity regression tests
         run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_runtime_capacity.py \
+            tests/test_execution_fanout.py \
+            tests/test_adapter_registry.py \
+            tests/test_workload_probe.py \
+            tests/test_performance_guard.py \
+            tests/test_topology_compare.py \
+            tests/test_fanout_probe.py \
+            tests/test_subscription_middleware_database_runtime_a3.py
+
+      - name: Unit tests
+        shell: bash
+        run: |
+          set -o pipefail
           PYTHONPATH=. python -m pytest \
             --cov=processual_kernel --cov=processual_api \
-            --cov-report=xml --cov-report=term-missing -q
+            --cov-report=xml --cov-report=term-missing -q \
+            2>&1 | tee pytest-public.log
+
+      - name: Upload pytest failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-public-${{ matrix.python-version }}
+          path: pytest-public.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Build package
         run: python -m build

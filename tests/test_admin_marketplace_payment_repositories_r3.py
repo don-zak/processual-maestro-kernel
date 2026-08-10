@@ -11,16 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.admin_marketplace.models import (
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
 )
 from processual_api.admin_marketplace.persistence.protocols import (
     EntitlementActivationRepository,
     InvoiceRepository,
+    PaymentEvidenceRepository,
     PaymentVerificationRepository,
 )
 from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyEntitlementActivationRepository,
     SqlAlchemyInvoiceRepository,
+    SqlAlchemyPaymentEvidenceRepository,
     SqlAlchemyPaymentVerificationRepository,
 )
 
@@ -69,6 +72,30 @@ REPOSITORIES = (
         "admin_market_entitlement_activations",
     ),
 )
+
+
+def test_payment_evidence_repository_matches_protocol_and_has_no_transaction_api() -> None:
+    repository = SqlAlchemyPaymentEvidenceRepository(MagicMock(spec=AsyncSession))
+
+    assert isinstance(repository, PaymentEvidenceRepository)
+    assert _public_methods(SqlAlchemyPaymentEvidenceRepository).isdisjoint(
+        {"begin", "close", "commit", "create_session", "rollback"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_payment_evidence_repository_reads_by_safe_reference_with_lock() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyPaymentEvidenceRepository(session)
+    row = MagicMock(spec=AdminMarketPaymentEvidence)
+    session.scalar_result = row
+
+    result = await repository.get_by_ref("pev_001", for_update=True)
+
+    assert result is row
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "FROM admin_market_payment_evidence" in sql
+    assert "FOR UPDATE" in sql
 
 
 @pytest.mark.parametrize(
@@ -226,7 +253,25 @@ def test_payment_repositories_have_no_automatic_activation_api(
     )
 
 
-def test_entitlement_activation_repository_records_only() -> None:
+def test_entitlement_activation_repository_only_records_and_reads() -> None:
     methods = _public_methods(SqlAlchemyEntitlementActivationRepository)
 
-    assert methods == {"add", "get_by_id"}
+    assert methods == {
+        "add",
+        "get_by_id",
+        "get_by_idempotency_key_hash",
+        "get_by_order_id",
+        "list_recent",
+    }
+
+
+@pytest.mark.asyncio
+async def test_entitlement_activation_order_lookup_uses_row_lock() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyEntitlementActivationRepository(session)
+
+    await repository.get_by_order_id(uuid.uuid4(), for_update=True)
+
+    sql = _compile_postgresql(session.scalar_statements[0])
+    assert "admin_market_entitlement_activations.order_id" in sql
+    assert "FOR UPDATE" in sql

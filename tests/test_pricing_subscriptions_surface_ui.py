@@ -52,7 +52,7 @@ def test_pricing_surface_does_not_expose_secret_markers() -> None:
 def test_login_commercial_panel_links_to_pricing_surface_without_checkout() -> None:
     text = LOGIN_HTML.read_text(encoding="utf-8").lower()
 
-    assert 'href="/pricing"' in text
+    assert 'href="/plans"' in text
     assert 'aria-label="request access"' in text
     assert "/billing/checkout" not in text
     assert "billing/checkout" not in text
@@ -61,5 +61,5 @@ def test_login_offers_action_links_directly_to_public_pricing_page() -> None:
     text = LOGIN_HTML.read_text(encoding="utf-8")
 
     assert 'id="login-offers-registration-button"' in text
-    assert 'href="/pricing"' in text
-    assert 'aria-label="View subscription options and registration"' in text
+    assert 'href="/plans"' in text
+    assert 'aria-label="View plans and registration"' in text

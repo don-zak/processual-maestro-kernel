@@ -17,6 +17,7 @@ from processual_api.admin_marketplace.persistence.repositories import (
     SqlAlchemyChannelSelectionRepository,
     SqlAlchemyCommercialAuditRepository,
     SqlAlchemyCommercialDecisionRepository,
+    SqlAlchemyContractRepository,
     SqlAlchemyEntitlementActivationRepository,
     SqlAlchemyInvoiceRepository,
     SqlAlchemyOfferRepository,
@@ -84,6 +85,10 @@ async def test_unit_of_work_constructs_all_repositories() -> None:
             SqlAlchemyOrderRepository,
         )
         assert isinstance(
+            unit_of_work.contracts,
+            SqlAlchemyContractRepository,
+        )
+        assert isinstance(
             unit_of_work.payment_verifications,
             SqlAlchemyPaymentVerificationRepository,
         )
@@ -127,6 +132,7 @@ async def test_all_repositories_share_one_session() -> None:
             unit_of_work.subscriptions,
             unit_of_work.trials,
             unit_of_work.orders,
+            unit_of_work.contracts,
             unit_of_work.payment_verifications,
             unit_of_work.invoices,
             unit_of_work.entitlement_activations,

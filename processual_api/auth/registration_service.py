@@ -17,6 +17,10 @@ from processual_api.auth.passwords import PasswordService
 from processual_api.auth.registration_contracts import RegistrationMode
 from processual_api.auth.registration_repository import RegistrationConflictError
 from processual_api.auth.token_material import TokenDigester
+from processual_api.billing.public_plan_journey import (
+    PLAN_DEFINITIONS,
+    resolve_direct_registration_plan,
+)
 
 EMAIL_VERIFICATION_TTL = timedelta(hours=24)
 GENERIC_REGISTRATION_STATUS = "accepted"
@@ -48,6 +52,8 @@ class RegistrationCommand:
     display_name: str
     password: str
     accepted_terms_version: str
+    selected_plan_id: str | None = None
+    billing_period: str | None = None
     organization_name: str | None = None
 
 
@@ -60,6 +66,23 @@ class RegistrationReceipt:
 @dataclass(frozen=True, slots=True)
 class RegistrationOutcome:
     receipt: RegistrationReceipt
+
+
+def validate_registration_plan_mode(
+    *,
+    mode: RegistrationMode,
+    selected_plan_id: str | None,
+) -> None:
+    if selected_plan_id is None:
+        return
+
+    definition = PLAN_DEFINITIONS.get(selected_plan_id)
+    if definition is None:
+        raise ValueError("Plan is not available for direct registration.")
+
+    expected_mode = str(definition["account_type"])
+    if expected_mode != mode.value:
+        raise ValueError("Selected plan is not available for this registration mode.")
 
 
 class RegistrationService:
@@ -88,6 +111,25 @@ class RegistrationService:
         terms_version = command.accepted_terms_version.strip()
         if not terms_version or len(terms_version) > 64:
             raise ValueError("accepted_terms_version is invalid.")
+        selected_plan_id = resolve_direct_registration_plan(command.selected_plan_id)
+        validate_registration_plan_mode(
+            mode=command.mode,
+            selected_plan_id=selected_plan_id,
+        )
+        billing_period = (
+            command.billing_period.strip().lower()
+            if command.billing_period is not None
+            else None
+        )
+
+        if selected_plan_id is None:
+            if billing_period is not None:
+                raise ValueError("billing_period requires a selected plan.")
+        elif billing_period not in ("monthly", "annual"):
+            raise ValueError(
+                "A direct registration plan requires monthly or annual billing."
+            )
+
         organization_name = None
         slug = None
         organization_id = None
@@ -138,6 +180,8 @@ class RegistrationService:
                     organization_id=organization_id,
                     organization_slug=slug,
                     organization_name=organization_name,
+                    selected_plan_id=selected_plan_id,
+                    billing_period=billing_period,
                 )
                 unit_of_work.repository.add_delivery_outbox(
                     outbox_id=outbox_id,
@@ -161,4 +205,5 @@ __all__ = [
     "RegistrationReceipt",
     "RegistrationService",
     "RegistrationUnitOfWork",
+    "validate_registration_plan_mode",
 ]

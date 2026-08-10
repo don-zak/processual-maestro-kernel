@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from processual_api.admin_marketplace.models import (
@@ -9,10 +10,15 @@ from processual_api.admin_marketplace.models import (
     AdminMarketChannelEligibility,
     AdminMarketChannelSelection,
     AdminMarketCommercialDecision,
+    AdminMarketContract,
     AdminMarketEntitlementActivation,
     AdminMarketInvoice,
+    AdminMarketNotificationOutbox,
     AdminMarketOffer,
     AdminMarketOrder,
+    AdminMarketPaymentDestination,
+    AdminMarketPaymentEvidence,
+    AdminMarketPaymentReconciliationCase,
     AdminMarketPaymentVerification,
     AdminMarketPlan,
     AdminMarketSubscription,
@@ -25,6 +31,8 @@ class PlanRepository(Protocol):
     async def get_by_id(
         self,
         plan_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> AdminMarketPlan | None: ...
 
     def add(
@@ -42,6 +50,15 @@ class OfferRepository(Protocol):
         for_update: bool = False,
     ) -> AdminMarketOffer | None: ...
 
+    async def get_published_direct_for_plan_code(
+        self,
+        *,
+        plan_code: str,
+        billing_period: str,
+        now: datetime,
+        for_update: bool = False,
+    ) -> AdminMarketOffer | None: ...
+
     def add(
         self,
         offer: AdminMarketOffer,
@@ -50,9 +67,22 @@ class OfferRepository(Protocol):
 
 @runtime_checkable
 class SubscriptionRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketSubscription]: ...
+
     async def get_by_id(
         self,
         subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None: ...
+
+    async def get_active_by_customer_ref(
+        self,
+        customer_ref: str,
         *,
         for_update: bool = False,
     ) -> AdminMarketSubscription | None: ...
@@ -80,6 +110,8 @@ class TrialRepository(Protocol):
 
 @runtime_checkable
 class OrderRepository(Protocol):
+    async def list_recent(self, *, limit: int = 100) -> Sequence[AdminMarketOrder]: ...
+
     async def get_by_id(
         self,
         order_id: uuid.UUID,
@@ -87,9 +119,87 @@ class OrderRepository(Protocol):
         for_update: bool = False,
     ) -> AdminMarketOrder | None: ...
 
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None: ...
+
+    async def get_by_ref(
+        self,
+        order_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketOrder | None: ...
+
     def add(
         self,
         order: AdminMarketOrder,
+    ) -> None: ...
+
+
+@runtime_checkable
+class ContractRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketContract]: ...
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None: ...
+
+    async def get_by_completion_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketContract | None: ...
+
+    def add(self, contract: AdminMarketContract) -> None: ...
+
+
+@runtime_checkable
+class PaymentDestinationRepository(Protocol):
+    async def list_all(
+        self,
+    ) -> Sequence[AdminMarketPaymentDestination]: ...
+
+    async def get_by_id(
+        self,
+        destination_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    async def get_by_ref(
+        self,
+        destination_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    async def get_by_creation_idempotency_key_hash(
+        self,
+        key_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    async def get_active_default(
+        self,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentDestination | None: ...
+
+    def add(
+        self,
+        destination: AdminMarketPaymentDestination,
     ) -> None: ...
 
 
@@ -102,10 +212,45 @@ class PaymentVerificationRepository(Protocol):
         for_update: bool = False,
     ) -> AdminMarketPaymentVerification | None: ...
 
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentVerification | None: ...
+
     def add(
         self,
         verification: AdminMarketPaymentVerification,
     ) -> None: ...
+
+
+@runtime_checkable
+class PaymentEvidenceRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentEvidence]: ...
+
+    async def list_by_order_id(
+        self,
+        order_id: uuid.UUID,
+    ) -> Sequence[AdminMarketPaymentEvidence]: ...
+
+    async def get_by_ref(
+        self,
+        evidence_ref: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentEvidence | None: ...
+
+    async def get_by_submission_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentEvidence | None: ...
+
+    def add(self, evidence: AdminMarketPaymentEvidence) -> None: ...
 
 
 @runtime_checkable
@@ -125,11 +270,29 @@ class InvoiceRepository(Protocol):
 
 @runtime_checkable
 class EntitlementActivationRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketEntitlementActivation]: ...
+
     async def get_by_id(
         self,
         activation_id: uuid.UUID,
         *,
         for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None: ...
+
+    async def get_by_order_id(
+        self,
+        order_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketEntitlementActivation | None: ...
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
     ) -> AdminMarketEntitlementActivation | None: ...
 
     def add(
@@ -143,6 +306,13 @@ class ChannelEligibilityRepository(Protocol):
     async def get_by_id(
         self,
         eligibility_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketChannelEligibility | None: ...
+
+    async def get_by_customer_ref(
+        self,
+        customer_ref: str,
         *,
         for_update: bool = False,
     ) -> AdminMarketChannelEligibility | None: ...
@@ -182,6 +352,29 @@ class CommercialDecisionRepository(Protocol):
 
 
 @runtime_checkable
+class PaymentReconciliationRepository(Protocol):
+    async def list_recent(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[AdminMarketPaymentReconciliationCase]: ...
+
+    async def get_by_evidence_id(
+        self,
+        evidence_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPaymentReconciliationCase | None: ...
+
+    async def get_by_idempotency_key_hash(
+        self,
+        key_hash: str,
+    ) -> AdminMarketPaymentReconciliationCase | None: ...
+
+    def add(self, case: AdminMarketPaymentReconciliationCase) -> None: ...
+
+
+@runtime_checkable
 class CommercialAuditRepository(Protocol):
     async def get_by_id(
         self,
@@ -202,19 +395,33 @@ class CommercialAuditRepository(Protocol):
 
 
 @runtime_checkable
+class NotificationOutboxRepository(Protocol):
+    async def list_recent(self, *, limit: int = 100) -> Sequence[AdminMarketNotificationOutbox]: ...
+
+    async def get_by_deduplication_key_hash(self, key_hash: str) -> AdminMarketNotificationOutbox | None: ...
+
+    def add(self, event: AdminMarketNotificationOutbox) -> None: ...
+
+
+@runtime_checkable
 class AdminMarketplaceUnitOfWork(Protocol):
     plans: PlanRepository
     offers: OfferRepository
     subscriptions: SubscriptionRepository
     trials: TrialRepository
     orders: OrderRepository
+    contracts: ContractRepository
+    payment_destinations: PaymentDestinationRepository
     payment_verifications: PaymentVerificationRepository
+    payment_evidence: PaymentEvidenceRepository
+    payment_reconciliations: PaymentReconciliationRepository
     invoices: InvoiceRepository
     entitlement_activations: EntitlementActivationRepository
     channel_eligibilities: ChannelEligibilityRepository
     channel_selections: ChannelSelectionRepository
     commercial_decisions: CommercialDecisionRepository
     commercial_audit: CommercialAuditRepository
+    notification_outbox: NotificationOutboxRepository
 
     async def __aenter__(
         self,
@@ -238,10 +445,15 @@ __all__ = [
     "ChannelSelectionRepository",
     "CommercialAuditRepository",
     "CommercialDecisionRepository",
+    "ContractRepository",
     "EntitlementActivationRepository",
     "InvoiceRepository",
+    "NotificationOutboxRepository",
     "OfferRepository",
     "OrderRepository",
+    "PaymentDestinationRepository",
+    "PaymentEvidenceRepository",
+    "PaymentReconciliationRepository",
     "PaymentVerificationRepository",
     "PlanRepository",
     "SubscriptionRepository",

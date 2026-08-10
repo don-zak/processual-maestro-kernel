@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.auth.models import (
     AuthActionToken,
     AuthDeliveryOutbox,
+    AuthRegistrationPlanIntent,
     IdentityOrganization,
     IdentityTermsAcceptance,
     IdentityUser,
@@ -94,6 +95,26 @@ class SqlAlchemyRegistrationRepository:
         )
         await self._session.execute(statement)
 
+    async def mark_registration_plan_intent_verified(
+        self,
+        user_id: uuid.UUID,
+        *,
+        verified_at: datetime,
+    ) -> None:
+        statement = (
+            update(AuthRegistrationPlanIntent)
+            .where(
+                AuthRegistrationPlanIntent.user_id == user_id,
+                AuthRegistrationPlanIntent.state == "pending_verification",
+            )
+            .values(
+                state="verified",
+                verified_at=verified_at,
+                updated_at=verified_at,
+            )
+        )
+        await self._session.execute(statement)
+
     def add_verification_delivery(
         self,
         *,
@@ -145,6 +166,8 @@ class SqlAlchemyRegistrationRepository:
         organization_id: uuid.UUID | None = None,
         organization_slug: str | None = None,
         organization_name: str | None = None,
+        selected_plan_id: str | None = None,
+        billing_period: str | None = None,
     ) -> None:
         user = IdentityUser(
             id=user_id,
@@ -155,6 +178,17 @@ class SqlAlchemyRegistrationRepository:
         )
         self._pending_users[user_id] = user
         self._session.add(user)
+        if selected_plan_id is not None:
+            self._session.add(
+                AuthRegistrationPlanIntent(
+                    id=uuid.uuid4(),
+                    user_id=user_id,
+                    selected_plan_id=selected_plan_id,
+                    billing_period=billing_period,
+                    state="pending_verification",
+                    user=user,
+                )
+            )
         self._session.add(
             IdentityTermsAcceptance(
                 id=uuid.uuid4(),

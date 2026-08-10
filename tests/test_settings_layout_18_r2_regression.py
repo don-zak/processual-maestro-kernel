@@ -43,19 +43,40 @@ def test_settings_r2_defines_five_independent_tabs() -> None:
     assert "panel.hidden = !active" in source
 
 
-def test_settings_r2_reconciles_late_rendered_cards() -> None:
+def test_settings_r2_reconciles_late_rendered_cards_without_retry_timers() -> None:
     source = _read(LAYOUT_JS)
 
     assert "function reconcile()" in source
     assert "function scheduleReconcile()" in source
     assert "new MutationObserver" in source
-    assert "observer.observe(page" in source
+    assert "function observePageMutations(page)" in source
+    assert "observer?.observe(page" in source
     assert "childList: true" in source
     assert "subtree: true" in source
 
-    assert "window.setTimeout(reconcile, 100)" in source
-    assert "window.setTimeout(reconcile, 500)" in source
-    assert "window.setTimeout(reconcile, 1500)" in source
+    assert "let initialized = false" in source
+    assert "if (initialized)" in source
+    assert "window.setTimeout(reconcile, 100)" not in source
+    assert "window.setTimeout(reconcile, 500)" not in source
+    assert "window.setTimeout(reconcile, 1500)" not in source
+
+
+def test_settings_r2_disconnects_observer_during_own_dom_reconciliation() -> None:
+    source = _read(LAYOUT_JS)
+    reconcile_block = source.split("function reconcile()", 1)[1].split(
+        "function scheduleReconcile()", 1
+    )[0]
+
+    assert "const resumeObserver = Boolean(observer)" in reconcile_block
+    assert "observer?.disconnect()" in reconcile_block
+    assert "if (resumeObserver)" in reconcile_block
+    assert "observePageMutations(page)" in reconcile_block
+
+    disconnect_pos = reconcile_block.index("observer?.disconnect()")
+    shell_pos = reconcile_block.index("ensureLayoutShell(page)")
+    resume_pos = reconcile_block.index("if (resumeObserver)")
+
+    assert disconnect_pos < shell_pos < resume_pos
 
 
 def test_settings_r2_keeps_only_selected_panel_visible() -> None:

@@ -1,0 +1,489 @@
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+from fastapi import HTTPException
+from fastapi.routing import APIRoute
+
+from processual_api.integrations.adapter_contracts import get_adapter_contract
+from processual_api.integrations.credential_profiles import (
+    COMMON_REQUIRED_CUSTOMER_INPUTS,
+    get_credential_profile,
+)
+from processual_api.integrations.enterprise_qualification_drafts import (
+    DRAFT_STORAGE_KEY,
+)
+from processual_api.routers import settings as settings_router
+from processual_api.routers import settings_enterprise_integration_runtime as enterprise_runtime
+from processual_api.routers.settings_enterprise_integration_runtime import (
+    EnterpriseSandboxQualificationRequest,
+    enterprise_integration_console_payload,
+    evaluate_enterprise_sandbox_qualification,
+    save_enterprise_sandbox_qualification_draft,
+    submit_enterprise_sandbox_qualification_draft,
+)
+
+
+def _client(plan_id: str = "enterprise_integration") -> dict:
+    return {
+        "sub": "client-a",
+        "user_id": "client-a",
+        "client_id": "client-a",
+        "role": "client",
+        "plan_id": plan_id,
+    }
+
+
+def _profile_scope_id(
+    profile_id: str = "enterprise_core_api_reference",
+) -> str:
+    profile = get_credential_profile(profile_id)
+    for contract_id in profile.adapter_contract_ids:
+        contract = get_adapter_contract(contract_id)
+        if contract.required_scopes:
+            return contract.required_scopes[0]
+    raise AssertionError(f"Profile {profile_id} has no required adapter scope")
+
+
+def _qualification_body() -> EnterpriseSandboxQualificationRequest:
+    return EnterpriseSandboxQualificationRequest(
+        credential_profile_id="enterprise_core_api_reference",
+        requested_scope_ids=[_profile_scope_id()],
+        provided_input_ids=list(COMMON_REQUIRED_CUSTOMER_INPUTS),
+    )
+
+
+def test_enterprise_integration_console_route_is_registered() -> None:
+    paths = {
+        route.path
+        for route in settings_router.router.routes
+        if isinstance(route, APIRoute)
+    }
+
+    assert "/settings/enterprise-integration" in paths
+    assert "/settings/enterprise-integration/sandbox-qualification" in paths
+    assert "/settings/enterprise-integration/sandbox-qualification/draft" in paths
+    assert (
+        "/settings/enterprise-integration/sandbox-qualification/draft/submit"
+        in paths
+    )
+
+
+def test_locked_plan_returns_upgrade_only_contract(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "starter"},
+            "api_keys": [
+                {
+                    "id": "hidden-key",
+                    "client_id": "client-a",
+                    "status": "enabled",
+                    "hashed": "never-return-this",
+                }
+            ],
+            DRAFT_STORAGE_KEY: {
+                "status": "draft",
+                "credential_profile_id": "enterprise_core_api_reference",
+                "requested_scope_ids": [_profile_scope_id()],
+                "provided_input_ids": [],
+            },
+        },
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("starter")
+    )
+
+    assert payload["enabled"] is False
+    assert payload["status"] == "locked"
+    assert payload["key_count"] == 0
+    assert payload["keys"] == []
+    assert payload["readiness_checks"] == []
+    assert payload["qualification_draft"] is None
+    assert payload["production_allowed"] is False
+    assert payload["runtime_connector_approved"] is False
+    assert payload["raw_secret_visible"] is False
+    assert payload["scope_posture"] == {
+        "enabled": False,
+        "source": "catalog",
+        "total": 0,
+        "read": 0,
+        "write": 0,
+        "restricted": 0,
+        "read_only_pilot": 0,
+        "supervisor_approval_required": 0,
+        "production_allowed_without_approval": 0,
+    }
+    assert payload["qualification_catalog"] == {
+        "enabled": False,
+        "source": "catalog",
+        "profiles": [],
+        "scopes": [],
+    }
+    assert payload["sections"] == [
+        {
+            "id": "entitlement",
+            "label": "Enterprise entitlement",
+            "status": "locked",
+            "next_action": "Upgrade to an eligible Enterprise Integration plan.",
+        }
+    ]
+
+
+def test_enterprise_console_returns_safe_key_and_readiness_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_integration"},
+            "api_keys": [
+                {
+                    "id": "key-a",
+                    "prefix": "pmk_safe...",
+                    "client_id": "client-a",
+                    "status": "enabled",
+                    "scopes": ["read:health"],
+                    "hashed": "never-return-this",
+                    "api_key": "never-return-this-either",
+                },
+                {
+                    "id": "other-client-key",
+                    "prefix": "pmk_other...",
+                    "client_id": "client-b",
+                    "status": "enabled",
+                },
+            ],
+        },
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_integration")
+    )
+
+    assert payload["enabled"] is True
+    assert payload["status"] == "available"
+    assert payload["environment"] == "sandbox"
+    assert payload["production_allowed"] is False
+    assert payload["runtime_connector_approved"] is False
+    assert payload["raw_secret_visible"] is False
+    assert payload["qualification_draft"] is None
+    assert payload["key_count"] == 1
+    assert payload["keys"][0]["key_id"] == "key-a"
+    assert payload["keys"][0]["client_id"] == "client-a"
+    assert "hashed" not in payload["keys"][0]
+    assert "api_key" not in payload["keys"][0]
+    assert payload["operational_profile_count"] >= 1
+    assert payload["scope_posture"]["enabled"] is True
+    assert payload["scope_posture"]["source"] == "catalog"
+    assert payload["scope_posture"]["total"] >= 1
+    assert payload["scope_posture"]["read"] >= 1
+    assert payload["scope_posture"]["write"] >= 1
+    assert payload["scope_posture"]["restricted"] >= 1
+    assert payload["scope_posture"]["read_only_pilot"] >= 1
+    assert payload["scope_posture"]["supervisor_approval_required"] >= 1
+    assert payload["scope_posture"]["production_allowed_without_approval"] == 0
+    catalog = payload["qualification_catalog"]
+    assert catalog["enabled"] is True
+    assert catalog["source"] == "catalog"
+    assert catalog["profiles"]
+    assert catalog["scopes"]
+    assert catalog["security_controls_client_approvable"] is False
+    assert catalog["production_allowed"] is False
+    assert catalog["runtime_connector_approved"] is False
+    assert all(profile["allowed_scope_ids"] for profile in catalog["profiles"])
+    assert all(
+        profile["runtime_connector_approved"] is False
+        for profile in catalog["profiles"]
+    )
+    assert payload["readiness"]["total"] >= 1
+    assert payload["readiness"]["production_allowed"] == 0
+    assert payload["readiness"]["runtime_connector_approved"] == 0
+    assert all(
+        check["production_allowed"] is False
+        for check in payload["readiness_checks"]
+    )
+    assert all(
+        check["runtime_connector_approved"] is False
+        for check in payload["readiness_checks"]
+    )
+    assert [section["id"] for section in payload["sections"]] == [
+        "entitlement",
+        "api_keys",
+        "integration_profile",
+        "readiness",
+        "production",
+    ]
+
+
+def test_scope_posture_counts_are_internally_consistent(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_core"},
+            "api_keys": [],
+        },
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_core")
+    )
+    posture = payload["scope_posture"]
+
+    assert posture["source"] == "catalog"
+    assert posture["total"] == posture["read"] + posture["write"] + posture["restricted"]
+    assert posture["read_only_pilot"] == posture["read"]
+    assert posture["supervisor_approval_required"] == (
+        posture["write"] + posture["restricted"]
+    )
+    assert posture["production_allowed_without_approval"] == 0
+
+
+def test_enterprise_console_evaluates_readiness_once(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_core"},
+            "api_keys": [],
+        },
+    )
+    original = enterprise_runtime.list_integration_readiness_checks
+    calls = 0
+
+    def counted_readiness_checks():
+        nonlocal calls
+        calls += 1
+        return original()
+
+    monkeypatch.setattr(
+        enterprise_runtime,
+        "list_integration_readiness_checks",
+        counted_readiness_checks,
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_core")
+    )
+
+    assert calls == 1
+    assert payload["readiness"]["total"] == len(payload["readiness_checks"])
+
+
+def test_enterprise_private_remains_legacy_compatible(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_private"},
+            "api_keys": [],
+        },
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_private")
+    )
+
+    assert payload["enabled"] is True
+    assert payload["legacy_compatibility"] is True
+    assert payload["plan_id"] == "enterprise_private"
+
+
+def test_endpoint_payload_has_no_secret_markers(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {
+            "subscription": {"plan_id": "enterprise_core"},
+            "api_keys": [],
+        },
+    )
+
+    payload = asyncio.run(
+        __import__(
+            "processual_api.routers.settings_enterprise_integration_runtime",
+            fromlist=["get_enterprise_integration_console"],
+        ).get_enterprise_integration_console(_client("enterprise_core"))
+    )
+
+    text = repr(payload).lower()
+    assert "encrypted_key" not in text
+    assert "hashed_key" not in text
+    assert "raw_secret" in text
+    assert payload["raw_secret_visible"] is False
+
+
+def test_sandbox_qualification_route_rejects_locked_plan(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "starter"}},
+    )
+    body = EnterpriseSandboxQualificationRequest(
+        credential_profile_id="enterprise_core_api_reference",
+        requested_scope_ids=[_profile_scope_id()],
+        provided_input_ids=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            evaluate_enterprise_sandbox_qualification(body, _client("starter"))
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_sandbox_qualification_route_rejects_unknown_identifier(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "enterprise_core"}},
+    )
+    body = EnterpriseSandboxQualificationRequest(
+        credential_profile_id="enterprise_core_api_reference",
+        requested_scope_ids=["unknown:scope"],
+        provided_input_ids=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            evaluate_enterprise_sandbox_qualification(body, _client("enterprise_core"))
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+def test_sandbox_qualification_route_is_evaluate_only_and_fail_closed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "enterprise_core"}},
+    )
+    payload = asyncio.run(
+        evaluate_enterprise_sandbox_qualification(
+            _qualification_body(),
+            _client("enterprise_core"),
+        )
+    )
+
+    assert payload["environment"] == "sandbox"
+    assert payload["persisted"] is False
+    assert payload["missing_input_ids"] == []
+    assert payload["security_controls_approved"] == 0
+    assert payload["sandbox_ready"] is False
+    assert payload["production_allowed"] is False
+    assert payload["runtime_connector_approved"] is False
+    assert all(
+        check["status"] == "blocked_missing_security_controls"
+        for check in payload["readiness_checks"]
+    )
+
+
+def test_save_draft_route_persists_only_safe_identifiers(monkeypatch) -> None:
+    raw = {"subscription": {"plan_id": "enterprise_core"}}
+    saved: list[dict] = []
+    monkeypatch.setattr(settings_router, "_load_raw", lambda user_id: raw)
+    monkeypatch.setattr(
+        settings_router,
+        "_save_raw",
+        lambda user_id, data: saved.append(dict(data)),
+    )
+
+    payload = asyncio.run(
+        save_enterprise_sandbox_qualification_draft(
+            _qualification_body(),
+            _client("enterprise_core"),
+        )
+    )
+
+    assert len(saved) == 1
+    stored = raw[DRAFT_STORAGE_KEY]
+    assert stored["status"] == "draft"
+    assert stored["credential_profile_id"] == "enterprise_core_api_reference"
+    assert stored["requested_scope_ids"] == [_profile_scope_id()]
+    assert stored["provided_input_ids"] == list(COMMON_REQUIRED_CUSTOMER_INPUTS)
+    assert "security_controls_approved" not in stored
+    assert "production_allowed" not in stored
+    assert "runtime_connector_approved" not in stored
+    assert payload["persisted"] is True
+    assert payload["draft_status"] == "draft"
+    assert payload["security_controls_approved"] == 0
+    assert payload["production_allowed"] is False
+    assert payload["runtime_connector_approved"] is False
+
+
+def test_save_draft_route_rejects_locked_plan_without_write(monkeypatch) -> None:
+    saves = 0
+
+    def capture_save(user_id, data):
+        nonlocal saves
+        saves += 1
+
+    monkeypatch.setattr(
+        settings_router,
+        "_load_raw",
+        lambda user_id: {"subscription": {"plan_id": "starter"}},
+    )
+    monkeypatch.setattr(settings_router, "_save_raw", capture_save)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            save_enterprise_sandbox_qualification_draft(
+                _qualification_body(),
+                _client("starter"),
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+    assert saves == 0
+
+
+def test_submit_draft_route_moves_to_review_without_security_approval(monkeypatch) -> None:
+    raw = {"subscription": {"plan_id": "enterprise_core"}}
+    monkeypatch.setattr(settings_router, "_load_raw", lambda user_id: raw)
+    monkeypatch.setattr(settings_router, "_save_raw", lambda user_id, data: None)
+    asyncio.run(
+        save_enterprise_sandbox_qualification_draft(
+            _qualification_body(),
+            _client("enterprise_core"),
+        )
+    )
+
+    payload = asyncio.run(
+        submit_enterprise_sandbox_qualification_draft(
+            _client("enterprise_core")
+        )
+    )
+
+    assert raw[DRAFT_STORAGE_KEY]["status"] == "pending_review"
+    assert payload["draft_status"] == "pending_review"
+    assert payload["security_controls_approved"] == 0
+    assert payload["sandbox_ready"] is False
+    assert payload["production_allowed"] is False
+    assert payload["runtime_connector_approved"] is False
+
+
+def test_console_rehydrates_only_safe_qualification_draft(monkeypatch) -> None:
+    raw = {"subscription": {"plan_id": "enterprise_core"}}
+    monkeypatch.setattr(settings_router, "_load_raw", lambda user_id: raw)
+    monkeypatch.setattr(settings_router, "_save_raw", lambda user_id, data: None)
+    asyncio.run(
+        save_enterprise_sandbox_qualification_draft(
+            _qualification_body(),
+            _client("enterprise_core"),
+        )
+    )
+
+    payload = enterprise_integration_console_payload(
+        current_user=_client("enterprise_core")
+    )
+    draft = payload["qualification_draft"]
+
+    assert draft["persisted"] is True
+    assert draft["credential_profile_id"] == "enterprise_core_api_reference"
+    assert draft["security_controls_approved"] == 0
+    assert draft["production_allowed"] is False
+    assert draft["runtime_connector_approved"] is False

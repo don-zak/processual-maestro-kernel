@@ -26,6 +26,7 @@ def test_settings_exposes_canonical_production_secret_contract() -> None:
         "AUTH_DELIVERY_KEY_RING_JSON",
         "AUTH_DELIVERY_PROVIDER_TOKEN",
         "AUTH_MFA_KEY_RING_JSON",
+        "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
     }
 
     assert set(PRODUCTION_SECRET_ENV_VARS) == expected

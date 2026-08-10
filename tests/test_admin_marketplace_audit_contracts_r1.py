@@ -42,11 +42,21 @@ def test_commercial_audit_record_is_immutable_and_safe() -> None:
         record.metadata["channel"] = "lemon_squeezy"  # type: ignore[index]
 
 
-def test_audit_rejects_sensitive_metadata_and_non_platform_admin() -> None:
+def test_audit_rejects_sensitive_metadata_and_unknown_authority() -> None:
     with pytest.raises(AdminMarketplaceAuditSafetyError, match="Sensitive"):
         _record(metadata={"api_key": "raw-secret"})
-    with pytest.raises(AdminMarketplaceAuditSafetyError, match="platform_admin"):
+    with pytest.raises(AdminMarketplaceAuditSafetyError, match="authority"):
         _record(platform_authority="platform_supervisor")
+
+
+def test_order_creation_accepts_authenticated_customer_authority() -> None:
+    record = _record(
+        platform_authority="identity_customer",
+        action=CommercialAuditAction.ORDER_CREATED,
+        resource_type=CommercialResourceType.ORDER,
+    )
+
+    assert record.platform_authority == "identity_customer"
 
 
 def test_audit_requires_timezone_and_sha256_digests() -> None:

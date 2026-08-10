@@ -1,0 +1,236 @@
+name: Staging Canary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - benchmarks/staging_canary_gate.py
+      - benchmarks/staging_canary_median.py
+      - benchmarks/workload_probe.py
+      - benchmarks/execution_mix_app.py
+      - benchmarks/execution_mix_probe.py
+      - benchmarks/execution_mix_compare.py
+      - benchmarks/topology_compare.py
+      - tests/test_staging_canary_gate.py
+      - tests/test_staging_canary_median.py
+      - processual_api/middleware/runtime_capacity.py
+      - processual_api/middleware/runtime_capacity_metrics.py
+      - processual_api/cgt_governor/adapters/execution_fanout.py
+      - processual_api/cgt_governor/adapters/registry.py
+      - processual_api/cgt_governor/policy/fanout_planner.py
+      - processual_api/routers/workflows.py
+      - .github/workflows/staging-canary.yml
+
+permissions:
+  contents: read
+
+jobs:
+  two-worker-median-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: benchmark-password
+          POSTGRES_DB: maestro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      ENVIRONMENT: development
+      PYTHONPATH: "."
+      DATABASE_URL: postgresql+asyncpg://maestro:benchmark-password@127.0.0.1:5432/maestro
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: benchmark-only-not-production-jwt-secret
+      API_KEYS: benchmark-only-api-key
+      POSTGRES_PASSWORD: benchmark-password
+      REDIS_PASSWORD: benchmark-password
+      GRAFANA_ADMIN_PASSWORD: benchmark-password
+      RATE_LIMIT_ENABLED: "false"
+      CAPACITY_GUARD_ENABLED: "true"
+      CAPACITY_GLOBAL_LIMIT_OCU: "40"
+      CAPACITY_ACTOR_LIMIT_OCU: "12"
+      EXECUTION_FANOUT_ENABLED: "true"
+      EXECUTION_FANOUT_GLOBAL_LIMIT: "16"
+      EXECUTION_FANOUT_PROVIDER_LIMIT: "8"
+      EXECUTION_FANOUT_WAIT_MS: "250"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install canary dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,security,database,cache,observability]'
+
+      - name: Verify median canary policy
+        run: |
+          ruff check benchmarks/staging_canary_gate.py benchmarks/staging_canary_median.py tests/test_staging_canary_gate.py tests/test_staging_canary_median.py
+          flake8 benchmarks/staging_canary_gate.py benchmarks/staging_canary_median.py tests/test_staging_canary_gate.py tests/test_staging_canary_median.py
+          pytest -q tests/test_staging_canary_gate.py tests/test_staging_canary_median.py
+
+      - name: Start one-worker Maestro canary
+        run: |
+          mkdir -p canary-results
+          python benchmarks/flush_redis.py
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 1 > canary-results/workload-1w-server.log 2>&1 &
+          echo $! > canary-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat canary-results/workload-1w-server.log
+          exit 1
+
+      - name: Run three one-worker workload trials
+        run: |
+          for trial in 1 2 3; do
+            python benchmarks/flush_redis.py
+            python benchmarks/workload_probe.py \
+              --concurrency 40 \
+              --light-requests 10 \
+              --normal-requests 160 \
+              --heavy-requests 80 \
+              --governance-requests 40 \
+              --output "canary-results/workloads-1w-trial-${trial}.json" \
+              > "canary-results/workloads-1w-trial-${trial}.txt"
+          done
+
+      - name: Restart Maestro canary with two workers
+        run: |
+          kill "$(cat canary-results/server.pid)"
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat canary-results/server.pid)" 2>/dev/null; then break; fi; sleep 1; done
+          python benchmarks/flush_redis.py
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 2 > canary-results/workload-2w-server.log 2>&1 &
+          echo $! > canary-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat canary-results/workload-2w-server.log
+          exit 1
+
+      - name: Run three two-worker workload trials
+        run: |
+          for trial in 1 2 3; do
+            python benchmarks/flush_redis.py
+            python benchmarks/workload_probe.py \
+              --concurrency 40 \
+              --light-requests 10 \
+              --normal-requests 160 \
+              --heavy-requests 80 \
+              --governance-requests 40 \
+              --output "canary-results/workloads-2w-trial-${trial}.json" \
+              > "canary-results/workloads-2w-trial-${trial}.txt"
+          done
+
+      - name: Stop Maestro workload canary
+        run: |
+          kill "$(cat canary-results/server.pid)" || true
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat canary-results/server.pid)" 2>/dev/null; then break; fi; sleep 1; done
+
+      - name: Start one-worker execution-mix canary
+        run: |
+          python benchmarks/flush_redis.py
+          CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.execution_mix_app:app --host 127.0.0.1 --port 8020 --workers 1 > canary-results/execution-1w-server.log 2>&1 &
+          echo $! > canary-results/execution.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat canary-results/execution-1w-server.log
+          exit 1
+
+      - name: Run three one-worker execution-mix trials
+        run: |
+          for trial in 1 2 3; do
+            python benchmarks/flush_redis.py
+            python benchmarks/execution_mix_probe.py \
+              --base-url http://127.0.0.1:8020 \
+              --workers 1 \
+              --providers 2 \
+              --widths 4,8 \
+              --concurrency 40 \
+              --requests 80 \
+              --output "canary-results/execution-mix-1w-trial-${trial}.json" \
+              > "canary-results/execution-mix-1w-trial-${trial}.txt"
+          done
+
+      - name: Restart execution-mix canary with two workers
+        run: |
+          kill "$(cat canary-results/execution.pid)"
+          for attempt in $(seq 1 20); do if ! kill -0 "$(cat canary-results/execution.pid)" 2>/dev/null; then break; fi; sleep 1; done
+          python benchmarks/flush_redis.py
+          CAPACITY_GUARD_ENABLED=false python -m uvicorn benchmarks.execution_mix_app:app --host 127.0.0.1 --port 8020 --workers 2 > canary-results/execution-2w-server.log 2>&1 &
+          echo $! > canary-results/execution.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8020/health/live >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat canary-results/execution-2w-server.log
+          exit 1
+
+      - name: Run three two-worker execution-mix trials
+        run: |
+          for trial in 1 2 3; do
+            python benchmarks/flush_redis.py
+            python benchmarks/execution_mix_probe.py \
+              --base-url http://127.0.0.1:8020 \
+              --workers 2 \
+              --providers 2 \
+              --widths 4,8 \
+              --concurrency 40 \
+              --requests 80 \
+              --output "canary-results/execution-mix-2w-trial-${trial}.json" \
+              > "canary-results/execution-mix-2w-trial-${trial}.txt"
+          done
+
+      - name: Gate two-worker staging candidate by median
+        run: |
+          python benchmarks/staging_canary_median.py \
+            --workloads-1w canary-results/workloads-1w-trial-*.json \
+            --workloads-2w canary-results/workloads-2w-trial-*.json \
+            --execution-mix-1w canary-results/execution-mix-1w-trial-*.json \
+            --execution-mix-2w canary-results/execution-mix-2w-trial-*.json \
+            --output canary-results/staging-canary-median.md \
+            | tee canary-results/staging-canary-median.txt
+          cat canary-results/staging-canary-median.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload staging canary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-staging-canary
+          path: canary-results/
+
+      - name: Stop canary processes
+        if: always()
+        run: |
+          if [ -f canary-results/server.pid ]; then kill "$(cat canary-results/server.pid)" 2>/dev/null || true; fi
+          if [ -f canary-results/execution.pid ]; then kill "$(cat canary-results/execution.pid)" 2>/dev/null || true; fi

@@ -1,13 +1,15 @@
-"""Group 2 quota top-up purchase contracts.
+"""Group 2 quota top-up quote contracts.
 
-These contracts define minimum top-up bundles, integer multiples, price previews,
-and upgrade guidance. They do not enable checkout, collect payment, grant units,
-persist orders, or enforce quotas.
+These contracts define authoritative bundle geometry, derived price previews, and
+upgrade guidance. Public purchase exposure remains disabled here for backward
+compatibility. Operational purchase activation is a separate server-side
+runtime/readiness decision in ``admin_marketplace`` and must not be inferred
+from these public-preview flags.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Final
@@ -17,9 +19,14 @@ from processual_api.billing.commercial_catalog_contracts import (
     build_catalog_plan_contracts,
 )
 
-TOP_UP_CONTRACT_VERSION: Final = "2026-07-group2-top-up-v1"
-TOP_UP_STATUS: Final = "draft_review"
+TOP_UP_CONTRACT_VERSION: Final = "2026-08-group2-top-up-v2"
+TOP_UP_STATUS: Final = "public_exposure_disabled"
+TOP_UP_AUTHORITY_SCOPE: Final = "quote_policy_only"
+TOP_UP_RUNTIME_ACTIVATION_AUTHORITY: Final = "admin_marketplace_top_up_readiness"
 
+# Compatibility/public-exposure flags. They are deliberately not runtime
+# activation authority. Runtime purchase routes use their own fail-closed
+# feature and readiness gates.
 TOP_UP_PURCHASE_ENABLED: Final = False
 TOP_UP_CHECKOUT_ENABLED: Final = False
 TOP_UP_GRANT_ENABLED: Final = False
@@ -66,7 +73,7 @@ class TopUpPolicy:
         if self.price_per_bundle_usd <= 0:
             raise ValueError("price_per_bundle_usd must be positive")
         if self.purchase_enabled:
-            raise ValueError("Group 2 top-up purchase must remain disabled")
+            raise ValueError("public Group 2 top-up exposure must remain disabled")
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -93,21 +100,15 @@ class TopUpQuote:
         payload["total_price_usd"] = str(self.total_price_usd)
         payload["state"] = self.state.value
         payload["upgrade_monthly_difference_usd"] = (
-            None if self.upgrade_monthly_difference_usd is None else str(self.upgrade_monthly_difference_usd)
+            None
+            if self.upgrade_monthly_difference_usd is None
+            else str(self.upgrade_monthly_difference_usd)
         )
         return payload
 
 
 _TOP_UP_POLICY_INPUTS: Final[
-    dict[
-        str,
-        tuple[
-            int,
-            int,
-            int,
-            TopUpRolloverPolicy,
-        ],
-    ]
+    dict[str, tuple[int, int, int, TopUpRolloverPolicy]]
 ] = {
     "academic": (
         5_000,
@@ -175,9 +176,11 @@ def build_top_up_policies() -> tuple[TopUpPolicy, ...]:
         rollover_policy,
     ) in _TOP_UP_POLICY_INPUTS.items():
         plan = catalog[plan_code]
-        price_per_bundle = (plan.overage_per_1000_usd * Decimal(bundle_units) / Decimal(1_000)).quantize(
-            Decimal("0.01")
-        )
+        price_per_bundle = (
+            plan.overage_per_1000_usd
+            * Decimal(bundle_units)
+            / Decimal(1_000)
+        ).quantize(Decimal("0.01"))
 
         policies.append(
             TopUpPolicy(
@@ -215,7 +218,7 @@ def _next_plan_code(plan_code: str) -> str | None:
     return ordered[index + 1]
 
 
-def quote_top_up(plan_code: str, requested_units: int) -> TopUpQuote:
+def _quote_top_up_base(plan_code: str, requested_units: int) -> TopUpQuote:
     policies = {policy.plan_code: policy for policy in build_top_up_policies()}
     catalog = _catalog_by_code()
 
@@ -246,7 +249,9 @@ def quote_top_up(plan_code: str, requested_units: int) -> TopUpQuote:
     else:
         bundle_count = requested_units // policy.bundle_units
         total_units = bundle_count * policy.bundle_units
-        total_price = (policy.price_per_bundle_usd * Decimal(bundle_count)).quantize(Decimal("0.01"))
+        total_price = (
+            policy.price_per_bundle_usd * Decimal(bundle_count)
+        ).quantize(Decimal("0.01"))
         state = TopUpPurchaseState.READY_FOR_REVIEW
 
     upgrade_plan_code = _next_plan_code(plan_code)
@@ -255,9 +260,9 @@ def quote_top_up(plan_code: str, requested_units: int) -> TopUpQuote:
     if state is TopUpPurchaseState.READY_FOR_REVIEW and upgrade_plan_code is not None:
         current_plan = catalog[plan_code]
         upgrade_plan = catalog[upgrade_plan_code]
-        upgrade_monthly_difference = (upgrade_plan.monthly_price_usd - current_plan.monthly_price_usd).quantize(
-            Decimal("0.01")
-        )
+        upgrade_monthly_difference = (
+            upgrade_plan.monthly_price_usd - current_plan.monthly_price_usd
+        ).quantize(Decimal("0.01"))
 
         if upgrade_monthly_difference > 0 and total_price >= upgrade_monthly_difference:
             state = TopUpPurchaseState.UPGRADE_RECOMMENDED
@@ -269,21 +274,39 @@ def quote_top_up(plan_code: str, requested_units: int) -> TopUpQuote:
         bundle_count=bundle_count,
         total_units=total_units,
         total_price_usd=total_price,
-        state=(
-            TopUpPurchaseState.DISABLED
-            if state is TopUpPurchaseState.READY_FOR_REVIEW and not TOP_UP_PURCHASE_ENABLED
-            else state
-        ),
+        state=state,
         upgrade_plan_code=upgrade_plan_code,
         upgrade_monthly_difference_usd=upgrade_monthly_difference,
         purchase_enabled=False,
     )
 
 
+def quote_top_up(plan_code: str, requested_units: int) -> TopUpQuote:
+    """Return the public-preview quote without implying runtime activation."""
+
+    quote = _quote_top_up_base(plan_code, requested_units)
+    if quote.state is TopUpPurchaseState.READY_FOR_REVIEW:
+        return replace(quote, state=TopUpPurchaseState.DISABLED)
+    return quote
+
+
+def quote_top_up_for_runtime(plan_code: str, requested_units: int) -> TopUpQuote:
+    """Return authoritative bundle/price validation for guarded runtime flows.
+
+    This function does not activate purchase, checkout, persistence, or grants.
+    Callers must independently pass server-side feature and readiness gates.
+    ``purchase_enabled`` therefore deliberately remains ``False``.
+    """
+
+    return _quote_top_up_base(plan_code, requested_units)
+
+
 def build_top_up_contract_bundle() -> dict[str, Any]:
     return {
         "contract_version": TOP_UP_CONTRACT_VERSION,
         "status": TOP_UP_STATUS,
+        "authority_scope": TOP_UP_AUTHORITY_SCOPE,
+        "runtime_activation_authority": TOP_UP_RUNTIME_ACTIVATION_AUTHORITY,
         "purchase_enabled": TOP_UP_PURCHASE_ENABLED,
         "checkout_enabled": TOP_UP_CHECKOUT_ENABLED,
         "grant_enabled": TOP_UP_GRANT_ENABLED,
@@ -293,3 +316,26 @@ def build_top_up_contract_bundle() -> dict[str, Any]:
         "seat_based": TOP_UP_SEAT_BASED,
         "policies": [policy.to_dict() for policy in build_top_up_policies()],
     }
+
+
+__all__ = [
+    "TOP_UP_AUTHORITY_SCOPE",
+    "TOP_UP_CHECKOUT_ENABLED",
+    "TOP_UP_CONTRACT_VERSION",
+    "TOP_UP_GRANT_ENABLED",
+    "TOP_UP_MULTIPLES_ONLY",
+    "TOP_UP_PERSISTENCE_ENABLED",
+    "TOP_UP_PURCHASE_ENABLED",
+    "TOP_UP_REQUIRES_ACTIVE_SUBSCRIPTION",
+    "TOP_UP_RUNTIME_ACTIVATION_AUTHORITY",
+    "TOP_UP_SEAT_BASED",
+    "TOP_UP_STATUS",
+    "TopUpPolicy",
+    "TopUpPurchaseState",
+    "TopUpQuote",
+    "TopUpRolloverPolicy",
+    "build_top_up_contract_bundle",
+    "build_top_up_policies",
+    "quote_top_up",
+    "quote_top_up_for_runtime",
+]

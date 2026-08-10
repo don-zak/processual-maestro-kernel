@@ -1,25 +1,22 @@
-"""Subscription middleware - enforces billing status on every request.
-
-Stages:
-  active       -> full access
-  grace        -> read-only (days 0-7 after failed payment)
-  suspended    -> billing page only (days 8-90)
-  expired      -> blocked (after 90 days, auto-cancel)
-"""
+"""Database-backed subscription access enforcement."""
 
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-
-_GRACE_DAYS = 7
-_SUSPENSION_DAYS = 90
+from processual_api.admin_marketplace.subscription_access import (
+    SubscriptionAccessSnapshot,
+    resolve_subscription_access,
+)
+from processual_api.billing.plan_capability_matrix import required_execution_capability
+from processual_api.billing.plan_entitlement_gate import (
+    PlanEntitlementDeniedError,
+    require_plan_entitlement,
+)
+from processual_api.middleware.runtime_capacity import RuntimeCapacityMiddleware
 
 _PUBLIC_PATHS = {
     "/login",
@@ -51,25 +48,29 @@ _PUBLIC_PATHS = {
     "/favicon.ico",
 }
 
+# Administrative authorization is resolved by the route's identity/scope authority.
+# It must not be coupled to a customer subscription lookup.
+_SUBSCRIPTION_EXEMPT_PREFIXES = {"/settings/admin/"}
 _SUSPENSION_ALLOWED_PREFIXES = {"/billing"}
-
 _READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
-
 _JWT_SECRET = None
 _JWT_ALGORITHM = "HS256"
 
 
-def _load_subscriptions() -> list[dict]:
-    path = _DATA_DIR / "subscriptions.json"
-    if path.exists():
-        try:
-            return json.loads(path.read_text("utf-8"))
-        except json.JSONDecodeError, OSError:
-            pass
-    return []
+def _json_response(*, status_code: int, detail: str, stage: str) -> Response:
+    return Response(
+        status_code=status_code,
+        content=json.dumps(
+            {
+                "detail": detail,
+                "subscription_stage": stage,
+            }
+        ),
+        media_type="application/json",
+    )
 
 
-def _extract_user_id(request: Request) -> str | None:
+def _extract_customer_ref(request: Request) -> str | None:
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -77,112 +78,149 @@ def _extract_user_id(request: Request) -> str | None:
 
     jwt_secret = _JWT_SECRET
     if jwt_secret is None:
-        from ..settings import settings as _s
+        from ..settings import settings as _settings
 
-        globals()["_JWT_SECRET"] = _s.jwt_secret
-        jwt_secret = _s.jwt_secret
+        globals()["_JWT_SECRET"] = _settings.jwt_secret
+        jwt_secret = _settings.jwt_secret
 
     try:
         import jwt
 
         payload = jwt.decode(token, jwt_secret, algorithms=[_JWT_ALGORITHM])
-        return payload.get("sub")
+        subject = payload.get("sub")
+        if not isinstance(subject, str):
+            return None
+        normalized = subject.strip().lower()
+        return normalized or None
     except Exception:
         return None
 
 
-def _compute_stage(sub: dict) -> str:
-    status = sub.get("status", "active")
-    if status == "active":
-        return "active"
-    if status == "expired" or status == "cancelled":
-        return "expired"
-
-    created_str = sub.get("suspended_at") or sub.get("created_at", "")
-    try:
-        suspended_at = datetime.fromisoformat(created_str)
-    except ValueError, TypeError:
-        return "grace"
-
-    now = datetime.now(UTC)
-    days_since = (now - suspended_at).days
-
-    if days_since <= _GRACE_DAYS:
-        return "grace"
-    elif days_since <= _SUSPENSION_DAYS:
-        return "suspended"
-    else:
-        return "expired"
+def _required_server_authoritative_capability(
+    *,
+    method: str,
+    path: str,
+) -> str | None:
+    return required_execution_capability(method, path)
 
 
-def _get_user_sub(user_id: str) -> dict | None:
-    subs = _load_subscriptions()
-    user_subs = [s for s in subs if s.get("user_id") == user_id]
-    if not user_subs:
+def _enforce_server_authoritative_capability(
+    *,
+    access: SubscriptionAccessSnapshot,
+    method: str,
+    path: str,
+) -> Response | None:
+    capability_code = _required_server_authoritative_capability(
+        method=method,
+        path=path,
+    )
+    if capability_code is None:
         return None
-    return max(user_subs, key=lambda s: s.get("created_at", ""))
+
+    try:
+        require_plan_entitlement(access.plan_code, capability_code)
+    except PlanEntitlementDeniedError:
+        return _json_response(
+            status_code=403,
+            detail="Subscription plan does not permit this operation.",
+            stage=access.access_stage,
+        )
+    return None
 
 
-class SubscriptionMiddleware(BaseHTTPMiddleware):
+class _SubscriptionAccessMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        if path in _PUBLIC_PATHS or path.startswith("/static/") or path.startswith("/console/"):
+        if (
+            path in _PUBLIC_PATHS
+            or path.startswith("/static/")
+            or path.startswith("/console/")
+            or any(path.startswith(prefix) for prefix in _SUBSCRIPTION_EXEMPT_PREFIXES)
+        ):
             return await call_next(request)
 
-        user_id = _extract_user_id(request)
-        if user_id is None:
+        customer_ref = _extract_customer_ref(request)
+        if customer_ref is None:
             return await call_next(request)
 
-        sub = _get_user_sub(user_id)
-        if sub is None:
-            return await call_next(request)
+        try:
+            access = await resolve_subscription_access(customer_ref)
+        except Exception:
+            return _json_response(
+                status_code=503,
+                detail="Subscription access is temporarily unavailable.",
+                stage="unavailable",
+            )
 
-        stage = _compute_stage(sub)
+        if access is None:
+            return _json_response(
+                status_code=403,
+                detail="No active subscription access record was found.",
+                stage="inactive",
+            )
 
+        stage = access.access_stage
         if stage == "active":
+            capability_denial = _enforce_server_authoritative_capability(
+                access=access,
+                method=request.method,
+                path=path,
+            )
+            if capability_denial is not None:
+                return capability_denial
             return await call_next(request)
 
         if stage == "grace":
             if request.method not in _READ_ONLY_METHODS:
-                return Response(
+                return _json_response(
                     status_code=403,
-                    content=json.dumps(
-                        {
-                            "detail": (
-                                "Payment overdue - service is in read-only mode. Update billing to restore full access."
-                            ),
-                            "subscription_stage": "grace",
-                        }
-                    ),
-                    media_type="application/json",
+                    detail="Payment overdue. Service is read-only until billing is restored.",
+                    stage="grace",
                 )
+            capability_denial = _enforce_server_authoritative_capability(
+                access=access,
+                method=request.method,
+                path=path,
+            )
+            if capability_denial is not None:
+                return capability_denial
             return await call_next(request)
 
         if stage == "suspended":
-            if not any(path.startswith(p) for p in _SUSPENSION_ALLOWED_PREFIXES):
-                return Response(
+            if not any(path.startswith(prefix) for prefix in _SUSPENSION_ALLOWED_PREFIXES):
+                return _json_response(
                     status_code=403,
-                    content=json.dumps(
-                        {
-                            "detail": "Subscription suspended. Visit Billing to reactivate.",
-                            "subscription_stage": "suspended",
-                        }
-                    ),
-                    media_type="application/json",
+                    detail="Subscription suspended. Visit Billing to reactivate.",
+                    stage="suspended",
                 )
             return await call_next(request)
 
-        if stage == "expired":
-            return Response(
+        if stage == "terminated":
+            return _json_response(
                 status_code=403,
-                content=json.dumps(
-                    {
-                        "detail": "Subscription expired after 90 days - please re-subscribe.",
-                        "subscription_stage": "expired",
-                    }
-                ),
-                media_type="application/json",
+                detail="Subscription terminated. A new subscription is required.",
+                stage="terminated",
             )
 
-        return await call_next(request)
+        return _json_response(
+            status_code=503,
+            detail="Subscription access is temporarily unavailable.",
+            stage="unavailable",
+        )
+
+
+class SubscriptionMiddleware:
+    """Compose capacity admission and subscription access as independent layers."""
+
+    def __init__(self, app) -> None:
+        self._subscription_layer = _SubscriptionAccessMiddleware(app)
+        self._app = RuntimeCapacityMiddleware(self._subscription_layer)
+
+    async def dispatch(self, request: Request, call_next):
+        """Preserve the historical direct-dispatch contract for focused tests."""
+
+        return await self._subscription_layer.dispatch(request, call_next)
+
+    async def __call__(self, scope, receive, send) -> None:
+        await self._app(scope, receive, send)

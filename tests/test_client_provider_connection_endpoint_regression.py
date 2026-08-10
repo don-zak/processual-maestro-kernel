@@ -18,14 +18,15 @@ def test_provider_connection_route_is_registered() -> None:
     assert "/settings/provider-connection" in paths
 
 
-def test_client_provider_connection_compatibility_alias_is_registered() -> None:
-    paths = {
-        route.path
+def test_client_provider_connection_compatibility_alias_is_deprecated() -> None:
+    route = next(
+        route
         for route in settings_router.router.routes
         if isinstance(route, APIRoute)
-    }
+        and route.path == "/settings/client/provider-connection"
+    )
 
-    assert "/settings/client/provider-connection" in paths
+    assert route.deprecated is True
 
 
 def test_client_provider_connection_alias_preserves_authenticated_identity(
@@ -67,6 +68,7 @@ def test_client_provider_connection_alias_preserves_authenticated_identity(
         "provider_cost_included": False,
         "billing_policy": "byok",
     }
+
 
 def test_provider_connection_returns_client_safe_empty_status(monkeypatch) -> None:
     monkeypatch.setattr(settings_router, "provider_ids", lambda: ["openai", "opencode"])

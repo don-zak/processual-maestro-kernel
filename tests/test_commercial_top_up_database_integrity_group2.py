@@ -9,6 +9,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from processual_api.admin_marketplace.models import AdminMarketPlan, AdminMarketSubscription
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    AdminMarketSubscriptionQuotaCycle,
+)
 from processual_api.billing.commercial_top_up_models import (
     CommercialTopUpAuditRecord,
     CommercialTopUpGrant,
@@ -16,6 +20,12 @@ from processual_api.billing.commercial_top_up_models import (
     CommercialTopUpPaymentEvidence,
 )
 from processual_api.db.base import Base
+
+PLAN_ID = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+SUBSCRIPTION_ID = uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+QUOTA_CYCLE_ID = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+CUSTOMER_REF = "customer-integrity-1"
+PLAN_CATALOG_VERSION = "2026-08-plan-fulfillment-v1"
 
 
 @pytest.fixture()
@@ -30,6 +40,51 @@ def session() -> Session:
 
     Base.metadata.create_all(engine)
     with Session(engine) as value:
+        value.add(
+            AdminMarketPlan(
+                id=PLAN_ID,
+                plan_code="starter",
+                display_name="Starter",
+                entitlement_profile_ref="starter",
+                quota_profile_ref="starter",
+                metadata_json={},
+            )
+        )
+        value.add(
+            AdminMarketSubscription(
+                id=SUBSCRIPTION_ID,
+                subscription_ref="sub-integrity-1",
+                customer_ref=CUSTOMER_REF,
+                offer_id=None,
+                plan_id=PLAN_ID,
+                status="active",
+                starts_at=datetime(2026, 8, 1, tzinfo=UTC),
+                ends_at=None,
+                order_id=None,
+            )
+        )
+        value.add(
+            AdminMarketSubscriptionQuotaCycle(
+                id=QUOTA_CYCLE_ID,
+                subscription_id=SUBSCRIPTION_ID,
+                source_cycle_id=None,
+                customer_ref=CUSTOMER_REF,
+                plan_code="starter",
+                plan_catalog_version=PLAN_CATALOG_VERSION,
+                entitlement_codes=["maestro_execution"],
+                quota_profile_ref="starter",
+                metric_code="credits",
+                period_start=datetime(2026, 8, 1, tzinfo=UTC),
+                period_end=datetime(2026, 9, 1, tzinfo=UTC),
+                base_limit_units=100_000,
+                rollover_units=0,
+                top_up_units=0,
+                rollover_status="available",
+                used_units=80_000,
+                version=0,
+            )
+        )
+        value.commit()
         yield value
     engine.dispose()
 
@@ -38,8 +93,11 @@ def _order(*, key: str = "order-key-001") -> CommercialTopUpOrder:
     return CommercialTopUpOrder(
         id=uuid.uuid4(),
         account_id=uuid.uuid4(),
-        subscription_id=uuid.uuid4(),
+        customer_ref=CUSTOMER_REF,
+        subscription_id=SUBSCRIPTION_ID,
+        quota_cycle_id=QUOTA_CYCLE_ID,
         plan_code="starter",
+        plan_catalog_version=PLAN_CATALOG_VERSION,
         requested_units=20_000,
         bundle_count=2,
         total_price_usd=Decimal("118.00"),

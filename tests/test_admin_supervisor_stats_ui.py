@@ -21,13 +21,16 @@ def test_supervisor_stats_script_defines_overview_counters() -> None:
     assert "admin-supervisor-overview-counters" in source
     assert "summarizeRequests" in source
     assert "requests by status" in source
-    assert "pending" in source
-    assert "reviewed" in source
-    assert "approved" in source
-    assert "rejected" in source
-    assert "completed" in source
-    assert "draft saved" in source
-    assert "response sent" in source
+    for marker in (
+        "pending",
+        "reviewed",
+        "approved",
+        "rejected",
+        "completed",
+        "Draft saved",
+        "Response sent",
+    ):
+        assert marker in source
 
 
 def test_supervisor_stats_fetches_client_requests_with_admin_auth_bridge() -> None:
@@ -38,6 +41,7 @@ def test_supervisor_stats_fetches_client_requests_with_admin_auth_bridge() -> No
     assert "auth.headers" in source
     assert "credentials: 'include'" in source
     assert "Accept: 'application/json'" in source
+    assert "method: 'GET'" in source
 
 
 def test_supervisor_stats_are_visibility_only_not_permissions() -> None:
@@ -45,10 +49,12 @@ def test_supervisor_stats_are_visibility_only_not_permissions() -> None:
 
     assert "visibility only" in source
     assert "Backend enforcement remains authoritative" in source
-    assert "Do not display raw supervisor session keys" in source
+    assert "Actions remain owned by the Clients page" in source
     assert "key_hash" not in source
     assert "provider_secret" not in source
     assert "encrypted_key" not in source
+    for method in ("POST", "PUT", "PATCH", "DELETE"):
+        assert f"method: '{method}'" not in source
 
 
 def test_admin_supervisor_overview_has_static_placeholder() -> None:
@@ -59,12 +65,14 @@ def test_admin_supervisor_overview_has_static_placeholder() -> None:
     assert "Loading supervisor overview" in source
 
 
-def test_supervisor_stats_rehydrates_after_admin_home_runtime_changes() -> None:
+def test_supervisor_stats_refreshes_without_recreating_duplicate_cards() -> None:
     source = read_text("processual_api/static/js/admin_supervisor_stats.js")
 
-    assert "scheduleSupervisorOverviewRefresh" in source
-    assert "installSupervisorOverviewRefreshHooks" in source
-    assert "MutationObserver" in source
-    assert "window.addEventListener('load'" in source
-    assert "setTimeout(() => scheduleSupervisorOverviewRefresh(), 250)" in source
+    assert "scheduleRefresh" in source
+    assert "window.addEventListener('load', scheduleRefresh)" in source
+    assert "pmk-client-request-updated" in source
+    assert "pmk-supervisor-session-key-updated" in source
     assert "document.getElementById(HOST_ID)" in source
+    assert "MutationObserver" not in source
+    assert "Supervisor Operations Center" not in source
+    assert "admin-supervisor-home-console" not in source

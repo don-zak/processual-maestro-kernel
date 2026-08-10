@@ -3,38 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta
-    name="maestro-plan-catalog-endpoint"
-    content="/billing/public-plan-journey"
-  >
-  <title>Choose a plan · Maestro</title>
-  <meta
-    name="description"
-    content="Choose a Maestro plan to review its offer and begin registration."
-  >
+  <meta name="maestro-plan-catalog-endpoint" content="/billing/public-plan-journey">
+  <title>Maestro plans</title>
+  <meta name="description" content="Compare Maestro plans by quota, price, audience, and registration path.">
   <link rel="stylesheet" href="/console/css/public-journey.css">
 </head>
 <body>
   <main class="journey-shell">
-    <header class="journey-header">
+    <header class="journey-header journey-header--wide">
       <a class="brand" href="/">Maestro</a>
-      <p class="eyebrow">Step 1 of 5</p>
-      <h1>Choose your plan</h1>
+      <p class="eyebrow">Plans and capacity</p>
+      <h1>Choose the capacity that fits your work</h1>
       <p class="lede">
-        Select a plan to review the corresponding offer before creating your account.
+        Unlimited members within the included quota. Bring your own provider keys,
+        and add more quota only when needed.
       </p>
+      <div class="billing-note">
+        Annual base-plan billing saves 20%. On-demand quota add-ons are separate and never discounted.
+      </div>
     </header>
 
-    <section
-      id="plans-grid"
-      class="plan-grid"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <p id="plans-status">Loading available plans…</p>
+    <section id="plans-grid" class="plan-grid" aria-live="polite" aria-busy="true">
+      <p id="plans-status">Loading available plans...</p>
     </section>
   </main>
-
   <script type="module" src="/console/js/pages/plans.js"></script>
 </body>
 </html>

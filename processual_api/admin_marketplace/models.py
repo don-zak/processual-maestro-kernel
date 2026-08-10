@@ -11,11 +11,14 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    LargeBinary,
     Numeric,
     String,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -107,6 +110,18 @@ class AdminMarketOffer(Base):
             name="currency_length",
         ),
         CheckConstraint(
+            "sales_channel IN ('maestro_direct', 'lemon_squeezy')",
+            name="sales_channel_allowed",
+        ),
+        CheckConstraint(
+            "billing_period IN ('monthly', 'annual')",
+            name="billing_period_allowed",
+        ),
+        CheckConstraint(
+            "sales_channel != 'maestro_direct' OR currency = 'TND'",
+            name="direct_channel_requires_tnd",
+        ),
+        CheckConstraint(
             """
             expires_at IS NULL
             OR effective_at IS NULL
@@ -146,8 +161,18 @@ class AdminMarketOffer(Base):
         String(3),
         nullable=False,
     )
+    sales_channel: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="lemon_squeezy",
+    )
+    billing_period: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="monthly",
+    )
     amount: Mapped[Decimal] = mapped_column(
-        Numeric(18, 2),
+        Numeric(18, 3),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(
@@ -197,6 +222,17 @@ class AdminMarketSubscription(Base):
             "subscription_ref",
             name="uq_admin_market_subscriptions_subscription_ref",
         ),
+        UniqueConstraint(
+            "order_id",
+            name="uq_admin_market_subscriptions_order_id",
+        ),
+        Index(
+            "uq_admin_market_subscriptions_active_customer",
+            "customer_ref",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
         Index(
             "ix_admin_market_subscriptions_customer_status",
             "customer_ref",
@@ -213,13 +249,21 @@ class AdminMarketSubscription(Base):
         String(128),
         nullable=False,
     )
-    offer_id: Mapped[uuid.UUID] = mapped_column(
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_orders.id",
+            name="fk_admin_market_subscription_order",
+            ondelete="RESTRICT",
+        ),
+    )
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
             "admin_market_offers.id",
             ondelete="RESTRICT",
         ),
-        nullable=False,
+        nullable=True,
     )
     plan_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -328,19 +372,66 @@ class AdminMarketOrder(Base):
             """
             status IN (
                 'draft',
-                'submitted',
-                'awaiting_payment_verification',
-                'approved',
-                'rejected',
+                'awaiting_contract',
+                'awaiting_payment',
+                'payment_under_review',
+                'ready_for_activation',
+                'activated',
                 'cancelled',
-                'fulfilled'
+                'expired',
+                'requires_review'
             )
             """,
             name="status_allowed",
         ),
+        CheckConstraint(
+            "billing_period IN ('monthly', 'annual')",
+            name="billing_period_allowed",
+        ),
+        CheckConstraint(
+            "selected_channel != 'maestro_direct' OR country_code = 'TN'",
+            name="direct_channel_country_tunisia",
+        ),
+        CheckConstraint(
+            "selected_channel != 'maestro_direct' OR currency = 'TND'",
+            name="direct_channel_currency_tnd",
+        ),
+        CheckConstraint(
+            "subtotal_amount >= 0 AND tax_amount >= 0 AND total_amount >= 0",
+            name="amounts_nonnegative",
+        ),
+        CheckConstraint(
+            "total_amount = subtotal_amount + tax_amount",
+            name="total_amount_consistent",
+        ),
+        CheckConstraint(
+            "contract_status IN ('not_required', 'pending', 'completed', 'rejected', 'expired')",
+            name="contract_status_allowed",
+        ),
+        CheckConstraint(
+            "payment_requirement IN ('required', 'not_required')",
+            name="payment_requirement_allowed",
+        ),
+        CheckConstraint(
+            """
+            payment_status IN (
+                'pending', 'customer_reported', 'notification_received', 'matched',
+                'verified', 'requires_review', 'rejected', 'not_required'
+            )
+            """,
+            name="payment_status_allowed",
+        ),
         UniqueConstraint(
             "order_ref",
             name="uq_admin_market_orders_order_ref",
+        ),
+        UniqueConstraint(
+            "creation_idempotency_key_hash",
+            name="uq_admin_market_orders_creation_idem_hash",
+        ),
+        UniqueConstraint(
+            "payment_reference",
+            name="uq_admin_market_orders_payment_reference",
         ),
         Index(
             "ix_admin_market_orders_customer_status",
@@ -366,17 +457,112 @@ class AdminMarketOrder(Base):
         ),
         nullable=False,
     )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_plans.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    billing_period: Mapped[str] = mapped_column(String(16), nullable=False)
     selected_channel: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
     )
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 3),
+        nullable=False,
+        default=Decimal("0.000"),
+    )
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
     status: Mapped[str] = mapped_column(
         String(40),
         nullable=False,
         default="draft",
     )
+    contract_status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="pending",
+    )
+    payment_requirement: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="required",
+    )
+    payment_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="pending",
+    )
+    payment_reference: Mapped[str | None] = mapped_column(String(64))
+    payment_destination_snapshot: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    offer_snapshot: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    creation_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created_at_column()
     updated_at: Mapped[datetime] = _updated_at_column()
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AdminMarketContract(Base):
+    __tablename__ = "admin_market_contracts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('completed', 'rejected', 'expired')",
+            name="status_allowed",
+        ),
+        CheckConstraint(
+            "acceptance_method IN ('authenticated_clickwrap', 'admin_exception')",
+            name="acceptance_method_allowed",
+        ),
+        UniqueConstraint("contract_ref", name="uq_admin_market_contracts_contract_ref"),
+        UniqueConstraint("order_id", name="uq_admin_market_contracts_order_id"),
+        UniqueConstraint(
+            "evidence_reference",
+            name="uq_admin_market_contracts_evidence_reference",
+        ),
+        UniqueConstraint(
+            "completion_idempotency_key_hash",
+            name="uq_admin_market_contracts_completion_idem_hash",
+        ),
+        Index("ix_admin_market_contracts_customer_status", "customer_ref", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    contract_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    contract_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    accepted_party_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    acceptance_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    completion_idempotency_key_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = _created_at_column()
 
 
 class AdminMarketPaymentVerification(Base):
@@ -396,6 +582,14 @@ class AdminMarketPaymentVerification(Base):
         UniqueConstraint(
             "verification_ref",
             name=("uq_admin_market_payment_verifications_verification_ref"),
+        ),
+        UniqueConstraint(
+            "order_id",
+            name="uq_admin_market_payment_verifications_order_id",
+        ),
+        UniqueConstraint(
+            "decision_idempotency_key_hash",
+            name="uq_admin_market_payment_verifications_decision_idem_hash",
         ),
         Index(
             "ix_admin_market_payment_verifications_order_status",
@@ -418,6 +612,14 @@ class AdminMarketPaymentVerification(Base):
         ),
         nullable=False,
     )
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_payment_evidence.id",
+            name="fk_admin_market_payment_verification_evidence",
+            ondelete="RESTRICT",
+        ),
+    )
     status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
@@ -426,8 +628,160 @@ class AdminMarketPaymentVerification(Base):
     safe_reference: Mapped[str | None] = mapped_column(
         String(255),
     )
+    decided_by_user_id: Mapped[str | None] = mapped_column(String(128))
+    decision_reason_code: Mapped[str | None] = mapped_column(String(128))
+    decision_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
     updated_at: Mapped[datetime] = _updated_at_column()
+
+
+class AdminMarketPaymentEvidence(Base):
+    __tablename__ = "admin_market_payment_evidence"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type IN ('customer_report', 'admin_exception', 'provider_notification', 'reconciliation')",
+            name="source_type_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('received', 'matched', 'requires_review', 'rejected')",
+            name="status_allowed",
+        ),
+        CheckConstraint("actual_amount >= 0", name="actual_amount_nonnegative"),
+        CheckConstraint("length(currency) = 3", name="currency_length"),
+        UniqueConstraint("evidence_ref", name="uq_admin_market_payment_evidence_ref"),
+        UniqueConstraint(
+            "source_reference_hash",
+            name="uq_admin_market_payment_evidence_source_reference_hash",
+        ),
+        UniqueConstraint(
+            "submission_idempotency_key_hash",
+            name="uq_admin_market_payment_evidence_submission_idem_hash",
+        ),
+        Index(
+            "ix_admin_market_payment_evidence_order_status",
+            "order_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    evidence_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    actual_amount: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    safe_source_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_reference_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    submission_idempotency_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    amount_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    currency_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    destination_matched: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    match_reason_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = _created_at_column()
+
+
+class AdminMarketPaymentReconciliationCase(Base):
+    __tablename__ = "admin_market_payment_reconciliation_cases"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'requires_review', 'resolved', 'rejected')",
+            name="status_allowed",
+        ),
+        CheckConstraint(
+            "exception_type IN ('underpayment', 'overpayment', 'unknown_reference', "
+            "'old_destination', 'late_payment', 'duplicate_payment', 'payer_mismatch', "
+            "'currency_mismatch', 'untrusted_evidence', 'other')",
+            name="exception_type_allowed",
+        ),
+        CheckConstraint(
+            "resolution IS NULL OR resolution IN ('accepted_match', 'rejected', "
+            "'linked', 'unlinked', 'reevaluated', 'placed_in_review')",
+            name="resolution_allowed",
+        ),
+        UniqueConstraint("case_ref", name="uq_admin_market_reconciliation_case_ref"),
+        UniqueConstraint("evidence_id", name="uq_admin_market_reconciliation_evidence"),
+        UniqueConstraint(
+            "decision_idempotency_key_hash",
+            name="uq_admin_market_reconciliation_idem_hash",
+        ),
+        Index(
+            "ix_admin_market_reconciliation_status_updated",
+            "status",
+            "updated_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    case_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_payment_evidence.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    candidate_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    exception_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    resolution: Mapped[str | None] = mapped_column(String(32))
+    reason_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    safe_note: Mapped[str | None] = mapped_column(String(500))
+    decided_by_user_id: Mapped[str | None] = mapped_column(String(128))
+    decision_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+
+class AdminMarketNotificationOutbox(Base):
+    __tablename__ = "admin_market_notification_outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('order_created', 'contract_completed', "
+            "'payment_instructions_ready', 'payment_reported', 'payment_verified', "
+            "'payment_requires_review', 'subscription_activated', "
+            "'activation_failed', 'order_cancelled')",
+            name="event_type_allowed",
+        ),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        UniqueConstraint("event_ref", name="uq_admin_market_notification_event_ref"),
+        UniqueConstraint("deduplication_key_hash", name="uq_admin_market_notification_dedup_hash"),
+        Index(
+            "ix_admin_market_notification_outbox_dispatch",
+            "delivered_at",
+            "dead_lettered_at",
+            "available_at",
+            "claimed_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    event_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    aggregate_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    recipient_customer_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_json: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+    deduplication_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = _created_at_column()
 
 
 class AdminMarketInvoice(Base):
@@ -482,6 +836,22 @@ class AdminMarketEntitlementActivation(Base):
             "activation_ref",
             name=("uq_admin_market_entitlement_activations_activation_ref"),
         ),
+        UniqueConstraint(
+            "subscription_id",
+            name="uq_admin_market_entitlement_activations_subscription_id",
+        ),
+        UniqueConstraint(
+            "order_id",
+            name="uq_admin_market_entitlement_activations_order_id",
+        ),
+        UniqueConstraint(
+            "activation_idempotency_key_hash",
+            name="uq_admin_market_entitlement_activations_idem_hash",
+        ),
+        CheckConstraint(
+            "status IN ('activated', 'failed', 'requires_review')",
+            name="status_allowed",
+        ),
         Index(
             "ix_admin_market_entitlement_subscription",
             "subscription_id",
@@ -496,6 +866,14 @@ class AdminMarketEntitlementActivation(Base):
     customer_ref: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "admin_market_orders.id",
+            name="fk_admin_market_entitlement_order",
+            ondelete="RESTRICT",
+        ),
     )
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -515,6 +893,13 @@ class AdminMarketEntitlementActivation(Base):
         nullable=False,
         default=False,
     )
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="activated",
+    )
+    activation_idempotency_key_hash: Mapped[str | None] = mapped_column(String(64))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at_column()
 
 
@@ -544,6 +929,21 @@ class AdminMarketChannelEligibility(Base):
         CheckConstraint(
             "country_code IS NULL OR length(country_code) = 2",
             name="country_code_length",
+        ),
+        CheckConstraint(
+            "address_status IN ('unverified', 'confirmed', 'revoked')",
+            name="address_status_allowed",
+        ),
+        CheckConstraint(
+            """
+            address_status != 'confirmed'
+            OR (
+                country_code IS NOT NULL
+                AND address_source IS NOT NULL
+                AND address_verified_at IS NOT NULL
+            )
+            """,
+            name="confirmed_address_requires_evidence",
         ),
         CheckConstraint(
             """
@@ -585,6 +985,15 @@ class AdminMarketChannelEligibility(Base):
     )
     country_code: Mapped[str | None] = mapped_column(
         String(2),
+    )
+    address_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="unverified",
+    )
+    address_source: Mapped[str | None] = mapped_column(String(64))
+    address_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
     )
     maestro_direct_status: Mapped[str] = mapped_column(
         String(24),
@@ -723,8 +1132,8 @@ class AdminMarketAuditRecord(Base):
     __tablename__ = "admin_market_audit_records"
     __table_args__ = (
         CheckConstraint(
-            "platform_authority = 'platform_admin'",
-            name="platform_authority_exact",
+            "platform_authority IN ('platform_admin', 'identity_customer', 'system')",
+            name="actor_authority_allowed",
         ),
         CheckConstraint(
             """
@@ -734,7 +1143,16 @@ class AdminMarketAuditRecord(Base):
                 'channel_eligibility_decided',
                 'channel_selected',
                 'payment_verification_decided',
-                'subscription_activation_decided'
+                'subscription_activation_decided',
+                'payment_destination_created',
+                'payment_destination_validated',
+                'payment_destination_activated',
+                'payment_destination_deactivated',
+                'payment_destination_default_set',
+                'order_created',
+                'contract_completed',
+                'payment_evidence_recorded',
+                'payment_reconciliation_decided'
             )
             """,
             name="action_allowed",
@@ -748,7 +1166,11 @@ class AdminMarketAuditRecord(Base):
                 'payment_verification',
                 'subscription',
                 'trial',
-                'sales_channel_eligibility'
+                'sales_channel_eligibility',
+                'payment_destination',
+                'contract',
+                'payment_evidence',
+                'payment_reconciliation'
             )
             """,
             name="resource_type_allowed",
@@ -853,13 +1275,214 @@ class AdminMarketAuditRecord(Base):
     created_at: Mapped[datetime] = _created_at_column()
 
 
+class AdminMarketPaymentDestination(Base):
+    __tablename__ = "admin_market_payment_destinations"
+    __table_args__ = (
+        CheckConstraint(
+            """
+            destination_type IN (
+                'bank_account',
+                'postal_account'
+            )
+            """,
+            name="destination_type_allowed",
+        ),
+        CheckConstraint(
+            "country_code = 'TN'",
+            name="country_tunisia_only",
+        ),
+        CheckConstraint(
+            "currency = 'TND'",
+            name="currency_tnd_only",
+        ),
+        CheckConstraint(
+            "sales_channel = 'maestro_direct'",
+            name="channel_direct",
+        ),
+        CheckConstraint(
+            """
+            status IN (
+                'draft',
+                'validated',
+                'active',
+                'inactive'
+            )
+            """,
+            name="status_allowed",
+        ),
+        CheckConstraint(
+            """
+            validation_method IS NULL
+            OR validation_method IN (
+                'structural',
+                'provider'
+            )
+            """,
+            name="validation_method_allowed",
+        ),
+        CheckConstraint(
+            "length(identifier_ciphertext) > 12",
+            name="ciphertext_not_truncated",
+        ),
+        CheckConstraint(
+            "length(trim(masked_identifier)) >= 8",
+            name="masked_identifier_present",
+        ),
+        CheckConstraint(
+            """
+            expires_at IS NULL
+            OR effective_at IS NULL
+            OR expires_at > effective_at
+            """,
+            name="effective_window_valid",
+        ),
+        CheckConstraint(
+            """
+            NOT is_active
+            OR status = 'active'
+            """,
+            name="active_status",
+        ),
+        CheckConstraint(
+            """
+            NOT is_default
+            OR (
+                is_active
+                AND status = 'active'
+            )
+            """,
+            name="default_requires_active",
+        ),
+        CheckConstraint(
+            """
+            status = 'draft'
+            OR (
+                validation_method IS NOT NULL
+                AND validation_reason_code IS NOT NULL
+                AND validated_at IS NOT NULL
+            )
+            """,
+            name="validated_state",
+        ),
+        UniqueConstraint(
+            "destination_ref",
+            name="uq_admin_market_payment_destinations_destination_ref",
+        ),
+        UniqueConstraint(
+            "creation_idempotency_key_hash",
+            name="uq_admin_market_payment_destinations_create_idem_hash",
+        ),
+        Index(
+            "ix_admin_market_payment_destinations_status",
+            "status",
+            "is_active",
+        ),
+        Index(
+            "uq_admin_market_payment_destinations_active_default",
+            "sales_channel",
+            unique=True,
+            postgresql_where=text("is_active AND is_default"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    destination_ref: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+    display_name: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+    )
+    destination_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+    institution_name: Mapped[str] = mapped_column(
+        String(160),
+        nullable=False,
+    )
+    account_holder_name: Mapped[str] = mapped_column(
+        String(160),
+        nullable=False,
+    )
+    identifier_ciphertext: Mapped[bytes] = mapped_column(
+        LargeBinary,
+        nullable=False,
+    )
+    identifier_key_version: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    masked_identifier: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+    creation_idempotency_key_hash: Mapped[str | None] = mapped_column(
+        String(64),
+    )
+    country_code: Mapped[str] = mapped_column(
+        String(2),
+        nullable=False,
+        default="TN",
+    )
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default="TND",
+    )
+    sales_channel: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="maestro_direct",
+    )
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="draft",
+    )
+    validation_method: Mapped[str | None] = mapped_column(
+        String(24),
+    )
+    validation_reason_code: Mapped[str | None] = mapped_column(
+        String(128),
+    )
+    validated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    effective_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    instructions: Mapped[str | None] = mapped_column(
+        String(1000),
+    )
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+
 ADMIN_MARKET_MODELS = (
     AdminMarketPlan,
     AdminMarketOffer,
     AdminMarketSubscription,
     AdminMarketTrial,
     AdminMarketOrder,
+    AdminMarketContract,
+    AdminMarketPaymentEvidence,
     AdminMarketPaymentVerification,
+    AdminMarketPaymentDestination,
     AdminMarketInvoice,
     AdminMarketEntitlementActivation,
     AdminMarketChannelEligibility,

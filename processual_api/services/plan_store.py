@@ -1,7 +1,8 @@
-"""Local plan policy store for API key quota binding.
+"""Transitional API-key plan policy bridge.
 
-KEY-05 keeps plan/subscription binding local and JSON-friendly before
-PostgreSQL, billing providers, or cloud deployment.
+Historical pilot policies remain available for legacy API keys. Current
+commercial plan identifiers are bound to the authoritative fulfillment catalog
+so counted API-key requests cannot silently fall back to Pilot Starter quotas.
 """
 
 from __future__ import annotations
@@ -10,6 +11,13 @@ import os
 from copy import deepcopy
 from typing import Any
 
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_SPECS,
+    normalize_plan_code,
+)
+
+# Historical metadata only. Blank plan identity is no longer allowed to resolve
+# through this default; callers must provide explicit plan authority.
 DEFAULT_API_PLAN_ID = "pilot_starter"
 
 
@@ -20,11 +28,23 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _authoritative_policy(plan_code: str) -> dict[str, Any]:
+    spec = PLAN_FULFILLMENT_SPECS[plan_code]
+    return {
+        "id": spec.plan_code,
+        "name": spec.plan_code.replace("_", " ").title(),
+        "source": "authoritative_fulfillment_catalog",
+        "quotas": {
+            "evaluation": spec.monthly_unit_allowance,
+        },
+    }
+
+
 PLAN_POLICIES: dict[str, dict[str, Any]] = {
     "pilot_starter": {
         "id": "pilot_starter",
         "name": "Pilot Starter",
-        "source": "plan",
+        "source": "legacy_plan",
         "quotas": {
             "evaluation": 50,
         },
@@ -32,7 +52,7 @@ PLAN_POLICIES: dict[str, dict[str, Any]] = {
     "pilot_pro": {
         "id": "pilot_pro",
         "name": "Pilot Pro",
-        "source": "plan",
+        "source": "legacy_plan",
         "quotas": {
             "evaluation": 500,
         },
@@ -40,7 +60,7 @@ PLAN_POLICIES: dict[str, dict[str, Any]] = {
     "institution_trial": {
         "id": "institution_trial",
         "name": "Institution Trial",
-        "source": "plan",
+        "source": "legacy_plan",
         "quotas": {
             "evaluation": 2000,
         },
@@ -48,17 +68,20 @@ PLAN_POLICIES: dict[str, dict[str, Any]] = {
     "enterprise_private": {
         "id": "enterprise_private",
         "name": "Enterprise Private",
-        "source": "plan",
+        "source": "legacy_plan",
         "quotas": {
             # -1 means unlimited in the current quota_store logic.
             "evaluation": _env_int("PMK_ENTERPRISE_PRIVATE_EVALUATION_QUOTA", -1),
         },
     },
+    **{
+        plan_code: _authoritative_policy(plan_code)
+        for plan_code in PLAN_FULFILLMENT_SPECS
+    },
 }
 
 
 PLAN_ALIASES: dict[str, str] = {
-    "starter": "pilot_starter",
     "pilot": "pilot_starter",
     "pilot_starter": "pilot_starter",
     "pilotstarter": "pilot_starter",
@@ -69,9 +92,10 @@ PLAN_ALIASES: dict[str, str] = {
     "institution_trial": "institution_trial",
     "institutiontrial": "institution_trial",
     "trial": "institution_trial",
-    "enterprise": "enterprise_private",
     "enterprise_private": "enterprise_private",
     "enterpriseprivate": "enterprise_private",
+    "enterprise": "enterprise_pilot",
+    "enterprise_integration": "enterprise_pilot",
 }
 
 
@@ -84,13 +108,21 @@ def normalize_plan_key(value: Any) -> str:
 def resolve_plan_id(value: Any) -> str:
     normalized = normalize_plan_key(value)
     if not normalized:
-        return DEFAULT_API_PLAN_ID
+        raise KeyError("API quota plan authority is required")
 
     if normalized in PLAN_POLICIES:
         return normalized
 
     compact = normalized.replace("_", "")
-    return PLAN_ALIASES.get(normalized) or PLAN_ALIASES.get(compact) or DEFAULT_API_PLAN_ID
+    alias = PLAN_ALIASES.get(normalized) or PLAN_ALIASES.get(compact)
+    if alias is not None:
+        return alias
+
+    canonical = normalize_plan_code(normalized)
+    if canonical in PLAN_POLICIES:
+        return canonical
+
+    raise KeyError(f"unknown API quota plan: {normalized}")
 
 
 def get_plan_policy(plan_id: Any) -> dict[str, Any]:

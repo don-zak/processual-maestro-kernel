@@ -1,0 +1,130 @@
+name: Orchestration Soak
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/a3-admin-marketplace-original-offers
+    paths:
+      - benchmarks/orchestration_api_app.py
+      - benchmarks/orchestration_api_probe.py
+      - benchmarks/orchestration_api_soak.py
+      - tests/test_orchestration_api_soak.py
+      - .github/workflows/orchestration-soak.yml
+      - processual_api/cgt_governor/policy/fanout_planner.py
+      - processual_api/cgt_governor/policy/orchestration_metrics.py
+      - processual_api/cgt_governor/adapters/execution_fanout.py
+      - processual_api/cgt_governor/adapters/registry.py
+      - processual_api/routers/workflows.py
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PYTHONPATH: "."
+      ENVIRONMENT: development
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: benchmark-only-not-production-jwt-secret
+      API_KEYS: benchmark-only-api-key
+      RATE_LIMIT_ENABLED: "false"
+      CAPACITY_GUARD_ENABLED: "false"
+      EXECUTION_FANOUT_ENABLED: "true"
+      EXECUTION_FANOUT_GLOBAL_LIMIT: "16"
+      EXECUTION_FANOUT_PROVIDER_LIMIT: "8"
+      EXECUTION_FANOUT_WAIT_MS: "250"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install soak dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,cache,database,security,observability]'
+
+      - name: Lint soak benchmark
+        run: |
+          ruff check \
+            benchmarks/orchestration_api_app.py \
+            benchmarks/orchestration_api_probe.py \
+            benchmarks/orchestration_api_soak.py \
+            tests/test_orchestration_api_soak.py
+          flake8 \
+            benchmarks/orchestration_api_app.py \
+            benchmarks/orchestration_api_probe.py \
+            benchmarks/orchestration_api_soak.py \
+            tests/test_orchestration_api_soak.py
+
+      - name: Test soak summarization
+        run: pytest -q tests/test_orchestration_api_soak.py
+
+      - name: Start two-worker orchestration harness
+        run: |
+          mkdir -p soak-results
+          python benchmarks/flush_redis.py
+          python -m uvicorn benchmarks.orchestration_api_app:app \
+            --host 127.0.0.1 \
+            --port 8030 \
+            --workers 2 \
+            --timeout-keep-alive 30 \
+            > soak-results/server.log 2>&1 &
+          echo $! > soak-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8030/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat soak-results/server.log
+          exit 1
+
+      - name: Run sustained orchestration soak
+        run: |
+          python benchmarks/orchestration_api_soak.py \
+            --base-url http://127.0.0.1:8030 \
+            --workers 2 \
+            --widths 4,8,12,16 \
+            --concurrency 10,20 \
+            --trials 3 \
+            --requests 120 \
+            --output soak-results/orchestration-soak.json \
+            | tee soak-results/orchestration-soak.txt
+
+      - name: Verify orchestration metrics exposure
+        run: |
+          curl --fail --silent http://127.0.0.1:8030/metrics > soak-results/metrics.txt
+          grep -q 'maestro_llm_orchestration_requests_total' soak-results/metrics.txt
+          grep -q 'maestro_llm_orchestration_latency_seconds' soak-results/metrics.txt
+
+      - name: Upload orchestration soak
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-orchestration-soak
+          path: soak-results/
+
+      - name: Stop orchestration harness
+        if: always()
+        run: |
+          if [ -f soak-results/server.pid ]; then
+            kill "$(cat soak-results/server.pid)" 2>/dev/null || true
+          fi

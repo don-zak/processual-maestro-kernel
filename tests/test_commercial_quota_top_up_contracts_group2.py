@@ -3,16 +3,19 @@ from decimal import Decimal
 import pytest
 
 from processual_api.billing.commercial_quota_top_up_contracts import (
+    TOP_UP_AUTHORITY_SCOPE,
     TOP_UP_CHECKOUT_ENABLED,
     TOP_UP_GRANT_ENABLED,
     TOP_UP_MULTIPLES_ONLY,
     TOP_UP_PERSISTENCE_ENABLED,
     TOP_UP_PURCHASE_ENABLED,
+    TOP_UP_RUNTIME_ACTIVATION_AUTHORITY,
     TOP_UP_SEAT_BASED,
     TopUpPurchaseState,
     build_top_up_contract_bundle,
     build_top_up_policies,
     quote_top_up,
+    quote_top_up_for_runtime,
 )
 
 
@@ -48,21 +51,27 @@ def test_bundle_prices_derive_from_plan_overage_rate() -> None:
     assert policies["enterprise_pilot"].price_per_bundle_usd == Decimal("650.00")
 
 
-def test_valid_multiple_builds_price_preview() -> None:
+def test_public_preview_does_not_activate_purchase() -> None:
     quote = quote_top_up("starter", 20_000)
     assert quote.bundle_count == 2
     assert quote.total_units == 20_000
     assert quote.total_price_usd == Decimal("118.00")
     assert quote.purchase_enabled is False
-    assert quote.state in {
-        TopUpPurchaseState.DISABLED,
-        TopUpPurchaseState.UPGRADE_RECOMMENDED,
-    }
+    assert quote.state is TopUpPurchaseState.DISABLED
+
+
+def test_runtime_quote_preserves_price_authority_without_enabling_purchase() -> None:
+    quote = quote_top_up_for_runtime("starter", 20_000)
+    assert quote.bundle_count == 2
+    assert quote.total_units == 20_000
+    assert quote.total_price_usd == Decimal("118.00")
+    assert quote.state is TopUpPurchaseState.READY_FOR_REVIEW
+    assert quote.purchase_enabled is False
 
 
 def test_below_minimum_and_invalid_multiple_fail_closed() -> None:
-    below = quote_top_up("starter", 5_000)
-    invalid = quote_top_up("starter", 15_000)
+    below = quote_top_up_for_runtime("starter", 5_000)
+    invalid = quote_top_up_for_runtime("starter", 15_000)
     assert below.state is TopUpPurchaseState.BELOW_MINIMUM
     assert invalid.state is TopUpPurchaseState.INVALID_MULTIPLE
     assert below.total_price_usd == Decimal("0.00")
@@ -70,38 +79,42 @@ def test_below_minimum_and_invalid_multiple_fail_closed() -> None:
 
 
 def test_above_maximum_fails_closed() -> None:
-    quote = quote_top_up("academic", 25_000)
+    quote = quote_top_up_for_runtime("academic", 25_000)
     assert quote.state is TopUpPurchaseState.ABOVE_MAXIMUM
     assert quote.bundle_count == 0
 
 
 def test_upgrade_is_recommended_when_cheaper_or_equal() -> None:
-    quote = quote_top_up("starter", 10_000)
+    quote = quote_top_up_for_runtime("starter", 10_000)
     assert quote.upgrade_plan_code == "business"
     assert quote.upgrade_monthly_difference_usd == Decimal("470.00")
 
-    quote = quote_top_up("starter", 80_000)
+    quote = quote_top_up_for_runtime("starter", 80_000)
     assert quote.total_price_usd == Decimal("472.00")
     assert quote.state is TopUpPurchaseState.UPGRADE_RECOMMENDED
 
 
 def test_unknown_plan_and_non_positive_request_are_rejected() -> None:
     with pytest.raises(ValueError):
-        quote_top_up("unknown", 10_000)
+        quote_top_up_for_runtime("unknown", 10_000)
     with pytest.raises(ValueError):
-        quote_top_up("starter", 0)
+        quote_top_up_for_runtime("starter", 0)
 
 
-def test_top_up_foundation_remains_non_activating() -> None:
+def test_public_contract_is_not_runtime_activation_authority() -> None:
     assert TOP_UP_PURCHASE_ENABLED is False
     assert TOP_UP_CHECKOUT_ENABLED is False
     assert TOP_UP_GRANT_ENABLED is False
     assert TOP_UP_PERSISTENCE_ENABLED is False
     assert TOP_UP_MULTIPLES_ONLY is True
     assert TOP_UP_SEAT_BASED is False
+    assert TOP_UP_AUTHORITY_SCOPE == "quote_policy_only"
+    assert TOP_UP_RUNTIME_ACTIVATION_AUTHORITY == "admin_marketplace_top_up_readiness"
 
     bundle = build_top_up_contract_bundle()
-    assert bundle["status"] == "draft_review"
+    assert bundle["status"] == "public_exposure_disabled"
+    assert bundle["authority_scope"] == "quote_policy_only"
+    assert bundle["runtime_activation_authority"] == "admin_marketplace_top_up_readiness"
     assert bundle["purchase_enabled"] is False
     assert bundle["checkout_enabled"] is False
     assert bundle["grant_enabled"] is False

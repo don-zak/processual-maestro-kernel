@@ -132,21 +132,21 @@ def test_admin_client_request_apply_plan_saves_verified_plan(
 
     assert result["status"] == "plan_applied"
     assert result["changed"] is True
-    assert result["plan"]["plan_id"] == "enterprise"
+    assert result["plan"]["plan_id"] == "enterprise_pilot"
     assert result["plan"]["source"] == "client_requests"
     assert result["plan"]["monthly_unit_allowance"] > 0
-    assert result["request"]["approved_plan"] == "enterprise"
+    assert result["request"]["approved_plan"] == "enterprise_pilot"
     assert result["request"]["plan_source"] == "client_requests"
     assert result["request"]["plan_applied"] is True
 
     saved_request = _load_saved_request(tmp_path)
-    assert saved_request["approved_plan"] == "enterprise"
+    assert saved_request["approved_plan"] == "enterprise_pilot"
     assert saved_request["plan_source"] == "client_requests"
     assert saved_request["plan_applied"] is True
     assert saved_request["plan_applied_at"]
     assert saved_request["plan_applied_by"] == "owner-admin"
     assert saved_request["status_history"][-1]["event"] == "plan_applied"
-    assert saved_request["status_history"][-1]["plan_id"] == "enterprise"
+    assert saved_request["status_history"][-1]["plan_id"] == "enterprise_pilot"
     assert saved_request["status_history"][-1]["plan_source"] == "client_requests"
     assert saved_request["status_history"][-1]["source"] == "admin_clients_panel"
 
@@ -338,7 +338,7 @@ def test_admin_client_request_apply_plan_preserves_admin_plan_source_consistency
     saved_request = _load_saved_request(tmp_path)
 
     assert result["status"] == "plan_applied"
-    assert saved_request["approved_plan"] == "enterprise"
+    assert saved_request["approved_plan"] == "enterprise_pilot"
     assert saved_request["plan_source"] == "client_requests"
     assert after.get("client_requests", 0) >= before.get("client_requests", 0)
     assert after.get("client_requests", 0) >= 1

@@ -59,7 +59,7 @@ def _load_store_unlocked(
 
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return {"supervisor_session_keys": []}
 
     if not isinstance(raw, dict):
@@ -175,7 +175,7 @@ def _verify_key(raw_key: str, encoded_hash: str) -> bool:
         iterations = int(iterations_raw)
         salt = base64.urlsafe_b64decode(salt_raw.encode("ascii"))
         expected = base64.urlsafe_b64decode(digest_raw.encode("ascii"))
-    except ValueError, OSError:
+    except (ValueError, OSError):
         return False
 
     digest = hashlib.pbkdf2_hmac(

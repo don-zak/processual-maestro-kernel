@@ -12,6 +12,8 @@
     error: '',
   };
 
+  let providerObserver = null;
+
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -20,6 +22,50 @@
 
   function rootPage() { return document.getElementById('page-settings'); }
   function operationsRoot() { return document.getElementById('settings-operations-root'); }
+
+  function providerSnapshotFromPage() {
+    const status = document.getElementById('set-provider-connection-status')?.textContent?.trim() || '';
+    if (!status || status === 'Provider status unavailable') return null;
+
+    const provider = document.getElementById('set-provider-connection-provider')?.textContent?.trim() || '';
+    const model = document.getElementById('set-provider-connection-model')?.textContent?.trim() || '';
+    const secretStatus = document.getElementById('set-provider-connection-secret-status')?.textContent?.trim() || '';
+    const normalizedStatus = status.toLowerCase();
+    const configured = normalizedStatus === 'configured' || secretStatus.includes('stored encrypted');
+
+    return {
+      status,
+      configured,
+      provider: provider === '-' ? '' : provider,
+      model: model === '-' ? '' : model,
+    };
+  }
+
+  function syncProviderFromPage() {
+    const snapshot = providerSnapshotFromPage();
+    if (!snapshot) return;
+
+    const previous = JSON.stringify(state.provider || {});
+    const next = JSON.stringify(snapshot);
+    if (previous === next) return;
+
+    state.provider = snapshot;
+    render();
+  }
+
+  function observeProviderStatus() {
+    if (providerObserver) return;
+    const target = document.getElementById('set-provider-connection-card');
+    if (!target) return;
+
+    providerObserver = new MutationObserver(syncProviderFromPage);
+    providerObserver.observe(target, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    syncProviderFromPage();
+  }
 
   function profileOptions() {
     const profiles = Array.isArray(state.integration?.operational_profiles)
@@ -39,6 +85,35 @@
 
   function activeKeys() {
     return Array.isArray(state.sandboxKeys?.keys) ? state.sandboxKeys.keys : [];
+  }
+
+  function replaceSandboxKeys(keys) {
+    state.sandboxKeys = {
+      ...(state.sandboxKeys || {}),
+      keys,
+      key_count: keys.length,
+      max_active_keys: state.sandboxKeys?.max_active_keys || 3,
+    };
+  }
+
+  function appendSandboxKey(key) {
+    if (!key) return;
+    replaceSandboxKeys(activeKeys().concat([key]));
+  }
+
+  function replaceRotatedSandboxKey(keyId, key) {
+    if (!key) return;
+    replaceSandboxKeys(
+      activeKeys()
+        .filter((item) => item.key_id !== keyId)
+        .concat([key])
+    );
+  }
+
+  function removeSandboxKey(keyId) {
+    replaceSandboxKeys(
+      activeKeys().filter((item) => item.key_id !== keyId)
+    );
   }
 
   function keyRows() {
@@ -124,17 +199,16 @@
     if (state.loading) return;
     state.loading = true;
     state.error = '';
+    state.provider = providerSnapshotFromPage();
     try {
-      const primaryResults = await Promise.allSettled([
+      const integrationResult = await Promise.allSettled([
         CLIENT.get('/settings/api-key-integration'),
-        CLIENT.get('/settings/client/provider-connection'),
       ]);
-      state.integration = primaryResults[0].status === 'fulfilled' ? primaryResults[0].value : null;
-      state.provider = primaryResults[1].status === 'fulfilled' ? primaryResults[1].value : null;
+      const integration = integrationResult[0];
+      state.integration = integration.status === 'fulfilled' ? integration.value : null;
 
-      const primaryFailures = primaryResults.filter((item) => item.status === 'rejected');
-      if (primaryFailures.length) {
-        state.error = primaryFailures.map((item) => item.reason?.detail || item.reason?.message || 'Unavailable').join(' · ');
+      if (integration.status === 'rejected') {
+        state.error = integration.reason?.detail || integration.reason?.message || 'Integration status unavailable.';
       }
 
       if (state.integration?.enabled === true) {
@@ -158,6 +232,7 @@
     } finally {
       state.loading = false;
       render();
+      observeProviderStatus();
     }
   }
 
@@ -181,8 +256,9 @@
         expires_in_days: expires,
       });
       state.secretOnce = result.api_key || '';
+      appendSandboxKey(result.key);
       state.message = 'Sandbox key created successfully.';
-      await load();
+      render();
     } catch (error) {
       state.message = '';
       state.error = error?.detail || error?.message || 'Key creation failed.';
@@ -197,8 +273,9 @@
     try {
       const result = await CLIENT.post(`/settings/client/api-keys/${encodeURIComponent(keyId)}/rotate`, { expires_in_days: 30 });
       state.secretOnce = result.api_key || '';
+      replaceRotatedSandboxKey(keyId, result.key);
       state.message = 'Key rotated. The previous key is revoked.';
-      await load();
+      render();
     } catch (error) {
       state.message = '';
       state.error = error?.detail || error?.message || 'Key rotation failed.';
@@ -213,8 +290,9 @@
     render();
     try {
       await CLIENT.del(`/settings/client/api-keys/${encodeURIComponent(keyId)}`);
+      removeSandboxKey(keyId);
       state.message = 'Sandbox key revoked.';
-      await load();
+      render();
     } catch (error) {
       state.message = '';
       state.error = error?.detail || error?.message || 'Key revocation failed.';
@@ -264,12 +342,12 @@
       document.getElementById(id)?.classList.add('sops-secondary');
     });
     state.mounted = true;
+    observeProviderStatus();
     load();
   }
 
   function init() {
     mount();
-    load();
   }
 
   window.PMK_SETTINGS_OPERATIONS_18 = { init, refresh: load };

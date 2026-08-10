@@ -27,7 +27,7 @@ def test_registration_page_contains_accessible_form_contract() -> None:
     assert 'type="password"' in html
     assert 'aria-live="polite"' in html
     assert 'href="/login"' in html
-    assert 'href="/pricing"' in html
+    assert 'href="/plans"' in html
 
 
 def test_registration_page_loads_controller() -> None:

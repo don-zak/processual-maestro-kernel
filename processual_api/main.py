@@ -73,6 +73,7 @@ from processual_api.services.integration_claim_keys import (
     revoke_integration_claim_key as pmk13a_revoke_integration_claim_key,
 )
 
+from .admin_marketplace.router import router as admin_marketplace_router
 from .auth.account_recovery_router import (
     router as account_recovery_router,
 )
@@ -158,6 +159,7 @@ app.include_router(cgt_governor.router)
 app.include_router(settings_router.router)
 app.include_router(applications.router)
 app.include_router(billing_router)
+app.include_router(admin_marketplace_router)
 
 # Register Stage 18 qualification routes only after the
 # complete router module has been initialized.

@@ -11,6 +11,10 @@ from alembic import context
 from processual_api.admin_marketplace import models as admin_marketplace_models  # noqa: F401
 from processual_api.auth import models as identity_auth_models  # noqa: F401
 from processual_api.db.base import Base
+from processual_api.db.sqlite_migration_recovery import (
+    cleanup_orphaned_batch_tables,
+    recover_uncommitted_head_version,
+)
 
 config = context.config
 if config.config_file_name is not None:
@@ -39,6 +43,11 @@ def run_migrations_offline() -> None:
 
 
 def _run_sync_migrations(connection) -> None:
+    cleanup_orphaned_batch_tables(connection)
+    recovered = recover_uncommitted_head_version(connection)
+    if recovered:
+        connection.commit()
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -46,6 +55,7 @@ def _run_sync_migrations(connection) -> None:
     )
     with context.begin_transaction():
         context.run_migrations()
+    connection.commit()
 
 
 async def _run_async_migrations() -> None:

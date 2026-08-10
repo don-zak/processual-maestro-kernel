@@ -18,7 +18,6 @@ def test_api_key_integration_route_is_registered() -> None:
 
 
 def test_api_key_integration_is_locked_for_non_enterprise_plan(monkeypatch) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",
@@ -49,7 +48,6 @@ def test_api_key_integration_is_locked_for_non_enterprise_plan(monkeypatch) -> N
 def test_api_key_integration_is_enabled_for_enterprise_integration_plan(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",
@@ -110,7 +108,6 @@ def test_api_key_integration_is_enabled_for_enterprise_integration_plan(
 def test_api_key_integration_accepts_legacy_enterprise_private_plan(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(settings_router, "_load_billing_subscriptions", lambda: [])
     monkeypatch.setattr(
         settings_router,
         "_load_raw",

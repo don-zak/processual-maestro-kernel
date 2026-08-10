@@ -23,6 +23,15 @@ class CommercialAuditAction(StrEnum):
     CHANNEL_SELECTED = "channel_selected"
     PAYMENT_VERIFICATION_DECIDED = "payment_verification_decided"
     SUBSCRIPTION_ACTIVATION_DECIDED = "subscription_activation_decided"
+    PAYMENT_DESTINATION_CREATED = "payment_destination_created"
+    PAYMENT_DESTINATION_VALIDATED = "payment_destination_validated"
+    PAYMENT_DESTINATION_ACTIVATED = "payment_destination_activated"
+    PAYMENT_DESTINATION_DEACTIVATED = "payment_destination_deactivated"
+    PAYMENT_DESTINATION_DEFAULT_SET = "payment_destination_default_set"
+    ORDER_CREATED = "order_created"
+    CONTRACT_COMPLETED = "contract_completed"
+    PAYMENT_EVIDENCE_RECORDED = "payment_evidence_recorded"
+    PAYMENT_RECONCILIATION_DECIDED = "payment_reconciliation_decided"
 
 
 class CommercialResourceType(StrEnum):
@@ -33,6 +42,10 @@ class CommercialResourceType(StrEnum):
     SUBSCRIPTION = "subscription"
     TRIAL = "trial"
     SALES_CHANNEL_ELIGIBILITY = "sales_channel_eligibility"
+    PAYMENT_DESTINATION = "payment_destination"
+    CONTRACT = "contract"
+    PAYMENT_EVIDENCE = "payment_evidence"
+    PAYMENT_RECONCILIATION = "payment_reconciliation"
 
 
 class CommercialAuditOutcome(StrEnum):
@@ -106,8 +119,14 @@ class CommercialAuditRecord:
             raise AdminMarketplaceAuditSafetyError("resource_type must be a valid CommercialResourceType.")
         if not isinstance(self.outcome, CommercialAuditOutcome):
             raise AdminMarketplaceAuditSafetyError("outcome must be a valid CommercialAuditOutcome.")
-        if self.platform_authority != "platform_admin":
-            raise AdminMarketplaceAuditSafetyError("Commercial audit actor must use platform_admin authority.")
+        if self.platform_authority not in {
+            "platform_admin",
+            "identity_customer",
+            "system",
+        }:
+            raise AdminMarketplaceAuditSafetyError(
+                "Commercial audit actor authority is invalid."
+            )
         object.__setattr__(
             self, "previous_state_digest", _digest(self.previous_state_digest, field_name="previous_state_digest")
         )

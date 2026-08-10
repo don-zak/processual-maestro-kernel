@@ -26,7 +26,6 @@
     if (auth && typeof auth.headers === 'function') {
       return auth.headers(extra);
     }
-
     return new Headers(extra);
   }
 
@@ -54,7 +53,6 @@
           : `HTTP ${response.status}`;
       throw new Error(detail);
     }
-
     return data;
   }
 
@@ -71,37 +69,7 @@
     if (payload.data && Array.isArray(payload.data.client_requests)) {
       return payload.data.client_requests;
     }
-
     return [];
-  }
-
-  function requestStatus(item) {
-    return normalizeStatus(
-      item.status ||
-        item.request_status ||
-        item.state ||
-        item.lifecycle_status ||
-        item.current_status
-    );
-  }
-
-  function hasDraftSaved(item) {
-    return Boolean(
-      item.supervisor_response_draft ||
-        item.supervisor_draft ||
-        item.draft_saved ||
-        item.supervisor_response_draft_saved ||
-        item.response_draft_saved
-    );
-  }
-
-  function hasResponseSent(item) {
-    return Boolean(
-      item.supervisor_response_sent ||
-        item.response_sent ||
-        item.supervisor_sent_at ||
-        item.response_sent_at
-    );
   }
 
   function summarizeRequests(items) {
@@ -118,17 +86,28 @@
 
     items.forEach((item) => {
       summary.total += 1;
-      summary[requestStatus(item)] += 1;
+      const status = normalizeStatus(
+        item.status || item.request_status || item.state || item.lifecycle_status
+      );
+      summary[status] += 1;
 
-      if (hasDraftSaved(item)) {
+      if (
+        item.supervisor_response_draft ||
+        item.supervisor_draft ||
+        item.draft_saved ||
+        item.response_draft_saved
+      ) {
         summary.draftSaved += 1;
       }
-
-      if (hasResponseSent(item)) {
+      if (
+        item.supervisor_response_sent ||
+        item.response_sent ||
+        item.supervisor_sent_at ||
+        item.response_sent_at
+      ) {
         summary.responseSent += 1;
       }
     });
-
     return summary;
   }
 
@@ -145,21 +124,13 @@
     let host = document.getElementById(HOST_ID);
     if (host) return host;
 
-    const page = document.getElementById('page-admin-home') || document.getElementById('page-admin-clients');
+    const page = document.getElementById('page-admin-home');
     if (!page) return null;
 
     const card = document.createElement('div');
     card.className = 'card';
     card.id = HOST_ID;
     card.style.marginTop = 'var(--s-5)';
-    card.innerHTML = `
-      <div class="sec-hdr">
-        <div class="sh-title">Supervisor Overview</div>
-        <div class="sh-sub">requests by status - visibility only</div>
-      </div>
-      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">Loading supervisor overview...</div>
-    `;
-
     const section = page.querySelector('section') || page.firstElementChild || page;
     section.appendChild(card);
     return card;
@@ -172,7 +143,7 @@
     host.innerHTML = `
       <div class="sec-hdr">
         <div class="sh-title">Supervisor Overview</div>
-        <div class="sh-sub">requests by status - visibility only</div>
+        <div class="sh-sub">Client requests by status — visibility only</div>
       </div>
       <div class="grid-3">
         ${statTile('Total requests', summary.total)}
@@ -181,11 +152,11 @@
         ${statTile('Approved requests', summary.approved)}
         ${statTile('Rejected requests', summary.rejected)}
         ${statTile('Completed requests', summary.completed)}
-        ${statTile('draft saved', summary.draftSaved)}
-        ${statTile('response sent', summary.responseSent)}
+        ${statTile('Draft saved', summary.draftSaved)}
+        ${statTile('Response sent', summary.responseSent)}
       </div>
       <div class="muted" style="margin-top:var(--s-3)">
-        Backend enforcement remains authoritative. Do not display raw supervisor session keys.
+        Actions remain owned by the Clients page. Backend enforcement remains authoritative.
       </div>
     `;
   }
@@ -193,114 +164,46 @@
   function renderError(error) {
     const host = ensureHost();
     if (!host) return;
-
     host.innerHTML = `
       <div class="sec-hdr">
         <div class="sh-title">Supervisor Overview</div>
-        <div class="sh-sub">requests by status - visibility only</div>
+        <div class="sh-sub">Client requests by status — visibility only</div>
       </div>
       <div class="admin-note danger">Unable to load supervisor overview: ${escapeHtml(
         error.message || error
       )}</div>
-      <div class="muted">Backend enforcement remains authoritative.</div>
     `;
   }
 
   async function refreshSupervisorOverviewCounters() {
-    ensureSupervisorHomeConsole();
     const host = ensureHost();
     if (!host) return;
 
     try {
       const payload = await requestJson(ENDPOINT);
-      const requests = extractRequests(payload);
-      renderSummary(summarizeRequests(requests));
+      renderSummary(summarizeRequests(extractRequests(payload)));
     } catch (error) {
       renderError(error);
     }
   }
 
-  refreshSupervisorOverviewCounters();
-
-  window.addEventListener('pmk-supervisor-session-key-updated', () => {
-    refreshSupervisorOverviewCounters();
-  });
-
-  let supervisorOverviewRefreshTimer = null;
-
-  function scheduleSupervisorOverviewRefresh() {
-    if (supervisorOverviewRefreshTimer) {
-      window.clearTimeout(supervisorOverviewRefreshTimer);
-    }
-
-    supervisorOverviewRefreshTimer = window.setTimeout(() => {
-      supervisorOverviewRefreshTimer = null;
+  let refreshTimer = null;
+  function scheduleRefresh() {
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = null;
       refreshSupervisorOverviewCounters();
     }, 0);
   }
 
-  function ensureSupervisorHomeConsole() {
-    if (document.getElementById('admin-supervisor-home-console')) return;
+  window.addEventListener('load', scheduleRefresh);
+  window.addEventListener('pmk-supervisor-session-key-updated', scheduleRefresh);
+  window.addEventListener('pmk-client-request-updated', scheduleRefresh);
 
-    const overviewHost = document.getElementById(HOST_ID);
-    if (!overviewHost || !overviewHost.parentNode) return;
+  window.PMK_ADMIN_SUPERVISOR_STATS = {
+    refreshSupervisorOverviewCounters,
+    summarizeRequests,
+  };
 
-    const consoleCard = document.createElement('div');
-    consoleCard.id = 'admin-supervisor-home-console';
-    consoleCard.className = 'card';
-    consoleCard.style.marginTop = 'var(--s-5)';
-    consoleCard.innerHTML = `
-      <div class="sec-hdr">
-        <div class="sh-title">Supervisor Operations Center</div>
-        <div class="sh-sub">visibility hub for supervisor operations - no policy changes</div>
-      </div>
-      <div class="admin-note">
-        Use this home console to jump to the current supervisor visibility surfaces:
-        <a href="#admin-supervisor-overview-counters">Supervisor Overview</a>,
-        <a href="#admin-supervisor-audit-summary">Recent Supervisor Audit</a>,
-        and <a href="#admin-api-key-lifecycle-summary">API Key Lifecycle Summary</a>.
-      </div>
-      <div class="muted" style="margin-top:var(--s-3)">
-        Backend enforcement remains authoritative. This is a visibility-only home surface with no raw keys or provider secrets.
-      </div>
-    `;
-
-    overviewHost.parentNode.insertBefore(consoleCard, overviewHost);
-  }
-
-  function installSupervisorOverviewRefreshHooks() {
-    window.addEventListener('load', () => {
-      scheduleSupervisorOverviewRefresh();
-    });
-
-    window.addEventListener('pmk-supervisor-session-key-updated', () => {
-      scheduleSupervisorOverviewRefresh();
-    });
-
-    document.addEventListener('click', (event) => {
-      const target = event.target;
-      if (!target || typeof target.closest !== 'function') return;
-
-      if (target.closest('[data-admin-page]') || target.closest('.nav-btn')) {
-        window.setTimeout(() => scheduleSupervisorOverviewRefresh(), 0);
-      }
-    });
-
-    if (typeof MutationObserver === 'function') {
-      const main = document.getElementById('main') || document.body;
-      const observer = new MutationObserver(() => {
-        if (!document.getElementById(HOST_ID) || !document.getElementById('admin-supervisor-home-console')) {
-          scheduleSupervisorOverviewRefresh();
-        }
-      });
-
-      observer.observe(main, { childList: true, subtree: true });
-    }
-  }
-
-  installSupervisorOverviewRefreshHooks();
-  scheduleSupervisorOverviewRefresh();
-  setTimeout(() => scheduleSupervisorOverviewRefresh(), 250);
-  setTimeout(() => scheduleSupervisorOverviewRefresh(), 1000);
-
+  scheduleRefresh();
 })();

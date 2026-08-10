@@ -481,6 +481,43 @@ class AuthAccountRecoveryRequest(Base):
     )
 
 
+class AuthRegistrationPlanIntent(Base):
+    """A pre-subscription plan choice captured during identity registration."""
+
+    __tablename__ = "auth_registration_plan_intents"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_auth_registration_plan_intent_user"),
+        CheckConstraint(
+            "state IN ('pending_verification', 'verified', 'superseded', 'cancelled')",
+            name="state_allowed",
+        ),
+        CheckConstraint(
+            "billing_period IS NULL OR billing_period IN ('monthly', 'annual')",
+            name="billing_period_allowed",
+        ),
+        Index("ix_auth_registration_plan_intents_state", "state", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    selected_plan_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    billing_period: Mapped[str | None] = mapped_column(String(16))
+    state: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="pending_verification",
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at_column()
+    updated_at: Mapped[datetime] = _updated_at_column()
+
+    user: Mapped[IdentityUser] = relationship()
+
+
 class AuthDeliveryOutbox(Base):
     __tablename__ = "auth_delivery_outbox"
     __table_args__ = (
@@ -633,5 +670,6 @@ IDENTITY_AUTH_MODELS = (
 __all__ = [
     *[model.__name__ for model in IDENTITY_AUTH_MODELS],
     "AuthAccountRecoveryRequest",
+    "AuthRegistrationPlanIntent",
     "AuthDeliveryOutbox",
 ]

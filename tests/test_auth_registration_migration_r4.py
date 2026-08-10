@@ -16,9 +16,14 @@ def _offline(*arguments: str) -> str:
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", *arguments],
         cwd=ROOT,
         env=environment,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
+    )
+    assert result.returncode == 0, (
+        f"alembic {' '.join(arguments)} failed\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
     )
     return result.stdout.lower()
 

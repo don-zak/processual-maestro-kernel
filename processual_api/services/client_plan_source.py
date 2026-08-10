@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from processual_api.billing.usage_pricing import monthly_unit_allowance, normalize_plan_id
+from processual_api.billing.usage_pricing import (
+    canonical_plan_id,
+    monthly_unit_allowance,
+    normalize_plan_id,
+)
 
 VERIFIED_CLIENT_REQUEST_PLAN_SOURCE = 'client_requests'
 PLAN_APPLIED_EVENT = 'plan_applied'
@@ -77,8 +81,11 @@ def apply_verified_client_request_plan(
     if request_status not in ELIGIBLE_PLAN_REQUEST_STATUSES:
         raise ClientRequestPlanApplyError('request_not_approved')
 
-    plan_id, allowance = supported_verified_plan(request_plan_candidate(entry))
-    if not plan_id or allowance <= 0:
+    verified_plan_id, allowance = supported_verified_plan(
+        request_plan_candidate(entry)
+    )
+    plan_id = canonical_plan_id(verified_plan_id)
+    if not verified_plan_id or not plan_id or allowance <= 0:
         raise ClientRequestPlanApplyError('unsupported_plan')
 
     actor_text = _text(actor) or 'admin'
@@ -87,7 +94,7 @@ def apply_verified_client_request_plan(
 
     already_applied = (
         entry.get('plan_applied') is True
-        and normalize_plan_id(entry.get('approved_plan')) == plan_id
+        and canonical_plan_id(entry.get('approved_plan')) == plan_id
         and _text(entry.get('plan_source')) == VERIFIED_CLIENT_REQUEST_PLAN_SOURCE
     )
 

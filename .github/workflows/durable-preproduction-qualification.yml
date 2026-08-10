@@ -1,0 +1,104 @@
+name: Durable Preproduction Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_16_workers:
+        description: Run the qualification-only 16-worker tier
+        required: false
+        default: false
+        type: boolean
+      jobs:
+        description: Jobs per qualification trial
+        required: false
+        default: "384"
+        type: string
+      repetitions:
+        description: Repetitions per worker tier
+        required: false
+        default: "5"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  durable-preproduction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      PYTHONPATH: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install qualification dependencies
+        run: python -m pip install pytest pytest-asyncio redis ruff fastapi httpx
+
+      - name: Verify qualification slice
+        run: >-
+          python -m ruff check
+          processual_api/execution
+          benchmarks/durable_worker_scale.py
+          tests/test_adaptive_concurrency.py
+          tests/test_adaptive_pool_gate.py
+          tests/test_execution_domain_capacity.py
+          tests/test_durable_redis_qualification.py
+          tests/test_durable_resilience_qualification.py
+
+      - name: Run durable resilience qualification
+        run: >-
+          python -m pytest -q
+          tests/test_adaptive_concurrency.py
+          tests/test_adaptive_pool_gate.py
+          tests/test_execution_domain_capacity.py
+          tests/test_durable_redis_qualification.py
+          tests/test_durable_resilience_qualification.py
+
+      - name: Repeat stable 8-worker qualification
+        run: >-
+          python benchmarks/durable_worker_scale.py
+          --redis-url "$TEST_REDIS_URL"
+          --workers 8
+          --jobs "${{ inputs.jobs }}"
+          --handler-delay-ms 20
+          --repetitions "${{ inputs.repetitions }}"
+          --redis-telemetry
+          | tee durable-preproduction-8w.json
+
+      - name: Qualification-only 16-worker tier
+        if: ${{ inputs.include_16_workers }}
+        run: >-
+          python benchmarks/durable_worker_scale.py
+          --redis-url "$TEST_REDIS_URL"
+          --workers 16
+          --jobs "${{ inputs.jobs }}"
+          --handler-delay-ms 20
+          --repetitions "${{ inputs.repetitions }}"
+          --redis-telemetry
+          | tee durable-preproduction-16w.json
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: durable-preproduction-qualification
+          path: |
+            durable-preproduction-8w.json
+            durable-preproduction-16w.json
+          if-no-files-found: ignore

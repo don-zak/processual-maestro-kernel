@@ -698,6 +698,49 @@ pending ───────────────────→ deactivated
       </div>
     </div>
 
+    <!-- Tunisia direct subscription payment: fail-closed and hidden until eligible -->
+    <div class="card settings-section" id="set-tunisia-direct-payment-card" data-settings-section-key="plan-usage" style="display:none">
+      <div class="sec-hdr">
+        <div class="sh-title">Tunisia Subscription Payment</div>
+        <div class="sh-sub">Available only for a confirmed Tunisian address and an active validated payment destination</div>
+      </div>
+      <div class="settings-grid">
+        <div class="inp-group">
+          <label class="inp-label">Offer</label>
+          <span id="set-tn-payment-offer" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Billing</label>
+          <span id="set-tn-payment-billing" class="font-data">—</span>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label">Confirmed address</label>
+          <span id="set-tn-payment-address" class="font-data">—</span>
+        </div>
+      </div>
+      <button id="set-tn-payment-create-order" class="btn accent sm" type="button" style="margin-top:var(--s-3)">Create payment order</button>
+      <span id="set-tn-payment-status" class="font-data text-muted" style="font-size:10px;margin-left:var(--s-2)">Ready</span>
+      <div id="set-tn-contract-action" class="mono-block" style="display:none;font-size:11px;margin-top:var(--s-3)">
+        <strong>Direct subscription contract</strong>
+        <div>Version: <span id="set-tn-contract-version">—</span></div>
+        <label style="display:block;margin-top:var(--s-2)">
+          <input id="set-tn-contract-accepted" type="checkbox">
+          I accept this subscription contract using my authenticated account.
+        </label>
+        <button id="set-tn-contract-complete" class="btn accent sm" type="button" disabled style="margin-top:var(--s-2)">Accept &amp; continue to payment</button>
+      </div>
+      <div id="set-tn-payment-result" class="mono-block" style="display:none;font-size:11px;white-space:pre-wrap;margin-top:var(--s-3)"></div>
+      <form id="set-tn-payment-report-form" class="mono-block" style="display:none;font-size:11px;margin-top:var(--s-3)" autocomplete="off">
+        <strong>Report your bank transfer</strong>
+        <p>This report will be matched and queued for administrator verification. It does not confirm payment by itself.</p>
+        <label class="inp-label">Amount sent<input id="set-tn-payment-report-amount" class="inp" inputmode="decimal" required></label>
+        <label class="inp-label">Currency<input id="set-tn-payment-report-currency" class="inp" value="TND" minlength="3" maxlength="3" required></label>
+        <label class="inp-label">Order payment reference<input id="set-tn-payment-report-reference" class="inp" required></label>
+        <label class="inp-label">Bank transfer reference<input id="set-tn-payment-transfer-reference" class="inp" minlength="4" maxlength="128" required autocomplete="off"></label>
+        <button id="set-tn-payment-report-submit" class="btn accent sm" type="submit" style="margin-top:var(--s-2)">Submit payment report</button>
+      </form>
+    </div>
+
 
     <!-- Enterprise Integration -->
     <div class="card settings-section" id="set-api-key-integration-card" style="display:none">

@@ -3,6 +3,9 @@
 The contracts bind the selected Maestro pricing proposal to neutral catalog,
 quota, and entitlement metadata. They do not publish offers, activate checkout,
 persist subscriptions, or enforce quotas.
+
+Numeric quota and price values are derived from the selected-pricing proposal;
+this module owns catalog policy only and must not shadow those values.
 """
 
 from __future__ import annotations
@@ -210,88 +213,47 @@ _CANONICAL_PLAN_ORDER: Final[tuple[str, ...]] = (
     "enterprise_strategic",
 )
 
-_EXPECTED_INCLUDED_UNITS: Final[dict[str, int]] = {
-    "academic": 5_000,
-    "starter": 10_000,
-    "enterprise_integration_starter": 50_000,
-    "business": 100_000,
-    "enterprise_pilot": 500_000,
-    "enterprise_core": 1_500_000,
-    "enterprise_scale": 3_000_000,
-    "enterprise_strategic": 5_000_000,
-}
 
-_EXPECTED_MONTHLY_PRICE_USD: Final[dict[str, Decimal]] = {
-    "academic": Decimal("29"),
-    "starter": Decimal("49"),
-    "enterprise_integration_starter": Decimal("259"),
-    "business": Decimal("519"),
-    "enterprise_pilot": Decimal("2790"),
-    "enterprise_core": Decimal("7890"),
-    "enterprise_scale": Decimal("14990"),
-    "enterprise_strategic": Decimal("23900"),
-}
-
-_EXPECTED_ANNUAL_PRICE_USD: Final[dict[str, Decimal]] = {
-    "academic": Decimal("295.80"),
-    "starter": Decimal("499.80"),
-    "enterprise_integration_starter": Decimal("2641.80"),
-    "business": Decimal("5293.80"),
-    "enterprise_pilot": Decimal("28458.00"),
-    "enterprise_core": Decimal("80478.00"),
-    "enterprise_scale": Decimal("152898.00"),
-    "enterprise_strategic": Decimal("243780.00"),
-}
-
-_EXPECTED_OVERAGE_USD: Final[dict[str, Decimal]] = {
-    "academic": Decimal("6.50"),
-    "starter": Decimal("5.90"),
-    "enterprise_integration_starter": Decimal("6.00"),
-    "business": Decimal("6.00"),
-    "enterprise_pilot": Decimal("6.50"),
-    "enterprise_core": Decimal("6.20"),
-    "enterprise_scale": Decimal("5.95"),
-    "enterprise_strategic": Decimal("5.75"),
-}
+def _required_selected_value(plan: dict[str, Any], key: str) -> Any:
+    if key not in plan:
+        raise ValueError(f"Selected-pricing plan is missing required field: {key}")
+    return plan[key]
 
 
-def _unique_numeric_value(
-    plan: dict[str, Any],
+def _selected_contract_values(
     *,
-    expected: Decimal,
-    preferred_tokens: tuple[str, ...],
-    excluded_tokens: tuple[str, ...] = (),
-) -> Any:
-    preferred: list[tuple[str, Any]] = []
-    fallback: list[tuple[str, Any]] = []
-
-    for key, value in plan.items():
-        if isinstance(value, bool):
-            continue
-        try:
-            numeric = Decimal(str(value))
-        except Exception:
-            continue
-        if numeric != expected:
-            continue
-
-        normalized = key.lower()
-        if any(token in normalized for token in excluded_tokens):
-            continue
-
-        fallback.append((key, value))
-        if all(token in normalized for token in preferred_tokens):
-            preferred.append((key, value))
-
-    matches = preferred if len(preferred) == 1 else fallback
-    if len(matches) != 1:
-        found = ", ".join(key for key, _ in matches) or "(none)"
-        available = ", ".join(sorted(plan))
+    expected_plan_code: str,
+    plan: dict[str, Any],
+) -> tuple[int, Decimal, Decimal, Decimal]:
+    plan_code = str(_required_selected_value(plan, "plan_id")).strip().lower()
+    if plan_code != expected_plan_code:
         raise ValueError(
-            f"Unable to resolve unique selected-pricing value {expected}; matches: [{found}]; available: [{available}]"
+            "Selected-pricing plan order does not match canonical catalog order: "
+            f"{plan_code!r} != {expected_plan_code!r}"
         )
 
-    return matches[0][1]
+    try:
+        included_units = int(_required_selected_value(plan, "monthly_unit_allowance"))
+        monthly_price = Decimal(
+            str(_required_selected_value(plan, "selected_monthly_price"))
+        )
+        annual_price = Decimal(
+            str(_required_selected_value(plan, "selected_yearly_price"))
+        )
+        overage_price = Decimal(
+            str(
+                _required_selected_value(
+                    plan,
+                    "selected_overage_price_per_1000_units",
+                )
+            )
+        )
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise ValueError(
+            f"Selected-pricing numeric fields are invalid for plan: {expected_plan_code}"
+        ) from exc
+
+    return included_units, monthly_price, annual_price, overage_price
 
 
 def build_catalog_plan_contracts() -> tuple[CatalogPlanContract, ...]:
@@ -306,49 +268,12 @@ def build_catalog_plan_contracts() -> tuple[CatalogPlanContract, ...]:
 
     contracts: list[CatalogPlanContract] = []
     for code, plan in zip(_CANONICAL_PLAN_ORDER, plans, strict=True):
-        expected_units = _EXPECTED_INCLUDED_UNITS[code]
-        expected_monthly = _EXPECTED_MONTHLY_PRICE_USD[code]
-        expected_annual = _EXPECTED_ANNUAL_PRICE_USD[code]
-        expected_overage = _EXPECTED_OVERAGE_USD[code]
-
-        included_units = int(
-            _unique_numeric_value(
-                plan,
-                expected=Decimal(expected_units),
-                preferred_tokens=("unit",),
-                excluded_tokens=("overage", "price", "cost"),
+        included_units, monthly_price, annual_price, overage_price = (
+            _selected_contract_values(
+                expected_plan_code=code,
+                plan=plan,
             )
         )
-        monthly_price = Decimal(
-            str(
-                _unique_numeric_value(
-                    plan,
-                    expected=expected_monthly,
-                    preferred_tokens=("price",),
-                    excluded_tokens=("minimum", "calculated", "cost", "annual"),
-                )
-            )
-        )
-        annual_price = Decimal(
-            str(
-                _unique_numeric_value(
-                    plan,
-                    expected=expected_annual,
-                    preferred_tokens=("annual",),
-                    excluded_tokens=("minimum", "calculated", "cost"),
-                )
-            )
-        )
-        overage_price = Decimal(
-            str(
-                _unique_numeric_value(
-                    plan,
-                    expected=expected_overage,
-                    preferred_tokens=("overage",),
-                )
-            )
-        )
-
         audience, visibility, entitlements, seat_limit = _PLAN_POLICY[code]
         contracts.append(
             CatalogPlanContract(

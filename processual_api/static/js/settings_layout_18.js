@@ -14,6 +14,9 @@
   let observer = null;
   let reconciling = false;
   let reconcileTimer = null;
+  let initialized = false;
+  let enterpriseConsoleLoading = false;
+  let enterpriseConsoleLoaded = false;
 
   function settingsPage() {
     return document.getElementById('page-settings');
@@ -45,6 +48,7 @@
     }
 
     if (
+      id === 'set-enterprise-integration-eligibility-card' ||
       id === 'set-api-key-integration-card' ||
       id === 'set-client-integration-guide-card' ||
       id === 'set-integration-readiness-card'
@@ -102,6 +106,61 @@
     return 'account';
   }
 
+  function tabId(key) {
+    return `sl18-tab-${key}`;
+  }
+
+  function panelId(key) {
+    return `sl18-panel-${key}`;
+  }
+
+  function moveTabFocus(tabs, currentIndex, direction) {
+    if (!tabs.length) {
+      return;
+    }
+
+    const nextIndex = (
+      currentIndex + direction + tabs.length
+    ) % tabs.length;
+    tabs[nextIndex].focus();
+  }
+
+  function handleTabKeydown(event, tabs) {
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      moveTabFocus(tabs, currentIndex, 1);
+      return;
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      moveTabFocus(tabs, currentIndex, -1);
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      tabs[0]?.focus();
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      tabs[tabs.length - 1]?.focus();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activate(event.currentTarget.dataset.sl18Tab, true);
+    }
+  }
+
   function ensureLayoutShell(page) {
     let tabs = page.querySelector(':scope > .sl18-tabs');
     let panelsRoot = page.querySelector(':scope > .sl18-panels');
@@ -116,8 +175,10 @@
         <button
           type="button"
           class="sl18-tab"
+          id="${tabId(tab.key)}"
           role="tab"
           aria-selected="false"
+          aria-controls="${panelId(tab.key)}"
           data-sl18-tab="${tab.key}"
         >${tab.label}</button>
       `).join('');
@@ -139,10 +200,15 @@
       if (!panel) {
         panel = document.createElement('section');
         panel.className = 'sl18-panel';
+        panel.id = panelId(tab.key);
         panel.dataset.sl18Panel = tab.key;
         panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', tabId(tab.key));
         panel.hidden = true;
         panelsRoot.appendChild(panel);
+      } else {
+        panel.id = panelId(tab.key);
+        panel.setAttribute('aria-labelledby', tabId(tab.key));
       }
     });
 
@@ -156,6 +222,15 @@
 
         event.preventDefault();
         activate(button.dataset.sl18Tab, true);
+      });
+
+      const tabButtons = Array.from(
+        tabs.querySelectorAll('[data-sl18-tab]')
+      );
+      tabButtons.forEach((button) => {
+        button.addEventListener('keydown', (event) => {
+          handleTabKeydown(event, tabButtons);
+        });
       });
 
       tabs.dataset.sl18Bound = '1';
@@ -353,6 +428,178 @@
     requests.appendChild(support);
   }
 
+  function ensureEnterpriseConsoleCard(panel) {
+    let card = document.getElementById('set-enterprise-console-card');
+    if (card) {
+      return card;
+    }
+
+    card = document.createElement('section');
+    card.id = 'set-enterprise-console-card';
+    card.className = 'settings-card sl18-enterprise-console';
+    card.setAttribute('aria-labelledby', 'set-enterprise-console-title');
+
+    const header = document.createElement('div');
+    header.className = 'sec-hdr';
+
+    const headerCopy = document.createElement('div');
+    const title = document.createElement('div');
+    title.id = 'set-enterprise-console-title';
+    title.className = 'sh-title';
+    title.textContent = 'Enterprise Integration';
+    const subtitle = document.createElement('div');
+    subtitle.className = 'sh-sub';
+    subtitle.textContent = 'Server-authoritative entitlement, identity, readiness, and approval state';
+    headerCopy.append(title, subtitle);
+
+    const badge = document.createElement('span');
+    badge.id = 'set-enterprise-console-badge';
+    badge.className = 'sl18-enterprise-badge';
+    badge.textContent = 'Loading';
+    header.append(headerCopy, badge);
+
+    const summary = document.createElement('div');
+    summary.className = 'settings-grid sl18-enterprise-summary';
+    summary.innerHTML = [
+      '<div class="inp-group"><label class="inp-label">Plan</label><span id="set-enterprise-console-plan" class="font-data">—</span></div>',
+      '<div class="inp-group"><label class="inp-label">Environment</label><span id="set-enterprise-console-environment" class="font-data">sandbox</span></div>',
+      '<div class="inp-group"><label class="inp-label">Active keys</label><span id="set-enterprise-console-key-count" class="font-data">—</span></div>',
+      '<div class="inp-group"><label class="inp-label">Sandbox ready</label><span id="set-enterprise-console-sandbox-ready" class="font-data">—</span></div>',
+    ].join('');
+
+    const nextAction = document.createElement('div');
+    nextAction.className = 'sl18-enterprise-next';
+    const nextLabel = document.createElement('strong');
+    nextLabel.textContent = 'Next safe action';
+    const nextText = document.createElement('span');
+    nextText.id = 'set-enterprise-console-next-action';
+    nextText.textContent = 'Loading enterprise integration state…';
+    nextAction.append(nextLabel, nextText);
+
+    const stages = document.createElement('ol');
+    stages.id = 'set-enterprise-console-stages';
+    stages.className = 'sl18-enterprise-stages';
+    stages.setAttribute('aria-label', 'Enterprise integration lifecycle');
+
+    const safety = document.createElement('p');
+    safety.id = 'set-enterprise-console-safety';
+    safety.className = 'sl18-enterprise-safety';
+    safety.textContent = 'Production access is not granted from Settings. Runtime connector approval remains supervised and fail-closed.';
+
+    card.append(header, summary, nextAction, stages, safety);
+    panel.prepend(card);
+    return card;
+  }
+
+  function enterpriseStatusLabel(status) {
+    const labels = {
+      ready: 'Ready',
+      available: 'Available',
+      action_required: 'Action required',
+      blocked: 'Blocked',
+      locked: 'Locked',
+    };
+    return labels[String(status || '').toLowerCase()] || 'Pending';
+  }
+
+  function renderEnterpriseConsole(payload) {
+    const card = document.getElementById('set-enterprise-console-card');
+    if (!card || !payload) {
+      return;
+    }
+
+    const enabled = payload.enabled === true;
+    card.dataset.enterpriseEnabled = String(enabled);
+
+    const badge = document.getElementById('set-enterprise-console-badge');
+    if (badge) {
+      badge.textContent = enterpriseStatusLabel(payload.status);
+      badge.dataset.status = String(payload.status || 'pending');
+    }
+
+    const plan = document.getElementById('set-enterprise-console-plan');
+    const environment = document.getElementById('set-enterprise-console-environment');
+    const keyCount = document.getElementById('set-enterprise-console-key-count');
+    const sandboxReady = document.getElementById('set-enterprise-console-sandbox-ready');
+    const nextAction = document.getElementById('set-enterprise-console-next-action');
+
+    if (plan) {
+      plan.textContent = String(payload.plan_id || payload.normalized_plan_id || '—');
+    }
+    if (environment) {
+      environment.textContent = String(payload.environment || 'sandbox');
+    }
+    if (keyCount) {
+      keyCount.textContent = String(Number(payload.key_count || 0));
+    }
+    if (sandboxReady) {
+      sandboxReady.textContent = String(Number(payload.readiness?.sandbox_ready || 0));
+    }
+    if (nextAction) {
+      nextAction.textContent = String(payload.next_action || 'Review integration readiness.');
+    }
+
+    const stages = document.getElementById('set-enterprise-console-stages');
+    if (stages) {
+      stages.replaceChildren();
+      const sections = Array.isArray(payload.sections) ? payload.sections : [];
+      sections.forEach((section) => {
+        const item = document.createElement('li');
+        item.className = 'sl18-enterprise-stage';
+        item.dataset.status = String(section.status || 'pending');
+
+        const dot = document.createElement('span');
+        dot.className = 'sl18-enterprise-stage-dot';
+        dot.setAttribute('aria-hidden', 'true');
+
+        const copy = document.createElement('span');
+        copy.className = 'sl18-enterprise-stage-copy';
+        const label = document.createElement('strong');
+        label.textContent = String(section.label || section.id || 'Integration stage');
+        const status = document.createElement('span');
+        status.textContent = enterpriseStatusLabel(section.status);
+        const action = document.createElement('small');
+        action.textContent = String(section.next_action || '');
+        copy.append(label, status, action);
+        item.append(dot, copy);
+        stages.appendChild(item);
+      });
+    }
+  }
+
+  function renderEnterpriseConsoleError() {
+    const badge = document.getElementById('set-enterprise-console-badge');
+    const nextAction = document.getElementById('set-enterprise-console-next-action');
+    if (badge) {
+      badge.textContent = 'Unavailable';
+      badge.dataset.status = 'blocked';
+    }
+    if (nextAction) {
+      nextAction.textContent = 'Enterprise integration state could not be loaded. No production access has been granted.';
+    }
+  }
+
+  async function loadEnterpriseConsole(force = false) {
+    if (enterpriseConsoleLoading || (enterpriseConsoleLoaded && !force)) {
+      return;
+    }
+    if (typeof CLIENT === 'undefined' || typeof CLIENT.get !== 'function') {
+      renderEnterpriseConsoleError();
+      return;
+    }
+
+    enterpriseConsoleLoading = true;
+    try {
+      const payload = await CLIENT.get('/settings/enterprise-integration');
+      renderEnterpriseConsole(payload);
+      enterpriseConsoleLoaded = true;
+    } catch (error) {
+      renderEnterpriseConsoleError();
+    } finally {
+      enterpriseConsoleLoading = false;
+    }
+  }
+
   function topLevelSettingsCards(page) {
     const selector = [
       '#settings-operations-root',
@@ -426,12 +673,23 @@
       }
     );
 
+    if (safeKey === 'integration') {
+      loadEnterpriseConsole();
+    }
+
     if (persist) {
       sessionStorage.setItem(
         TAB_STORAGE_KEY,
         safeKey
       );
     }
+  }
+
+  function observePageMutations(page) {
+    observer?.observe(page, {
+      childList: true,
+      subtree: true,
+    });
   }
 
   function reconcile() {
@@ -442,6 +700,8 @@
     }
 
     reconciling = true;
+    const resumeObserver = Boolean(observer);
+    observer?.disconnect();
 
     try {
       const { panelsRoot } =
@@ -473,6 +733,10 @@
         }
       );
 
+      if (panels.integration) {
+        ensureEnterpriseConsoleCard(panels.integration);
+      }
+
       const obsoleteControls = [
         'set-section-collapse-controls',
       ];
@@ -487,6 +751,9 @@
 
       page.dataset.sl18Ready = '1';
     } finally {
+      if (resumeObserver) {
+        observePageMutations(page);
+      }
       reconciling = false;
     }
   }
@@ -513,25 +780,25 @@
       }
     });
 
-    observer.observe(page, {
-      childList: true,
-      subtree: true,
-    });
+    observePageMutations(page);
   }
 
   function init() {
+    if (initialized) {
+      reconcile();
+      return;
+    }
+
+    initialized = true;
     reconcile();
     observePage();
-
-    window.setTimeout(reconcile, 100);
-    window.setTimeout(reconcile, 500);
-    window.setTimeout(reconcile, 1500);
   }
 
   window.PMK_SETTINGS_LAYOUT_18 = {
     init,
     activate,
     reconcile,
+    loadEnterpriseConsole,
   };
 
   if (document.readyState === 'loading') {

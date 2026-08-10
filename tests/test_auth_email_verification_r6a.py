@@ -18,6 +18,7 @@ class FakeRepository:
         self.pending_user = None
         self.latest = None
         self.invalidations = []
+        self.plan_intent_verifications = []
         self.deliveries = []
 
     async def verification_principals_for_update(self, token_hash):
@@ -33,6 +34,9 @@ class FakeRepository:
 
     async def invalidate_active_verification_tokens(self, user_id, *, invalidated_at):
         self.invalidations.append((user_id, invalidated_at))
+
+    async def mark_registration_plan_intent_verified(self, user_id, *, verified_at):
+        self.plan_intent_verifications.append((user_id, verified_at))
 
     def add_verification_delivery(self, **values):
         self.deliveries.append(values)
@@ -69,7 +73,11 @@ def test_valid_verification_consumes_once_and_activates_pending_user():
     now = datetime(2026, 7, 22, 12, tzinfo=UTC)
     digester = TokenDigester(b"t" * 32)
     material = digester.generate_token(purpose="verify_email")
-    user = SimpleNamespace(status="pending_verification", email_verified_at=None)
+    user = SimpleNamespace(
+        id="00000000-0000-0000-0000-000000000001",
+        status="pending_verification",
+        email_verified_at=None,
+    )
     token = SimpleNamespace(
         token_hash=material.digest,
         consumed_at=None,
@@ -88,6 +96,7 @@ def test_valid_verification_consumes_once_and_activates_pending_user():
     assert token.consumed_at == now
     assert user.status == "active"
     assert user.email_verified_at == now
+    assert repository.plan_intent_verifications == [(user.id, now)]
     assert unit_of_work.commit_count == 1
 
 
@@ -112,6 +121,7 @@ def test_expired_or_invalidated_verification_is_generic_and_has_no_write():
 
     assert outcome.processed is True
     assert user.status == "pending_verification"
+    assert repository.plan_intent_verifications == []
     assert unit_of_work.commit_count == 0
 
 
@@ -126,9 +136,7 @@ def test_resend_rotates_token_and_outbox_in_one_commit():
     repository.latest = SimpleNamespace(created_at=now - RESEND_COOLDOWN - timedelta(seconds=1))
     unit_of_work = FakeUnitOfWork(repository)
 
-    outcome = asyncio.run(
-        _service(repository, unit_of_work, now=now).resend(" Person@Example.com ")
-    )
+    outcome = asyncio.run(_service(repository, unit_of_work, now=now).resend(" Person@Example.com "))
 
     assert outcome.accepted is True
     assert repository.invalidations == [(user.id, now)]

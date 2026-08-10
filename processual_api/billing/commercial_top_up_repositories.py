@@ -37,6 +37,23 @@ class SqlAlchemyCommercialTopUpOrderRepository:
             select(CommercialTopUpOrder).where(CommercialTopUpOrder.idempotency_key == idempotency_key)
         )
 
+    async def list_recovery_candidates(
+        self,
+        *,
+        limit: int = 100,
+    ) -> Sequence[CommercialTopUpOrder]:
+        statement = (
+            select(CommercialTopUpOrder)
+            .where(
+                (CommercialTopUpOrder.checkout_creation_status == "uncertain")
+                | (CommercialTopUpOrder.state == "payment_verified")
+            )
+            .order_by(CommercialTopUpOrder.created_at.asc(), CommercialTopUpOrder.id.asc())
+            .limit(max(1, min(limit, 500)))
+        )
+        result = await self._session.scalars(statement)
+        return tuple(result.all())
+
     def add(self, order: CommercialTopUpOrder) -> None:
         self._session.add(order)
 
