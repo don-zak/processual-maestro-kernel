@@ -99,6 +99,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload public verification snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-source-${{ matrix.python-version }}
+          path: .
+          include-hidden-files: true
+          retention-days: 1
+
       - name: Build package
         run: python -m build
 
