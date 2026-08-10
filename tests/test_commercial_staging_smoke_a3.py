@@ -5,17 +5,19 @@ from fastapi import FastAPI
 
 from processual_api.staging_smoke import evaluate_staging_routes
 
+_REQUIRED = (
+    ("GET", "/health/live"),
+    ("GET", "/health/ready"),
+    ("POST", "/admin-marketplace/subscriptions/usage"),
+    ("POST", "/billing/webhook"),
+)
+
 
 def test_real_application_passes_commercial_staging_smoke() -> None:
     from processual_api.main import app
 
     routes = evaluate_staging_routes(app)
-    assert routes == (
-        "GET /health/live",
-        "GET /health/ready",
-        "POST /admin-marketplace/subscriptions/usage",
-        "POST /billing/webhook",
-    )
+    assert routes == tuple(sorted(f"{method} {path}" for method, path in _REQUIRED))
 
 
 def test_missing_or_duplicate_required_routes_fail_closed() -> None:
@@ -23,11 +25,15 @@ def test_missing_or_duplicate_required_routes_fail_closed() -> None:
     with pytest.raises(RuntimeError, match="required routes are missing"):
         evaluate_staging_routes(empty)
 
-    from processual_api.main import app
-
     duplicate = FastAPI()
-    duplicate.routes.extend(app.routes)
-    duplicate.routes.extend(app.routes)
+
+    async def placeholder() -> dict[str, bool]:
+        return {"ok": True}
+
+    for method, path in _REQUIRED:
+        duplicate.add_api_route(path, placeholder, methods=[method])
+        duplicate.add_api_route(path, placeholder, methods=[method])
+
     with pytest.raises(RuntimeError, match="required routes are duplicated"):
         evaluate_staging_routes(duplicate)
 
