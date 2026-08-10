@@ -6,10 +6,11 @@ from fastapi.testclient import TestClient
 from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
 from processual_api.cgt_governor.adapters.execution_fanout import ExecutionFanoutSaturatedError
 from processual_api.main import app
-from processual_api.routers import workflows
+from processual_api.routers import execution_observability, workflows
 from processual_api.services.execution_observability import (
     clear_execution_observations_for_tests,
     execution_observability_snapshot,
+    record_execution_observation,
 )
 
 
@@ -49,9 +50,45 @@ def _client(monkeypatch) -> TestClient:
     return TestClient(test_app)
 
 
+def _settings_client(user: dict[str, object]) -> TestClient:
+    test_app = FastAPI()
+    test_app.include_router(execution_observability.router)
+    test_app.dependency_overrides[execution_observability.get_current_user] = lambda: user
+    return TestClient(test_app)
+
+
 def test_execution_observability_summary_route_is_registered_once() -> None:
     paths = [route.path for route in app.routes]
     assert paths.count("/settings/execution-observability/summary") == 1
+
+
+def test_execution_observability_summary_requires_usage_read_scope() -> None:
+    record_execution_observation(
+        execution_kind="task",
+        task_id="task.secure",
+        status="success",
+        duration_ms=1,
+        items_total=1,
+        items_succeeded=1,
+    )
+
+    denied = _settings_client({"sub": "reviewer"}).get(
+        "/settings/execution-observability/summary"
+    )
+    assert denied.status_code == 403
+    assert "admin:usage:read" in denied.json()["detail"]
+
+    allowed = _settings_client(
+        {
+            "sub": "reviewer",
+            "supervision_scopes": ["admin:usage:read"],
+        }
+    ).get("/settings/execution-observability/summary")
+    assert allowed.status_code == 200
+    payload = allowed.json()
+    assert payload["source_of_truth"] == "canonical_execution_records"
+    assert payload["summary"]["executions_total"] == 1
+    assert payload["recent_executions"][0]["task_id"] == "task.secure"
 
 
 def test_llm_orchestration_records_canonical_execution_and_returns_id(monkeypatch) -> None:
