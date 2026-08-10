@@ -54,8 +54,8 @@ def _valid_environment() -> dict[str, str]:
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
-    assert staging.expected_alembic_head == "20260805_0029"
-    assert EXPECTED_ALEMBIC_HEAD == "20260805_0029"
+    assert staging.expected_alembic_head == "20260809_0046"
+    assert EXPECTED_ALEMBIC_HEAD == "20260809_0046"
     assert set(staging.checks) == {
         "required_values",
         "secret_strength",
@@ -119,7 +119,7 @@ def test_release_workflow_requires_gates_before_publish() -> None:
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
         "Verify migration head",
-        "20260805_0029",
+        "20260809_0046",
         "Commercial staging smoke gate",
         "python -m processual_api.staging_smoke",
         "Run commercial regression gate",
