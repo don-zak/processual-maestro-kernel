@@ -42,20 +42,40 @@ function Get-JUnitSummary {
     param([Parameter(Mandatory)][string]$Path)
 
     [xml]$document = Get-Content -LiteralPath $Path -Raw
-    $root = $document.testsuites
-    if ($null -eq $root) {
-        $root = $document.testsuite
+    $suites = @()
+
+    if ($null -ne $document.testsuites) {
+        $suites = @($document.testsuites.testsuite)
     }
-    if ($null -eq $root) {
-        throw "Unable to read JUnit summary from $Path"
+    elseif ($null -ne $document.testsuite) {
+        $suites = @($document.testsuite)
+    }
+
+    $suites = @($suites | Where-Object { $null -ne $_ })
+    if ($suites.Count -eq 0) {
+        throw "Unable to read JUnit test suites from $Path"
+    }
+
+    $tests = 0
+    $failures = 0
+    $errors = 0
+    $skipped = 0
+    $timeSeconds = 0.0
+
+    foreach ($suite in $suites) {
+        $tests += [int]$suite.tests
+        $failures += [int]$suite.failures
+        $errors += [int]$suite.errors
+        $skipped += [int]$suite.skipped
+        $timeSeconds += [double]$suite.time
     }
 
     return [ordered]@{
-        tests = [int]$root.tests
-        failures = [int]$root.failures
-        errors = [int]$root.errors
-        skipped = [int]$root.skipped
-        time_seconds = [double]$root.time
+        tests = $tests
+        failures = $failures
+        errors = $errors
+        skipped = $skipped
+        time_seconds = $timeSeconds
     }
 }
 
