@@ -46,10 +46,7 @@ class SqlAlchemyCommercialEventRepository:
                 CommercialEventRecord.aggregate == aggregate.value,
                 CommercialEventRecord.aggregate_id == aggregate_id,
             )
-            .order_by(
-                CommercialEventRecord.occurred_at.asc(),
-                CommercialEventRecord.event_id.asc(),
-            )
+            .order_by(CommercialEventRecord.ledger_sequence.asc())
         )
         records: Sequence[CommercialEventRecord] = result.all()
         return tuple(_to_event(record) for record in records)
