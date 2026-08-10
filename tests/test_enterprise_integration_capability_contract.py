@@ -7,7 +7,15 @@ from processual_api.billing.usage_pricing import (
 )
 
 
-def test_enterprise_integration_capability_enables_authoritative_enterprise_plans() -> None:
+def test_enterprise_integration_capability_enables_authoritative_entitled_plans() -> None:
+    assert ENTERPRISE_INTEGRATION_PLANS == frozenset(
+        {
+            "enterprise_integration_starter",
+            "enterprise_scale",
+            "enterprise_strategic",
+        }
+    )
+
     for plan_id in ENTERPRISE_INTEGRATION_PLANS:
         capability = enterprise_integration_capability(plan_id)
 
@@ -17,23 +25,27 @@ def test_enterprise_integration_capability_enables_authoritative_enterprise_plan
         assert allows_enterprise_integration(plan_id) is True
 
 
-def test_enterprise_integration_capability_preserves_public_aliases() -> None:
+def test_public_enterprise_aliases_preserve_identity_without_capability_promotion() -> None:
     for plan_id in ("enterprise", "enterprise_integration"):
         capability = enterprise_integration_capability(plan_id)
 
-        assert capability["enabled"] is True
+        assert capability["enabled"] is False
+        assert capability["status"] == "locked"
         assert capability["normalized_plan_id"] == plan_id
         assert capability["canonical_plan_id"] == "enterprise_pilot"
         assert capability["legacy_compatibility"] is False
+        assert allows_enterprise_integration(plan_id) is False
 
 
-def test_enterprise_custom_remains_eligible_without_catalog_quota() -> None:
+def test_enterprise_custom_requires_explicit_catalog_entitlement() -> None:
     capability = enterprise_integration_capability("enterprise_custom")
 
-    assert capability["enabled"] is True
+    assert capability["enabled"] is False
+    assert capability["status"] == "locked"
     assert capability["normalized_plan_id"] == "enterprise_custom"
     assert capability["canonical_plan_id"] == "enterprise_custom"
     assert capability["legacy_compatibility"] is False
+    assert allows_enterprise_integration("enterprise_custom") is False
 
 
 def test_enterprise_integration_capability_preserves_legacy_private_plan() -> None:
@@ -51,8 +63,16 @@ def test_enterprise_integration_capability_preserves_legacy_private_plan() -> No
     assert allows_enterprise_integration("enterprise_private") is True
 
 
-def test_enterprise_integration_capability_locks_non_enterprise_plans() -> None:
-    for plan_id in (None, "", "academic", "starter", "business"):
+def test_enterprise_integration_capability_locks_non_entitled_plans() -> None:
+    for plan_id in (
+        None,
+        "",
+        "academic",
+        "starter",
+        "business",
+        "enterprise_pilot",
+        "enterprise_core",
+    ):
         capability = enterprise_integration_capability(plan_id)
 
         assert capability["enabled"] is False
@@ -61,10 +81,11 @@ def test_enterprise_integration_capability_locks_non_enterprise_plans() -> None:
         assert allows_enterprise_integration(plan_id) is False
 
 
-def test_enterprise_integration_capability_normalizes_human_entered_plan_ids() -> None:
+def test_human_entered_enterprise_alias_normalizes_without_capability_promotion() -> None:
     capability = enterprise_integration_capability(" Enterprise Integration ")
 
-    assert capability["enabled"] is True
+    assert capability["enabled"] is False
+    assert capability["status"] == "locked"
     assert capability["plan_id"] == "enterprise_integration"
     assert capability["normalized_plan_id"] == "enterprise_integration"
     assert capability["canonical_plan_id"] == "enterprise_pilot"
