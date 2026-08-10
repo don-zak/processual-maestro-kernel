@@ -10,6 +10,7 @@ from processual_api.auth.organization_authority import (
     OrganizationAuthorityError,
     require_organization_role,
     resolve_active_organization_authority,
+    resolve_current_organization_authority,
 )
 from processual_api.billing.plan_capability_matrix import (
     CapabilityStatus,
@@ -69,6 +70,29 @@ async def test_business_role_is_resolved_from_active_membership(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_current_user_role_claim_is_not_authority(monkeypatch) -> None:
+    membership = SimpleNamespace(role="viewer")
+    monkeypatch.setattr(
+        organization_authority,
+        "get_session_factory",
+        lambda: _SessionFactory(membership),
+    )
+
+    authority = await resolve_current_organization_authority(
+        {
+            "session_type": "identity_user",
+            "user_id": "11111111-1111-1111-1111-111111111111",
+            "organization_id": "22222222-2222-2222-2222-222222222222",
+            "role": "organization_owner",
+        }
+    )
+
+    assert authority.role == "viewer"
+    with pytest.raises(OrganizationAuthorityError):
+        require_organization_role(authority, "organization_owner")
+
+
+@pytest.mark.asyncio
 async def test_missing_active_membership_fails_closed(monkeypatch) -> None:
     monkeypatch.setattr(
         organization_authority,
@@ -80,6 +104,19 @@ async def test_missing_active_membership_fails_closed(monkeypatch) -> None:
         await resolve_active_organization_authority(
             user_id="11111111-1111-1111-1111-111111111111",
             organization_id="22222222-2222-2222-2222-222222222222",
+        )
+
+
+@pytest.mark.asyncio
+async def test_non_identity_session_cannot_claim_business_role() -> None:
+    with pytest.raises(OrganizationAuthorityError, match="identity user session required"):
+        await resolve_current_organization_authority(
+            {
+                "session_type": "jwt",
+                "user_id": "11111111-1111-1111-1111-111111111111",
+                "organization_id": "22222222-2222-2222-2222-222222222222",
+                "role": "organization_owner",
+            }
         )
 
 
