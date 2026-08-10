@@ -5,7 +5,10 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
-from processual_api.billing.plan_capability_matrix import TOOL_CAPABILITIES, CapabilityStatus
+from processual_api.billing.plan_capability_matrix import (
+    TOOL_CAPABILITIES,
+    CapabilityStatus,
+)
 
 
 class ApiVisibility(StrEnum):
@@ -60,15 +63,11 @@ def _sandbox_integration_surface(
     )
 
 
-def _unqualified_mixed_surface(surface_id: str, path_prefix: str) -> ApiSurfacePolicy:
-    """Classify optional/full-install route families without promoting them.
-
-    These prefixes contain heterogeneous public, customer, admin, or internal routes.
-    Stage B1 must still account for every mounted route, but no family may inherit a
-    production-ready claim merely because optional dependencies caused it to mount.
-    More-specific qualified policies continue to win through longest-prefix matching.
-    """
-
+def _unqualified_mixed_surface(
+    surface_id: str,
+    path_prefix: str,
+) -> ApiSurfacePolicy:
+    """Classify optional route families without promoting them."""
     return ApiSurfacePolicy(
         surface_id=surface_id,
         path_prefix=path_prefix,
@@ -210,7 +209,9 @@ _API_SURFACE_POLICIES = {
     ),
     "integration_readiness_operator_package": ApiSurfacePolicy(
         surface_id="integration_readiness_operator_package",
-        path_prefix="/settings/admin/integration-readiness-operator-package",
+        path_prefix=(
+            "/settings/admin/integration-readiness-operator-package"
+        ),
         visibility=ApiVisibility.ADMIN,
         readiness=ApiReadiness.PRODUCTION_READY,
         auth_required=True,
@@ -237,28 +238,59 @@ _API_SURFACE_POLICIES = {
         external_dependency="payment_channel_readiness",
         production_allowed=False,
     ),
+    "billing_statements_customer": ApiSurfacePolicy(
+        surface_id="billing_statements_customer",
+        path_prefix="/billing/statements",
+        visibility=ApiVisibility.CUSTOMER,
+        readiness=ApiReadiness.SANDBOX_ONLY,
+        auth_required=True,
+        audit_required=True,
+        external_dependency="authoritative_usage_and_quota_ledger",
+        production_allowed=False,
+    ),
+    "billing_statements_admin": ApiSurfacePolicy(
+        surface_id="billing_statements_admin",
+        path_prefix="/billing/admin/statements",
+        visibility=ApiVisibility.ADMIN,
+        readiness=ApiReadiness.SANDBOX_ONLY,
+        auth_required=True,
+        audit_required=True,
+        external_dependency="authoritative_usage_and_quota_ledger",
+        production_allowed=False,
+    ),
     "full_install_adapters": _unqualified_mixed_surface(
-        "full_install_adapters", "/adapters"
+        "full_install_adapters",
+        "/adapters",
     ),
     "full_install_applications": _unqualified_mixed_surface(
-        "full_install_applications", "/applications"
+        "full_install_applications",
+        "/applications",
     ),
-    "full_install_auth": _unqualified_mixed_surface("full_install_auth", "/auth"),
+    "full_install_auth": _unqualified_mixed_surface(
+        "full_install_auth",
+        "/auth",
+    ),
     "full_install_billing": _unqualified_mixed_surface(
-        "full_install_billing", "/billing"
+        "full_install_billing",
+        "/billing",
     ),
     "full_install_discord": _unqualified_mixed_surface(
-        "full_install_discord", "/discord"
+        "full_install_discord",
+        "/discord",
     ),
     "full_install_settings": _unqualified_mixed_surface(
-        "full_install_settings", "/settings"
+        "full_install_settings",
+        "/settings",
     ),
     "full_install_telemetry": _unqualified_mixed_surface(
-        "full_install_telemetry", "/telemetry"
+        "full_install_telemetry",
+        "/telemetry",
     ),
 }
 
-API_SURFACE_POLICIES: Final = MappingProxyType(_API_SURFACE_POLICIES)
+API_SURFACE_POLICIES: Final = MappingProxyType(
+    _API_SURFACE_POLICIES
+)
 
 
 def _normalize_path(path: str) -> str:
@@ -274,11 +306,16 @@ def readiness_for_path(path: str) -> ApiSurfacePolicy | None:
         policy
         for policy in API_SURFACE_POLICIES.values()
         if normalized == policy.path_prefix
-        or normalized.startswith(policy.path_prefix.rstrip("/") + "/")
+        or normalized.startswith(
+            policy.path_prefix.rstrip("/") + "/"
+        )
     ]
     if not matches:
         return None
-    return max(matches, key=lambda policy: len(policy.path_prefix))
+    return max(
+        matches,
+        key=lambda policy: len(policy.path_prefix),
+    )
 
 
 def production_surface_allowed(path: str) -> bool:
@@ -294,31 +331,57 @@ def validate_api_readiness_registry() -> None:
     seen_prefixes: set[str] = set()
     for key, policy in API_SURFACE_POLICIES.items():
         if key != policy.surface_id:
-            raise ValueError(f"surface key mismatch: {key}")
+            raise ValueError(
+                f"surface key mismatch: {key}"
+            )
         if not policy.path_prefix.startswith("/"):
-            raise ValueError(f"surface path must be absolute: {policy.surface_id}")
+            raise ValueError(
+                "surface path must be absolute: "
+                f"{policy.surface_id}"
+            )
         if policy.path_prefix in seen_prefixes:
-            raise ValueError(f"duplicate surface prefix: {policy.path_prefix}")
+            raise ValueError(
+                "duplicate surface prefix: "
+                f"{policy.path_prefix}"
+            )
         seen_prefixes.add(policy.path_prefix)
 
-        if policy.visibility in {ApiVisibility.CUSTOMER, ApiVisibility.ADMIN, ApiVisibility.INTERNAL}:
-            if not policy.auth_required:
-                raise ValueError(f"non-public surface must require auth: {policy.surface_id}")
-
-        if policy.readiness is not ApiReadiness.PRODUCTION_READY and policy.production_allowed:
+        if policy.visibility in {
+            ApiVisibility.CUSTOMER,
+            ApiVisibility.ADMIN,
+            ApiVisibility.INTERNAL,
+        } and not policy.auth_required:
             raise ValueError(
-                f"non-ready surface cannot allow production: {policy.surface_id}"
+                "non-public surface must require auth: "
+                f"{policy.surface_id}"
+            )
+
+        if (
+            policy.readiness is not ApiReadiness.PRODUCTION_READY
+            and policy.production_allowed
+        ):
+            raise ValueError(
+                "non-ready surface cannot allow production: "
+                f"{policy.surface_id}"
             )
 
         if policy.capability_code is not None:
-            capability = TOOL_CAPABILITIES.get(policy.capability_code)
+            capability = TOOL_CAPABILITIES.get(
+                policy.capability_code
+            )
             if capability is None:
                 raise ValueError(
-                    f"surface references unknown capability: {policy.capability_code}"
+                    "surface references unknown capability: "
+                    f"{policy.capability_code}"
                 )
-            if policy.production_allowed and not capability.production_allowed:
+            if (
+                policy.production_allowed
+                and not capability.production_allowed
+            ):
                 raise ValueError(
-                    f"surface production policy exceeds capability authority: {policy.surface_id}"
+                    "surface production policy exceeds "
+                    "capability authority: "
+                    f"{policy.surface_id}"
                 )
 
     sandbox_surfaces = (
@@ -340,7 +403,26 @@ def validate_api_readiness_registry() -> None:
             or TOOL_CAPABILITIES["advanced_integration"].status
             is not CapabilityStatus.SANDBOX_ONLY
         ):
-            raise ValueError(f"advanced integration surface must remain sandbox-only: {surface_id}")
+            raise ValueError(
+                "advanced integration surface must remain "
+                f"sandbox-only: {surface_id}"
+            )
+
+    for surface_id in (
+        "billing_statements_customer",
+        "billing_statements_admin",
+    ):
+        policy = API_SURFACE_POLICIES[surface_id]
+        if (
+            policy.readiness is not ApiReadiness.SANDBOX_ONLY
+            or policy.production_allowed
+            or not policy.auth_required
+            or not policy.audit_required
+        ):
+            raise ValueError(
+                "billing statements must remain explicitly "
+                f"qualified before production: {surface_id}"
+            )
 
     unqualified_full_install_surfaces = (
         "full_install_adapters",
@@ -359,7 +441,8 @@ def validate_api_readiness_registry() -> None:
             or policy.production_allowed
         ):
             raise ValueError(
-                f"unqualified full-install surface must remain disabled: {surface_id}"
+                "unqualified full-install surface must "
+                f"remain disabled: {surface_id}"
             )
 
     durable = API_SURFACE_POLICIES["durable_execution"]
@@ -368,11 +451,19 @@ def validate_api_readiness_registry() -> None:
         or durable.readiness is not ApiReadiness.INTERNAL_ONLY
         or durable.production_allowed
     ):
-        raise ValueError("durable execution must remain internal-only")
+        raise ValueError(
+            "durable execution must remain internal-only"
+        )
 
     topup = API_SURFACE_POLICIES["topup_public_purchase"]
-    if topup.readiness is not ApiReadiness.DISABLED or topup.production_allowed:
-        raise ValueError("public top-up purchase must remain disabled until qualified")
+    if (
+        topup.readiness is not ApiReadiness.DISABLED
+        or topup.production_allowed
+    ):
+        raise ValueError(
+            "public top-up purchase must remain disabled "
+            "until qualified"
+        )
 
 
 validate_api_readiness_registry()

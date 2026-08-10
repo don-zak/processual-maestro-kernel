@@ -9,7 +9,7 @@ const pageMeta = {
   gateway:    { title: 'Gateway Dashboard', sub: 'Agent registry, evaluation, lifecycle management' },
   simulation: { title: 'Supervision Simulation', sub: 'Virtual agent governance pipeline' },
   adapters:   { title: 'Adapter Manager', sub: 'Provider configuration and testing' },
-  settings:   { title: 'Client Settings', sub: 'Account, provider, plan, integration, and precise escalations' },
+  settings:   { title: 'Client Settings', sub: 'Account, provider, plan, billing, integration, and precise escalations' },
 };
 
 const APP = (() => {
@@ -80,6 +80,7 @@ const APP = (() => {
     if (pg === 'settings') {
       PAGES.settings?.init?.();
       window.PMK_SETTINGS_OPERATIONS_18?.init?.();
+      window.PMK_SETTINGS_BILLING_STATEMENTS?.init?.();
       setTimeout(() => window.PMK_SETTINGS_LAYOUT_18?.init?.(), 0);
       setTimeout(() => window.PMK_SETTINGS_ENTERPRISE_CONSOLE_18?.init?.(), 0);
     }
@@ -143,153 +144,93 @@ const APP = (() => {
     try {
       const sub = await CLIENT.get('/settings/subscription');
       const stage = sub.stage || 'active';
-      if (stage === 'active') {
-        banner.style.display = 'none';
-        return;
-      }
+      if (stage === 'active') { banner.style.display = 'none'; return; }
       banner.style.display = 'block';
       if (stage === 'grace') {
-        banner.style.backgroundColor = 'rgba(251,191,36,0.1)';
-        banner.style.borderColor = 'rgba(251,191,36,0.3)';
-        banner.style.color = '#fbbf24';
+        banner.style.backgroundColor = 'rgba(251,191,36,0.1)'; banner.style.borderColor = 'rgba(251,191,36,0.3)'; banner.style.color = '#fbbf24';
         banner.innerHTML = '⚠ Payment overdue — service is <strong>read-only</strong>. <a href="/billing/portal" style="color:#fbbf24;text-decoration:underline">Update billing →</a>';
       } else if (stage === 'suspended') {
-        banner.style.backgroundColor = 'rgba(248,113,113,0.1)';
-        banner.style.borderColor = 'rgba(248,113,113,0.3)';
-        banner.style.color = '#f87171';
+        banner.style.backgroundColor = 'rgba(248,113,113,0.1)'; banner.style.borderColor = 'rgba(248,113,113,0.3)'; banner.style.color = '#f87171';
         banner.innerHTML = '✖ Subscription suspended — <a href="/billing/portal" style="color:#f87171;text-decoration:underline">Reactivate now →</a>';
       } else if (stage === 'expired') {
-        banner.style.backgroundColor = 'rgba(248,113,113,0.15)';
-        banner.style.borderColor = 'rgba(248,113,113,0.4)';
-        banner.style.color = '#ef4444';
+        banner.style.backgroundColor = 'rgba(248,113,113,0.15)'; banner.style.borderColor = 'rgba(248,113,113,0.4)'; banner.style.color = '#ef4444';
         banner.innerHTML = '✖ Subscription expired — please <a href="/pricing" style="color:#ef4444;text-decoration:underline">re-subscribe</a>.';
       }
-    } catch (e) {
-      // Banner remains hidden when subscription status is unavailable.
-    }
+    } catch (e) {}
   }
 
-  function hasDescentGateSession() {
-    return sessionStorage.getItem('maestro_descent_gate_seen') === '1';
-  }
+  function hasDescentGateSession() { return sessionStorage.getItem('maestro_descent_gate_seen') === '1'; }
 
   function init() {
-    if (!hasDescentGateSession()) {
-      window.location.replace('/');
-      return;
-    }
-    AUTH.init();
-    tickClock(); setInterval(tickClock, 1000);
-    initNav();
-    initKeyboard();
-    initRtlToggle();
+    if (!hasDescentGateSession()) { window.location.replace('/'); return; }
+    AUTH.init(); tickClock(); setInterval(tickClock, 1000); initNav(); initKeyboard(); initRtlToggle();
     const lt = document.getElementById('lang-toggle');
     if (lt) lt.textContent = I18N.lang() === 'ar' ? 'EN' : 'AR';
-    if (!AUTH.isLoggedIn()) {
-      window.location.replace('/login');
-      return;
-    }
-    checkSubscription();
-    loadInitialPage();
+    if (!AUTH.isLoggedIn()) { window.location.replace('/login'); return; }
+    checkSubscription(); loadInitialPage();
   }
 
   function loadInitialPage() {
     const hash = window.location.hash.replace('#page-', '');
-    if (hash && pageMeta[hash]) {
-      navigateTo(hash);
-    } else {
-      PAGES.overview?.refresh();
-    }
+    if (hash && pageMeta[hash]) navigateTo(hash); else PAGES.overview?.refresh();
   }
 
-  return {
-    gwAgents, gwDecisionFeed, rankColors, getGwActionColor,
-    showToast, showLoading, hideLoading,
-    init
-  };
+  return { gwAgents, gwDecisionFeed, rankColors, getGwActionColor, showToast, showLoading, hideLoading, init };
 })();
 
 (function bootstrapInstitutionWorkspace18() {
-  pageMeta.institution = {
-    title: 'Enterprise Workspace',
-    sub: 'Technical intake, task execution, automated validation, and approval gates',
-  };
+  pageMeta.institution = { title: 'Enterprise Workspace', sub: 'Technical intake, task execution, automated validation, and approval gates' };
   const navWrap = document.getElementById('nav-wrap');
   if (navWrap && !navWrap.querySelector('[data-page="institution"]')) {
     const settingsButton = navWrap.querySelector('[data-page="settings"]');
-    const button = document.createElement('button');
-    button.className = 'nav-btn';
-    button.dataset.page = 'institution';
-    button.innerHTML = '<span class="nav-ind"></span><span class="nav-ico">◇</span><span>Enterprise</span>';
-    navWrap.insertBefore(button, settingsButton || null);
+    const button = document.createElement('button'); button.className = 'nav-btn'; button.dataset.page = 'institution';
+    button.innerHTML = '<span class="nav-ind"></span><span class="nav-ico">◇</span><span>Enterprise</span>'; navWrap.insertBefore(button, settingsButton || null);
   }
   const content = document.getElementById('content');
   if (content && !document.getElementById('page-institution')) {
-    const page = document.createElement('div');
-    page.className = 'page';
-    page.id = 'page-institution';
-    page.innerHTML = '<div id="institution-workspace-root"><div class="iw18-empty">Loading enterprise integration workspace…</div></div>';
-    content.appendChild(page);
+    const page = document.createElement('div'); page.className = 'page'; page.id = 'page-institution';
+    page.innerHTML = '<div id="institution-workspace-root"><div class="iw18-empty">Loading enterprise integration workspace…</div></div>'; content.appendChild(page);
   }
   if (!document.querySelector('link[data-iw18-style]')) {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.href = 'css/institution_workspace_18.css?v=enterpriseops2';
-    style.dataset.iw18Style = 'true';
-    document.head.appendChild(style);
+    const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = 'css/institution_workspace_18.css?v=enterpriseops2'; style.dataset.iw18Style = 'true'; document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-iw18-script]')) {
-    const script = document.createElement('script');
-    script.src = 'js/pages/institution_workspace_18.js?v=enterpriseops2';
-    script.dataset.iw18Script = 'true';
-    document.body.appendChild(script);
+    const script = document.createElement('script'); script.src = 'js/pages/institution_workspace_18.js?v=enterpriseops2'; script.dataset.iw18Script = 'true'; document.body.appendChild(script);
   }
 })();
 
 (function bootstrapSettingsOperations18() {
   if (!document.querySelector('link[data-sops18-style]')) {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.href = 'css/settings_operations_18.css?v=settingsops2';
-    style.dataset.sops18Style = 'true';
-    document.head.appendChild(style);
+    const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = 'css/settings_operations_18.css?v=settingsops2'; style.dataset.sops18Style = 'true'; document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-sops18-script]')) {
+    const script = document.createElement('script'); script.src = 'js/settings_operations_18.js?v=settingsops2'; script.dataset.sops18Script = 'true'; document.body.appendChild(script);
+  }
+})();
+
+(function bootstrapSettingsBillingStatements() {
+  if (!document.querySelector('script[data-mbs-script]')) {
     const script = document.createElement('script');
-    script.src = 'js/settings_operations_18.js?v=settingsops2';
-    script.dataset.sops18Script = 'true';
+    script.src = 'js/settings_billing_statements.js?v=billing-statements-v2';
+    script.dataset.mbsScript = 'true';
     document.body.appendChild(script);
   }
 })();
 
 (function bootstrapSettingsLayout18() {
   if (!document.querySelector('link[data-sl18-style]')) {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.href = 'css/settings_layout_18.css?v=settingslayout1';
-    style.dataset.sl18Style = 'true';
-    document.head.appendChild(style);
+    const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = 'css/settings_layout_18.css?v=settingslayout1'; style.dataset.sl18Style = 'true'; document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-sl18-script]')) {
-    const script = document.createElement('script');
-    script.src = 'js/settings_layout_18.js?v=settingslayout1';
-    script.dataset.sl18Script = 'true';
-    document.body.appendChild(script);
+    const script = document.createElement('script'); script.src = 'js/settings_layout_18.js?v=settingslayout1'; script.dataset.sl18Script = 'true'; document.body.appendChild(script);
   }
 })();
 
 (function bootstrapSettingsEnterpriseConsole18() {
   if (!document.querySelector('link[data-se18-style]')) {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.href = 'css/settings_enterprise_console_18.css?v=enterpriseconsole1';
-    style.dataset.se18Style = 'true';
-    document.head.appendChild(style);
+    const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = 'css/settings_enterprise_console_18.css?v=enterpriseconsole1'; style.dataset.se18Style = 'true'; document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-se18-script]')) {
-    const script = document.createElement('script');
-    script.src = 'js/settings_enterprise_console_18.js?v=enterpriseconsole1';
-    script.dataset.se18Script = 'true';
-    document.body.appendChild(script);
+    const script = document.createElement('script'); script.src = 'js/settings_enterprise_console_18.js?v=enterpriseconsole1'; script.dataset.se18Script = 'true'; document.body.appendChild(script);
   }
 })();
