@@ -41,10 +41,37 @@ class ApiSurfacePolicy:
         return payload
 
 
+def _sandbox_integration_surface(
+    surface_id: str,
+    path_prefix: str,
+    visibility: ApiVisibility,
+) -> ApiSurfacePolicy:
+    return ApiSurfacePolicy(
+        surface_id=surface_id,
+        path_prefix=path_prefix,
+        visibility=visibility,
+        readiness=ApiReadiness.SANDBOX_ONLY,
+        auth_required=True,
+        audit_required=True,
+        external_dependency="qualified_external_connector",
+        capability_code="advanced_integration",
+        production_allowed=False,
+    )
+
+
 _API_SURFACE_POLICIES = {
     "health": ApiSurfacePolicy(
         surface_id="health",
         path_prefix="/health",
+        visibility=ApiVisibility.PUBLIC,
+        readiness=ApiReadiness.PRODUCTION_READY,
+        auth_required=False,
+        audit_required=False,
+        production_allowed=True,
+    ),
+    "metrics": ApiSurfacePolicy(
+        surface_id="metrics",
+        path_prefix="/metrics",
         visibility=ApiVisibility.PUBLIC,
         readiness=ApiReadiness.PRODUCTION_READY,
         auth_required=False,
@@ -101,16 +128,45 @@ _API_SURFACE_POLICIES = {
         capability_code="byok_provider_connection",
         production_allowed=True,
     ),
-    "advanced_integration": ApiSurfacePolicy(
-        surface_id="advanced_integration",
-        path_prefix="/settings/enterprise-integration",
-        visibility=ApiVisibility.CUSTOMER,
-        readiness=ApiReadiness.SANDBOX_ONLY,
-        auth_required=True,
-        audit_required=True,
-        external_dependency="qualified_external_connector",
-        capability_code="advanced_integration",
-        production_allowed=False,
+    "advanced_integration": _sandbox_integration_surface(
+        "advanced_integration",
+        "/settings/enterprise-integration",
+        ApiVisibility.CUSTOMER,
+    ),
+    "external_connectivity_admin": _sandbox_integration_surface(
+        "external_connectivity_admin",
+        "/settings/admin/external-connectivity",
+        ApiVisibility.ADMIN,
+    ),
+    "integration_claim_keys_admin": _sandbox_integration_surface(
+        "integration_claim_keys_admin",
+        "/settings/admin/integration-claim-keys",
+        ApiVisibility.ADMIN,
+    ),
+    "integration_tasks_admin": _sandbox_integration_surface(
+        "integration_tasks_admin",
+        "/settings/admin/integration-tasks",
+        ApiVisibility.ADMIN,
+    ),
+    "operator_pilot_handoff": _sandbox_integration_surface(
+        "operator_pilot_handoff",
+        "/settings/admin/operator-pilot-handoff",
+        ApiVisibility.ADMIN,
+    ),
+    "external_connectivity_client": _sandbox_integration_surface(
+        "external_connectivity_client",
+        "/settings/client/external-connectivity",
+        ApiVisibility.CUSTOMER,
+    ),
+    "integration_claim_keys_client": _sandbox_integration_surface(
+        "integration_claim_keys_client",
+        "/settings/client/integration-claim-keys",
+        ApiVisibility.CUSTOMER,
+    ),
+    "integration_onboarding_client": _sandbox_integration_surface(
+        "integration_onboarding_client",
+        "/settings/client/integration-onboarding",
+        ApiVisibility.CUSTOMER,
     ),
     "admin_marketplace": ApiSurfacePolicy(
         surface_id="admin_marketplace",
@@ -125,6 +181,15 @@ _API_SURFACE_POLICIES = {
     "integration_readiness_admin": ApiSurfacePolicy(
         surface_id="integration_readiness_admin",
         path_prefix="/settings/admin/integration-readiness-tracking",
+        visibility=ApiVisibility.ADMIN,
+        readiness=ApiReadiness.PRODUCTION_READY,
+        auth_required=True,
+        audit_required=True,
+        production_allowed=True,
+    ),
+    "integration_readiness_operator_package": ApiSurfacePolicy(
+        surface_id="integration_readiness_operator_package",
+        path_prefix="/settings/admin/integration-readiness-operator-package",
         visibility=ApiVisibility.ADMIN,
         readiness=ApiReadiness.PRODUCTION_READY,
         auth_required=True,
@@ -216,14 +281,26 @@ def validate_api_readiness_registry() -> None:
                     f"surface production policy exceeds capability authority: {policy.surface_id}"
                 )
 
-    advanced = API_SURFACE_POLICIES["advanced_integration"]
-    if (
-        advanced.readiness is not ApiReadiness.SANDBOX_ONLY
-        or advanced.production_allowed
-        or TOOL_CAPABILITIES["advanced_integration"].status
-        is not CapabilityStatus.SANDBOX_ONLY
-    ):
-        raise ValueError("advanced integration must remain sandbox-only")
+    sandbox_surfaces = (
+        "advanced_integration",
+        "external_connectivity_admin",
+        "integration_claim_keys_admin",
+        "integration_tasks_admin",
+        "operator_pilot_handoff",
+        "external_connectivity_client",
+        "integration_claim_keys_client",
+        "integration_onboarding_client",
+    )
+    for surface_id in sandbox_surfaces:
+        policy = API_SURFACE_POLICIES[surface_id]
+        if (
+            policy.readiness is not ApiReadiness.SANDBOX_ONLY
+            or policy.production_allowed
+            or policy.capability_code != "advanced_integration"
+            or TOOL_CAPABILITIES["advanced_integration"].status
+            is not CapabilityStatus.SANDBOX_ONLY
+        ):
+            raise ValueError(f"advanced integration surface must remain sandbox-only: {surface_id}")
 
     durable = API_SURFACE_POLICIES["durable_execution"]
     if (
