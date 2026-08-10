@@ -58,7 +58,11 @@ def _settings_client(user: dict[str, object]) -> TestClient:
 
 
 def test_execution_observability_summary_route_is_registered_once() -> None:
-    paths = [route.path for route in app.routes]
+    paths = [
+        path
+        for route in app.routes
+        if (path := getattr(route, "path", None)) is not None
+    ]
     assert paths.count("/settings/execution-observability/summary") == 1
 
 
