@@ -7,7 +7,7 @@ providers, fetches price lists, or invents missing commercial cost assumptions.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
 
 USAGE_ECONOMICS_VERSION: Final = "2026-08-b3-usage-economics-v1"
@@ -114,7 +114,9 @@ def forecast_usage_run_rate(
 
     metering = UsageMeteringInput(units=units, credits_per_unit=credits_per_unit)
     factor = Decimal(period_days) / Decimal(observed_days)
-    projected_units = int((Decimal(units) * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    projected_units = int(
+        (Decimal(units) * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    )
     projected_credits = _money(metering.credits * factor)
     projected_cost = _money(observed_cost_usd * factor)
 
