@@ -33,6 +33,11 @@ def _payload(**overrides):
             "attributes": {
                 "store_id": 42,
                 "test_mode": False,
+                "customer_id": 5001,
+                "order_id": 6001,
+                "variant_id": 8001,
+                "status": "active",
+                "updated_at": "2026-08-06T09:30:00Z",
             },
         },
     }
@@ -78,6 +83,10 @@ def test_valid_webhook_is_verified_without_mutating_internal_references() -> Non
     assert verified.order_ref == "order_456"
     assert verified.offer_ref == "offer_pro_monthly"
     assert verified.test_mode is False
+    assert verified.evidence.provider_customer_id == "5001"
+    assert verified.evidence.provider_order_id == "6001"
+    assert verified.evidence.provider_subscription_id == "9001"
+    assert verified.evidence.variant_id == "8001"
 
 
 def test_signature_is_calculated_over_exact_raw_body() -> None:
