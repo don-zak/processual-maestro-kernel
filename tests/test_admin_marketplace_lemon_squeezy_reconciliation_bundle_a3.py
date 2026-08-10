@@ -43,6 +43,13 @@ def _inbox() -> LemonSqueezyWebhookInboxEntry:
         processing_status="received",
         attempt_count=0,
         received_at=NOW,
+        evidence_schema_version=1,
+        provider_customer_id="5001",
+        provider_subscription_id="8001",
+        currency="USD",
+        total_amount="1999",
+        provider_status="paid",
+        provider_effective_at=NOW,
     )
 
 
@@ -54,7 +61,7 @@ def _context(**overrides) -> LemonSqueezyReconciliationContext:
         "order_sales_channel": "lemon_squeezy",
         "offer_sales_channel": "lemon_squeezy",
         "production_mode": True,
-        "external_binding_matches": True,
+        "expected_provider_customer_id": "5001",
     }
     values.update(overrides)
     return LemonSqueezyReconciliationContext(**values)
@@ -111,7 +118,7 @@ async def test_trusted_event_is_decided_and_committed_once() -> None:
     result = await process(inbox_id=inbox.id, decided_at=NOW)
 
     assert result.action == "reconcile"
-    assert result.reason_code == "trusted_event_requires_reconciliation"
+    assert result.reason_code == "verified_evidence_requires_reconciliation"
     assert inbox.processing_status == "processed"
     assert inbox.attempt_count == 1
     assert uow.commits == 1
@@ -126,7 +133,7 @@ async def test_review_decision_rejects_inbox_without_subscription_mutation_api()
     uow = Uow(inbox)
 
     async def loader(_):
-        return _context(external_binding_matches=False)
+        return _context(expected_provider_customer_id="5002")
 
     process = process_lemon_squeezy_reconciliation_factory(
         uow_factory=lambda: uow,
@@ -136,7 +143,7 @@ async def test_review_decision_rejects_inbox_without_subscription_mutation_api()
 
     assert result.action == "requires_review"
     assert inbox.processing_status == "rejected"
-    assert inbox.last_error_code == "external_binding_mismatch"
+    assert inbox.last_error_code == "provider_customer_mismatch"
     assert uow.commits == 1
     assert not any("subscription" in name or "entitlement" in name for name in dir(process))
 
@@ -155,7 +162,7 @@ async def test_existing_decision_is_replayed_without_commit_or_context_reload() 
         order_ref=inbox.order_ref,
         offer_ref=inbox.offer_ref,
         action="reconcile",
-        reason_code="trusted_event_requires_reconciliation",
+        reason_code="verified_evidence_requires_reconciliation",
         decided_at=NOW,
     )
     uow = Uow(inbox, existing)
@@ -185,7 +192,7 @@ async def test_existing_decision_with_cross_account_binding_fails_closed() -> No
         order_ref=inbox.order_ref,
         offer_ref=inbox.offer_ref,
         action="reconcile",
-        reason_code="trusted_event_requires_reconciliation",
+        reason_code="verified_evidence_requires_reconciliation",
         decided_at=NOW,
     )
     uow = Uow(inbox, existing)
@@ -242,7 +249,7 @@ def test_repository_maps_domain_record_and_owns_no_transaction() -> None:
         order_ref="order-1",
         offer_ref="offer-1",
         action="reconcile",
-        reason_code="trusted_event_requires_reconciliation",
+        reason_code="verified_evidence_requires_reconciliation",
         decided_at=NOW,
     )
     repository.add(record)
