@@ -78,7 +78,6 @@ def _task(
 
 
 _TASKS = {
-    # CRM
     "crm.customer_context": _task(
         "crm.customer_context", "crm", "read customer context", READ,
         ("crm:read",), ("customer_id",),
@@ -96,8 +95,6 @@ _TASKS = {
         ("crm:read", "customer:update"),
         ("customer_id", "proposed_changes"), ("reason",), "crm_update_draft",
     ),
-
-    # External customer billing system, distinct from Maestro commercial billing.
     "billing.account_context": _task(
         "billing.account_context", "billing", "read billing state", READ,
         ("billing:read",), ("account_id",),
@@ -116,8 +113,6 @@ _TASKS = {
         ("invoice_id", "payment_id", "recommended_next_step"),
         "billing_review_note",
     ),
-
-    # Ticketing / helpdesk.
     "support.ticket_history": _task(
         "support.ticket_history", "ticketing", "read ticket history", READ,
         ("ticket:read", "helpdesk:read"), ("ticket_id",),
@@ -134,8 +129,6 @@ _TASKS = {
         ("subject", "description"), ("customer_id", "priority"),
         "support_ticket_request",
     ),
-
-    # Order management.
     "order.preview": _task(
         "order.preview", "order_management", "preview order impact", READ,
         ("order:preview",), ("customer_id", "requested_change"),
@@ -152,8 +145,6 @@ _TASKS = {
         ("order:create_with_approval",), ("customer_id", "order_payload"),
         ("approval_reference",), "order_create_request",
     ),
-
-    # Network assurance.
     "network.health_context": _task(
         "network.health_context", "network_assurance", "read network health", READ,
         ("network:read",), ("resource_id",),
@@ -170,12 +161,10 @@ _TASKS = {
         ("resource_id", "incident_id"),
         ("status", "diagnostics", "alarms", "metrics"), "incident_context",
     ),
-
-    # Cross-sector document workflows.
     "document.approved_content": _task(
         "document.approved_content", "document", "read approved documents", READ,
-        ("document:read",), ("document_id",),
-        ("title", "content", "metadata"), "document_context",
+        ("document:read", "compliance_document:read", "paper:read"),
+        ("document_id",), ("title", "content", "metadata"), "document_context",
     ),
     "document.classification": _task(
         "document.classification", "document", "classify document", READ,
@@ -187,8 +176,6 @@ _TASKS = {
         ("document:read", "response:draft"), ("document_id", "content"),
         ("request_context", "metadata"), "document_response_draft",
     ),
-
-    # Banking / KYC / compliance.
     "banking.kyc_materials": _task(
         "banking.kyc_materials", "banking_kyc", "read KYC materials", READ,
         ("customer_case:read", "kyc_document:read", "compliance_document:read"),
@@ -206,8 +193,6 @@ _TASKS = {
         ("case_id", "compliance_context"), ("risk_summary", "documents"),
         "compliance_note_draft",
     ),
-
-    # Government / public administration.
     "government.case_context": _task(
         "government.case_context", "government_case", "read public service case", READ,
         ("case:read", "audit_record:read"), ("case_id",),
@@ -223,8 +208,6 @@ _TASKS = {
         DRAFT, ("case:read", "response:draft"), ("case_id", "request_text"),
         ("case_summary", "policy_context"), "government_response_draft",
     ),
-
-    # Research.
     "research.dataset_context": _task(
         "research.dataset_context", "research_dataset", "read dataset metadata", READ,
         ("dataset:read",), ("dataset_id",),
@@ -243,8 +226,6 @@ _TASKS = {
         ("dataset_id", "analysis_context"), ("experiment_id", "project_id"),
         "analysis_report_draft",
     ),
-
-    # University / student services.
     "university.student_request": _task(
         "university.student_request", "university_student", "read student request", READ,
         ("student_request:read",), ("request_id",),
@@ -262,8 +243,6 @@ _TASKS = {
         ("case_id", "applicant_context"), ("documents", "status"),
         "admission_response_draft",
     ),
-
-    # Generic enterprise helpdesk/project/knowledge workflows.
     "enterprise.helpdesk_issue": _task(
         "enterprise.helpdesk_issue", "enterprise_helpdesk", "read helpdesk issue", READ,
         ("helpdesk:read",), ("issue_id",),
