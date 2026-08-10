@@ -6,8 +6,10 @@ on:
       - feat/b1-automatic-api-readiness-gate
     paths:
       - "processual_api/billing/commercial_state_machine.py"
+      - "processual_api/billing/commercial_event_contracts.py"
       - "processual_api/billing/commercial_top_up_order_grant_contracts.py"
       - "tests/test_commercial_state_machine_b2.py"
+      - "tests/test_commercial_event_contracts_b2.py"
       - "tests/test_commercial_top_up*.py"
       - ".github/workflows/commercial-authority-b2.yml"
 
@@ -29,7 +31,12 @@ jobs:
 
       - name: Ruff commercial authority changes
         run: |
-          ruff check processual_api/billing/commercial_state_machine.py tests/test_commercial_state_machine_b2.py --output-format=github
+          ruff check \
+            processual_api/billing/commercial_state_machine.py \
+            processual_api/billing/commercial_event_contracts.py \
+            tests/test_commercial_state_machine_b2.py \
+            tests/test_commercial_event_contracts_b2.py \
+            --output-format=github
 
       - name: Focused commercial authority tests
         env:
@@ -37,5 +44,6 @@ jobs:
         run: |
           python -m pytest -q \
             tests/test_commercial_state_machine_b2.py \
+            tests/test_commercial_event_contracts_b2.py \
             tests/test_commercial_top_up_order_grant_contracts_group2.py \
             tests/test_commercial_top_up_order_grant_contracts_boundaries_group2.py
