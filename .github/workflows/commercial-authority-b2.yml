@@ -37,4 +37,5 @@ jobs:
         run: |
           python -m pytest -q \
             tests/test_commercial_state_machine_b2.py \
-            tests/test_commercial_top_up_order_grant_contracts.py
+            tests/test_commercial_top_up_order_grant_contracts_group2.py \
+            tests/test_commercial_top_up_order_grant_contracts_boundaries_group2.py
