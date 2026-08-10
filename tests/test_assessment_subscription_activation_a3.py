@@ -319,7 +319,7 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
     assert terms.amount_minor_units == 240_000
     assert len(unit.subscription_quotas.added) == 1
     quota_account = unit.subscription_quotas.added[0]
-    assert quota_account.metric_code == "credits"
+    assert quota_account.metric_code == "maestro_units"
     assert quota_account.limit_units == 125_000
     assert quota_account.limit_units != 5_000
     assert len(unit.entitlement_activations.added) == 1
@@ -350,7 +350,7 @@ async def test_assessment_subscription_runtime_enforces_exact_quota() -> None:
     await record_usage(
         subscription_id=activation.subscription_id,
         customer_ref=activation.customer_ref,
-        metric_code="credits",
+        metric_code="maestro_units",
         units=125_000,
         idempotency_key="usage-exact-limit",
         dimensions={"source": "assessment-e2e"},
@@ -365,7 +365,7 @@ async def test_assessment_subscription_runtime_enforces_exact_quota() -> None:
         await record_usage(
             subscription_id=activation.subscription_id,
             customer_ref=activation.customer_ref,
-            metric_code="credits",
+            metric_code="maestro_units",
             units=1,
             idempotency_key="usage-over-limit",
             dimensions={"source": "assessment-e2e"},
