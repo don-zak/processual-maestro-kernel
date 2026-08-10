@@ -86,7 +86,9 @@ function Invoke-PytestPhase {
 
     Write-Host ""
     Write-Host "=== $Label ==="
-    & $PythonCommand -m pytest @Tests -ra --junitxml=$junitPath 2>&1 | Tee-Object -FilePath $logPath
+    & $PythonCommand -m pytest @Tests -ra --junitxml=$junitPath 2>&1 |
+        Tee-Object -FilePath $logPath |
+        Out-Host
     $exitCode = $LASTEXITCODE
 
     if (-not (Test-Path -LiteralPath $junitPath -PathType Leaf)) {
@@ -106,12 +108,13 @@ function Invoke-PytestPhase {
         log = $logPath
     }
 
+    $phaseJsonPath = Join-Path $EvidenceDirectory "$PhaseId.json"
+    $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $phaseJsonPath -Encoding utf8
+
     if ($status -ne "passed") {
-        $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory "$PhaseId.json") -Encoding utf8
         throw "$Label failed. Inspect $logPath"
     }
 
-    $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory "$PhaseId.json") -Encoding utf8
     return $result
 }
 
