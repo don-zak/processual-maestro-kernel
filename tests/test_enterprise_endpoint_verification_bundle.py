@@ -17,6 +17,15 @@ def test_comprehensive_verification_bundle_exists_and_is_fail_closed() -> None:
     assert "ENTERPRISE ENDPOINT TASK BINDINGS VERIFICATION PASSED" in text
 
 
+def test_verification_bundle_handles_single_junit_suite_on_windows_powershell() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "[object[]]$suiteNodes = @()" in text
+    assert "$suiteNodes += @($document.testsuites.testsuite)" in text
+    assert "$suiteNodes += @($document.testsuite)" in text
+    assert "$suiteNodes = @($suiteNodes | Where-Object { $null -ne $_ })" in text
+    assert "if ($suiteNodes.Count -eq 0)" in text
+
+
 def test_verification_bundle_references_all_required_contract_layers() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     required = {
