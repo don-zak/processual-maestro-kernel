@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC
 from uuid import UUID
 
 from sqlalchemy import select
@@ -73,6 +74,9 @@ def _to_record(event: CommercialEvent) -> CommercialEventRecord:
 
 def _to_event(record: CommercialEventRecord) -> CommercialEvent:
     aggregate = CommercialAggregate(record.aggregate)
+    occurred_at = record.occurred_at
+    if occurred_at.tzinfo is None:
+        occurred_at = occurred_at.replace(tzinfo=UTC)
     return CommercialEvent(
         event_id=record.event_id,
         aggregate=aggregate,
@@ -86,7 +90,7 @@ def _to_event(record: CommercialEventRecord) -> CommercialEvent:
             operation=record.operation,
             request_key=record.request_key,
         ),
-        occurred_at=record.occurred_at,
+        occurred_at=occurred_at,
         actor_reference=record.actor_reference,
         evidence_reference=record.evidence_reference,
         payload_digest=record.payload_digest,
