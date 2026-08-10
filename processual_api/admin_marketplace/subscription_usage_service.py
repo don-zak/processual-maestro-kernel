@@ -13,6 +13,7 @@ from processual_api.admin_marketplace.subscription_runtime import (
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
     AdminMarketSubscriptionUsageLedger,
 )
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
 
 
 class SubscriptionUsageUnitOfWork(Protocol):
@@ -39,6 +40,7 @@ def record_subscription_usage_factory(
         dimensions: dict[str, object],
         occurred_at=None,
     ) -> AdminMarketSubscriptionUsageLedger:
+        canonical_metric_code = normalize_maestro_metric_code(metric_code)
         reservation = build_usage_reservation(
             units=units,
             idempotency_key=idempotency_key,
@@ -55,7 +57,8 @@ def record_subscription_usage_factory(
                 if (
                     existing.subscription_id != subscription_id
                     or existing.customer_ref != customer_ref
-                    or existing.metric_code != metric_code
+                    or normalize_maestro_metric_code(existing.metric_code)
+                    != canonical_metric_code
                     or existing.units != units
                     or existing.dimensions_digest != reservation.dimensions_digest
                 ):
@@ -77,7 +80,7 @@ def record_subscription_usage_factory(
 
             quota = await uow.subscription_quotas.get_current(
                 subscription_id=subscription_id,
-                metric_code=metric_code,
+                metric_code=canonical_metric_code,
                 occurred_at=reservation.occurred_at,
                 for_update=True,
             )
@@ -93,7 +96,7 @@ def record_subscription_usage_factory(
                 subscription_id=quota.subscription_id,
                 customer_ref=quota.customer_ref,
                 quota_profile_ref=quota.quota_profile_ref,
-                metric_code=quota.metric_code,
+                metric_code=normalize_maestro_metric_code(quota.metric_code),
                 period_start=quota.period_start,
                 period_end=quota.period_end,
                 limit_units=quota.limit_units,
@@ -109,7 +112,7 @@ def record_subscription_usage_factory(
                 quota_account_id=quota.id,
                 subscription_id=subscription_id,
                 customer_ref=customer_ref,
-                metric_code=metric_code,
+                metric_code=canonical_metric_code,
                 units=reservation.units,
                 idempotency_key_hash=reservation.idempotency_key_hash,
                 dimensions_digest=reservation.dimensions_digest,
