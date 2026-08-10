@@ -135,7 +135,7 @@ class EnterpriseEndpointBindingSpec(BaseModel):
         return unique
 
     @model_validator(mode="after")
-    def _no_secret_material(self) -> "EnterpriseEndpointBindingSpec":
+    def _no_secret_material(self) -> EnterpriseEndpointBindingSpec:
         for key, value in self.request_headers.items():
             normalized_key = key.strip().lower()
             normalized_value = str(value).strip().lower()
