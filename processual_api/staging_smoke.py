@@ -4,9 +4,6 @@ import inspect
 import sys
 from collections import Counter
 
-from fastapi.routing import APIRoute
-
-
 _REQUIRED_ROUTES = {
     ("GET", "/health/live"),
     ("GET", "/health/ready"),
@@ -19,12 +16,15 @@ def evaluate_staging_routes(app) -> tuple[str, ...]:
     route_counts: Counter[tuple[str, str]] = Counter()
     route_endpoints: dict[tuple[str, str], object] = {}
     for route in app.routes:
-        if not isinstance(route, APIRoute):
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", None)
+        endpoint = getattr(route, "endpoint", None)
+        if not isinstance(path, str) or methods is None or endpoint is None:
             continue
-        for method in route.methods:
-            key = (method, route.path)
+        for method in methods:
+            key = (str(method).upper(), path)
             route_counts[key] += 1
-            route_endpoints[key] = route.endpoint
+            route_endpoints[key] = endpoint
 
     missing = sorted(_REQUIRED_ROUTES - set(route_counts))
     if missing:
