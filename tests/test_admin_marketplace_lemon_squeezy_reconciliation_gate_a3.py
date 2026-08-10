@@ -24,7 +24,7 @@ def _entry(**overrides: object) -> LemonSqueezyWebhookInboxEntry:
         "payload_digest": "b" * 64,
         "event_name": "subscription_updated",
         "resource_type": "subscriptions",
-        "external_resource_id": "123",
+        "external_resource_id": "9001",
         "store_id": "42",
         "customer_ref": "customer-1",
         "order_ref": "order-1",
@@ -33,6 +33,13 @@ def _entry(**overrides: object) -> LemonSqueezyWebhookInboxEntry:
         "processing_status": "received",
         "attempt_count": 0,
         "received_at": NOW,
+        "evidence_schema_version": 1,
+        "provider_customer_id": "5001",
+        "provider_order_id": "6001",
+        "provider_subscription_id": "9001",
+        "variant_id": "8001",
+        "provider_status": "active",
+        "provider_effective_at": NOW,
     }
     values.update(overrides)
     return LemonSqueezyWebhookInboxEntry(**values)
@@ -46,7 +53,7 @@ def _context(**overrides: object) -> LemonSqueezyReconciliationContext:
         "order_sales_channel": "lemon_squeezy",
         "offer_sales_channel": "lemon_squeezy",
         "production_mode": True,
-        "external_binding_matches": True,
+        "expected_provider_customer_id": "5001",
     }
     values.update(overrides)
     return LemonSqueezyReconciliationContext(**values)
@@ -66,7 +73,7 @@ def test_trusted_live_event_is_sent_to_reconciliation_without_mutation() -> None
     )
 
     assert decision.action == "reconcile"
-    assert decision.reason_code == "trusted_event_requires_reconciliation"
+    assert decision.reason_code == "verified_evidence_requires_reconciliation"
     assert _snapshot(entry) == before
 
 
@@ -79,7 +86,7 @@ def test_trusted_live_event_is_sent_to_reconciliation_without_mutation() -> None
         ({"offer_ref": "offer-2"}, {}, "offer_binding_mismatch"),
         ({}, {"order_sales_channel": "maestro_direct"}, "order_channel_mismatch"),
         ({}, {"offer_sales_channel": "maestro_direct"}, "offer_channel_mismatch"),
-        ({}, {"external_binding_matches": False}, "external_binding_mismatch"),
+        ({"provider_customer_id": "5002"}, {}, "provider_customer_mismatch"),
         ({"test_mode": False}, {"production_mode": False}, "live_event_in_test_environment"),
     ),
 )
@@ -129,22 +136,71 @@ def test_unknown_event_requires_review_fail_closed() -> None:
 
 
 @pytest.mark.parametrize(
-    ("event_name", "resource_type"),
+    ("event_name", "resource_type", "entry_overrides"),
     (
-        ("order_created", "orders"),
-        ("order_refunded", "orders"),
-        ("subscription_created", "subscriptions"),
-        ("subscription_cancelled", "subscriptions"),
-        ("subscription_payment_success", "subscription-invoices"),
-        ("subscription_payment_failed", "subscription-invoices"),
+        (
+            "order_created",
+            "orders",
+            {
+                "external_resource_id": "6001",
+                "evidence_schema_version": 3,
+                "provider_order_id": "6001",
+                "provider_subscription_id": None,
+                "currency": "USD",
+                "total_amount": "1999",
+            },
+        ),
+        (
+            "order_refunded",
+            "orders",
+            {
+                "external_resource_id": "6001",
+                "evidence_schema_version": 3,
+                "provider_order_id": "6001",
+                "provider_subscription_id": None,
+                "currency": "USD",
+                "total_amount": "1999",
+            },
+        ),
+        ("subscription_created", "subscriptions", {}),
+        ("subscription_cancelled", "subscriptions", {}),
+        (
+            "subscription_payment_success",
+            "subscription-invoices",
+            {
+                "external_resource_id": "9101",
+                "provider_order_id": None,
+                "provider_subscription_id": "9001",
+                "variant_id": None,
+                "currency": "USD",
+                "total_amount": "2499",
+            },
+        ),
+        (
+            "subscription_payment_failed",
+            "subscription-invoices",
+            {
+                "external_resource_id": "9101",
+                "provider_order_id": None,
+                "provider_subscription_id": "9001",
+                "variant_id": None,
+                "currency": "USD",
+                "total_amount": "2499",
+            },
+        ),
     ),
 )
 def test_supported_event_resource_pairs_reconcile(
     event_name: str,
     resource_type: str,
+    entry_overrides: dict[str, object],
 ) -> None:
     decision = classify_lemon_squeezy_reconciliation(
-        entry=_entry(event_name=event_name, resource_type=resource_type),
+        entry=_entry(
+            event_name=event_name,
+            resource_type=resource_type,
+            **entry_overrides,
+        ),
         context=_context(),
     )
 
