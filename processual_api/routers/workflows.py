@@ -21,6 +21,7 @@ from ..cgt_governor.policy.orchestration_metrics import (
     record_orchestration,
 )
 from ..dependencies import get_kernel
+from ..services.execution_observability import record_execution_observation
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -73,9 +74,6 @@ async def create_workflow(
     try:
         kernel.register_agent(AgentSpec("default-agent", "work", capabilities=("work",)))
     except ValueError as exc:
-        # Repeated API calls in the same process should not fail just because the
-        # built-in workflow agent has already been registered.  Keep other
-        # registration errors visible as 400 responses.
         if "agent already registered" not in str(exc):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     steps = tuple(
@@ -91,15 +89,11 @@ async def create_workflow(
     try:
         record = kernel.create_workflow(plan)
     except ValueError as exc:
-        # Integration and release-check suites may reuse deterministic workflow IDs
-        # across repeated runs against the same process-level kernel.  Treat an
-        # already-created workflow as an idempotent create request instead of
-        # leaking a 500 response.  Other validation errors remain client errors.
         if "workflow already exists" not in str(exc):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
             record = kernel.get_workflow(req.workflow_id)
-        except KeyError as inner_exc:  # defensive: should not happen after the create collision
+        except KeyError as inner_exc:
             raise HTTPException(
                 status_code=500,
                 detail=f"workflow exists but cannot be loaded: {req.workflow_id}",
@@ -117,11 +111,7 @@ async def orchestrate_llm(
     req: LLMOrchestrationRequest,
     _user: str = Depends(get_current_user),
 ) -> dict[str, object] | Response:
-    """Fan out workflow prompts through one configured LLM provider safely.
-
-    The request-local planner may pace broad single-provider workloads, while the
-    shared execution fan-out governor remains the authoritative saturation layer.
-    """
+    """Fan out workflow prompts and record the same execution used by console KPIs."""
     width = len(req.prompts)
     if width < 1 or width > 32:
         raise HTTPException(status_code=400, detail="prompts must contain between 1 and 32 items")
@@ -151,11 +141,7 @@ async def orchestrate_llm(
 
     outcomes = await execute_fanout_plan(req.prompts, generate, plan)
     latency_seconds = time.perf_counter() - started
-    saturated = [
-        outcome
-        for outcome in outcomes
-        if isinstance(outcome, ExecutionFanoutSaturatedError)
-    ]
+    saturated = [outcome for outcome in outcomes if isinstance(outcome, ExecutionFanoutSaturatedError)]
     if saturated:
         record_orchestration(
             OrchestrationObservation(
@@ -167,6 +153,20 @@ async def orchestrate_llm(
                 success_items=0,
                 error_items=len(outcomes),
             )
+        )
+        record_execution_observation(
+            execution_kind="workflow",
+            task_id="workflow.llm_orchestration",
+            provider=req.provider,
+            status="saturated",
+            duration_ms=latency_seconds * 1000.0,
+            items_total=width,
+            items_succeeded=0,
+            items_failed=len(outcomes),
+            paced=plan.is_paced,
+            plan_reason=plan.reason,
+            failure_stage="execution",
+            failure_code="execution_fanout_saturated",
         )
         return Response(
             status_code=429,
@@ -199,19 +199,35 @@ async def orchestrate_llm(
                 }
             )
 
+    terminal_status = "partial_error" if error_items else "success"
     record_orchestration(
         OrchestrationObservation(
             paced=plan.is_paced,
             plan_reason=plan.reason,
             width=width,
-            outcome="partial_error" if error_items else "success",
+            outcome=terminal_status,
             latency_seconds=latency_seconds,
             success_items=success_items,
             error_items=error_items,
         )
     )
+    execution = record_execution_observation(
+        execution_kind="workflow",
+        task_id="workflow.llm_orchestration",
+        provider=req.provider,
+        status=terminal_status,
+        duration_ms=latency_seconds * 1000.0,
+        items_total=width,
+        items_succeeded=success_items,
+        items_failed=error_items,
+        paced=plan.is_paced,
+        plan_reason=plan.reason,
+        failure_stage="execution" if error_items else None,
+        failure_code="item_execution_error" if error_items else None,
+    )
 
     return {
+        "execution_id": execution["execution_id"],
         "provider": req.provider,
         "width": width,
         "paced": plan.is_paced,
@@ -223,7 +239,9 @@ async def orchestrate_llm(
 
 @router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow(
-    workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)
+    workflow_id: str,
+    _user: str = Depends(get_current_user),
+    kernel: ProcessualMaestroKernel = Depends(get_kernel),
 ):
     try:
         record = kernel.get_workflow(workflow_id)
@@ -239,7 +257,9 @@ async def get_workflow(
 
 @router.post("/{workflow_id}/checkpoint", response_model=CheckpointResponse)
 async def create_checkpoint(
-    workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)
+    workflow_id: str,
+    _user: str = Depends(get_current_user),
+    kernel: ProcessualMaestroKernel = Depends(get_kernel),
 ):
     try:
         kernel.get_workflow(workflow_id)
@@ -254,7 +274,9 @@ async def create_checkpoint(
 
 @router.get("/{workflow_id}/governance", response_model=GovernanceReport)
 async def get_governance(
-    workflow_id: str, _user: str = Depends(get_current_user), kernel: ProcessualMaestroKernel = Depends(get_kernel)
+    workflow_id: str,
+    _user: str = Depends(get_current_user),
+    kernel: ProcessualMaestroKernel = Depends(get_kernel),
 ):
     try:
         kernel.get_workflow(workflow_id)
