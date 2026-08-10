@@ -12,6 +12,9 @@ from processual_api.billing.usage_economics import (
     build_usage_economics_snapshot,
     forecast_usage_run_rate,
 )
+from processual_api.services.commercial_operations_read_model import (
+    build_commercial_operations_read_model,
+)
 from processual_api.services.customer_360 import build_customer_360_read_model
 
 
@@ -105,6 +108,27 @@ def test_snapshot_keeps_byok_provider_cost_boundary_explicit() -> None:
     assert snapshot["gross_margin_usd"] == "80.0000"
 
 
+def _customer_model(
+    *,
+    client_id: str,
+    units: int,
+    revenue: str,
+    cost: str,
+    near_limit: bool = False,
+    exceeded: bool = False,
+) -> dict[str, object]:
+    return {
+        "client_id": client_id,
+        "usage": {"monthly_units_used": units},
+        "quota": {"near_limit": near_limit, "exceeded": exceeded},
+        "economics": {
+            "credits": str(Decimal(units).quantize(Decimal("0.0001"))),
+            "recognized_revenue_usd": revenue,
+            "total_observed_cost_usd": cost,
+        },
+    }
+
+
 def test_customer_360_combines_scoped_usage_economics_and_forecast() -> None:
     summary = {
         "client_id": "client-1",
@@ -149,3 +173,41 @@ def test_customer_360_omits_forecast_when_observation_window_missing() -> None:
     )
     assert model["forecast"] is None
     assert model["transparency"]["forecast_method"] is None
+
+
+def test_operations_read_model_aggregates_customer_360_portfolio() -> None:
+    model = build_commercial_operations_read_model(
+        [
+            _customer_model(
+                client_id="alpha",
+                units=100,
+                revenue="30",
+                cost="10",
+                near_limit=True,
+            ),
+            _customer_model(
+                client_id="beta",
+                units=50,
+                revenue="20",
+                cost="5",
+                exceeded=True,
+            ),
+        ]
+    )
+    assert model["customer_count"] == 2
+    assert model["total_units"] == 150
+    assert model["total_credits"] == "150.0000"
+    assert model["recognized_revenue_usd"] == "50.0000"
+    assert model["total_observed_cost_usd"] == "15.0000"
+    assert model["gross_margin_usd"] == "35.0000"
+    assert model["gross_margin_percent"] == "70.0000"
+    assert model["near_limit_clients"] == ["alpha"]
+    assert model["exceeded_clients"] == ["beta"]
+    assert model["authority"]["cost_source"] == "observed_inputs_only"
+
+
+def test_operations_read_model_does_not_invent_margin_percent_without_revenue() -> None:
+    model = build_commercial_operations_read_model(
+        [_customer_model(client_id="zero", units=0, revenue="0", cost="0")]
+    )
+    assert model["gross_margin_percent"] is None
