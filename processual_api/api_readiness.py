@@ -5,7 +5,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
-from processual_api.billing.plan_capability_matrix import CapabilityStatus, TOOL_CAPABILITIES
+from processual_api.billing.plan_capability_matrix import TOOL_CAPABILITIES, CapabilityStatus
 
 
 class ApiVisibility(StrEnum):
