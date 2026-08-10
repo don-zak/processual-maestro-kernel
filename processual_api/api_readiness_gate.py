@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
-from typing import Final, Iterable
+from typing import Final
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
