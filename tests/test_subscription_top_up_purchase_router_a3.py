@@ -124,6 +124,8 @@ async def test_purchase_wires_authoritative_order_to_server_cycle_and_variant(
                 requested_units=command.requested_units,
                 bundle_count=1,
                 total_price_usd="10.00",
+                settlement_currency="USD",
+                settlement_amount="10.00",
                 channel="lemon_squeezy",
                 idempotent_replay=False,
                 committed=True,
