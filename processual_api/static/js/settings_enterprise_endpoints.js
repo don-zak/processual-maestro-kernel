@@ -310,6 +310,12 @@
     renderEvidence(root, evidencePayload);
   }
 
+  async function refreshFailureReview() {
+    try {
+      await window.PMK_SETTINGS_ENTERPRISE_FAILURE_REVIEW?.refresh?.(true);
+    } catch (error) {}
+  }
+
   async function saveBinding(root, form) {
     try {
       status(root, 'Validating endpoint, request mapping, and canonical response mapping…');
@@ -358,9 +364,9 @@
   async function runLiveSandboxProof(root, form) {
     try {
       const binding = await persistBindingAndRequestMapping(form);
-      status(root, 'Executing governed live sandbox proof…');
+      status(root, 'Executing governed live sandbox proof with failure review enabled…');
       const result = await CLIENT.post(
-        `${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}/sandbox-execute`,
+        `${BINDINGS_ENDPOINT}/${encodeURIComponent(binding.binding_id)}/reviewed-sandbox-execute`,
         { task_input: parseTaskInput(form) }
       );
       const output = root.querySelector('[data-see-preview]');
@@ -373,12 +379,15 @@
         http_status: result.http_status,
         destination_host: result.destination_host,
         completed_at: result.completed_at,
+        failure_review: result.failure_review,
       }, null, 2);
       output.hidden = false;
       await reloadState(root);
+      await refreshFailureReview();
       status(root, `Live sandbox proof passed for ${result.task_id}. Evidence SHA-256: ${result.evidence_sha256}`, 'success');
     } catch (error) {
-      status(root, error?.message || 'Live sandbox proof failed or requires a supervisor sandbox grant.', 'error');
+      await refreshFailureReview();
+      status(root, error?.message || 'Live sandbox proof failed and was recorded for review.', 'error');
     }
   }
 
