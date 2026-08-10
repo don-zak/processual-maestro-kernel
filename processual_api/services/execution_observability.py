@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 _MAX_RECORDS = 500
+_TERMINAL_STATUSES = frozenset({"success", "partial_error", "failed", "saturated"})
 _LOCK = RLock()
 _RECORDS: deque[ExecutionObservation] = deque(maxlen=_MAX_RECORDS)
 
@@ -70,6 +71,17 @@ def record_execution_observation(
     if succeeded + failed > total:
         raise ValueError("execution item outcomes cannot exceed items_total")
 
+    terminal_status = str(status or "").strip()
+    if terminal_status not in _TERMINAL_STATUSES:
+        allowed = ", ".join(sorted(_TERMINAL_STATUSES))
+        raise ValueError(f"execution status must be terminal: {allowed}")
+    if terminal_status in {"failed", "saturated"} and failed < 1:
+        raise ValueError("failed execution status requires items_failed")
+    if terminal_status == "success" and failed:
+        raise ValueError("successful execution cannot contain failed items")
+    if terminal_status == "partial_error" and (succeeded < 1 or failed < 1):
+        raise ValueError("partial_error requires succeeded and failed items")
+
     observation = ExecutionObservation(
         execution_id=execution_id or f"exec_{uuid4().hex}",
         execution_kind=str(execution_kind or "task").strip() or "task",
@@ -77,7 +89,7 @@ def record_execution_observation(
         workflow_id=str(workflow_id).strip() if workflow_id else None,
         binding_id=str(binding_id).strip() if binding_id else None,
         provider=str(provider).strip() if provider else None,
-        status=str(status or "unknown").strip() or "unknown",
+        status=terminal_status,
         started_at=started_at or _iso(),
         completed_at=completed_at or _iso(),
         duration_ms=max(float(duration_ms), 0.0),
@@ -105,11 +117,7 @@ def list_execution_observations(*, limit: int = 100) -> list[dict[str, Any]]:
 def execution_observability_snapshot(*, limit: int = 50) -> dict[str, Any]:
     records = list_execution_observations(limit=_MAX_RECORDS)
     total = len(records)
-    completed = sum(
-        1
-        for item in records
-        if item["status"] in {"success", "partial_error", "failed", "saturated"}
-    )
+    completed = sum(1 for item in records if item["status"] in _TERMINAL_STATUSES)
     succeeded = sum(1 for item in records if item["status"] == "success")
     failed = sum(1 for item in records if item["status"] in {"failed", "saturated"})
     partial = sum(1 for item in records if item["status"] == "partial_error")
