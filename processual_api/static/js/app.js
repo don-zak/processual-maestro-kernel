@@ -83,6 +83,7 @@ const APP = (() => {
       window.PMK_SETTINGS_BILLING_STATEMENTS?.init?.();
       setTimeout(() => window.PMK_SETTINGS_LAYOUT_18?.init?.(), 0);
       setTimeout(() => window.PMK_SETTINGS_ENTERPRISE_CONSOLE_18?.init?.(), 0);
+      setTimeout(() => window.PMK_SETTINGS_ENTERPRISE_ENDPOINTS?.init?.(), 0);
     }
     if (pg === 'institution') { PAGES.institution?.init?.(); }
     if (pg === 'gateway') {
@@ -232,5 +233,21 @@ const APP = (() => {
   }
   if (!document.querySelector('script[data-se18-script]')) {
     const script = document.createElement('script'); script.src = 'js/settings_enterprise_console_18.js?v=enterpriseconsole1'; script.dataset.se18Script = 'true'; document.body.appendChild(script);
+  }
+})();
+
+(function bootstrapSettingsEnterpriseEndpoints() {
+  if (!document.querySelector('link[data-see-style]')) {
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.href = 'css/settings_enterprise_endpoints.css?v=endpoint-bindings1';
+    style.dataset.seeStyle = 'true';
+    document.head.appendChild(style);
+  }
+  if (!document.querySelector('script[data-see-script]')) {
+    const script = document.createElement('script');
+    script.src = 'js/settings_enterprise_endpoints.js?v=endpoint-bindings1';
+    script.dataset.seeScript = 'true';
+    document.body.appendChild(script);
   }
 })();
