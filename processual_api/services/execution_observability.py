@@ -20,6 +20,7 @@ class ExecutionObservation:
     execution_kind: str
     task_id: str
     workflow_id: str | None
+    binding_id: str | None
     provider: str | None
     status: str
     started_at: str
@@ -53,6 +54,7 @@ def record_execution_observation(
     items_failed: int = 0,
     provider: str | None = None,
     workflow_id: str | None = None,
+    binding_id: str | None = None,
     paced: bool = False,
     plan_reason: str | None = None,
     failure_stage: str | None = None,
@@ -73,6 +75,7 @@ def record_execution_observation(
         execution_kind=str(execution_kind or "task").strip() or "task",
         task_id=str(task_id or "unknown").strip() or "unknown",
         workflow_id=str(workflow_id).strip() if workflow_id else None,
+        binding_id=str(binding_id).strip() if binding_id else None,
         provider=str(provider).strip() if provider else None,
         status=str(status or "unknown").strip() or "unknown",
         started_at=started_at or _iso(),
@@ -102,7 +105,11 @@ def list_execution_observations(*, limit: int = 100) -> list[dict[str, Any]]:
 def execution_observability_snapshot(*, limit: int = 50) -> dict[str, Any]:
     records = list_execution_observations(limit=_MAX_RECORDS)
     total = len(records)
-    completed = sum(1 for item in records if item["status"] in {"success", "partial_error", "failed", "saturated"})
+    completed = sum(
+        1
+        for item in records
+        if item["status"] in {"success", "partial_error", "failed", "saturated"}
+    )
     succeeded = sum(1 for item in records if item["status"] == "success")
     failed = sum(1 for item in records if item["status"] in {"failed", "saturated"})
     partial = sum(1 for item in records if item["status"] == "partial_error")
@@ -112,6 +119,8 @@ def execution_observability_snapshot(*, limit: int = 50) -> dict[str, Any]:
     by_task = Counter(item["task_id"] for item in records)
     by_status = Counter(item["status"] for item in records)
     by_provider = Counter(item["provider"] or "none" for item in records)
+    by_execution_kind = Counter(item["execution_kind"] for item in records)
+    by_environment = Counter(item["environment"] for item in records)
     item_totals = {
         "total": sum(int(item["items_total"]) for item in records),
         "succeeded": sum(int(item["items_succeeded"]) for item in records),
@@ -139,6 +148,8 @@ def execution_observability_snapshot(*, limit: int = 50) -> dict[str, Any]:
         "by_status": dict(sorted(by_status.items())),
         "by_task": dict(sorted(by_task.items())),
         "by_provider": dict(sorted(by_provider.items())),
+        "by_execution_kind": dict(sorted(by_execution_kind.items())),
+        "by_environment": dict(sorted(by_environment.items())),
         "recent_executions": recent,
         "reconciliation": {
             "aggregate_record_count": total,
