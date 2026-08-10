@@ -13,6 +13,17 @@ jobs:
       matrix:
         python-version: ["3.14"]
 
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +52,10 @@ jobs:
           except ModuleNotFoundError:
               print('OK: private modules correctly excluded')
           "
+
+      - name: Verify Redis service
+        run: |
+          python -c "import redis; r=redis.Redis(host='127.0.0.1', port=6379); assert r.ping()"
 
       - name: Ruff check
         run: ruff check . --output-format=github
