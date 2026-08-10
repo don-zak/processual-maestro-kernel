@@ -89,9 +89,11 @@ def test_sandbox_proof_includes_validated_task_injection_digest(monkeypatch) -> 
     assert snapshot["by_execution_kind"] == {"sandbox_proof": 1}
     assert snapshot["by_environment"] == {"sandbox": 1}
     assert snapshot["by_task"] == {"billing.account_context": 1}
+    assert snapshot["by_provider"] == {"billing": 1}
     recent = snapshot["recent_executions"][0]
     assert recent["execution_id"] == result["execution_id"]
     assert recent["binding_id"] == "billing.account"
+    assert recent["provider"] == "billing"
     assert recent["execution_kind"] == "sandbox_proof"
     assert recent["environment"] == "sandbox"
     assert recent["status"] == "success"
