@@ -13,6 +13,8 @@ on:
       - "processual_api/services/customer_360.py"
       - "processual_api/services/commercial_operations_read_model.py"
       - "tests/test_usage_economics_stage3.py"
+      - "tests/test_client_usage_summary_*regression.py"
+      - "tests/test_productization_pricing_surface_regression.py"
       - ".github/workflows/usage-economics-b3.yml"
 
 jobs:
@@ -49,4 +51,9 @@ jobs:
           PYTHONPATH: .
         run: |
           python -m pytest -q \
-            tests/test_usage_economics_stage3.py
+            tests/test_usage_economics_stage3.py \
+            tests/test_client_usage_summary_service_regression.py \
+            tests/test_client_usage_summary_security_regression.py \
+            tests/test_client_usage_summary_route_regression.py \
+            tests/test_client_usage_summary_endpoint_regression.py \
+            tests/test_productization_pricing_surface_regression.py
