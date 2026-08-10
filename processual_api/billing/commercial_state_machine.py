@@ -5,6 +5,8 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
+from processual_api.billing.commercial_top_up_order_grant_contracts import TopUpOrderState
+
 
 class CommercialAggregate(StrEnum):
     ORDER = "order"
@@ -76,11 +78,34 @@ _TRANSITIONS: dict[CommercialAggregate, frozenset[tuple[str, str]]] = {
     ),
     CommercialAggregate.TOP_UP: frozenset(
         {
-            ("requested", "pending_payment"),
-            ("pending_payment", "verified"),
-            ("pending_payment", "cancelled"),
-            ("verified", "granted"),
-            ("verified", "refunded"),
+            (TopUpOrderState.DRAFT.value, TopUpOrderState.AWAITING_CONFIRMATION.value),
+            (
+                TopUpOrderState.AWAITING_CONFIRMATION.value,
+                TopUpOrderState.AWAITING_PAYMENT.value,
+            ),
+            (
+                TopUpOrderState.AWAITING_CONFIRMATION.value,
+                TopUpOrderState.CANCELLED.value,
+            ),
+            (
+                TopUpOrderState.AWAITING_PAYMENT.value,
+                TopUpOrderState.PAYMENT_PENDING.value,
+            ),
+            (TopUpOrderState.AWAITING_PAYMENT.value, TopUpOrderState.CANCELLED.value),
+            (
+                TopUpOrderState.PAYMENT_PENDING.value,
+                TopUpOrderState.PAYMENT_VERIFIED.value,
+            ),
+            (
+                TopUpOrderState.PAYMENT_PENDING.value,
+                TopUpOrderState.PAYMENT_REJECTED.value,
+            ),
+            (
+                TopUpOrderState.PAYMENT_VERIFIED.value,
+                TopUpOrderState.GRANT_PENDING.value,
+            ),
+            (TopUpOrderState.GRANT_PENDING.value, TopUpOrderState.GRANTED.value),
+            (TopUpOrderState.GRANT_PENDING.value, TopUpOrderState.FAILED.value),
         }
     ),
     CommercialAggregate.RECONCILIATION: frozenset(
@@ -137,6 +162,15 @@ def validate_commercial_state_machine() -> None:
                 raise ValueError(
                     f"commercial transition contains self-loop: {aggregate.value} {current_state}"
                 )
+
+    top_up_states = {state.value for state in TopUpOrderState}
+    referenced_top_up_states = {
+        state
+        for transition in COMMERCIAL_TRANSITIONS[CommercialAggregate.TOP_UP]
+        for state in transition
+    }
+    if not referenced_top_up_states.issubset(top_up_states):
+        raise ValueError("top-up transition policy references unknown authoritative state")
 
 
 validate_commercial_state_machine()
