@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from decimal import Decimal
-from typing import Any, Final, Iterable
+from typing import Any, Final
 
 COMMERCIAL_OPERATIONS_READ_MODEL_VERSION: Final = "2026-08-b3-operations-read-model-v1"
 
