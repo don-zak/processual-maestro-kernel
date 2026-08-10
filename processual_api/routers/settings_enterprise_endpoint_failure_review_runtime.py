@@ -22,6 +22,42 @@ from processual_api.supervision_rbac import QUALIFICATION_REVIEW_SCOPE
 from . import settings as settings_module
 from . import settings_enterprise_endpoint_bindings_runtime as endpoint_runtime
 
+_ADMIN_FAILURE_READ_SCOPES = frozenset(
+    {
+        "admin:*",
+        "admin:integration:qualification:read",
+        "admin:integration:qualification:review",
+        "admin:integration_readiness:review",
+        "admin:clients:review",
+    }
+)
+
+
+def _normalized_scopes(current_user: dict[str, Any]) -> set[str]:
+    raw = current_user.get("scopes") or current_user.get("permissions") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, (list, tuple, set)):
+        return set()
+    return {
+        str(scope).strip()
+        for scope in raw
+        if str(scope or "").strip()
+    }
+
+
+def _require_admin_failure_read(current_user: dict[str, Any]) -> None:
+    scopes = _normalized_scopes(current_user)
+    role = str(current_user.get("role") or "").strip().lower()
+    if "*" in scopes or scopes.intersection(_ADMIN_FAILURE_READ_SCOPES):
+        return
+    if role == "admin" and "admin" in scopes:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin sandbox failure review access is required.",
+    )
+
 
 def _require_supervisor_review_session(request: Request) -> None:
     try:
@@ -37,14 +73,7 @@ def _require_supervisor_review_session(request: Request) -> None:
         ) from exc
 
 
-@settings_module.router.get(
-    "/enterprise-integration/sandbox-failures",
-    response_model=dict,
-)
-async def list_enterprise_endpoint_sandbox_failures(
-    current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
-    _, raw = endpoint_runtime._require_enterprise(current_user)
+def _failure_payload(raw: dict[str, Any]) -> dict[str, Any]:
     failures = list_safe_sandbox_failures(raw)
     return {
         "environment": "sandbox",
@@ -57,6 +86,34 @@ async def list_enterprise_endpoint_sandbox_failures(
         "runtime_connector_approved": False,
         "raw_secret_visible": False,
         "raw_error_visible": False,
+    }
+
+
+@settings_module.router.get(
+    "/enterprise-integration/sandbox-failures",
+    response_model=dict,
+)
+async def list_enterprise_endpoint_sandbox_failures(
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _, raw = endpoint_runtime._require_enterprise(current_user)
+    return _failure_payload(raw)
+
+
+@settings_module.router.get(
+    "/admin/integration-tasks/{client_id}/sandbox-failures",
+    response_model=dict,
+)
+async def list_admin_enterprise_endpoint_sandbox_failures(
+    client_id: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _require_admin_failure_read(current_user)
+    payload = _failure_payload(settings_module._load_raw(client_id))
+    return {
+        **payload,
+        "client_id": client_id,
+        "visibility": "admin",
     }
 
 
@@ -122,7 +179,7 @@ async def review_enterprise_endpoint_sandbox_failure(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    del current_user
+    _require_admin_failure_read(current_user)
     _require_supervisor_review_session(request)
     raw = settings_module._load_raw(client_id)
     try:
@@ -148,6 +205,7 @@ async def review_enterprise_endpoint_sandbox_failure(
 
 __all__ = [
     "execute_enterprise_endpoint_reviewed_sandbox_proof",
+    "list_admin_enterprise_endpoint_sandbox_failures",
     "list_enterprise_endpoint_sandbox_failures",
     "review_enterprise_endpoint_sandbox_failure",
 ]
