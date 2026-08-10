@@ -5,6 +5,9 @@ from types import TracebackType
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.billing.commercial_event_repository import (
+    SqlAlchemyCommercialEventRepository,
+)
 from processual_api.billing.commercial_top_up_repositories import (
     SqlAlchemyCommercialTopUpAuditRepository,
     SqlAlchemyCommercialTopUpGrantRepository,
@@ -28,6 +31,7 @@ class SqlAlchemyCommercialTopUpUnitOfWork:
         self.payments = SqlAlchemyCommercialTopUpPaymentRepository(self._session)
         self.grants = SqlAlchemyCommercialTopUpGrantRepository(self._session)
         self.audit = SqlAlchemyCommercialTopUpAuditRepository(self._session)
+        self.event_ledger = SqlAlchemyCommercialEventRepository(self._session)
         return self
 
     async def __aexit__(
