@@ -126,6 +126,34 @@ async def test_public_and_unauthenticated_requests_do_not_open_runtime_lookup(mo
     assert calls == 0
 
 
+@pytest.mark.asyncio
+async def test_admin_routes_do_not_open_customer_subscription_lookup(monkeypatch) -> None:
+    calls = 0
+
+    async def resolve(customer_ref):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("admin routes must not open customer subscription lookup")
+
+    monkeypatch.setattr(middleware_module, "resolve_subscription_access", resolve)
+    monkeypatch.setattr(
+        middleware_module,
+        "_extract_customer_ref",
+        lambda request: "admin-subject",
+    )
+
+    response = await _middleware().dispatch(
+        _request(
+            method="POST",
+            path="/settings/admin/operator-pilot-handoff/intake-preview",
+        ),
+        _next,
+    )
+
+    assert response.status_code == 200
+    assert calls == 0
+
+
 def test_middleware_has_no_json_subscription_file_fallback() -> None:
     source = inspect.getsource(middleware_module)
 
