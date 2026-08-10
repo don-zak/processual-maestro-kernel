@@ -87,6 +87,8 @@ def classify_provider_health(
         raise ValueError("now must be timezone-aware")
     if observation is None:
         return ProviderHealth.UNKNOWN
+    if observation.observed_at > now:
+        return ProviderHealth.UNKNOWN
     if now - observation.observed_at > timedelta(seconds=policy.observation_ttl_seconds):
         return ProviderHealth.UNKNOWN
     if observation.consecutive_failures >= policy.open_after_failures:
