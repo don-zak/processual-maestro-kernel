@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import processual_api.admin_marketplace.lemon_squeezy_reconciliation_processor as processor_module
 from processual_api.admin_marketplace.lemon_squeezy_inbox import LemonSqueezyWebhookInboxEntry
 from processual_api.admin_marketplace.lemon_squeezy_reconciliation_gate import (
     LemonSqueezyReconciliationContext,
@@ -103,13 +104,32 @@ class Uow:
 
 
 @pytest.mark.asyncio
-async def test_trusted_event_is_decided_and_committed_once() -> None:
+async def test_trusted_event_is_decided_and_committed_once(monkeypatch) -> None:
     inbox = _inbox()
     uow = Uow(inbox)
 
-    async def loader(value):
+    async def loader(uow_arg, value):
+        assert uow_arg is uow
         assert value is inbox
         return _context()
+
+    async def fake_advance(uow_arg, inbox_arg):
+        assert uow_arg is uow
+        assert inbox_arg is inbox
+        return object()
+
+    async def fake_lifecycle(*, uow, binding, inbox):
+        assert uow is not None
+        assert binding is not None
+        assert inbox is not None
+        return None
+
+    monkeypatch.setattr(processor_module, "_advance_binding_watermark", fake_advance)
+    monkeypatch.setattr(
+        processor_module,
+        "apply_lemon_squeezy_subscription_lifecycle",
+        fake_lifecycle,
+    )
 
     process = process_lemon_squeezy_reconciliation_factory(
         uow_factory=lambda: uow,
@@ -132,7 +152,7 @@ async def test_review_decision_rejects_inbox_without_subscription_mutation_api()
     inbox = _inbox()
     uow = Uow(inbox)
 
-    async def loader(_):
+    async def loader(_uow, _inbox):
         return _context(expected_provider_customer_id="5002")
 
     process = process_lemon_squeezy_reconciliation_factory(
@@ -272,6 +292,7 @@ async def test_repository_uses_for_update_for_decision_lock() -> None:
     class Session:
         def __init__(self):
             self.statement = None
+
         async def scalar(self, statement):
             self.statement = statement
             return None
