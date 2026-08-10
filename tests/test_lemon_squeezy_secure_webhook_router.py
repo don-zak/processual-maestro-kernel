@@ -65,7 +65,7 @@ async def test_secure_webhook_ingests_then_reconciles(
             assert kwargs["expected_store_id"] == "7001"
             return SimpleNamespace(
                 replayed=False,
-                entry=SimpleNamespace(id=inbox_id),
+                entry=SimpleNamespace(id=inbox_id, offer_ref="offer-1"),
             )
 
         return ingest
@@ -145,7 +145,7 @@ async def test_reconciliation_failure_returns_conflict(
         async def ingest(**kwargs: object):
             return SimpleNamespace(
                 replayed=False,
-                entry=SimpleNamespace(id=inbox_id),
+                entry=SimpleNamespace(id=inbox_id, offer_ref="offer-1"),
             )
 
         return ingest
