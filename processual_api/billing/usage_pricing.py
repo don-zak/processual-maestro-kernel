@@ -126,24 +126,11 @@ def allows_enterprise_integration_qualification(plan_id: str | None) -> bool:
 
 
 def enterprise_integration_capability(plan_id: str | None) -> dict[str, Any]:
-    normalized_plan_id = normalize_plan_id(plan_id)
-    canonical = canonical_plan_id(plan_id)
-    legacy = normalized_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
-    enabled = allows_enterprise_integration(plan_id)
-    return {
-        "enabled": enabled,
-        "status": "available" if enabled else "locked",
-        "plan_id": normalized_plan_id or "unknown",
-        "normalized_plan_id": normalized_plan_id or "unknown",
-        "canonical_plan_id": canonical or normalized_plan_id or "unknown",
-        "legacy_compatibility": legacy,
-        "eligible_plans": sorted(ENTERPRISE_INTEGRATION_PLANS),
-    }
+    """Return Settings console/sandbox qualification eligibility.
 
-
-def enterprise_integration_qualification_capability(
-    plan_id: str | None,
-) -> dict[str, Any]:
+    This deliberately does not grant Advanced Integration execution. Call
+    allows_enterprise_integration() for the execution entitlement decision.
+    """
     normalized_plan_id = normalize_plan_id(plan_id)
     canonical = canonical_plan_id(plan_id)
     legacy = normalized_plan_id in LEGACY_ENTERPRISE_INTEGRATION_PLANS
@@ -160,6 +147,12 @@ def enterprise_integration_qualification_capability(
         "advanced_integration_enabled": execution_enabled,
         "production_allowed": False,
     }
+
+
+def enterprise_integration_qualification_capability(
+    plan_id: str | None,
+) -> dict[str, Any]:
+    return enterprise_integration_capability(plan_id)
 
 
 def endpoint_class(endpoint: str) -> str:
