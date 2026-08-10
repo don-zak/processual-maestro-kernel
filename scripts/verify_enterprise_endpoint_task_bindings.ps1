@@ -123,10 +123,16 @@ try {
         "tests/test_enterprise_sandbox_task_injection_proof.py",
         "tests/test_settings_enterprise_sandbox_execution_runtime.py"
     )
+    $failureReviewTests = @(
+        "tests/test_enterprise_endpoint_failure_review.py",
+        "tests/test_settings_enterprise_endpoint_failure_review_runtime.py",
+        "tests/test_settings_enterprise_failure_review_ui.py"
+    )
     $settingsBoundaryTests = @(
         "tests/test_settings_enterprise_endpoints_ui.py",
         "tests/test_settings_enterprise_sandbox_proof_ui.py",
         "tests/test_settings_enterprise_integration_runtime.py",
+        "tests/test_enterprise_endpoint_sandbox_readiness.py",
         "tests/test_api_readiness_automatic_gate_b1.py",
         "tests/test_api_readiness_app_coverage_b1.py"
     )
@@ -135,7 +141,8 @@ try {
     $phases += Invoke-PytestPhase -PhaseId "01-contracts" -Label "Advertised integration task contracts" -Tests $contractTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
     $phases += Invoke-PytestPhase -PhaseId "02-mappings" -Label "Endpoint request and response mappings" -Tests $mappingTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
     $phases += Invoke-PytestPhase -PhaseId "03-live-sandbox-proof" -Label "Governed live sandbox proof, grants, and task injection" -Tests $sandboxProofTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
-    $phases += Invoke-PytestPhase -PhaseId "04-settings-boundaries" -Label "Enterprise Settings UI, runtime, and readiness boundaries" -Tests $settingsBoundaryTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
+    $phases += Invoke-PytestPhase -PhaseId "04-failure-review-recovery" -Label "Sandbox failure review, correction, and successful retest lifecycle" -Tests $failureReviewTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
+    $phases += Invoke-PytestPhase -PhaseId "05-settings-boundaries" -Label "Enterprise Settings UI, runtime, and readiness boundaries" -Tests $settingsBoundaryTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
 
     $fullProgram = $null
     if (-not $SkipFullProgram) {
@@ -176,7 +183,7 @@ try {
         ($SkipFullProgram -or $fullProgram.overall_status -eq "passed")
     )
     $result = [ordered]@{
-        schema_version = "2026-08-enterprise-endpoint-task-bindings-powershell-v1"
+        schema_version = "2026-08-enterprise-endpoint-task-bindings-powershell-v2"
         generated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
         repository_root = $repoRoot
         powershell_version = $PSVersionTable.PSVersion.ToString()
