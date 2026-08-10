@@ -16,6 +16,8 @@ from processual_api.billing.plan_fulfillment_catalog import (
     normalize_plan_code,
 )
 
+# Historical metadata only. Blank plan identity is no longer allowed to resolve
+# through this default; callers must provide explicit plan authority.
 DEFAULT_API_PLAN_ID = "pilot_starter"
 
 
@@ -106,7 +108,7 @@ def normalize_plan_key(value: Any) -> str:
 def resolve_plan_id(value: Any) -> str:
     normalized = normalize_plan_key(value)
     if not normalized:
-        return DEFAULT_API_PLAN_ID
+        raise KeyError("API quota plan authority is required")
 
     if normalized in PLAN_POLICIES:
         return normalized
