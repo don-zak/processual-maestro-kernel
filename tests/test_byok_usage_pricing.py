@@ -13,11 +13,11 @@ def test_byok_pricing_policy_excludes_provider_costs():
     decision = pricing_decision("/cgt/govern")
 
     assert decision.billing_policy == "byok"
-    assert decision.billing_scope == "maestro_usage_units"
+    assert decision.billing_scope == "maestro_units"
     assert decision.provider_cost_included is False
     assert PROVIDER_COST_INCLUDED is False
     assert BILLING_POLICY == "byok"
-    assert BILLING_SCOPE == "maestro_usage_units"
+    assert BILLING_SCOPE == "maestro_units"
 
 
 def test_operational_endpoints_do_not_consume_paid_units():
@@ -48,12 +48,20 @@ def test_report_and_auto_repair_endpoints_have_higher_unit_costs():
     assert pricing_decision("/cgt/govern/auto-repair").units_charged == 5
 
 
-def test_enterprise_integration_plan_allows_500000_monthly_units():
+def test_enterprise_aliases_keep_500000_monthly_units_without_capability_promotion():
     assert ENTERPRISE_INTEGRATION_UNIT_ALLOWANCE == 500_000
     assert monthly_unit_allowance("enterprise") == 500_000
     assert monthly_unit_allowance("enterprise_integration") == 500_000
-    assert allows_enterprise_integration("enterprise")
-    assert allows_enterprise_integration("enterprise_integration")
+    assert not allows_enterprise_integration("enterprise")
+    assert not allows_enterprise_integration("enterprise_integration")
+
+
+def test_only_entitled_plans_allow_advanced_enterprise_integration():
+    assert allows_enterprise_integration("enterprise_integration_starter")
+    assert allows_enterprise_integration("enterprise_scale")
+    assert allows_enterprise_integration("enterprise_strategic")
+    assert not allows_enterprise_integration("enterprise_pilot")
+    assert not allows_enterprise_integration("enterprise_core")
 
 
 def test_non_enterprise_plans_do_not_allow_enterprise_integration():
@@ -69,7 +77,7 @@ def test_pricing_decision_exports_usage_ledger_fields():
     assert record["endpoint"] == "/cgt/govern"
     assert record["endpoint_class"] == "governance_evaluation"
     assert record["units_charged"] == 1
-    assert record["pricing_version"] == "2026-07-byok-v1"
+    assert record["pricing_version"] == "2026-08-maestro-units-v1"
     assert record["billing_policy"] == "byok"
-    assert record["billing_scope"] == "maestro_usage_units"
+    assert record["billing_scope"] == "maestro_units"
     assert record["provider_cost_included"] is False
