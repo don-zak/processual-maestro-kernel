@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final, Iterable
+from typing import Final
 
 PROVIDER_EVENT_INBOX_VERSION: Final = "2026-08-b4-provider-event-inbox-v1"
 PROVIDER_EVENT_INBOX_STORAGE_ENABLED: Final = False
