@@ -7,12 +7,16 @@ on:
     paths:
       - "processual_api/billing/commercial_state_machine.py"
       - "processual_api/billing/commercial_event_contracts.py"
+      - "processual_api/billing/commercial_event_models.py"
+      - "processual_api/billing/commercial_event_repository.py"
       - "processual_api/billing/commercial_top_up_transition_authority.py"
       - "processual_api/billing/commercial_top_up_event_ledger.py"
       - "processual_api/billing/commercial_top_up_application_service.py"
+      - "processual_api/billing/commercial_top_up_unit_of_work.py"
       - "processual_api/billing/commercial_top_up_order_grant_contracts.py"
       - "tests/test_commercial_state_machine_b2.py"
       - "tests/test_commercial_event_contracts_b2.py"
+      - "tests/test_commercial_event_sqlalchemy_b2.py"
       - "tests/test_commercial_top_up_transition_authority_b2.py"
       - "tests/test_commercial_top_up_event_ledger_b2.py"
       - "tests/test_commercial_top_up_application_service_group2.py"
@@ -40,11 +44,15 @@ jobs:
           ruff check \
             processual_api/billing/commercial_state_machine.py \
             processual_api/billing/commercial_event_contracts.py \
+            processual_api/billing/commercial_event_models.py \
+            processual_api/billing/commercial_event_repository.py \
             processual_api/billing/commercial_top_up_transition_authority.py \
             processual_api/billing/commercial_top_up_event_ledger.py \
             processual_api/billing/commercial_top_up_application_service.py \
+            processual_api/billing/commercial_top_up_unit_of_work.py \
             tests/test_commercial_state_machine_b2.py \
             tests/test_commercial_event_contracts_b2.py \
+            tests/test_commercial_event_sqlalchemy_b2.py \
             tests/test_commercial_top_up_transition_authority_b2.py \
             tests/test_commercial_top_up_event_ledger_b2.py \
             tests/test_commercial_top_up_application_service_group2.py \
@@ -57,6 +65,7 @@ jobs:
           python -m pytest -q \
             tests/test_commercial_state_machine_b2.py \
             tests/test_commercial_event_contracts_b2.py \
+            tests/test_commercial_event_sqlalchemy_b2.py \
             tests/test_commercial_top_up_transition_authority_b2.py \
             tests/test_commercial_top_up_event_ledger_b2.py \
             tests/test_commercial_top_up_order_grant_contracts_group2.py \
