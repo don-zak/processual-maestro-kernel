@@ -9,6 +9,7 @@ from processual_api.billing.commercial_state_machine import (
     validate_commercial_state_machine,
     validate_commercial_transition,
 )
+from processual_api.billing.commercial_top_up_order_grant_contracts import TopUpOrderState
 
 
 @pytest.mark.parametrize(
@@ -18,7 +19,11 @@ from processual_api.billing.commercial_state_machine import (
         (CommercialAggregate.PAYMENT, "pending", "verified"),
         (CommercialAggregate.SUBSCRIPTION, "pending", "active"),
         (CommercialAggregate.ASSESSMENT_ACTIVATION, "approved", "activated"),
-        (CommercialAggregate.TOP_UP, "verified", "granted"),
+        (
+            CommercialAggregate.TOP_UP,
+            TopUpOrderState.PAYMENT_VERIFIED.value,
+            TopUpOrderState.GRANT_PENDING.value,
+        ),
         (CommercialAggregate.RECONCILIATION, "matched", "closed"),
     ],
 )
@@ -59,6 +64,30 @@ def test_unknown_transition_fails_closed() -> None:
         validate_commercial_transition(transition)
 
 
+def test_top_up_cannot_skip_payment_verification() -> None:
+    transition = CommercialTransition(
+        aggregate=CommercialAggregate.TOP_UP,
+        current_state=TopUpOrderState.PAYMENT_PENDING.value,
+        next_state=TopUpOrderState.GRANTED.value,
+        operation="grant_without_verified_payment",
+    )
+
+    assert transition_allowed(transition) is False
+    with pytest.raises(CommercialTransitionError, match="is not allowed"):
+        validate_commercial_transition(transition)
+
+
+def test_top_up_policy_only_references_authoritative_state_values() -> None:
+    authoritative_states = {state.value for state in TopUpOrderState}
+    referenced_states = {
+        state
+        for transition in COMMERCIAL_TRANSITIONS[CommercialAggregate.TOP_UP]
+        for state in transition
+    }
+
+    assert referenced_states <= authoritative_states
+
+
 def test_state_machine_rejects_self_loops() -> None:
     transition = CommercialTransition(
         aggregate=CommercialAggregate.SUBSCRIPTION,
@@ -86,8 +115,8 @@ def test_transition_requires_non_blank_operation() -> None:
     with pytest.raises(ValueError, match="operation must not be blank"):
         CommercialTransition(
             aggregate=CommercialAggregate.TOP_UP,
-            current_state="requested",
-            next_state="pending_payment",
+            current_state=TopUpOrderState.DRAFT.value,
+            next_state=TopUpOrderState.AWAITING_CONFIRMATION.value,
             operation=" ",
         )
 
