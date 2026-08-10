@@ -11,6 +11,7 @@ on:
       - "processual_api/services/usage_log_store.py"
       - "processual_api/services/client_usage_summary.py"
       - "processual_api/services/customer_360.py"
+      - "processual_api/services/commercial_operations_read_model.py"
       - "tests/test_usage_economics_stage3.py"
       - ".github/workflows/usage-economics-b3.yml"
 
@@ -39,6 +40,7 @@ jobs:
             processual_api/services/usage_log_store.py \
             processual_api/services/client_usage_summary.py \
             processual_api/services/customer_360.py \
+            processual_api/services/commercial_operations_read_model.py \
             tests/test_usage_economics_stage3.py \
             --output-format=github
 
