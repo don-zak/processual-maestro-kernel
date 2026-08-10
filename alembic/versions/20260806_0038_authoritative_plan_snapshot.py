@@ -45,16 +45,17 @@ def upgrade() -> None:
         {"version": VERSION},
     )
 
-    missing = connection.execute(
-        sa.text(
-            f"SELECT 1 FROM {TABLE} "
-            "WHERE plan_code IS NULL OR plan_catalog_version IS NULL LIMIT 1"
-        )
-    ).first()
-    if missing:
-        raise RuntimeError(
-            "Authoritative plan snapshot migration found orphaned quota cycles"
-        )
+    if not context.is_offline_mode():
+        missing = connection.execute(
+            sa.text(
+                f"SELECT 1 FROM {TABLE} "
+                "WHERE plan_code IS NULL OR plan_catalog_version IS NULL LIMIT 1"
+            )
+        ).first()
+        if missing:
+            raise RuntimeError(
+                "Authoritative plan snapshot migration found orphaned quota cycles"
+            )
 
     with op.batch_alter_table(TABLE) as batch:
         batch.alter_column("plan_code", existing_type=sa.String(128), nullable=False)
