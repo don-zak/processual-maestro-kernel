@@ -1,8 +1,8 @@
 """Atomic application service for commercial quota top-ups.
 
 The service is fail-closed by default. Runtime persistence, payment handling,
-grant execution, and audit writes remain disabled unless an explicit policy is
-injected by a governed composition root.
+grant execution, audit writes, and commercial event-ledger writes remain
+disabled unless an explicit policy is injected by a governed composition root.
 """
 
 from __future__ import annotations
@@ -20,6 +20,12 @@ from typing import Protocol
 
 from processual_api.billing.commercial_settings_top_up_checkout_contracts import (
     TopUpCheckoutChannel,
+)
+from processual_api.billing.commercial_top_up_event_ledger import (
+    TOP_UP_EVENT_LEDGER_STORAGE_ENABLED,
+    TopUpEventLedgerConflictError,
+    TopUpEventLedgerRepository,
+    stage_top_up_events,
 )
 from processual_api.billing.commercial_top_up_models import (
     CommercialTopUpAuditRecord,
@@ -44,8 +50,12 @@ from processual_api.billing.commercial_top_up_persistence_audit_contracts import
     TOP_UP_ORDER_STORAGE_ENABLED,
     TOP_UP_PAYMENT_EVIDENCE_STORAGE_ENABLED,
 )
+from processual_api.billing.commercial_top_up_transition_authority import (
+    TopUpTransitionEvidence,
+    build_verified_payment_grant_events,
+)
 
-TOP_UP_APPLICATION_SERVICE_VERSION = "2026-07-group2-top-up-application-service-v1"
+TOP_UP_APPLICATION_SERVICE_VERSION = "2026-08-b2-top-up-application-service-v2"
 TOP_UP_APPLICATION_SERVICE_STATUS = "draft_review"
 
 
@@ -58,7 +68,7 @@ class TopUpApplicationServiceDisabledError(TopUpApplicationServiceError):
 
 
 class TopUpApplicationConflictError(TopUpApplicationServiceError):
-    """Raised when an idempotency key is reused with different data."""
+    """Raised when commercial authority or idempotency state conflicts."""
 
 
 class TopUpApplicationNotFoundError(TopUpApplicationServiceError):
@@ -80,6 +90,7 @@ class TopUpApplicationPolicy:
     payment_storage_enabled: bool = TOP_UP_PAYMENT_EVIDENCE_STORAGE_ENABLED
     grant_storage_enabled: bool = TOP_UP_GRANT_STORAGE_ENABLED
     audit_storage_enabled: bool = TOP_UP_AUDIT_STORAGE_ENABLED
+    event_ledger_enabled: bool = TOP_UP_EVENT_LEDGER_STORAGE_ENABLED
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,19 +116,9 @@ class CreateTopUpOrderCommand:
 
     def __post_init__(self) -> None:
         if self.settlement_currency is None:
-            object.__setattr__(
-                self,
-                "settlement_currency",
-                "USD",
-            )
-
+            object.__setattr__(self, "settlement_currency", "USD")
         if self.settlement_amount is None:
-            object.__setattr__(
-                self,
-                "settlement_amount",
-                self.total_price_usd,
-            )
-
+            object.__setattr__(self, "settlement_amount", self.total_price_usd)
         if not self.plan_code.strip():
             raise ValueError("plan_code must not be blank")
         if self.requested_units <= 0:
@@ -220,6 +221,7 @@ class AsyncTopUpUnitOfWork(Protocol):
     payments: PaymentRepository
     grants: GrantRepository
     audit: AuditRepository
+    event_ledger: TopUpEventLedgerRepository
 
     async def __aenter__(self) -> AsyncTopUpUnitOfWork: ...
 
@@ -235,10 +237,7 @@ class AsyncTopUpUnitOfWork(Protocol):
     async def rollback(self) -> None: ...
 
 
-UnitOfWorkFactory = Callable[
-    [],
-    AbstractAsyncContextManager[AsyncTopUpUnitOfWork],
-]
+UnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[AsyncTopUpUnitOfWork]]
 
 
 class CommercialTopUpApplicationService:
@@ -257,24 +256,17 @@ class CommercialTopUpApplicationService:
         self,
         command: CreateTopUpOrderCommand,
     ) -> TopUpApplicationResult:
-        self._require(
-            self._policy.order_creation_enabled,
-            "top-up order creation is disabled",
-        )
-        self._require(
-            self._policy.order_storage_enabled,
-            "top-up order storage is disabled",
-        )
-        self._require(
-            self._policy.audit_storage_enabled,
-            "top-up audit storage is disabled",
-        )
+        self._require(self._policy.order_creation_enabled, "top-up order creation is disabled")
+        self._require(self._policy.order_storage_enabled, "top-up order storage is disabled")
+        self._require(self._policy.audit_storage_enabled, "top-up audit storage is disabled")
 
         async with self._unit_of_work_factory() as uow:
             existing = await uow.orders.get_by_idempotency_key(command.idempotency_key)
             if existing is not None:
                 if not _same_order(existing, command):
-                    raise TopUpApplicationConflictError("top-up order idempotency key conflicts with existing order")
+                    raise TopUpApplicationConflictError(
+                        "top-up order idempotency key conflicts with existing order"
+                    )
                 return TopUpApplicationResult(
                     order_id=existing.id,
                     outcome=TopUpApplicationOutcome.IDEMPOTENT_REPLAY,
@@ -290,13 +282,13 @@ class CommercialTopUpApplicationService:
                 requested_units=command.requested_units,
                 bundle_count=command.bundle_count,
                 total_price_usd=command.total_price_usd,
-                settlement_currency=(command.settlement_currency.strip().upper()),
+                settlement_currency=command.settlement_currency.strip().upper(),
                 settlement_amount=command.settlement_amount,
-                exchange_rate_usd_tnd=(command.exchange_rate_usd_tnd),
-                exchange_rate_source=(command.exchange_rate_source),
-                exchange_rate_reference=(command.exchange_rate_reference),
-                exchange_rate_observed_at=(command.exchange_rate_observed_at),
-                exchange_rate_expires_at=(command.exchange_rate_expires_at),
+                exchange_rate_usd_tnd=command.exchange_rate_usd_tnd,
+                exchange_rate_source=command.exchange_rate_source,
+                exchange_rate_reference=command.exchange_rate_reference,
+                exchange_rate_observed_at=command.exchange_rate_observed_at,
+                exchange_rate_expires_at=command.exchange_rate_expires_at,
                 channel=command.channel.value,
                 idempotency_key=command.idempotency_key,
                 state=TopUpOrderState.AWAITING_PAYMENT.value,
@@ -336,32 +328,26 @@ class CommercialTopUpApplicationService:
             self._policy.grant_execution_enabled,
             "top-up unit grant execution is disabled",
         )
-        self._require(
-            self._policy.order_storage_enabled,
-            "top-up order storage is disabled",
-        )
+        self._require(self._policy.order_storage_enabled, "top-up order storage is disabled")
         self._require(
             self._policy.payment_storage_enabled,
             "top-up payment evidence storage is disabled",
         )
+        self._require(self._policy.grant_storage_enabled, "top-up grant storage is disabled")
+        self._require(self._policy.audit_storage_enabled, "top-up audit storage is disabled")
         self._require(
-            self._policy.grant_storage_enabled,
-            "top-up grant storage is disabled",
-        )
-        self._require(
-            self._policy.audit_storage_enabled,
-            "top-up audit storage is disabled",
+            self._policy.event_ledger_enabled,
+            "top-up commercial event ledger is disabled",
         )
 
         async with self._unit_of_work_factory() as uow:
-            order = await uow.orders.get_by_id(
-                command.order_id,
-                for_update=True,
-            )
+            order = await uow.orders.get_by_id(command.order_id, for_update=True)
             if order is None:
                 raise TopUpApplicationNotFoundError("top-up order was not found")
 
-            existing_provider_payment = await uow.payments.get_by_provider_reference(command.provider_reference)
+            existing_provider_payment = await uow.payments.get_by_provider_reference(
+                command.provider_reference
+            )
             existing_grant = await uow.grants.get_for_order(
                 command.order_id,
                 for_update=True,
@@ -369,14 +355,23 @@ class CommercialTopUpApplicationService:
 
             if existing_provider_payment is not None:
                 if existing_provider_payment.order_id != command.order_id:
-                    raise TopUpApplicationConflictError("provider payment reference belongs to another top-up order")
+                    raise TopUpApplicationConflictError(
+                        "provider payment reference belongs to another top-up order"
+                    )
                 if existing_grant is None:
-                    raise TopUpApplicationConflictError("payment replay found without its atomic grant")
+                    raise TopUpApplicationConflictError(
+                        "payment replay found without its atomic grant"
+                    )
                 return TopUpApplicationResult(
                     order_id=command.order_id,
                     outcome=TopUpApplicationOutcome.IDEMPOTENT_REPLAY,
                     grant_outcome=UnitGrantOutcome(existing_grant.outcome),
                     committed=False,
+                )
+
+            if order.state != TopUpOrderState.AWAITING_PAYMENT.value:
+                raise TopUpApplicationConflictError(
+                    "top-up payment and grant must start from awaiting_payment"
                 )
 
             payment_contract = PaymentVerificationContract(
@@ -385,14 +380,13 @@ class CommercialTopUpApplicationService:
                 outcome=PaymentVerificationOutcome.VERIFIED,
                 verified_amount=command.verified_amount,
                 verified_currency=command.verified_currency.strip().upper(),
-                immutable_evidence_reference=(command.immutable_evidence_reference),
+                immutable_evidence_reference=command.immutable_evidence_reference,
             )
-            order_contract = _to_order_contract(
-                order=order,
-                existing_grant=existing_grant,
-            )
+            order_contract = _to_order_contract(order=order, existing_grant=existing_grant)
             existing_keys = (
-                frozenset({existing_grant.grant_idempotency_key}) if existing_grant is not None else frozenset()
+                frozenset({existing_grant.grant_idempotency_key})
+                if existing_grant is not None
+                else frozenset()
             )
             decision = decide_unit_grant(
                 order=order_contract,
@@ -400,9 +394,48 @@ class CommercialTopUpApplicationService:
                 previously_granted_idempotency_keys=existing_keys,
                 execution_enabled=self._policy.grant_execution_enabled,
             )
-
             if decision.outcome is not UnitGrantOutcome.GRANTED:
-                raise TopUpApplicationConflictError(f"atomic unit grant was not approved: {decision.reason}")
+                raise TopUpApplicationConflictError(
+                    f"atomic unit grant was not approved: {decision.reason}"
+                )
+
+            payment_payload = {
+                "provider_reference": command.provider_reference,
+                "verified_amount": str(command.verified_amount),
+                "verified_currency": command.verified_currency.strip().upper(),
+            }
+            grant_payload = {
+                "grant_idempotency_key": decision.grant_idempotency_key,
+                "units": decision.units,
+                "outcome": decision.outcome.value,
+            }
+            occurred_at = self._clock()
+            if occurred_at.tzinfo is None:
+                raise ValueError("application service clock must be timezone aware")
+            authority_events = build_verified_payment_grant_events(
+                TopUpTransitionEvidence(
+                    order_id=command.order_id,
+                    provider_reference=command.provider_reference,
+                    actor_reference=command.actor_reference,
+                    evidence_reference=command.immutable_evidence_reference,
+                    occurred_at=occurred_at,
+                    payment_payload_digest=_payload_digest(payment_payload),
+                    grant_payload_digest=_payload_digest(grant_payload),
+                )
+            )
+            try:
+                ledger_result = await stage_top_up_events(
+                    repository=uow.event_ledger,
+                    events=authority_events,
+                )
+            except TopUpEventLedgerConflictError as exc:
+                raise TopUpApplicationConflictError(
+                    f"top-up commercial event ledger conflict: {exc}"
+                ) from exc
+            if ledger_result.replayed:
+                raise TopUpApplicationConflictError(
+                    "commercial event replay exists without atomic payment and grant"
+                )
 
             payment = CommercialTopUpPaymentEvidence(
                 order_id=command.order_id,
@@ -410,7 +443,7 @@ class CommercialTopUpApplicationService:
                 outcome=payment_contract.outcome.value,
                 verified_amount=payment_contract.verified_amount,
                 verified_currency=payment_contract.verified_currency,
-                immutable_evidence_reference=(payment_contract.immutable_evidence_reference),
+                immutable_evidence_reference=payment_contract.immutable_evidence_reference,
             )
             grant = CommercialTopUpGrant(
                 order_id=command.order_id,
@@ -422,18 +455,13 @@ class CommercialTopUpApplicationService:
             uow.payments.add(payment)
             uow.grants.add(grant)
             order.state = TopUpOrderState.GRANTED.value
-
             uow.audit.append(
                 self._audit_record(
                     order_id=command.order_id,
                     action="payment_verified",
                     actor_reference=command.actor_reference,
-                    evidence_reference=(command.immutable_evidence_reference),
-                    payload={
-                        "provider_reference": command.provider_reference,
-                        "verified_amount": str(command.verified_amount),
-                        "verified_currency": (command.verified_currency.strip().upper()),
-                    },
+                    evidence_reference=command.immutable_evidence_reference,
+                    payload=payment_payload,
                 )
             )
             uow.audit.append(
@@ -441,19 +469,15 @@ class CommercialTopUpApplicationService:
                     order_id=command.order_id,
                     action="grant_applied",
                     actor_reference=command.actor_reference,
-                    evidence_reference=(f"grant://{decision.grant_idempotency_key}"),
-                    payload={
-                        "grant_idempotency_key": (decision.grant_idempotency_key),
-                        "units": decision.units,
-                        "outcome": decision.outcome.value,
-                    },
+                    evidence_reference=f"grant://{decision.grant_idempotency_key}",
+                    payload=grant_payload,
                 )
             )
             await uow.commit()
 
         return TopUpApplicationResult(
             order_id=command.order_id,
-            outcome=(TopUpApplicationOutcome.PAYMENT_AND_GRANT_RECORDED),
+            outcome=TopUpApplicationOutcome.PAYMENT_AND_GRANT_RECORDED,
             grant_outcome=UnitGrantOutcome.GRANTED,
             committed=True,
         )
@@ -539,8 +563,8 @@ def _to_order_contract(
         exchange_rate_usd_tnd=order.exchange_rate_usd_tnd,
         exchange_rate_source=order.exchange_rate_source,
         exchange_rate_reference=order.exchange_rate_reference,
-        exchange_rate_observed_at=(order.exchange_rate_observed_at),
-        exchange_rate_expires_at=(order.exchange_rate_expires_at),
+        exchange_rate_observed_at=order.exchange_rate_observed_at,
+        exchange_rate_expires_at=order.exchange_rate_expires_at,
         channel=TopUpCheckoutChannel(order.channel),
         idempotency_key=order.idempotency_key,
         state=state,
@@ -567,7 +591,7 @@ def _event_reference(
     evidence_reference: str,
     payload_digest: str,
 ) -> str:
-    material = (f"{order_id}|{action}|{evidence_reference}|{payload_digest}").encode()
+    material = f"{order_id}|{action}|{evidence_reference}|{payload_digest}".encode()
     return f"top-up-event:{hashlib.sha256(material).hexdigest()}"
 
 
@@ -577,13 +601,15 @@ def build_top_up_application_service_status() -> dict[str, bool | str]:
         "contract_version": TOP_UP_APPLICATION_SERVICE_VERSION,
         "status": TOP_UP_APPLICATION_SERVICE_STATUS,
         "order_creation_enabled": policy.order_creation_enabled,
-        "payment_verification_enabled": (policy.payment_verification_enabled),
+        "payment_verification_enabled": policy.payment_verification_enabled,
         "grant_execution_enabled": policy.grant_execution_enabled,
         "order_storage_enabled": policy.order_storage_enabled,
         "payment_storage_enabled": policy.payment_storage_enabled,
         "grant_storage_enabled": policy.grant_storage_enabled,
         "audit_storage_enabled": policy.audit_storage_enabled,
+        "event_ledger_enabled": policy.event_ledger_enabled,
         "atomic_payment_grant_audit_required": True,
+        "atomic_payment_grant_audit_event_ledger_required": True,
         "fail_closed_by_default": True,
     }
 
