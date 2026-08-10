@@ -18,6 +18,7 @@ from processual_api.billing.commercial_settings_top_up_checkout_contracts import
     TopUpCheckoutChannel,
 )
 from processual_api.billing.commercial_top_up_models import CommercialTopUpOrder
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_CATALOG_VERSION,
     QUOTA_METRIC_CODE,
@@ -113,7 +114,7 @@ def create_subscription_top_up_order_factory(
             if (
                 cycle.subscription_id != subscription.id
                 or cycle.customer_ref != command.customer_ref
-                or cycle.metric_code != QUOTA_METRIC_CODE
+                or normalize_maestro_metric_code(cycle.metric_code) != QUOTA_METRIC_CODE
             ):
                 raise SubscriptionTopUpOrderError(
                     "quota cycle conflicts with the top-up order."
