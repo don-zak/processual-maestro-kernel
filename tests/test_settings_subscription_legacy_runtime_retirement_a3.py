@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from processual_api.routers import settings as settings_module
 from processual_api.routers import (
     settings_subscription_runtime as runtime_module,
@@ -37,20 +39,27 @@ def test_client_integration_plan_prefers_verified_claims() -> None:
     assert plan == "enterprise_integration"
 
 
-def test_client_integration_plan_falls_back_to_local_settings_then_starter() -> None:
+def test_client_integration_plan_uses_local_authority_but_missing_plan_fails_closed() -> None:
     local_plan = runtime_module.resolve_client_integration_plan_without_legacy_storage(
         "ignored-user",
         {"subscription": {"plan_id": "business"}},
         {},
     )
-    missing_plan = runtime_module.resolve_client_integration_plan_without_legacy_storage(
-        "ignored-user",
-        {},
-        {},
-    )
 
     assert local_plan == "business"
-    assert missing_plan == "starter"
+
+    with pytest.raises(ValueError, match="authoritative subscription plan is required"):
+        runtime_module.resolve_client_integration_plan_without_legacy_storage(
+            "ignored-user",
+            {},
+            {},
+        )
+
+    with pytest.raises(ValueError, match="authoritative subscription plan is required"):
+        runtime_module.resolve_current_plan_without_legacy_storage(
+            "ignored-user",
+            {},
+        )
 
 
 def test_api_key_plan_resolution_uses_installed_non_legacy_resolver() -> None:
