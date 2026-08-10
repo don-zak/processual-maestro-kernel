@@ -33,7 +33,15 @@ def _body(*, customer_ref: str = "customer-1") -> bytes:
             "data": {
                 "type": "subscriptions",
                 "id": "123",
-                "attributes": {"store_id": 42, "test_mode": False},
+                "attributes": {
+                    "store_id": 42,
+                    "test_mode": False,
+                    "customer_id": 501,
+                    "order_id": 601,
+                    "variant_id": 701,
+                    "status": "active",
+                    "updated_at": "2026-08-05T20:00:00Z",
+                },
             },
         },
         separators=(",", ":"),
