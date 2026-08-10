@@ -112,6 +112,7 @@ def test_order_money_comparison_is_decimal_safe() -> None:
             event_name="order_created",
             resource_type="orders",
             external_resource_id="801",
+            evidence_schema_version=3,
             provider_subscription_id=None,
             currency="USD",
             total_amount="1000.00",
