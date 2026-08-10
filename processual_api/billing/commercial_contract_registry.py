@@ -14,6 +14,9 @@ from typing import Final
 from processual_api.billing.assessment_plan_fulfillment import (
     ASSESSMENT_PLAN_FULFILLMENT_VERSION,
 )
+from processual_api.billing.commercial_academic_institution_authority import (
+    ACADEMIC_INSTITUTION_AUTHORITY_VERSION,
+)
 from processual_api.billing.commercial_catalog_contracts import CATALOG_CONTRACT_VERSION
 from processual_api.billing.commercial_event_contracts import COMMERCIAL_EVENT_CONTRACT_VERSION
 from processual_api.billing.commercial_top_up_application_service import (
@@ -40,6 +43,7 @@ class CommercialContractVersion:
 
 
 _CONTRACT_VERSIONS = {
+    "academic_institution_authority": ACADEMIC_INSTITUTION_AUTHORITY_VERSION,
     "assessment_plan_fulfillment": ASSESSMENT_PLAN_FULFILLMENT_VERSION,
     "catalog": CATALOG_CONTRACT_VERSION,
     "commercial_event": COMMERCIAL_EVENT_CONTRACT_VERSION,
