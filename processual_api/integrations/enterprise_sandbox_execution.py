@@ -1,12 +1,4 @@
-"""Governed external HTTP execution for Enterprise Integration sandbox proofs.
-
-This module is intentionally sandbox-only. It executes a previously validated
-EnterpriseEndpointBindingSpec, resolves credentials transiently from deployment
-configuration, blocks unsafe network destinations, disables redirects and proxy
-inheritance, maps the JSON response into the canonical Maestro task input, and
-returns a redacted evidence record. It never persists or returns credential
-material and it never enables production access.
-"""
+"""Governed external HTTP execution for Enterprise Integration sandbox proofs."""
 
 from __future__ import annotations
 
@@ -36,6 +28,7 @@ from processual_api.integrations.integration_task_catalog import get_integration
 MAX_SANDBOX_RESPONSE_BYTES = 1_048_576
 _ALLOWED_CREDENTIAL_HEADERS = frozenset({"authorization", "x-api-key"})
 _PROFILE_ENV_SAFE = re.compile(r"[^A-Z0-9]+")
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 
 
 class SandboxExecutionError(ValueError):
@@ -66,12 +59,7 @@ class SandboxCredentialResolver(Protocol):
 
 
 class EnvironmentSandboxCredentialResolver:
-    """Resolve sandbox credentials from process environment only.
-
-    Supported deployment variables are derived from the credential profile id:
-    MAESTRO_SANDBOX_AUTHORIZATION_<PROFILE> and
-    MAESTRO_SANDBOX_API_KEY_<PROFILE>. Values are never returned in evidence.
-    """
+    """Resolve sandbox credentials from deployment environment only."""
 
     @staticmethod
     def _suffix(profile_id: str) -> str:
@@ -107,7 +95,6 @@ class EnvironmentSandboxCredentialResolver:
             headers["X-API-Key"] = api_key
         if not headers:
             raise SandboxExecutionError("sandbox_credential_reference_unresolved")
-
         return SandboxCredentialEnvelope(
             headers=headers,
             source="deployment_environment_reference",
@@ -135,7 +122,6 @@ def _resolve_public_addresses_sync(hostname: str, port: int) -> tuple[str, ...]:
         )
     except OSError as exc:
         raise SandboxExecutionError("sandbox_destination_dns_failed") from exc
-
     addresses = tuple(
         sorted(
             {
@@ -174,19 +160,15 @@ def _safe_credential_headers(envelope: SandboxCredentialEnvelope) -> dict[str, s
     return safe
 
 
-def _canonical_digest(mapped: dict[str, Any]) -> str:
+def _digest(value: Any) -> str:
     payload = json.dumps(
-        mapped,
+        value,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
         default=str,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
-
-
-def _response_digest(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
 
 
 def _now_iso(now: datetime | None = None) -> str:
@@ -202,6 +184,7 @@ async def execute_sandbox_binding(
     task_input: dict[str, Any],
     approved_operation_classes: set[str] | frozenset[str],
     approval_reference: str,
+    request_body: dict[str, Any] | None = None,
     credential_resolver: SandboxCredentialResolver | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
     now: datetime | None = None,
@@ -217,6 +200,10 @@ async def execute_sandbox_binding(
         raise SandboxExecutionError("sandbox_operation_class_not_approved")
     if spec.environment != "sandbox":
         raise SandboxExecutionError("sandbox_environment_required")
+    if request_body is not None and spec.method not in _BODY_METHODS:
+        raise SandboxExecutionError("sandbox_request_body_method_not_allowed")
+    if task.operation_class == "approval_gated_write" and request_body is None:
+        raise SandboxExecutionError("sandbox_request_body_required")
 
     preview = build_request_preview(spec, task_input)
     parsed = httpx.URL(str(preview["url"]))
@@ -233,10 +220,9 @@ async def execute_sandbox_binding(
         credential_profile_id=spec.credential_profile_id,
         binding_id=spec.binding_id,
     )
-    credential_headers = _safe_credential_headers(envelope)
     headers = {
         **{str(k): str(v) for k, v in spec.request_headers.items()},
-        **credential_headers,
+        **_safe_credential_headers(envelope),
     }
 
     query = preview.get("query") or {}
@@ -245,18 +231,21 @@ async def execute_sandbox_binding(
     if query_text:
         request_url = f"{request_url}?{query_text}"
 
-    timeout = httpx.Timeout(float(spec.timeout_seconds))
+    request_kwargs: dict[str, Any] = {"headers": headers}
+    if request_body is not None:
+        request_kwargs["json"] = request_body
+
     try:
         async with httpx.AsyncClient(
             transport=transport,
-            timeout=timeout,
+            timeout=httpx.Timeout(float(spec.timeout_seconds)),
             follow_redirects=False,
             trust_env=False,
         ) as client:
             response = await client.request(
                 spec.method,
                 request_url,
-                headers=headers,
+                **request_kwargs,
             )
     except httpx.HTTPError as exc:
         raise SandboxExecutionError("sandbox_http_request_failed") from exc
@@ -302,13 +291,13 @@ async def execute_sandbox_binding(
         "path": spec.path,
         "http_status": response.status_code,
         "content_type": content_type or "application/json",
-        "response_sha256": _response_digest(content),
-        "canonical_input_sha256": _canonical_digest(canonical_input),
+        "response_sha256": hashlib.sha256(content).hexdigest(),
+        "canonical_input_sha256": _digest(canonical_input),
+        "request_body_sha256": _digest(request_body) if request_body is not None else None,
         "mapping_valid": True,
         "credential_source": envelope.source,
         "completed_at": completed_at,
     }
-    evidence_sha256 = _canonical_digest(evidence_material)
 
     return {
         "status": "sandbox_proof_passed",
@@ -321,6 +310,8 @@ async def execute_sandbox_binding(
         "output_slot": mapped["output_slot"],
         "canonical_input": canonical_input,
         "canonical_input_sha256": evidence_material["canonical_input_sha256"],
+        "request_body_sha256": evidence_material["request_body_sha256"],
+        "request_body_included_in_evidence": False,
         "http_status": response.status_code,
         "content_type": evidence_material["content_type"],
         "destination_host": hostname,
@@ -333,7 +324,7 @@ async def execute_sandbox_binding(
         "redirects_followed": False,
         "mapping_valid": True,
         "network_request_executed": True,
-        "evidence_sha256": evidence_sha256,
+        "evidence_sha256": _digest(evidence_material),
         "completed_at": completed_at,
         "production_allowed": False,
         "runtime_connector_approved": False,
