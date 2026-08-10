@@ -60,6 +60,8 @@ def test_snapshot_reconciles_aggregates_from_same_execution_records() -> None:
     assert snapshot["by_task"] == {"workflow.llm_orchestration": 2}
     assert snapshot["by_provider"] == {"openai": 2}
     assert snapshot["by_status"] == {"partial_error": 1, "success": 1}
+    assert snapshot["by_execution_kind"] == {"workflow": 2}
+    assert snapshot["by_environment"] == {"runtime": 2}
     assert snapshot["reconciliation"]["aggregate_record_count"] == len(
         snapshot["recent_executions"]
     )
@@ -102,6 +104,8 @@ def test_snapshot_recent_limit_does_not_change_aggregate_truth() -> None:
 
     assert snapshot["record_count"] == 5
     assert snapshot["summary"]["executions_total"] == 5
+    assert snapshot["by_execution_kind"] == {"task": 5}
+    assert snapshot["by_environment"] == {"runtime": 5}
     assert len(snapshot["recent_executions"]) == 2
     assert snapshot["reconciliation"]["aggregate_record_count"] == 5
     assert snapshot["reconciliation"]["recent_count"] == 2
