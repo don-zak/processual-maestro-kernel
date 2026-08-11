@@ -2277,75 +2277,6 @@ async def test_notifications(body: NotificationSettings, current_user: dict = De
         raise HTTPException(status_code=400, detail=str(e)[:200])
 
 
-def _load_billing_subscriptions() -> list[dict]:
-    path = _DATA_DIR / "subscriptions.json"
-    if path.exists():
-        try:
-            import json
-            return json.loads(path.read_text("utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
-    return []
-
-
-def _compute_stage(sub: dict) -> str:
-    from datetime import datetime
-    status = sub.get("status", "active")
-    if status == "active":
-        return "active"
-    if status in ("expired", "cancelled"):
-        return "expired"
-
-    created_str = sub.get("suspended_at") or sub.get("created_at", "")
-    try:
-        suspended_at = datetime.fromisoformat(created_str)
-    except (ValueError, TypeError):
-        return "grace"
-
-    days_since = (datetime.now(UTC) - suspended_at).days
-    if days_since <= 7:
-        return "grace"
-    elif days_since <= 90:
-        return "suspended"
-    else:
-        return "expired"
-
-
-@router.get("/subscription", response_model=SubscriptionInfo)
-async def get_subscription(current_user: dict = Depends(get_current_user)):
-    user_id = current_user.get("sub", "default")
-
-    # Check billing subscriptions first
-    billing_subs = _load_billing_subscriptions()
-    user_subs = [s for s in billing_subs if s.get("user_id") == user_id]
-    if user_subs:
-        latest = max(user_subs, key=lambda s: s.get("created_at", ""))
-        stage = _compute_stage(latest)
-        return SubscriptionInfo(
-            plan=latest.get("plan", "Starter"),
-            status=latest.get("status", "active"),
-            stage=stage,
-            renews_at=latest.get("renews_at"),
-            seats=latest.get("seats", 1),
-            max_seats=latest.get("max_seats", 1),
-            payment_failures=latest.get("payment_failures", 0),
-            suspended_at=latest.get("suspended_at"),
-        )
-
-    # Fall back to local settings
-    raw = _load_raw(user_id)
-    sub = raw.get("subscription", {})
-    return SubscriptionInfo(
-        plan=sub.get("plan", "Starter"),
-        status=sub.get("status", "active"),
-        stage=sub.get("stage", "active"),
-        renews_at=sub.get("renews_at"),
-        seats=sub.get("seats", 1),
-        max_seats=sub.get("max_seats", 1),
-        payment_failures=sub.get("payment_failures", 0),
-        suspended_at=sub.get("suspended_at"),
-    )
-
 def _find_active_api_key_or_404(raw: dict, key_id: str) -> dict:
     for key in raw.get("api_keys", []):
         if key.get("id") != key_id:
@@ -2399,7 +2330,6 @@ def _allows_client_api_key_integration(plan_id: str | None) -> bool:
 
 
 
-
 def _client_api_key_operational_profiles_payload(*, enabled: bool) -> dict[str, Any]:
     catalog = api_key_operational_profiles_payload()
     raw_profiles = catalog.get("profiles", ()) if enabled else ()
@@ -2421,38 +2351,19 @@ def _client_api_key_operational_profiles_payload(*, enabled: bool) -> dict[str, 
         ),
     }
 
+
 def _resolve_client_api_key_integration_plan_id(
     user_id: str,
     raw: dict[str, Any],
     current_user: dict[str, Any],
 ) -> str:
-    candidates: list[Any] = [
-        current_user.get("plan_id"),
-        current_user.get("plan"),
-    ]
+    del user_id, raw, current_user
+    raise RuntimeError("Settings subscription runtime extension is not installed.")
 
-    billing_subs = _load_billing_subscriptions()
-    user_subs = [sub for sub in billing_subs if sub.get("user_id") == user_id]
-    if user_subs:
-        latest = max(user_subs, key=lambda sub: sub.get("created_at", ""))
-        candidates.extend([
-            latest.get("plan_id"),
-            latest.get("plan"),
-        ])
 
-    subscription = raw.get("subscription", {})
-    if isinstance(subscription, dict):
-        candidates.extend([
-            subscription.get("plan_id"),
-            subscription.get("plan"),
-        ])
-
-    for candidate in candidates:
-        normalized = normalize_plan_id(str(candidate) if candidate is not None else None)
-        if normalized:
-            return normalized
-
-    return "starter"
+def _resolve_current_plan_id(user_id: str, raw: dict[str, Any]) -> str:
+    del user_id, raw
+    raise RuntimeError("Settings subscription runtime extension is not installed.")
 
 
 def _active_client_integration_keys(
@@ -2614,17 +2525,6 @@ async def list_api_keys(current_user: dict = Depends(require_scope(ADMIN_SETTING
         })
 
     return visible_keys
-
-
-def _resolve_current_plan_id(user_id: str, raw: dict) -> str:
-    billing_subs = _load_billing_subscriptions()
-    user_subs = [s for s in billing_subs if s.get("user_id") == user_id]
-    if user_subs:
-        latest = max(user_subs, key=lambda s: s.get("created_at", ""))
-        return resolve_plan_id(latest.get("plan_id") or latest.get("plan"))
-
-    subscription = raw.get("subscription", {})
-    return resolve_plan_id(subscription.get("plan_id") or subscription.get("plan", "Starter"))
 
 
 @router.post("/api-keys", response_model=dict)
