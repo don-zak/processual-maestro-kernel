@@ -137,20 +137,12 @@ def install_runtime_subscription_route(target_router: APIRouter) -> None:
     target_router.routes.extend(_runtime_router.routes)
 
 
-def retire_legacy_subscription_runtime() -> None:
+def install_subscription_runtime_hooks() -> None:
     settings_module._resolve_client_api_key_integration_plan_id = (
         resolve_client_integration_plan_without_legacy_storage
     )
     settings_module._resolve_current_plan_id = resolve_current_plan_without_legacy_storage
 
-    for legacy_name in (
-        "_load_billing_subscriptions",
-        "_compute_stage",
-        "get_subscription",
-    ):
-        if hasattr(settings_module, legacy_name):
-            delattr(settings_module, legacy_name)
-
 
 install_runtime_subscription_route(settings_router)
-retire_legacy_subscription_runtime()
+install_subscription_runtime_hooks()
