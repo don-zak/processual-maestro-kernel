@@ -98,12 +98,11 @@ def test_current_client_settings_ui_uses_client_scoped_usage_summary() -> None:
     assert "CLIENT.get('/settings/usage-summary')" not in settings_js
 
 
-def test_settings_retirement_candidates_still_exist_until_explicit_removal() -> None:
+def test_remaining_settings_retirement_candidates_still_exist_until_explicit_removal() -> None:
     router = _read(ROOT / "processual_api" / "routers" / "settings.py")
 
     assert '@router.put("/llm-provider"' in router
     assert '@router.delete("/llm-provider"' in router
-    assert '@router.post("/llm-provider/test"' in router
     assert '@router.get("/usage-summary"' in router
 
 

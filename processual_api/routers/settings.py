@@ -7,7 +7,6 @@ import os
 import re
 import secrets
 import shutil
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -38,7 +37,6 @@ from ..schemas.settings import (
     NotificationSettings,
     SettingsResponse,
     SubscriptionInfo,
-    TestConnectionResult,
 )
 from ..services.admin_subscription_analytics import build_admin_subscription_analytics
 from ..services.client_plan_source import (
@@ -2121,19 +2119,6 @@ async def clear_client_provider_connection(current_user: dict = Depends(get_curr
     return payload
 
 
-@router.post("/provider-connection/test", response_model=TestConnectionResult)
-async def test_client_provider_connection(
-    body: ClientProviderConnectionSetupPayload,
-    current_user: dict = Depends(get_current_user),
-):
-    provider = _normalize_client_provider(body.provider)
-    config = LLMProviderConfig(
-        provider=provider,
-        api_key=str(body.provider_secret or "").strip(),
-        model=str(body.model or "").strip(),
-    )
-    return await test_llm_provider(config, current_user)
-
 @router.put("/llm-provider", response_model=dict)
 async def save_llm_provider(body: LLMProviderConfig, current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("sub", "default")
@@ -2167,87 +2152,6 @@ async def clear_llm_provider(current_user: dict = Depends(get_current_user)):
     raw["llm_provider"] = {"configured": False, "provider": "", "model": ""}
     _save_raw(user_id, raw)
     return {"status": "cleared"}
-
-
-@router.post("/llm-provider/test", response_model=TestConnectionResult)
-async def test_llm_provider(body: LLMProviderConfig, current_user: dict = Depends(get_current_user)):
-    user_id = current_user.get("sub", "default")
-    provider = body.provider.lower()
-
-    api_key = body.api_key
-    if not api_key:
-        raw = _load_raw(user_id)
-        encrypted = raw.get("llm_provider", {}).get("encrypted_key")
-        if encrypted:
-            decrypted = _decrypt_api_key(encrypted)
-            if decrypted:
-                api_key = decrypted
-
-    if not api_key and provider not in {"opencode", "generic_openai_compatible"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key is required")
-
-    known_providers = provider_ids()
-    if provider not in known_providers:
-        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
-
-    start = time.time()
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=10) as client:
-            if provider == "openai":
-                res = await client.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-            elif provider == "anthropic":
-                res = await client.get(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
-                )
-            elif provider == "gemini":
-                res = await client.get(
-                    f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
-                )
-            elif provider == "deepseek":
-                res = await client.get(
-                    "https://api.deepseek.com/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-            elif provider == "opencode":
-                base_url = os.environ.get("OPENCODE_API_URL", "http://localhost:11434/v1")
-                res = await client.get(
-                    f"{base_url}/models",
-                    headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
-                )
-            elif provider == "openrouter":
-                base_url = os.environ.get("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
-                res = await client.get(
-                    f"{base_url}/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-            elif provider == "generic_openai_compatible":
-                base_url = os.environ.get("GENERIC_OPENAI_API_URL", "").rstrip("/")
-                if not base_url:
-                    return TestConnectionResult(success=False, error="GENERIC_OPENAI_API_URL is required")
-                res = await client.get(
-                    f"{base_url}/models",
-                    headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
-                )
-
-            latency = (time.time() - start) * 1000
-
-            if res.status_code == 200:
-                return TestConnectionResult(success=True, latency_ms=round(latency, 1))
-            else:
-                return TestConnectionResult(
-                    success=False,
-                    error=f"HTTP {res.status_code}: Provider returned non-200",
-                )
-
-    except httpx.TimeoutException:
-        return TestConnectionResult(success=False, error="Connection timed out after 10s")
-    except Exception as e:
-        return TestConnectionResult(success=False, error=str(e)[:200])
 
 
 @router.put("/notifications", response_model=NotificationSettings)
