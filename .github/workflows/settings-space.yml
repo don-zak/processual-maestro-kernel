@@ -3,7 +3,7 @@ name: Settings Space
 on:
   push:
     branches:
-      - feat/a3-admin-marketplace-original-offers
+      - main
     paths:
       - processual_api/settings.py
       - processual_api/routers/__init__.py

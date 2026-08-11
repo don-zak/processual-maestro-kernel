@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feat/a3-admin-marketplace-original-offers
+      - main
     paths:
       - processual_api/**
       - tests/test_runtime_benchmark_isolation.py
