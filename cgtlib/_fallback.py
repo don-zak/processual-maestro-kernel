@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .api import CGTLIB_STABLE_API as CGTLIB_STABLE_API
+from ._stable_api import CGTLIB_STABLE_API as CGTLIB_STABLE_API
 
 _UNAVAILABLE_MSG = "requires private CGT engine which is not available in this build"
 
