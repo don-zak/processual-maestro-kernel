@@ -26,8 +26,9 @@ def test_legacy_subscription_symbols_are_removed_from_runtime_namespace() -> Non
 
 def test_runtime_plan_resolvers_do_not_reference_legacy_subscription_storage() -> None:
     assert "subscriptions.json" not in RUNTIME_SOURCE
-    assert "_load_billing_subscriptions" in RUNTIME_SOURCE
-    assert "delattr(settings_module, legacy_name)" in RUNTIME_SOURCE
+    assert "_load_billing_subscriptions" not in RUNTIME_SOURCE
+    assert "_compute_stage" not in RUNTIME_SOURCE
+    assert "delattr(settings_module, legacy_name)" not in RUNTIME_SOURCE
 
 
 def test_client_integration_plan_prefers_verified_claims() -> None:
