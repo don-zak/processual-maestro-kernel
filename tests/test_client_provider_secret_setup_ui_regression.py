@@ -4,6 +4,9 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX_HTML = ROOT / "processual_api" / "static" / "index.html"
 SETTINGS_JS = ROOT / "processual_api" / "static" / "js" / "pages" / "settings.js"
 SETTINGS_ROUTER = ROOT / "processual_api" / "routers" / "settings.py"
+SETTINGS_PROVIDER_TEST_RUNTIME = (
+    ROOT / "processual_api" / "routers" / "settings_provider_test_runtime.py"
+)
 
 
 def read_file(path: Path) -> str:
@@ -60,11 +63,13 @@ def test_provider_secret_setup_keeps_client_settings_route_boundaries() -> None:
 
 def test_provider_secret_setup_backend_exposes_new_client_endpoints() -> None:
     router = read_file(SETTINGS_ROUTER)
+    provider_test_runtime = read_file(SETTINGS_PROVIDER_TEST_RUNTIME)
 
     assert "class ClientProviderConnectionSetupPayload" in router
     assert "provider_secret" in router
     assert '@router.put("/provider-connection/setup"' in router
-    assert '@router.post("/provider-connection/test"' in router
+    assert '"/provider-connection/test"' in provider_test_runtime
+    assert "async def test_provider_connection_runtime(" in provider_test_runtime
     assert '@router.delete("/provider-connection/setup"' in router
     assert "_encrypt_api_key(provider_secret, user_id)" in router
     assert "Raw provider secrets are never returned" in router
