@@ -35,8 +35,10 @@ jobs:
           keep_marker = '@router.put("/llm-provider", response_model=dict)\n'
           legacy_start = '@router.post("/llm-provider/test", response_model=TestConnectionResult)\n'
           legacy_end = '@router.put("/notifications", response_model=NotificationSettings)\n'
+          time_import = 'import time\n'
+          result_import = '    TestConnectionResult,\n'
 
-          for marker in (start_marker, keep_marker, legacy_start, legacy_end):
+          for marker in (start_marker, keep_marker, legacy_start, legacy_end, time_import, result_import):
               if text.count(marker) != 1:
                   raise SystemExit(f'Expected exactly one marker: {marker!r}; found {text.count(marker)}')
 
@@ -48,6 +50,8 @@ jobs:
           legacy_end_idx = text.index(legacy_end, legacy_start_idx)
           text = text[:legacy_start_idx] + text[legacy_end_idx:]
 
+          text = text.replace(time_import, '', 1)
+          text = text.replace(result_import, '', 1)
           path.write_text(text, encoding='utf-8')
 
       - name: Verify exact retirement shape
@@ -60,6 +64,8 @@ jobs:
               'async def test_llm_provider(',
               '@router.post("/provider-connection/test", response_model=TestConnectionResult)',
               '@router.post("/llm-provider/test", response_model=TestConnectionResult)',
+              'import time\n',
+              '    TestConnectionResult,\n',
           )
           present = [marker for marker in forbidden if marker in text]
           if present:
