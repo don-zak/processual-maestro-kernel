@@ -48,16 +48,6 @@ jobs:
           legacy_end_idx = text.index(legacy_end, legacy_start_idx)
           text = text[:legacy_start_idx] + text[legacy_end_idx:]
 
-          # These imports were used only by the retired provider-test implementations.
-          if 'time.' in text or 'time(' in text:
-              raise SystemExit('time still appears used after provider-test removal; aborting import cleanup')
-          text = text.replace('import time\n', '', 1)
-
-          # TestConnectionResult is now owned by settings_provider_test_runtime.py.
-          if 'TestConnectionResult' in text:
-              raise SystemExit('TestConnectionResult still appears used after provider-test removal; aborting import cleanup')
-          text = text.replace('    TestConnectionResult,\n', '', 1)
-
           path.write_text(text, encoding='utf-8')
 
       - name: Verify exact retirement shape
