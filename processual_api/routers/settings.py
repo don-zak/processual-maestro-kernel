@@ -2330,7 +2330,6 @@ def _allows_client_api_key_integration(plan_id: str | None) -> bool:
 
 
 
-
 def _client_api_key_operational_profiles_payload(*, enabled: bool) -> dict[str, Any]:
     catalog = api_key_operational_profiles_payload()
     raw_profiles = catalog.get("profiles", ()) if enabled else ()
@@ -2351,6 +2350,20 @@ def _client_api_key_operational_profiles_payload(*, enabled: bool) -> dict[str, 
             "They do not approve customer-specific production connectors."
         ),
     }
+
+
+def _resolve_client_api_key_integration_plan_id(
+    user_id: str,
+    raw: dict[str, Any],
+    current_user: dict[str, Any],
+) -> str:
+    del user_id, raw, current_user
+    raise RuntimeError("Settings subscription runtime extension is not installed.")
+
+
+def _resolve_current_plan_id(user_id: str, raw: dict[str, Any]) -> str:
+    del user_id, raw
+    raise RuntimeError("Settings subscription runtime extension is not installed.")
 
 
 def _active_client_integration_keys(
