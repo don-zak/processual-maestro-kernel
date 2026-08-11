@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feat/a3-admin-marketplace-original-offers
+      - main
     paths:
       - benchmarks/execution_mix_app.py
       - benchmarks/execution_mix_shape_probe.py

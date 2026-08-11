@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feat/a3-admin-marketplace-original-offers
+      - main
     paths:
       - processual_api/execution/**
       - benchmarks/durable_worker_scale.py
