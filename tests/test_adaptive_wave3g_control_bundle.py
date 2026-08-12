@@ -151,17 +151,17 @@ def test_checkpoint_controller_precedence_final_event_and_milestone() -> None:
         now=120.0,
     )
     assert final.due is True
-    assert final.kind == CheckpointKind.FINAL
+    assert final.trigger == CheckpointKind.FINAL
     assert final.next_due_at == 3700.0
 
     event = controller.inspect("wf", profile, policy, event="repeated_failure", milestone=True, now=120.0)
     assert event.due is True
-    assert event.kind == CheckpointKind.EVENT_BASED
+    assert event.trigger == CheckpointKind.EVENT_BASED
     assert "risk event detected" in event.reason
 
     milestone = controller.inspect("wf", profile, policy, milestone=True, now=120.0)
     assert milestone.due is True
-    assert milestone.kind == CheckpointKind.MILESTONE
+    assert milestone.trigger == CheckpointKind.MILESTONE
 
 
 def test_checkpoint_controller_periodic_schedule_branches() -> None:
@@ -170,12 +170,12 @@ def test_checkpoint_controller_periodic_schedule_branches() -> None:
 
     disabled = controller.inspect("wf", profile, _policy(None), now=100.0)
     assert disabled.due is False
-    assert disabled.kind is None
+    assert disabled.trigger is None
     assert disabled.next_due_at is None
 
     first = controller.inspect("wf", profile, _policy(60), now=100.0)
     assert first.due is True
-    assert first.kind == CheckpointKind.HOURLY
+    assert first.trigger == CheckpointKind.HOURLY
     assert first.next_due_at == 3700.0
 
     elapsed_hourly = controller.inspect(
@@ -186,7 +186,7 @@ def test_checkpoint_controller_periodic_schedule_branches() -> None:
         now=3700.0,
     )
     assert elapsed_hourly.due is True
-    assert elapsed_hourly.kind == CheckpointKind.HOURLY
+    assert elapsed_hourly.trigger == CheckpointKind.HOURLY
 
     elapsed_short_interval = controller.inspect(
         "wf",
@@ -196,7 +196,7 @@ def test_checkpoint_controller_periodic_schedule_branches() -> None:
         now=1000.0,
     )
     assert elapsed_short_interval.due is True
-    assert elapsed_short_interval.kind == CheckpointKind.MILESTONE
+    assert elapsed_short_interval.trigger == CheckpointKind.MILESTONE
 
     waiting = controller.inspect(
         "wf",
@@ -206,7 +206,7 @@ def test_checkpoint_controller_periodic_schedule_branches() -> None:
         now=200.0,
     )
     assert waiting.due is False
-    assert waiting.kind is None
+    assert waiting.trigger is None
     assert waiting.next_due_at == 3700.0
 
 
