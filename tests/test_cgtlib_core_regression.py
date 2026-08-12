@@ -161,7 +161,16 @@ def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
             else:
                 errors.append([None, None])
 
-        print(json.dumps({"has_private": cgt._HAS_PRIVATE, "errors": errors}))
+        print(
+            json.dumps(
+                {
+                    "has_private": cgt._HAS_PRIVATE,
+                    "errors": errors,
+                    "stable_api_is_tuple": isinstance(cgt.CGTLIB_STABLE_API, tuple),
+                    "stable_api_contains_manifest": "build_cgtlib_manifest" in cgt.CGTLIB_STABLE_API,
+                }
+            )
+        )
         """
     )
     result = subprocess.run(
@@ -173,6 +182,8 @@ def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
     payload = json.loads(result.stdout)
 
     assert payload["has_private"] is False
+    assert payload["stable_api_is_tuple"] is True
+    assert payload["stable_api_contains_manifest"] is True
     assert len(payload["errors"]) == 7
     for error_name, message in payload["errors"]:
         assert error_name == "_FeatureUnavailableError"

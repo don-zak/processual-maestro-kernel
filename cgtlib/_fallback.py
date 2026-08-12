@@ -5,8 +5,9 @@ engine is not available.
 """
 from __future__ import annotations
 
-from dataclasses import field
 from typing import Any
+
+from ._stable_api import CGTLIB_STABLE_API as CGTLIB_STABLE_API
 
 _UNAVAILABLE_MSG = "requires private CGT engine which is not available in this build"
 
@@ -356,9 +357,6 @@ def validate_structural_transition_report(*args, **kwargs):
 
 
 # ---------- api / metadata ----------
-CGTLIB_STABLE_API: dict[str, Any] = field(default_factory=lambda: {"_available": False})
-
-
 def build_public_api_snapshot(*args, **kwargs):
     raise _FeatureUnavailableError("build_public_api_snapshot")
 
