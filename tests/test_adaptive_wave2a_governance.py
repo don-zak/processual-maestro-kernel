@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 
 from processual_kernel.adaptive.certification import AdaptiveCertificationAuthority, checksum
 from processual_kernel.adaptive.checkpoints import CheckpointScheduler
@@ -28,6 +28,7 @@ from processual_kernel.adaptive_types import (
     WorkflowHistoryEvent,
 )
 from processual_kernel.types import (
+    AgentState,
     KernelPolicy,
     MaestroAction,
     StepRecord,
@@ -553,10 +554,9 @@ def test_checkpoint_report_covers_agents_handoffs_risks_and_remaining_actions():
     workflow.steps["s2"] = StepRecord(step=step_b, state=StepState.RUNNING, assigned_agent_id="b")
 
     registry = {
-        "a": SimpleNamespace(state=__import__("processual_kernel.types", fromlist=["AgentState"]).AgentState.TRANSITIONAL, psi=-0.1, previous_psi=0.1, failure_streak=2),
-        "b": SimpleNamespace(state=__import__("processual_kernel.types", fromlist=["AgentState"]).AgentState.ACTIVE, psi=0.5, previous_psi=0.48, failure_streak=0),
+        "a": SimpleNamespace(state=AgentState.TRANSITIONAL, psi=-0.1, previous_psi=0.1, failure_streak=2),
+        "b": SimpleNamespace(state=AgentState.ACTIVE, psi=0.5, previous_psi=0.48, failure_streak=0),
     }
-    AgentState = __import__("processual_kernel.types", fromlist=["AgentState"]).AgentState
     handoffs = {
         "a->b": SimpleNamespace(source_agent_id="a", target_agent_id="b", state=AgentState.QUARANTINED, psi=-0.2, previous_psi=0.0, observations=3),
         "x->y": SimpleNamespace(source_agent_id="x", target_agent_id="y", state=AgentState.ACTIVE, psi=0.5, previous_psi=0.5, observations=1),
@@ -695,3 +695,4 @@ def test_replay_empty_inputs_no_escalation_bonus_and_keep_baseline_branches():
     assert capped.quality_delta == 0.18
     assert capped.latency_delta == -0.12
     assert capped.confidence == 0.9
+
