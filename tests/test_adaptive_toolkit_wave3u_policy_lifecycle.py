@@ -137,10 +137,11 @@ def test_apply_policy_patch_updates_policy_tracks_version_and_persists() -> None
     patch = make_patch()
     updated = SimpleNamespace(policy_version="p2")
     toolkit.calibrator.apply_patch.return_value = updated
+    original_policy = kernel.policy
 
     toolkit.apply_policy_patch(patch, min_sample_size=7)
 
-    toolkit.calibrator.apply_patch.assert_called_once_with(kernel.policy, patch, min_sample_size=7)
+    toolkit.calibrator.apply_patch.assert_called_once_with(original_policy, patch, min_sample_size=7)
     assert kernel.policy is updated
     assert kernel.governor.policy is updated
     assert "p2" in toolkit._successful_patch_versions
@@ -161,10 +162,11 @@ def test_rollback_policy_patch_updates_policy_discards_version_and_persists() ->
     toolkit._successful_patch_versions.add("p2")
     updated = SimpleNamespace(policy_version="p1")
     toolkit.calibrator.rollback_patch.return_value = updated
+    original_policy = kernel.policy
 
     toolkit.rollback_policy_patch(patch)
 
-    toolkit.calibrator.rollback_patch.assert_called_once_with(kernel.policy, patch)
+    toolkit.calibrator.rollback_patch.assert_called_once_with(original_policy, patch)
     assert kernel.policy is updated
     assert kernel.governor.policy is updated
     assert "p2" not in toolkit._successful_patch_versions
