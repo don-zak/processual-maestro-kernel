@@ -326,7 +326,7 @@ def test_observe_workflow_from_steps_builds_telemetry(monkeypatch: pytest.Monkey
     assert telemetry.completion_confidence == pytest.approx(2 / 9)
     assert telemetry.goal_alignment == 0.55
     assert telemetry.coordination_quality == 0.45
-    assert telemetry.latency_pressure == 0.15
+    assert telemetry.latency_pressure == pytest.approx(0.15)
     assert telemetry.custom == {"business_priority": 0.8}
 
 
