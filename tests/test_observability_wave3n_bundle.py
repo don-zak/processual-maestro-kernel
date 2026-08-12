@@ -24,12 +24,23 @@ def test_log_event_defaults_and_timestamp_shape() -> None:
 
 def test_structured_logger_fallback_constructor_and_methods(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_logger = Mock(spec=logging.Logger)
+    fake_handler = Mock()
+    fake_logging = SimpleNamespace(
+        getLogger=Mock(return_value=fake_logger),
+        StreamHandler=Mock(return_value=fake_handler),
+        Formatter=Mock(return_value=Mock()),
+        INFO=logging.INFO,
+    )
     monkeypatch.setattr(logging_mod, "_structlog_available", False)
-    monkeypatch.setattr(logging_mod.logging, "getLogger", Mock(return_value=fake_logger))
-    monkeypatch.setattr(logging_mod.logging, "StreamHandler", Mock(return_value=Mock()))
+    monkeypatch.setattr(logging_mod, "logging", fake_logging)
 
     logger = logging_mod.StructuredLogger("fallback")
     assert logger._logger is fake_logger
+    fake_logging.getLogger.assert_called_once_with("fallback")
+    fake_logging.StreamHandler.assert_called_once_with(sys.stdout)
+    fake_handler.setFormatter.assert_called_once()
+    fake_logger.addHandler.assert_called_once_with(fake_handler)
+    fake_logger.setLevel.assert_called_once_with(logging.INFO)
 
     logger.info("evt", key=1)
     logger.warning("warn", value="x")
@@ -209,7 +220,7 @@ def test_noop_metric_collectors_accept_labels_increment_and_observe() -> None:
     assert histogram.observe(2.5) is None
 
 
-def _fake_sentry_sdk() -> tuple[SimpleNamespace, Mock, Mock, list[dict[str, object]]]:
+def _fake_sentry_sdk() -> tuple[SimpleNamespace, Mock, Mock, Mock, list[dict[str, object]]]:
     init = Mock()
     capture_exception = Mock()
     capture_message = Mock()
