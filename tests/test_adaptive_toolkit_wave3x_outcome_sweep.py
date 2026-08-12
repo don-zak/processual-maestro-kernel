@@ -28,10 +28,10 @@ def make_toolkit(workflow_state: WorkflowState) -> AdaptiveGovernanceToolkit:
     return toolkit
 
 
-def pending_entry(decision_id: str) -> SimpleNamespace:
+def pending_entry(decision_id: str, workflow_id: str = "wf-1") -> SimpleNamespace:
     return SimpleNamespace(
         decision_id=decision_id,
-        workflow_id="wf-1",
+        workflow_id=workflow_id,
         action=MaestroAction.PAUSE,
         metadata={"expected_effect": "stabilize"},
     )
@@ -40,7 +40,10 @@ def pending_entry(decision_id: str) -> SimpleNamespace:
 def test_auto_evaluate_pending_outcomes_infers_success_and_progress_delta() -> None:
     toolkit = make_toolkit(WorkflowState.COMPLETED)
     entry = pending_entry("dec-1")
-    toolkit.pending_outcomes.return_value = (entry, pending_entry("other"))
+    toolkit.pending_outcomes.return_value = (
+        entry,
+        pending_entry("other", workflow_id="wf-2"),
+    )
     plan = SimpleNamespace(
         pending_count=1,
         batch_size=1,
