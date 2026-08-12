@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -63,7 +63,7 @@ async def test_governed_adapter_delegates_health_and_runs_generation_through_fan
 ) -> None:
     adapter = FakeAdapter()
     governed = registry_mod._GovernedLLMAdapter(adapter)
-    fanout = AsyncMock()
+    fanout = Mock()
 
     async def run_operation(provider_name: str, operation):
         fanout(provider_name)
@@ -74,7 +74,7 @@ async def test_governed_adapter_delegates_health_and_runs_generation_through_fan
     assert governed.is_configured() is True
     assert await governed.is_available() is True
     assert await governed.generate("hello", system_prompt="system", temperature=0.2) == "generated"
-    fanout.assert_awaited_once_with("Provider One")
+    fanout.assert_called_once_with("Provider One")
     assert adapter.generate_calls == [
         {"prompt": "hello", "system_prompt": "system", "temperature": 0.2}
     ]
