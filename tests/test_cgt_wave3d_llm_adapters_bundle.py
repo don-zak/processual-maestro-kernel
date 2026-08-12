@@ -39,7 +39,7 @@ class _Completions:
 
 
 class _OpenAIClient:
-    instances: list["_OpenAIClient"] = []
+    instances: list[_OpenAIClient] = []
     fail_models = False
     response_text = "answer"
 
@@ -240,7 +240,7 @@ async def test_openrouter_configuration_headers_availability_and_generate(monkey
 
 
 class _AnthropicClient:
-    instances: list["_AnthropicClient"] = []
+    instances: list[_AnthropicClient] = []
     fail_ping = False
     empty_content = False
 
@@ -304,7 +304,7 @@ class _GeminiModels:
 
 
 class _GeminiClient:
-    instances: list["_GeminiClient"] = []
+    instances: list[_GeminiClient] = []
     fail_list = False
 
     def __init__(self, api_key: str) -> None:
