@@ -147,7 +147,7 @@ def test_execute_checkpoint_recommendation_executes_and_tracks_fingerprint() -> 
 
 def test_execute_checkpoint_recommendation_forces_dry_run_without_auto_execute() -> None:
     toolkit = make_toolkit()
-    command = configure_command(toolkit, dry_run=True)
+    configure_command(toolkit, dry_run=True)
     dedupe = SimpleNamespace(
         action=MaestroAction.PAUSE,
         duplicate=False,
