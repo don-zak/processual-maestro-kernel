@@ -128,7 +128,7 @@ def test_metrics_aggregates_workflows_handoffs_agents_outcomes_and_checkpoints()
     kernel = SimpleNamespace(
         workflows={
             "done": _workflow(WorkflowState.COMPLETED, 6.0),
-            "open": _workflow(WorkflowState.ACTIVE, 2.0),
+            "open": _workflow(WorkflowState.RUNNING, 2.0),
         },
         handoffs={
             "good": _handoff(AgentState.ACTIVE, 0.2),
