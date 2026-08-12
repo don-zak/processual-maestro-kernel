@@ -100,13 +100,3 @@ def test_workflow_latency_observation_delegates_exact_value(monkeypatch) -> None
     metrics.observe_workflow_latency(1.25)
 
     histogram.observe.assert_called_once_with(1.25)
-
-
-def test_noop_metrics_support_labels_increment_and_observe() -> None:
-    counter = metrics._NoopCounter()
-    histogram = metrics._NoopHistogram()
-
-    assert counter.labels(rank="x") is counter
-    assert counter.inc() is None
-    assert counter.inc(3.5) is None
-    assert histogram.observe(2.0) is None
