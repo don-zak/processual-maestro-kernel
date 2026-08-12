@@ -11,13 +11,11 @@ class _FakeParagraph:
 
 
 class _FakeTable:
-    def __init__(self, data, colWidths=None):
+    def __init__(self, data, **kwargs):
         self.data = data
-        self.col_widths = colWidths
+        self.col_widths = kwargs.get("colWidths")
         self.styles = []
-
-    def setStyle(self, style) -> None:
-        self.styles.append(style)
+        self.setStyle = self.styles.append
 
 
 class _FakeDoc:
