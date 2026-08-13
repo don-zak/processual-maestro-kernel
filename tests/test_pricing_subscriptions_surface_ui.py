@@ -18,10 +18,11 @@ def test_pricing_surface_file_exists_and_fetches_public_catalog() -> None:
     assert "commercially_listed" in text
 
 
-def test_pricing_surface_renders_catalog_safety_metadata() -> None:
+def test_pricing_surface_renders_production_safety_metadata() -> None:
     text = _pricing_text()
 
-    assert "Draft pricing" in text
+    assert "Subscription catalog" in text
+    assert "Draft pricing" not in text
     assert "BYOK" in text
     assert "provider costs are not included" in text.lower()
     assert "Checkout" in text
@@ -56,6 +57,7 @@ def test_login_commercial_panel_links_to_pricing_surface_without_checkout() -> N
     assert 'aria-label="request access"' in text
     assert "/billing/checkout" not in text
     assert "billing/checkout" not in text
+
 
 def test_login_offers_action_links_directly_to_public_pricing_page() -> None:
     text = LOGIN_HTML.read_text(encoding="utf-8")
