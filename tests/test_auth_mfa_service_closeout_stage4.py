@@ -284,6 +284,6 @@ def test_step_up_regeneration_disable_and_status_branches() -> None:
     repo.remaining = 4
     status = asyncio.run(service.status(user_id=user_id, session_id=session_id))
     assert status.enabled is True
-    assert status.pending is False
+    assert status.pending_enrollment is False
     assert status.recovery_codes_remaining == 4
     assert status.step_up_satisfied is True
