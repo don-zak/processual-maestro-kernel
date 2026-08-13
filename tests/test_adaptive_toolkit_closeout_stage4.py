@@ -62,7 +62,7 @@ def test_human_approval_lifecycle_delegates_audits_and_persists() -> None:
         policy_version="v-current",
         owner="ops",
     )
-    assert toolkit.pending_approval_requests("wf-1") == (pending,)
+    assert toolkit.safety_guard.pending(workflow_id="wf-1") == (pending,)
 
     result = toolkit.approve_human_request("req-1")
     assert result is approved
@@ -189,7 +189,11 @@ def test_convergence_report_tracks_history_and_recovery_playbook_inputs() -> Non
     critique = SimpleNamespace(findings=("finding",))
     invariants = SimpleNamespace(violations=("violation",))
     repair = SimpleNamespace(edge_id="edge-1")
-    playbook = SimpleNamespace(workflow_id="wf-5")
+    playbook = SimpleNamespace(
+        workflow_id="wf-5",
+        steps=("recover",),
+        confidence=0.9,
+    )
     toolkit.pending_outcomes.return_value = ("pending",)
     toolkit.pending_approval_requests.return_value = ("approval", "approval-2")
     toolkit.contracts.build_recovery_playbook.return_value = playbook
