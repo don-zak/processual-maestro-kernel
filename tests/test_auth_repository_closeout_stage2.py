@@ -4,7 +4,6 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 
