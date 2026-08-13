@@ -60,11 +60,7 @@ class SensitiveSessionAPIRoute(APIRoute):
         return sanitized_route_handler
 
 
-router = APIRouter(
-    prefix="/auth",
-    tags=["identity-sessions"],
-    route_class=SensitiveSessionAPIRoute,
-)
+router = APIRouter(prefix="/auth", tags=["identity-sessions"], route_class=SensitiveSessionAPIRoute)
 
 
 async def get_session_runtime() -> SessionRuntime:
@@ -81,47 +77,21 @@ async def get_identity_user(current_user: dict = Depends(get_current_user)) -> d
 
 
 def _audit(request: Request, *, action: str, result: str) -> None:
-    logger.info(
-        "identity_session",
-        extra={
-            "request_id": getattr(request.state, "request_id", "unavailable"),
-            "session_action": action,
-            "session_result": result,
-        },
-    )
+    logger.info("identity_session", extra={"request_id": getattr(request.state, "request_id", "unavailable"), "session_action": action, "session_result": result})
 
 
 def _client_ip(request: Request, runtime: SessionRuntime) -> str:
     peer_ip = request.client.host if request.client is not None else "127.0.0.1"
-    return resolve_client_ip(
-        peer_ip=peer_ip,
-        forwarded_for=request.headers.get("X-Forwarded-For"),
-        policy=runtime.proxy_policy,
-    )
+    return resolve_client_ip(peer_ip=peer_ip, forwarded_for=request.headers.get("X-Forwarded-For"), policy=runtime.proxy_policy)
 
 
-async def _consume_rate_limit(
-    *,
-    request: Request,
-    runtime: SessionRuntime,
-    action: str,
-    rules: tuple[AuthRateLimitRule, ...],
-    subjects: dict[str, str],
-) -> None:
+async def _consume_rate_limit(*, request: Request, runtime: SessionRuntime, action: str, rules: tuple[AuthRateLimitRule, ...], subjects: dict[str, str]) -> None:
     try:
-        decision = await runtime.rate_limiter.consume(
-            action=action,
-            subjects=subjects,
-            rules=rules,
-        )
+        decision = await runtime.rate_limiter.consume(action=action, subjects=subjects, rules=rules)
     except (AuthRateLimitUnavailableError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
     if not decision.allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many session requests.",
-            headers={"Retry-After": str(max(1, decision.retry_after_seconds))},
-        )
+        raise HTTPException(status_code=429, detail="Too many session requests.", headers={"Retry-After": str(max(1, decision.retry_after_seconds))})
 
 
 async def _response_floor(started_at: float, minimum_seconds: float) -> None:
@@ -131,24 +101,8 @@ async def _response_floor(started_at: float, minimum_seconds: float) -> None:
 
 
 def _set_session_cookies(response: Response, issued: IssuedSession) -> None:
-    response.set_cookie(
-        REFRESH_COOKIE,
-        issued.refresh_token,
-        max_age=issued.refresh_expires_in,
-        secure=True,
-        httponly=True,
-        samesite="strict",
-        path="/auth/session",
-    )
-    response.set_cookie(
-        CSRF_COOKIE,
-        issued.csrf_token,
-        max_age=issued.refresh_expires_in,
-        secure=True,
-        httponly=False,
-        samesite="strict",
-        path="/auth/session",
-    )
+    response.set_cookie(REFRESH_COOKIE, issued.refresh_token, max_age=issued.refresh_expires_in, secure=True, httponly=True, samesite="strict", path="/auth/session")
+    response.set_cookie(CSRF_COOKIE, issued.csrf_token, max_age=issued.refresh_expires_in, secure=True, httponly=False, samesite="strict", path="/auth/session")
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
 
@@ -168,38 +122,19 @@ def _refresh_credentials(request: Request, csrf_header: str | None) -> tuple[str
     return refresh_token, csrf_cookie
 
 
-@router.post(
-    "/login",
-    response_model=AccessTokenResponseContract,
-    response_model_exclude_none=True,
-)
-async def login(
-    body: LoginRequestContract,
-    request: Request,
-    response: Response,
-    runtime: SessionRuntime = Depends(get_session_runtime),
-):
+@router.post("/login", response_model=AccessTokenResponseContract, response_model_exclude_none=True)
+async def login(body: LoginRequestContract, request: Request, response: Response, runtime: SessionRuntime = Depends(get_session_runtime)):
     started_at = time.perf_counter()
     try:
         try:
             email_subject = normalize_email(body.email)
         except ValueError:
             email_subject = "invalid-email"
-        await _consume_rate_limit(
-            request=request,
-            runtime=runtime,
-            action="login",
-            rules=LOGIN_RULES,
-            subjects={"ip": _client_ip(request, runtime), "email": email_subject},
-        )
+        await _consume_rate_limit(request=request, runtime=runtime, action="login", rules=LOGIN_RULES, subjects={"ip": _client_ip(request, runtime), "email": email_subject})
         issued = await runtime.service.login(email=body.email, password=body.password)
     except InvalidSessionCredentialsError as exc:
         _audit(request, action="login", result="denied")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=GENERIC_INVALID,
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_INVALID, headers={"WWW-Authenticate": "Bearer"}) from exc
     except SessionAuthorityUnavailableError as exc:
         _audit(request, action="login", result="unavailable")
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
@@ -207,32 +142,13 @@ async def login(
         await _response_floor(started_at, runtime.minimum_response_seconds)
     _set_session_cookies(response, issued)
     _audit(request, action="login", result="accepted")
-    return AccessTokenResponseContract(
-        access_token=issued.access_token,
-        expires_in=issued.access_expires_in,
-        mfa_required=True if issued.mfa_required else None,
-    )
+    return AccessTokenResponseContract(access_token=issued.access_token, expires_in=issued.access_expires_in, mfa_required=True if issued.mfa_required else None, csrf_token=issued.csrf_token)
 
 
-@router.post(
-    "/session/refresh",
-    response_model=AccessTokenResponseContract,
-    response_model_exclude_none=True,
-)
-async def refresh_session(
-    request: Request,
-    response: Response,
-    csrf_header: str | None = Header(default=None, alias=CSRF_HEADER),
-    runtime: SessionRuntime = Depends(get_session_runtime),
-):
+@router.post("/session/refresh", response_model=AccessTokenResponseContract, response_model_exclude_none=True)
+async def refresh_session(request: Request, response: Response, csrf_header: str | None = Header(default=None, alias=CSRF_HEADER), runtime: SessionRuntime = Depends(get_session_runtime)):
     raw_refresh_token, _ = _refresh_credentials(request, csrf_header)
-    await _consume_rate_limit(
-        request=request,
-        runtime=runtime,
-        action="session_refresh",
-        rules=SESSION_REFRESH_RULES,
-        subjects={"ip": _client_ip(request, runtime), "token": raw_refresh_token},
-    )
+    await _consume_rate_limit(request=request, runtime=runtime, action="session_refresh", rules=SESSION_REFRESH_RULES, subjects={"ip": _client_ip(request, runtime), "token": raw_refresh_token})
     try:
         issued = await runtime.service.refresh(raw_refresh_token)
     except (InvalidSessionCredentialsError, RefreshTokenReuseError):
@@ -244,19 +160,11 @@ async def refresh_session(
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
     _set_session_cookies(response, issued)
     _audit(request, action="refresh", result="accepted")
-    return AccessTokenResponseContract(
-        access_token=issued.access_token,
-        expires_in=issued.access_expires_in,
-    )
+    return AccessTokenResponseContract(access_token=issued.access_token, expires_in=issued.access_expires_in, mfa_required=True if issued.mfa_required else None, csrf_token=issued.csrf_token)
 
 
 @router.post("/session/logout", response_model=SessionProcessedResponseContract)
-async def logout_session(
-    request: Request,
-    response: Response,
-    csrf_header: str | None = Header(default=None, alias=CSRF_HEADER),
-    runtime: SessionRuntime = Depends(get_session_runtime),
-):
+async def logout_session(request: Request, response: Response, csrf_header: str | None = Header(default=None, alias=CSRF_HEADER), runtime: SessionRuntime = Depends(get_session_runtime)):
     raw_refresh_token, _ = _refresh_credentials(request, csrf_header)
     try:
         await runtime.service.logout(raw_refresh_token)
@@ -268,12 +176,7 @@ async def logout_session(
 
 
 @router.post("/session/logout-all", response_model=SessionProcessedResponseContract)
-async def logout_all_sessions(
-    request: Request,
-    response: Response,
-    csrf_header: str | None = Header(default=None, alias=CSRF_HEADER),
-    runtime: SessionRuntime = Depends(get_session_runtime),
-):
+async def logout_all_sessions(request: Request, response: Response, csrf_header: str | None = Header(default=None, alias=CSRF_HEADER), runtime: SessionRuntime = Depends(get_session_runtime)):
     raw_refresh_token, _ = _refresh_credentials(request, csrf_header)
     try:
         await runtime.service.logout_all(raw_refresh_token)
@@ -285,10 +188,7 @@ async def logout_all_sessions(
 
 
 @router.get("/sessions", response_model=SessionListResponseContract)
-async def list_sessions(
-    runtime: SessionRuntime = Depends(get_session_runtime),
-    current_user: dict = Depends(get_identity_user),
-):
+async def list_sessions(runtime: SessionRuntime = Depends(get_session_runtime), current_user: dict = Depends(get_identity_user)):
     try:
         user_id = uuid.UUID(current_user["user_id"])
         current_session_id = uuid.UUID(current_user["session_id"])
@@ -297,31 +197,13 @@ async def list_sessions(
         raise HTTPException(status_code=401, detail=GENERIC_INVALID) from exc
     except SessionAuthorityUnavailableError as exc:
         raise HTTPException(status_code=503, detail=GENERIC_UNAVAILABLE) from exc
-    return SessionListResponseContract(
-        sessions=tuple(
-            SessionViewContract(
-                id=session.id,
-                authenticated_at=session.authenticated_at,
-                last_seen_at=session.last_seen_at,
-                expires_at=session.expires_at,
-                current=session.id == current_session_id,
-            )
-            for session in sessions
-        )
-    )
+    return SessionListResponseContract(sessions=tuple(SessionViewContract(id=session.id, authenticated_at=session.authenticated_at, last_seen_at=session.last_seen_at, expires_at=session.expires_at, current=session.id == current_session_id) for session in sessions))
 
 
 @router.delete("/sessions/{session_id}", response_model=SessionProcessedResponseContract)
-async def revoke_session(
-    session_id: uuid.UUID,
-    runtime: SessionRuntime = Depends(get_session_runtime),
-    current_user: dict = Depends(get_identity_user),
-):
+async def revoke_session(session_id: uuid.UUID, runtime: SessionRuntime = Depends(get_session_runtime), current_user: dict = Depends(get_identity_user)):
     try:
-        await runtime.service.revoke_session(
-            user_id=uuid.UUID(current_user["user_id"]),
-            session_id=session_id,
-        )
+        await runtime.service.revoke_session(user_id=uuid.UUID(current_user["user_id"]), session_id=session_id)
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=401, detail=GENERIC_INVALID) from exc
     except SessionAuthorityUnavailableError as exc:
