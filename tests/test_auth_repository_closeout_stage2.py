@@ -246,7 +246,7 @@ def test_session_repository_refresh_revoke_and_views() -> None:
             reason="security_reset",
         )
     )
-    assert len(session.execute_statements) == 3
+    assert len(session.execute_statements) == 4
 
     views = asyncio.run(repository.sessions_for_user(user_id))
     assert len(views) == 1
