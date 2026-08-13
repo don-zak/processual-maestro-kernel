@@ -93,7 +93,7 @@ def test_transport_contract_and_result_dataclasses_reject_unsafe_mutations() -> 
         replace(contract, sandbox_only=False)
     with pytest.raises(ValueError, match="must remain False"):
         replace(contract, external_http_allowed=True)
-    with pytest.raises(ValueError, match="status"):
+    with pytest.raises(ValueError, match="remain disabled"):
         replace(contract, status="blocked")
 
     result = ConnectorTransportResult(
