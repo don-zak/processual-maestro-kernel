@@ -237,7 +237,7 @@ async def login(
         access_token=issued.access_token,
         expires_in=issued.access_expires_in,
         mfa_required=True if issued.mfa_required else None,
-        csrf_token=issued.csrf_token,
+        csrf_token=issued.csrf_token if issued.mfa_required else None,
     )
 
 
