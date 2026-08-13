@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import sys
+from types import ModuleType
 from unittest.mock import Mock, call
 
 import pytest
 
-import cgtlib.benchmark_surfaces as benchmark_surfaces
-from cgtlib.benchmark_surfaces import BenchmarkSurface, BenchmarkSurfacePoint
-from cgtlib.types import CGTParameters
+_private_package = ModuleType("cgtlib.private")
+_compute_module = ModuleType("cgtlib.private.compute")
+_private_package.compute = _compute_module
+sys.modules["cgtlib.private"] = _private_package
+sys.modules["cgtlib.private.compute"] = _compute_module
+try:
+    import cgtlib.benchmark_surfaces as benchmark_surfaces
+    from cgtlib.benchmark_surfaces import BenchmarkSurface, BenchmarkSurfacePoint
+    from cgtlib.types import CGTParameters
+finally:
+    sys.modules.pop("cgtlib.private.compute", None)
+    sys.modules.pop("cgtlib.private", None)
 
 
 def test_evaluate_benchmark_surface_rejects_invalid_axis() -> None:
