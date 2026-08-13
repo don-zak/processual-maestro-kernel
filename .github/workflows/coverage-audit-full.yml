@@ -1,8 +1,8 @@
 name: Coverage Audit Full
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: ["audit/full-coverage-measurement-20260813"]
 
 jobs:
   full-coverage-audit:
