@@ -34,10 +34,11 @@ def test_pricing_factors_card_uses_public_assumptions_route_without_internal_val
 
     assert 'fetch("/billing/unit-cost-assumptions"' in source
     assert "loadPublicPricingFactors" in source
-    assert "review_status" in source
+    assert "review_status" not in source
     assert "billing_policy" in source
     assert "provider_cost_included" in source
     assert "approved_for_checkout" in source
+    assert "approved_for_checkout === true" in source
 
     card_start = source.index('id="pricing-factors-card"')
     card_end = source.index("</article>", card_start)
@@ -50,7 +51,7 @@ def test_pricing_factors_card_is_language_scoped() -> None:
     source = _pricing_text()
 
     assert 'data-label-ar="عوامل التسعير"' in source
-    assert 'data-label-en="Pricing factors under review"' in source
+    assert 'data-label-en="Pricing factors"' in source
     assert 'data-pricing-factors-lang="ar"' in source
     assert 'data-pricing-factors-lang="en"' in source
     assert 'lang="ar" dir="rtl" hidden' in source
@@ -58,6 +59,8 @@ def test_pricing_factors_card_is_language_scoped() -> None:
     assert "currentPricingFactorsLanguage" in source
     assert "document.documentElement.getAttribute" in source
     assert "section.hidden = !isActive" in source
+    assert "Pricing factors under review" not in source
+    assert "عوامل التسعير قيد المراجعة" not in source
 
 
 def test_pricing_factors_card_does_not_publish_internal_cost_or_profit_model() -> None:

@@ -16,24 +16,28 @@ def test_pricing_surface_fetches_offer_pricebook() -> None:
     assert 'id="offer-pricebook-state"' in text
 
 
-def test_pricing_surface_renders_draft_offer_review_language() -> None:
+def test_pricing_surface_renders_production_offer_language() -> None:
     text = _pricing_text()
 
-    assert "Draft offers" in text
-    assert "Offer structures under review" in text
-    assert "Pricing pending review" in text
+    assert "Offers" in text
+    assert "Commercial offers" in text
+    assert "Commercial offer." in text
     assert "Calculation method" in text
-    assert "Pending review" in text
+    assert "Draft offers" not in text
+    assert "Offer structures under review" not in text
+    assert "Pricing pending review" not in text
+    assert "Pending review" not in text
 
 
-def test_pricing_surface_offer_metadata_has_no_final_amounts_or_checkout() -> None:
+def test_pricing_surface_offer_metadata_has_no_checkout_endpoint_and_stays_fail_closed() -> None:
     text = _pricing_text().lower()
 
     assert "amount_cents" in text
-    assert "pending review" in text
+    assert "pending review" not in text
     assert "/billing/checkout" not in text
     assert "billing/checkout" not in text
-    assert "checkout enabled" not in text
+    assert "approved_for_checkout === true" in text
+    assert 'checkoutenabled ? "checkout enabled" : "checkout disabled"' in text
 
 
 def test_pricing_surface_offer_metadata_is_secret_safe() -> None:

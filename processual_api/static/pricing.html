@@ -444,11 +444,11 @@ h1{
   </div>
 
   <section class="hero">
-    <p class="eyebrow">Draft subscription catalog</p>
+    <p class="eyebrow">Subscription catalog</p>
     <h1>Subscription options</h1>
     <p class="hero-copy">
-      Processual Maestro currently lists draft commercial subscription options and draft offer structures.
-      Pricing values are not approved, checkout is disabled, and provider costs are not included.
+      Processual Maestro lists commercial subscription options and offer structures.
+      BYOK applies, provider costs are not included, and checkout availability follows the active commercial configuration.
     </p>
 
     <div class="status-row" id="catalog-summary" aria-label="Catalog summary">
@@ -487,11 +487,11 @@ h1{
     <section class="surface-section" id="pricing-offers-section">
       <div class="section-heading">
         <div>
-          <span class="badge warning">Draft offers</span>
-          <h2>Offer structures under review</h2>
+          <span class="badge warning">Offers</span>
+          <h2>Commercial offers</h2>
           <p class="section-copy">
             Offers define trial, monthly, yearly, and contact-sales structures.
-            Amounts and calculation method are intentionally pending review.
+            Offer availability and checkout state follow the active commercial configuration.
           </p>
         </div>
       </div>
@@ -507,15 +507,15 @@ h1{
           aria-expanded="false"
           aria-controls="pricing-factors-card"
           data-label-ar="عوامل التسعير"
-          data-label-en="Pricing factors under review"
+          data-label-en="Pricing factors"
         >
-          Pricing factors under review
+          Pricing factors
         </button>
       </div>
       <article class="pricing-factors-card" id="pricing-factors-card" aria-hidden="true">
         <section class="pricing-factors-content" data-pricing-factors-lang="ar" lang="ar" dir="rtl" hidden>
-          <h3>عوامل التسعير قيد المراجعة</h3>
-          <p id="pricing-factors-state-ar">تحميل حالة مراجعة التسعير...</p>
+          <h3>عوامل التسعير</h3>
+          <p id="pricing-factors-state-ar">تحميل حالة التسعير...</p>
           <ul class="pricing-factors-list">
             <li>تراعي الأسعار البنية التحتية والتشغيل العام للخدمة.</li>
             <li>تراعي معالجة الدفع والالتزامات الضريبية القابلة للتطبيق.</li>
@@ -527,8 +527,8 @@ h1{
           </p>
         </section>
         <section class="pricing-factors-content" data-pricing-factors-lang="en" lang="en" hidden>
-          <h3>Pricing factors under review</h3>
-          <p id="pricing-factors-state-en">Loading pricing review status...</p>
+          <h3>Pricing factors</h3>
+          <p id="pricing-factors-state-en">Loading pricing status...</p>
           <ul class="pricing-factors-list">
             <li>Pricing considers infrastructure and general service operations.</li>
             <li>Pricing considers payment processing and applicable tax handling.</li>
@@ -633,9 +633,9 @@ h1{
     return `
       <article class="plan-card" data-plan-id="${text(plan.plan_id, "unknown")}">
         <h3>${text(plan.display_name, "Plan")}</h3>
-        <p class="plan-description">${text(plan.description, "Draft subscription option.")}</p>
+        <p class="plan-description">${text(plan.description, "Subscription option.")}</p>
         <div class="price-label">${text(plan.price_label, "TBD")}</div>
-        <div class="draft-note">Draft pricing — final prices are not published.</div>
+
         <div class="plan-meta">
           <div class="meta-item">
             <span class="meta-label">Audience</span>
@@ -673,9 +673,9 @@ h1{
     return `
       <article class="offer-card" data-offer-id="${text(offer.offer_id, "unknown")}">
         <h3>${text(offer.display_name, "Offer")}</h3>
-        <p class="offer-description">${text(offer.description, "Draft offer under review.")}</p>
-        <div class="review-label">${text(offer.public_price_label, "Pricing pending review")}</div>
-        <div class="draft-note">${text(offer.price_review_note, "Pricing calculation is not defined yet.")}</div>
+        <p class="offer-description">${text(offer.description, "Commercial offer.")}</p>
+        <div class="review-label">${text(offer.public_price_label, "—")}</div>
+        <div class="draft-note">${text(offer.price_review_note, "—")}</div>
         <div class="offer-policy-note">${fulfillmentLabel(offer)}</div>
         <div class="offer-meta">
           <div class="meta-item">
@@ -688,15 +688,15 @@ h1{
           </div>
           <div class="meta-item">
             <span class="meta-label">Amount</span>
-            <span class="meta-value">${formatPending(offer.amount_cents, "Pending review")}</span>
+            <span class="meta-value">${formatPending(offer.amount_cents, "—")}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Currency</span>
-            <span class="meta-value">${formatPending(offer.currency, "Pending review")}</span>
+            <span class="meta-value">${formatPending(offer.currency, "—")}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Trial duration</span>
-            <span class="meta-value">${formatPending(offer.trial_duration_days, "Pending review")}</span>
+            <span class="meta-value">${formatPending(offer.trial_duration_days, "—")}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Calculation method</span>
@@ -719,7 +719,7 @@ h1{
     const plans = Array.isArray(payload.plans) ? payload.plans : [];
     const commercialPlans = plans.filter((plan) => plan.commercially_listed === true);
 
-    summaryPricing.textContent = text(payload.pricing_status, "draft");
+    summaryPricing.textContent = text(payload.pricing_status, "unknown");
     summaryBilling.textContent = text(payload.billing_policy, "byok").toUpperCase();
     summaryProvider.textContent = payload.provider_cost_included ? "Included" : "Not included";
     summaryCheckout.textContent = payload.checkout_enabled ? "Enabled" : "Disabled";
@@ -730,7 +730,7 @@ h1{
       return;
     }
 
-    state.textContent = `Catalog ${text(payload.catalog_version, "draft")} · ${commercialPlans.length} listed plans`;
+    state.textContent = `Catalog ${text(payload.catalog_version, "current")} · ${commercialPlans.length} listed plans`;
     grid.innerHTML = commercialPlans.map(planCard).join("");
   }
 
@@ -739,12 +739,12 @@ h1{
     const listedOffers = offers.filter((offer) => offer.commercially_listed === true);
 
     if (!listedOffers.length) {
-      offerState.textContent = "No draft offers are listed yet.";
+      offerState.textContent = "No commercial offers are listed.";
       offerGrid.innerHTML = "";
       return;
     }
 
-    offerState.textContent = `Offer price book ${text(payload.pricebook_version, "draft")} · ${listedOffers.length} draft offers`;
+    offerState.textContent = `Offer price book ${text(payload.pricebook_version, "current")} · ${listedOffers.length} offers`;
     offerGrid.innerHTML = listedOffers.map(offerCard).join("");
   }
 
@@ -894,7 +894,7 @@ h1{
 
       button.textContent = isArabic
         ? button.dataset.labelAr || "عوامل التسعير"
-        : button.dataset.labelEn || "Pricing factors under review";
+        : button.dataset.labelEn || "Pricing factors";
 
       card.setAttribute("lang", activeLang);
       card.setAttribute("dir", isArabic ? "rtl" : "ltr");
@@ -913,23 +913,20 @@ h1{
     }
 
     function setPricingFactorsStatus(payload) {
-      const reviewStatus = payload && payload.review_status ? payload.review_status : "pending_review";
       const billingPolicy = payload && payload.billing_policy ? String(payload.billing_policy).toUpperCase() : "BYOK";
       const providerExcluded = payload && payload.provider_cost_included === false;
-      const checkoutDisabled = payload && payload.approved_for_checkout === false;
+      const checkoutEnabled = payload && payload.approved_for_checkout === true;
 
       const english = [
-        `Review status: ${reviewStatus}`,
         billingPolicy,
-        providerExcluded ? "AI provider costs excluded" : "provider cost policy under review",
-        checkoutDisabled ? "checkout disabled" : "checkout under review",
+        providerExcluded ? "AI provider costs excluded" : "provider cost policy unavailable",
+        checkoutEnabled ? "checkout enabled" : "checkout disabled",
       ].join(" · ");
 
       const arabic = [
-        `حالة المراجعة: ${reviewStatus}`,
         billingPolicy,
-        providerExcluded ? "تكاليف مزود الذكاء الاصطناعي غير مشمولة" : "سياسة كلفة المزود قيد المراجعة",
-        checkoutDisabled ? "الدفع غير مفعل" : "الدفع قيد المراجعة",
+        providerExcluded ? "تكاليف مزود الذكاء الاصطناعي غير مشمولة" : "سياسة كلفة المزود غير متاحة",
+        checkoutEnabled ? "الدفع مفعل" : "الدفع غير مفعل",
       ].join(" · ");
 
       const englishState = document.getElementById("pricing-factors-state-en");
@@ -959,7 +956,6 @@ h1{
         setPricingFactorsStatus(payload);
       } catch (error) {
         setPricingFactorsStatus({
-          review_status: "pending_review",
           billing_policy: "byok",
           provider_cost_included: false,
           approved_for_checkout: false,
