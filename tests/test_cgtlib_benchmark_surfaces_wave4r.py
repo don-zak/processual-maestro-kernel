@@ -14,6 +14,7 @@ sys.modules["cgtlib.private.compute"] = _compute_module
 try:
     import cgtlib.benchmark_surfaces as benchmark_surfaces
     from cgtlib.benchmark_surfaces import BenchmarkSurface, BenchmarkSurfacePoint
+    from cgtlib.errors import ValidationError
     from cgtlib.types import CGTParameters
 finally:
     sys.modules.pop("cgtlib.private.compute", None)
@@ -31,7 +32,7 @@ def test_evaluate_benchmark_surface_rejects_invalid_axis() -> None:
 
 
 def test_evaluate_benchmark_surface_rejects_empty_inputs() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError, match="packs must not be empty"):
         benchmark_surfaces.evaluate_benchmark_surface(
             [],
             base_parameters=CGTParameters(),
@@ -39,7 +40,7 @@ def test_evaluate_benchmark_surface_rejects_empty_inputs() -> None:
             axis_values=(1.0,),
         )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError, match="axis_values must not be empty"):
         benchmark_surfaces.evaluate_benchmark_surface(
             [object()],
             base_parameters=CGTParameters(),
@@ -114,7 +115,7 @@ def test_evaluate_benchmark_surfaces_forwards_each_grid(monkeypatch: pytest.Monk
         call(packs, base_parameters=base, axis_name="omega", axis_values=(2.0,)),
     ]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError, match="axis_grids must not be empty"):
         benchmark_surfaces.evaluate_benchmark_surfaces(packs, base_parameters=base, axis_grids={})
 
 
@@ -165,5 +166,5 @@ def test_summarize_benchmark_surface_reports_ranges_and_spans() -> None:
 
 
 def test_summarize_benchmark_surface_rejects_empty_points() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError, match=r"surface\.points must not be empty"):
         benchmark_surfaces.summarize_benchmark_surface(BenchmarkSurface(axis_name="lam", points=()))
