@@ -139,7 +139,7 @@ def test_evaluation_access_card_is_visible_before_authority_check() -> None:
         "const EVALUATION_HOST_ID = 'admin-evaluation-grants'",
         "function ensureEvaluationGrantPlaceholder()",
         "External Evaluation Access",
-        "This is part of Admin API Key Lifecycle.",
+        "External Evaluation is an API key lifecycle option.",
         "Activate External Evaluation",
         "Activate External Evaluation to verify administrator authority and load controls.",
         "Backend scopes remain authoritative. Raw API keys are shown only at issue time.",
@@ -148,8 +148,9 @@ def test_evaluation_access_card_is_visible_before_authority_check() -> None:
     for marker in required:
         assert marker in source
 
-    assert "const parent = lifecycleCard || page" in source
-    assert "parent.appendChild(card)" in source
+    assert "if (!lifecycleCard) return null" in source
+    assert "lifecycleCard.insertBefore(card, lifecycleForm)" in source
+    assert "fallback-page" not in source
 
 
 def test_evaluation_access_card_explains_non_authorized_states() -> None:

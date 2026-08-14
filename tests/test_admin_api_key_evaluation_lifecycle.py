@@ -20,15 +20,18 @@ def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle() -> No
         "const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body'",
         "const EVALUATION_ACTIVATE_ID = 'admin-api-key-external-evaluation-activate'",
         "const lifecycleCard = document.getElementById(API_KEY_LIFECYCLE_CARD_ID)",
-        "const parent = lifecycleCard || page",
-        "parent.appendChild(card)",
-        "This is part of Admin API Key Lifecycle",
+        "if (!lifecycleCard) return null",
+        "const lifecycleForm = lifecycleCard.querySelector('.admin-grid')",
+        "lifecycleCard.insertBefore(card, lifecycleForm)",
+        "External Evaluation is an API key lifecycle option.",
         "Activate External Evaluation",
     ]
     for marker in required:
         assert marker in source
 
+    assert "const parent = lifecycleCard || page" not in source
     assert "page.appendChild(host)" not in source
+    assert "fallback-page" not in source
 
 
 def test_external_evaluation_activation_reveals_body_and_selects_evaluation_mode() -> None:
@@ -40,9 +43,26 @@ def test_external_evaluation_activation_reveals_body_and_selects_evaluation_mode
         "body.hidden = false",
         "button.disabled = true",
         "button.textContent = 'External Evaluation Active'",
+        "placeEvaluationWorkspaceInsideCard();",
         "mode.value = 'external_evaluation'",
         "mode.dispatchEvent(new Event('change', { bubbles: true }))",
         "await checkAdminSession()",
+    ]
+    for marker in required:
+        assert marker in source
+
+
+def test_external_evaluation_moves_provisioning_workspace_inside_activated_card() -> None:
+    source = _source(SESSION)
+
+    required = [
+        "const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace'",
+        "function placeEvaluationWorkspaceInsideCard()",
+        "const body = document.getElementById(EVALUATION_BODY_ID)",
+        "const host = document.getElementById(EVALUATION_HOST_ID)",
+        "const workspace = document.getElementById(PROVISIONING_WORKSPACE_ID)",
+        "if (workspace.parentElement === body) return",
+        "body.insertBefore(workspace, host || body.firstChild)",
     ]
     for marker in required:
         assert marker in source
