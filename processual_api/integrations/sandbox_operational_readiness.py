@@ -176,6 +176,9 @@ def evaluate_sandbox_operational_readiness(
 
     proof_ok = bool(
         live_proof_evidence
+        and live_proof_evidence.get("operational_proof") is True
+        and live_proof_evidence.get("peer_address_verified") is True
+        and live_proof_evidence.get("customer_secret_reference_configured") is True
         and live_proof_evidence.get("network_request_executed") is True
         and live_proof_evidence.get("mapping_valid") is True
         and live_proof_evidence.get("ready_for_task_consumption") is True
@@ -183,7 +186,7 @@ def evaluate_sandbox_operational_readiness(
         and live_proof_evidence.get("runtime_connector_approved") is False
     )
     if not proof_ok:
-        blockers.append("live_sandbox_proof_required")
+        blockers.append("hardened_live_sandbox_proof_required")
     elif status is SandboxOperationalStatus.CONTENT_READY:
         status = SandboxOperationalStatus.LIVE_PROOF_PASSED
         status = SandboxOperationalStatus.SANDBOX_READY
