@@ -7,6 +7,15 @@ from typing import Any
 from fastapi import Depends, HTTPException, status
 
 from processual_api.auth.security import get_current_user
+from processual_api.integrations.enterprise_endpoint_bindings import EndpointBindingError
+from processual_api.integrations.enterprise_endpoint_request_mapping import (
+    EndpointRequestMappingError,
+    build_external_request_body,
+)
+from processual_api.integrations.enterprise_sandbox_execution import (
+    SandboxExecutionError,
+    execute_sandbox_binding,
+)
 from processual_api.integrations.sandbox_operational_readiness import (
     SANDBOX_CONTENT_STORAGE_KEY,
     SANDBOX_SECRET_REFERENCE_STORAGE_KEY,
@@ -15,6 +24,14 @@ from processual_api.integrations.sandbox_operational_readiness import (
     evaluate_sandbox_operational_readiness,
     safe_content_projection,
     safe_secret_reference_projection,
+)
+from processual_api.integrations.sandbox_secret_resolution import (
+    ReferenceSandboxCredentialResolver,
+)
+from processual_api.integrations.sandbox_verified_transport import VerifiedPeerSandboxTransport
+from processual_api.services.enterprise_endpoint_sandbox_grants import (
+    SandboxGrantError,
+    resolve_active_sandbox_execution_grant,
 )
 
 from . import settings as settings_module
@@ -180,7 +197,98 @@ async def get_enterprise_sandbox_operational_readiness(
     }
 
 
+@settings_module.router.post(
+    "/enterprise-integration/endpoint-bindings/{binding_id}/sandbox-operational-execute",
+    response_model=dict,
+)
+async def execute_enterprise_sandbox_operational_proof(
+    binding_id: str,
+    body: binding_runtime.EndpointSandboxExecuteRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Execute the hardened sandbox path after explicit provisioning is complete."""
+
+    user_id, raw = binding_runtime._require_enterprise(current_user)
+    spec = binding_runtime._find_binding(raw, binding_id)
+    content = _content_contract(raw, binding_id)
+    secret_reference = _secret_reference(raw, binding_id)
+    if content is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Sandbox content contract is required before operational execution.",
+        )
+    if secret_reference is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Customer sandbox secret reference is required before operational execution.",
+        )
+
+    try:
+        grant = resolve_active_sandbox_execution_grant(
+            raw,
+            binding_id=spec.binding_id,
+            task_id=spec.task_id,
+        )
+        request_mapping = binding_runtime._find_request_mapping(raw, binding_id)
+        if spec.method in _BODY_METHODS and request_mapping is None:
+            raise EndpointRequestMappingError(
+                "sandbox request body mapping is required for this endpoint method"
+            )
+        request_body = (
+            build_external_request_body(spec, request_mapping, body.task_input)
+            if request_mapping is not None
+            else None
+        )
+        resolver = ReferenceSandboxCredentialResolver(secret_reference)
+        transport = VerifiedPeerSandboxTransport()
+        result = await execute_sandbox_binding(
+            spec,
+            task_input=body.task_input,
+            request_body=request_body,
+            approved_operation_classes=set(grant["approved_operation_classes"]),
+            approval_reference=str(grant["grant_id"]),
+            credential_resolver=resolver,
+            transport=transport,
+        )
+        if not transport.last_verified_peer:
+            raise SandboxExecutionError("sandbox_peer_address_unverified")
+    except (
+        ValueError,
+        KeyError,
+        EndpointBindingError,
+        EndpointRequestMappingError,
+        SandboxGrantError,
+        SandboxExecutionError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    result = {
+        **result,
+        "operational_proof": True,
+        "peer_address_verified": True,
+        "verified_peer_address": transport.last_verified_peer,
+        "content_dataset_reference": content.dataset_reference,
+        "content_fixture_profile_reference": content.fixture_profile_reference,
+        "customer_secret_reference_configured": True,
+    }
+    evidence = {
+        key: value
+        for key, value in result.items()
+        if key != "canonical_input"
+    }
+    evidence["canonical_output_slot"] = result["output_slot"]
+    items = binding_runtime._safe_evidence(raw)
+    items.append(evidence)
+    raw[binding_runtime.SANDBOX_EVIDENCE_STORAGE_KEY] = items[-50:]
+    settings_module._save_raw(user_id, raw)
+    return result
+
+
 __all__ = [
+    "execute_enterprise_sandbox_operational_proof",
     "get_enterprise_sandbox_operational_readiness",
     "save_enterprise_sandbox_content_contract",
     "save_enterprise_sandbox_secret_reference",
