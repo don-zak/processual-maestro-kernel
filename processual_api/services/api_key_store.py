@@ -39,7 +39,12 @@ def _verify_pbkdf2_api_key(plain_key: str, hashed_key: str) -> bool:
         iterations = int(iterations_raw)
         salt = base64.urlsafe_b64decode(salt_b64.encode("ascii"))
         expected = base64.urlsafe_b64decode(digest_b64.encode("ascii"))
-        actual = hashlib.pbkdf2_hmac("sha256", plain_key.encode("utf-8"), salt, iterations)
+        actual = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain_key.encode("utf-8"),
+            salt,
+            iterations,
+        )
         return hmac.compare_digest(actual, expected)
     except Exception:
         return False
@@ -56,7 +61,10 @@ def _verify_stored_key(plain_key: str, hashed_key: str) -> bool:
         return False
 
     try:
-        return _bcrypt_lib.checkpw(plain_key.encode("utf-8"), hashed_key.encode("utf-8"))
+        return _bcrypt_lib.checkpw(
+            plain_key.encode("utf-8"),
+            hashed_key.encode("utf-8"),
+        )
     except Exception:
         return False
 
@@ -70,7 +78,10 @@ def _safe_load_json(path: Path) -> dict[str, Any]:
 
 def _safe_save_json(path: Path, data: dict[str, Any]) -> None:
     tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
+    tmp_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        "utf-8",
+    )
     tmp_path.replace(path)
 
 
@@ -88,7 +99,11 @@ def _is_expired(value: str | None) -> bool:
         return False
 
 
-def _public_identity(user_id: str, raw: dict[str, Any], key: dict[str, Any]) -> dict[str, Any]:
+def _public_identity(
+    user_id: str,
+    raw: dict[str, Any],
+    key: dict[str, Any],
+) -> dict[str, Any]:
     client_id = (
         key.get("client_id")
         or raw.get("client_id")
@@ -113,6 +128,9 @@ def _public_identity(user_id: str, raw: dict[str, Any], key: dict[str, Any]) -> 
         "evaluation_grant_id": key.get("evaluation_grant_id"),
         "entitlement_source": key.get("entitlement_source"),
         "subscription_required": key.get("subscription_required", True),
+        "allowed_task_ids": list(key.get("allowed_task_ids") or []),
+        "task_scope_ids": list(key.get("task_scope_ids") or []),
+        "task_authority_source": key.get("task_authority_source"),
     }
 
 
@@ -168,7 +186,9 @@ def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
                 continue
 
             key["last_used_at"] = now
-            key["usage_count"] = int(key.get("usage_count", 0) or 0) + 1
+            key["usage_count"] = int(
+                key.get("usage_count", 0) or 0
+            ) + 1
             changed = True
 
             raw["api_keys"] = keys
