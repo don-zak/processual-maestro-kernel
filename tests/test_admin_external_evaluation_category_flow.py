@@ -6,6 +6,7 @@ SUMMARY = JS / "admin_api_key_summary.js"
 EVALUATION = JS / "admin_evaluation_grants.js"
 SESSION = JS / "admin_session.js"
 PROVISIONING = JS / "admin_api_key_provisioning_workspace.js"
+RUNTIME_FIXUPS = JS / "admin_runtime_fixups.js"
 
 
 def _source(path: Path) -> str:
@@ -30,22 +31,30 @@ def test_external_evaluation_is_a_real_category_driven_lifecycle_choice() -> Non
         assert marker in source
 
 
-def test_external_evaluation_does_not_require_a_visible_activate_button() -> None:
-    source = _source(SUMMARY)
+def test_external_evaluation_has_no_visible_legacy_activation_path() -> None:
+    session = _source(SESSION)
 
-    assert "if (button) button.hidden = true" in source
-    assert "This lifecycle is selected from Category." in source
-    assert "External Evaluation Lifecycle" in source
-    assert "verify → provision → bind tasks → create grant → issue once → test → revoke" in source
+    assert "This lifecycle is selected only from API Key Category." in session
+    assert "External Evaluation Lifecycle" in session
+    assert "verify → provision → bind tasks → create grant → issue once → test → revoke" in session
+    assert "Activate External Evaluation" not in session
+    assert "External Evaluation Active" not in session
+    assert "EVALUATION_ACTIVATE_ID" not in session
+    assert "applyExternalEvaluationActivation" not in session
+    assert ".click()" not in session
 
 
 def test_external_evaluation_category_switches_away_from_standard_surfaces() -> None:
-    source = _source(SUMMARY)
+    summary = _source(SUMMARY)
+    runtime = _source(RUNTIME_FIXUPS)
 
-    assert "setStandardVisibility(!external)" in source
-    assert "node.hidden = visible" in source
-    assert "admin-api-key-category-authority" in source
-    assert "slot.appendChild(label)" in source
+    assert "setStandardVisibility(!external)" in summary
+    assert "node.hidden = visible" in summary
+    assert "admin-api-key-category-authority" in summary
+    assert "slot.appendChild(label)" in summary
+    assert "removeApiKeyProfileControls();" in runtime
+    assert "data.standardApiKeyOnly" not in runtime
+    assert "controls.dataset.standardApiKeyOnly = 'true'" in runtime
 
 
 def test_external_evaluation_renders_the_plan_contract_before_creation() -> None:
@@ -113,6 +122,20 @@ def test_grant_post_uses_only_readiness_contract_values() -> None:
     assert "/settings/api-keys" not in create_source
 
 
+def test_standard_runtime_fixup_cannot_generate_an_external_evaluation_key() -> None:
+    source = _source(RUNTIME_FIXUPS)
+
+    generation_start = source.index("async function generateProfiledApiKey()")
+    profile_start = source.index("const profileName", generation_start)
+    guard = source[generation_start:profile_start]
+
+    assert "if (externalEvaluationSelected())" in guard
+    assert "Standard API key generation is blocked for External Evaluation." in guard
+    assert "button.disabled = true" in guard
+    assert "return;" in guard
+    assert "request('POST', '/settings/api-keys'" not in guard
+
+
 def test_evaluation_issue_remains_one_time_and_never_persists_raw_secret() -> None:
     source = _source(EVALUATION)
 
@@ -151,6 +174,7 @@ def test_existing_backend_authorities_and_scope_derivation_are_preserved() -> No
     assert "pmk-api-key-access-selection-changed" in provisioning
     assert "loadEvaluationGrantControls();" in session
     assert "loadApiKeyProvisioningWorkspace();" in session
+    assert "loadApiKeyEvaluationLifecycle();" in session
 
 
 def test_operational_profile_remains_intent_only_not_scope_authority() -> None:
