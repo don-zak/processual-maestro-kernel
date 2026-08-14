@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from enum import StrEnum
 from typing import Any
 
@@ -143,6 +145,35 @@ def safe_secret_reference_projection(reference: SandboxSecretReference) -> dict[
     }
 
 
+def sandbox_provisioning_fingerprint(
+    *,
+    binding: dict[str, Any],
+    request_mapping: dict[str, Any] | None,
+    secret_reference: SandboxSecretReference,
+    content_contract: SandboxContentContract,
+) -> str:
+    """Bind proof evidence to the exact non-secret sandbox provisioning state."""
+
+    payload = {
+        "binding": binding,
+        "request_mapping": request_mapping,
+        "secret_reference": {
+            "binding_id": secret_reference.binding_id,
+            "provider_id": secret_reference.provider_id,
+            "secret_reference": secret_reference.secret_reference,
+        },
+        "content_contract": content_contract.model_dump(mode="json"),
+    }
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def evaluate_sandbox_operational_readiness(
     *,
     binding_configured: bool,
@@ -150,6 +181,7 @@ def evaluate_sandbox_operational_readiness(
     secret_reference: SandboxSecretReference | None,
     content_contract: SandboxContentContract | None,
     live_proof_evidence: dict[str, Any] | None,
+    expected_provisioning_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Derive one monotonic, fail-closed sandbox readiness status."""
 
@@ -184,6 +216,11 @@ def evaluate_sandbox_operational_readiness(
         and live_proof_evidence.get("ready_for_task_consumption") is True
         and live_proof_evidence.get("production_allowed") is False
         and live_proof_evidence.get("runtime_connector_approved") is False
+        and (
+            expected_provisioning_sha256 is None
+            or live_proof_evidence.get("provisioning_sha256")
+            == expected_provisioning_sha256
+        )
     )
     if not proof_ok:
         blockers.append("hardened_live_sandbox_proof_required")
@@ -198,6 +235,7 @@ def evaluate_sandbox_operational_readiness(
         "secret_reference_configured": secret_reference is not None,
         "content_contract_configured": content_contract is not None,
         "live_proof_passed": proof_ok,
+        "provisioning_sha256": expected_provisioning_sha256,
         "production_allowed": False,
         "runtime_connector_approved": False,
     }
@@ -212,4 +250,5 @@ __all__ = [
     "evaluate_sandbox_operational_readiness",
     "safe_content_projection",
     "safe_secret_reference_projection",
+    "sandbox_provisioning_fingerprint",
 ]
