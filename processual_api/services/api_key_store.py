@@ -175,7 +175,7 @@ def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
                 changed = True
                 continue
             if key.get("category") == "pilot_client":
-                key["evaluation_grant_state"] = "active"
+                key["evaluation_grant_state"] = grant_state
                 changed = True
 
             hashed = key.get("hashed") or key.get("hashed_key")
