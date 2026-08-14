@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
     '/console/js/admin_evaluation_grants.js?v=adminevaltasks03-visible';
+  const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
+    'script[data-admin-api-key-provisioning-workspace]';
+  const API_KEY_WORKSPACE_SCRIPT_SRC =
+    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace01';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
@@ -216,6 +220,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(script);
   }
 
+  function loadApiKeyProvisioningWorkspace() {
+    if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) return;
+
+    const script = document.createElement('script');
+    script.src = API_KEY_WORKSPACE_SCRIPT_SRC;
+    script.dataset.adminApiKeyProvisioningWorkspace = 'true';
+    script.addEventListener('load', () => {
+      if (!document.body.dataset.adminApiKeyProvisioningWorkspace) {
+        document.body.dataset.adminApiKeyProvisioningWorkspace = 'loading';
+      }
+    });
+    script.addEventListener('error', () => {
+      document.body.dataset.adminApiKeyProvisioningWorkspace = 'load-error';
+    });
+    document.body.appendChild(script);
+  }
+
   function wait(delayMs) {
     return new Promise((resolve) => window.setTimeout(resolve, delayMs));
   }
@@ -334,6 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
       writeProtected(
         'Admin session verified. Backend scopes remain the authority.'
       );
+      loadApiKeyProvisioningWorkspace();
       dispatchAdminSessionVerified(me);
 
       if (canManageEvaluationGrants(me)) {
