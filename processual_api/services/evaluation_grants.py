@@ -52,7 +52,9 @@ def refresh_evaluation_grant_status(
     *,
     now: datetime | None = None,
 ) -> str:
-    status = str(grant.get("status") or EVALUATION_GRANT_ACTIVE).strip().lower()
+    status = str(
+        grant.get("status") or EVALUATION_GRANT_ACTIVE
+    ).strip().lower()
     if status in {EVALUATION_GRANT_REVOKED, EVALUATION_GRANT_EXPIRED}:
         return status
 
@@ -73,6 +75,7 @@ def validate_evaluation_grant(
     grant_id: str | None,
     client_id: str,
     requested_scopes: list[str],
+    requested_task_ids: list[str] | None = None,
     quota_limit: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -80,7 +83,10 @@ def validate_evaluation_grant(
     if grant is None:
         raise ValueError("evaluation_grant_required")
 
-    if refresh_evaluation_grant_status(grant, now=now) != EVALUATION_GRANT_ACTIVE:
+    if (
+        refresh_evaluation_grant_status(grant, now=now)
+        != EVALUATION_GRANT_ACTIVE
+    ):
         raise ValueError("evaluation_grant_inactive")
 
     if str(grant.get("client_id") or "") != str(client_id or ""):
@@ -91,9 +97,28 @@ def validate_evaluation_grant(
         for scope in grant.get("allowed_scopes") or []
         if str(scope).strip()
     }
-    requested = {str(scope).strip() for scope in requested_scopes if str(scope).strip()}
+    requested = {
+        str(scope).strip()
+        for scope in requested_scopes
+        if str(scope).strip()
+    }
     if not requested or not requested.issubset(allowed_scopes):
         raise ValueError("evaluation_grant_scope_mismatch")
+
+    allowed_tasks = {
+        str(task_id).strip().lower()
+        for task_id in grant.get("allowed_task_ids") or []
+        if str(task_id).strip()
+    }
+    requested_tasks = {
+        str(task_id).strip().lower()
+        for task_id in requested_task_ids or []
+        if str(task_id).strip()
+    }
+    if not allowed_tasks:
+        raise ValueError("evaluation_grant_tasks_required")
+    if not requested_tasks or not requested_tasks.issubset(allowed_tasks):
+        raise ValueError("evaluation_grant_task_mismatch")
 
     max_requests = int(grant.get("max_requests", 0) or 0)
     if max_requests <= 0:
@@ -119,6 +144,7 @@ def key_evaluation_grant_state(
             grant_id=str(key.get("evaluation_grant_id") or ""),
             client_id=str(key.get("client_id") or ""),
             requested_scopes=list(key.get("scopes") or []),
+            requested_task_ids=list(key.get("allowed_task_ids") or []),
             quota_limit=int(key.get("quota_limit", 0) or 0),
             now=now,
         )
@@ -127,21 +153,47 @@ def key_evaluation_grant_state(
     return True, "active"
 
 
+def evaluation_task_allowed(
+    current_user: dict[str, Any],
+    task_id: str,
+) -> bool:
+    if current_user.get("auth_method") != "api_key":
+        return True
+    if current_user.get("entitlement_source") != "admin_evaluation_grant":
+        return True
+    allowed = {
+        str(value).strip().lower()
+        for value in current_user.get("allowed_task_ids") or []
+        if str(value).strip()
+    }
+    return str(task_id or "").strip().lower() in allowed
+
+
 def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
     return {
         "grant_id": str(grant.get("grant_id") or ""),
-        "status": str(grant.get("status") or EVALUATION_GRANT_ACTIVE),
+        "status": str(
+            grant.get("status") or EVALUATION_GRANT_ACTIVE
+        ),
         "client_id": str(grant.get("client_id") or ""),
         "user_id": str(grant.get("user_id") or ""),
         "issued_to": str(grant.get("issued_to") or ""),
         "purpose": str(grant.get("purpose") or ""),
+        "allowed_task_ids": list(grant.get("allowed_task_ids") or []),
+        "task_scope_ids": list(grant.get("task_scope_ids") or []),
+        "task_authority_source": str(
+            grant.get("task_authority_source")
+            or "integration_task_catalog"
+        ),
         "allowed_scopes": list(grant.get("allowed_scopes") or []),
         "max_requests": int(grant.get("max_requests", 0) or 0),
         "created_at": str(grant.get("created_at") or ""),
         "expires_at": str(grant.get("expires_at") or ""),
         "revoked_at": grant.get("revoked_at"),
         "approved_by": str(grant.get("approved_by") or ""),
-        "approved_by_role": str(grant.get("approved_by_role") or ""),
+        "approved_by_role": str(
+            grant.get("approved_by_role") or ""
+        ),
         "subscription_required": False,
         "production_allowed": False,
     }
@@ -150,6 +202,7 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
 __all__ = [
     "EVALUATION_GRANTS_STORAGE_KEY",
     "evaluation_grants",
+    "evaluation_task_allowed",
     "find_evaluation_grant",
     "key_evaluation_grant_state",
     "refresh_evaluation_grant_status",
