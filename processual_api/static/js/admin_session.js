@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks02';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks03-visible';
+  const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const ADMIN_ROLES = new Set([
     'admin',
     'administrator',
@@ -65,23 +66,52 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
+  function ensureEvaluationGrantPlaceholder() {
+    let host = document.getElementById(EVALUATION_HOST_ID);
+    if (host) return host;
+
+    const page = document.getElementById('page-admin-api-keys');
+    if (!page) return null;
+
+    host = document.createElement('div');
+    host.id = EVALUATION_HOST_ID;
+    host.className = 'card';
+    host.style.marginTop = 'var(--s-5)';
+    host.dataset.evaluationGrantPlaceholder = 'true';
+    host.innerHTML = `
+      <div class="sec-hdr">
+        <div class="sh-title">External Evaluation Access</div>
+        <div class="sh-sub">supervisor-governed API access outside paid subscription onboarding</div>
+      </div>
+      <div class="admin-note" data-evaluation-access-status>
+        Checking administrator authority for evaluation grant management...
+      </div>
+      <div class="muted" style="margin-top:var(--s-2)">
+        Backend scopes remain authoritative. Management controls appear only after verified authorization.
+      </div>
+    `;
+    page.appendChild(host);
+    return host;
+  }
+
+  function setEvaluationAccessStatus(message, danger = false) {
+    const host = ensureEvaluationGrantPlaceholder();
+    if (!host) return;
+    const target = host.querySelector('[data-evaluation-access-status]');
+    if (!target) return;
+    target.className = danger ? 'admin-note danger' : 'admin-note';
+    target.textContent = message;
+  }
+
   function evaluationLoadFailure(message) {
     document.body.dataset.adminEvaluationGrants = 'load-error';
-    const page = document.getElementById('page-admin-api-keys');
-    if (!page || document.getElementById('admin-evaluation-grants-load-error')) {
-      return;
-    }
-    const note = document.createElement('div');
-    note.id = 'admin-evaluation-grants-load-error';
-    note.className = 'card admin-note danger';
-    note.style.marginTop = 'var(--s-5)';
-    note.textContent = message;
-    page.appendChild(note);
+    setEvaluationAccessStatus(message, true);
   }
 
   function loadEvaluationGrantControls() {
     if (document.querySelector(EVALUATION_SCRIPT_SELECTOR)) return;
 
+    setEvaluationAccessStatus('Authorized. Loading evaluation grant controls...');
     const script = document.createElement('script');
     script.src = EVALUATION_SCRIPT_SRC;
     script.dataset.adminEvaluationGrants = 'true';
@@ -97,6 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function checkAdminSession() {
+    ensureEvaluationGrantPlaceholder();
+
     const protectedBlocks = Array.from(
       document.querySelectorAll('.mono-block')
     ).filter((el) =>
@@ -118,6 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!headers.has('Authorization') && !headers.has('X-API-Key')) {
         document.body.dataset.adminSession = 'auth-missing';
+        document.body.dataset.adminEvaluationGrants = 'auth-missing';
+        const message =
+          'Administrator credential is required before evaluation grant controls can be shown.';
+        setEvaluationAccessStatus(message, true);
         writeProtected(
           'Admin auth token missing. Login did not persist a Bearer token for admin API calls.'
         );
@@ -132,6 +168,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!response.ok) {
         document.body.dataset.adminSession = 'error-' + response.status;
+        document.body.dataset.adminEvaluationGrants = 'auth-error';
+        setEvaluationAccessStatus(
+          'Administrator verification failed: HTTP ' + response.status,
+          true
+        );
         writeProtected('Admin session check failed: HTTP ' + response.status);
         return;
       }
@@ -139,6 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const me = await response.json();
       if (!isAdminSession(me)) {
         document.body.dataset.adminSession = 'not-admin';
+        document.body.dataset.adminEvaluationGrants = 'not-authorized';
+        setEvaluationAccessStatus(
+          'The current session is authenticated but does not have administrator authority for this area.',
+          true
+        );
         writeProtected('Session exists, but admin scope was not found.');
         return;
       }
@@ -153,14 +199,24 @@ document.addEventListener('DOMContentLoaded', () => {
         loadEvaluationGrantControls();
       } else {
         document.body.dataset.adminEvaluationGrants = 'not-authorized';
+        setEvaluationAccessStatus(
+          'Administrator session verified, but evaluation grant management requires owner, security, billing, wildcard, or admin:api_keys:write authority.',
+          true
+        );
       }
     } catch (error) {
       document.body.dataset.adminSession = 'error';
+      document.body.dataset.adminEvaluationGrants = 'auth-error';
+      setEvaluationAccessStatus(
+        'Administrator verification failed: ' + (error.message || String(error)),
+        true
+      );
       writeProtected(
         'Admin session check failed: ' + (error.message || String(error))
       );
     }
   }
 
+  ensureEvaluationGrantPlaceholder();
   checkAdminSession();
 });
