@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks04-lifecycle';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks05-accesscatalog';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await wait(delayMs);
       const retry = await fetch('/auth/me', {
         method: 'GET',
-        credentials: 'include',
+        credentials,
         headers,
       });
       if (retry.ok || retry.status !== 503) {
