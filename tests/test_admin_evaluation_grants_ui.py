@@ -93,7 +93,7 @@ def test_admin_session_gates_evaluation_management_on_verified_authority() -> No
         "billing_admin",
         "admin:api_keys:write",
         "admin_evaluation_grants.js",
-        "data-admin-evaluation-grants",
+        "dataset.adminEvaluationGrants",
         "document.body.dataset.adminEvaluationGrants = 'authorized'",
         "document.body.dataset.adminEvaluationGrants = 'not-authorized'",
     ]
