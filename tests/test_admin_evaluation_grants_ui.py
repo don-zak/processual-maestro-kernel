@@ -132,7 +132,7 @@ def test_verified_admin_session_emits_single_bootstrap_event() -> None:
     )
 
 
-def test_evaluation_access_card_is_visible_before_authority_check() -> None:
+def test_evaluation_access_surface_is_visible_by_category_without_legacy_activation() -> None:
     source = _session_source()
 
     required = [
@@ -140,18 +140,21 @@ def test_evaluation_access_card_is_visible_before_authority_check() -> None:
         "const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card'",
         "const EVALUATION_HOST_ID = 'admin-evaluation-grants'",
         "function ensureEvaluationGrantPlaceholder()",
-        "External Evaluation Access",
-        "External Evaluation is an API key lifecycle option.",
-        "Activate External Evaluation",
-        "Activate External Evaluation to verify administrator authority and load controls.",
+        "External Evaluation Lifecycle",
+        "This lifecycle is selected only from API Key Category.",
+        "Administrator Verification",
+        "Select External Evaluation Access to verify administrator authority and load governed controls.",
         "Backend scopes remain authoritative. Raw API keys are shown only at issue time.",
-        "ensureEvaluationGrantPlaceholder();\n  checkAdminSession();",
+        "syncEvaluationSelectionState();",
     ]
     for marker in required:
         assert marker in source
 
     assert "if (!lifecycleCard) return null" in source
     assert "lifecycleCard.insertBefore(card, lifecycleForm)" in source
+    assert "Activate External Evaluation" not in source
+    assert "External Evaluation Active" not in source
+    assert "EVALUATION_ACTIVATE_ID" not in source
     assert "fallback-page" not in source
 
 
@@ -178,6 +181,7 @@ def test_local_development_evaluation_auth_bootstrap_is_session_only() -> None:
         "const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])",
         "function isLocalDevelopmentOrigin()",
         "function renderDevelopmentAuthBootstrap()",
+        "if (!externalEvaluationSelected()) return",
         "type=\"password\"",
         "autocomplete=\"off\"",
         "sessionStorage.setItem('api_key', value)",
@@ -203,7 +207,7 @@ def test_local_development_evaluation_auth_bootstrap_allows_retry() -> None:
         "existingInput?.focus();",
         "if (button) button.disabled = false;",
         "response.status === 401 || response.status === 403",
-        "document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'",
+        "externalEvaluationSelected()",
     ]
     for marker in required:
         assert marker in source
@@ -217,6 +221,22 @@ def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() 
     assert "script.addEventListener('error'" in source
     assert "setEvaluationAccessStatus(message, true)" in source
     assert "Evaluation grant controls could not be loaded." in source
+
+
+def test_category_change_rechecks_admin_and_loads_evaluation_controls() -> None:
+    source = _session_source()
+
+    required = [
+        "window.addEventListener('pmk-api-key-category-changed'",
+        "syncEvaluationSelectionState();",
+        "if (externalEvaluationSelected())",
+        "await checkAdminSession();",
+        "loadApiKeyProvisioningWorkspace();",
+        "loadEvaluationGrantControls();",
+        "loadApiKeyEvaluationLifecycle();",
+    ]
+    for marker in required:
+        assert marker in source
 
 
 def test_evaluation_ui_does_not_own_navigation_or_reload_behavior() -> None:
