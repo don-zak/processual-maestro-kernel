@@ -24,6 +24,7 @@ from processual_api.integrations.sandbox_operational_readiness import (
     evaluate_sandbox_operational_readiness,
     safe_content_projection,
     safe_secret_reference_projection,
+    sandbox_provisioning_fingerprint,
 )
 from processual_api.integrations.sandbox_secret_resolution import (
     ReferenceSandboxCredentialResolver,
@@ -85,11 +86,37 @@ def _secret_reference(raw: dict[str, Any], binding_id: str) -> SandboxSecretRefe
     return None
 
 
-def _latest_binding_evidence(raw: dict[str, Any], binding_id: str) -> dict[str, Any] | None:
+def _latest_binding_evidence(
+    raw: dict[str, Any],
+    binding_id: str,
+    task_id: str,
+) -> dict[str, Any] | None:
     for item in reversed(binding_runtime._safe_evidence(raw)):
-        if str(item.get("binding_id") or "") == binding_id:
+        if (
+            str(item.get("binding_id") or "") == binding_id
+            and str(item.get("task_id") or "") == task_id
+        ):
             return item
     return None
+
+
+def _provisioning_sha256(
+    *,
+    spec: Any,
+    request_mapping: Any,
+    secret_reference: SandboxSecretReference,
+    content: SandboxContentContract,
+) -> str:
+    return sandbox_provisioning_fingerprint(
+        binding=spec.model_dump(mode="json"),
+        request_mapping=(
+            request_mapping.model_dump(mode="json")
+            if request_mapping is not None
+            else None
+        ),
+        secret_reference=secret_reference,
+        content_contract=content,
+    )
 
 
 @settings_module.router.put(
@@ -173,13 +200,24 @@ async def get_enterprise_sandbox_operational_readiness(
     request_mapping_ready = spec.method not in _BODY_METHODS or request_mapping is not None
     content = _content_contract(raw, binding_id)
     secret_reference = _secret_reference(raw, binding_id)
-    evidence = _latest_binding_evidence(raw, binding_id)
+    evidence = _latest_binding_evidence(raw, binding_id, spec.task_id)
+    expected_provisioning_sha256 = (
+        _provisioning_sha256(
+            spec=spec,
+            request_mapping=request_mapping,
+            secret_reference=secret_reference,
+            content=content,
+        )
+        if content is not None and secret_reference is not None
+        else None
+    )
     readiness = evaluate_sandbox_operational_readiness(
         binding_configured=True,
         mapping_configured=response_mapping_ready and request_mapping_ready,
         secret_reference=secret_reference,
         content_contract=content,
         live_proof_evidence=evidence,
+        expected_provisioning_sha256=expected_provisioning_sha256,
     )
     return {
         "binding_id": binding_id,
@@ -239,6 +277,12 @@ async def execute_enterprise_sandbox_operational_proof(
             if request_mapping is not None
             else None
         )
+        provisioning_sha256 = _provisioning_sha256(
+            spec=spec,
+            request_mapping=request_mapping,
+            secret_reference=secret_reference,
+            content=content,
+        )
         resolver = ReferenceSandboxCredentialResolver(secret_reference)
         transport = VerifiedPeerSandboxTransport()
         result = await execute_sandbox_binding(
@@ -270,6 +314,7 @@ async def execute_enterprise_sandbox_operational_proof(
         "operational_proof": True,
         "peer_address_verified": True,
         "verified_peer_address": transport.last_verified_peer,
+        "provisioning_sha256": provisioning_sha256,
         "content_dataset_reference": content.dataset_reference,
         "content_fixture_profile_reference": content.fixture_profile_reference,
         "customer_secret_reference_configured": True,
