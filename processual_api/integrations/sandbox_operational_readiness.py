@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from enum import StrEnum
+from hashlib import sha256
+from json import dumps
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -164,14 +164,14 @@ def sandbox_provisioning_fingerprint(
         },
         "content_contract": content_contract.model_dump(mode="json"),
     }
-    encoded = json.dumps(
+    encoded = dumps(
         payload,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
         default=str,
     ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return sha256(encoded).hexdigest()
 
 
 def evaluate_sandbox_operational_readiness(
