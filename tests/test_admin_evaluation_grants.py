@@ -245,7 +245,48 @@ def test_tampered_key_task_expansion_is_fail_closed(monkeypatch, tmp_path):
     )
 
 
-def test_legacy_pilot_key_without_grant_is_fail_closed(
+def test_governed_evaluation_key_without_grant_is_fail_closed(
+    monkeypatch,
+    tmp_path,
+):
+    _patch_data_dir(monkeypatch, tmp_path)
+
+    created = asyncio.run(
+        settings_router.create_api_key(
+            body=settings_router.ApiKeyCreateRequest(
+                category="pilot_client",
+                client_id="governed-evaluation-client",
+                user_id="governed-evaluation-user",
+                scopes=["read:health"],
+                quota_limit_override=5,
+                expires_at=(
+                    datetime.now(UTC) + timedelta(days=7)
+                ).isoformat(),
+                purpose="Governed evaluation key missing its required grant",
+                issued_to="governed-evaluation-recipient",
+            ),
+            current_user=_admin(),
+        )
+    )
+
+    raw = settings_router._load_raw("evaluation-owner")
+    stored = raw["api_keys"][0]
+    stored["entitlement_source"] = "admin_evaluation_grant"
+    stored["subscription_required"] = False
+    stored["allowed_task_ids"] = ["crm.customer_context"]
+    stored["task_scope_ids"] = ["crm:read"]
+    stored["task_authority_source"] = "integration_task_catalog"
+    settings_router._save_raw("evaluation-owner", raw)
+
+    assert api_key_store.verify_dynamic_api_key(created["api_key"]) is None
+    saved = settings_router._load_raw("evaluation-owner")
+    assert (
+        saved["api_keys"][0]["evaluation_grant_state"]
+        == "evaluation_grant_required"
+    )
+
+
+def test_legacy_unmarked_pilot_key_remains_backward_compatible(
     monkeypatch,
     tmp_path,
 ):
@@ -262,19 +303,20 @@ def test_legacy_pilot_key_without_grant_is_fail_closed(
                 expires_at=(
                     datetime.now(UTC) + timedelta(days=7)
                 ).isoformat(),
-                purpose="Legacy pilot without governed evaluation grant",
+                purpose="Historical pilot compatibility regression",
                 issued_to="legacy-pilot",
             ),
             current_user=_admin(),
         )
     )
 
-    assert api_key_store.verify_dynamic_api_key(created["api_key"]) is None
+    identity = api_key_store.verify_dynamic_api_key(created["api_key"])
+    assert identity is not None
     raw = settings_router._load_raw("evaluation-owner")
-    assert (
-        raw["api_keys"][0]["evaluation_grant_state"]
-        == "evaluation_grant_required"
-    )
+    assert raw["api_keys"][0]["evaluation_grant_state"] in {
+        "legacy_pilot_compatible",
+        "active",
+    }
 
 
 def test_expired_grant_stops_previously_valid_key(monkeypatch, tmp_path):
