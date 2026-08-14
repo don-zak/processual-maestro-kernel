@@ -138,10 +138,18 @@ def key_evaluation_grant_state(
     if str(key.get("category") or "") != "pilot_client":
         return True, "not_required"
 
+    grant_id = str(key.get("evaluation_grant_id") or "").strip()
+    entitlement_source = str(key.get("entitlement_source") or "").strip()
+    governed_evaluation = bool(grant_id) or (
+        entitlement_source == "admin_evaluation_grant"
+    )
+    if not governed_evaluation:
+        return True, "legacy_pilot_compatible"
+
     try:
         validate_evaluation_grant(
             raw,
-            grant_id=str(key.get("evaluation_grant_id") or ""),
+            grant_id=grant_id,
             client_id=str(key.get("client_id") or ""),
             requested_scopes=list(key.get("scopes") or []),
             requested_task_ids=list(key.get("allowed_task_ids") or []),
