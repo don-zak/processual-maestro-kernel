@@ -5,8 +5,12 @@ from __future__ import annotations
 from fastapi import Depends, HTTPException, Request
 
 from processual_api.auth.security import get_current_user
+from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
 from processual_api.integrations.api_key_operational_profiles import (
     api_key_operational_profiles_payload,
+)
+from processual_api.integrations.api_key_platform_operational_profiles import (
+    list_platform_api_key_operational_profiles,
 )
 
 from . import settings as settings_module
@@ -23,40 +27,6 @@ _ALLOWED_ADMIN_SCOPES = {
     "admin:settings",
     "admin:api_keys:read",
     "admin:api_keys:write",
-}
-
-# Explicit provisioning policy. FastAPI's route registry is authoritative for
-# what exists; this map is authoritative for which runtime routes an API key
-# may intentionally select in the admin provisioning workspace.
-_GRANTABLE_ENDPOINT_POLICIES: dict[tuple[str, str], dict[str, object]] = {
-    ("GET", "/health/live"): {
-        "capability": "Runtime liveness",
-        "required_scopes": ["read:health"],
-    },
-    ("GET", "/health/ready"): {
-        "capability": "Runtime readiness",
-        "required_scopes": ["read:health"],
-    },
-    ("GET", "/adapters/status"): {
-        "capability": "Adapter/provider status",
-        "required_scopes": ["read:adapters"],
-    },
-    ("GET", "/cgt/govern/status"): {
-        "capability": "Governor status",
-        "required_scopes": ["read:governor"],
-    },
-    ("POST", "/cgt/analyze"): {
-        "capability": "CGT analysis",
-        "required_scopes": ["run:analyze"],
-    },
-    ("POST", "/cgt/govern"): {
-        "capability": "Governed evaluation",
-        "required_scopes": ["run:govern"],
-    },
-    ("GET", "/cgt/govern/reports"): {
-        "capability": "Governance reports",
-        "required_scopes": ["read:reports"],
-    },
 }
 
 
@@ -95,7 +65,7 @@ def _route_catalog(request: Request) -> list[dict[str, object]]:
         tags = [str(tag) for tag in (getattr(route, "tags", None) or [])]
         route_name = str(getattr(route, "name", "") or "")
         for method in methods:
-            policy = _GRANTABLE_ENDPOINT_POLICIES.get((method, path))
+            policy = get_api_key_access_policy(method, path)
             control_plane = path.startswith(("/settings", "/admin", "/auth"))
             docs_surface = path in {"/docs", "/redoc", "/openapi.json"}
             grantable = policy is not None and not control_plane and not docs_surface
@@ -106,18 +76,21 @@ def _route_catalog(request: Request) -> list[dict[str, object]]:
                     "name": route_name,
                     "tags": tags,
                     "capability": (
-                        str(policy.get("capability"))
+                        policy.capability
                         if policy
                         else route_name.replace("_", " ").strip() or path
                     ),
-                    "required_scopes": (
-                        list(policy.get("required_scopes") or []) if policy else []
+                    "task_id": policy.task_id if policy else None,
+                    "operation_class": policy.operation_class if policy else None,
+                    "required_scopes": list(policy.required_scopes) if policy else [],
+                    "operational_profile_ids": (
+                        list(policy.operational_profile_ids) if policy else []
                     ),
                     "grantable": grantable,
                     "control_plane": control_plane,
-                    "production_allowed": False if grantable else None,
+                    "production_allowed": policy.production_allowed if grantable else None,
                     "selection_reason": (
-                        "explicit_runtime_access_policy"
+                        "canonical_runtime_access_policy"
                         if grantable
                         else "visibility_only_not_in_grant_policy"
                     ),
@@ -137,9 +110,17 @@ async def admin_api_key_operational_profiles(
 
     _require_api_key_provisioning_admin(current_user)
     payload = api_key_operational_profiles_payload()
+    profiles = [
+        *list(payload.get("profiles") or []),
+        *list_platform_api_key_operational_profiles(),
+    ]
     return {
         **payload,
-        "selection_authority": "api_key_operational_profiles",
+        "profile_count": len(profiles),
+        "profiles": profiles,
+        "selection_authority": (
+            "api_key_operational_profiles+platform_runtime_operational_profiles"
+        ),
         "raw_secret_visible": False,
         "admin_provisioning_catalog": True,
     }
@@ -153,7 +134,7 @@ async def admin_api_key_access_catalog(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """Return registered API routes plus the explicit key-grantable subset."""
+    """Return registered API routes plus the canonical key-grantable subset."""
 
     _require_api_key_provisioning_admin(current_user)
     endpoints = _route_catalog(request)
@@ -165,14 +146,32 @@ async def admin_api_key_access_catalog(
             for scope in endpoint.get("required_scopes", [])
         }
     )
+    tasks = sorted(
+        {
+            str(endpoint["task_id"])
+            for endpoint in grantable
+            if endpoint.get("task_id")
+        }
+    )
+    profiles = sorted(
+        {
+            str(profile_id)
+            for endpoint in grantable
+            for profile_id in endpoint.get("operational_profile_ids", [])
+        }
+    )
     return {
         "ok": True,
         "catalog": "api_key_access_catalog",
-        "selection_authority": "fastapi_route_registry+explicit_runtime_access_policy",
+        "selection_authority": "fastapi_route_registry+canonical_runtime_access_policy",
         "endpoint_count": len(endpoints),
         "grantable_endpoint_count": len(grantable),
         "grantable_scope_count": len(scopes),
         "grantable_scopes": scopes,
+        "canonical_task_count": len(tasks),
+        "canonical_tasks": tasks,
+        "operational_profile_count": len(profiles),
+        "operational_profile_ids": profiles,
         "production_allowed": False,
         "raw_secret_visible": False,
         "endpoints": endpoints,
