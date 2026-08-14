@@ -17,6 +17,7 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
 
     def __init__(self, inner: httpx.AsyncBaseTransport | None = None) -> None:
         self._inner = inner or httpx.AsyncHTTPTransport()
+        self.last_verified_peer: str | None = None
 
     @staticmethod
     def _peer_address(response: httpx.Response) -> str:
@@ -42,6 +43,7 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
         if peer not in allowed:
             await response.aclose()
             raise SandboxExecutionError("sandbox_peer_address_mismatch")
+        self.last_verified_peer = peer
         response.extensions["sandbox_peer_verified"] = True
         response.extensions["sandbox_peer_address"] = peer
         return response
