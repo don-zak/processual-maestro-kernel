@@ -2,10 +2,9 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
 
-from processual_api.main import app
 from processual_api.routers.settings_admin_api_key_provisioning import (
     _require_api_key_provisioning_admin,
     admin_api_key_access_catalog,
@@ -32,14 +31,37 @@ def _session_source() -> str:
     return SESSION_SCRIPT.read_text(encoding="utf-8")
 
 
-def _request() -> Request:
+def _catalog_test_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/health/live")
+    async def health_live() -> dict:
+        return {"status": "ok"}
+
+    @app.get("/adapters/status")
+    async def adapters_status() -> dict:
+        return {"status": "ok"}
+
+    @app.post("/cgt/govern")
+    async def cgt_govern() -> dict:
+        return {"status": "ok"}
+
+    @app.get("/settings/example")
+    async def settings_example() -> dict:
+        return {"status": "locked"}
+
+    return app
+
+
+def _request(app: FastAPI | None = None) -> Request:
+    request_app = app or FastAPI()
     return Request(
         {
             "type": "http",
             "method": "GET",
             "path": "/settings/admin/api-key-access-catalog",
             "headers": [],
-            "app": app,
+            "app": request_app,
         }
     )
 
@@ -78,9 +100,10 @@ def test_admin_operational_profile_catalog_is_safe_and_non_production() -> None:
 
 
 def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy() -> None:
+    catalog_app = _catalog_test_app()
     payload = asyncio.run(
         admin_api_key_access_catalog(
-            _request(),
+            _request(catalog_app),
             {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
         )
     )
@@ -90,7 +113,7 @@ def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy()
         "fastapi_route_registry+explicit_runtime_access_policy"
     )
     assert payload["endpoint_count"] == len(payload["endpoints"])
-    assert payload["grantable_endpoint_count"] > 0
+    assert payload["grantable_endpoint_count"] == 3
     assert payload["raw_secret_visible"] is False
     assert payload["production_allowed"] is False
 
@@ -104,6 +127,7 @@ def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy()
     assert by_key[("GET", "/adapters/status")]["required_scopes"] == ["read:adapters"]
     assert by_key[("POST", "/cgt/govern")]["grantable"] is True
     assert by_key[("POST", "/cgt/govern")]["required_scopes"] == ["run:govern"]
+    assert by_key[("GET", "/settings/example")]["grantable"] is False
 
     settings_routes = [
         endpoint
