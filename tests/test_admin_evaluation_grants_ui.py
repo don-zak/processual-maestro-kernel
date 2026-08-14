@@ -23,7 +23,7 @@ def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
     source = _management_source()
 
     required = [
-        "External Evaluation Access",
+        "Evaluation Grant Preparation",
         "/settings/admin/evaluation-grants",
         "Create Evaluation Grant",
         "Issue API Key",
@@ -41,7 +41,7 @@ def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
     required = [
         "/settings/admin/evaluation-grants/task-catalog",
         "API key task content",
-        "canonical Maestro task catalog",
+        "canonical tasks",
         "data-eval-task",
         "selectedEvaluationTasks",
         "allowed_task_ids",
@@ -66,8 +66,10 @@ def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> N
 def test_evaluation_grant_ui_requires_at_least_one_task() -> None:
     source = _management_source()
 
-    assert "Select at least one canonical task for the API key content." in source
-    assert "if (!allowedTaskIds.length)" in source
+    assert "tasks.length > 0" in source
+    assert "Select at least one canonical task." in source
+    assert "button.disabled = !readiness.ready" in source
+    assert "if (!readiness.ready)" in source
 
 
 def test_lifecycle_summary_stays_read_only_and_does_not_load_management() -> None:
