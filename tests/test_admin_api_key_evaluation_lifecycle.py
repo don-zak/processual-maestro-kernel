@@ -11,13 +11,64 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_evaluation_lifecycle_embeds_existing_grant_host_in_workspace() -> None:
+def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle() -> None:
+    source = _source(SESSION)
+
+    required = [
+        "const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card'",
+        "const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card'",
+        "const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body'",
+        "const EVALUATION_ACTIVATE_ID = 'admin-api-key-external-evaluation-activate'",
+        "const lifecycleCard = document.getElementById(API_KEY_LIFECYCLE_CARD_ID)",
+        "const parent = lifecycleCard || page",
+        "parent.appendChild(card)",
+        "This is part of Admin API Key Lifecycle",
+        "Activate External Evaluation",
+    ]
+    for marker in required:
+        assert marker in source
+
+    assert "page.appendChild(host)" not in source
+
+
+def test_external_evaluation_activation_reveals_body_and_selects_evaluation_mode() -> None:
+    source = _source(SESSION)
+
+    required = [
+        "function applyExternalEvaluationActivation()",
+        "card.dataset.activated = 'true'",
+        "body.hidden = false",
+        "button.disabled = true",
+        "button.textContent = 'External Evaluation Active'",
+        "mode.value = 'external_evaluation'",
+        "mode.dispatchEvent(new Event('change', { bubbles: true }))",
+        "await checkAdminSession()",
+    ]
+    for marker in required:
+        assert marker in source
+
+
+def test_local_development_credential_is_revealed_only_inside_activated_card() -> None:
+    source = _source(SESSION)
+
+    assert "Local development credential" in source
+    assert "sessionStorage.setItem('api_key', value)" in source
+    assert "Verify & Load Controls" in source
+    assert "document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'" in source
+    assert "renderDevelopmentAuthBootstrap();" in source
+    assert "localStorage.setItem('api_key'" not in source
+
+
+def test_evaluation_lifecycle_keeps_grant_host_inside_external_evaluation_card() -> None:
     source = _source(LIFECYCLE)
 
     required = [
         "admin-api-key-provisioning-workspace",
+        "admin-api-key-external-evaluation-card",
+        "admin-api-key-external-evaluation-body",
         "admin-api-key-evaluation-lifecycle-slot",
         "admin-evaluation-grants",
+        "externalBody.appendChild(slot)",
         "hostSlot.appendChild(host)",
         "host.dataset.lifecycleEmbedded = 'true'",
         "External Evaluation Lifecycle",
@@ -25,11 +76,11 @@ def test_evaluation_lifecycle_embeds_existing_grant_host_in_workspace() -> None:
     for marker in required:
         assert marker in source
 
-    assert "document.createElement('div')" not in source
+    assert "workspace.appendChild(slot)" not in source
     assert "/settings/admin/evaluation-grants" not in source
 
 
-def test_external_evaluation_mode_hides_standard_key_form_and_actions() -> None:
+def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_surfaces() -> None:
     source = _source(LIFECYCLE)
 
     assert "mode() === 'external_evaluation'" in source
@@ -37,6 +88,8 @@ def test_external_evaluation_mode_hides_standard_key_form_and_actions() -> None:
     assert "scopesLabel.hidden = evaluationMode" in source
     assert "actions.hidden = evaluationMode" in source
     assert "slot.hidden = !evaluationMode" in source
+    assert "externalBody.hidden = false" in source
+    assert "Grant creation, task binding, one-time key issue, and revoke" in source
     assert "evaluation grant authority" in source
 
 
@@ -92,6 +145,13 @@ def test_session_loads_evaluation_lifecycle_only_after_verified_admin_authority(
     assert source.index("if (canManageEvaluationGrants(me))") < source.index(
         "loadApiKeyEvaluationLifecycle();"
     )
+
+
+def test_activation_is_reapplied_after_dynamic_workspace_and_lifecycle_scripts_load() -> None:
+    source = _source(SESSION)
+
+    assert source.count("window.setTimeout(applyExternalEvaluationActivation, 0)") >= 2
+    assert "document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'" in source
 
 
 def test_evaluation_key_issue_result_is_complete_and_copyable_once() -> None:

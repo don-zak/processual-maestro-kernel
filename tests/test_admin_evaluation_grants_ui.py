@@ -134,16 +134,22 @@ def test_evaluation_access_card_is_visible_before_authority_check() -> None:
     source = _session_source()
 
     required = [
+        "const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card'",
+        "const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card'",
         "const EVALUATION_HOST_ID = 'admin-evaluation-grants'",
         "function ensureEvaluationGrantPlaceholder()",
         "External Evaluation Access",
-        "Checking administrator authority for evaluation grant management...",
-        "Backend scopes remain authoritative.",
-        "Management controls appear only after verified authorization.",
+        "This is part of Admin API Key Lifecycle.",
+        "Activate External Evaluation",
+        "Activate External Evaluation to verify administrator authority and load controls.",
+        "Backend scopes remain authoritative. Raw API keys are shown only at issue time.",
         "ensureEvaluationGrantPlaceholder();\n  checkAdminSession();",
     ]
     for marker in required:
         assert marker in source
+
+    assert "const parent = lifecycleCard || page" in source
+    assert "parent.appendChild(card)" in source
 
 
 def test_evaluation_access_card_explains_non_authorized_states() -> None:
@@ -193,7 +199,8 @@ def test_local_development_evaluation_auth_bootstrap_allows_retry() -> None:
         "Credential was not accepted. Enter another development API key.",
         "existingInput?.focus();",
         "if (button) button.disabled = false;",
-        "if (response.status === 401 || response.status === 403)",
+        "response.status === 401 || response.status === 403",
+        "document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'",
     ]
     for marker in required:
         assert marker in source

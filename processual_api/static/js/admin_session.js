@@ -10,8 +10,13 @@ document.addEventListener('DOMContentLoaded', () => {
     'script[data-admin-api-key-evaluation-lifecycle]';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
     '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation01';
+  const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card';
+  const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card';
+  const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body';
+  const EVALUATION_ACTIVATE_ID = 'admin-api-key-external-evaluation-activate';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
+  const PROVISIONING_MODE_ID = 'admin-api-key-provisioning-mode';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
   const ADMIN_ROLES = new Set([
     'admin',
@@ -81,32 +86,73 @@ document.addEventListener('DOMContentLoaded', () => {
     return LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname);
   }
 
+  function applyExternalEvaluationActivation() {
+    const card = document.getElementById(EVALUATION_CARD_ID);
+    const body = document.getElementById(EVALUATION_BODY_ID);
+    const button = document.getElementById(EVALUATION_ACTIVATE_ID);
+    if (!card || !body || !button) return;
+
+    card.dataset.activated = 'true';
+    body.hidden = false;
+    button.disabled = true;
+    button.textContent = 'External Evaluation Active';
+
+    const mode = document.getElementById(PROVISIONING_MODE_ID);
+    if (mode && mode.value !== 'external_evaluation') {
+      mode.value = 'external_evaluation';
+      mode.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
   function ensureEvaluationGrantPlaceholder() {
     let host = document.getElementById(EVALUATION_HOST_ID);
     if (host) return host;
 
+    const lifecycleCard = document.getElementById(API_KEY_LIFECYCLE_CARD_ID);
     const page = document.getElementById('page-admin-api-keys');
-    if (!page) return null;
+    const parent = lifecycleCard || page;
+    if (!parent) return null;
 
-    host = document.createElement('div');
-    host.id = EVALUATION_HOST_ID;
-    host.className = 'card';
-    host.style.marginTop = 'var(--s-5)';
-    host.dataset.evaluationGrantPlaceholder = 'true';
-    host.innerHTML = `
-      <div class="sec-hdr">
-        <div class="sh-title">External Evaluation Access</div>
-        <div class="sh-sub">supervisor-governed API access outside paid subscription onboarding</div>
-      </div>
-      <div class="admin-note" data-evaluation-access-status>
-        Checking administrator authority for evaluation grant management...
-      </div>
-      <div class="muted" style="margin-top:var(--s-2)">
-        Backend scopes remain authoritative. Management controls appear only after verified authorization.
-      </div>
-    `;
-    page.appendChild(host);
-    return host;
+    let card = document.getElementById(EVALUATION_CARD_ID);
+    if (!card) {
+      card = document.createElement('section');
+      card.id = EVALUATION_CARD_ID;
+      card.className = 'card flat';
+      card.style.marginTop = 'var(--s-4)';
+      card.dataset.lifecycleEmbedded = lifecycleCard ? 'true' : 'fallback-page';
+      card.innerHTML = `
+        <div class="sec-hdr">
+          <div class="sh-title">External Evaluation Access</div>
+          <div class="sh-sub">supervisor-governed sandbox API key preparation, issue, test, and revoke</div>
+        </div>
+        <div class="admin-note">
+          This is part of Admin API Key Lifecycle. Activate it to reveal the governed provisioning and evaluation controls. Production access remains disabled.
+        </div>
+        <div class="admin-actions">
+          <button id="${EVALUATION_ACTIVATE_ID}" class="btn primary" type="button">
+            Activate External Evaluation
+          </button>
+        </div>
+        <div id="${EVALUATION_BODY_ID}" hidden style="margin-top:var(--s-3)">
+          <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
+            <div class="admin-note" data-evaluation-access-status>
+              Activate External Evaluation to verify administrator authority and load controls.
+            </div>
+            <div class="muted" style="margin-top:var(--s-2)">
+              Backend scopes remain authoritative. Raw API keys are shown only at issue time.
+            </div>
+          </div>
+        </div>
+      `;
+      parent.appendChild(card);
+
+      document.getElementById(EVALUATION_ACTIVATE_ID)?.addEventListener('click', async () => {
+        applyExternalEvaluationActivation();
+        await checkAdminSession();
+      });
+    }
+
+    return document.getElementById(EVALUATION_HOST_ID);
   }
 
   function setEvaluationAccessStatus(message, danger = false) {
@@ -225,7 +271,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadApiKeyProvisioningWorkspace() {
-    if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) return;
+    if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) {
+      if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
+        applyExternalEvaluationActivation();
+      }
+      return;
+    }
 
     const script = document.createElement('script');
     script.src = API_KEY_WORKSPACE_SCRIPT_SRC;
@@ -233,6 +284,9 @@ document.addEventListener('DOMContentLoaded', () => {
     script.addEventListener('load', () => {
       if (!document.body.dataset.adminApiKeyProvisioningWorkspace) {
         document.body.dataset.adminApiKeyProvisioningWorkspace = 'loading';
+      }
+      if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
+        window.setTimeout(applyExternalEvaluationActivation, 0);
       }
     });
     script.addEventListener('error', () => {
@@ -250,6 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
     script.addEventListener('load', () => {
       if (!document.body.dataset.adminApiKeyEvaluationLifecycle) {
         document.body.dataset.adminApiKeyEvaluationLifecycle = 'loading';
+      }
+      if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
+        window.setTimeout(applyExternalEvaluationActivation, 0);
       }
     });
     script.addEventListener('error', () => {
@@ -336,7 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const message =
           'Administrator credential is required before evaluation grant controls can be shown.';
         setEvaluationAccessStatus(message, true);
-        renderDevelopmentAuthBootstrap();
+        if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
+          renderDevelopmentAuthBootstrap();
+        }
         writeProtected(
           'Admin auth token missing. Login did not persist a Bearer token for admin API calls.'
         );
@@ -352,7 +411,10 @@ document.addEventListener('DOMContentLoaded', () => {
           'Administrator verification failed: HTTP ' + response.status,
           true
         );
-        if (response.status === 401 || response.status === 403) {
+        if (
+          (response.status === 401 || response.status === 403) &&
+          document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'
+        ) {
           renderDevelopmentAuthBootstrap();
         }
         writeProtected('Admin session check failed: HTTP ' + response.status);
