@@ -1,5 +1,7 @@
 (function () {
   const CARD_ID = 'admin-api-key-lifecycle-card';
+  const EXTERNAL_CARD_ID = 'admin-api-key-external-evaluation-card';
+  const EXTERNAL_BODY_ID = 'admin-api-key-external-evaluation-body';
   const WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_SLOT_ID = 'admin-api-key-evaluation-lifecycle-slot';
@@ -51,7 +53,8 @@
 
   function ensureSlot() {
     const workspace = document.getElementById(WORKSPACE_ID);
-    if (!workspace) return null;
+    const externalBody = document.getElementById(EXTERNAL_BODY_ID);
+    if (!workspace || !externalBody) return null;
     let slot = document.getElementById(EVALUATION_SLOT_ID);
     if (slot) return slot;
 
@@ -71,7 +74,7 @@
       <div id="${PREVIEW_ID}" style="margin-top:var(--s-3)"></div>
       <div data-admin-evaluation-host-slot style="margin-top:var(--s-3)"></div>
     `;
-    workspace.appendChild(slot);
+    externalBody.appendChild(slot);
     return slot;
   }
 
@@ -105,11 +108,18 @@
 
   function updateModeVisibility() {
     const card = document.getElementById(CARD_ID);
+    const externalCard = document.getElementById(EXTERNAL_CARD_ID);
+    const externalBody = document.getElementById(EXTERNAL_BODY_ID);
     const slot = ensureSlot();
-    if (!card || !slot) return;
+    if (!card || !externalCard || !externalBody || !slot) return;
     const evaluationMode = mode() === 'external_evaluation';
 
     slot.hidden = !evaluationMode;
+    if (evaluationMode) {
+      externalCard.dataset.activated = 'true';
+      externalBody.hidden = false;
+    }
+
     const standardGrid = directStandardGrid(card);
     const scopesLabel = standardScopesLabel();
     const actions = standardActions();
@@ -121,7 +131,7 @@
     if (status && evaluationMode) {
       status.className = 'admin-note ok';
       status.textContent =
-        'External Evaluation mode is active. Grant creation, task binding, one-time key issue, and revoke are embedded below under the evaluation grant authority.';
+        'External Evaluation mode is active. Grant creation, task binding, one-time key issue, and revoke are embedded inside the External Evaluation Access card below.';
     }
     renderEvaluationPreview();
   }
@@ -161,7 +171,8 @@
   function initialize() {
     const workspace = document.getElementById(WORKSPACE_ID);
     const modeSelect = document.getElementById(MODE_ID);
-    if (!workspace || !modeSelect) {
+    const externalBody = document.getElementById(EXTERNAL_BODY_ID);
+    if (!workspace || !modeSelect || !externalBody) {
       attachAttempts += 1;
       if (attachAttempts < MAX_ATTACH_ATTEMPTS) {
         window.setTimeout(initialize, ATTACH_RETRY_MS);
