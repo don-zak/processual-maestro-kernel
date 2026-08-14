@@ -108,13 +108,44 @@ def test_admin_session_gates_evaluation_management_on_verified_authority() -> No
     )
 
 
+def test_evaluation_access_card_is_visible_before_authority_check() -> None:
+    source = _session_source()
+
+    required = [
+        "const EVALUATION_HOST_ID = 'admin-evaluation-grants'",
+        "function ensureEvaluationGrantPlaceholder()",
+        "External Evaluation Access",
+        "Checking administrator authority for evaluation grant management...",
+        "Backend scopes remain authoritative.",
+        "Management controls appear only after verified authorization.",
+        "ensureEvaluationGrantPlaceholder();\n  checkAdminSession();",
+    ]
+    for marker in required:
+        assert marker in source
+
+
+def test_evaluation_access_card_explains_non_authorized_states() -> None:
+    source = _session_source()
+
+    required = [
+        "document.body.dataset.adminEvaluationGrants = 'auth-missing'",
+        "Administrator credential is required before evaluation grant controls can be shown.",
+        "document.body.dataset.adminEvaluationGrants = 'auth-error'",
+        "Administrator verification failed: HTTP ",
+        "The current session is authenticated but does not have administrator authority for this area.",
+        "Administrator session verified, but evaluation grant management requires owner, security, billing, wildcard, or admin:api_keys:write authority.",
+    ]
+    for marker in required:
+        assert marker in source
+
+
 def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() -> None:
     source = _session_source()
 
     assert "document.querySelector(EVALUATION_SCRIPT_SELECTOR)" in source
     assert "if (document.querySelector(EVALUATION_SCRIPT_SELECTOR)) return;" in source
     assert "script.addEventListener('error'" in source
-    assert "admin-evaluation-grants-load-error" in source
+    assert "setEvaluationAccessStatus(message, true)" in source
     assert "Evaluation grant controls could not be loaded." in source
 
 
