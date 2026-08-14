@@ -3,6 +3,7 @@
   const EVALUATION_TASK_CATALOG_ENDPOINT =
     '/settings/admin/evaluation-grants/task-catalog';
   const GRANT_HOST_ID = 'admin-evaluation-grants';
+  const EXTERNAL_CATEGORY = 'external_evaluation';
   let evaluationTaskCatalog = [];
 
   function escapeHtml(value) {
@@ -70,24 +71,24 @@
   function ensureGrantHost() {
     let host = document.getElementById(GRANT_HOST_ID);
     if (host) return host;
-    const page = document.getElementById('page-admin-api-keys');
-    if (!page) return null;
+    const body = document.getElementById('admin-api-key-external-evaluation-body');
+    if (!body) return null;
     host = document.createElement('div');
-    host.className = 'card';
     host.id = GRANT_HOST_ID;
-    host.style.marginTop = 'var(--s-5)';
-    page.appendChild(host);
+    host.className = 'card flat';
+    host.dataset.evaluationGrantPlaceholder = 'true';
+    body.appendChild(host);
     return host;
   }
 
   function grantForm() {
     return `
       <div class="sec-hdr">
-        <div class="sh-title">External Evaluation Access</div>
-        <div class="sh-sub">supervisor-governed API access outside paid subscription onboarding</div>
+        <div class="sh-title">Evaluation Grant Preparation</div>
+        <div class="sh-sub">identity, limits, canonical tasks, grant creation, one-time issue, and revoke</div>
       </div>
       <div class="admin-note">
-        Evaluation grants are temporary, quota-bound, non-production entitlements. Select the API key content from the same canonical Maestro task catalog used by the specialization/integration task workspace. Administrative scopes are rejected by the backend.
+        Evaluation grants are temporary, quota-bound, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
       </div>
       <div class="grid-3">
         <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
@@ -101,8 +102,11 @@
         <div class="muted">Choose only the canonical tasks this evaluation key may represent.</div>
         <div id="admin-eval-task-list" style="margin-top:var(--s-2)">Loading canonical tasks...</div>
       </div>
+      <div id="admin-eval-readiness" class="admin-note" style="margin-top:var(--s-3)">
+        Evaluation grant creation is locked until the lifecycle readiness contract is complete.
+      </div>
       <div style="margin-top:var(--s-3)">
-        <button id="admin-eval-create" class="btn primary" type="button">Create Evaluation Grant</button>
+        <button id="admin-eval-create" class="btn primary" type="button" disabled>Create Evaluation Grant</button>
         <button id="admin-eval-refresh" class="btn secondary" type="button">Refresh Grants</button>
       </div>
       <div id="admin-eval-result" class="admin-note" style="margin-top:var(--s-3)"></div>
@@ -116,6 +120,7 @@
     if (!evaluationTaskCatalog.length) {
       target.innerHTML =
         '<div class="admin-note danger">Canonical task catalog is unavailable. Grant creation is disabled.</div>';
+      updateEvaluationReadiness();
       return;
     }
     const groups = new Map();
@@ -144,6 +149,7 @@
       input.addEventListener('change', dispatchEvaluationSelectionChanged);
     });
     dispatchEvaluationSelectionChanged();
+    updateEvaluationReadiness();
   }
 
   async function loadEvaluationTaskCatalog() {
@@ -165,6 +171,77 @@
     return Array.isArray(values)
       ? [...new Set(values.map((scope) => text(scope)).filter(Boolean))]
       : [];
+  }
+
+  function selectedEvaluationEndpoints() {
+    const workspace = window.PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE;
+    if (!workspace || typeof workspace.selectedEndpoints !== 'function') return [];
+    const values = workspace.selectedEndpoints();
+    return Array.isArray(values) ? values : [];
+  }
+
+  function evaluationReadiness() {
+    const category = text(document.getElementById('admin-api-key-category')?.value);
+    const profile = text(document.getElementById('admin-api-key-operational-profile')?.value);
+    const clientId = text(document.getElementById('admin-eval-client-id')?.value);
+    const issuedTo = text(document.getElementById('admin-eval-issued-to')?.value);
+    const purpose = text(document.getElementById('admin-eval-purpose')?.value);
+    const duration = Number.parseInt(document.getElementById('admin-eval-days')?.value || '0', 10);
+    const quota = Number.parseInt(document.getElementById('admin-eval-max-requests')?.value || '0', 10);
+    const tasks = selectedEvaluationTasks();
+    const scopes = selectedEvaluationScopes();
+    const endpoints = selectedEvaluationEndpoints();
+    const grantAuthority = document.body.dataset.adminEvaluationGrants;
+
+    const checks = [
+      ['category', category === EXTERNAL_CATEGORY, 'Select External Evaluation Access in Category.'],
+      ['administrator', document.body.dataset.adminSession === 'ok', 'Verify an administrator credential.'],
+      ['grant_authority', grantAuthority === 'authorized' || grantAuthority === 'loaded', 'Evaluation grant authority must be authorized.'],
+      ['operational_profile', Boolean(profile), 'Select an operational profile.'],
+      ['eligible_endpoint', endpoints.length > 0, 'Select at least one eligible API endpoint.'],
+      ['derived_scope', scopes.length > 0, 'Selected endpoints must derive at least one runtime scope.'],
+      ['canonical_task', tasks.length > 0, 'Select at least one canonical task.'],
+      ['client_id', Boolean(clientId), 'Client ID is required.'],
+      ['issued_to', Boolean(issuedTo), 'Issued to is required.'],
+      ['purpose', purpose.length >= 10, 'Purpose must contain at least 10 characters.'],
+      ['duration', Number.isInteger(duration) && duration >= 1 && duration <= 90, 'Duration must be between 1 and 90 days.'],
+      ['quota', Number.isInteger(quota) && quota >= 1 && quota <= 10000, 'Max requests must be between 1 and 10000.'],
+    ];
+    const missing = checks.filter(([, ok]) => !ok).map(([id, , message]) => ({ id, message }));
+    return {
+      ready: missing.length === 0,
+      missing,
+      category,
+      profile,
+      clientId,
+      issuedTo,
+      purpose,
+      duration,
+      quota,
+      tasks,
+      scopes,
+      endpoints,
+    };
+  }
+
+  function updateEvaluationReadiness() {
+    const readiness = evaluationReadiness();
+    const button = document.getElementById('admin-eval-create');
+    const target = document.getElementById('admin-eval-readiness');
+    if (button) {
+      button.disabled = !readiness.ready;
+      button.dataset.lifecycleReady = readiness.ready ? 'true' : 'false';
+    }
+    if (target) {
+      target.className = readiness.ready ? 'admin-note ok' : 'admin-note';
+      target.innerHTML = readiness.ready
+        ? '<strong>READY.</strong> All planned lifecycle gates are complete. Create Evaluation Grant is enabled; backend validation remains authoritative.'
+        : `<strong>LOCKED.</strong> Complete the remaining gates:<br>${readiness.missing
+            .map((item) => `• ${escapeHtml(item.message)}`)
+            .join('<br>')}`;
+    }
+    window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
+    return readiness;
   }
 
   function grantRow(grant) {
@@ -210,45 +287,27 @@
   }
 
   async function createEvaluationGrant() {
-    const clientId = text(document.getElementById('admin-eval-client-id')?.value);
-    const issuedTo = text(document.getElementById('admin-eval-issued-to')?.value);
-    const purpose = text(document.getElementById('admin-eval-purpose')?.value);
-    const expiresInDays = Number.parseInt(
-      document.getElementById('admin-eval-days')?.value || '14',
-      10
-    );
-    const maxRequests = Number.parseInt(
-      document.getElementById('admin-eval-max-requests')?.value || '100',
-      10
-    );
-    const allowedTaskIds = selectedEvaluationTasks();
-    const allowedScopes = selectedEvaluationScopes();
+    const readiness = updateEvaluationReadiness();
+    if (!readiness.ready) {
+      setGrantResult(
+        'Evaluation grant creation blocked by the lifecycle readiness contract. Complete every LOCKED gate before retrying.',
+        true
+      );
+      return;
+    }
 
-    if (!clientId || !issuedTo || purpose.length < 10) {
-      setGrantResult(
-        'Client ID, issued-to, and a descriptive purpose are required.',
-        true
-      );
-      return;
-    }
-    if (!allowedTaskIds.length) {
-      setGrantResult(
-        'Select at least one canonical task for the API key content.',
-        true
-      );
-      return;
-    }
+    const allowedScopes = readiness.scopes;
 
     try {
       const result = await request(EVALUATION_GRANTS_ENDPOINT, 'POST', {
-        client_id: clientId,
-        user_id: clientId,
-        issued_to: issuedTo,
-        purpose,
-        allowed_task_ids: allowedTaskIds,
+        client_id: readiness.clientId,
+        user_id: readiness.clientId,
+        issued_to: readiness.issuedTo,
+        purpose: readiness.purpose,
+        allowed_task_ids: readiness.tasks,
         ...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {}),
-        expires_in_days: expiresInDays,
-        max_requests: maxRequests,
+        expires_in_days: readiness.duration,
+        max_requests: readiness.quota,
       });
       const grant = result.grant || {};
       setGrantResult(
@@ -353,12 +412,20 @@
     host.innerHTML = grantForm();
     host.addEventListener('input', dispatchEvaluationSelectionChanged);
     host.addEventListener('change', dispatchEvaluationSelectionChanged);
+    host.addEventListener('input', updateEvaluationReadiness);
+    host.addEventListener('change', updateEvaluationReadiness);
     document
       .getElementById('admin-eval-create')
       ?.addEventListener('click', createEvaluationGrant);
     document
       .getElementById('admin-eval-refresh')
       ?.addEventListener('click', refreshEvaluationGrants);
+
+    window.addEventListener('pmk-admin-session-verified', updateEvaluationReadiness);
+    window.addEventListener('pmk-api-key-category-changed', updateEvaluationReadiness);
+    window.addEventListener('pmk-api-key-access-selection-changed', updateEvaluationReadiness);
+    window.addEventListener('pmk-evaluation-selection-changed', updateEvaluationReadiness);
+
     try {
       await loadEvaluationTaskCatalog();
     } catch (error) {
@@ -371,7 +438,13 @@
     }
     refreshEvaluationGrants();
     dispatchEvaluationSelectionChanged();
+    updateEvaluationReadiness();
   }
+
+  window.PMK_ADMIN_EVALUATION_GRANTS = {
+    readiness: evaluationReadiness,
+    updateReadiness: updateEvaluationReadiness,
+  };
 
   initializeEvaluationGrants();
 })();
