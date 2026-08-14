@@ -22,12 +22,6 @@
     },
     {
       group: 'supervision readiness',
-      label: 'Admin session identity',
-      path: '/auth/me',
-      auth: true,
-    },
-    {
-      group: 'supervision readiness',
       label: 'Client request inbox',
       path: '/settings/admin/client-requests',
       auth: true,
@@ -63,15 +57,6 @@
       .replaceAll("'", '&#039;');
   }
 
-  function authHeaders(extra = {}) {
-    const auth = window.PMK_ADMIN_AUTH;
-    if (auth && typeof auth.headers === 'function') {
-      return auth.headers(extra);
-    }
-
-    return new Headers(extra);
-  }
-
   function ensureReadinessHost() {
     const existing = document.getElementById(HOST_ID);
     if (existing) {
@@ -97,7 +82,7 @@
         <div class="sh-sub">program runtime and supervision readiness - visibility-only</div>
       </div>
       <div data-admin-runtime-body="readiness" class="mono-block" style="font-size:11px;white-space:pre-wrap">
-        Loading program and supervision readiness...
+        Waiting for verified admin session before readiness checks...
       </div>
     `;
 
@@ -298,12 +283,19 @@
   }
 
   function installReadinessRefreshHooks() {
+    window.addEventListener('pmk-admin-session-verified', () => {
+      scheduleReadinessRefresh(150);
+    });
     window.addEventListener('pmk-supervisor-session-key-updated', () => {
-      scheduleReadinessRefresh(100);
+      if (document.body.dataset.adminSession === 'ok') {
+        scheduleReadinessRefresh(150);
+      }
     });
   }
 
   installReadinessRefreshHooks();
   ensureReadinessHost();
-  scheduleReadinessRefresh(0);
+  if (document.body.dataset.adminSession === 'ok') {
+    scheduleReadinessRefresh(150);
+  }
 })();

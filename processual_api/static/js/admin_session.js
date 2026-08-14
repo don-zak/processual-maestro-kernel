@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'security_admin',
     'billing_admin',
   ]);
+  const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500];
 
   function normalizedRole(me) {
     return String(
@@ -126,6 +127,56 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(script);
   }
 
+  function wait(delayMs) {
+    return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  }
+
+  async function fetchAdminIdentity(headers) {
+    const response = await fetch('/auth/me', {
+      method: 'GET',
+      credentials: 'include',
+      headers,
+    });
+
+    if (response.ok || response.status !== 503) {
+      return response;
+    }
+
+    for (const delayMs of SESSION_RETRY_DELAYS_MS) {
+      document.body.dataset.adminSession = 'retrying-503';
+      document.body.dataset.adminEvaluationGrants = 'auth-retrying';
+      setEvaluationAccessStatus(
+        'Administrator verification is temporarily unavailable. Retrying safely...'
+      );
+      await wait(delayMs);
+      const retry = await fetch('/auth/me', {
+        method: 'GET',
+        credentials: 'include',
+        headers,
+      });
+      if (retry.ok || retry.status !== 503) {
+        return retry;
+      }
+    }
+
+    return response;
+  }
+
+  function dispatchAdminSessionVerified(me) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('pmk-admin-session-verified', {
+          detail: {
+            role: normalizedRole(me),
+            scopes: normalizedScopes(me),
+          },
+        })
+      );
+    } catch {
+      window.dispatchEvent(new Event('pmk-admin-session-verified'));
+    }
+  }
+
   async function checkAdminSession() {
     ensureEvaluationGrantPlaceholder();
 
@@ -160,11 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const response = await fetch('/auth/me', {
-        method: 'GET',
-        credentials: 'include',
-        headers,
-      });
+      const response = await fetchAdminIdentity(headers);
 
       if (!response.ok) {
         document.body.dataset.adminSession = 'error-' + response.status;
@@ -193,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
       writeProtected(
         'Admin session verified. Backend scopes remain the authority.'
       );
+      dispatchAdminSessionVerified(me);
 
       if (canManageEvaluationGrants(me)) {
         document.body.dataset.adminEvaluationGrants = 'authorized';
