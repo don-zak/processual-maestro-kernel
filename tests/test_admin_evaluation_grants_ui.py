@@ -1,15 +1,21 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "processual_api" / "static" / "js" / "admin_api_key_summary.js"
+JS = ROOT / "processual_api" / "static" / "js"
+SUMMARY_SCRIPT = JS / "admin_api_key_summary.js"
+MANAGEMENT_SCRIPT = JS / "admin_evaluation_grants.js"
 
 
-def _source() -> str:
-    return SCRIPT.read_text(encoding="utf-8")
+def _summary_source() -> str:
+    return SUMMARY_SCRIPT.read_text(encoding="utf-8")
+
+
+def _management_source() -> str:
+    return MANAGEMENT_SCRIPT.read_text(encoding="utf-8")
 
 
 def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
-    source = _source()
+    source = _management_source()
 
     required = [
         "External Evaluation Access",
@@ -25,7 +31,7 @@ def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
 
 
 def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
-    source = _source()
+    source = _management_source()
 
     required = [
         "/settings/admin/evaluation-grants/task-catalog",
@@ -42,7 +48,7 @@ def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
 
 
 def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> None:
-    source = _source()
+    source = _management_source()
 
     assert "window.PMK_ADMIN_AUTH" in source
     assert "credentials: 'include'" in source
@@ -53,12 +59,23 @@ def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> N
 
 
 def test_evaluation_grant_ui_requires_at_least_one_task() -> None:
-    source = _source()
+    source = _management_source()
 
     assert "Select at least one canonical task for the API key content." in source
     assert "if (!allowedTaskIds.length)" in source
 
 
-def test_api_key_summary_script_is_invoked() -> None:
-    source = _source().rstrip()
-    assert source.endswith("})();")
+def test_lifecycle_summary_loads_separate_evaluation_management_module() -> None:
+    source = _summary_source()
+
+    assert "admin_evaluation_grants.js" in source
+    assert "dataset.adminEvaluationGrants" in source
+    assert "pmk-evaluation-grant-updated" in source
+    assert "method: 'GET'" in source
+    assert "method: 'POST'" not in source
+    assert "method: 'DELETE'" not in source
+
+
+def test_api_key_ui_scripts_are_invoked() -> None:
+    assert _summary_source().rstrip().endswith("})();")
+    assert _management_source().rstrip().endswith("})();")
