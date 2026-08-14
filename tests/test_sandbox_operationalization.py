@@ -23,6 +23,8 @@ from processual_api.integrations.sandbox_secret_resolution import (
 from processual_api.integrations.sandbox_verified_transport import VerifiedPeerSandboxTransport
 from processual_api.routers import settings_enterprise_sandbox_operational_runtime as runtime
 
+_PROVISIONING_SHA = "p" * 64
+
 
 def _content(binding_id: str = "billing.account") -> SandboxContentContract:
     return SandboxContentContract(
@@ -45,12 +47,14 @@ def _secret(binding_id: str = "billing.account") -> SandboxSecretReference:
 def _proof() -> dict[str, object]:
     return {
         "binding_id": "billing.account",
+        "task_id": "billing.account_context",
         "operational_proof": True,
         "peer_address_verified": True,
         "customer_secret_reference_configured": True,
         "network_request_executed": True,
         "mapping_valid": True,
         "ready_for_task_consumption": True,
+        "provisioning_sha256": _PROVISIONING_SHA,
         "production_allowed": False,
         "runtime_connector_approved": False,
         "evidence_sha256": "a" * 64,
@@ -123,6 +127,7 @@ def test_readiness_is_fail_closed_until_all_operational_proofs_exist() -> None:
         secret_reference=_secret(),
         content_contract=_content(),
         live_proof_evidence=None,
+        expected_provisioning_sha256=_PROVISIONING_SHA,
     )
     assert provisioned["status"] == "content_ready"
     assert provisioned["sandbox_ready"] is False
@@ -134,12 +139,27 @@ def test_readiness_is_fail_closed_until_all_operational_proofs_exist() -> None:
         secret_reference=_secret(),
         content_contract=_content(),
         live_proof_evidence=_proof(),
+        expected_provisioning_sha256=_PROVISIONING_SHA,
     )
     assert ready["status"] == "sandbox_ready"
     assert ready["sandbox_ready"] is True
     assert ready["blocker_codes"] == []
     assert ready["production_allowed"] is False
     assert ready["runtime_connector_approved"] is False
+
+
+def test_changed_provisioning_invalidates_existing_proof() -> None:
+    result = evaluate_sandbox_operational_readiness(
+        binding_configured=True,
+        mapping_configured=True,
+        secret_reference=_secret(),
+        content_contract=_content(),
+        live_proof_evidence=_proof(),
+        expected_provisioning_sha256="q" * 64,
+    )
+    assert result["status"] == "content_ready"
+    assert result["sandbox_ready"] is False
+    assert result["blocker_codes"] == ["hardened_live_sandbox_proof_required"]
 
 
 def test_legacy_live_proof_cannot_mark_operational_sandbox_ready() -> None:
@@ -153,6 +173,7 @@ def test_legacy_live_proof_cannot_mark_operational_sandbox_ready() -> None:
         secret_reference=_secret(),
         content_contract=_content(),
         live_proof_evidence=legacy,
+        expected_provisioning_sha256=_PROVISIONING_SHA,
     )
     assert result["status"] == "content_ready"
     assert result["sandbox_ready"] is False
@@ -278,6 +299,7 @@ def test_readiness_route_reports_operational_state(monkeypatch) -> None:
         runtime.binding_runtime,
         "_find_binding",
         lambda raw, binding_id: SimpleNamespace(
+            task_id="billing.account_context",
             method="GET",
             field_mapping={"account_id": "$.id"},
         ),
@@ -287,6 +309,11 @@ def test_readiness_route_reports_operational_state(monkeypatch) -> None:
         "_find_request_mapping",
         lambda raw, binding_id: None,
     )
+    monkeypatch.setattr(
+        runtime,
+        "_provisioning_sha256",
+        lambda **kwargs: _PROVISIONING_SHA,
+    )
     result = asyncio.run(
         runtime.get_enterprise_sandbox_operational_readiness(
             "billing.account",
@@ -295,6 +322,7 @@ def test_readiness_route_reports_operational_state(monkeypatch) -> None:
     )
     assert result["status"] == "sandbox_ready"
     assert result["sandbox_ready"] is True
+    assert result["provisioning_sha256"] == _PROVISIONING_SHA
     assert result["secret_reference"]["value_included"] is False
     assert result["raw_secret_visible"] is False
     assert result["raw_payload_visible"] is False
