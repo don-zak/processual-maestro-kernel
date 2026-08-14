@@ -296,7 +296,7 @@
       return;
     }
 
-    const allowedScopes = selectedEvaluationScopes();
+    const allowedScopes = readiness.scopes;
 
     try {
       const result = await request(EVALUATION_GRANTS_ENDPOINT, 'POST', {
@@ -305,7 +305,7 @@
         issued_to: readiness.issuedTo,
         purpose: readiness.purpose,
         allowed_task_ids: readiness.tasks,
-        allowed_scopes: allowedScopes,
+        ...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {}),
         expires_in_days: readiness.duration,
         max_requests: readiness.quota,
       });

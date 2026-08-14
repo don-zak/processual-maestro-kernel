@@ -105,9 +105,11 @@ def test_grant_post_uses_only_readiness_contract_values() -> None:
     assert "client_id: readiness.clientId" in create_source
     assert "issued_to: readiness.issuedTo" in create_source
     assert "allowed_task_ids: readiness.tasks" in create_source
-    assert "allowed_scopes: readiness.scopes" in create_source
+    assert "const allowedScopes = readiness.scopes;" in create_source
+    assert "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})" in create_source
     assert "expires_in_days: readiness.duration" in create_source
     assert "max_requests: readiness.quota" in create_source
+    assert "selectedEvaluationScopes();" not in create_source
     assert "/settings/api-keys" not in create_source
 
 
