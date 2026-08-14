@@ -184,6 +184,21 @@ def test_local_development_evaluation_auth_bootstrap_is_session_only() -> None:
     )
 
 
+def test_local_development_evaluation_auth_bootstrap_allows_retry() -> None:
+    source = _session_source()
+
+    required = [
+        "const existing = document.getElementById(EVALUATION_DEV_AUTH_ID)",
+        "if (existingButton) existingButton.disabled = false;",
+        "Credential was not accepted. Enter another development API key.",
+        "existingInput?.focus();",
+        "if (button) button.disabled = false;",
+        "if (response.status === 401 || response.status === 403)",
+    ]
+    for marker in required:
+        assert marker in source
+
+
 def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() -> None:
     source = _session_source()
 
