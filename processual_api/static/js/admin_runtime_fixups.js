@@ -1,5 +1,6 @@
-
 (function () {
+  const EXTERNAL_CATEGORY = 'external_evaluation';
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -60,6 +61,10 @@
       ).join(''),
       '</tbody></table>',
     ].join('');
+  }
+
+  function externalEvaluationSelected() {
+    return document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY;
   }
 
   function ensureStyle() {
@@ -214,9 +219,18 @@
     return profiles[profile] || profiles.service_integration;
   }
 
+  function removeApiKeyProfileControls() {
+    document.getElementById('admin-api-key-profile-controls')?.remove();
+  }
+
   function ensureApiKeyProfileControls() {
     const page = document.getElementById('page-admin-api-keys');
     if (!page) return;
+
+    if (externalEvaluationSelected()) {
+      removeApiKeyProfileControls();
+      return;
+    }
 
     if (document.getElementById('admin-api-key-profile')) return;
 
@@ -227,6 +241,7 @@
     const controls = document.createElement('div');
     controls.className = 'admin-profile-controls';
     controls.id = 'admin-api-key-profile-controls';
+    controls.dataset.standardApiKeyOnly = 'true';
     controls.innerHTML = [
       '<div>',
       '<label for="admin-api-key-profile">Key category / team role</label>',
@@ -279,6 +294,17 @@
   }
 
   async function generateProfiledApiKey() {
+    if (externalEvaluationSelected()) {
+      const output = document.getElementById('admin-api-key-create-result');
+      const button = document.getElementById('admin-api-key-generate-btn');
+      if (button) button.disabled = true;
+      if (output) {
+        output.textContent =
+          'Standard API key generation is blocked for External Evaluation. Complete the Evaluation Grant lifecycle and use Issue API Key after all readiness gates are READY.';
+      }
+      return;
+    }
+
     const profileName = document.getElementById('admin-api-key-profile')?.value || 'service_integration';
     const profile = keyProfile(profileName);
     const labelInput = document.getElementById('admin-api-key-profile-label')?.value || '';
@@ -390,12 +416,26 @@
   }
 
   function bindApiKeyButtons() {
+    if (externalEvaluationSelected()) {
+      removeApiKeyProfileControls();
+      const generateButton = document.getElementById('admin-api-key-generate-btn');
+      if (generateButton) {
+        generateButton.disabled = true;
+        generateButton.dataset.evaluationModeDisabled = 'true';
+      }
+      return;
+    }
+
     ensureApiKeyProfileControls();
 
     const generateButton = document.getElementById('admin-api-key-generate-btn');
     const refreshButton = document.getElementById('admin-api-key-refresh-btn');
 
     if (generateButton) {
+      if (generateButton.dataset.evaluationModeDisabled === 'true') {
+        generateButton.disabled = false;
+        delete generateButton.dataset.evaluationModeDisabled;
+      }
       generateButton.onclick = function (event) {
         event.preventDefault();
         generateProfiledApiKey();
@@ -430,6 +470,10 @@
     generateProfiledApiKey,
     keyProfile,
   };
+
+  window.addEventListener('pmk-api-key-category-changed', () => {
+    bindApiKeyButtons();
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {

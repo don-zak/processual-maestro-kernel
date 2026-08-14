@@ -1,23 +1,22 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks05-accesscatalog';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks06-lifecycle-final';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
-    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace02';
+    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-evaluation-lifecycle]';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
-    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation01';
+    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation02-lifecycle-final';
   const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card';
   const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card';
   const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body';
-  const EVALUATION_ACTIVATE_ID = 'admin-api-key-external-evaluation-activate';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
-  const PROVISIONING_MODE_ID = 'admin-api-key-provisioning-mode';
   const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
+  const EXTERNAL_CATEGORY = 'external_evaluation';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
   const ADMIN_ROLES = new Set([
     'admin',
@@ -87,32 +86,18 @@ document.addEventListener('DOMContentLoaded', () => {
     return LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname);
   }
 
+  function externalEvaluationSelected() {
+    return document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY;
+  }
+
   function placeEvaluationWorkspaceInsideCard() {
+    if (!externalEvaluationSelected()) return;
     const body = document.getElementById(EVALUATION_BODY_ID);
     const host = document.getElementById(EVALUATION_HOST_ID);
     const workspace = document.getElementById(PROVISIONING_WORKSPACE_ID);
     if (!body || !workspace) return;
     if (workspace.parentElement === body) return;
     body.insertBefore(workspace, host || body.firstChild);
-  }
-
-  function applyExternalEvaluationActivation() {
-    const card = document.getElementById(EVALUATION_CARD_ID);
-    const body = document.getElementById(EVALUATION_BODY_ID);
-    const button = document.getElementById(EVALUATION_ACTIVATE_ID);
-    if (!card || !body || !button) return;
-
-    card.dataset.activated = 'true';
-    body.hidden = false;
-    button.disabled = true;
-    button.textContent = 'External Evaluation Active';
-    placeEvaluationWorkspaceInsideCard();
-
-    const mode = document.getElementById(PROVISIONING_MODE_ID);
-    if (mode && mode.value !== 'external_evaluation') {
-      mode.value = 'external_evaluation';
-      mode.dispatchEvent(new Event('change', { bubbles: true }));
-    }
   }
 
   function ensureEvaluationGrantPlaceholder() {
@@ -126,45 +111,55 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!card) {
       card = document.createElement('section');
       card.id = EVALUATION_CARD_ID;
-      card.className = 'card flat admin-api-key-lifecycle-option-card';
+      card.className = 'card flat';
       card.style.marginTop = 'var(--s-4)';
       card.dataset.lifecycleEmbedded = 'true';
+      card.dataset.categoryOwned = 'true';
+      card.dataset.activated = 'false';
+      card.hidden = true;
       card.innerHTML = `
         <div class="sec-hdr">
-          <div class="sh-title">External Evaluation Access</div>
-          <div class="sh-sub">supervisor-governed sandbox API key preparation, issue, test, and revoke</div>
+          <div class="sh-title">External Evaluation Lifecycle</div>
+          <div class="sh-sub">verify → provision → bind tasks → create grant → issue once → test → revoke</div>
         </div>
         <div class="admin-note">
-          External Evaluation is an API key lifecycle option. Activate it to reveal its administrator verification, provisioning, task binding, one-time issue, testing, and revoke controls here. Production access remains disabled.
-        </div>
-        <div class="admin-actions">
-          <button id="${EVALUATION_ACTIVATE_ID}" class="btn primary" type="button">
-            Activate External Evaluation
-          </button>
+          This lifecycle is selected only from API Key Category. Standard key generation is disabled while External Evaluation is selected. Production access remains disabled.
         </div>
         <div id="${EVALUATION_BODY_ID}" hidden style="margin-top:var(--s-3)">
-          <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
-            <div class="admin-note" data-evaluation-access-status>
-              Activate External Evaluation to verify administrator authority and load controls.
+          <section class="card flat" data-evaluation-verification-stage="true">
+            <div class="sec-hdr">
+              <div class="sh-title">Administrator Verification</div>
+              <div class="sh-sub">required before governed provisioning and API key issue controls are enabled</div>
             </div>
-            <div class="muted" style="margin-top:var(--s-2)">
-              Backend scopes remain authoritative. Raw API keys are shown only at issue time.
+            <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
+              <div class="admin-note" data-evaluation-access-status>
+                Select External Evaluation Access to verify administrator authority and load governed controls.
+              </div>
+              <div class="muted" style="margin-top:var(--s-2)">
+                Backend scopes remain authoritative. Raw API keys are shown only at issue time.
+              </div>
             </div>
-          </div>
+          </section>
         </div>
       `;
 
       const lifecycleForm = lifecycleCard.querySelector('.admin-grid');
       if (lifecycleForm) lifecycleCard.insertBefore(card, lifecycleForm);
       else lifecycleCard.appendChild(card);
-
-      document.getElementById(EVALUATION_ACTIVATE_ID)?.addEventListener('click', async () => {
-        applyExternalEvaluationActivation();
-        await checkAdminSession();
-      });
     }
 
     return document.getElementById(EVALUATION_HOST_ID);
+  }
+
+  function syncEvaluationSelectionState() {
+    const card = document.getElementById(EVALUATION_CARD_ID);
+    const body = document.getElementById(EVALUATION_BODY_ID);
+    if (!card || !body) return;
+    const selected = externalEvaluationSelected();
+    card.hidden = !selected;
+    body.hidden = !selected;
+    card.dataset.activated = selected ? 'true' : 'false';
+    if (selected) placeEvaluationWorkspaceInsideCard();
   }
 
   function setEvaluationAccessStatus(message, danger = false) {
@@ -182,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderDevelopmentAuthBootstrap() {
     if (!isLocalDevelopmentOrigin()) return;
+    if (!externalEvaluationSelected()) return;
     const host = ensureEvaluationGrantPlaceholder();
     if (!host) return;
 
@@ -208,13 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="muted" style="margin-top:var(--s-1)">
         Enter the development API key for this browser session. It is stored in sessionStorage only.
       </div>
-      <div style="display:flex;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
         <input
           id="admin-evaluation-dev-api-key"
           type="password"
           autocomplete="off"
           placeholder="Development API key"
-          style="flex:1"
         >
         <button id="admin-evaluation-dev-api-key-save" class="btn primary" type="button">
           Verify & Load Controls
@@ -239,7 +234,10 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.setItem('api_key', value);
         if (input) input.value = '';
         if (button) button.disabled = true;
-        if (message) message.textContent = 'Credential saved for this tab. Verifying administrator authority...';
+        if (message) {
+          message.textContent =
+            'Credential saved for this tab. Verifying administrator authority...';
+        }
         setEvaluationAccessStatus('Verifying local development administrator credential...');
         await checkAdminSession();
       } catch (error) {
@@ -273,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
     script.dataset.adminEvaluationGrants = 'true';
     script.addEventListener('load', () => {
       document.body.dataset.adminEvaluationGrants = 'loaded';
+      window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
     });
     script.addEventListener('error', () => {
       evaluationLoadFailure(
@@ -284,9 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadApiKeyProvisioningWorkspace() {
     if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) {
-      if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
-        applyExternalEvaluationActivation();
-      }
+      placeEvaluationWorkspaceInsideCard();
       return;
     }
 
@@ -297,9 +294,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!document.body.dataset.adminApiKeyProvisioningWorkspace) {
         document.body.dataset.adminApiKeyProvisioningWorkspace = 'loading';
       }
-      if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
-        window.setTimeout(applyExternalEvaluationActivation, 0);
-      }
+      window.setTimeout(placeEvaluationWorkspaceInsideCard, 0);
+      window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
     });
     script.addEventListener('error', () => {
       document.body.dataset.adminApiKeyProvisioningWorkspace = 'load-error';
@@ -317,9 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!document.body.dataset.adminApiKeyEvaluationLifecycle) {
         document.body.dataset.adminApiKeyEvaluationLifecycle = 'loading';
       }
-      if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
-        window.setTimeout(applyExternalEvaluationActivation, 0);
-      }
+      window.setTimeout(placeEvaluationWorkspaceInsideCard, 0);
     });
     script.addEventListener('error', () => {
       document.body.dataset.adminApiKeyEvaluationLifecycle = 'load-error';
@@ -379,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function checkAdminSession() {
     ensureEvaluationGrantPlaceholder();
+    syncEvaluationSelectionState();
 
     const protectedBlocks = Array.from(
       document.querySelectorAll('.mono-block')
@@ -405,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const message =
           'Administrator credential is required before evaluation grant controls can be shown.';
         setEvaluationAccessStatus(message, true);
-        if (document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true') {
+        if (externalEvaluationSelected()) {
           renderDevelopmentAuthBootstrap();
         }
         writeProtected(
@@ -425,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
         if (
           (response.status === 401 || response.status === 403) &&
-          document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'
+          externalEvaluationSelected()
         ) {
           renderDevelopmentAuthBootstrap();
         }
@@ -477,6 +472,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  window.PMK_ADMIN_SESSION = {
+    check: checkAdminSession,
+    syncEvaluationSelectionState,
+  };
+
+  window.addEventListener('pmk-api-key-category-changed', async () => {
+    syncEvaluationSelectionState();
+    if (externalEvaluationSelected()) {
+      await checkAdminSession();
+    } else {
+      clearDevelopmentAuthBootstrap();
+    }
+  });
+
   ensureEvaluationGrantPlaceholder();
+  syncEvaluationSelectionState();
   checkAdminSession();
 });

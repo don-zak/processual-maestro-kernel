@@ -251,7 +251,7 @@ def test_workspace_script_loads_only_after_verified_admin_session() -> None:
 
     required = [
         "API_KEY_WORKSPACE_SCRIPT_SELECTOR",
-        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace02",
+        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final",
         "function loadApiKeyProvisioningWorkspace()",
         "script.dataset.adminApiKeyProvisioningWorkspace = 'true'",
         "document.body.dataset.adminSession = 'ok'",
