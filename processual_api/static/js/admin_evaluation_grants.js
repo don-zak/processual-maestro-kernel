@@ -274,13 +274,14 @@
       setGrantResult(`
         <strong>One-time evaluation API key created.</strong><br>
         Copy it now; it will not be displayed again.<br>
-        <span class="mono-block" style="display:block;margin-top:var(--s-2)">${escapeHtml(header)}: ${escapeHtml(secret)}</span>
+        <span class="mono-block" style="display:block;margin-top:var(--s-2)">X-API-Key: ${escapeHtml(secret)}</span>
+        ${header !== 'X-API-Key' ? `<div class="muted">Backend header: ${escapeHtml(header)}</div>` : ''}
         <button id="admin-eval-copy-issued-key" class="btn secondary" type="button" style="margin-top:var(--s-2)">Copy API Key</button><br>
         <strong>Grant</strong>: ${escapeHtml(grantId)}<br>
         <strong>Client</strong>: ${escapeHtml(key.client_id || '')}<br>
         <strong>Scopes</strong>: ${escapeHtml(scopes.join(', ') || 'none')}<br>
         <strong>Task scope IDs</strong>: ${escapeHtml(taskScopes.join(', ') || 'none')}<br>
-        <strong>Bound tasks</strong>: ${escapeHtml(tasks.join(', ') || 'none')}<br>
+        <strong>Bound tasks:</strong> ${escapeHtml(tasks.join(', ') || 'none')}<br>
         <strong>Quota</strong>: ${escapeHtml(key.quota_limit)}<br>
         <strong>Expires</strong>: ${escapeHtml(key.expires_at)}<br>
         <strong>Example endpoint</strong>: ${escapeHtml(exampleEndpoint)}<br>
