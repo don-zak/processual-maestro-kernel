@@ -17,8 +17,8 @@
       optional: true,
     },
     {
-      label: "Governor",
-      path: "/cgt/govern/status",
+      label: 'Governor',
+      path: '/cgt/govern/status',
     },
     {
       group: 'supervision readiness',
@@ -45,12 +45,12 @@
       auth: true,
     },
     {
-      label: "Adapters - Adapter Status",
-      path: "/adapters/status",
+      label: 'Adapters - Adapter Status',
+      path: '/adapters/status',
     },
     {
-      label: "Adapters - Adapter Readiness",
-      path: "/adapters/readiness",
+      label: 'Adapters - Adapter Readiness',
+      path: '/adapters/readiness',
     },
   ];
 
@@ -74,7 +74,13 @@
 
   function ensureReadinessHost() {
     const existing = document.getElementById(HOST_ID);
-    if (existing) return existing;
+    if (existing) {
+      if (!existing.querySelector('[data-admin-runtime-body]')) {
+        const body = existing.querySelector('.mono-block');
+        if (body) body.setAttribute('data-admin-runtime-body', 'readiness');
+      }
+      return existing;
+    }
 
     const overviewHost = document.getElementById('admin-supervisor-overview-counters');
     const homeConsole = document.getElementById('admin-supervisor-home-console');
@@ -90,7 +96,7 @@
         <div class="sh-title">${escapeHtml(TITLE)}</div>
         <div class="sh-sub">program runtime and supervision readiness - visibility-only</div>
       </div>
-      <div class="mono-block" style="font-size:11px;white-space:pre-wrap">
+      <div data-admin-runtime-body="readiness" class="mono-block" style="font-size:11px;white-space:pre-wrap">
         Loading program and supervision readiness...
       </div>
     `;
@@ -103,14 +109,15 @@
 
     return host;
   }
+
   function readinessFetch(path, headers = {}) {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();
-      request.open("GET", path, true);
+      request.open('GET', path, true);
       request.withCredentials = true;
       request.timeout = 10000;
 
-      if (headers && typeof headers.forEach === "function") {
+      if (headers && typeof headers.forEach === 'function') {
         headers.forEach((value, name) => {
           if (value !== undefined && value !== null) {
             request.setRequestHeader(name, String(value));
@@ -130,8 +137,8 @@
           status: request.status,
         });
       };
-      request.onerror = () => reject(new Error("Readiness request failed"));
-      request.ontimeout = () => reject(new Error("Readiness request timed out"));
+      request.onerror = () => reject(new Error('Readiness request failed'));
+      request.ontimeout = () => reject(new Error('Readiness request timed out'));
       request.send();
     });
   }
@@ -212,16 +219,18 @@
         <div class="sh-title">${escapeHtml(TITLE)}</div>
         <div class="sh-sub">program runtime and supervision readiness - visibility-only</div>
       </div>
-      <div class="admin-note">
-        <strong>Program:</strong> ${escapeHtml(summarize(results, 'program readiness'))}
-        <br>
-        <strong>Supervision:</strong> ${escapeHtml(
-          summarize(results, 'supervision readiness')
-        )}
-      </div>
-      ${rows}
-      <div class="muted" style="margin-top:var(--s-3)">
-        Backend enforcement remains authoritative. This card only reports readiness signals.
+      <div data-admin-runtime-body="readiness">
+        <div class="admin-note">
+          <strong>Program:</strong> ${escapeHtml(summarize(results, 'program readiness'))}
+          <br>
+          <strong>Supervision:</strong> ${escapeHtml(
+            summarize(results, 'supervision readiness')
+          )}
+        </div>
+        ${rows}
+        <div class="muted" style="margin-top:var(--s-3)">
+          Backend enforcement remains authoritative. This card only reports readiness signals.
+        </div>
       </div>
     `;
   }
@@ -235,14 +244,19 @@
         <div class="sh-title">${escapeHtml(TITLE)}</div>
         <div class="sh-sub">program runtime and supervision readiness - visibility-only</div>
       </div>
-      <div class="admin-note danger">Unable to load readiness summary: ${escapeHtml(
-        error.message || error
-      )}</div>
-      <div class="muted">Backend enforcement remains authoritative.</div>
+      <div data-admin-runtime-body="readiness">
+        <div class="admin-note danger">Unable to load readiness summary: ${escapeHtml(
+          error.message || error
+        )}</div>
+        <div class="muted">Backend enforcement remains authoritative.</div>
+      </div>
     `;
   }
 
-  async function refreshReadinessSummary() {
+  let refreshInFlight = null;
+  let refreshQueued = false;
+
+  async function runReadinessRefresh() {
     ensureReadinessHost();
 
     try {
@@ -253,9 +267,26 @@
     }
   }
 
+  function refreshReadinessSummary() {
+    if (refreshInFlight) {
+      refreshQueued = true;
+      return refreshInFlight;
+    }
+
+    refreshInFlight = runReadinessRefresh().finally(() => {
+      refreshInFlight = null;
+      if (refreshQueued) {
+        refreshQueued = false;
+        refreshReadinessSummary();
+      }
+    });
+
+    return refreshInFlight;
+  }
+
   let readinessTimer = null;
 
-  function scheduleReadinessRefresh() {
+  function scheduleReadinessRefresh(delayMs = 50) {
     if (readinessTimer) {
       window.clearTimeout(readinessTimer);
     }
@@ -263,32 +294,16 @@
     readinessTimer = window.setTimeout(() => {
       readinessTimer = null;
       refreshReadinessSummary();
-    }, 0);
+    }, delayMs);
   }
 
   function installReadinessRefreshHooks() {
-    window.addEventListener('load', () => {
-      scheduleReadinessRefresh();
-    });
-
     window.addEventListener('pmk-supervisor-session-key-updated', () => {
-      scheduleReadinessRefresh();
+      scheduleReadinessRefresh(100);
     });
-
-    if (typeof MutationObserver === 'function') {
-      const main = document.getElementById('main') || document.body;
-      const observer = new MutationObserver(() => {
-        if (!document.getElementById(HOST_ID)) {
-          scheduleReadinessRefresh();
-        }
-      });
-
-      observer.observe(main, { childList: true, subtree: true });
-    }
   }
 
   installReadinessRefreshHooks();
-  scheduleReadinessRefresh();
-  setTimeout(() => scheduleReadinessRefresh(), 250);
-  setTimeout(() => scheduleReadinessRefresh(), 1000);
+  ensureReadinessHost();
+  scheduleReadinessRefresh(0);
 })();

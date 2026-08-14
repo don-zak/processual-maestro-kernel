@@ -43,14 +43,35 @@ def test_readiness_summary_script_checks_program_and_supervision_surfaces() -> N
     assert "Backend enforcement remains authoritative" in source
 
 
-def test_readiness_summary_can_rehydrate_after_admin_runtime_changes() -> None:
+def test_readiness_summary_marks_runtime_owned_host_before_cleanup() -> None:
     source = read_text("processual_api/static/js/admin_supervisor_readiness_summary.js")
 
-    assert "ensureReadinessHost" in source
-    assert "MutationObserver" in source
-    assert "scheduleReadinessRefresh" in source
-    assert "window.addEventListener('load'" in source
+    assert "data-admin-runtime-body" in source
+    assert "existing.querySelector('[data-admin-runtime-body]')" in source
+    assert "body.setAttribute('data-admin-runtime-body', 'readiness')" in source
+    assert "ensureReadinessHost();\n  scheduleReadinessRefresh(0);" in source
+
+
+def test_readiness_summary_refresh_is_single_flight_and_coalesced() -> None:
+    source = read_text("processual_api/static/js/admin_supervisor_readiness_summary.js")
+
+    assert "let refreshInFlight = null" in source
+    assert "let refreshQueued = false" in source
+    assert "if (refreshInFlight)" in source
+    assert "refreshQueued = true" in source
+    assert "refreshInFlight = runReadinessRefresh().finally" in source
+    assert "if (refreshQueued)" in source
+
+
+def test_readiness_summary_has_no_dom_mutation_refresh_loop() -> None:
+    source = read_text("processual_api/static/js/admin_supervisor_readiness_summary.js")
+
+    assert "MutationObserver" not in source
+    assert "window.addEventListener('load'" not in source
+    assert "setTimeout(() => scheduleReadinessRefresh(), 250)" not in source
+    assert "setTimeout(() => scheduleReadinessRefresh(), 1000)" not in source
     assert "pmk-supervisor-session-key-updated" in source
+    assert "scheduleReadinessRefresh(100)" in source
 
 
 def test_readiness_summary_preserves_secret_boundaries() -> None:
@@ -62,7 +83,7 @@ def test_readiness_summary_preserves_secret_boundaries() -> None:
     assert "encrypted_key" not in source
 
 
-def test_admin_supervisor_readiness_summary_includes_governor_and_adapters():
+def test_admin_supervisor_readiness_summary_includes_governor_and_adapters() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
         encoding="utf-8"
     )
@@ -76,7 +97,7 @@ def test_admin_supervisor_readiness_summary_includes_governor_and_adapters():
     assert "/adapters/readiness" in source
 
 
-def test_admin_supervisor_readiness_summary_does_not_render_secret_fields():
+def test_admin_supervisor_readiness_summary_does_not_render_secret_fields() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
         encoding="utf-8"
     )
@@ -85,6 +106,7 @@ def test_admin_supervisor_readiness_summary_does_not_render_secret_fields():
     assert "key_hash" not in source
     assert "provider_secret" not in source
     assert "encrypted_key" not in source
+
 
 def test_readiness_summary_passes_admin_auth_headers_to_checks() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
@@ -96,6 +118,7 @@ def test_readiness_summary_passes_admin_auth_headers_to_checks() -> None:
     assert "new XMLHttpRequest" in source
     assert "request.withCredentials = true" in source
 
+
 def test_readiness_summary_does_not_use_bridged_fetch_for_readiness_checks() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
         encoding="utf-8"
@@ -105,6 +128,7 @@ def test_readiness_summary_does_not_use_bridged_fetch_for_readiness_checks() -> 
     assert "new XMLHttpRequest" in source
     assert "PMK_ADMIN_AUTH.fetch" not in source
     assert "bridgedFetch" not in source
+
 
 def test_readiness_summary_uses_xhr_to_avoid_global_fetch_bridge() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
@@ -118,6 +142,7 @@ def test_readiness_summary_uses_xhr_to_avoid_global_fetch_bridge() -> None:
     assert "return fetch(path, options)" not in source
     assert "PMK_ADMIN_AUTH.fetch" not in source
     assert "bridgedFetch" not in source
+
 
 def test_readiness_summary_does_not_gate_readiness_auth_headers_on_check_auth() -> None:
     source = Path("processual_api/static/js/admin_supervisor_readiness_summary.js").read_text(
