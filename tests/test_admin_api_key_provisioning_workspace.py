@@ -3,15 +3,19 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
+from processual_api.main import app
 from processual_api.routers.settings_admin_api_key_provisioning import (
     _require_api_key_provisioning_admin,
+    admin_api_key_access_catalog,
     admin_api_key_operational_profiles,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 JS = ROOT / "processual_api" / "static" / "js"
 WORKSPACE_SCRIPT = JS / "admin_api_key_provisioning_workspace.js"
+EVALUATION_SCRIPT = JS / "admin_evaluation_grants.js"
 SESSION_SCRIPT = JS / "admin_session.js"
 ROUTERS_INIT = ROOT / "processual_api" / "routers" / "__init__.py"
 
@@ -20,8 +24,24 @@ def _workspace_source() -> str:
     return WORKSPACE_SCRIPT.read_text(encoding="utf-8")
 
 
+def _evaluation_source() -> str:
+    return EVALUATION_SCRIPT.read_text(encoding="utf-8")
+
+
 def _session_source() -> str:
     return SESSION_SCRIPT.read_text(encoding="utf-8")
+
+
+def _request() -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/settings/admin/api-key-access-catalog",
+            "headers": [],
+            "app": app,
+        }
+    )
 
 
 def test_admin_operational_profile_catalog_requires_admin_authority() -> None:
@@ -57,7 +77,50 @@ def test_admin_operational_profile_catalog_is_safe_and_non_production() -> None:
         assert "forbidden_scopes" in profile
 
 
-def test_provisioning_workspace_exposes_mode_profile_and_access_preview() -> None:
+def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy() -> None:
+    payload = asyncio.run(
+        admin_api_key_access_catalog(
+            _request(),
+            {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
+        )
+    )
+
+    assert payload["catalog"] == "api_key_access_catalog"
+    assert payload["selection_authority"] == (
+        "fastapi_route_registry+explicit_runtime_access_policy"
+    )
+    assert payload["endpoint_count"] == len(payload["endpoints"])
+    assert payload["grantable_endpoint_count"] > 0
+    assert payload["raw_secret_visible"] is False
+    assert payload["production_allowed"] is False
+
+    by_key = {
+        (endpoint["method"], endpoint["path"]): endpoint
+        for endpoint in payload["endpoints"]
+    }
+    assert by_key[("GET", "/health/live")]["grantable"] is True
+    assert by_key[("GET", "/health/live")]["required_scopes"] == ["read:health"]
+    assert by_key[("GET", "/adapters/status")]["grantable"] is True
+    assert by_key[("GET", "/adapters/status")]["required_scopes"] == ["read:adapters"]
+    assert by_key[("POST", "/cgt/govern")]["grantable"] is True
+    assert by_key[("POST", "/cgt/govern")]["required_scopes"] == ["run:govern"]
+
+    settings_routes = [
+        endpoint
+        for endpoint in payload["endpoints"]
+        if endpoint["path"].startswith("/settings")
+    ]
+    assert settings_routes
+    assert all(endpoint["grantable"] is False for endpoint in settings_routes)
+    assert not any(
+        str(scope).startswith("admin:")
+        for endpoint in payload["endpoints"]
+        if endpoint["grantable"]
+        for scope in endpoint["required_scopes"]
+    )
+
+
+def test_provisioning_workspace_exposes_profiles_endpoints_and_access_preview() -> None:
     source = _workspace_source()
 
     required = [
@@ -67,8 +130,12 @@ def test_provisioning_workspace_exposes_mode_profile_and_access_preview() -> Non
         "External Evaluation",
         "admin-api-key-operational-profile",
         "/settings/admin/api-key-operational-profiles",
-        "Selected operational intent only.",
+        "/settings/admin/api-key-access-catalog",
+        "Eligible API Endpoints",
+        "Backend Route Inventory",
+        "data-api-key-access-endpoint",
         "Access Preview",
+        "Selected endpoints",
         "Key scopes currently configured",
         "Selected operational intent",
         "production",
@@ -78,14 +145,16 @@ def test_provisioning_workspace_exposes_mode_profile_and_access_preview() -> Non
         assert marker in source
 
 
-def test_operational_profile_catalog_is_preview_only_and_does_not_mutate_key_scopes() -> None:
+def test_endpoint_selection_derives_scopes_but_operational_profile_remains_intent_only() -> None:
     source = _workspace_source()
 
-    assert "This catalog does not grant runtime authority by itself" in source
-    assert "does not mutate the key scopes below" in source
-    assert "applySelectedProfileScopes" not in source
-    assert "admin-api-key-apply-profile-scopes" not in source
+    assert "Selected operational intent only." in source
+    assert "selectedEndpointScopes" in source
+    assert "syncScopesFromEndpointSelection" in source
+    assert "target.value = derivedScopes.join('\\n')" in source
+    assert "profile.allowed_scopes" in source
     assert "target.value = allowed.join" not in source
+    assert "admin-api-key-apply-profile-scopes" not in source
 
 
 def test_external_evaluation_mode_cannot_use_standard_key_generation() -> None:
@@ -94,18 +163,32 @@ def test_external_evaluation_mode_cannot_use_standard_key_generation() -> None:
     assert "provisioningMode() === 'external_evaluation'" in source
     assert "button.disabled = true" in source
     assert "button.dataset.evaluationModeDisabled = 'true'" in source
-    assert "evaluation grant authority cannot be bypassed" in source
+    assert "evaluation grant authority" in source
     assert "/settings/admin/evaluation-grants" in source
-    assert "This preview does not issue a key." in source
     assert "fetch('/settings/api-keys'" not in source
     assert "POST /settings/api-keys" not in source
 
 
-def test_workspace_uses_backend_catalog_and_does_not_store_secrets() -> None:
+def test_external_evaluation_grant_receives_selected_endpoint_scopes() -> None:
+    source = _evaluation_source()
+
+    assert "function selectedEvaluationScopes()" in source
+    assert "PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE" in source
+    assert "workspace.selectedScopes()" in source
+    assert "const allowedScopes = selectedEvaluationScopes();" in source
+    assert "allowed_scopes: allowedScopes" in source
+    assert "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})" in source
+    assert "sessionStorage.setItem" not in source
+    assert "localStorage.setItem" not in source
+
+
+def test_workspace_uses_backend_catalogs_and_does_not_store_secrets() -> None:
     source = _workspace_source()
 
     assert "requestJson(PROFILE_ENDPOINT)" in source
+    assert "requestJson(ACCESS_CATALOG_ENDPOINT)" in source
     assert "payload.profiles" in source
+    assert "payload.endpoints" in source
     assert "profile.allowed_scopes" in source
     assert "profile.forbidden_scopes" in source
     assert "sessionStorage.setItem" not in source
