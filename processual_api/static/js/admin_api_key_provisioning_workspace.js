@@ -115,6 +115,9 @@
     const allowed = Array.isArray(profile.allowed_scopes) ? profile.allowed_scopes : [];
     const forbidden = Array.isArray(profile.forbidden_scopes) ? profile.forbidden_scopes : [];
     target.innerHTML = `
+      <div class="admin-note" style="margin-top:var(--s-2)">
+        Selected operational intent only. This catalog does not grant runtime authority by itself and does not mutate the key scopes below.
+      </div>
       <div class="grid-3" style="margin-top:var(--s-2)">
         <div class="card flat"><strong>Environment</strong><div>${escapeHtml(profile.environment || 'sandbox')}</div></div>
         <div class="card flat"><strong>Read only</strong><div>${profile.read_only ? 'yes' : 'no'}</div></div>
@@ -123,19 +126,10 @@
         <div class="card flat"><strong>Supervisor for write</strong><div>${profile.requires_supervisor_for_write ? 'required' : 'not required'}</div></div>
         <div class="card flat"><strong>Runtime connector</strong><div>${profile.runtime_connector_approved ? 'approved' : 'not approved'}</div></div>
       </div>
-      <div style="margin-top:var(--s-2)"><strong>Allowed operational scopes</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(allowed.join('\n') || 'none')}</div></div>
-      <div style="margin-top:var(--s-2)"><strong>Forbidden operational scopes</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(forbidden.join('\n') || 'none')}</div></div>
+      <div style="margin-top:var(--s-2)"><strong>Allowed operational intent</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(allowed.join('\n') || 'none')}</div></div>
+      <div style="margin-top:var(--s-2)"><strong>Forbidden operational intent</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(forbidden.join('\n') || 'none')}</div></div>
       <div class="muted" style="margin-top:var(--s-2)">${escapeHtml(profile.next_action || '')}</div>
     `;
-  }
-
-  function applySelectedProfileScopes() {
-    const profile = selectedProfile();
-    const target = document.getElementById('admin-api-key-scopes');
-    if (!profile || !target) return;
-    const allowed = Array.isArray(profile.allowed_scopes) ? profile.allowed_scopes : [];
-    target.value = allowed.join('\n');
-    target.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function renderPreview() {
@@ -144,6 +138,7 @@
     const profile = selectedProfile();
     const mode = provisioningMode();
     const scopeValues = scopes();
+    const profileScopes = Array.isArray(profile?.allowed_scopes) ? profile.allowed_scopes : [];
     const productionAllowed = profile ? Boolean(profile.production_allowed) : false;
 
     target.innerHTML = `
@@ -163,7 +158,8 @@
         <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>${productionAllowed ? 'allowed' : 'disabled'}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>runtime_connector</strong><span>${profile?.runtime_connector_approved ? 'approved' : 'not approved'}</span></div>
       </div>
-      <div style="margin-top:var(--s-2)"><strong>Effective scopes in form</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(scopeValues.join('\n') || 'none')}</div></div>
+      <div style="margin-top:var(--s-2)"><strong>Key scopes currently configured</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(scopeValues.join('\n') || 'none')}</div></div>
+      <div style="margin-top:var(--s-2)"><strong>Selected operational intent</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(profileScopes.join('\n') || 'none')}</div></div>
       ${mode === 'external_evaluation' ? '<div class="admin-note" style="margin-top:var(--s-2)">Evaluation task binding and grant issuance stay under /settings/admin/evaluation-grants. This preview does not issue a key.</div>' : ''}
     `;
   }
@@ -231,7 +227,7 @@
     workspace.innerHTML = `
       <div class="sec-hdr">
         <div class="sh-title">Provisioning Workspace</div>
-        <div class="sh-sub">key mode, operational profile, and safe access preview</div>
+        <div class="sh-sub">key mode, operational intent, and safe access preview</div>
       </div>
       <div class="admin-grid">
         <label>Provisioning mode
@@ -249,9 +245,6 @@
       <div id="admin-api-key-provisioning-mode-status" class="admin-note"></div>
       <div id="admin-api-key-operational-profile-status" class="muted" style="margin-top:var(--s-2)"></div>
       <div id="admin-api-key-operational-profile-details"></div>
-      <div class="admin-actions" style="margin-top:var(--s-2)">
-        <button id="admin-api-key-apply-profile-scopes" class="btn secondary" type="button">Apply profile scopes to key</button>
-      </div>
       <div id="admin-api-key-access-preview"></div>
     `;
 
@@ -265,10 +258,6 @@
     });
     document.getElementById('admin-api-key-operational-profile')?.addEventListener('change', () => {
       renderProfileDetails();
-      renderPreview();
-    });
-    document.getElementById('admin-api-key-apply-profile-scopes')?.addEventListener('click', () => {
-      applySelectedProfileScopes();
       renderPreview();
     });
 
