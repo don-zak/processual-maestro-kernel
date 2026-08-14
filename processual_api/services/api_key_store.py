@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from processual_api.services.evaluation_grants import key_evaluation_grant_state
+
 try:
     import bcrypt as _bcrypt_lib
 except ImportError:
@@ -108,6 +110,9 @@ def _public_identity(user_id: str, raw: dict[str, Any], key: dict[str, Any]) -> 
         "api_key_id": key.get("id", ""),
         "api_key_prefix": key.get("prefix", ""),
         "scopes": scopes,
+        "evaluation_grant_id": key.get("evaluation_grant_id"),
+        "entitlement_source": key.get("entitlement_source"),
+        "subscription_required": key.get("subscription_required", True),
     }
 
 
@@ -145,6 +150,15 @@ def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
                 key["status"] = "expired"
                 changed = True
                 continue
+
+            grant_allowed, grant_state = key_evaluation_grant_state(raw, key)
+            if not grant_allowed:
+                key["evaluation_grant_state"] = grant_state
+                changed = True
+                continue
+            if key.get("category") == "pilot_client":
+                key["evaluation_grant_state"] = "active"
+                changed = True
 
             hashed = key.get("hashed") or key.get("hashed_key")
             if not hashed:
