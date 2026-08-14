@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
   const PROVISIONING_MODE_ID = 'admin-api-key-provisioning-mode';
+  const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
   const ADMIN_ROLES = new Set([
     'admin',
@@ -86,6 +87,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname);
   }
 
+  function placeEvaluationWorkspaceInsideCard() {
+    const body = document.getElementById(EVALUATION_BODY_ID);
+    const host = document.getElementById(EVALUATION_HOST_ID);
+    const workspace = document.getElementById(PROVISIONING_WORKSPACE_ID);
+    if (!body || !workspace) return;
+    if (workspace.parentElement === body) return;
+    body.insertBefore(workspace, host || body.firstChild);
+  }
+
   function applyExternalEvaluationActivation() {
     const card = document.getElementById(EVALUATION_CARD_ID);
     const body = document.getElementById(EVALUATION_BODY_ID);
@@ -96,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     body.hidden = false;
     button.disabled = true;
     button.textContent = 'External Evaluation Active';
+    placeEvaluationWorkspaceInsideCard();
 
     const mode = document.getElementById(PROVISIONING_MODE_ID);
     if (mode && mode.value !== 'external_evaluation') {
@@ -109,24 +120,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (host) return host;
 
     const lifecycleCard = document.getElementById(API_KEY_LIFECYCLE_CARD_ID);
-    const page = document.getElementById('page-admin-api-keys');
-    const parent = lifecycleCard || page;
-    if (!parent) return null;
+    if (!lifecycleCard) return null;
 
     let card = document.getElementById(EVALUATION_CARD_ID);
     if (!card) {
       card = document.createElement('section');
       card.id = EVALUATION_CARD_ID;
-      card.className = 'card flat';
+      card.className = 'card flat admin-api-key-lifecycle-option-card';
       card.style.marginTop = 'var(--s-4)';
-      card.dataset.lifecycleEmbedded = lifecycleCard ? 'true' : 'fallback-page';
+      card.dataset.lifecycleEmbedded = 'true';
       card.innerHTML = `
         <div class="sec-hdr">
           <div class="sh-title">External Evaluation Access</div>
           <div class="sh-sub">supervisor-governed sandbox API key preparation, issue, test, and revoke</div>
         </div>
         <div class="admin-note">
-          This is part of Admin API Key Lifecycle. Activate it to reveal the governed provisioning and evaluation controls. Production access remains disabled.
+          External Evaluation is an API key lifecycle option. Activate it to reveal its administrator verification, provisioning, task binding, one-time issue, testing, and revoke controls here. Production access remains disabled.
         </div>
         <div class="admin-actions">
           <button id="${EVALUATION_ACTIVATE_ID}" class="btn primary" type="button">
@@ -144,7 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
-      parent.appendChild(card);
+
+      const lifecycleForm = lifecycleCard.querySelector('.admin-grid');
+      if (lifecycleForm) lifecycleCard.insertBefore(card, lifecycleForm);
+      else lifecycleCard.appendChild(card);
 
       document.getElementById(EVALUATION_ACTIVATE_ID)?.addEventListener('click', async () => {
         applyExternalEvaluationActivation();
