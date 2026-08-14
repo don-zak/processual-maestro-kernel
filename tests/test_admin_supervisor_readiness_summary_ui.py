@@ -33,7 +33,7 @@ def test_readiness_summary_script_checks_program_and_supervision_surfaces() -> N
     assert "supervision readiness" in source
     assert "path: '/health/live'" in source
     assert "path: '/health/ready'" in source
-    assert "/auth/me" in source
+    assert "/auth/me" not in source
     assert "/settings/admin/client-requests" in source
     assert "/settings/admin/audit-events?limit=3" in source
     assert "/settings/api-keys" in source
@@ -49,7 +49,7 @@ def test_readiness_summary_marks_runtime_owned_host_before_cleanup() -> None:
     assert "data-admin-runtime-body" in source
     assert "existing.querySelector('[data-admin-runtime-body]')" in source
     assert "body.setAttribute('data-admin-runtime-body', 'readiness')" in source
-    assert "ensureReadinessHost();\n  scheduleReadinessRefresh(0);" in source
+    assert "Waiting for verified admin session before readiness checks..." in source
 
 
 def test_readiness_summary_refresh_is_single_flight_and_coalesced() -> None:
@@ -63,6 +63,16 @@ def test_readiness_summary_refresh_is_single_flight_and_coalesced() -> None:
     assert "if (refreshQueued)" in source
 
 
+def test_readiness_summary_waits_for_verified_admin_session() -> None:
+    source = read_text("processual_api/static/js/admin_supervisor_readiness_summary.js")
+
+    assert "pmk-admin-session-verified" in source
+    assert "document.body.dataset.adminSession === 'ok'" in source
+    assert "scheduleReadinessRefresh(150)" in source
+    assert "scheduleReadinessRefresh(0)" not in source
+    assert "path: '/auth/me'" not in source
+
+
 def test_readiness_summary_has_no_dom_mutation_refresh_loop() -> None:
     source = read_text("processual_api/static/js/admin_supervisor_readiness_summary.js")
 
@@ -71,7 +81,6 @@ def test_readiness_summary_has_no_dom_mutation_refresh_loop() -> None:
     assert "setTimeout(() => scheduleReadinessRefresh(), 250)" not in source
     assert "setTimeout(() => scheduleReadinessRefresh(), 1000)" not in source
     assert "pmk-supervisor-session-key-updated" in source
-    assert "scheduleReadinessRefresh(100)" in source
 
 
 def test_readiness_summary_preserves_secret_boundaries() -> None:
