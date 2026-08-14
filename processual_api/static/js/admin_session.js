@@ -117,7 +117,21 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderDevelopmentAuthBootstrap() {
     if (!isLocalDevelopmentOrigin()) return;
     const host = ensureEvaluationGrantPlaceholder();
-    if (!host || document.getElementById(EVALUATION_DEV_AUTH_ID)) return;
+    if (!host) return;
+
+    const existing = document.getElementById(EVALUATION_DEV_AUTH_ID);
+    if (existing) {
+      const existingInput = existing.querySelector('#admin-evaluation-dev-api-key');
+      const existingButton = existing.querySelector('#admin-evaluation-dev-api-key-save');
+      const existingMessage = existing.querySelector('[data-evaluation-dev-auth-message]');
+      if (existingButton) existingButton.disabled = false;
+      if (existingMessage) {
+        existingMessage.textContent =
+          'Credential was not accepted. Enter another development API key.';
+      }
+      existingInput?.focus();
+      return;
+    }
 
     const bootstrap = document.createElement('div');
     bootstrap.id = EVALUATION_DEV_AUTH_ID;
@@ -163,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setEvaluationAccessStatus('Verifying local development administrator credential...');
         await checkAdminSession();
       } catch (error) {
+        if (button) button.disabled = false;
         if (message) {
           message.textContent =
             'Unable to store the development credential for this browser session.';
