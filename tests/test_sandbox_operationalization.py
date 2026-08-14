@@ -8,10 +8,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from processual_api.integrations.enterprise_sandbox_execution import (
-    SandboxCredentialEnvelope,
-    SandboxExecutionError,
-)
+from processual_api.integrations.enterprise_sandbox_execution import SandboxExecutionError
 from processual_api.integrations.sandbox_operational_readiness import (
     SANDBOX_CONTENT_STORAGE_KEY,
     SANDBOX_SECRET_REFERENCE_STORAGE_KEY,
@@ -48,6 +45,9 @@ def _secret(binding_id: str = "billing.account") -> SandboxSecretReference:
 def _proof() -> dict[str, object]:
     return {
         "binding_id": "billing.account",
+        "operational_proof": True,
+        "peer_address_verified": True,
+        "customer_secret_reference_configured": True,
         "network_request_executed": True,
         "mapping_valid": True,
         "ready_for_task_consumption": True,
@@ -126,7 +126,7 @@ def test_readiness_is_fail_closed_until_all_operational_proofs_exist() -> None:
     )
     assert provisioned["status"] == "content_ready"
     assert provisioned["sandbox_ready"] is False
-    assert provisioned["blocker_codes"] == ["live_sandbox_proof_required"]
+    assert provisioned["blocker_codes"] == ["hardened_live_sandbox_proof_required"]
 
     ready = evaluate_sandbox_operational_readiness(
         binding_configured=True,
@@ -140,6 +140,23 @@ def test_readiness_is_fail_closed_until_all_operational_proofs_exist() -> None:
     assert ready["blocker_codes"] == []
     assert ready["production_allowed"] is False
     assert ready["runtime_connector_approved"] is False
+
+
+def test_legacy_live_proof_cannot_mark_operational_sandbox_ready() -> None:
+    legacy = _proof()
+    legacy.pop("operational_proof")
+    legacy.pop("peer_address_verified")
+    legacy.pop("customer_secret_reference_configured")
+    result = evaluate_sandbox_operational_readiness(
+        binding_configured=True,
+        mapping_configured=True,
+        secret_reference=_secret(),
+        content_contract=_content(),
+        live_proof_evidence=legacy,
+    )
+    assert result["status"] == "content_ready"
+    assert result["sandbox_ready"] is False
+    assert result["blocker_codes"] == ["hardened_live_sandbox_proof_required"]
 
 
 def test_reference_resolver_is_customer_scoped(monkeypatch) -> None:
