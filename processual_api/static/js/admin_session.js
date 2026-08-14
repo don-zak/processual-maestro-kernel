@@ -1,11 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks03-visible';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks04-lifecycle';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
     '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace01';
+  const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
+    'script[data-admin-api-key-evaluation-lifecycle]';
+  const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
+    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation01';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
@@ -237,6 +241,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(script);
   }
 
+  function loadApiKeyEvaluationLifecycle() {
+    if (document.querySelector(API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR)) return;
+
+    const script = document.createElement('script');
+    script.src = API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC;
+    script.dataset.adminApiKeyEvaluationLifecycle = 'true';
+    script.addEventListener('load', () => {
+      if (!document.body.dataset.adminApiKeyEvaluationLifecycle) {
+        document.body.dataset.adminApiKeyEvaluationLifecycle = 'loading';
+      }
+    });
+    script.addEventListener('error', () => {
+      document.body.dataset.adminApiKeyEvaluationLifecycle = 'load-error';
+    });
+    document.body.appendChild(script);
+  }
+
   function wait(delayMs) {
     return new Promise((resolve) => window.setTimeout(resolve, delayMs));
   }
@@ -361,6 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (canManageEvaluationGrants(me)) {
         document.body.dataset.adminEvaluationGrants = 'authorized';
         loadEvaluationGrantControls();
+        loadApiKeyEvaluationLifecycle();
       } else {
         document.body.dataset.adminEvaluationGrants = 'not-authorized';
         setEvaluationAccessStatus(
