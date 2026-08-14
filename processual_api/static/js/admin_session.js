@@ -1,11 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks04-lifecycle';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks05-accesscatalog';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
-    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace01';
+    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace02';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-evaluation-lifecycle]';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
