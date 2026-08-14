@@ -131,9 +131,7 @@ class SessionService:
             user.failed_login_count = 0
             user.locked_until = None
             organization_id = await repository.active_organization_id(user.id)
-            platform_authorities = (
-                await repository.active_platform_authorities(user.id)
-            )
+            platform_authorities = await repository.active_platform_authorities(user.id)
             mfa_required = await repository.requires_mfa(user.id)
             session_id = uuid.uuid4()
             family_id = uuid.uuid4()
@@ -218,8 +216,10 @@ class SessionService:
                 expires_at=auth_session.expires_at,
             )
             auth_session.last_seen_at = now
-            platform_authorities = (
-                await repository.active_platform_authorities(user.id)
+            platform_authorities = await repository.active_platform_authorities(user.id)
+            mfa_required = (
+                await repository.requires_mfa(user.id)
+                and auth_session.mfa_satisfied_at is None
             )
             await uow.commit()
 
@@ -228,6 +228,7 @@ class SessionService:
             session_id=auth_session.id,
             organization_id=auth_session.organization_id,
             session_expires_at=auth_session.expires_at,
+            mfa_required=mfa_required,
             platform_authorities=platform_authorities,
         )
         return IssuedSession(
@@ -237,6 +238,7 @@ class SessionService:
             refresh_expires_in=max(1, int((auth_session.expires_at - self._now()).total_seconds())),
             csrf_token=self._csrf_token(),
             session_id=auth_session.id,
+            mfa_required=mfa_required,
         )
 
     async def logout(self, raw_refresh_token: str) -> None:

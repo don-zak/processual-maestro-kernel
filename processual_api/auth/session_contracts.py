@@ -19,6 +19,7 @@ class AccessTokenResponseContract(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     mfa_required: bool | None = None
+    csrf_token: str | None = None
 
 
 class SessionProcessedResponseContract(BaseModel):

@@ -55,7 +55,10 @@ class SensitiveSessionAPIRoute(APIRoute):
             try:
                 return await route_handler(request)
             except RequestValidationError:
-                return JSONResponse(status_code=422, content={"detail": "Invalid session request."})
+                return JSONResponse(
+                    status_code=422,
+                    content={"detail": "Invalid session request."},
+                )
 
         return sanitized_route_handler
 
@@ -154,8 +157,20 @@ def _set_session_cookies(response: Response, issued: IssuedSession) -> None:
 
 
 def _clear_session_cookies(response: Response) -> None:
-    response.delete_cookie(REFRESH_COOKIE, path="/auth/session", secure=True, httponly=True, samesite="strict")
-    response.delete_cookie(CSRF_COOKIE, path="/auth/session", secure=True, httponly=False, samesite="strict")
+    response.delete_cookie(
+        REFRESH_COOKIE,
+        path="/auth/session",
+        secure=True,
+        httponly=True,
+        samesite="strict",
+    )
+    response.delete_cookie(
+        CSRF_COOKIE,
+        path="/auth/session",
+        secure=True,
+        httponly=False,
+        samesite="strict",
+    )
     response.headers["Cache-Control"] = "no-store"
 
 
@@ -163,7 +178,12 @@ def _refresh_credentials(request: Request, csrf_header: str | None) -> tuple[str
     refresh_token = request.cookies.get(REFRESH_COOKIE, "")
     csrf_cookie = request.cookies.get(CSRF_COOKIE, "")
     supplied = csrf_header or ""
-    if not refresh_token or not csrf_cookie or not supplied or not secrets.compare_digest(csrf_cookie, supplied):
+    if (
+        not refresh_token
+        or not csrf_cookie
+        or not supplied
+        or not secrets.compare_digest(csrf_cookie, supplied)
+    ):
         raise HTTPException(status_code=403, detail="Session request denied.")
     return refresh_token, csrf_cookie
 
@@ -190,9 +210,15 @@ async def login(
             runtime=runtime,
             action="login",
             rules=LOGIN_RULES,
-            subjects={"ip": _client_ip(request, runtime), "email": email_subject},
+            subjects={
+                "ip": _client_ip(request, runtime),
+                "email": email_subject,
+            },
         )
-        issued = await runtime.service.login(email=body.email, password=body.password)
+        issued = await runtime.service.login(
+            email=body.email,
+            password=body.password,
+        )
     except InvalidSessionCredentialsError as exc:
         _audit(request, action="login", result="denied")
         raise HTTPException(
@@ -211,6 +237,7 @@ async def login(
         access_token=issued.access_token,
         expires_in=issued.access_expires_in,
         mfa_required=True if issued.mfa_required else None,
+        csrf_token=issued.csrf_token if issued.mfa_required else None,
     )
 
 
@@ -231,13 +258,19 @@ async def refresh_session(
         runtime=runtime,
         action="session_refresh",
         rules=SESSION_REFRESH_RULES,
-        subjects={"ip": _client_ip(request, runtime), "token": raw_refresh_token},
+        subjects={
+            "ip": _client_ip(request, runtime),
+            "token": raw_refresh_token,
+        },
     )
     try:
         issued = await runtime.service.refresh(raw_refresh_token)
     except (InvalidSessionCredentialsError, RefreshTokenReuseError):
         _audit(request, action="refresh", result="denied")
-        denied = JSONResponse(status_code=401, content={"detail": GENERIC_INVALID})
+        denied = JSONResponse(
+            status_code=401,
+            content={"detail": GENERIC_INVALID},
+        )
         _clear_session_cookies(denied)
         return denied
     except SessionAuthorityUnavailableError as exc:
@@ -247,6 +280,8 @@ async def refresh_session(
     return AccessTokenResponseContract(
         access_token=issued.access_token,
         expires_in=issued.access_expires_in,
+        mfa_required=True if issued.mfa_required else None,
+        csrf_token=issued.csrf_token,
     )
 
 
