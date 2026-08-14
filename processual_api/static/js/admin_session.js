@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await wait(delayMs);
       const retry = await fetch('/auth/me', {
         method: 'GET',
-        credentials,
+        credentials: 'include',
         headers,
       });
       if (retry.ok || retry.status !== 503) {
