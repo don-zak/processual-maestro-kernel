@@ -118,9 +118,11 @@ async def admin_api_key_operational_profiles(
         **payload,
         "profile_count": len(profiles),
         "profiles": profiles,
-        "selection_authority": (
-            "api_key_operational_profiles+platform_runtime_operational_profiles"
-        ),
+        "selection_authority": "api_key_operational_profiles",
+        "profile_sources": [
+            "api_key_operational_profiles",
+            "platform_runtime_operational_profiles",
+        ],
         "raw_secret_visible": False,
         "admin_provisioning_catalog": True,
     }
@@ -163,7 +165,8 @@ async def admin_api_key_access_catalog(
     return {
         "ok": True,
         "catalog": "api_key_access_catalog",
-        "selection_authority": "fastapi_route_registry+canonical_runtime_access_policy",
+        "selection_authority": "fastapi_route_registry+explicit_runtime_access_policy",
+        "policy_authority": "canonical_runtime_access_policy",
         "endpoint_count": len(endpoints),
         "grantable_endpoint_count": len(grantable),
         "grantable_scope_count": len(scopes),
