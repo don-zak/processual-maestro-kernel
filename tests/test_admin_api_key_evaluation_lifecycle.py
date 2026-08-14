@@ -5,59 +5,65 @@ JS = ROOT / "processual_api" / "static" / "js"
 LIFECYCLE = JS / "admin_api_key_evaluation_lifecycle.js"
 EVALUATION = JS / "admin_evaluation_grants.js"
 SESSION = JS / "admin_session.js"
+RUNTIME_FIXUPS = JS / "admin_runtime_fixups.js"
 
 
 def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle() -> None:
+def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle_without_legacy_button() -> None:
     source = _source(SESSION)
 
     required = [
         "const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card'",
         "const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card'",
         "const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body'",
-        "const EVALUATION_ACTIVATE_ID = 'admin-api-key-external-evaluation-activate'",
         "const lifecycleCard = document.getElementById(API_KEY_LIFECYCLE_CARD_ID)",
         "if (!lifecycleCard) return null",
         "const lifecycleForm = lifecycleCard.querySelector('.admin-grid')",
         "lifecycleCard.insertBefore(card, lifecycleForm)",
-        "External Evaluation is an API key lifecycle option.",
-        "Activate External Evaluation",
+        "External Evaluation Lifecycle",
+        "This lifecycle is selected only from API Key Category.",
+        "Administrator Verification",
     ]
     for marker in required:
         assert marker in source
 
-    assert "const parent = lifecycleCard || page" not in source
+    assert "EVALUATION_ACTIVATE_ID" not in source
+    assert "Activate External Evaluation" not in source
+    assert "External Evaluation Active" not in source
     assert "page.appendChild(host)" not in source
     assert "fallback-page" not in source
 
 
-def test_external_evaluation_activation_reveals_body_and_selects_evaluation_mode() -> None:
+def test_category_selection_directly_controls_evaluation_visibility_and_verification() -> None:
     source = _source(SESSION)
 
     required = [
-        "function applyExternalEvaluationActivation()",
-        "card.dataset.activated = 'true'",
-        "body.hidden = false",
-        "button.disabled = true",
-        "button.textContent = 'External Evaluation Active'",
-        "placeEvaluationWorkspaceInsideCard();",
-        "mode.value = 'external_evaluation'",
-        "mode.dispatchEvent(new Event('change', { bubbles: true }))",
-        "await checkAdminSession()",
+        "function externalEvaluationSelected()",
+        "document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY",
+        "function syncEvaluationSelectionState()",
+        "card.hidden = !selected",
+        "body.hidden = !selected",
+        "card.dataset.activated = selected ? 'true' : 'false'",
+        "window.addEventListener('pmk-api-key-category-changed'",
+        "await checkAdminSession();",
     ]
     for marker in required:
         assert marker in source
 
+    assert ".click()" not in source
+    assert "applyExternalEvaluationActivation" not in source
 
-def test_external_evaluation_moves_provisioning_workspace_inside_activated_card() -> None:
+
+def test_external_evaluation_moves_provisioning_workspace_inside_selected_lifecycle() -> None:
     source = _source(SESSION)
 
     required = [
         "const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace'",
         "function placeEvaluationWorkspaceInsideCard()",
+        "if (!externalEvaluationSelected()) return",
         "const body = document.getElementById(EVALUATION_BODY_ID)",
         "const host = document.getElementById(EVALUATION_HOST_ID)",
         "const workspace = document.getElementById(PROVISIONING_WORKSPACE_ID)",
@@ -68,13 +74,13 @@ def test_external_evaluation_moves_provisioning_workspace_inside_activated_card(
         assert marker in source
 
 
-def test_local_development_credential_is_revealed_only_inside_activated_card() -> None:
+def test_local_development_credential_is_scoped_to_external_evaluation_selection() -> None:
     source = _source(SESSION)
 
     assert "Local development credential" in source
     assert "sessionStorage.setItem('api_key', value)" in source
     assert "Verify & Load Controls" in source
-    assert "document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'" in source
+    assert "if (!externalEvaluationSelected()) return" in source
     assert "renderDevelopmentAuthBootstrap();" in source
     assert "localStorage.setItem('api_key'" not in source
 
@@ -113,6 +119,29 @@ def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_s
     assert "evaluation grant authority" in source
 
 
+def test_runtime_fixups_cannot_reintroduce_standard_key_generation_in_external_evaluation() -> None:
+    source = _source(RUNTIME_FIXUPS)
+
+    required = [
+        "const EXTERNAL_CATEGORY = 'external_evaluation'",
+        "function externalEvaluationSelected()",
+        "removeApiKeyProfileControls();",
+        "if (externalEvaluationSelected())",
+        "Standard API key generation is blocked for External Evaluation.",
+        "button.disabled = true",
+        "window.addEventListener('pmk-api-key-category-changed'",
+    ]
+    for marker in required:
+        assert marker in source
+
+    generation_start = source.index("async function generateProfiledApiKey()")
+    request_start = source.index("const profileName", generation_start)
+    guard_source = source[generation_start:request_start]
+    assert "if (externalEvaluationSelected())" in guard_source
+    assert "return;" in guard_source
+    assert "request('POST', '/settings/api-keys'" not in guard_source
+
+
 def test_evaluation_lifecycle_preview_uses_real_grant_inputs_and_tasks() -> None:
     source = _source(LIFECYCLE)
 
@@ -143,16 +172,19 @@ def test_evaluation_lifecycle_attachment_is_bounded_without_dom_observer() -> No
     assert "while (" not in source
 
 
-def test_session_loads_evaluation_lifecycle_only_after_verified_admin_authority() -> None:
+def test_session_loads_provisioning_and_issue_controls_only_after_verified_admin_authority() -> None:
     source = _source(SESSION)
 
     required = [
         "API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR",
-        "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation01",
+        "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation02-lifecycle-final",
+        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final",
+        "admin_evaluation_grants.js?v=adminevaltasks06-lifecycle-final",
         "function loadApiKeyEvaluationLifecycle()",
         "script.dataset.adminApiKeyEvaluationLifecycle = 'true'",
         "document.body.dataset.adminSession = 'ok'",
         "if (canManageEvaluationGrants(me))",
+        "loadApiKeyProvisioningWorkspace();",
         "loadEvaluationGrantControls();",
         "loadApiKeyEvaluationLifecycle();",
     ]
@@ -160,18 +192,11 @@ def test_session_loads_evaluation_lifecycle_only_after_verified_admin_authority(
         assert marker in source
 
     assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
-        "loadApiKeyEvaluationLifecycle();"
+        "loadApiKeyProvisioningWorkspace();"
     )
     assert source.index("if (canManageEvaluationGrants(me))") < source.index(
-        "loadApiKeyEvaluationLifecycle();"
+        "loadEvaluationGrantControls();"
     )
-
-
-def test_activation_is_reapplied_after_dynamic_workspace_and_lifecycle_scripts_load() -> None:
-    source = _source(SESSION)
-
-    assert source.count("window.setTimeout(applyExternalEvaluationActivation, 0)") >= 2
-    assert "document.getElementById(EVALUATION_CARD_ID)?.dataset.activated === 'true'" in source
 
 
 def test_evaluation_key_issue_result_is_complete_and_copyable_once() -> None:
