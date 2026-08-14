@@ -67,14 +67,25 @@ def test_provisioning_workspace_exposes_mode_profile_and_access_preview() -> Non
         "External Evaluation",
         "admin-api-key-operational-profile",
         "/settings/admin/api-key-operational-profiles",
-        "Apply profile scopes to key",
+        "Selected operational intent only.",
         "Access Preview",
-        "Effective scopes in form",
+        "Key scopes currently configured",
+        "Selected operational intent",
         "production",
         "runtime_connector",
     ]
     for marker in required:
         assert marker in source
+
+
+def test_operational_profile_catalog_is_preview_only_and_does_not_mutate_key_scopes() -> None:
+    source = _workspace_source()
+
+    assert "This catalog does not grant runtime authority by itself" in source
+    assert "does not mutate the key scopes below" in source
+    assert "applySelectedProfileScopes" not in source
+    assert "admin-api-key-apply-profile-scopes" not in source
+    assert "target.value = allowed.join" not in source
 
 
 def test_external_evaluation_mode_cannot_use_standard_key_generation() -> None:
