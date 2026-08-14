@@ -296,6 +296,8 @@
       return;
     }
 
+    const allowedScopes = selectedEvaluationScopes();
+
     try {
       const result = await request(EVALUATION_GRANTS_ENDPOINT, 'POST', {
         client_id: readiness.clientId,
@@ -303,7 +305,7 @@
         issued_to: readiness.issuedTo,
         purpose: readiness.purpose,
         allowed_task_ids: readiness.tasks,
-        allowed_scopes: readiness.scopes,
+        allowed_scopes: allowedScopes,
         expires_in_days: readiness.duration,
         max_requests: readiness.quota,
       });
@@ -408,14 +410,10 @@
     const host = ensureGrantHost();
     if (!host) return;
     host.innerHTML = grantForm();
-    host.addEventListener('input', () => {
-      dispatchEvaluationSelectionChanged();
-      updateEvaluationReadiness();
-    });
-    host.addEventListener('change', () => {
-      dispatchEvaluationSelectionChanged();
-      updateEvaluationReadiness();
-    });
+    host.addEventListener('input', dispatchEvaluationSelectionChanged);
+    host.addEventListener('change', dispatchEvaluationSelectionChanged);
+    host.addEventListener('input', updateEvaluationReadiness);
+    host.addEventListener('change', updateEvaluationReadiness);
     document
       .getElementById('admin-eval-create')
       ?.addEventListener('click', createEvaluationGrant);
