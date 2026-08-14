@@ -207,9 +207,21 @@
     }
   }
 
+  function loadEvaluationGrantControls() {
+    if (document.querySelector('script[data-admin-evaluation-grants]')) return;
+    const script = document.createElement('script');
+    script.src = '/console/js/admin_evaluation_grants.js?v=adminevaltasks01';
+    script.dataset.adminEvaluationGrants = 'true';
+    document.body.appendChild(script);
+  }
+
   refreshApiKeyLifecycleSummary();
+  loadEvaluationGrantControls();
 
   window.addEventListener('pmk-supervisor-session-key-updated', () => {
     refreshApiKeyLifecycleSummary();
   });
-});
+  window.addEventListener('pmk-evaluation-grant-updated', () => {
+    refreshApiKeyLifecycleSummary();
+  });
+})();
