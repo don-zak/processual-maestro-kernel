@@ -24,6 +24,23 @@ def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
         assert marker in source
 
 
+def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
+    source = _source()
+
+    required = [
+        "/settings/admin/evaluation-grants/task-catalog",
+        "API key task content",
+        "canonical Maestro task catalog",
+        "data-eval-task",
+        "selectedEvaluationTasks",
+        "allowed_task_ids",
+        "Bound tasks:",
+        "task_authority_source",
+    ]
+    for marker in required:
+        assert marker in source
+
+
 def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> None:
     source = _source()
 
@@ -33,6 +50,13 @@ def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> N
     assert "Copy it now; it will not be displayed again." in source
     assert "key_hash" not in source
     assert "provider_secret" not in source
+
+
+def test_evaluation_grant_ui_requires_at_least_one_task() -> None:
+    source = _source()
+
+    assert "Select at least one canonical task for the API key content." in source
+    assert "if (!allowedTaskIds.length)" in source
 
 
 def test_api_key_summary_script_is_invoked() -> None:
