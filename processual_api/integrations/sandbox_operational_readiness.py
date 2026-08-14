@@ -9,7 +9,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 SANDBOX_CONTENT_STORAGE_KEY = "enterprise_sandbox_content_contracts_v1"
 SANDBOX_SECRET_REFERENCE_STORAGE_KEY = "enterprise_sandbox_secret_references_v1"
 _PROHIBITED_MARKERS = (
