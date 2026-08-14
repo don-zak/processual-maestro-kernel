@@ -18,6 +18,14 @@
     return String(value ?? '').trim();
   }
 
+  function dispatchEvaluationSelectionChanged() {
+    try {
+      window.dispatchEvent(new CustomEvent('pmk-evaluation-selection-changed'));
+    } catch {
+      window.dispatchEvent(new Event('pmk-evaluation-selection-changed'));
+    }
+  }
+
   function authHeaders(extra = {}) {
     const auth = window.PMK_ADMIN_AUTH;
     if (auth && typeof auth.headers === 'function') {
@@ -132,6 +140,10 @@
         </fieldset>
       `)
       .join('');
+    target.querySelectorAll('[data-eval-task]').forEach((input) => {
+      input.addEventListener('change', dispatchEvaluationSelectionChanged);
+    });
+    dispatchEvaluationSelectionChanged();
   }
 
   async function loadEvaluationTaskCatalog() {
@@ -149,6 +161,7 @@
   function grantRow(grant) {
     const active = text(grant.status).toLowerCase() === 'active';
     const tasks = Array.isArray(grant.allowed_task_ids) ? grant.allowed_task_ids : [];
+    const scopes = Array.isArray(grant.allowed_scopes) ? grant.allowed_scopes : [];
     const actions = active
       ? `<button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
          <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke</button>`
@@ -157,6 +170,7 @@
       <div class="card flat" style="margin-top:var(--s-2)">
         <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)}</div>
         <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · quota ${escapeHtml(grant.max_requests)} · keys ${escapeHtml(grant.active_key_count || 0)}</div>
+        <div class="muted">scopes: ${scopes.length ? scopes.map(escapeHtml).join(', ') : 'backend defaults'}</div>
         <div class="muted">tasks: ${tasks.length ? tasks.map(escapeHtml).join(', ') : 'none'} · authority ${escapeHtml(grant.task_authority_source || 'integration_task_catalog')}</div>
         <div class="muted">expires ${escapeHtml(grant.expires_at)} · subscription required: no · production: disabled</div>
         <div style="margin-top:var(--s-2)">${actions}</div>
@@ -225,10 +239,15 @@
         expires_in_days: expiresInDays,
         max_requests: maxRequests,
       });
+      const grant = result.grant || {};
       setGrantResult(
-        `Evaluation grant created: <strong>${escapeHtml(result.grant?.grant_id || '')}</strong><br>Tasks: ${(result.grant?.allowed_task_ids || []).map(escapeHtml).join(', ')}`
+        `Evaluation grant created: <strong>${escapeHtml(grant.grant_id || '')}</strong><br>` +
+        `Tasks: ${(grant.allowed_task_ids || []).map(escapeHtml).join(', ')}<br>` +
+        `Scopes: ${(grant.allowed_scopes || []).map(escapeHtml).join(', ') || 'backend defaults'}<br>` +
+        `Quota: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
       );
       await refreshEvaluationGrants();
+      dispatchEvaluationSelectionChanged();
     } catch (error) {
       setGrantResult(
         `Unable to create grant: ${escapeHtml(error.message || error)}`,
@@ -245,14 +264,35 @@
         { label: 'External evaluation access' }
       );
       const secret = text(result.api_key);
-      const tasks = result.key?.allowed_task_ids || [];
+      const key = result.key || {};
+      const tasks = Array.isArray(key.allowed_task_ids) ? key.allowed_task_ids : [];
+      const scopes = Array.isArray(key.scopes) ? key.scopes : [];
+      const taskScopes = Array.isArray(key.task_scope_ids) ? key.task_scope_ids : [];
+      const usage = result.onboarding_usage || {};
+      const header = text(usage.header) || 'X-API-Key';
+      const exampleEndpoint = text(usage.example_endpoint) || '/adapters/status';
       setGrantResult(`
         <strong>One-time evaluation API key created.</strong><br>
         Copy it now; it will not be displayed again.<br>
-        <span class="mono-block" style="display:block;margin-top:var(--s-2)">X-API-Key: ${escapeHtml(secret)}</span>
-        Grant: ${escapeHtml(grantId)} · quota ${escapeHtml(result.key?.quota_limit)} · expires ${escapeHtml(result.key?.expires_at)}<br>
-        Bound tasks: ${tasks.map(escapeHtml).join(', ')}
+        <span class="mono-block" style="display:block;margin-top:var(--s-2)">${escapeHtml(header)}: ${escapeHtml(secret)}</span>
+        <button id="admin-eval-copy-issued-key" class="btn secondary" type="button" style="margin-top:var(--s-2)">Copy API Key</button><br>
+        <strong>Grant</strong>: ${escapeHtml(grantId)}<br>
+        <strong>Client</strong>: ${escapeHtml(key.client_id || '')}<br>
+        <strong>Scopes</strong>: ${escapeHtml(scopes.join(', ') || 'none')}<br>
+        <strong>Task scope IDs</strong>: ${escapeHtml(taskScopes.join(', ') || 'none')}<br>
+        <strong>Bound tasks</strong>: ${escapeHtml(tasks.join(', ') || 'none')}<br>
+        <strong>Quota</strong>: ${escapeHtml(key.quota_limit)}<br>
+        <strong>Expires</strong>: ${escapeHtml(key.expires_at)}<br>
+        <strong>Example endpoint</strong>: ${escapeHtml(exampleEndpoint)}<br>
+        <strong>Subscription required</strong>: no · <strong>Production</strong>: disabled
       `);
+      document.getElementById('admin-eval-copy-issued-key')?.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(secret);
+        } catch {
+          // Clipboard may be unavailable in restricted browser contexts.
+        }
+      });
       await refreshEvaluationGrants();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
@@ -299,6 +339,8 @@
     const host = ensureGrantHost();
     if (!host) return;
     host.innerHTML = grantForm();
+    host.addEventListener('input', dispatchEvaluationSelectionChanged);
+    host.addEventListener('change', dispatchEvaluationSelectionChanged);
     document
       .getElementById('admin-eval-create')
       ?.addEventListener('click', createEvaluationGrant);
@@ -316,6 +358,7 @@
       );
     }
     refreshEvaluationGrants();
+    dispatchEvaluationSelectionChanged();
   }
 
   initializeEvaluationGrants();
