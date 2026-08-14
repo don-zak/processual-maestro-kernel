@@ -1,7 +1,9 @@
 (function () {
   const API_KEYS_ENDPOINT = '/settings/api-keys';
   const SUPERVISOR_KEYS_ENDPOINT = '/settings/admin/supervisor-session-keys';
+  const EVALUATION_GRANTS_ENDPOINT = '/settings/admin/evaluation-grants';
   const HOST_ID = 'admin-api-key-lifecycle-summary';
+  const GRANT_HOST_ID = 'admin-evaluation-grants';
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -25,11 +27,19 @@
     return new Headers(extra);
   }
 
-  async function requestJson(path) {
+  async function request(path, method = 'GET', payload) {
+    const headers = authHeaders({ Accept: 'application/json' });
+    if (payload !== undefined && headers && typeof headers.set === 'function') {
+      headers.set('Content-Type', 'application/json');
+    } else if (payload !== undefined && headers && typeof headers === 'object') {
+      headers['Content-Type'] = 'application/json';
+    }
+
     const response = await fetch(path, {
-      method: 'GET',
+      method,
       credentials: 'include',
-      headers: authHeaders({ Accept: 'application/json' }),
+      headers,
+      ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
     });
 
     const rawText = await response.text();
@@ -47,10 +57,14 @@
         data && typeof data === 'object'
           ? data.detail || data.message || `HTTP ${response.status}`
           : `HTTP ${response.status}`;
-      throw new Error(detail);
+      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
     }
 
     return data;
+  }
+
+  async function requestJson(path) {
+    return request(path, 'GET');
   }
 
   function extractList(payload, keys) {
@@ -207,9 +221,164 @@
     }
   }
 
+  function ensureGrantHost() {
+    let host = document.getElementById(GRANT_HOST_ID);
+    if (host) return host;
+
+    const page = document.getElementById('page-admin-api-keys');
+    if (!page) return null;
+
+    host = document.createElement('div');
+    host.className = 'card';
+    host.id = GRANT_HOST_ID;
+    host.style.marginTop = 'var(--s-5)';
+    page.appendChild(host);
+    return host;
+  }
+
+  function grantForm() {
+    return `
+      <div class="sec-hdr">
+        <div class="sh-title">External Evaluation Access</div>
+        <div class="sh-sub">supervisor-governed API access outside paid subscription onboarding</div>
+      </div>
+      <div class="admin-note">
+        Evaluation grants are temporary, quota-bound, non-production entitlements. Administrative scopes are rejected by the backend.
+      </div>
+      <div class="grid-3">
+        <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
+        <label>Issued to<input id="admin-eval-issued-to" type="text" placeholder="Company or evaluator"></label>
+        <label>Duration days<input id="admin-eval-days" type="number" min="1" max="90" value="14"></label>
+        <label>Max requests<input id="admin-eval-max-requests" type="number" min="1" max="10000" value="100"></label>
+        <label style="grid-column:span 2">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation"></label>
+      </div>
+      <div style="margin-top:var(--s-3)">
+        <button id="admin-eval-create" class="btn primary" type="button">Create Evaluation Grant</button>
+        <button id="admin-eval-refresh" class="btn secondary" type="button">Refresh Grants</button>
+      </div>
+      <div id="admin-eval-result" class="admin-note" style="margin-top:var(--s-3)"></div>
+      <div id="admin-eval-list" style="margin-top:var(--s-3)">Loading evaluation grants...</div>
+    `;
+  }
+
+  function grantRow(grant) {
+    const active = text(grant.status).toLowerCase() === 'active';
+    const actions = active
+      ? `<button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
+         <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke</button>`
+      : '';
+    return `
+      <div class="card flat" style="margin-top:var(--s-2)">
+        <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)}</div>
+        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · quota ${escapeHtml(grant.max_requests)} · keys ${escapeHtml(grant.active_key_count || 0)}</div>
+        <div class="muted">expires ${escapeHtml(grant.expires_at)} · subscription required: no · production: disabled</div>
+        <div style="margin-top:var(--s-2)">${actions}</div>
+      </div>
+    `;
+  }
+
+  function setGrantResult(message, danger = false) {
+    const target = document.getElementById('admin-eval-result');
+    if (!target) return;
+    target.className = danger ? 'admin-note danger' : 'admin-note ok';
+    target.innerHTML = message;
+  }
+
+  async function refreshEvaluationGrants() {
+    const list = document.getElementById('admin-eval-list');
+    if (!list) return;
+    try {
+      const payload = await requestJson(EVALUATION_GRANTS_ENDPOINT);
+      const grants = Array.isArray(payload.grants) ? payload.grants : [];
+      list.innerHTML = grants.length
+        ? grants.map(grantRow).join('')
+        : '<div class="muted">No evaluation grants have been issued.</div>';
+      bindGrantActions();
+    } catch (error) {
+      list.innerHTML = `<div class="admin-note danger">Unable to load evaluation grants: ${escapeHtml(error.message || error)}</div>`;
+    }
+  }
+
+  async function createEvaluationGrant() {
+    const clientId = text(document.getElementById('admin-eval-client-id')?.value);
+    const issuedTo = text(document.getElementById('admin-eval-issued-to')?.value);
+    const purpose = text(document.getElementById('admin-eval-purpose')?.value);
+    const expiresInDays = Number.parseInt(document.getElementById('admin-eval-days')?.value || '14', 10);
+    const maxRequests = Number.parseInt(document.getElementById('admin-eval-max-requests')?.value || '100', 10);
+
+    if (!clientId || !issuedTo || purpose.length < 10) {
+      setGrantResult('Client ID, issued-to, and a descriptive purpose are required.', true);
+      return;
+    }
+
+    try {
+      const result = await request(EVALUATION_GRANTS_ENDPOINT, 'POST', {
+        client_id: clientId,
+        user_id: clientId,
+        issued_to: issuedTo,
+        purpose,
+        expires_in_days: expiresInDays,
+        max_requests: maxRequests,
+      });
+      setGrantResult(`Evaluation grant created: <strong>${escapeHtml(result.grant?.grant_id || '')}</strong>`);
+      await refreshEvaluationGrants();
+    } catch (error) {
+      setGrantResult(`Unable to create grant: ${escapeHtml(error.message || error)}`, true);
+    }
+  }
+
+  async function issueEvaluationKey(grantId) {
+    try {
+      const result = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/issue-key`, 'POST', {
+        label: 'External evaluation access',
+      });
+      const secret = text(result.api_key);
+      setGrantResult(`
+        <strong>One-time evaluation API key created.</strong><br>
+        Copy it now; it will not be displayed again.<br>
+        <span class="mono-block" style="display:block;margin-top:var(--s-2)">X-API-Key: ${escapeHtml(secret)}</span>
+        Grant: ${escapeHtml(grantId)} · quota ${escapeHtml(result.key?.quota_limit)} · expires ${escapeHtml(result.key?.expires_at)}
+      `);
+      await refreshEvaluationGrants();
+      await refreshApiKeyLifecycleSummary();
+    } catch (error) {
+      setGrantResult(`Unable to issue evaluation key: ${escapeHtml(error.message || error)}`, true);
+    }
+  }
+
+  async function revokeEvaluationGrant(grantId) {
+    try {
+      const result = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}`, 'DELETE');
+      setGrantResult(`Grant revoked. ${escapeHtml(result.revoked_key_count || 0)} linked key(s) revoked.`);
+      await refreshEvaluationGrants();
+      await refreshApiKeyLifecycleSummary();
+    } catch (error) {
+      setGrantResult(`Unable to revoke evaluation grant: ${escapeHtml(error.message || error)}`, true);
+    }
+  }
+
+  function bindGrantActions() {
+    document.querySelectorAll('[data-eval-issue]').forEach((button) => {
+      button.addEventListener('click', () => issueEvaluationKey(button.dataset.evalIssue));
+    });
+    document.querySelectorAll('[data-eval-revoke]').forEach((button) => {
+      button.addEventListener('click', () => revokeEvaluationGrant(button.dataset.evalRevoke));
+    });
+  }
+
+  function initializeEvaluationGrants() {
+    const host = ensureGrantHost();
+    if (!host) return;
+    host.innerHTML = grantForm();
+    document.getElementById('admin-eval-create')?.addEventListener('click', createEvaluationGrant);
+    document.getElementById('admin-eval-refresh')?.addEventListener('click', refreshEvaluationGrants);
+    refreshEvaluationGrants();
+  }
+
   refreshApiKeyLifecycleSummary();
+  initializeEvaluationGrants();
 
   window.addEventListener('pmk-supervisor-session-key-updated', () => {
     refreshApiKeyLifecycleSummary();
   });
-});
+})();
