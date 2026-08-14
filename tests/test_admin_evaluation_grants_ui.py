@@ -161,6 +161,44 @@ def test_evaluation_access_card_explains_non_authorized_states() -> None:
         assert marker in source
 
 
+def test_local_development_evaluation_auth_bootstrap_is_session_only() -> None:
+    source = _session_source()
+
+    required = [
+        "const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth'",
+        "const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])",
+        "function isLocalDevelopmentOrigin()",
+        "function renderDevelopmentAuthBootstrap()",
+        "type=\"password\"",
+        "autocomplete=\"off\"",
+        "sessionStorage.setItem('api_key', value)",
+        "Verify & Load Controls",
+        "await checkAdminSession();",
+    ]
+    for marker in required:
+        assert marker in source
+
+    assert "localStorage.setItem('api_key'" not in source
+    assert source.index("if (!isLocalDevelopmentOrigin()) return;") < source.index(
+        "sessionStorage.setItem('api_key', value)"
+    )
+
+
+def test_local_development_evaluation_auth_bootstrap_allows_retry() -> None:
+    source = _session_source()
+
+    required = [
+        "const existing = document.getElementById(EVALUATION_DEV_AUTH_ID)",
+        "if (existingButton) existingButton.disabled = false;",
+        "Credential was not accepted. Enter another development API key.",
+        "existingInput?.focus();",
+        "if (button) button.disabled = false;",
+        "if (response.status === 401 || response.status === 403)",
+    ]
+    for marker in required:
+        assert marker in source
+
+
 def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() -> None:
     source = _session_source()
 
