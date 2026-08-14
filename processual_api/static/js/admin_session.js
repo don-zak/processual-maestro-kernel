@@ -41,11 +41,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = normalizedRole(me);
     const scopes = normalizedScopes(me);
     return (
+      role === 'admin' ||
+      role === 'administrator' ||
       ADMIN_ROLES.has(role) ||
+      scopes.includes('admin') ||
+      scopes.includes('admin:settings') ||
       scopes.some(
         (scope) =>
           scope === '*' ||
-          scope === 'admin' ||
           scope.startsWith('admin:')
       )
     );
