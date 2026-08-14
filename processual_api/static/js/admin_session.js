@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SRC =
     '/console/js/admin_evaluation_grants.js?v=adminevaltasks03-visible';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
+  const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
+  const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
   const ADMIN_ROLES = new Set([
     'admin',
     'administrator',
@@ -67,6 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
+  function isLocalDevelopmentOrigin() {
+    return LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname);
+  }
+
   function ensureEvaluationGrantPlaceholder() {
     let host = document.getElementById(EVALUATION_HOST_ID);
     if (host) return host;
@@ -102,6 +108,74 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!target) return;
     target.className = danger ? 'admin-note danger' : 'admin-note';
     target.textContent = message;
+  }
+
+  function clearDevelopmentAuthBootstrap() {
+    document.getElementById(EVALUATION_DEV_AUTH_ID)?.remove();
+  }
+
+  function renderDevelopmentAuthBootstrap() {
+    if (!isLocalDevelopmentOrigin()) return;
+    const host = ensureEvaluationGrantPlaceholder();
+    if (!host || document.getElementById(EVALUATION_DEV_AUTH_ID)) return;
+
+    const bootstrap = document.createElement('div');
+    bootstrap.id = EVALUATION_DEV_AUTH_ID;
+    bootstrap.className = 'admin-note';
+    bootstrap.style.marginTop = 'var(--s-3)';
+    bootstrap.innerHTML = `
+      <div style="font-weight:700">Local development credential</div>
+      <div class="muted" style="margin-top:var(--s-1)">
+        Enter the development API key for this browser session. It is stored in sessionStorage only.
+      </div>
+      <div style="display:flex;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
+        <input
+          id="admin-evaluation-dev-api-key"
+          type="password"
+          autocomplete="off"
+          placeholder="Development API key"
+          style="flex:1"
+        >
+        <button id="admin-evaluation-dev-api-key-save" class="btn primary" type="button">
+          Verify & Load Controls
+        </button>
+      </div>
+      <div class="muted" data-evaluation-dev-auth-message style="margin-top:var(--s-1)"></div>
+    `;
+    host.appendChild(bootstrap);
+
+    const input = bootstrap.querySelector('#admin-evaluation-dev-api-key');
+    const button = bootstrap.querySelector('#admin-evaluation-dev-api-key-save');
+    const message = bootstrap.querySelector('[data-evaluation-dev-auth-message]');
+
+    async function saveCredential() {
+      const value = String(input?.value || '').trim();
+      if (!value) {
+        if (message) message.textContent = 'Enter a development API key.';
+        return;
+      }
+
+      try {
+        sessionStorage.setItem('api_key', value);
+        if (input) input.value = '';
+        if (button) button.disabled = true;
+        if (message) message.textContent = 'Credential saved for this tab. Verifying administrator authority...';
+        setEvaluationAccessStatus('Verifying local development administrator credential...');
+        await checkAdminSession();
+      } catch (error) {
+        if (message) {
+          message.textContent =
+            'Unable to store the development credential for this browser session.';
+        }
+      }
+    }
+
+    button?.addEventListener('click', saveCredential);
+    input?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      saveCredential();
+    });
   }
 
   function evaluationLoadFailure(message) {
@@ -205,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const message =
           'Administrator credential is required before evaluation grant controls can be shown.';
         setEvaluationAccessStatus(message, true);
+        renderDevelopmentAuthBootstrap();
         writeProtected(
           'Admin auth token missing. Login did not persist a Bearer token for admin API calls.'
         );
@@ -220,6 +295,9 @@ document.addEventListener('DOMContentLoaded', () => {
           'Administrator verification failed: HTTP ' + response.status,
           true
         );
+        if (response.status === 401 || response.status === 403) {
+          renderDevelopmentAuthBootstrap();
+        }
         writeProtected('Admin session check failed: HTTP ' + response.status);
         return;
       }
@@ -236,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      clearDevelopmentAuthBootstrap();
       document.body.dataset.adminSession = 'ok';
       writeProtected(
         'Admin session verified. Backend scopes remain the authority.'
