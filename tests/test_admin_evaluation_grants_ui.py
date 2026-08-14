@@ -108,6 +108,28 @@ def test_admin_session_gates_evaluation_management_on_verified_authority() -> No
     )
 
 
+def test_admin_session_retries_only_transient_503_with_bounded_backoff() -> None:
+    source = _session_source()
+
+    assert "const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500]" in source
+    assert "response.status !== 503" in source
+    assert "for (const delayMs of SESSION_RETRY_DELAYS_MS)" in source
+    assert "document.body.dataset.adminSession = 'retrying-503'" in source
+    assert "document.body.dataset.adminEvaluationGrants = 'auth-retrying'" in source
+    assert "Retrying safely..." in source
+    assert "while (" not in source
+
+
+def test_verified_admin_session_emits_single_bootstrap_event() -> None:
+    source = _session_source()
+
+    assert "function dispatchAdminSessionVerified(me)" in source
+    assert "pmk-admin-session-verified" in source
+    assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
+        "dispatchAdminSessionVerified(me);"
+    )
+
+
 def test_evaluation_access_card_is_visible_before_authority_check() -> None:
     source = _session_source()
 
