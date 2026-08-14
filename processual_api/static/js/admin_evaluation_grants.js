@@ -158,6 +158,15 @@
       .filter(Boolean);
   }
 
+  function selectedEvaluationScopes() {
+    const workspace = window.PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE;
+    if (!workspace || typeof workspace.selectedScopes !== 'function') return [];
+    const values = workspace.selectedScopes();
+    return Array.isArray(values)
+      ? [...new Set(values.map((scope) => text(scope)).filter(Boolean))]
+      : [];
+  }
+
   function grantRow(grant) {
     const active = text(grant.status).toLowerCase() === 'active';
     const tasks = Array.isArray(grant.allowed_task_ids) ? grant.allowed_task_ids : [];
@@ -213,6 +222,7 @@
       10
     );
     const allowedTaskIds = selectedEvaluationTasks();
+    const allowedScopes = selectedEvaluationScopes();
 
     if (!clientId || !issuedTo || purpose.length < 10) {
       setGrantResult(
@@ -236,6 +246,7 @@
         issued_to: issuedTo,
         purpose,
         allowed_task_ids: allowedTaskIds,
+        ...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {}),
         expires_in_days: expiresInDays,
         max_requests: maxRequests,
       });
