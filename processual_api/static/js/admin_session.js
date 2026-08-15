@@ -170,9 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('pmk-api-key-category-changed', () => {
     if (!externalEvaluationSelected()) {
       document.body.dataset.adminEvaluationGrants = 'inactive';
-      return;
     }
-    checkAdminSession();
   });
 
   // Render the complete lifecycle immediately. Privileged catalogs and actions
