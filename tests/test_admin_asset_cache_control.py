@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.testclient import TestClient
 
 from processual_api.middleware.security_headers import SecurityHeadersMiddleware
@@ -19,6 +20,17 @@ def _client() -> TestClient:
     @app.get('/console/js/client.js')
     async def client_asset():
         return {'asset': 'client'}
+
+    return TestClient(app)
+
+
+def _html_client() -> TestClient:
+    app = FastAPI()
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    @app.get('/admin', response_class=HTMLResponse)
+    async def admin_page():
+        return '<html><body><main>admin</main></body></html>'
 
     return TestClient(app)
 
@@ -48,3 +60,14 @@ def test_non_admin_console_assets_keep_normal_cache_semantics() -> None:
     assert 'cache-control' not in response.headers
     assert 'pragma' not in response.headers
     assert 'expires' not in response.headers
+
+
+def test_admin_html_always_loads_external_evaluation_dom_contract() -> None:
+    response = _html_client().get('/admin')
+
+    assert response.status_code == 200
+    assert (
+        '<script src="/console/js/admin_external_evaluation_dom_contract.js?'
+        'v=admindomcontract01"></script>'
+    ) in response.text
+    assert response.text.count('admin_external_evaluation_dom_contract.js') == 1

@@ -136,6 +136,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "processual_api/admin_marketplace/subscription_runtime.py" = ["I001"]
 "processual_api/admin_marketplace/subscription_runtime_persistence.py" = ["E501", "I001"]
 "processual_api/admin_marketplace/subscription_runtime_transition_persistence.py" = ["E501"]
+"processual_api/middleware/security_headers.py" = ["I001"]
 "processual_api/staging_smoke.py" = ["I001"]
 
 [tool.flake8]
