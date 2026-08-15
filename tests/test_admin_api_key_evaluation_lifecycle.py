@@ -16,7 +16,6 @@ def _source(path: Path) -> str:
 
 def test_primary_renderer_owns_external_evaluation_category_and_surfaces() -> None:
     source = _source(API_KEYS)
-
     required = [
         "const EXTERNAL_CATEGORY = 'external_evaluation'",
         "External Evaluation Access - governed sandbox evaluation",
@@ -36,7 +35,6 @@ def test_primary_renderer_owns_external_evaluation_category_and_surfaces() -> No
 
 def test_complete_external_evaluation_stage_map_is_visible_from_renderer() -> None:
     source = _source(API_KEYS)
-
     stages = [
         "1. Administrator Verification",
         "2. Operational Profile",
@@ -49,14 +47,12 @@ def test_complete_external_evaluation_stage_map_is_visible_from_renderer() -> No
     ]
     for stage in stages:
         assert stage in source
-
     assert "All lifecycle stages remain visible before verification" in source
     assert "LOCKED" in source
 
 
 def test_verification_and_grant_hosts_are_separate_fixed_renderer_surfaces() -> None:
     source = _source(API_KEYS)
-
     assert "admin-evaluation-verification-controls" in source
     assert "admin-evaluation-grants" in source
     assert "admin-api-key-evaluation-verification-stage" in source
@@ -67,7 +63,6 @@ def test_verification_and_grant_hosts_are_separate_fixed_renderer_surfaces() -> 
 def test_external_evaluation_has_no_legacy_activation_or_secondary_mode() -> None:
     api_keys = _source(API_KEYS)
     provisioning = _source(PROVISIONING)
-
     combined = api_keys + provisioning
     assert "Activate External Evaluation" not in combined
     assert "External Evaluation Active" not in combined
@@ -80,7 +75,6 @@ def test_primary_renderer_hard_blocks_standard_key_creation_for_evaluation() -> 
     create_start = source.index("async function createKey()")
     revoke_start = source.index("async function revokeKey", create_start)
     create_source = source[create_start:revoke_start]
-
     assert "selectedCategory() === EXTERNAL_CATEGORY" in create_source
     assert "Standard API key generation is blocked for External Evaluation." in create_source
     assert "return;" in create_source
@@ -89,12 +83,11 @@ def test_primary_renderer_hard_blocks_standard_key_creation_for_evaluation() -> 
 
 def test_session_is_presentation_neutral_and_uses_renderer_verification_host() -> None:
     source = _source(SESSION)
-
     assert "const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls'" in source
     assert "function evaluationHost()" in source
     assert "document.getElementById(VERIFICATION_HOST_ID)" in source
     assert "document.createElement('section')" not in source
-    assert "document.createElement('div')" in source  # local credential bootstrap only
+    assert "document.createElement('div')" not in source
     assert "ensureEvaluationGrantPlaceholder" not in source
     assert "page.appendChild(host)" not in source
     assert "insertBefore" not in source
@@ -108,7 +101,6 @@ def test_legacy_dom_owner_files_are_removed() -> None:
 
 def test_provisioning_mounts_into_fixed_renderer_slot_without_reparenting() -> None:
     source = _source(PROVISIONING)
-
     required = [
         "const WORKSPACE_ID = 'admin-api-key-external-provisioning-slot'",
         "document.getElementById(WORKSPACE_ID)",
@@ -120,7 +112,6 @@ def test_provisioning_mounts_into_fixed_renderer_slot_without_reparenting() -> N
     ]
     for marker in required:
         assert marker in source
-
     assert "appendChild(workspace)" not in source
     assert "before(workspace)" not in source
     assert "insertBefore" not in source
@@ -129,7 +120,6 @@ def test_provisioning_mounts_into_fixed_renderer_slot_without_reparenting() -> N
 
 def test_operational_profile_is_intent_only_and_endpoints_derive_scopes() -> None:
     source = _source(PROVISIONING)
-
     assert "Choosing a profile does not mutate runtime scopes" in source
     assert "selectedEndpointScopes" in source
     assert "syncScopesFromEndpointSelection" in source
@@ -139,35 +129,29 @@ def test_operational_profile_is_intent_only_and_endpoints_derive_scopes() -> Non
     assert "target.value = allowed.join" not in source
 
 
-def test_session_loads_privileged_modules_only_after_verified_admin() -> None:
+def test_session_preloads_locked_modules_then_unlocks_only_after_super_admin_probe() -> None:
     source = _source(SESSION)
-
-    assert "document.body.dataset.adminSession = 'ok'" in source
+    assert "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'" in source
     assert "loadApiKeyProvisioningWorkspace();" in source
-    assert "if (canManageEvaluationGrants(me))" in source
     assert "loadEvaluationGrantControls();" in source
+    assert "authority.authority !== 'platform_admin'" in source
+    assert "authority.exclusive_super_administrator !== true" in source
+    assert "document.body.dataset.adminSession = 'ok'" in source
+    assert "document.body.dataset.adminEvaluationGrants = 'authorized'" in source
+    assert "dispatchSuperAdminVerified(authority);" in source
     assert "admin_api_key_evaluation_lifecycle.js" not in source
-    assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
-        "loadApiKeyProvisioningWorkspace();"
-    )
-    assert source.index("if (canManageEvaluationGrants(me))") < source.index(
-        "loadEvaluationGrantControls();"
-    )
 
 
-def test_local_development_admin_credential_is_session_only() -> None:
+def test_local_development_api_key_cannot_unlock_external_evaluation() -> None:
     source = _source(SESSION)
-
-    assert "if (!isLocalDevelopmentOrigin() || !externalEvaluationSelected()) return;" in source
-    assert "sessionStorage.setItem('api_key', value)" in source
-    assert "localStorage.setItem('api_key'" not in source
-    assert "type=\"password\"" in source
-    assert "autocomplete=\"off\"" in source
+    assert "sessionStorage.setItem('api_key'" not in source
+    assert "EVALUATION_DEV_AUTH_ID" not in source
+    assert "Development API key" not in source
+    assert "API keys and legacy admin sessions cannot unlock External Evaluation." in source
 
 
 def test_evaluation_readiness_remains_hard_gated_and_non_bypassable() -> None:
     source = _source(EVALUATION)
-
     required = [
         "function evaluationReadiness()",
         "category === EXTERNAL_CATEGORY",
@@ -189,7 +173,6 @@ def test_evaluation_readiness_remains_hard_gated_and_non_bypassable() -> None:
 
 def test_evaluation_authority_is_the_only_create_issue_revoke_path() -> None:
     source = _source(EVALUATION)
-
     assert "const EVALUATION_GRANTS_ENDPOINT = '/settings/admin/evaluation-grants'" in source
     assert "EVALUATION_GRANTS_ENDPOINT, 'POST'" in source
     assert "/issue-key" in source
@@ -199,9 +182,9 @@ def test_evaluation_authority_is_the_only_create_issue_revoke_path() -> None:
 
 def test_evaluation_key_is_one_time_and_never_persisted() -> None:
     source = _source(EVALUATION)
-
     assert "One-time evaluation API key created." in source
-    assert "Copy it now; it will not be displayed again." in source
+    assert "Copy it now; it will not be displayed again after this result changes." in source
     assert "navigator.clipboard.writeText(secret)" in source
+    assert "let oneTimeIssuedKey = ''" in source
     assert "sessionStorage.setItem" not in source
     assert "localStorage.setItem" not in source
