@@ -10,19 +10,23 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_coverage_ui_reads_plan_and_runtime_evidence_without_mutation() -> None:
+def test_coverage_ui_reads_plan_quality_and_runtime_evidence_without_mutation() -> None:
     source = _source(COVERAGE_SCRIPT)
     required = [
         "/settings/admin/evaluation-grants/coverage-plan",
         "/settings/admin/evaluation-grants/coverage-status",
+        "/settings/admin/evaluation-grants/quality-status",
         "Complete Endpoint Evaluation Coverage",
         "Declared coverage:",
         "Measured protected runtime coverage:",
+        "Repeatability / quality evidence:",
         "public_availability_probe",
         "evaluation_key_runtime",
         "Campaign Client ID",
         "protected_runtime_coverage_complete",
-        "cross-application repetition",
+        "quality_gate_passed",
+        "P95",
+        "multiple external programs",
     ]
     for marker in required:
         assert marker in source
@@ -50,6 +54,16 @@ def test_coverage_ui_does_not_count_public_health_as_api_key_proof() -> None:
     assert "publicRows" in source
     assert "/health/live and /health/ready" in source
     assert "public reachability must not be misreported as key authorization evidence" in source
+
+
+def test_coverage_ui_shows_repeatability_and_failure_quality_thresholds() -> None:
+    source = _source(COVERAGE_SCRIPT)
+    assert "quality_sufficient_endpoint_count" in source
+    assert "min_successes_per_endpoint" in source
+    assert "max_failure_rate" in source
+    assert "p95_latency_ms" in source
+    assert "quality_evidence_sufficient" in source
+    assert "A P95 latency limit is evaluated only when explicitly supplied" in source
 
 
 def test_admin_session_preloads_coverage_asset_but_authority_controls_hydration() -> None:
