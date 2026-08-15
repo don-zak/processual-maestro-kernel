@@ -142,7 +142,7 @@ def test_each_protected_endpoint_is_allowed_only_when_explicitly_selected(
     selected = policies[(method, path)]
     identity = _evaluation_identity_for(selected)
 
-    assert evaluation_endpoint_allowed(identity, method, path) is True
+    assert evaluation_endpoint_allowed(identity, method=method, path=path) is True
 
     for other in policies.values():
         other_key = (other.method, other.path)
@@ -150,8 +150,8 @@ def test_each_protected_endpoint_is_allowed_only_when_explicitly_selected(
             continue
         assert evaluation_endpoint_allowed(
             identity,
-            other.method,
-            other.path,
+            method=other.method,
+            path=other.path,
         ) is False
 
 
