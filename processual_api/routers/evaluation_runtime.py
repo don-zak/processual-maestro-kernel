@@ -24,6 +24,10 @@ from processual_api.integrations.enterprise_sandbox_execution import (
     SandboxExecutionError,
     execute_sandbox_binding,
 )
+from processual_api.integrations.integration_task_completion import (
+    IntegrationTaskCompletionError,
+    complete_mapped_read_task,
+)
 from processual_api.integrations.sandbox_secret_resolution import (
     ReferenceSandboxCredentialResolver,
 )
@@ -103,6 +107,32 @@ def _append_evidence(raw: dict[str, Any], evidence: dict[str, Any]) -> None:
     raw[EVALUATION_TASK_EVIDENCE_STORAGE_KEY] = items[-100:]
 
 
+def _completion_from_external_result(
+    *,
+    task_id: str,
+    binding_id: str,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Derive truthful task completion without promoting draft/write handoffs."""
+
+    try:
+        return complete_mapped_read_task(
+            task_id=task_id,
+            binding_id=binding_id,
+            canonical_input=dict(result.get("canonical_input") or {}),
+            expected_output_slot=str(result.get("output_slot") or ""),
+        )
+    except IntegrationTaskCompletionError as exc:
+        return {
+            "maestro_task_completed": False,
+            "completion_stage": "downstream_consumer_required",
+            "dedicated_downstream_consumer_required": True,
+            "completion_reason": str(exc),
+            "production_allowed": False,
+            "raw_secret_visible": False,
+        }
+
+
 @router.post("/task-execute", response_model=dict)
 async def execute_evaluation_runtime_task(
     body: EvaluationRuntimeTaskExecuteRequest,
@@ -110,10 +140,10 @@ async def execute_evaluation_runtime_task(
 ) -> dict[str, Any]:
     """Execute one pre-provisioned external operation for an allowed canonical task.
 
-    A successful response proves the external binding operation, response mapping,
-    and canonical task-injection handoff. It intentionally does not claim that a
-    downstream Maestro workflow consumed that handoff; that is a separate readiness
-    stage and must be evidenced separately.
+    For canonical READ tasks, successful governed external execution plus a valid
+    canonical mapping is the declared task operation and can be marked completed.
+    Draft and approval-gated write tasks remain incomplete until a dedicated
+    downstream consumer performs their declared operation.
     """
 
     _require_evaluation_credential(current_user)
@@ -183,6 +213,18 @@ async def execute_evaluation_runtime_task(
             detail=str(exc),
         ) from exc
 
+    completion = _completion_from_external_result(
+        task_id=task_id,
+        binding_id=spec.binding_id,
+        result=result,
+    )
+    task_completed = completion["maestro_task_completed"] is True
+    evaluation_stage = (
+        "canonical_task_completed"
+        if task_completed
+        else "external_operation_executed"
+    )
+
     evidence = {
         "execution_id": result.get("execution_id"),
         "evaluation_grant_id": current_user.get("evaluation_grant_id"),
@@ -197,10 +239,12 @@ async def execute_evaluation_runtime_task(
         "ready_for_task_consumption": result.get("ready_for_task_consumption") is True,
         "response_sha256": result.get("response_sha256"),
         "task_injection_sha256": result.get("task_injection_sha256"),
-        "evidence_sha256": result.get("evidence_sha256"),
+        "external_evidence_sha256": result.get("evidence_sha256"),
+        "task_completion_sha256": completion.get("completion_sha256"),
+        "completion_stage": completion.get("completion_stage"),
         "completed_at": result.get("completed_at"),
-        "evaluation_stage": "external_operation_executed",
-        "maestro_task_completed": False,
+        "evaluation_stage": evaluation_stage,
+        "maestro_task_completed": task_completed,
         "raw_secret_visible": False,
     }
     _append_evidence(raw, evidence)
@@ -208,12 +252,16 @@ async def execute_evaluation_runtime_task(
 
     return {
         **result,
+        **completion,
         "evaluation_runtime": True,
         "evaluation_grant_id": current_user.get("evaluation_grant_id"),
         "task_authority_enforced": True,
-        "evaluation_stage": "external_operation_executed",
-        "maestro_task_completed": False,
-        "next_readiness_stage": "maestro_task_consumption",
+        "evaluation_stage": evaluation_stage,
+        "next_readiness_stage": (
+            "outcome_quality_validation"
+            if task_completed
+            else "maestro_task_consumption"
+        ),
         "raw_secret_visible": False,
     }
 
