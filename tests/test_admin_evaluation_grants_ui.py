@@ -199,7 +199,8 @@ def test_primary_renderer_has_single_category_verification_trigger() -> None:
     assert "window.addEventListener('pmk-api-key-category-changed'" in session
     assert "if (!externalEvaluationSelected())" in session
     listener_start = session.index("window.addEventListener('pmk-api-key-category-changed'")
-    listener_source = session[listener_start:]
+    listener_end = session.index("\n  });", listener_start) + len("\n  });")
+    listener_source = session[listener_start:listener_end]
     assert "checkAdminSession();" not in listener_source
     assert "admin_api_key_evaluation_lifecycle.js" not in session
 
