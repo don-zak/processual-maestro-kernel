@@ -1,6 +1,7 @@
 (function () {
   const PLAN_ENDPOINT = '/settings/admin/evaluation-grants/coverage-plan';
   const STATUS_ENDPOINT = '/settings/admin/evaluation-grants/coverage-status';
+  const QUALITY_ENDPOINT = '/settings/admin/evaluation-grants/quality-status';
   const PREVIEW_STAGE_ID = 'admin-api-key-evaluation-preview';
   const COVERAGE_HOST_ID = 'admin-evaluation-coverage';
 
@@ -90,23 +91,31 @@
     `;
   }
 
-  function renderStatus(status) {
+  function renderStatus(status, quality) {
     const host = ensureHost();
     const target = host?.querySelector('[data-eval-coverage-content]');
     if (!target) return;
     const endpoints = Array.isArray(status.endpoints) ? status.endpoints : [];
     const protectedRows = endpoints.filter((row) => row.proof_mode === 'evaluation_key_runtime');
     const publicRows = endpoints.filter((row) => row.proof_mode === 'public_availability_probe');
+    const qualityRows = Array.isArray(quality?.endpoints) ? quality.endpoints : [];
+    const qualityByPath = new Map(qualityRows.map((row) => [`${row.method} ${row.path}`, row]));
     const complete = status.protected_runtime_coverage_complete === true;
-    target.className = complete ? 'admin-note ok' : 'admin-note';
+    const qualityPassed = quality?.quality_gate_passed === true;
+    target.className = complete && qualityPassed ? 'admin-note ok' : 'admin-note';
     target.innerHTML = `
       <strong>Measured protected runtime coverage:</strong> ${escapeHtml(status.protected_endpoint_success_count || 0)}/${escapeHtml(status.protected_endpoint_count || 0)} · ${escapeHtml(status.protected_coverage_percent || 0)}%<br>
+      <strong>Repeatability / quality evidence:</strong> ${escapeHtml(quality?.quality_sufficient_endpoint_count || 0)}/${escapeHtml(quality?.protected_endpoint_count || status.protected_endpoint_count || 0)} · ${escapeHtml(quality?.quality_evidence_percent || 0)}% · ${qualityPassed ? 'PASS' : 'PENDING'}<br>
       <span class="muted">Campaign Client ID: ${escapeHtml(status.client_id || 'none')} · evidence is aggregated across bounded grants/keys without exposing raw secrets.</span>
       <div style="margin-top:var(--s-2)">
-        ${protectedRows.map((row) => `<div class="admin-api-key-metadata-card-row"><strong>${escapeHtml(row.method)} ${escapeHtml(row.path)}</strong><span>${row.observed_success ? 'PASS' : 'PENDING'} · attempts ${escapeHtml(row.attempt_count)} · failures ${escapeHtml(row.failure_count)} · avg ${escapeHtml(row.avg_latency_ms)} ms</span></div>`).join('')}
+        ${protectedRows.map((row) => {
+          const q = qualityByPath.get(`${row.method} ${row.path}`) || {};
+          return `<div class="admin-api-key-metadata-card-row"><strong>${escapeHtml(row.method)} ${escapeHtml(row.path)}</strong><span>${row.observed_success ? 'COVERED' : 'PENDING'} · successes ${escapeHtml(q.success_count ?? row.success_count)} · failures ${escapeHtml(q.failure_count ?? row.failure_count)} · P95 ${escapeHtml(q.p95_latency_ms ?? row.avg_latency_ms)} ms · quality ${q.quality_evidence_sufficient ? 'PASS' : 'PENDING'}</span></div>`;
+        }).join('')}
       </div>
+      <div class="admin-note" style="margin-top:var(--s-2)"><strong>Default quality evidence threshold:</strong> at least ${escapeHtml(quality?.thresholds?.min_successes_per_endpoint || 3)} successful runs per protected endpoint and failure rate ≤ ${escapeHtml(quality?.thresholds?.max_failure_rate ?? 0)}. A P95 latency limit is evaluated only when explicitly supplied by release policy.</div>
       <div class="admin-note" style="margin-top:var(--s-2)"><strong>Public availability probes:</strong> ${escapeHtml(publicRows.length)} remain separate from API-key proof. Validate /health/live and /health/ready externally; public reachability must not be misreported as key authorization evidence.</div>
-      <div class="muted" style="margin-top:var(--s-2)">${complete ? 'All protected policy endpoints have successful runtime evidence. Full campaign still requires public probe evidence, task outcome quality, failure/retry checks, and cross-application repetition.' : 'Coverage is not complete. Missing protected endpoints must be exercised successfully with the bounded campaign keys.'}</div>
+      <div class="muted" style="margin-top:var(--s-2)">${complete && qualityPassed ? 'Protected endpoint coverage and repeatability evidence are sufficient under the displayed thresholds. Full release evidence still requires public probes, semantic task outcome quality, failure/retry/idempotency checks, and repetition through multiple external programs.' : 'Evaluation evidence is not yet sufficient. Exercise every protected endpoint repeatedly and resolve failures before treating the campaign as readiness evidence.'}</div>
     `;
   }
 
@@ -124,8 +133,11 @@
       return;
     }
     try {
-      const status = await request(`${STATUS_ENDPOINT}?client_id=${encodeURIComponent(clientId)}`);
-      renderStatus(status);
+      const [status, quality] = await Promise.all([
+        request(`${STATUS_ENDPOINT}?client_id=${encodeURIComponent(clientId)}`),
+        request(`${QUALITY_ENDPOINT}?client_id=${encodeURIComponent(clientId)}`),
+      ]);
+      renderStatus(status, quality);
     } catch (error) {
       renderPlanOnly(`Unable to load measured coverage: ${error.message || error}`);
     }
