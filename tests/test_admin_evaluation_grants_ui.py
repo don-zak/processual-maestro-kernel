@@ -7,6 +7,9 @@ SUMMARY_SCRIPT = JS / "admin_api_key_summary.js"
 MANAGEMENT_SCRIPT = JS / "admin_evaluation_grants.js"
 SESSION_SCRIPT = JS / "admin_session.js"
 PROVISIONING_SCRIPT = JS / "admin_api_key_provisioning_workspace.js"
+EVALUATION_ROUTER = ROOT / "processual_api" / "routers" / "settings_admin_evaluation_grants.py"
+PROVISIONING_ROUTER = ROOT / "processual_api" / "routers" / "settings_admin_api_key_provisioning.py"
+SUPER_ADMIN_AUTHORITY = ROOT / "processual_api" / "auth" / "platform_admin_authority.py"
 
 
 def _source(path: Path) -> str:
@@ -88,30 +91,39 @@ def test_primary_renderer_owns_visible_external_evaluation_shell() -> None:
     assert "External Evaluation Active" not in source
 
 
-def test_admin_session_gates_authority_without_lifecycle_dom_creation() -> None:
+def test_session_uses_backend_super_admin_authority_probe_only() -> None:
     source = _source(SESSION_SCRIPT)
     required = [
-        "fetch('/auth/me'",
-        "canManageEvaluationGrants",
-        "EVALUATION_ADMIN_ROLES",
-        "owner_admin",
-        "security_admin",
-        "billing_admin",
-        "admin:api_keys:write",
-        "admin_evaluation_grants.js",
+        "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'",
+        "fetch(AUTHORITY_ENDPOINT",
+        "authority.authority !== 'platform_admin'",
+        "authority.exclusive_super_administrator !== true",
         "document.body.dataset.adminEvaluationGrants = 'authorized'",
         "document.body.dataset.adminEvaluationGrants = 'not-authorized'",
         "window.PMK_ADMIN_SESSION",
     ]
     for marker in required:
         assert marker in source
+
+    for forbidden in [
+        "EVALUATION_ADMIN_ROLES",
+        "canManageEvaluationGrants",
+        "owner_admin",
+        "security_admin",
+        "billing_admin",
+        "admin:api_keys:write",
+        "sessionStorage.setItem('api_key'",
+        "EVALUATION_DEV_AUTH_ID",
+    ]:
+        assert forbidden not in source
+
     assert "ensureEvaluationGrantPlaceholder" not in source
     assert "admin-api-key-lifecycle-card" not in source
     assert "MutationObserver" not in source
     assert "insertBefore" not in source
 
 
-def test_admin_session_preloads_locked_ui_before_verification() -> None:
+def test_admin_session_preloads_locked_ui_before_super_admin_verification() -> None:
     source = _source(SESSION_SCRIPT)
     preload = source.rindex("loadApiKeyProvisioningWorkspace();")
     preload_grants = source.rindex("loadEvaluationGrantControls();")
@@ -122,11 +134,11 @@ def test_admin_session_preloads_locked_ui_before_verification() -> None:
     assert "document.body.dataset.adminEvaluationGrants = 'loaded'" not in source
 
 
-def test_authority_is_set_before_verified_hydration_event() -> None:
+def test_super_admin_authority_is_set_before_hydration_event() -> None:
     source = _source(SESSION_SCRIPT)
     ok_pos = source.index("document.body.dataset.adminSession = 'ok'")
     authority_pos = source.index("document.body.dataset.adminEvaluationGrants = 'authorized'", ok_pos)
-    event_pos = source.index("dispatchAdminSessionVerified(me);", authority_pos)
+    event_pos = source.index("dispatchSuperAdminVerified(authority);", authority_pos)
     assert ok_pos < authority_pos < event_pos
 
 
@@ -163,36 +175,51 @@ def test_admin_session_retries_only_transient_503_with_bounded_backoff() -> None
     assert "while (" not in source
 
 
-def test_evaluation_access_card_explains_non_authorized_states() -> None:
+def test_evaluation_access_card_explains_exclusive_super_admin_states() -> None:
     source = _source(SESSION_SCRIPT)
     required = [
-        "document.body.dataset.adminEvaluationGrants = 'auth-missing'",
-        "The full lifecycle remains visible but locked.",
-        "document.body.dataset.adminEvaluationGrants = 'auth-error'",
-        "Administrator verification failed: HTTP ",
-        "Authenticated session does not have administrator authority.",
-        "evaluation grant management requires owner/security/billing or admin:api_keys:write authority.",
+        "Super Administrator identity session is required.",
+        "External Evaluation is exclusive to an active Super Administrator (platform_admin).",
+        "owner_admin, security_admin, billing_admin, wildcard scopes, and API keys are not sufficient.",
+        "Backend did not confirm exclusive Super Administrator authority.",
     ]
     for marker in required:
         assert marker in source
 
 
-def test_local_development_evaluation_auth_bootstrap_is_session_only_and_retryable() -> None:
-    source = _source(SESSION_SCRIPT)
+def test_backend_evaluation_grants_require_platform_admin_helper_everywhere() -> None:
+    source = _source(EVALUATION_ROUTER)
+    assert "/admin/evaluation-grants/authority" in source
+    assert "require_active_platform_admin" in source
+    assert source.count("await require_active_platform_admin(current_user)") == 6
+    assert "_ALLOWED_ADMIN_ROLES" not in source
+    assert 'created_by_admin_role": "platform_admin"' in source
+    assert '"exclusive_super_administrator": True' in source
+
+
+def test_backend_provisioning_catalogs_are_super_admin_only() -> None:
+    source = _source(PROVISIONING_ROUTER)
+    assert source.count("await require_active_platform_admin(current_user)") == 2
+    assert "_ALLOWED_ADMIN_ROLES" not in source
+    assert "_ALLOWED_ADMIN_SCOPES" not in source
+    assert source.count('"exclusive_super_administrator": True') == 2
+
+
+def test_platform_admin_helper_rejects_legacy_and_non_identity_authority() -> None:
+    source = _source(SUPER_ADMIN_AUTHORITY)
     required = [
-        "const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth'",
-        "const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])",
-        "if (!isLocalDevelopmentOrigin() || !externalEvaluationSelected()) return;",
-        "type=\"password\"",
-        "autocomplete=\"off\"",
-        "sessionStorage.setItem('api_key', value)",
-        "Verify & Unlock Controls",
-        "Credential was not accepted. Enter another development API key.",
-        "response.status === 401 || response.status === 403",
+        'SUPER_ADMIN_AUTHORITY = "platform_admin"',
+        'current_user.get("session_type") != "identity_user"',
+        "AdminMarketplaceIdentityAuthorityResolver",
+        "authority.active_platform_admin",
+        "SUPER_ADMIN_AUTHORITY not in authority.platform_authorities",
+        "Exclusive super-administrator identity authority is required.",
     ]
     for marker in required:
         assert marker in source
-    assert "localStorage.setItem('api_key'" not in source
+
+    for forbidden in ["owner_admin", "security_admin", "billing_admin", "admin:*", "admin:api_keys:write"]:
+        assert forbidden not in source
 
 
 def test_primary_renderer_has_single_category_verification_trigger() -> None:
@@ -204,9 +231,6 @@ def test_primary_renderer_has_single_category_verification_trigger() -> None:
     assert "window.PMK_ADMIN_SESSION?.check?.();" in apply_source
     assert "dispatchCategoryChanged();" in apply_source
     assert "window.addEventListener('pmk-api-key-category-changed'" in session
-    listener_start = session.index("window.addEventListener('pmk-api-key-category-changed'")
-    listener_end = session.index("\n  });", listener_start) + len("\n  });")
-    assert "checkAdminSession();" not in session[listener_start:listener_end]
     assert "admin_api_key_evaluation_lifecycle.js" not in session
 
 
