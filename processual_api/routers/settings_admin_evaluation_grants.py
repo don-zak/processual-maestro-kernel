@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from processual_api.auth.platform_admin_authority import require_active_platform_admin
 from processual_api.auth.security import (
     _pbkdf2_hash_api_key,
     generate_api_key,
@@ -36,12 +37,6 @@ PILOT_DEFAULT_SCOPES = [
     "run:govern",
     "read:reports",
 ]
-_ALLOWED_ADMIN_ROLES = {
-    "admin",
-    "owner_admin",
-    "security_admin",
-    "billing_admin",
-}
 
 
 class EvaluationGrantCreate(BaseModel):
@@ -67,30 +62,6 @@ class EvaluationKeyIssue(BaseModel):
     )
 
 
-def _require_evaluation_admin(current_user: dict) -> None:
-    role = str(
-        current_user.get("role")
-        or current_user.get("admin_role")
-        or ""
-    ).strip().lower()
-    scopes = {
-        str(scope).strip().lower()
-        for scope in current_user.get("scopes") or []
-        if scope
-    }
-    if role in _ALLOWED_ADMIN_ROLES or scopes.intersection(
-        {"*", "admin:*", "admin:api_keys:write"}
-    ):
-        return
-    raise HTTPException(
-        status_code=403,
-        detail=(
-            "Evaluation grant administration requires an authorized "
-            "admin role."
-        ),
-    )
-
-
 def _owner_user_id(current_user: dict) -> str:
     return str(
         current_user.get("sub")
@@ -104,14 +75,9 @@ def _actor(current_user: dict) -> tuple[str, str]:
         current_user.get("email")
         or current_user.get("sub")
         or current_user.get("user_id")
-        or "admin"
+        or "super_admin"
     )
-    role = str(
-        current_user.get("role")
-        or current_user.get("admin_role")
-        or "admin"
-    )
-    return actor, role
+    return actor, "platform_admin"
 
 
 def _hash_key(raw_key: str) -> str:
@@ -137,9 +103,7 @@ def _safe_scopes(values: list[str]) -> list[str]:
         }:
             raise HTTPException(
                 status_code=422,
-                detail=(
-                    "Evaluation grants cannot include administrative scopes."
-                ),
+                detail="Evaluation grants cannot include administrative scopes.",
             )
         seen.add(scope)
         scopes.append(scope)
@@ -204,13 +168,28 @@ def _linked_key_count(raw: dict, grant_id: str) -> int:
 
 
 @settings_module.router.get(
+    "/admin/evaluation-grants/authority",
+    response_model=dict,
+)
+async def evaluation_grant_authority(
+    current_user: dict = Depends(get_current_user),
+):
+    await require_active_platform_admin(current_user)
+    return {
+        "authorized": True,
+        "authority": "platform_admin",
+        "exclusive_super_administrator": True,
+    }
+
+
+@settings_module.router.get(
     "/admin/evaluation-grants/task-catalog",
     response_model=dict,
 )
 async def evaluation_task_catalog(
     current_user: dict = Depends(get_current_user),
 ):
-    _require_evaluation_admin(current_user)
+    await require_active_platform_admin(current_user)
     payload = task_catalog_payload()
     return {
         **payload,
@@ -229,7 +208,7 @@ async def create_evaluation_grant(
     body: EvaluationGrantCreate,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_evaluation_admin(current_user)
+    await require_active_platform_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
     raw = settings_module._load_raw(owner_user_id)
     grants = evaluation_grants(raw)
@@ -250,9 +229,7 @@ async def create_evaluation_grant(
         "allowed_scopes": scopes,
         "max_requests": int(body.max_requests),
         "created_at": now.isoformat(),
-        "expires_at": (
-            now + timedelta(days=body.expires_in_days)
-        ).isoformat(),
+        "expires_at": (now + timedelta(days=body.expires_in_days)).isoformat(),
         "approved_by": actor,
         "approved_by_role": role,
         "revoked_at": None,
@@ -264,10 +241,7 @@ async def create_evaluation_grant(
     grants.append(grant)
     raw[EVALUATION_GRANTS_STORAGE_KEY] = grants[-500:]
     settings_module._save_raw(owner_user_id, raw)
-    return {
-        "status": "created",
-        "grant": safe_evaluation_grant(grant),
-    }
+    return {"status": "created", "grant": safe_evaluation_grant(grant)}
 
 
 @settings_module.router.get(
@@ -277,7 +251,7 @@ async def create_evaluation_grant(
 async def list_evaluation_grants(
     current_user: dict = Depends(get_current_user),
 ):
-    _require_evaluation_admin(current_user)
+    await require_active_platform_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
     raw = settings_module._load_raw(owner_user_id)
     grants = evaluation_grants(raw)
@@ -288,10 +262,7 @@ async def list_evaluation_grants(
         refresh_evaluation_grant_status(grant)
         changed = changed or before != str(grant.get("status") or "")
         item = safe_evaluation_grant(grant)
-        item["active_key_count"] = _linked_key_count(
-            raw,
-            item["grant_id"],
-        )
+        item["active_key_count"] = _linked_key_count(raw, item["grant_id"])
         items.append(item)
     if changed:
         raw[EVALUATION_GRANTS_STORAGE_KEY] = grants
@@ -314,15 +285,12 @@ async def issue_evaluation_key(
     body: EvaluationKeyIssue,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_evaluation_admin(current_user)
+    await require_active_platform_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
     raw = settings_module._load_raw(owner_user_id)
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Evaluation grant not found.",
-        )
+        raise HTTPException(status_code=404, detail="Evaluation grant not found.")
 
     scopes = list(grant.get("allowed_scopes") or [])
     task_ids = list(grant.get("allowed_task_ids") or [])
@@ -366,9 +334,7 @@ async def issue_evaluation_key(
         "label": body.label.strip(),
         "purpose": str(grant.get("purpose") or ""),
         "issued_to": str(grant.get("issued_to") or client_id),
-        "created_by_admin_role": str(
-            current_user.get("role") or "admin"
-        ),
+        "created_by_admin_role": "platform_admin",
         "evaluation_grant_id": grant_id,
         "entitlement_source": "admin_evaluation_grant",
         "subscription_required": False,
@@ -433,15 +399,12 @@ async def revoke_evaluation_grant(
     grant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_evaluation_admin(current_user)
+    await require_active_platform_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
     raw = settings_module._load_raw(owner_user_id)
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Evaluation grant not found.",
-        )
+        raise HTTPException(status_code=404, detail="Evaluation grant not found.")
 
     now = datetime.now(UTC).isoformat()
     grant["status"] = "revoked"
@@ -454,11 +417,7 @@ async def revoke_evaluation_grant(
                 continue
             if str(key.get("evaluation_grant_id") or "") != grant_id:
                 continue
-            if key.get("status") in {
-                "revoked",
-                "disabled",
-                "expired",
-            } or key.get("revoked_at"):
+            if key.get("status") in {"revoked", "disabled", "expired"} or key.get("revoked_at"):
                 continue
             key["status"] = "revoked"
             key["revoked_at"] = now
