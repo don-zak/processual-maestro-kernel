@@ -133,8 +133,8 @@ def test_external_evaluation_grant_receives_selected_endpoint_scopes() -> None:
     create_source = source[create_start:issue_start]
     assert "const readiness = updateEvaluationReadiness();" in create_source
     assert "if (!readiness.ready)" in create_source
-    assert "const allowedScopes = readiness.scopes;" in create_source
-    assert "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})" in create_source
+    assert "allowed_scopes: readiness.scopes" in create_source
+    assert "/settings/api-keys" not in create_source
 
 
 def test_workspace_does_not_store_secrets_or_observe_dom_forever() -> None:
