@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
-from processual_api.routers import cgt_governor, evaluation_runtime
+from processual_api.routers import evaluation_runtime
 
 
 def _evaluation_user(*, allowed_tasks: list[str]) -> dict:
@@ -33,6 +33,15 @@ def _binding(task_id: str = "crm.customer_context") -> SimpleNamespace:
     )
 
 
+def _matching_task_routes(routes) -> list:
+    return [
+        route
+        for route in routes
+        if getattr(route, "path", "") == "/evaluation/runtime/task-execute"
+        and "POST" in (getattr(route, "methods", set()) or set())
+    ]
+
+
 def test_runtime_task_bridge_is_canonical_grantable_surface() -> None:
     policy = get_api_key_access_policy(
         "POST",
@@ -43,13 +52,11 @@ def test_runtime_task_bridge_is_canonical_grantable_surface() -> None:
     assert policy.required_scopes == ("run:evaluation",)
     assert policy.production_allowed is False
 
-    matching = [
-        route
-        for route in cgt_governor.router.routes
-        if getattr(route, "path", "") == "/evaluation/runtime/task-execute"
-        and "POST" in (getattr(route, "methods", set()) or set())
-    ]
-    assert len(matching) == 1
+    assert len(_matching_task_routes(evaluation_runtime.router.routes)) == 1
+
+    from processual_api.main import app
+
+    assert len(_matching_task_routes(app.routes)) == 1
 
 
 def test_ungranted_task_is_denied_before_network_execution(monkeypatch) -> None:
@@ -184,6 +191,7 @@ def test_allowed_read_task_executes_and_records_truthful_completion(
         lambda _raw, _binding_id: SimpleNamespace(
             dataset_reference="dataset-ref",
             fixture_profile_reference="fixture-ref",
+            acceptance_criteria_references=("criteria-ref",),
         ),
     )
     monkeypatch.setattr(
@@ -279,6 +287,8 @@ def test_allowed_read_task_executes_and_records_truthful_completion(
     assert result["maestro_task_completed"] is True
     assert result["completion_stage"] == "canonical_read_task_completed"
     assert result["completion_sha256"]
+    assert result["outcome_validation_status"] == "missing_expectation"
+    assert result["outcome_validation_passed"] is False
     assert result["next_readiness_stage"] == "outcome_quality_validation"
     assert saved["owner"] == "evaluation-owner"
 
@@ -290,6 +300,8 @@ def test_allowed_read_task_executes_and_records_truthful_completion(
     assert evidence["maestro_task_completed"] is True
     assert evidence["completion_stage"] == "canonical_read_task_completed"
     assert evidence["task_completion_sha256"]
+    assert evidence["outcome_validation_status"] == "missing_expectation"
+    assert evidence["outcome_validation_passed"] is False
     assert "canonical_input" not in evidence
 
 
