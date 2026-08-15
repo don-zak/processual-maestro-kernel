@@ -75,8 +75,13 @@ def test_primary_renderer_owns_visible_external_evaluation_shell() -> None:
     required = [
         "External Evaluation Lifecycle",
         "Administrator Verification",
-        "Operational Profile & Eligible Endpoints",
-        "Evaluation Access Preview",
+        "Operational Profile",
+        "Eligible Endpoints & Derived Runtime Scopes",
+        "Canonical Tasks",
+        "Evaluation Identity & Limits",
+        "Access Preview & Readiness",
+        "Create Grant & One-Time API Key",
+        "Endpoint Test & Revocation",
         "admin-api-key-external-evaluation-card",
         "admin-api-key-external-evaluation-body",
         "admin-evaluation-grants",
@@ -181,15 +186,22 @@ def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() 
     assert "Evaluation grant controls could not be loaded." in source
 
 
-def test_category_change_rechecks_admin_without_loading_legacy_dom_mover() -> None:
-    source = _source(SESSION_SCRIPT)
+def test_primary_renderer_has_single_category_verification_trigger() -> None:
+    api_keys = _source(API_KEYS_SCRIPT)
+    session = _source(SESSION_SCRIPT)
 
-    assert "window.addEventListener('pmk-api-key-category-changed'" in source
-    assert "if (externalEvaluationSelected())" in source
-    assert "checkAdminSession();" in source
-    assert "loadApiKeyProvisioningWorkspace();" in source
-    assert "loadEvaluationGrantControls();" in source
-    assert "admin_api_key_evaluation_lifecycle.js" not in source
+    apply_start = api_keys.index("function applyLifecycleCategory()")
+    defaults_start = api_keys.index("function applyCategoryDefaults()", apply_start)
+    apply_source = api_keys[apply_start:defaults_start]
+
+    assert "window.PMK_ADMIN_SESSION?.check?.();" in apply_source
+    assert "dispatchCategoryChanged();" in apply_source
+    assert "window.addEventListener('pmk-api-key-category-changed'" in session
+    assert "if (!externalEvaluationSelected())" in session
+    listener_start = session.index("window.addEventListener('pmk-api-key-category-changed'")
+    listener_source = session[listener_start:]
+    assert "checkAdminSession();" not in listener_source
+    assert "admin_api_key_evaluation_lifecycle.js" not in session
 
 
 def test_evaluation_ui_does_not_own_navigation_or_reload_behavior() -> None:
