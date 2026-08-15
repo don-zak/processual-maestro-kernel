@@ -96,9 +96,10 @@ def test_grant_creation_is_hard_blocked_until_every_gate_is_ready() -> None:
     source = _source(EVALUATION)
 
     required = [
-        "category === EXTERNAL_CATEGORY",
+        "function authorized()",
         "document.body.dataset.adminSession === 'ok'",
-        "grantAuthority === 'authorized'",
+        "document.body.dataset.adminEvaluationGrants === 'authorized'",
+        "category === EXTERNAL_CATEGORY",
         "Boolean(profile)",
         "endpoints.length > 0",
         "scopes.length > 0",
@@ -111,7 +112,7 @@ def test_grant_creation_is_hard_blocked_until_every_gate_is_ready() -> None:
     ]
     for marker in required:
         assert marker in source
-    assert "grantAuthority === 'loaded'" not in source
+    assert "adminEvaluationGrants === 'loaded'" not in source
 
 
 def test_grant_post_uses_only_evaluation_grant_authority() -> None:
