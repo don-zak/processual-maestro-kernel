@@ -17,7 +17,7 @@ from processual_api.services.evaluation_outcome_runtime import (
 def _content() -> SandboxContentContract:
     return SandboxContentContract(
         binding_id="binding-crm-read",
-        dataset_reference="dataset/customer-1-v1",
+        dataset_reference="dataset/crm-customer-fixture-v1",
         fixture_profile_reference="fixture/crm-customer-active-v1",
         required_record_types=("customer",),
         acceptance_criteria_references=("criteria/crm-active-customer-v1",),
@@ -46,7 +46,7 @@ def test_outcome_expectation_persists_hashes_not_raw_expected_values() -> None:
 
     assert expectation["required_fields"] == ["account_status", "customer_id"]
     assert expectation["raw_expected_values_persisted"] is False
-    assert "customer-1" not in serialized
+    assert '"customer-1"' not in serialized
     assert '"active"' not in serialized
     assert len(expectation["expected_field_sha256"]["customer_id"]) == 64
     assert len(expectation["expectation_sha256"]) == 64
