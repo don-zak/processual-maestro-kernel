@@ -2,6 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
     '/console/js/admin_evaluation_grants.js?v=adminevaltasks08-super-admin';
+  const EVALUATION_COVERAGE_SCRIPT_SELECTOR = 'script[data-admin-evaluation-coverage]';
+  const EVALUATION_COVERAGE_SCRIPT_SRC =
+    '/console/js/admin_evaluation_coverage.js?v=adminevalcoverage01';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
@@ -62,6 +65,17 @@ document.addEventListener('DOMContentLoaded', () => {
     script.addEventListener('error', () => {
       document.body.dataset.adminEvaluationUi = 'load-error';
       setEvaluationAccessStatus('Evaluation UI assets could not be loaded.', true);
+    });
+    document.body.appendChild(script);
+  }
+
+  function loadEvaluationCoverageControls() {
+    if (document.querySelector(EVALUATION_COVERAGE_SCRIPT_SELECTOR)) return;
+    const script = document.createElement('script');
+    script.src = EVALUATION_COVERAGE_SCRIPT_SRC;
+    script.dataset.adminEvaluationCoverage = 'true';
+    script.addEventListener('error', () => {
+      document.body.dataset.adminEvaluationCoverage = 'load-error';
     });
     document.body.appendChild(script);
   }
@@ -205,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // hydrate only after the backend confirms exclusive platform_admin authority.
   loadApiKeyProvisioningWorkspace();
   loadEvaluationGrantControls();
+  loadEvaluationCoverageControls();
 
   if (externalEvaluationSelected()) checkAdminSession();
 });
