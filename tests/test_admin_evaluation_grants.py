@@ -113,7 +113,7 @@ def test_create_evaluation_grant_is_subscription_independent_and_safe(
     assert grant["max_requests"] == 25
     assert grant["subscription_required"] is False
     assert grant["production_allowed"] is False
-    assert grant["approved_by_role"] == "security_admin"
+    assert grant["approved_by_role"] == "platform_admin"
     assert grant["allowed_task_ids"] == EVALUATION_TASKS
     assert grant["task_authority_source"] == "integration_task_catalog"
     assert "crm:read" in grant["task_scope_ids"]
