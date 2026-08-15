@@ -69,10 +69,14 @@
     return params.get('identity') === '1' && params.get('mode') === 'admin';
   }
 
+  function isAdminMode() {
+    return document.getElementById('tab-admin')?.classList.contains('active') === true;
+  }
+
   function safeIdentityDestination() {
     const requested = new URLSearchParams(window.location.search).get('next') || '';
     if (!requested.startsWith('/')) {
-      return explicitSuperAdminMode() ? '/admin#api-keys' : '/console';
+      return (isAdminMode() || explicitSuperAdminMode()) ? '/admin#api-keys' : '/console';
     }
     try {
       const target = new URL(requested, window.location.origin);
@@ -118,7 +122,7 @@
   const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
   const message = (en, ar) => currentLanguage() === 'ar' ? ar : en;
   const isUserMode = () => document.getElementById('tab-user')?.classList.contains('active') === true;
-  const isIdentityMode = () => isUserMode() || explicitSuperAdminMode();
+  const isIdentityMode = () => isUserMode() || isAdminMode();
 
   function showError(text) {
     const error = document.getElementById('login-error');
@@ -135,16 +139,13 @@
   function buildPasswordVisibilityToggle() {
     const input = document.getElementById('login-password');
     if (!input || document.getElementById('login-password-visibility')) return;
-
     const parent = input.parentElement;
     if (!parent) return;
-
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
     parent.insertBefore(wrapper, input);
     wrapper.appendChild(input);
     input.style.paddingRight = '4.75rem';
-
     const toggle = document.createElement('button');
     toggle.id = 'login-password-visibility';
     toggle.type = 'button';
@@ -152,17 +153,9 @@
     toggle.setAttribute('aria-pressed', 'false');
     toggle.textContent = 'Show';
     Object.assign(toggle.style, {
-      position: 'absolute',
-      right: '0.8rem',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      border: '0',
-      background: 'transparent',
-      color: 'var(--amber)',
-      fontFamily: 'var(--font-data)',
-      fontSize: '10px',
-      cursor: 'pointer',
-      padding: '0.25rem',
+      position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)',
+      border: '0', background: 'transparent', color: 'var(--amber)', fontFamily: 'var(--font-data)',
+      fontSize: '10px', cursor: 'pointer', padding: '0.25rem',
     });
     toggle.addEventListener('click', () => {
       const reveal = input.type === 'password';
@@ -188,10 +181,7 @@
   }
 
   function pendingAuthHeaders(extra = {}) {
-    return {
-      ...extra,
-      Authorization: `Bearer ${pendingMfaToken}`,
-    };
+    return { ...extra, Authorization: `Bearer ${pendingMfaToken}` };
   }
 
   function syncMfaChallengeLanguage() {
@@ -369,9 +359,7 @@
 
   async function refreshCompletedIdentitySession() {
     const refreshed = await fetch('/auth/session/refresh', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'X-CSRF-Token': pendingCsrfToken },
+      method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': pendingCsrfToken },
     });
     const data = await refreshed.json().catch(() => ({}));
     if (!refreshed.ok) throw new Error(data.detail || message('Unable to complete MFA login.', 'تعذر إكمال تسجيل الدخول بالمصادقة متعددة العوامل.'));
@@ -383,9 +371,7 @@
 
   async function beginMfaEnrollment() {
     const response = await fetch('/auth/mfa/totp/enroll', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: pendingAuthHeaders({ 'Content-Type': 'application/json' }),
+      method: 'POST', credentials: 'same-origin', headers: pendingAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ label: 'Primary authenticator' }),
     });
     const data = await response.json().catch(() => ({}));
@@ -394,17 +380,10 @@
   }
 
   async function continueMfaRequirement() {
-    const status = await fetch('/auth/mfa/status', {
-      method: 'GET',
-      credentials: 'same-origin',
-      headers: pendingAuthHeaders(),
-    });
+    const status = await fetch('/auth/mfa/status', { method: 'GET', credentials: 'same-origin', headers: pendingAuthHeaders() });
     const data = await status.json().catch(() => ({}));
     if (!status.ok) throw new Error(data.detail || message('Unable to read MFA status.', 'تعذر قراءة حالة المصادقة متعددة العوامل.'));
-    if (data.enabled === true) {
-      showMfaChallenge();
-      return;
-    }
+    if (data.enabled === true) { showMfaChallenge(); return; }
     await beginMfaEnrollment();
   }
 
@@ -464,10 +443,7 @@
     if (button) { button.disabled = true; button.textContent = message('Confirming...', 'جار التأكيد...'); }
     try {
       const confirmation = await fetch('/auth/mfa/totp/confirm', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: pendingAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ code }),
+        method: 'POST', credentials: 'same-origin', headers: pendingAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ code }),
       });
       const data = await confirmation.json().catch(() => ({}));
       if (!confirmation.ok) throw new Error(data.detail || message('Unable to confirm MFA enrollment.', 'تعذر تأكيد إعداد المصادقة متعددة العوامل.'));
@@ -496,7 +472,6 @@
     buildMfaEnrollment();
     buildRecoveryCodes();
     buildPasswordVisibilityToggle();
-
     const loginButton = document.getElementById('login-btn');
     const password = document.getElementById('login-password');
     const userTab = document.getElementById('tab-user');
@@ -514,34 +489,16 @@
       event.stopImmediatePropagation();
       identityLogin();
     }, true);
-
-    userTab?.addEventListener('click', () => {
-      resetMfaChallenge();
-      syncIdentityModePresentation();
-    });
-    adminTab?.addEventListener('click', () => {
-      resetMfaChallenge();
-      syncIdentityModePresentation();
-    });
-    document.getElementById('lang-en')?.addEventListener('click', () => {
-      syncMfaChallengeLanguage();
-      syncIdentityModePresentation();
-    });
-    document.getElementById('lang-ar')?.addEventListener('click', () => {
-      syncMfaChallengeLanguage();
-      syncIdentityModePresentation();
-    });
-
+    userTab?.addEventListener('click', () => { resetMfaChallenge(); syncIdentityModePresentation(); });
+    adminTab?.addEventListener('click', () => { resetMfaChallenge(); syncIdentityModePresentation(); });
+    document.getElementById('lang-en')?.addEventListener('click', () => { syncMfaChallengeLanguage(); syncIdentityModePresentation(); });
+    document.getElementById('lang-ar')?.addEventListener('click', () => { syncMfaChallengeLanguage(); syncIdentityModePresentation(); });
     syncIdentityModePresentation();
   }
 
   window.PMK_LOGIN_TOKEN_CAPTURE = {
-    persistAuthPayload,
-    normalizeToken,
-    installFetchCapture,
-    installIdentityMfaLogin,
-    safeIdentityDestination,
-    explicitSuperAdminMode,
+    persistAuthPayload, normalizeToken, installFetchCapture, installIdentityMfaLogin,
+    safeIdentityDestination, explicitSuperAdminMode, isAdminMode,
   };
   installFetchCapture();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installIdentityMfaLogin, { once: true });
