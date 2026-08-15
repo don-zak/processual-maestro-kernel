@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "processual_api" / "static"
@@ -34,9 +33,9 @@ def test_admin_session_uses_auth_bridge_headers():
     required = [
         "PMK_ADMIN_AUTH.headers",
         "fetch('/auth/me'",
-        "Admin auth token missing",
-        "Admin session verified",
-        "Backend scopes remain the authority",
+        "Administrator credential is required",
+        "Administrator verified",
+        "window.PMK_ADMIN_SESSION",
     ]
 
     for token in required:
