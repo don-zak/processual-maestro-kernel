@@ -318,9 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   window.addEventListener('pmk-api-key-category-changed', () => {
-    if (externalEvaluationSelected()) {
-      checkAdminSession();
-    } else {
+    if (!externalEvaluationSelected()) {
       clearDevelopmentAuthBootstrap();
     }
   });
