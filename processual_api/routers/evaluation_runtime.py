@@ -24,6 +24,7 @@ from processual_api.integrations.enterprise_sandbox_execution import (
     SandboxExecutionError,
     execute_sandbox_binding,
 )
+from processual_api.integrations.integration_task_catalog import get_integration_task
 from processual_api.integrations.integration_task_completion import (
     IntegrationTaskCompletionError,
     complete_mapped_read_task,
@@ -37,6 +38,10 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
     resolve_active_sandbox_execution_grant,
 )
 from processual_api.services.evaluation_grants import evaluation_task_allowed
+from processual_api.services.evaluation_idempotency import (
+    reserve_evaluation_execution,
+    update_evaluation_execution_reservation,
+)
 from processual_api.services.evaluation_outcome_runtime import (
     evaluate_completed_task_outcome,
 )
@@ -56,6 +61,7 @@ class EvaluationRuntimeTaskExecuteRequest(BaseModel):
     task_id: str = Field(min_length=1, max_length=160)
     binding_id: str = Field(min_length=1, max_length=160)
     task_input: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
 
 
 def _evaluation_owner_id(current_user: dict[str, Any]) -> str:
@@ -144,10 +150,10 @@ async def execute_evaluation_runtime_task(
     """Execute one pre-provisioned external operation for an allowed canonical task.
 
     Canonical READ completion and Evaluation success are deliberately separate.
-    A completed READ task receives semantic outcome validation against a
-    Super-Administrator-provisioned hashed expectation bound to the prepared
-    synthetic content contract. Draft and approval-gated write tasks remain
-    incomplete until a dedicated downstream consumer performs their operation.
+    Completed READ tasks receive semantic outcome validation. Non-READ tasks
+    require a fail-closed idempotency reservation before the network request so
+    a timeout or ambiguous external failure cannot be silently retried into a
+    duplicate side effect.
     """
 
     _require_evaluation_credential(current_user)
@@ -159,6 +165,13 @@ async def execute_evaluation_runtime_task(
         requested_task_id=body.task_id,
         binding_task_id=spec.task_id,
     )
+    task = get_integration_task(task_id)
+    non_read_task = str(task.operation_class) != "read"
+    if non_read_task and not body.idempotency_key:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Non-READ Evaluation tasks require an idempotency_key before external execution.",
+        )
 
     content = sandbox_runtime._content_contract(raw, spec.binding_id)
     secret_reference = sandbox_runtime._secret_reference(raw, spec.binding_id)
@@ -173,6 +186,7 @@ async def execute_evaluation_runtime_task(
             detail="Prepared evaluation secret reference is required.",
         )
 
+    reservation: dict[str, Any] | None = None
     try:
         execution_grant = resolve_active_sandbox_execution_grant(
             raw,
@@ -189,6 +203,31 @@ async def execute_evaluation_runtime_task(
             if request_mapping is not None
             else None
         )
+        if non_read_task:
+            reservation = reserve_evaluation_execution(
+                raw,
+                idempotency_key=str(body.idempotency_key or ""),
+                task_id=task_id,
+                binding_id=spec.binding_id,
+                task_input=body.task_input,
+                api_key_id=str(current_user.get("api_key_id") or ""),
+                evaluation_grant_id=str(current_user.get("evaluation_grant_id") or ""),
+            )
+            if reservation["status"] == "conflict":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Idempotency key was already used for a different Evaluation request.",
+                )
+            if reservation["status"] == "duplicate":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Duplicate non-READ Evaluation execution blocked before network; "
+                        f"previous state: {reservation.get('previous_state') or 'unknown'}."
+                    ),
+                )
+            settings_router._save_raw(owner_id, raw)
+
         resolver = ReferenceSandboxCredentialResolver(secret_reference)
         transport = VerifiedPeerSandboxTransport()
         result = await execute_sandbox_binding(
@@ -204,6 +243,8 @@ async def execute_evaluation_runtime_task(
         )
         if not transport.last_verified_peer:
             raise SandboxExecutionError("evaluation_peer_address_unverified")
+    except HTTPException:
+        raise
     except (
         ValueError,
         KeyError,
@@ -212,10 +253,26 @@ async def execute_evaluation_runtime_task(
         SandboxGrantError,
         SandboxExecutionError,
     ) as exc:
+        if reservation and reservation.get("reservation_id"):
+            update_evaluation_execution_reservation(
+                raw,
+                reservation_id=str(reservation["reservation_id"]),
+                state="network_or_response_failure_uncertain",
+            )
+            settings_router._save_raw(owner_id, raw)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
+
+    if reservation and reservation.get("reservation_id"):
+        update_evaluation_execution_reservation(
+            raw,
+            reservation_id=str(reservation["reservation_id"]),
+            state="external_execution_completed",
+            execution_id=str(result.get("execution_id") or ""),
+            evidence_sha256=str(result.get("evidence_sha256") or ""),
+        )
 
     completion = _completion_from_external_result(
         task_id=task_id,
@@ -263,9 +320,14 @@ async def execute_evaluation_runtime_task(
         "expectation_sha256": outcome.get("expectation_sha256"),
         "field_check_count": outcome.get("field_check_count", 0),
         "matched_field_count": outcome.get("matched_field_count", 0),
+        "idempotency_required": non_read_task,
+        "idempotency_reservation_id": (reservation or {}).get("reservation_id"),
+        "idempotency_request_sha256": (reservation or {}).get("request_sha256"),
         "completed_at": result.get("completed_at"),
         "evaluation_stage": evaluation_stage,
         "maestro_task_completed": task_completed,
+        "raw_task_input_persisted": False,
+        "raw_idempotency_key_persisted": False,
         "raw_expected_values_persisted": False,
         "raw_secret_visible": False,
     }
@@ -280,6 +342,8 @@ async def execute_evaluation_runtime_task(
         "evaluation_grant_id": current_user.get("evaluation_grant_id"),
         "task_authority_enforced": True,
         "evaluation_stage": evaluation_stage,
+        "idempotency_required": non_read_task,
+        "idempotency_enforced": bool(non_read_task and reservation),
         "next_readiness_stage": (
             "failure_retry_validation"
             if task_completed and outcome_passed
@@ -287,6 +351,8 @@ async def execute_evaluation_runtime_task(
             if task_completed
             else "maestro_task_consumption"
         ),
+        "raw_task_input_persisted": False,
+        "raw_idempotency_key_persisted": False,
         "raw_expected_values_persisted": False,
         "raw_secret_visible": False,
     }
