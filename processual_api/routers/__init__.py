@@ -10,6 +10,7 @@ from . import settings_admin_api_key_provisioning as _settings_admin_api_key_pro
 from . import settings_admin_evaluation_coverage as _settings_admin_evaluation_coverage  # noqa: F401,E402
 from . import settings_admin_evaluation_grants as _settings_admin_evaluation_grants  # noqa: F401,E402
 from . import settings_admin_evaluation_outcomes as _settings_admin_evaluation_outcomes  # noqa: F401,E402
+from . import settings_admin_evaluation_provisioning as _settings_admin_evaluation_provisioning  # noqa: F401,E402
 from . import (  # noqa: F401,E402
     settings_enterprise_endpoint_bindings_runtime as _settings_enterprise_endpoint_bindings_runtime,
 )
