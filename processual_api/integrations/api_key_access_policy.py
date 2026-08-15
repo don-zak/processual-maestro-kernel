@@ -136,14 +136,7 @@ _POLICIES = {
         "Bounded canonical task execution for Evaluation Runtime",
         "execute",
         ("run:evaluation",),
-        (
-            "external_partner_access",
-            "service_integration_read_only",
-            "service_integration_support_ticketing",
-            "service_integration_billing_read",
-            "telecom_operations_sandbox",
-            "enterprise_telecom_conformance_read",
-        ),
+        ("platform_evaluation_runtime",),
     ),
 }
 
