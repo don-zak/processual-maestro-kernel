@@ -248,6 +248,7 @@ def summarize_usage_logs(
 
 def summarize_evaluation_endpoint_coverage(
     *,
+    client_id: str | None = None,
     evaluation_grant_id: str | None = None,
     api_key_id: str | None = None,
 ) -> dict[str, Any]:
@@ -257,6 +258,12 @@ def summarize_evaluation_endpoint_coverage(
         if record.get("entitlement_source") == "admin_evaluation_grant"
         and record.get("execution_mode") == "evaluation_runtime"
     ]
+    if client_id:
+        records = [
+            record
+            for record in records
+            if str(record.get("client_id", "")) == client_id
+        ]
     if evaluation_grant_id:
         records = [
             record
@@ -325,6 +332,7 @@ def summarize_evaluation_endpoint_coverage(
         else 100.0
     )
     return {
+        "client_id": client_id or "",
         "evaluation_grant_id": evaluation_grant_id or "",
         "api_key_id": api_key_id or "",
         "policy_endpoint_count": len(endpoints),
@@ -334,6 +342,7 @@ def summarize_evaluation_endpoint_coverage(
         "protected_coverage_percent": protected_percent,
         "protected_runtime_coverage_complete": protected_observed == protected_total,
         "full_campaign_requires_public_probe_evidence": True,
+        "campaign_correlation": "client_id",
         "endpoints": endpoints,
         "raw_secret_visible": False,
         "production_allowed": False,
