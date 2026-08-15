@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from processual_api.routers import evaluation_runtime
+from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
+from processual_api.routers import cgt_governor, evaluation_runtime
 
 
 def _evaluation_user(*, allowed_tasks: list[str]) -> dict:
@@ -30,6 +31,25 @@ def _binding(task_id: str = "crm.customer_context") -> SimpleNamespace:
         adapter_contract_id="crm_customer_context",
         method="GET",
     )
+
+
+def test_runtime_task_bridge_is_canonical_grantable_surface() -> None:
+    policy = get_api_key_access_policy(
+        "POST",
+        "/evaluation/runtime/task-execute",
+    )
+    assert policy is not None
+    assert policy.task_id == "platform.evaluation.task_execute"
+    assert policy.required_scopes == ("run:evaluation",)
+    assert policy.production_allowed is False
+
+    matching = [
+        route
+        for route in cgt_governor.router.routes
+        if getattr(route, "path", "") == "/evaluation/runtime/task-execute"
+        and "POST" in (getattr(route, "methods", set()) or set())
+    ]
+    assert len(matching) == 1
 
 
 def test_ungranted_task_is_denied_before_network_execution(monkeypatch) -> None:
