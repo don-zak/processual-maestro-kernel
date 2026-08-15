@@ -101,6 +101,7 @@ def test_session_uses_backend_super_admin_authority_probe_only() -> None:
         "document.body.dataset.adminEvaluationGrants = 'authorized'",
         "document.body.dataset.adminEvaluationGrants = 'not-authorized'",
         "window.PMK_ADMIN_SESSION",
+        "owner_admin, security_admin, billing_admin, wildcard scopes, and API keys are not sufficient.",
     ]
     for marker in required:
         assert marker in source
@@ -108,12 +109,9 @@ def test_session_uses_backend_super_admin_authority_probe_only() -> None:
     for forbidden in [
         "EVALUATION_ADMIN_ROLES",
         "canManageEvaluationGrants",
-        "owner_admin",
-        "security_admin",
-        "billing_admin",
-        "admin:api_keys:write",
         "sessionStorage.setItem('api_key'",
         "EVALUATION_DEV_AUTH_ID",
+        "fetch('/auth/me'",
     ]:
         assert forbidden not in source
 
