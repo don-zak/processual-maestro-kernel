@@ -33,8 +33,9 @@ def test_admin_session_never_redirects_to_splash_page():
 
     assert "window.location.replace('/')" not in script
     assert "window.location.href = '/'" not in script
-    assert "Administrator credential is required" in script
+    assert "Super Administrator identity session is required" in script
     assert "PMK_ADMIN_AUTH.headers" in script
+    assert "platform_admin" in script
 
 
 def test_admin_navigation_binds_buttons_and_switches_pages():
