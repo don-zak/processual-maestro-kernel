@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const STANDARD_LIFECYCLE_ID = 'admin-api-key-standard-lifecycle';
   const EXTERNAL_LIFECYCLE_ID = 'admin-api-key-external-evaluation-card';
   const EXTERNAL_BODY_ID = 'admin-api-key-external-evaluation-body';
+  const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EXTERNAL_CATEGORY = 'external_evaluation';
   const SUPERVISOR_SESSION_KEY_ENDPOINT = '/settings/admin/supervisor-session-keys';
@@ -183,7 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
         data = { raw: text };
       }
     }
-    if (!response.ok) throw new Error(formatAdminApiError(data, response.status));
+    if (!response.ok) {
+      throw new Error(formatAdminApiError(data, response.status));
+    }
     return data;
   }
 
@@ -366,8 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function clearSupervisorSessionKeyForAdmin() {
-    try { sessionStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY); } catch {}
-    try { localStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY); } catch {}
+    try {
+      sessionStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY);
+    } catch {}
+    try {
+      localStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY);
+    } catch {}
     updateSupervisorSessionCardAfterUse('Supervisor session: no browser key stored');
     dispatchSupervisorSessionKeyUpdated();
     const target = document.getElementById('admin-supervisor-key-use-status');
@@ -394,7 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
     document.getElementById('admin-supervisor-key-copy-created')?.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(raw); } catch {}
+      try {
+        await navigator.clipboard.writeText(raw);
+      } catch {}
     });
     document.getElementById('admin-supervisor-key-use-created')?.addEventListener('click', () => {
       storeSupervisorSessionKeyForAdmin(raw);
@@ -450,7 +459,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const cards = keys.map((key) => {
       const sessionKeyId = key.session_key_id || '';
-      const summary = [sessionKeyId || 'supervisor-session-key', key.level || 'level pending', key.status || 'status pending'].join(' / ');
+      const summary = [
+        sessionKeyId || 'supervisor-session-key',
+        key.level || 'level pending',
+        key.status || 'status pending',
+      ].join(' / ');
       return renderMetadataDetailsCard({
         className: 'admin-api-key-metadata-card admin-supervisor-session-metadata-card',
         summary,
@@ -485,7 +498,9 @@ document.addEventListener('DOMContentLoaded', () => {
       renderOneTimeSupervisorSessionKey(created);
       await refreshSupervisorSessionKeys();
     } catch (error) {
-      if (target) target.innerHTML = `<div class="admin-note danger">Supervisor key issue failed: ${escapeHtml(error.message)}</div>`;
+      if (target) {
+        target.innerHTML = `<div class="admin-note danger">Supervisor key issue failed: ${escapeHtml(error.message)}</div>`;
+      }
     }
   }
 
@@ -546,14 +561,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const cards = keys.map((key) => {
       const keyId = key.key_id || key.id || '';
-      const summary = [keyId || 'api-key', key.label || key.category || 'metadata', key.status || 'status pending'].join(' / ');
+      const summary = [
+        keyId || 'api-key',
+        key.label || key.category || 'metadata',
+        key.status || 'status pending',
+      ].join(' / ');
       return renderMetadataDetailsCard({
         className: 'admin-api-key-metadata-card',
         summary,
         fields: METADATA_FIELDS,
         item: key,
         actionHtml: `
-          <button class="btn danger admin-api-key-revoke" data-key-id="${escapeHtml(keyId)}" type="button">Revoke</button>
+          <button class="btn danger admin-api-key-revoke"
+            data-key-id="${escapeHtml(keyId)}" type="button">Revoke</button>
         `,
       });
     }).join('');
@@ -588,7 +608,9 @@ document.addEventListener('DOMContentLoaded', () => {
       renderOneTimeKey(created);
       await refreshKeys();
     } catch (error) {
-      if (result) result.innerHTML = `<div class="admin-note danger">API key creation failed: ${escapeHtml(error.message)}</div>`;
+      if (result) {
+        result.innerHTML = `<div class="admin-note danger">API key creation failed: ${escapeHtml(error.message)}</div>`;
+      }
     }
   }
 
@@ -601,12 +623,114 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function categoryOptions() {
-    return KEY_CATEGORIES.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join('');
+    return KEY_CATEGORIES
+      .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+      .join('');
+  }
+
+  function lifecycleStage(label, detail) {
+    return `
+      <div class="admin-api-key-metadata-card-row" data-evaluation-stage="${escapeHtml(label)}">
+        <strong>LOCKED · ${escapeHtml(label)}</strong>
+        <span>${escapeHtml(detail)}</span>
+      </div>
+    `;
+  }
+
+  function renderExternalEvaluationShell() {
+    return `
+      <section id="${EXTERNAL_LIFECYCLE_ID}" class="card flat" hidden style="display:none;margin-top:var(--s-4)" data-category-owned="true" data-activated="false">
+        <div class="sec-hdr">
+          <div class="sh-title">External Evaluation Lifecycle</div>
+          <div class="sh-sub">verify → profile → endpoints/scopes → tasks → identity/limits → readiness → create/issue → test/revoke</div>
+        </div>
+        <div class="admin-note">
+          External Evaluation is sandbox-only, temporary, quota-bound, and production-disabled. All lifecycle stages remain visible before verification; privileged controls unlock only after administrator authority is verified.
+        </div>
+
+        <div id="${EXTERNAL_BODY_ID}" hidden style="display:none;margin-top:var(--s-3)">
+          <section id="admin-api-key-evaluation-stage-overview" class="card flat">
+            <div class="sec-hdr">
+              <div class="sh-title">Lifecycle Stages</div>
+              <div class="sh-sub">the complete governed path remains visible even while controls are locked</div>
+            </div>
+            <div class="admin-api-key-metadata-card-grid">
+              ${lifecycleStage('1. Administrator Verification', 'Verify administrator identity and grant-management authority.')}
+              ${lifecycleStage('2. Operational Profile', 'Select sandbox operational intent; profile selection does not grant scopes.')}
+              ${lifecycleStage('3. Eligible Endpoints & Derived Runtime Scopes', 'Choose only explicitly grantable routes; endpoints derive non-admin runtime scopes.')}
+              ${lifecycleStage('4. Canonical Tasks', 'Bind canonical evaluation tasks from the backend task catalog.')}
+              ${lifecycleStage('5. Evaluation Identity & Limits', 'Provide Client ID, Issued To, Purpose, duration 1–90 days, and quota 1–10000.')}
+              ${lifecycleStage('6. Access Preview & Readiness', 'Review the effective sandbox entitlement and complete every readiness gate.')}
+              ${lifecycleStage('7. Create Grant & One-Time API Key', 'Create through evaluation-grant authority, then issue X-API-Key exactly once.')}
+              ${lifecycleStage('8. Endpoint Test & Revocation', 'Verify allowed/denied behavior, revoke the grant, then confirm the key no longer works.')}
+            </div>
+          </section>
+
+          <section id="admin-api-key-evaluation-verification-stage" class="card flat" data-evaluation-verification-stage="true" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Administrator Verification</div>
+              <div class="sh-sub">small verification stage; it never owns the rest of the lifecycle</div>
+            </div>
+            <div id="${VERIFICATION_HOST_ID}" class="card flat">
+              <div class="admin-note" data-evaluation-access-status>
+                Administrator verification is required before privileged evaluation controls can be enabled.
+              </div>
+              <div class="muted" style="margin-top:var(--s-2)">
+                Local development credentials may be stored in sessionStorage for this browser session only.
+              </div>
+            </div>
+          </section>
+
+          <section id="admin-api-key-external-provisioning-slot" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Operational Profile · Eligible Endpoints · Derived Runtime Scopes</div>
+              <div class="sh-sub">LOCKED until administrator verification; backend catalogs remain authoritative</div>
+            </div>
+            <div class="admin-note">Provisioning controls load here after successful administrator verification.</div>
+          </section>
+
+          <section id="admin-api-key-evaluation-task-identity-stage" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Canonical Tasks · Evaluation Identity · Duration / Quota</div>
+              <div class="sh-sub">LOCKED until administrator verification and grant authority are available</div>
+            </div>
+            <div class="admin-note">Task catalog and identity/limit controls are loaded by the evaluation-grant module after verification.</div>
+          </section>
+
+          <section id="admin-api-key-evaluation-preview" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Access Preview · Readiness</div>
+              <div class="sh-sub">LOCKED until profile, endpoints, tasks, identity, duration, and quota satisfy the contract</div>
+            </div>
+            <div class="admin-note">Readiness remains fail-closed. Create Evaluation Grant stays disabled until every gate is READY.</div>
+          </section>
+
+          <section id="admin-api-key-evaluation-grant-stage" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Create Evaluation Grant · Issue API Key</div>
+              <div class="sh-sub">evaluation-grant authority only; standard /settings/api-keys creation is never used</div>
+            </div>
+            <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
+              <div class="admin-note">LOCKED · Verify administrator authority before grant creation and one-time key issue.</div>
+            </div>
+          </section>
+
+          <section id="admin-api-key-evaluation-test-revoke-stage" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Allowed / Denied Endpoint Test · Revoke</div>
+              <div class="sh-sub">verify least privilege, revoke, then confirm the issued key stops working</div>
+            </div>
+            <div class="admin-note">LOCKED · Endpoint proof follows one-time key issue. Never paste or persist the raw key outside the one-time result.</div>
+          </section>
+        </div>
+      </section>
+    `;
   }
 
   function renderCard() {
     const root = page();
     if (!root) return;
+
     let card = document.getElementById(CARD_ID);
     if (!card) {
       card = document.createElement('div');
@@ -676,45 +800,7 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
         ${renderSupervisorSessionKeyPanel()}
       </section>
 
-      <section id="${EXTERNAL_LIFECYCLE_ID}" class="card flat" hidden style="display:none;margin-top:var(--s-4)" data-category-owned="true" data-activated="false">
-        <div class="sec-hdr">
-          <div class="sh-title">External Evaluation Lifecycle</div>
-          <div class="sh-sub">verify → provision → bind tasks → create grant → issue once → test → revoke</div>
-        </div>
-        <div class="admin-note">
-          External Evaluation is sandbox-only, temporary, quota-bound, and production-disabled. All lifecycle stages remain visible; privileged controls unlock only after administrator verification.
-        </div>
-        <div id="${EXTERNAL_BODY_ID}" hidden style="display:none;margin-top:var(--s-3)">
-          <section class="card flat" data-evaluation-verification-stage="true">
-            <div class="sec-hdr">
-              <div class="sh-title">Administrator Verification</div>
-              <div class="sh-sub">required before governed provisioning and one-time issue controls are enabled</div>
-            </div>
-            <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
-              <div class="admin-note" data-evaluation-access-status>
-                Administrator verification is required before evaluation grant controls can be enabled.
-              </div>
-              <div class="muted" style="margin-top:var(--s-2)">
-                Backend scopes remain authoritative. Raw API keys are shown only at issue time.
-              </div>
-            </div>
-          </section>
-          <section id="admin-api-key-external-provisioning-slot" class="card flat" style="margin-top:var(--s-3)">
-            <div class="sec-hdr">
-              <div class="sh-title">Operational Profile & Eligible Endpoints</div>
-              <div class="sh-sub">locked until administrator verification; backend catalogs remain authoritative</div>
-            </div>
-            <div class="admin-note">Provisioning controls load here after administrator verification.</div>
-          </section>
-          <section id="admin-api-key-evaluation-preview" class="card flat" style="margin-top:var(--s-3)">
-            <div class="sec-hdr">
-              <div class="sh-title">Evaluation Access Preview</div>
-              <div class="sh-sub">safe pre-issue summary</div>
-            </div>
-            <div class="admin-note">Preview remains locked until profile, endpoints, tasks, identity, duration, and quota are ready.</div>
-          </section>
-        </div>
-      </section>
+      ${renderExternalEvaluationShell()}
     `;
 
     const categorySelect = document.getElementById('admin-api-key-category');
