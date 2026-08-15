@@ -69,10 +69,12 @@ def test_summary_is_visibility_only_not_lifecycle_owner() -> None:
     assert "method: 'DELETE'" not in source
 
 
-def test_session_verifies_but_does_not_construct_or_move_lifecycle() -> None:
+def test_session_verifies_authority_without_constructing_or_moving_lifecycle() -> None:
     source = _source(SESSION)
 
-    assert "fetch('/auth/me'" in source
+    assert "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'" in source
+    assert "fetch(AUTHORITY_ENDPOINT" in source
+    assert "platform_admin" in source
     assert "window.PMK_ADMIN_SESSION" in source
     assert "pmk-admin-session-verified" in source
     assert "const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls'" in source
@@ -96,7 +98,7 @@ def test_grant_creation_is_hard_blocked_until_every_gate_is_ready() -> None:
     required = [
         "category === EXTERNAL_CATEGORY",
         "document.body.dataset.adminSession === 'ok'",
-        "grantAuthority === 'authorized' || grantAuthority === 'loaded'",
+        "grantAuthority === 'authorized'",
         "Boolean(profile)",
         "endpoints.length > 0",
         "scopes.length > 0",
@@ -109,6 +111,7 @@ def test_grant_creation_is_hard_blocked_until_every_gate_is_ready() -> None:
     ]
     for marker in required:
         assert marker in source
+    assert "grantAuthority === 'loaded'" not in source
 
 
 def test_grant_post_uses_only_evaluation_grant_authority() -> None:
@@ -122,6 +125,7 @@ def test_grant_post_uses_only_evaluation_grant_authority() -> None:
     assert "client_id: readiness.clientId" in create_source
     assert "issued_to: readiness.issuedTo" in create_source
     assert "allowed_task_ids: readiness.tasks" in create_source
+    assert "allowed_scopes: readiness.scopes" in create_source
     assert "expires_in_days: readiness.duration" in create_source
     assert "max_requests: readiness.quota" in create_source
     assert "/settings/api-keys" not in create_source
