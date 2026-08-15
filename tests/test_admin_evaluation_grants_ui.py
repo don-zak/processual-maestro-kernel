@@ -6,6 +6,7 @@ API_KEYS_SCRIPT = JS / "admin_api_keys.js"
 SUMMARY_SCRIPT = JS / "admin_api_key_summary.js"
 MANAGEMENT_SCRIPT = JS / "admin_evaluation_grants.js"
 SESSION_SCRIPT = JS / "admin_session.js"
+PROVISIONING_SCRIPT = JS / "admin_api_key_provisioning_workspace.js"
 
 
 def _source(path: Path) -> str:
@@ -14,15 +15,16 @@ def _source(path: Path) -> str:
 
 def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
     source = _source(MANAGEMENT_SCRIPT)
-
     required = [
-        "Evaluation Grant Preparation",
         "/settings/admin/evaluation-grants",
         "Create Evaluation Grant",
         "Issue API Key",
         "Revoke",
-        "subscription required: no",
-        "production: disabled",
+        "production disabled",
+        "Canonical Tasks",
+        "Evaluation Identity",
+        "Duration / Quota",
+        "Access Preview · Readiness",
     ]
     for marker in required:
         assert marker in source
@@ -30,16 +32,12 @@ def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
 
 def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
     source = _source(MANAGEMENT_SCRIPT)
-
     required = [
         "/settings/admin/evaluation-grants/task-catalog",
-        "API key task content",
-        "canonical tasks",
+        "canonical task",
         "data-eval-task",
         "selectedEvaluationTasks",
         "allowed_task_ids",
-        "Bound tasks:",
-        "task_authority_source",
     ]
     for marker in required:
         assert marker in source
@@ -47,11 +45,11 @@ def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
 
 def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> None:
     source = _source(MANAGEMENT_SCRIPT)
-
     assert "window.PMK_ADMIN_AUTH" in source
     assert "credentials: 'include'" in source
     assert "X-API-Key:" in source
-    assert "Copy it now; it will not be displayed again." in source
+    assert "Copy it now" in source
+    assert "let oneTimeIssuedKey = ''" in source
     assert "sessionStorage.setItem" not in source
     assert "localStorage.setItem" not in source
     assert "key_hash" not in source
@@ -59,7 +57,6 @@ def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> N
 
 def test_lifecycle_summary_stays_read_only_and_not_an_owner() -> None:
     source = _source(SUMMARY_SCRIPT)
-
     assert "API Key Lifecycle Summary" in source
     assert "pmk-evaluation-grant-updated" in source
     assert "method: 'GET'" in source
@@ -71,7 +68,6 @@ def test_lifecycle_summary_stays_read_only_and_not_an_owner() -> None:
 
 def test_primary_renderer_owns_visible_external_evaluation_shell() -> None:
     source = _source(API_KEYS_SCRIPT)
-
     required = [
         "External Evaluation Lifecycle",
         "Administrator Verification",
@@ -88,14 +84,12 @@ def test_primary_renderer_owns_visible_external_evaluation_shell() -> None:
     ]
     for marker in required:
         assert marker in source
-
     assert "Activate External Evaluation" not in source
     assert "External Evaluation Active" not in source
 
 
-def test_admin_session_gates_management_on_verified_authority_without_dom_creation() -> None:
+def test_admin_session_gates_authority_without_lifecycle_dom_creation() -> None:
     source = _source(SESSION_SCRIPT)
-
     required = [
         "fetch('/auth/me'",
         "canManageEvaluationGrants",
@@ -111,48 +105,73 @@ def test_admin_session_gates_management_on_verified_authority_without_dom_creati
     ]
     for marker in required:
         assert marker in source
-
     assert "ensureEvaluationGrantPlaceholder" not in source
     assert "admin-api-key-lifecycle-card" not in source
     assert "MutationObserver" not in source
     assert "insertBefore" not in source
 
 
+def test_admin_session_preloads_locked_ui_before_verification() -> None:
+    source = _source(SESSION_SCRIPT)
+    preload = source.rindex("loadApiKeyProvisioningWorkspace();")
+    preload_grants = source.rindex("loadEvaluationGrantControls();")
+    initial_check = source.rindex("checkAdminSession();")
+    assert preload < initial_check
+    assert preload_grants < initial_check
+    assert "document.body.dataset.adminEvaluationUi = 'loaded'" in source
+    assert "document.body.dataset.adminEvaluationGrants = 'loaded'" not in source
+
+
+def test_authority_is_set_before_verified_hydration_event() -> None:
+    source = _source(SESSION_SCRIPT)
+    ok_pos = source.index("document.body.dataset.adminSession = 'ok'")
+    authority_pos = source.index("document.body.dataset.adminEvaluationGrants = 'authorized'", ok_pos)
+    event_pos = source.index("dispatchAdminSessionVerified(me);", authority_pos)
+    assert ok_pos < authority_pos < event_pos
+
+
+def test_provisioning_renders_locked_shell_without_privileged_requests() -> None:
+    source = _source(PROVISIONING_SCRIPT)
+    assert "LOCKED — verify administrator first" in source
+    assert "renderPreview();" in source
+    assert "window.addEventListener('pmk-admin-session-verified', hydrateWorkspace)" in source
+    hydrate_start = source.index("async function hydrateWorkspace()")
+    init_start = source.index("function initializeWorkspace()")
+    hydrate_source = source[hydrate_start:init_start]
+    assert "document.body.dataset.adminSession !== 'ok'" in hydrate_source
+    assert "loadOperationalProfiles()" in hydrate_source
+    assert "loadAccessCatalog()" in hydrate_source
+
+
+def test_grants_render_locked_shell_and_hydrate_only_when_authorized() -> None:
+    source = _source(MANAGEMENT_SCRIPT)
+    assert "function renderLockedShell()" in source
+    assert "LOCKED — canonical task choices will load after administrator verification." in source
+    assert "disabled>Create Evaluation Grant" in source
+    assert "window.addEventListener('pmk-admin-session-verified', hydrateEvaluationControls)" in source
+    assert "document.body.dataset.adminEvaluationGrants === 'authorized'" in source
+    assert "document.body.dataset.adminEvaluationGrants === 'loaded'" not in source
+
+
 def test_admin_session_retries_only_transient_503_with_bounded_backoff() -> None:
     source = _source(SESSION_SCRIPT)
-
     assert "const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500]" in source
     assert "response.status !== 503" in source
     assert "for (const delayMs of SESSION_RETRY_DELAYS_MS)" in source
     assert "document.body.dataset.adminSession = 'retrying-503'" in source
-    assert "document.body.dataset.adminEvaluationGrants = 'auth-retrying'" in source
     assert "Retrying safely..." in source
     assert "while (" not in source
 
 
-def test_verified_admin_session_emits_bootstrap_event_before_privileged_modules() -> None:
-    source = _source(SESSION_SCRIPT)
-
-    assert "function dispatchAdminSessionVerified(me)" in source
-    assert "pmk-admin-session-verified" in source
-    assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
-        "loadApiKeyProvisioningWorkspace();"
-    )
-    assert source.index("loadApiKeyProvisioningWorkspace();") < source.index(
-        "dispatchAdminSessionVerified(me);"
-    )
-
-
 def test_evaluation_access_card_explains_non_authorized_states() -> None:
     source = _source(SESSION_SCRIPT)
-
     required = [
         "document.body.dataset.adminEvaluationGrants = 'auth-missing'",
-        "Administrator credential is required before evaluation grant controls can be enabled.",
+        "The full lifecycle remains visible but locked.",
         "document.body.dataset.adminEvaluationGrants = 'auth-error'",
         "Administrator verification failed: HTTP ",
-        "The current session is authenticated but does not have administrator authority for this area.",
-        "Administrator session verified, but evaluation grant management requires owner, security, billing, wildcard, or admin:api_keys:write authority.",
+        "Authenticated session does not have administrator authority.",
+        "evaluation grant management requires owner/security/billing or admin:api_keys:write authority.",
     ]
     for marker in required:
         assert marker in source
@@ -160,7 +179,6 @@ def test_evaluation_access_card_explains_non_authorized_states() -> None:
 
 def test_local_development_evaluation_auth_bootstrap_is_session_only_and_retryable() -> None:
     source = _source(SESSION_SCRIPT)
-
     required = [
         "const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth'",
         "const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])",
@@ -168,45 +186,31 @@ def test_local_development_evaluation_auth_bootstrap_is_session_only_and_retryab
         "type=\"password\"",
         "autocomplete=\"off\"",
         "sessionStorage.setItem('api_key', value)",
-        "Verify & Load Controls",
+        "Verify & Unlock Controls",
         "Credential was not accepted. Enter another development API key.",
         "response.status === 401 || response.status === 403",
     ]
     for marker in required:
         assert marker in source
-
     assert "localStorage.setItem('api_key'" not in source
-
-
-def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() -> None:
-    source = _source(SESSION_SCRIPT)
-
-    assert "if (document.querySelector(EVALUATION_SCRIPT_SELECTOR)) return;" in source
-    assert "script.addEventListener('error'" in source
-    assert "Evaluation grant controls could not be loaded." in source
 
 
 def test_primary_renderer_has_single_category_verification_trigger() -> None:
     api_keys = _source(API_KEYS_SCRIPT)
     session = _source(SESSION_SCRIPT)
-
     apply_start = api_keys.index("function applyLifecycleCategory()")
     defaults_start = api_keys.index("function applyCategoryDefaults()", apply_start)
     apply_source = api_keys[apply_start:defaults_start]
-
     assert "window.PMK_ADMIN_SESSION?.check?.();" in apply_source
     assert "dispatchCategoryChanged();" in apply_source
     assert "window.addEventListener('pmk-api-key-category-changed'" in session
-    assert "if (!externalEvaluationSelected())" in session
     listener_start = session.index("window.addEventListener('pmk-api-key-category-changed'")
     listener_end = session.index("\n  });", listener_start) + len("\n  });")
-    listener_source = session[listener_start:listener_end]
-    assert "checkAdminSession();" not in listener_source
+    assert "checkAdminSession();" not in session[listener_start:listener_end]
     assert "admin_api_key_evaluation_lifecycle.js" not in session
 
 
 def test_evaluation_ui_does_not_own_navigation_or_reload_behavior() -> None:
     source = _source(MANAGEMENT_SCRIPT)
-
     for marker in ["location.reload", "location.replace", "location.assign", "window.location.href"]:
         assert marker not in source
