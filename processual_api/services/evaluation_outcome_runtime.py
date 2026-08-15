@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from processual_api.integrations.integration_task_catalog import READ, get_integration_task
 from processual_api.integrations.sandbox_operational_readiness import SandboxContentContract
