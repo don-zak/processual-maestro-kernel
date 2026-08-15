@@ -28,7 +28,7 @@ def _binding(task_id: str = "crm.customer_context") -> SimpleNamespace:
     return SimpleNamespace(
         binding_id="binding-crm-context",
         task_id=task_id,
-        adapter_contract_id="crm_customer_context",
+        adapter_contract_id="crm",
         method="GET",
     )
 
@@ -151,7 +151,7 @@ def test_binding_task_mismatch_is_denied_before_network_execution(monkeypatch) -
     assert network_called is False
 
 
-def test_allowed_task_executes_preprovisioned_binding_and_records_stage(
+def test_allowed_read_task_executes_and_records_truthful_completion(
     monkeypatch,
 ) -> None:
     raw: dict = {}
@@ -237,6 +237,8 @@ def test_allowed_task_executes_preprovisioned_binding_and_records_stage(
             "execution_id": "exec-test",
             "task_id": "crm.customer_context",
             "operation_class": "read",
+            "output_slot": "crm_context",
+            "canonical_input": {"customer_id": "customer-1"},
             "http_status": 200,
             "network_request_executed": True,
             "mapping_valid": True,
@@ -271,11 +273,13 @@ def test_allowed_task_executes_preprovisioned_binding_and_records_stage(
     assert network_calls == 1
     assert result["evaluation_runtime"] is True
     assert result["task_authority_enforced"] is True
-    assert result["evaluation_stage"] == "external_operation_executed"
+    assert result["evaluation_stage"] == "canonical_task_completed"
     assert result["network_request_executed"] is True
     assert result["ready_for_task_consumption"] is True
-    assert result["maestro_task_completed"] is False
-    assert result["next_readiness_stage"] == "maestro_task_consumption"
+    assert result["maestro_task_completed"] is True
+    assert result["completion_stage"] == "canonical_read_task_completed"
+    assert result["completion_sha256"]
+    assert result["next_readiness_stage"] == "outcome_quality_validation"
     assert saved["owner"] == "evaluation-owner"
 
     evidence = saved["payload"][
@@ -283,8 +287,28 @@ def test_allowed_task_executes_preprovisioned_binding_and_records_stage(
     ][0]
     assert evidence["task_id"] == "crm.customer_context"
     assert evidence["network_request_executed"] is True
-    assert evidence["maestro_task_completed"] is False
+    assert evidence["maestro_task_completed"] is True
+    assert evidence["completion_stage"] == "canonical_read_task_completed"
+    assert evidence["task_completion_sha256"]
     assert "canonical_input" not in evidence
+
+
+def test_draft_task_remains_incomplete_without_dedicated_consumer() -> None:
+    completion = evaluation_runtime._completion_from_external_result(
+        task_id="support.response_draft",
+        binding_id="binding-support-draft",
+        result={
+            "output_slot": "support_response_draft",
+            "canonical_input": {
+                "ticket_id": "ticket-1",
+                "issue_context": "customer cannot authenticate",
+            },
+        },
+    )
+
+    assert completion["maestro_task_completed"] is False
+    assert completion["completion_stage"] == "downstream_consumer_required"
+    assert completion["dedicated_downstream_consumer_required"] is True
 
 
 def test_non_evaluation_api_key_cannot_use_task_bridge() -> None:
