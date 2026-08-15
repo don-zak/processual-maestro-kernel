@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_WORKSPACE_SCRIPT_SRC =
     '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace05-super-admin';
   const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls';
+  const SUPER_ADMIN_SIGN_IN_ID = 'admin-evaluation-super-admin-sign-in';
   const EXTERNAL_CATEGORY = 'external_evaluation';
   const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority';
   const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500];
@@ -26,6 +27,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!target) return;
     target.className = danger ? 'admin-note danger' : 'admin-note';
     target.textContent = message;
+  }
+
+  function clearSuperAdminSignInAction() {
+    document.getElementById(SUPER_ADMIN_SIGN_IN_ID)?.remove();
+  }
+
+  function renderSuperAdminSignInAction() {
+    const host = evaluationHost();
+    if (!host || document.getElementById(SUPER_ADMIN_SIGN_IN_ID)) return;
+    const wrapper = document.createElement('div');
+    wrapper.id = SUPER_ADMIN_SIGN_IN_ID;
+    wrapper.className = 'admin-actions';
+    wrapper.style.marginTop = 'var(--s-3)';
+    wrapper.innerHTML = `
+      <a class="btn primary" href="/login?mode=user&next=%2Fadmin%23api-keys">
+        Sign in as Super Administrator
+      </a>
+      <div class="muted" style="margin-top:var(--s-2)">
+        Uses the identity-session login and MFA flow. API keys and legacy admin sessions cannot unlock this lifecycle.
+      </div>
+    `;
+    host.appendChild(wrapper);
   }
 
   function loadEvaluationGrantControls() {
@@ -119,11 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
             'Super Administrator identity session is required. API keys and legacy admin sessions cannot unlock External Evaluation.',
             true
           );
+          renderSuperAdminSignInAction();
         } else if (response.status === 403) {
           setEvaluationAccessStatus(
             'Access denied. External Evaluation is exclusive to an active Super Administrator (platform_admin). owner_admin, security_admin, billing_admin, wildcard scopes, and API keys are not sufficient.',
             true
           );
+          renderSuperAdminSignInAction();
         } else {
           setEvaluationAccessStatus(
             `Super Administrator authority verification failed: HTTP ${response.status}`,
@@ -145,9 +170,11 @@ document.addEventListener('DOMContentLoaded', () => {
           'Access denied. Backend did not confirm exclusive Super Administrator authority.',
           true
         );
+        renderSuperAdminSignInAction();
         return;
       }
 
+      clearSuperAdminSignInAction();
       document.body.dataset.adminSession = 'ok';
       document.body.dataset.adminEvaluationGrants = 'authorized';
       document.body.dataset.adminEvaluationAuthority = 'platform_admin';
@@ -169,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.addEventListener('pmk-api-key-category-changed', () => {
     if (!externalEvaluationSelected()) {
+      clearSuperAdminSignInAction();
       document.body.dataset.adminEvaluationGrants = 'inactive';
     }
   });
