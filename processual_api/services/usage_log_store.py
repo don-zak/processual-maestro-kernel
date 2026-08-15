@@ -9,10 +9,15 @@ from typing import Any
 
 from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC
 from processual_api.billing.usage_pricing import monthly_unit_allowance, pricing_decision
+from processual_api.integrations.api_key_access_policy import list_api_key_access_policies
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _USAGE_LOG_PATH = _DATA_DIR / "usage_logs.jsonl"
 _RAW_API_KEY_PATTERN = re.compile(r"pmk_[A-Za-z0-9_-]+")
+_PUBLIC_EVALUATION_PROBES = {
+    ("GET", "/health/live"),
+    ("GET", "/health/ready"),
+}
 
 
 def _as_int_or_none(value: Any) -> int | None:
@@ -73,6 +78,16 @@ def append_usage_log(record: dict[str, Any]) -> None:
         "quota_after": quota_after,
         "plan_id": record.get("plan_id", ""),
         "quota_rejected": bool(record.get("quota_rejected", False)),
+        "entitlement_source": record.get("entitlement_source", ""),
+        "evaluation_grant_id": record.get("evaluation_grant_id", ""),
+        "execution_mode": record.get("execution_mode", ""),
+        "real_runtime_execution": bool(record.get("real_runtime_execution", False)),
+        "endpoint_authority_source": record.get("endpoint_authority_source", ""),
+        "task_authority_source": record.get("task_authority_source", ""),
+        "evaluation_request_limit": _as_int_or_none(record.get("evaluation_request_limit")),
+        "evaluation_request_used": _as_int_or_none(record.get("evaluation_request_used")),
+        "evaluation_request_remaining": _as_int_or_none(record.get("evaluation_request_remaining")),
+        "production_allowed": bool(record.get("production_allowed", False)),
     }
 
     with _USAGE_LOG_PATH.open("a", encoding="utf-8") as handle:
@@ -228,4 +243,98 @@ def summarize_usage_logs(
         "top_endpoints": dict(endpoint_counts.most_common(10)),
         "avg_latency_ms": avg_latency_ms,
         "latest_events": latest_events,
+    }
+
+
+def summarize_evaluation_endpoint_coverage(
+    *,
+    evaluation_grant_id: str | None = None,
+    api_key_id: str | None = None,
+) -> dict[str, Any]:
+    records = [
+        record
+        for record in _iter_usage_log_records()
+        if record.get("entitlement_source") == "admin_evaluation_grant"
+        and record.get("execution_mode") == "evaluation_runtime"
+    ]
+    if evaluation_grant_id:
+        records = [
+            record
+            for record in records
+            if str(record.get("evaluation_grant_id", "")) == evaluation_grant_id
+        ]
+    if api_key_id:
+        records = [
+            record
+            for record in records
+            if str(record.get("api_key_id", "")) == api_key_id
+        ]
+
+    endpoints: list[dict[str, Any]] = []
+    protected_total = protected_observed = 0
+    for policy in list_api_key_access_policies():
+        key = (policy.method, policy.path)
+        public_probe = key in _PUBLIC_EVALUATION_PROBES
+        if not public_probe:
+            protected_total += 1
+        matches = [
+            record
+            for record in records
+            if str(record.get("method", "")).upper() == policy.method
+            and str(record.get("endpoint", "")) == policy.path
+        ]
+        successes = [
+            record
+            for record in matches
+            if 200 <= _safe_int(record.get("status_code"), 0) < 400
+            and not bool(record.get("quota_rejected", False))
+        ]
+        if successes and not public_probe:
+            protected_observed += 1
+        avg_latency_ms = 0.0
+        if matches:
+            avg_latency_ms = round(
+                sum(_safe_float(record.get("latency_ms"), 0.0) for record in matches)
+                / len(matches),
+                3,
+            )
+        endpoints.append(
+            {
+                "method": policy.method,
+                "path": policy.path,
+                "task_id": policy.task_id,
+                "capability": policy.capability,
+                "proof_mode": (
+                    "public_availability_probe"
+                    if public_probe
+                    else "evaluation_key_runtime"
+                ),
+                "attempt_count": len(matches),
+                "success_count": len(successes),
+                "failure_count": len(matches) - len(successes),
+                "observed_success": bool(successes),
+                "avg_latency_ms": avg_latency_ms,
+                "requires_external_public_probe": public_probe,
+                "production_allowed": False,
+            }
+        )
+
+    protected_percent = (
+        round((protected_observed / protected_total) * 100, 2)
+        if protected_total
+        else 100.0
+    )
+    return {
+        "evaluation_grant_id": evaluation_grant_id or "",
+        "api_key_id": api_key_id or "",
+        "policy_endpoint_count": len(endpoints),
+        "public_probe_count": len(_PUBLIC_EVALUATION_PROBES),
+        "protected_endpoint_count": protected_total,
+        "protected_endpoint_success_count": protected_observed,
+        "protected_coverage_percent": protected_percent,
+        "protected_runtime_coverage_complete": protected_observed == protected_total,
+        "full_campaign_requires_public_probe_evidence": True,
+        "endpoints": endpoints,
+        "raw_secret_visible": False,
+        "production_allowed": False,
     }
