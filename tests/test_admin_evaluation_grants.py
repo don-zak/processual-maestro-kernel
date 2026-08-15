@@ -31,6 +31,17 @@ def _admin() -> dict:
     }
 
 
+def _allow_super_admin_business_logic(monkeypatch) -> None:
+    async def _allow(_current_user: dict) -> None:
+        return None
+
+    monkeypatch.setattr(
+        grant_routes,
+        "require_active_platform_admin",
+        _allow,
+    )
+
+
 def _patch_data_dir(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(settings_router, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(api_key_store, "_DATA_DIR", tmp_path)
@@ -71,7 +82,8 @@ def _issue_key(grant_id: str) -> dict:
     )
 
 
-def test_evaluation_task_catalog_reuses_canonical_catalog() -> None:
+def test_evaluation_task_catalog_reuses_canonical_catalog(monkeypatch) -> None:
+    _allow_super_admin_business_logic(monkeypatch)
     payload = asyncio.run(
         grant_routes.evaluation_task_catalog(current_user=_admin())
     )
@@ -89,6 +101,7 @@ def test_create_evaluation_grant_is_subscription_independent_and_safe(
     tmp_path,
 ):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
 
     result = _create_grant(max_requests=25)
     grant = result["grant"]
@@ -116,6 +129,7 @@ def test_create_evaluation_grant_is_subscription_independent_and_safe(
 
 def test_evaluation_grant_rejects_admin_scopes(monkeypatch, tmp_path):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
@@ -141,6 +155,7 @@ def test_evaluation_grant_rejects_unknown_canonical_task(
     tmp_path,
 ):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
 
     with pytest.raises(HTTPException) as exc:
         _create_grant(allowed_task_ids=["unknown.root.task"])
@@ -149,7 +164,7 @@ def test_evaluation_grant_rejects_unknown_canonical_task(
     assert "Unknown evaluation task" in str(exc.value.detail)
 
 
-def test_unauthorized_role_cannot_create_evaluation_grant(
+def test_legacy_admin_cannot_create_evaluation_grant(
     monkeypatch,
     tmp_path,
 ):
@@ -167,14 +182,17 @@ def test_unauthorized_role_cannot_create_evaluation_grant(
                     allowed_task_ids=["crm.customer_context"],
                 ),
                 current_user={
-                    "sub": "viewer",
-                    "role": "viewer_admin",
-                    "scopes": ["admin:read"],
+                    "sub": "legacy-security-admin",
+                    "user_id": "legacy-security-admin",
+                    "role": "security_admin",
+                    "session_type": "ui_admin",
+                    "scopes": ["*", "admin:api_keys:write"],
                 },
             )
         )
 
     assert exc.value.status_code == 403
+    assert "super-administrator" in str(exc.value.detail).lower()
 
 
 def test_issue_key_binds_grant_tasks_quota_expiry_and_one_time_secret(
@@ -182,6 +200,7 @@ def test_issue_key_binds_grant_tasks_quota_expiry_and_one_time_secret(
     tmp_path,
 ):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
     grant = _create_grant(max_requests=9)["grant"]
 
     result = _issue_key(grant["grant_id"])
@@ -212,6 +231,7 @@ def test_valid_evaluation_key_authenticates_with_task_authority(
     tmp_path,
 ):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
     grant = _create_grant()["grant"]
     issued = _issue_key(grant["grant_id"])
 
@@ -230,6 +250,7 @@ def test_valid_evaluation_key_authenticates_with_task_authority(
 
 def test_tampered_key_task_expansion_is_fail_closed(monkeypatch, tmp_path):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
     grant = _create_grant(allowed_task_ids=["crm.customer_context"])["grant"]
     issued = _issue_key(grant["grant_id"])
 
@@ -321,6 +342,7 @@ def test_legacy_unmarked_pilot_key_remains_backward_compatible(
 
 def test_expired_grant_stops_previously_valid_key(monkeypatch, tmp_path):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
     grant = _create_grant()["grant"]
     issued = _issue_key(grant["grant_id"])
     assert api_key_store.verify_dynamic_api_key(issued["api_key"]) is not None
@@ -336,6 +358,7 @@ def test_expired_grant_stops_previously_valid_key(monkeypatch, tmp_path):
 
 def test_revoke_grant_revokes_all_linked_keys(monkeypatch, tmp_path):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
     grant = _create_grant()["grant"]
     first = _issue_key(grant["grant_id"])
     second = _issue_key(grant["grant_id"])
@@ -358,6 +381,7 @@ def test_revoke_grant_revokes_all_linked_keys(monkeypatch, tmp_path):
 
 def test_issue_key_rejects_inactive_grant(monkeypatch, tmp_path):
     _patch_data_dir(monkeypatch, tmp_path)
+    _allow_super_admin_business_logic(monkeypatch)
     grant = _create_grant()["grant"]
     asyncio.run(
         grant_routes.revoke_evaluation_grant(
