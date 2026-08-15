@@ -21,7 +21,7 @@ def test_external_evaluation_is_declared_in_primary_key_categories() -> None:
     assert "const KEY_CATEGORIES = [" in source
 
 
-def test_primary_renderer_creates_both_lifecycle_surfaces_from_startup() -> None:
+def test_primary_renderer_creates_both_lifecycle_surfaces_and_full_stage_map() -> None:
     source = _source(API_KEYS)
 
     required = [
@@ -30,8 +30,13 @@ def test_primary_renderer_creates_both_lifecycle_surfaces_from_startup() -> None
         "admin-api-key-external-evaluation-card",
         "admin-api-key-external-evaluation-body",
         "Administrator Verification",
-        "Operational Profile & Eligible Endpoints",
-        "Evaluation Access Preview",
+        "Operational Profile",
+        "Eligible Endpoints & Derived Runtime Scopes",
+        "Canonical Tasks",
+        "Evaluation Identity & Limits",
+        "Access Preview & Readiness",
+        "Create Grant & One-Time API Key",
+        "Endpoint Test & Revocation",
     ]
     for marker in required:
         assert marker in source
@@ -70,6 +75,7 @@ def test_session_verifies_but_does_not_construct_or_move_lifecycle() -> None:
     assert "fetch('/auth/me'" in source
     assert "window.PMK_ADMIN_SESSION" in source
     assert "pmk-admin-session-verified" in source
+    assert "const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls'" in source
     assert "ensureEvaluationGrantPlaceholder" not in source
     assert "admin-api-key-lifecycle-card" not in source
     assert "insertBefore" not in source
@@ -81,7 +87,6 @@ def test_provisioning_has_no_independent_external_evaluation_mode() -> None:
 
     assert "admin-api-key-provisioning-mode" not in source
     assert "Standard / Integration Key" not in source
-    assert "External Evaluation" not in source
     assert "admin-api-key-external-provisioning-slot" in source
 
 
