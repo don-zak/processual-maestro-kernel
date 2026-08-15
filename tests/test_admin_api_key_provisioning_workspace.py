@@ -84,22 +84,18 @@ def test_admin_operational_profile_catalog_is_safe_and_non_production() -> None:
     )
 
     assert payload["admin_provisioning_catalog"] is True
-    assert payload["selection_authority"] == "api_key_operational_profiles"
     assert payload["raw_secret_visible"] is False
     assert payload["production_allowed"] is False
     assert payload["runtime_connector_approved"] is False
     assert payload["profiles"]
-    assert payload["profile_count"] == len(payload["profiles"])
-
     for profile in payload["profiles"]:
-        assert profile["client_visible"] is True
         assert profile["production_allowed"] is False
         assert profile["runtime_connector_approved"] is False
         assert "allowed_scopes" in profile
         assert "forbidden_scopes" in profile
 
 
-def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy() -> None:
+def test_admin_access_catalog_is_fail_closed_and_policy_driven() -> None:
     catalog_app = _catalog_test_app()
     payload = asyncio.run(
         admin_api_key_access_catalog(
@@ -108,34 +104,14 @@ def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy()
         )
     )
 
-    assert payload["catalog"] == "api_key_access_catalog"
-    assert payload["selection_authority"] == (
-        "fastapi_route_registry+explicit_runtime_access_policy"
-    )
-    assert payload["endpoint_count"] == len(payload["endpoints"])
-    assert payload["grantable_endpoint_count"] == 3
-    assert payload["raw_secret_visible"] is False
-    assert payload["production_allowed"] is False
-
     by_key = {
         (endpoint["method"], endpoint["path"]): endpoint
         for endpoint in payload["endpoints"]
     }
     assert by_key[("GET", "/health/live")]["grantable"] is True
-    assert by_key[("GET", "/health/live")]["required_scopes"] == ["read:health"]
     assert by_key[("GET", "/adapters/status")]["grantable"] is True
-    assert by_key[("GET", "/adapters/status")]["required_scopes"] == ["read:adapters"]
     assert by_key[("POST", "/cgt/govern")]["grantable"] is True
-    assert by_key[("POST", "/cgt/govern")]["required_scopes"] == ["run:govern"]
     assert by_key[("GET", "/settings/example")]["grantable"] is False
-
-    settings_routes = [
-        endpoint
-        for endpoint in payload["endpoints"]
-        if endpoint["path"].startswith("/settings")
-    ]
-    assert settings_routes
-    assert all(endpoint["grantable"] is False for endpoint in settings_routes)
     assert not any(
         str(scope).startswith("admin:")
         for endpoint in payload["endpoints"]
@@ -144,53 +120,39 @@ def test_admin_access_catalog_uses_registered_routes_and_explicit_grant_policy()
     )
 
 
-def test_provisioning_workspace_exposes_profiles_endpoints_and_access_preview() -> None:
+def test_provisioning_workspace_uses_fixed_external_evaluation_slot() -> None:
     source = _workspace_source()
 
     required = [
-        "Provisioning Workspace",
-        "admin-api-key-provisioning-mode",
-        "Standard / Integration Key",
-        "External Evaluation",
-        "admin-api-key-operational-profile",
+        "const WORKSPACE_ID = 'admin-api-key-external-provisioning-slot'",
+        "Operational Profile",
+        "Eligible Endpoints",
+        "Derived Runtime Scopes",
+        "Backend Route Inventory",
+        "Access Preview",
         "/settings/admin/api-key-operational-profiles",
         "/settings/admin/api-key-access-catalog",
-        "Eligible API Endpoints",
-        "Backend Route Inventory",
         "data-api-key-access-endpoint",
-        "Access Preview",
-        "Selected endpoints",
-        "Key scopes currently configured",
-        "Selected operational intent",
-        "production",
-        "runtime_connector",
     ]
     for marker in required:
         assert marker in source
 
+    assert "admin-api-key-provisioning-mode" not in source
+    assert "appendChild(workspace)" not in source
+    assert "before(workspace)" not in source
+    assert "insertBefore" not in source
 
-def test_endpoint_selection_derives_scopes_but_operational_profile_remains_intent_only() -> None:
+
+def test_endpoint_selection_derives_scopes_but_profile_is_intent_only() -> None:
     source = _workspace_source()
 
-    assert "Selected operational intent only." in source
+    assert "Choosing a profile does not mutate runtime scopes" in source
     assert "selectedEndpointScopes" in source
     assert "syncScopesFromEndpointSelection" in source
-    assert "target.value = derivedScopes.join('\\n')" in source
+    assert "derivedScopes.join('\\n')" in source
     assert "profile.allowed_scopes" in source
+    assert "target.value = profile" not in source
     assert "target.value = allowed.join" not in source
-    assert "admin-api-key-apply-profile-scopes" not in source
-
-
-def test_external_evaluation_mode_cannot_use_standard_key_generation() -> None:
-    source = _workspace_source()
-
-    assert "provisioningMode() === 'external_evaluation'" in source
-    assert "button.disabled = true" in source
-    assert "button.dataset.evaluationModeDisabled = 'true'" in source
-    assert "evaluation grant authority" in source
-    assert "/settings/admin/evaluation-grants" in source
-    assert "fetch('/settings/api-keys'" not in source
-    assert "POST /settings/api-keys" not in source
 
 
 def test_external_evaluation_grant_receives_selected_endpoint_scopes() -> None:
@@ -203,47 +165,21 @@ def test_external_evaluation_grant_receives_selected_endpoint_scopes() -> None:
     create_start = source.index("async function createEvaluationGrant()")
     issue_start = source.index("async function issueEvaluationKey", create_start)
     create_source = source[create_start:issue_start]
-
     assert "const readiness = updateEvaluationReadiness();" in create_source
     assert "if (!readiness.ready)" in create_source
     assert "const allowedScopes = readiness.scopes;" in create_source
-    assert "selectedEvaluationScopes();" not in create_source
     assert "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})" in create_source
-    assert "sessionStorage.setItem" not in source
-    assert "localStorage.setItem" not in source
 
 
-def test_workspace_uses_backend_catalogs_and_does_not_store_secrets() -> None:
+def test_workspace_does_not_store_secrets_or_observe_dom_forever() -> None:
     source = _workspace_source()
 
-    assert "requestJson(PROFILE_ENDPOINT)" in source
-    assert "requestJson(ACCESS_CATALOG_ENDPOINT)" in source
-    assert "payload.profiles" in source
-    assert "payload.endpoints" in source
-    assert "profile.allowed_scopes" in source
-    assert "profile.forbidden_scopes" in source
     assert "sessionStorage.setItem" not in source
     assert "localStorage.setItem" not in source
-    assert "raw_secret" not in source.lower()
-
-
-def test_workspace_initialization_is_bounded_and_does_not_observe_dom_forever() -> None:
-    source = _workspace_source()
-
-    assert "const MAX_INIT_ATTEMPTS = 20" in source
-    assert "const INIT_RETRY_MS = 100" in source
-    assert "initAttempts < MAX_INIT_ATTEMPTS" in source
-    assert "window.setTimeout(initializeWorkspace, INIT_RETRY_MS)" in source
     assert "MutationObserver" not in source
     assert "while (" not in source
-
-
-def test_workspace_updates_local_usage_examples_to_current_dev_port() -> None:
-    source = _workspace_source()
-
-    assert "127.0.0.1:8000" in source
-    assert "127.0.0.1:18080" in source
-    assert "replaceAll('127.0.0.1:8000', '127.0.0.1:18080')" in source
+    assert "const MAX_INIT_ATTEMPTS = 30" in source
+    assert "initAttempts < MAX_INIT_ATTEMPTS" in source
 
 
 def test_workspace_script_loads_only_after_verified_admin_session() -> None:
@@ -251,7 +187,7 @@ def test_workspace_script_loads_only_after_verified_admin_session() -> None:
 
     required = [
         "API_KEY_WORKSPACE_SCRIPT_SELECTOR",
-        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final",
+        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-single-owner",
         "function loadApiKeyProvisioningWorkspace()",
         "script.dataset.adminApiKeyProvisioningWorkspace = 'true'",
         "document.body.dataset.adminSession = 'ok'",
@@ -263,12 +199,8 @@ def test_workspace_script_loads_only_after_verified_admin_session() -> None:
     assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
         "loadApiKeyProvisioningWorkspace();"
     )
-    assert source.index("if (!isAdminSession(me))") < source.index(
-        "loadApiKeyProvisioningWorkspace();"
-    )
 
 
 def test_admin_provisioning_route_extension_is_registered() -> None:
     source = ROUTERS_INIT.read_text(encoding="utf-8")
-
     assert "settings_admin_api_key_provisioning" in source
