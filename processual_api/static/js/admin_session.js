@@ -1,17 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks05-accesscatalog';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks06-lifecycle-final';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
-    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace02';
+    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-single-owner';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-evaluation-lifecycle]';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
-    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation01';
+    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation03-single-owner';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
+  const EXTERNAL_CATEGORY = 'external_evaluation';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
   const ADMIN_ROLES = new Set([
     'admin',
@@ -58,11 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ADMIN_ROLES.has(role) ||
       scopes.includes('admin') ||
       scopes.includes('admin:settings') ||
-      scopes.some(
-        (scope) =>
-          scope === '*' ||
-          scope.startsWith('admin:')
-      )
+      scopes.some((scope) => scope === '*' || scope.startsWith('admin:'))
     );
   }
 
@@ -81,36 +78,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname);
   }
 
-  function ensureEvaluationGrantPlaceholder() {
-    let host = document.getElementById(EVALUATION_HOST_ID);
-    if (host) return host;
+  function externalEvaluationSelected() {
+    return document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY;
+  }
 
-    const page = document.getElementById('page-admin-api-keys');
-    if (!page) return null;
-
-    host = document.createElement('div');
-    host.id = EVALUATION_HOST_ID;
-    host.className = 'card';
-    host.style.marginTop = 'var(--s-5)';
-    host.dataset.evaluationGrantPlaceholder = 'true';
-    host.innerHTML = `
-      <div class="sec-hdr">
-        <div class="sh-title">External Evaluation Access</div>
-        <div class="sh-sub">supervisor-governed API access outside paid subscription onboarding</div>
-      </div>
-      <div class="admin-note" data-evaluation-access-status>
-        Checking administrator authority for evaluation grant management...
-      </div>
-      <div class="muted" style="margin-top:var(--s-2)">
-        Backend scopes remain authoritative. Management controls appear only after verified authorization.
-      </div>
-    `;
-    page.appendChild(host);
-    return host;
+  function evaluationHost() {
+    return document.getElementById(EVALUATION_HOST_ID);
   }
 
   function setEvaluationAccessStatus(message, danger = false) {
-    const host = ensureEvaluationGrantPlaceholder();
+    const host = evaluationHost();
     if (!host) return;
     const target = host.querySelector('[data-evaluation-access-status]');
     if (!target) return;
@@ -123,8 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderDevelopmentAuthBootstrap() {
-    if (!isLocalDevelopmentOrigin()) return;
-    const host = ensureEvaluationGrantPlaceholder();
+    if (!isLocalDevelopmentOrigin() || !externalEvaluationSelected()) return;
+    const host = evaluationHost();
     if (!host) return;
 
     const existing = document.getElementById(EVALUATION_DEV_AUTH_ID);
@@ -150,13 +127,12 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="muted" style="margin-top:var(--s-1)">
         Enter the development API key for this browser session. It is stored in sessionStorage only.
       </div>
-      <div style="display:flex;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
         <input
           id="admin-evaluation-dev-api-key"
           type="password"
           autocomplete="off"
           placeholder="Development API key"
-          style="flex:1"
         >
         <button id="admin-evaluation-dev-api-key-save" class="btn primary" type="button">
           Verify & Load Controls
@@ -176,12 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (message) message.textContent = 'Enter a development API key.';
         return;
       }
-
       try {
         sessionStorage.setItem('api_key', value);
         if (input) input.value = '';
         if (button) button.disabled = true;
-        if (message) message.textContent = 'Credential saved for this tab. Verifying administrator authority...';
+        if (message) {
+          message.textContent =
+            'Credential saved for this tab. Verifying administrator authority...';
+        }
         setEvaluationAccessStatus('Verifying local development administrator credential...');
         await checkAdminSession();
       } catch (error) {
@@ -208,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadEvaluationGrantControls() {
     if (document.querySelector(EVALUATION_SCRIPT_SELECTOR)) return;
-
     setEvaluationAccessStatus('Authorized. Loading evaluation grant controls...');
     const script = document.createElement('script');
     script.src = EVALUATION_SCRIPT_SRC;
@@ -226,7 +203,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadApiKeyProvisioningWorkspace() {
     if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) return;
-
     const script = document.createElement('script');
     script.src = API_KEY_WORKSPACE_SCRIPT_SRC;
     script.dataset.adminApiKeyProvisioningWorkspace = 'true';
@@ -243,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadApiKeyEvaluationLifecycle() {
     if (document.querySelector(API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR)) return;
-
     const script = document.createElement('script');
     script.src = API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC;
     script.dataset.adminApiKeyEvaluationLifecycle = 'true';
@@ -268,10 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       credentials: 'include',
       headers,
     });
-
-    if (response.ok || response.status !== 503) {
-      return response;
-    }
+    if (response.ok || response.status !== 503) return response;
 
     for (const delayMs of SESSION_RETRY_DELAYS_MS) {
       document.body.dataset.adminSession = 'retrying-503';
@@ -285,35 +257,26 @@ document.addEventListener('DOMContentLoaded', () => {
         credentials: 'include',
         headers,
       });
-      if (retry.ok || retry.status !== 503) {
-        return retry;
-      }
+      if (retry.ok || retry.status !== 503) return retry;
     }
-
     return response;
   }
 
   function dispatchAdminSessionVerified(me) {
     try {
-      window.dispatchEvent(
-        new CustomEvent('pmk-admin-session-verified', {
-          detail: {
-            role: normalizedRole(me),
-            scopes: normalizedScopes(me),
-          },
-        })
-      );
+      window.dispatchEvent(new CustomEvent('pmk-admin-session-verified', {
+        detail: {
+          role: normalizedRole(me),
+          scopes: normalizedScopes(me),
+        },
+      }));
     } catch {
       window.dispatchEvent(new Event('pmk-admin-session-verified'));
     }
   }
 
   async function checkAdminSession() {
-    ensureEvaluationGrantPlaceholder();
-
-    const protectedBlocks = Array.from(
-      document.querySelectorAll('.mono-block')
-    ).filter((el) =>
+    const protectedBlocks = Array.from(document.querySelectorAll('.mono-block')).filter((el) =>
       (el.textContent || '').includes('Checking admin session')
     );
 
@@ -325,17 +288,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const headers =
-        window.PMK_ADMIN_AUTH &&
-        typeof PMK_ADMIN_AUTH.headers === 'function'
+        window.PMK_ADMIN_AUTH && typeof PMK_ADMIN_AUTH.headers === 'function'
           ? PMK_ADMIN_AUTH.headers()
           : new Headers({ 'Content-Type': 'application/json' });
 
       if (!headers.has('Authorization') && !headers.has('X-API-Key')) {
         document.body.dataset.adminSession = 'auth-missing';
         document.body.dataset.adminEvaluationGrants = 'auth-missing';
-        const message =
-          'Administrator credential is required before evaluation grant controls can be shown.';
-        setEvaluationAccessStatus(message, true);
+        setEvaluationAccessStatus(
+          'Administrator credential is required before evaluation grant controls can be enabled.',
+          true
+        );
         renderDevelopmentAuthBootstrap();
         writeProtected(
           'Admin auth token missing. Login did not persist a Bearer token for admin API calls.'
@@ -344,7 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const response = await fetchAdminIdentity(headers);
-
       if (!response.ok) {
         document.body.dataset.adminSession = 'error-' + response.status;
         document.body.dataset.adminEvaluationGrants = 'auth-error';
@@ -373,9 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       clearDevelopmentAuthBootstrap();
       document.body.dataset.adminSession = 'ok';
-      writeProtected(
-        'Admin session verified. Backend scopes remain the authority.'
-      );
+      writeProtected('Admin session verified. Backend scopes remain the authority.');
       loadApiKeyProvisioningWorkspace();
       dispatchAdminSessionVerified(me);
 
@@ -397,12 +357,21 @@ document.addEventListener('DOMContentLoaded', () => {
         'Administrator verification failed: ' + (error.message || String(error)),
         true
       );
-      writeProtected(
-        'Admin session check failed: ' + (error.message || String(error))
-      );
+      writeProtected('Admin session check failed: ' + (error.message || String(error)));
     }
   }
 
-  ensureEvaluationGrantPlaceholder();
+  window.PMK_ADMIN_SESSION = {
+    check: checkAdminSession,
+  };
+
+  window.addEventListener('pmk-api-key-category-changed', () => {
+    if (externalEvaluationSelected()) {
+      checkAdminSession();
+    } else {
+      clearDevelopmentAuthBootstrap();
+    }
+  });
+
   checkAdminSession();
 });
