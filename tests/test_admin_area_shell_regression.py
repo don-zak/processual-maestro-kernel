@@ -21,7 +21,7 @@ def test_login_routes_admin_to_admin_and_user_to_console() -> None:
     assert "JSON.stringify({ username: user, password: pass, role: currentRole })" in source
 
 
-def test_admin_shell_exists_and_checks_admin_session() -> None:
+def test_admin_shell_exists_and_uses_super_admin_authority_probe() -> None:
     html = ADMIN_HTML.read_text(encoding="utf-8")
     session_script = (
         ADMIN_HTML.parent / "js" / "admin_session.js"
@@ -39,9 +39,9 @@ def test_admin_shell_exists_and_checks_admin_session() -> None:
     assert "/console/js/auth.js" not in html
     assert "AUTH.init()" not in html
 
-    assert "fetch('/auth/me'" in session_script
-    assert "role === 'admin'" in session_script
-    assert "admin:settings" in session_script
+    assert "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'" in session_script
+    assert "fetch(AUTHORITY_ENDPOINT" in session_script
+    assert "platform_admin" in session_script
     assert "PMK_ADMIN_AUTH.headers" in session_script
     assert "window.location.replace('/')" not in session_script
 
@@ -53,6 +53,7 @@ def test_admin_shell_exists_and_checks_admin_session() -> None:
     assert "page-admin-usage" in nav_script
     assert "page-admin-program-progress" in nav_script
     assert "page-admin-system-health" in nav_script
+
 
 def test_admin_shell_is_not_pricing_or_checkout() -> None:
     html = ADMIN_HTML.read_text(encoding="utf-8").lower()
