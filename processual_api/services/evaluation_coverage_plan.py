@@ -4,6 +4,9 @@ The plan is deterministic and intentionally separates observability, governor
 execution, and real canonical task execution. A full evaluation campaign may
 therefore use multiple bounded grants/keys instead of one unnecessarily broad
 credential while still proving coverage of the complete API-key runtime policy.
+All grants that belong to one external-program campaign should reuse the same
+``client_id`` so their runtime evidence can be aggregated without widening any
+single credential.
 """
 
 from __future__ import annotations
@@ -71,6 +74,7 @@ def build_evaluation_coverage_plan() -> dict[str, Any]:
                 "endpoints": endpoints,
                 "required_scopes": scopes,
                 "separate_key_recommended": True,
+                "reuse_campaign_client_id": True,
                 "subscription_required": False,
                 "production_allowed": False,
             }
@@ -80,6 +84,11 @@ def build_evaluation_coverage_plan() -> dict[str, Any]:
     uncovered = sorted(all_policy_keys - covered)
     return {
         "coverage_model": "least_privilege_multi_grant",
+        "campaign_correlation": "client_id",
+        "campaign_client_id_requirement": (
+            "Use one unique client_id for the external evaluation campaign and "
+            "reuse it across the bounded grants/keys in this plan."
+        ),
         "policy_endpoint_count": len(all_policy_keys),
         "covered_endpoint_count": len(covered),
         "coverage_percent": 100 if covered == all_policy_keys else 0,
