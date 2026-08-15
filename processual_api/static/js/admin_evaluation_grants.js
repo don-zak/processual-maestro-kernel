@@ -1,10 +1,16 @@
 (function () {
   const EVALUATION_GRANTS_ENDPOINT = '/settings/admin/evaluation-grants';
-  const EVALUATION_TASK_CATALOG_ENDPOINT =
-    '/settings/admin/evaluation-grants/task-catalog';
+  const EVALUATION_TASK_CATALOG_ENDPOINT = '/settings/admin/evaluation-grants/task-catalog';
+  const TASK_IDENTITY_STAGE_ID = 'admin-api-key-evaluation-task-identity-stage';
+  const PREVIEW_STAGE_ID = 'admin-api-key-evaluation-preview';
   const GRANT_HOST_ID = 'admin-evaluation-grants';
+  const TEST_REVOKE_STAGE_ID = 'admin-api-key-evaluation-test-revoke-stage';
   const EXTERNAL_CATEGORY = 'external_evaluation';
+
   let evaluationTaskCatalog = [];
+  let hydrated = false;
+  let hydrationPromise = null;
+  let oneTimeIssuedKey = '';
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -19,19 +25,14 @@
     return String(value ?? '').trim();
   }
 
-  function dispatchEvaluationSelectionChanged() {
-    try {
-      window.dispatchEvent(new CustomEvent('pmk-evaluation-selection-changed'));
-    } catch {
-      window.dispatchEvent(new Event('pmk-evaluation-selection-changed'));
-    }
+  function authorized() {
+    return document.body.dataset.adminSession === 'ok' &&
+      document.body.dataset.adminEvaluationGrants === 'authorized';
   }
 
   function authHeaders(extra = {}) {
     const auth = window.PMK_ADMIN_AUTH;
-    if (auth && typeof auth.headers === 'function') {
-      return auth.headers(extra);
-    }
+    if (auth && typeof auth.headers === 'function') return auth.headers(extra);
     return new Headers(extra);
   }
 
@@ -39,138 +40,138 @@
     const headers = authHeaders({ Accept: 'application/json' });
     if (payload !== undefined && headers && typeof headers.set === 'function') {
       headers.set('Content-Type', 'application/json');
-    } else if (payload !== undefined && headers && typeof headers === 'object') {
-      headers['Content-Type'] = 'application/json';
     }
-
     const response = await fetch(path, {
       method,
       credentials: 'include',
       headers,
       ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
     });
-    const rawText = await response.text();
+    const raw = await response.text();
     let data = {};
-    if (rawText) {
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = { message: rawText };
-      }
+    if (raw) {
+      try { data = JSON.parse(raw); } catch { data = { message: raw }; }
     }
     if (!response.ok) {
-      const detail =
-        data && typeof data === 'object'
-          ? data.detail || data.message || `HTTP ${response.status}`
-          : `HTTP ${response.status}`;
+      const detail = data.detail || data.message || `HTTP ${response.status}`;
       throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
     }
     return data;
   }
 
-  function ensureGrantHost() {
-    let host = document.getElementById(GRANT_HOST_ID);
-    if (host) return host;
-    const body = document.getElementById('admin-api-key-external-evaluation-body');
-    if (!body) return null;
-    host = document.createElement('div');
-    host.id = GRANT_HOST_ID;
-    host.className = 'card flat';
-    host.dataset.evaluationGrantPlaceholder = 'true';
-    body.appendChild(host);
-    return host;
+  function dispatchSelectionChanged() {
+    try {
+      window.dispatchEvent(new CustomEvent('pmk-evaluation-selection-changed'));
+    } catch {
+      window.dispatchEvent(new Event('pmk-evaluation-selection-changed'));
+    }
   }
 
-  function grantForm() {
-    return `
+  function taskIdentityStage() {
+    return document.getElementById(TASK_IDENTITY_STAGE_ID);
+  }
+
+  function previewStage() {
+    return document.getElementById(PREVIEW_STAGE_ID);
+  }
+
+  function grantHost() {
+    return document.getElementById(GRANT_HOST_ID);
+  }
+
+  function renderLockedShell() {
+    const taskStage = taskIdentityStage();
+    const preview = previewStage();
+    const grant = grantHost();
+    const testStage = document.getElementById(TEST_REVOKE_STAGE_ID);
+    if (!taskStage || !preview || !grant) return false;
+
+    taskStage.innerHTML = `
       <div class="sec-hdr">
-        <div class="sh-title">Evaluation Grant Preparation</div>
-        <div class="sh-sub">identity, limits, canonical tasks, grant creation, one-time issue, and revoke</div>
+        <div class="sh-title">Canonical Tasks</div>
+        <div class="sh-sub">backend task catalog; visible now, selectable after administrator verification</div>
       </div>
-      <div class="admin-note">
-        Evaluation grants are temporary, quota-bound, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
+      <div id="admin-eval-task-list" class="admin-note">
+        LOCKED — canonical task choices will load after administrator verification.
+      </div>
+
+      <div class="sec-hdr" style="margin-top:var(--s-3)">
+        <div class="sh-title">Evaluation Identity</div>
+        <div class="sh-sub">Client ID · Issued To · Purpose</div>
       </div>
       <div class="grid-3">
-        <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
-        <label>Issued to<input id="admin-eval-issued-to" type="text" placeholder="Company or evaluator"></label>
-        <label>Duration days<input id="admin-eval-days" type="number" min="1" max="90" value="14"></label>
-        <label>Max requests<input id="admin-eval-max-requests" type="number" min="1" max="10000" value="100"></label>
-        <label style="grid-column:span 2">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation"></label>
+        <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client" disabled></label>
+        <label>Issued to<input id="admin-eval-issued-to" type="text" placeholder="Company or evaluator" disabled></label>
+        <label style="grid-column:span 1">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation" disabled></label>
       </div>
-      <div style="margin-top:var(--s-3)">
-        <strong>API key task content</strong>
-        <div class="muted">Choose only the canonical tasks this evaluation key may represent.</div>
-        <div id="admin-eval-task-list" style="margin-top:var(--s-2)">Loading canonical tasks...</div>
+
+      <div class="sec-hdr" style="margin-top:var(--s-3)">
+        <div class="sh-title">Duration / Quota</div>
+        <div class="sh-sub">temporary sandbox access only</div>
       </div>
+      <div class="grid-3">
+        <label>Duration days<input id="admin-eval-days" type="number" min="1" max="90" value="14" disabled></label>
+        <label>Max requests<input id="admin-eval-max-requests" type="number" min="1" max="10000" value="100" disabled></label>
+        <div class="card flat"><strong>Production</strong><div>disabled</div></div>
+      </div>
+    `;
+
+    preview.innerHTML = `
+      <div class="sec-hdr">
+        <div class="sh-title">Access Preview · Readiness</div>
+        <div class="sh-sub">fail-closed lifecycle contract</div>
+      </div>
+      <div id="admin-eval-effective-preview" class="admin-api-key-metadata-card-grid"></div>
       <div id="admin-eval-readiness" class="admin-note" style="margin-top:var(--s-3)">
-        Evaluation grant creation is locked until the lifecycle readiness contract is complete.
+        <strong>LOCKED.</strong> Verify administrator authority before privileged catalogs and grant controls are enabled.
       </div>
-      <div style="margin-top:var(--s-3)">
+    `;
+
+    grant.innerHTML = `
+      <div class="admin-note">
+        Evaluation grants are temporary, quota-bound, non-production entitlements. Administrative scopes are rejected by backend policy.
+      </div>
+      <div class="admin-actions" style="margin-top:var(--s-3)">
         <button id="admin-eval-create" class="btn primary" type="button" disabled>Create Evaluation Grant</button>
-        <button id="admin-eval-refresh" class="btn secondary" type="button">Refresh Grants</button>
+        <button id="admin-eval-refresh" class="btn secondary" type="button" disabled>Refresh Grants</button>
       </div>
       <div id="admin-eval-result" class="admin-note" style="margin-top:var(--s-3)"></div>
-      <div id="admin-eval-list" style="margin-top:var(--s-3)">Loading evaluation grants...</div>
+      <div id="admin-eval-list" style="margin-top:var(--s-3)">
+        <div class="muted">LOCKED — grant list loads after administrator verification and grant authority.</div>
+      </div>
     `;
-  }
 
-  function renderEvaluationTaskCatalog() {
-    const target = document.getElementById('admin-eval-task-list');
-    if (!target) return;
-    if (!evaluationTaskCatalog.length) {
-      target.innerHTML =
-        '<div class="admin-note danger">Canonical task catalog is unavailable. Grant creation is disabled.</div>';
-      updateEvaluationReadiness();
-      return;
+    if (testStage) {
+      testStage.innerHTML = `
+        <div class="sec-hdr">
+          <div class="sh-title">Allowed / Denied Endpoint Test · Revoke</div>
+          <div class="sh-sub">least-privilege proof after one-time issue</div>
+        </div>
+        <div id="admin-eval-endpoint-test" class="admin-note">
+          LOCKED — issue an evaluation API key first. The raw key is kept in memory only for this page session and is never persisted.
+        </div>
+      `;
     }
-    const groups = new Map();
-    evaluationTaskCatalog.forEach((task) => {
-      const domain = text(task.adapter_contract_id) || 'other';
-      if (!groups.has(domain)) groups.set(domain, []);
-      groups.get(domain).push(task);
-    });
-    target.innerHTML = [...groups.entries()]
-      .map(([domain, tasks]) => `
-        <fieldset class="card flat" style="margin-top:var(--s-2)">
-          <legend><strong>${escapeHtml(domain.replaceAll('_', ' '))}</strong></legend>
-          ${tasks
-            .map((task) => `
-              <label style="display:block;margin-top:var(--s-2)">
-                <input type="checkbox" data-eval-task value="${escapeHtml(task.task_id)}">
-                <code>${escapeHtml(task.task_id)}</code> — ${escapeHtml(task.safe_operation)}
-                <span class="muted"> · ${escapeHtml(task.operation_class)} · ${(task.required_scope_ids || []).map(escapeHtml).join(', ')}</span>
-              </label>
-            `)
-            .join('')}
-        </fieldset>
-      `)
-      .join('');
-    target.querySelectorAll('[data-eval-task]').forEach((input) => {
-      input.addEventListener('change', dispatchEvaluationSelectionChanged);
-    });
-    dispatchEvaluationSelectionChanged();
-    updateEvaluationReadiness();
-  }
 
-  async function loadEvaluationTaskCatalog() {
-    const payload = await request(EVALUATION_TASK_CATALOG_ENDPOINT, 'GET');
-    evaluationTaskCatalog = Array.isArray(payload.tasks) ? payload.tasks : [];
-    renderEvaluationTaskCatalog();
+    taskStage.addEventListener('input', updateEvaluationReadiness);
+    taskStage.addEventListener('change', updateEvaluationReadiness);
+    document.getElementById('admin-eval-create')?.addEventListener('click', createEvaluationGrant);
+    document.getElementById('admin-eval-refresh')?.addEventListener('click', refreshEvaluationGrants);
+    renderEffectivePreview();
+    updateEvaluationReadiness();
+    return true;
   }
 
   function selectedEvaluationTasks() {
     return [...document.querySelectorAll('[data-eval-task]:checked')]
-      .map((input) => text(input.value))
-      .filter(Boolean);
+      .map((input) => text(input.value)).filter(Boolean);
   }
 
   function selectedEvaluationScopes() {
     const workspace = window.PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE;
     if (!workspace || typeof workspace.selectedScopes !== 'function') return [];
     const values = workspace.selectedScopes();
-    return Array.isArray(values)
-      ? [...new Set(values.map((scope) => text(scope)).filter(Boolean))]
-      : [];
+    return Array.isArray(values) ? [...new Set(values.map(text).filter(Boolean))] : [];
   }
 
   function selectedEvaluationEndpoints() {
@@ -191,12 +192,10 @@
     const tasks = selectedEvaluationTasks();
     const scopes = selectedEvaluationScopes();
     const endpoints = selectedEvaluationEndpoints();
-    const grantAuthority = document.body.dataset.adminEvaluationGrants;
-
     const checks = [
       ['category', category === EXTERNAL_CATEGORY, 'Select External Evaluation Access in Category.'],
       ['administrator', document.body.dataset.adminSession === 'ok', 'Verify an administrator credential.'],
-      ['grant_authority', grantAuthority === 'authorized' || grantAuthority === 'loaded', 'Evaluation grant authority must be authorized.'],
+      ['grant_authority', document.body.dataset.adminEvaluationGrants === 'authorized', 'Evaluation grant authority must be authorized.'],
       ['operational_profile', Boolean(profile), 'Select an operational profile.'],
       ['eligible_endpoint', endpoints.length > 0, 'Select at least one eligible API endpoint.'],
       ['derived_scope', scopes.length > 0, 'Selected endpoints must derive at least one runtime scope.'],
@@ -207,21 +206,27 @@
       ['duration', Number.isInteger(duration) && duration >= 1 && duration <= 90, 'Duration must be between 1 and 90 days.'],
       ['quota', Number.isInteger(quota) && quota >= 1 && quota <= 10000, 'Max requests must be between 1 and 10000.'],
     ];
-    const missing = checks.filter(([, ok]) => !ok).map(([id, , message]) => ({ id, message }));
     return {
-      ready: missing.length === 0,
-      missing,
-      category,
-      profile,
-      clientId,
-      issuedTo,
-      purpose,
-      duration,
-      quota,
-      tasks,
-      scopes,
-      endpoints,
+      ready: checks.every(([, ok]) => ok),
+      missing: checks.filter(([, ok]) => !ok).map(([id, , message]) => ({ id, message })),
+      category, profile, clientId, issuedTo, purpose, duration, quota, tasks, scopes, endpoints,
     };
+  }
+
+  function renderEffectivePreview() {
+    const target = document.getElementById('admin-eval-effective-preview');
+    if (!target) return;
+    const readiness = evaluationReadiness();
+    target.innerHTML = `
+      <div class="admin-api-key-metadata-card-row"><strong>category</strong><span>${escapeHtml(readiness.category || 'none')}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>profile</strong><span>${escapeHtml(readiness.profile || 'none')}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>endpoints</strong><span>${readiness.endpoints.length}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>derived scopes</strong><span>${readiness.scopes.length}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>canonical tasks</strong><span>${readiness.tasks.length}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>client / issued to</strong><span>${escapeHtml(readiness.clientId || 'none')} / ${escapeHtml(readiness.issuedTo || 'none')}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>duration / quota</strong><span>${readiness.duration || 0} days / ${readiness.quota || 0}</span></div>
+      <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
+    `;
   }
 
   function updateEvaluationReadiness() {
@@ -235,31 +240,65 @@
     if (target) {
       target.className = readiness.ready ? 'admin-note ok' : 'admin-note';
       target.innerHTML = readiness.ready
-        ? '<strong>READY.</strong> All planned lifecycle gates are complete. Create Evaluation Grant is enabled; backend validation remains authoritative.'
-        : `<strong>LOCKED.</strong> Complete the remaining gates:<br>${readiness.missing
-            .map((item) => `• ${escapeHtml(item.message)}`)
-            .join('<br>')}`;
+        ? '<strong>READY.</strong> Every lifecycle gate is complete. Create Evaluation Grant is enabled; backend validation remains authoritative.'
+        : `<strong>LOCKED.</strong> Complete the remaining gates:<br>${readiness.missing.map((item) => `• ${escapeHtml(item.message)}`).join('<br>')}`;
     }
-    window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
+    renderEffectivePreview();
     return readiness;
+  }
+
+  function renderEvaluationTaskCatalog() {
+    const target = document.getElementById('admin-eval-task-list');
+    if (!target) return;
+    if (!evaluationTaskCatalog.length) {
+      target.innerHTML = '<div class="admin-note danger">Canonical task catalog is unavailable. Grant creation remains disabled.</div>';
+      updateEvaluationReadiness();
+      return;
+    }
+    const groups = new Map();
+    evaluationTaskCatalog.forEach((task) => {
+      const domain = text(task.adapter_contract_id) || 'other';
+      if (!groups.has(domain)) groups.set(domain, []);
+      groups.get(domain).push(task);
+    });
+    target.innerHTML = [...groups.entries()].map(([domain, tasks]) => `
+      <fieldset class="card flat" style="margin-top:var(--s-2)">
+        <legend><strong>${escapeHtml(domain.replaceAll('_', ' '))}</strong></legend>
+        ${tasks.map((task) => `
+          <label style="display:block;margin-top:var(--s-2)">
+            <input type="checkbox" data-eval-task value="${escapeHtml(task.task_id)}">
+            <code>${escapeHtml(task.task_id)}</code> — ${escapeHtml(task.safe_operation)}
+            <span class="muted"> · ${escapeHtml(task.operation_class)} · ${(task.required_scope_ids || []).map(escapeHtml).join(', ')}</span>
+          </label>
+        `).join('')}
+      </fieldset>
+    `).join('');
+    target.querySelectorAll('[data-eval-task]').forEach((input) => {
+      input.addEventListener('change', dispatchSelectionChanged);
+    });
+    updateEvaluationReadiness();
+  }
+
+  async function loadEvaluationTaskCatalog() {
+    const payload = await request(EVALUATION_TASK_CATALOG_ENDPOINT, 'GET');
+    evaluationTaskCatalog = Array.isArray(payload.tasks) ? payload.tasks : [];
+    renderEvaluationTaskCatalog();
   }
 
   function grantRow(grant) {
     const active = text(grant.status).toLowerCase() === 'active';
     const tasks = Array.isArray(grant.allowed_task_ids) ? grant.allowed_task_ids : [];
     const scopes = Array.isArray(grant.allowed_scopes) ? grant.allowed_scopes : [];
-    const actions = active
-      ? `<button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
-         <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke</button>`
-      : '';
     return `
       <div class="card flat" style="margin-top:var(--s-2)">
         <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)}</div>
-        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · quota ${escapeHtml(grant.max_requests)} · keys ${escapeHtml(grant.active_key_count || 0)}</div>
-        <div class="muted">scopes: ${scopes.length ? scopes.map(escapeHtml).join(', ') : 'backend defaults'}</div>
-        <div class="muted">tasks: ${tasks.length ? tasks.map(escapeHtml).join(', ') : 'none'} · authority ${escapeHtml(grant.task_authority_source || 'integration_task_catalog')}</div>
-        <div class="muted">expires ${escapeHtml(grant.expires_at)} · subscription required: no · production: disabled</div>
-        <div style="margin-top:var(--s-2)">${actions}</div>
+        <div class="muted">${escapeHtml(grant.grant_id)} · quota ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)}</div>
+        <div class="muted">scopes: ${escapeHtml(scopes.join(', ') || 'backend defaults')}</div>
+        <div class="muted">tasks: ${escapeHtml(tasks.join(', ') || 'none')} · production disabled</div>
+        ${active ? `<div class="admin-actions" style="margin-top:var(--s-2)">
+          <button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
+          <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke</button>
+        </div>` : ''}
       </div>
     `;
   }
@@ -271,15 +310,22 @@
     target.innerHTML = message;
   }
 
+  function bindGrantActions() {
+    document.querySelectorAll('[data-eval-issue]').forEach((button) => {
+      button.addEventListener('click', () => issueEvaluationKey(button.dataset.evalIssue));
+    });
+    document.querySelectorAll('[data-eval-revoke]').forEach((button) => {
+      button.addEventListener('click', () => revokeEvaluationGrant(button.dataset.evalRevoke));
+    });
+  }
+
   async function refreshEvaluationGrants() {
     const list = document.getElementById('admin-eval-list');
-    if (!list) return;
+    if (!list || !authorized()) return;
     try {
       const payload = await request(EVALUATION_GRANTS_ENDPOINT, 'GET');
       const grants = Array.isArray(payload.grants) ? payload.grants : [];
-      list.innerHTML = grants.length
-        ? grants.map(grantRow).join('')
-        : '<div class="muted">No evaluation grants have been issued.</div>';
+      list.innerHTML = grants.length ? grants.map(grantRow).join('') : '<div class="muted">No evaluation grants have been issued.</div>';
       bindGrantActions();
     } catch (error) {
       list.innerHTML = `<div class="admin-note danger">Unable to load evaluation grants: ${escapeHtml(error.message || error)}</div>`;
@@ -289,15 +335,9 @@
   async function createEvaluationGrant() {
     const readiness = updateEvaluationReadiness();
     if (!readiness.ready) {
-      setGrantResult(
-        'Evaluation grant creation blocked by the lifecycle readiness contract. Complete every LOCKED gate before retrying.',
-        true
-      );
+      setGrantResult('Evaluation grant creation blocked by the lifecycle readiness contract.', true);
       return;
     }
-
-    const allowedScopes = readiness.scopes;
-
     try {
       const result = await request(EVALUATION_GRANTS_ENDPOINT, 'POST', {
         client_id: readiness.clientId,
@@ -305,145 +345,105 @@
         issued_to: readiness.issuedTo,
         purpose: readiness.purpose,
         allowed_task_ids: readiness.tasks,
-        ...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {}),
+        allowed_scopes: readiness.scopes,
         expires_in_days: readiness.duration,
         max_requests: readiness.quota,
       });
       const grant = result.grant || {};
-      setGrantResult(
-        `Evaluation grant created: <strong>${escapeHtml(grant.grant_id || '')}</strong><br>` +
-        `Tasks: ${(grant.allowed_task_ids || []).map(escapeHtml).join(', ')}<br>` +
-        `Scopes: ${(grant.allowed_scopes || []).map(escapeHtml).join(', ') || 'backend defaults'}<br>` +
-        `Quota: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
-      );
-      await refreshEvaluationGrants();
-      dispatchEvaluationSelectionChanged();
-    } catch (error) {
-      setGrantResult(
-        `Unable to create grant: ${escapeHtml(error.message || error)}`,
-        true
-      );
-    }
-  }
-
-  async function issueEvaluationKey(grantId) {
-    try {
-      const result = await request(
-        `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/issue-key`,
-        'POST',
-        { label: 'External evaluation access' }
-      );
-      const secret = text(result.api_key);
-      const key = result.key || {};
-      const tasks = Array.isArray(key.allowed_task_ids) ? key.allowed_task_ids : [];
-      const scopes = Array.isArray(key.scopes) ? key.scopes : [];
-      const taskScopes = Array.isArray(key.task_scope_ids) ? key.task_scope_ids : [];
-      const usage = result.onboarding_usage || {};
-      const header = text(usage.header) || 'X-API-Key';
-      const exampleEndpoint = text(usage.example_endpoint) || '/adapters/status';
-      setGrantResult(`
-        <strong>One-time evaluation API key created.</strong><br>
-        Copy it now; it will not be displayed again.<br>
-        <span class="mono-block" style="display:block;margin-top:var(--s-2)">X-API-Key: ${escapeHtml(secret)}</span>
-        ${header !== 'X-API-Key' ? `<div class="muted">Backend header: ${escapeHtml(header)}</div>` : ''}
-        <button id="admin-eval-copy-issued-key" class="btn secondary" type="button" style="margin-top:var(--s-2)">Copy API Key</button><br>
-        <strong>Grant</strong>: ${escapeHtml(grantId)}<br>
-        <strong>Client</strong>: ${escapeHtml(key.client_id || '')}<br>
-        <strong>Scopes</strong>: ${escapeHtml(scopes.join(', ') || 'none')}<br>
-        <strong>Task scope IDs</strong>: ${escapeHtml(taskScopes.join(', ') || 'none')}<br>
-        <strong>Bound tasks:</strong> ${escapeHtml(tasks.join(', ') || 'none')}<br>
-        <strong>Quota</strong>: ${escapeHtml(key.quota_limit)}<br>
-        <strong>Expires</strong>: ${escapeHtml(key.expires_at)}<br>
-        <strong>Example endpoint</strong>: ${escapeHtml(exampleEndpoint)}<br>
-        <strong>Subscription required</strong>: no · <strong>Production</strong>: disabled
-      `);
-      document.getElementById('admin-eval-copy-issued-key')?.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(secret);
-        } catch {
-          // Clipboard may be unavailable in restricted browser contexts.
-        }
-      });
+      setGrantResult(`Evaluation grant created: <strong>${escapeHtml(grant.grant_id || '')}</strong> · quota ${escapeHtml(grant.max_requests)} · production disabled`);
       await refreshEvaluationGrants();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
-      setGrantResult(
-        `Unable to issue evaluation key: ${escapeHtml(error.message || error)}`,
-        true
-      );
+      setGrantResult(`Unable to create grant: ${escapeHtml(error.message || error)}`, true);
+    }
+  }
+
+  function renderEndpointTestHint() {
+    const target = document.getElementById('admin-eval-endpoint-test');
+    if (!target) return;
+    target.className = oneTimeIssuedKey ? 'admin-note ok' : 'admin-note';
+    target.innerHTML = oneTimeIssuedKey
+      ? '<strong>One-time key is available in page memory.</strong> Use the selected eligible endpoint for the allowed test, an unselected runtime endpoint for the denied test, then revoke the grant and confirm the key stops working. The key is not persisted.'
+      : 'LOCKED — issue an evaluation API key first. The raw key is never persisted.';
+  }
+
+  async function issueEvaluationKey(grantId) {
+    if (!authorized()) return;
+    try {
+      const result = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/issue-key`, 'POST', { label: 'External evaluation access' });
+      const secret = text(result.api_key);
+      oneTimeIssuedKey = secret;
+      const key = result.key || {};
+      setGrantResult(`
+        <strong>One-time evaluation API key created.</strong> Copy it now; it will not be displayed again after this result changes.<br>
+        <span class="mono-block" style="display:block;margin-top:var(--s-2)">X-API-Key: ${escapeHtml(secret)}</span>
+        <button id="admin-eval-copy-issued-key" class="btn secondary" type="button" style="margin-top:var(--s-2)">Copy API Key</button><br>
+        <span class="muted">client ${escapeHtml(key.client_id || '')} · quota ${escapeHtml(key.quota_limit)} · expires ${escapeHtml(key.expires_at)} · production disabled</span>
+      `);
+      document.getElementById('admin-eval-copy-issued-key')?.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(secret); } catch {}
+      });
+      renderEndpointTestHint();
+      await refreshEvaluationGrants();
+      window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
+    } catch (error) {
+      setGrantResult(`Unable to issue evaluation key: ${escapeHtml(error.message || error)}`, true);
     }
   }
 
   async function revokeEvaluationGrant(grantId) {
+    if (!authorized()) return;
     try {
-      const result = await request(
-        `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}`,
-        'DELETE'
-      );
-      setGrantResult(
-        `Grant revoked. ${escapeHtml(result.revoked_key_count || 0)} linked key(s) revoked.`
-      );
+      const result = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}`, 'DELETE');
+      setGrantResult(`Grant revoked. ${escapeHtml(result.revoked_key_count || 0)} linked key(s) revoked.`);
+      oneTimeIssuedKey = '';
+      renderEndpointTestHint();
       await refreshEvaluationGrants();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
-      setGrantResult(
-        `Unable to revoke evaluation grant: ${escapeHtml(error.message || error)}`,
-        true
-      );
+      setGrantResult(`Unable to revoke evaluation grant: ${escapeHtml(error.message || error)}`, true);
     }
   }
 
-  function bindGrantActions() {
-    document.querySelectorAll('[data-eval-issue]').forEach((button) => {
-      button.addEventListener('click', () =>
-        issueEvaluationKey(button.dataset.evalIssue)
-      );
-    });
-    document.querySelectorAll('[data-eval-revoke]').forEach((button) => {
-      button.addEventListener('click', () =>
-        revokeEvaluationGrant(button.dataset.evalRevoke)
-      );
-    });
+  async function hydrateEvaluationControls() {
+    if (!authorized() || hydrated) return;
+    if (hydrationPromise) return hydrationPromise;
+    const taskStage = taskIdentityStage();
+    if (!taskStage) return;
+
+    taskStage.querySelectorAll('input').forEach((input) => { input.disabled = false; });
+    const refresh = document.getElementById('admin-eval-refresh');
+    if (refresh) refresh.disabled = false;
+    const list = document.getElementById('admin-eval-list');
+    if (list) list.innerHTML = '<div class="muted">Loading evaluation grants...</div>';
+    const taskList = document.getElementById('admin-eval-task-list');
+    if (taskList) taskList.innerHTML = '<div class="muted">Loading canonical tasks...</div>';
+
+    hydrationPromise = Promise.all([loadEvaluationTaskCatalog(), refreshEvaluationGrants()])
+      .then(() => { hydrated = true; })
+      .catch((error) => {
+        setGrantResult(`Unable to load evaluation controls: ${escapeHtml(error.message || error)}`, true);
+      })
+      .finally(() => {
+        hydrationPromise = null;
+        updateEvaluationReadiness();
+      });
+    return hydrationPromise;
   }
 
-  async function initializeEvaluationGrants() {
-    const host = ensureGrantHost();
-    if (!host) return;
-    host.innerHTML = grantForm();
-    host.addEventListener('input', dispatchEvaluationSelectionChanged);
-    host.addEventListener('change', dispatchEvaluationSelectionChanged);
-    host.addEventListener('input', updateEvaluationReadiness);
-    host.addEventListener('change', updateEvaluationReadiness);
-    document
-      .getElementById('admin-eval-create')
-      ?.addEventListener('click', createEvaluationGrant);
-    document
-      .getElementById('admin-eval-refresh')
-      ?.addEventListener('click', refreshEvaluationGrants);
-
-    window.addEventListener('pmk-admin-session-verified', updateEvaluationReadiness);
+  function initializeEvaluationGrants() {
+    if (!renderLockedShell()) return;
+    window.addEventListener('pmk-admin-session-verified', hydrateEvaluationControls);
     window.addEventListener('pmk-api-key-category-changed', updateEvaluationReadiness);
     window.addEventListener('pmk-api-key-access-selection-changed', updateEvaluationReadiness);
     window.addEventListener('pmk-evaluation-selection-changed', updateEvaluationReadiness);
-
-    try {
-      await loadEvaluationTaskCatalog();
-    } catch (error) {
-      evaluationTaskCatalog = [];
-      renderEvaluationTaskCatalog();
-      setGrantResult(
-        `Unable to load canonical task catalog: ${escapeHtml(error.message || error)}`,
-        true
-      );
-    }
-    refreshEvaluationGrants();
-    dispatchEvaluationSelectionChanged();
-    updateEvaluationReadiness();
+    hydrateEvaluationControls();
   }
 
   window.PMK_ADMIN_EVALUATION_GRANTS = {
     readiness: evaluationReadiness,
     updateReadiness: updateEvaluationReadiness,
+    hydrate: hydrateEvaluationControls,
   };
 
   initializeEvaluationGrants();
