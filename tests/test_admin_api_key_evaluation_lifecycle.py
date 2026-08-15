@@ -81,14 +81,16 @@ def test_primary_renderer_hard_blocks_standard_key_creation_for_evaluation() -> 
     assert create_source.index("return;") < create_source.index("request('POST', '/settings/api-keys'")
 
 
-def test_session_is_presentation_neutral_and_uses_renderer_verification_host() -> None:
+def test_session_uses_renderer_verification_host_without_lifecycle_dom_ownership() -> None:
     source = _source(SESSION)
     assert "const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls'" in source
     assert "function evaluationHost()" in source
     assert "document.getElementById(VERIFICATION_HOST_ID)" in source
+    assert "renderSuperAdminSignInAction" in source
+    assert "Sign in as Super Administrator" in source
     assert "document.createElement('section')" not in source
-    assert "document.createElement('div')" not in source
     assert "ensureEvaluationGrantPlaceholder" not in source
+    assert "admin-api-key-lifecycle-card" not in source
     assert "page.appendChild(host)" not in source
     assert "insertBefore" not in source
     assert "MutationObserver" not in source
