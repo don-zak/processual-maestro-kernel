@@ -41,11 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
     wrapper.className = 'admin-actions';
     wrapper.style.marginTop = 'var(--s-3)';
     wrapper.innerHTML = `
-      <a class="btn primary" href="/login?mode=user&next=%2Fadmin%23api-keys">
+      <a class="btn primary" href="/login?mode=admin&identity=1&next=%2Fadmin%23api-keys">
         Sign in as Super Administrator
       </a>
       <div class="muted" style="margin-top:var(--s-2)">
-        Uses the identity-session login and MFA flow. API keys and legacy admin sessions cannot unlock this lifecycle.
+        Uses the identity-session email/password + MFA flow. API keys and legacy admin sessions cannot unlock this lifecycle.
       </div>
     `;
     host.appendChild(wrapper);
