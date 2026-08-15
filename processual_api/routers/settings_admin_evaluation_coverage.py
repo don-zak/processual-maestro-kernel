@@ -12,6 +12,9 @@ from processual_api.services.evaluation_coverage_plan import (
 from processual_api.services.evaluation_quality_assessment import (
     assess_evaluation_campaign_quality,
 )
+from processual_api.services.evaluation_task_quality import (
+    summarize_evaluation_task_quality,
+)
 from processual_api.services.usage_log_store import (
     summarize_evaluation_endpoint_coverage,
 )
@@ -71,8 +74,31 @@ async def evaluation_quality_status(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@settings_module.router.get(
+    "/admin/evaluation-grants/task-quality-status",
+    response_model=dict,
+)
+async def evaluation_task_quality_status(
+    client_id: str = Query(min_length=1, max_length=160),
+    min_outcome_passes: int = Query(default=3, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    await require_active_platform_admin(current_user)
+    owner_id = str(current_user.get("sub") or current_user.get("user_id") or "default")
+    raw = settings_module._load_raw(owner_id)
+    try:
+        return summarize_evaluation_task_quality(
+            raw,
+            client_id=client_id,
+            min_outcome_passes=min_outcome_passes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 __all__ = [
     "evaluation_coverage_plan",
     "evaluation_coverage_status",
     "evaluation_quality_status",
+    "evaluation_task_quality_status",
 ]
