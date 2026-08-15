@@ -15,6 +15,10 @@ def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards():
 
     required = [
         "pruneLegacyPlaceholders",
+        "pruneLegacyApiKeyPlaceholders",
+        "admin-api-key-static-generate-btn",
+        "admin-api-key-static-refresh-btn",
+        "control?.closest('.card')?.remove()",
         "Checking admin session",
         "Planned usage view",
         "System-level provider settings",
