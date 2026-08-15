@@ -1,9 +1,8 @@
 (function () {
-  const CARD_ID = 'admin-api-key-lifecycle-card';
-  const WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
+  const WORKSPACE_ID = 'admin-api-key-external-provisioning-slot';
   const PROFILE_ENDPOINT = '/settings/admin/api-key-operational-profiles';
   const ACCESS_CATALOG_ENDPOINT = '/settings/admin/api-key-access-catalog';
-  const MAX_INIT_ATTEMPTS = 20;
+  const MAX_INIT_ATTEMPTS = 30;
   const INIT_RETRY_MS = 100;
 
   let operationalProfiles = [];
@@ -60,20 +59,9 @@
     return text(document.getElementById(id)?.value);
   }
 
-  function scopes() {
-    return value('admin-api-key-scopes')
-      .split(/[\n,]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
   function selectedProfile() {
     const profileId = value('admin-api-key-operational-profile');
     return operationalProfiles.find((profile) => profile.profile_id === profileId) || null;
-  }
-
-  function provisioningMode() {
-    return value('admin-api-key-provisioning-mode') || 'standard';
   }
 
   function selectedEndpointRows() {
@@ -82,9 +70,7 @@
         .map((input) => text(input.value))
         .filter(Boolean)
     );
-    return accessCatalog.filter((endpoint) =>
-      selectedKeys.has(`${endpoint.method} ${endpoint.path}`)
-    );
+    return accessCatalog.filter((endpoint) => selectedKeys.has(`${endpoint.method} ${endpoint.path}`));
   }
 
   function selectedEndpointScopes() {
@@ -106,21 +92,7 @@
     }));
   }
 
-  function syncScopesFromEndpointSelection() {
-    const derivedScopes = selectedEndpointScopes();
-    const target = document.getElementById('admin-api-key-scopes');
-    const status = document.getElementById('admin-api-key-access-selection-status');
-    if (target && derivedScopes.length) {
-      target.value = derivedScopes.join('\n');
-      target.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    if (status) {
-      const endpointCount = selectedEndpointRows().length;
-      status.textContent = endpointCount
-        ? `${endpointCount} endpoint(s) selected · ${derivedScopes.length} derived scope(s). Backend scope enforcement remains authoritative.`
-        : 'No endpoint selected. Existing category/profile scopes remain unchanged.';
-    }
-    renderPreview();
+  function dispatchSelectionChanged() {
     try {
       window.dispatchEvent(new CustomEvent('pmk-api-key-access-selection-changed'));
     } catch {
@@ -128,33 +100,22 @@
     }
   }
 
-  function updateGenerateGate() {
-    const button = document.getElementById('admin-api-key-generate-btn');
-    const status = document.getElementById('admin-api-key-provisioning-mode-status');
-    if (!button) return;
+  function syncScopesFromEndpointSelection() {
+    const derivedScopes = selectedEndpointScopes();
+    const status = document.getElementById('admin-api-key-access-selection-status');
+    const scopePreview = document.getElementById('admin-api-key-derived-scopes');
+    const endpointCount = selectedEndpointRows().length;
 
-    if (provisioningMode() === 'external_evaluation') {
-      button.disabled = true;
-      button.dataset.evaluationModeDisabled = 'true';
-      button.title = 'External Evaluation keys must be created through the evaluation grant authority.';
-      if (status) {
-        status.className = 'admin-note';
-        status.textContent =
-          'External Evaluation mode uses the evaluation grant authority. Endpoint selection below supplies explicit non-admin runtime scopes; task binding and issuance remain governed by /settings/admin/evaluation-grants.';
-      }
-      return;
-    }
-
-    if (button.dataset.evaluationModeDisabled === 'true') {
-      button.disabled = false;
-      delete button.dataset.evaluationModeDisabled;
-      button.removeAttribute('title');
-    }
     if (status) {
-      status.className = 'admin-note';
-      status.textContent =
-        'Standard / Integration mode uses the existing governed /settings/api-keys lifecycle. Selecting endpoints derives the scope set shown in the key form.';
+      status.textContent = endpointCount
+        ? `${endpointCount} endpoint(s) selected · ${derivedScopes.length} derived runtime scope(s).`
+        : 'No endpoint selected. Select explicit grantable endpoints to derive runtime scopes.';
     }
+    if (scopePreview) {
+      scopePreview.textContent = derivedScopes.join('\n') || 'none';
+    }
+    renderPreview();
+    dispatchSelectionChanged();
   }
 
   function renderProfileDetails() {
@@ -162,7 +123,7 @@
     if (!target) return;
     const profile = selectedProfile();
     if (!profile) {
-      target.innerHTML = '<div class="muted">Select an operational profile to inspect its governed capabilities.</div>';
+      target.innerHTML = '<div class="muted">Select an operational profile to inspect governed operational intent.</div>';
       return;
     }
 
@@ -170,7 +131,7 @@
     const forbidden = Array.isArray(profile.forbidden_scopes) ? profile.forbidden_scopes : [];
     target.innerHTML = `
       <div class="admin-note" style="margin-top:var(--s-2)">
-        Selected operational intent only. Runtime endpoint selection and backend scope enforcement remain authoritative.
+        Selected operational intent only. Choosing a profile does not mutate runtime scopes; endpoint selection remains the scope authority.
       </div>
       <div class="grid-3" style="margin-top:var(--s-2)">
         <div class="card flat"><strong>Environment</strong><div>${escapeHtml(profile.environment || 'sandbox')}</div></div>
@@ -182,7 +143,6 @@
       </div>
       <div style="margin-top:var(--s-2)"><strong>Allowed operational intent</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(allowed.join('\n') || 'none')}</div></div>
       <div style="margin-top:var(--s-2)"><strong>Forbidden operational intent</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(forbidden.join('\n') || 'none')}</div></div>
-      <div class="muted" style="margin-top:var(--s-2)">${escapeHtml(profile.next_action || '')}</div>
     `;
   }
 
@@ -238,34 +198,23 @@
     const target = document.getElementById('admin-api-key-access-preview');
     if (!target) return;
     const profile = selectedProfile();
-    const mode = provisioningMode();
-    const scopeValues = scopes();
-    const profileScopes = Array.isArray(profile?.allowed_scopes) ? profile.allowed_scopes : [];
     const endpointRows = selectedEndpointRows();
-    const productionAllowed = profile ? Boolean(profile.production_allowed) : false;
-
+    const derivedScopes = selectedEndpointScopes();
     target.innerHTML = `
       <div class="sec-hdr" style="margin-top:var(--s-3)">
         <div class="sh-title">Access Preview</div>
-        <div class="sh-sub">endpoint → scope → key/grant preview; backend enforcement remains authoritative</div>
+        <div class="sh-sub">endpoint → derived scope → evaluation grant; backend enforcement remains authoritative</div>
       </div>
       <div class="admin-api-key-metadata-card-grid">
-        <div class="admin-api-key-metadata-card-row"><strong>mode</strong><span>${escapeHtml(mode)}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>category</strong><span>${escapeHtml(value('admin-api-key-category'))}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>role</strong><span>${escapeHtml(value('admin-api-key-role'))}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>client_id</strong><span>${escapeHtml(value('admin-api-key-client-id'))}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>issued_to</strong><span>${escapeHtml(value('admin-api-key-issued-to'))}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>category</strong><span>external_evaluation</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>operational_profile</strong><span>${escapeHtml(profile?.profile_id || 'none')}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>endpoints</strong><span>${endpointRows.length}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>quota</strong><span>${escapeHtml(value('admin-api-key-quota-limit-override') || 'backend default')}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>expires_at</strong><span>${escapeHtml(value('admin-api-key-expires-at') || 'backend default')}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>${productionAllowed ? 'allowed' : 'disabled'}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>derived_scopes</strong><span>${derivedScopes.length}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>runtime_connector</strong><span>${profile?.runtime_connector_approved ? 'approved' : 'not approved'}</span></div>
       </div>
       <div style="margin-top:var(--s-2)"><strong>Selected endpoints</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(endpointRows.map((endpoint) => `${endpoint.method} ${endpoint.path}`).join('\n') || 'none')}</div></div>
-      <div style="margin-top:var(--s-2)"><strong>Key scopes currently configured</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(scopeValues.join('\n') || 'none')}</div></div>
-      <div style="margin-top:var(--s-2)"><strong>Selected operational intent</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(profileScopes.join('\n') || 'none')}</div></div>
-      ${mode === 'external_evaluation' ? '<div class="admin-note" style="margin-top:var(--s-2)">Evaluation task binding and grant issuance stay under /settings/admin/evaluation-grants. Selected endpoint scopes are passed explicitly to the grant request.</div>' : ''}
+      <div style="margin-top:var(--s-2)"><strong>Derived runtime scopes</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(derivedScopes.join('\n') || 'none')}</div></div>
     `;
   }
 
@@ -273,7 +222,6 @@
     const select = document.getElementById('admin-api-key-operational-profile');
     const status = document.getElementById('admin-api-key-operational-profile-status');
     if (!select) return;
-
     try {
       const payload = await requestJson(PROFILE_ENDPOINT);
       operationalProfiles = Array.isArray(payload.profiles) ? payload.profiles : [];
@@ -281,9 +229,7 @@
         .map((profile) => `<option value="${escapeHtml(profile.profile_id)}">${escapeHtml(profile.display_name || profile.profile_id)}</option>`)
         .join('');
       select.disabled = false;
-      if (status) {
-        status.textContent = `${operationalProfiles.length} backend-governed operational profiles available.`;
-      }
+      if (status) status.textContent = `${operationalProfiles.length} backend-governed operational profiles available.`;
       renderProfileDetails();
       renderPreview();
     } catch (error) {
@@ -312,92 +258,59 @@
     }
   }
 
-  function fixLocalUsageExamples(card) {
-    card.querySelectorAll('.mono-block').forEach((block) => {
-      const current = block.textContent || '';
-      if (current.includes('127.0.0.1:8000')) {
-        block.textContent = current.replaceAll('127.0.0.1:8000', '127.0.0.1:18080');
-      }
-    });
-  }
-
-  function bindPreviewUpdates(card) {
-    card.querySelectorAll('input, textarea, select').forEach((control) => {
-      if (control.dataset.apiKeyWorkspaceBound === 'true') return;
-      control.dataset.apiKeyWorkspaceBound = 'true';
-      control.addEventListener('input', renderPreview);
-      control.addEventListener('change', renderPreview);
-    });
-  }
-
   function initializeWorkspace() {
-    const card = document.getElementById(CARD_ID);
-    if (!card) {
+    const workspace = document.getElementById(WORKSPACE_ID);
+    if (!workspace) {
       initAttempts += 1;
       if (initAttempts < MAX_INIT_ATTEMPTS) {
         window.setTimeout(initializeWorkspace, INIT_RETRY_MS);
       }
       return;
     }
-    if (document.getElementById(WORKSPACE_ID)) return;
 
-    const workspace = document.createElement('section');
-    workspace.id = WORKSPACE_ID;
-    workspace.className = 'card flat';
-    workspace.style.marginTop = 'var(--s-4)';
+    if (workspace.dataset.workspaceInitialized === 'true') return;
+    workspace.dataset.workspaceInitialized = 'true';
     workspace.innerHTML = `
       <div class="sec-hdr">
-        <div class="sh-title">Provisioning Workspace</div>
-        <div class="sh-sub">key mode, operational intent, endpoints, scopes, and safe access preview</div>
+        <div class="sh-title">Operational Profile</div>
+        <div class="sh-sub">intent only; it never grants scopes by itself</div>
       </div>
-      <div class="admin-grid">
-        <label>Provisioning mode
-          <select id="admin-api-key-provisioning-mode">
-            <option value="standard">Standard / Integration Key</option>
-            <option value="external_evaluation">External Evaluation</option>
-          </select>
-        </label>
-        <label>Operational profile
-          <select id="admin-api-key-operational-profile" disabled>
-            <option value="">Loading backend catalog...</option>
-          </select>
-        </label>
-      </div>
-      <div id="admin-api-key-provisioning-mode-status" class="admin-note"></div>
+      <label>Operational profile
+        <select id="admin-api-key-operational-profile" disabled>
+          <option value="">Loading backend catalog...</option>
+        </select>
+      </label>
       <div id="admin-api-key-operational-profile-status" class="muted" style="margin-top:var(--s-2)"></div>
       <div id="admin-api-key-operational-profile-details"></div>
+
       <div class="sec-hdr" style="margin-top:var(--s-3)">
-        <div class="sh-title">Eligible API Endpoints</div>
-        <div class="sh-sub">registered backend routes with an explicit API-key grant policy</div>
+        <div class="sh-title">Eligible Endpoints</div>
+        <div class="sh-sub">only routes explicitly declared grantable by backend policy</div>
       </div>
       <div id="admin-api-key-access-catalog-status" class="muted"></div>
       <div id="admin-api-key-grantable-endpoints"></div>
       <div id="admin-api-key-access-selection-status" class="admin-note" style="margin-top:var(--s-2)"></div>
+
+      <div class="sec-hdr" style="margin-top:var(--s-3)">
+        <div class="sh-title">Derived Runtime Scopes</div>
+        <div class="sh-sub">computed only from selected eligible endpoints</div>
+      </div>
+      <div id="admin-api-key-derived-scopes" class="mono-block" style="white-space:pre-wrap">none</div>
+
       <div class="sec-hdr" style="margin-top:var(--s-3)">
         <div class="sh-title">Backend Route Inventory</div>
-        <div class="sh-sub">full registered route visibility; locked routes are not grantable from this workspace</div>
+        <div class="sh-sub">registered route visibility does not imply grantability</div>
       </div>
       <div id="admin-api-key-all-endpoints"></div>
       <div id="admin-api-key-access-preview"></div>
     `;
 
-    const formGrid = card.querySelector('.admin-grid');
-    if (formGrid) formGrid.before(workspace);
-    else card.prepend(workspace);
-
-    document.getElementById('admin-api-key-provisioning-mode')?.addEventListener('change', () => {
-      updateGenerateGate();
-      renderPreview();
-    });
     document.getElementById('admin-api-key-operational-profile')?.addEventListener('change', () => {
       renderProfileDetails();
       renderPreview();
+      dispatchSelectionChanged();
     });
 
-    fixLocalUsageExamples(card);
-    bindPreviewUpdates(card);
-    updateGenerateGate();
-    renderPreview();
     loadOperationalProfiles();
     loadAccessCatalog();
     document.body.dataset.adminApiKeyProvisioningWorkspace = 'loaded';
