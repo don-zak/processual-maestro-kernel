@@ -50,6 +50,23 @@ def _quota_usage_record(current_user: dict, *, units_charged: int) -> dict[str, 
     }
 
 
+def _evaluation_usage_record(current_user: dict) -> dict[str, object]:
+    if current_user.get("entitlement_source") != "admin_evaluation_grant":
+        return {}
+    return {
+        "entitlement_source": "admin_evaluation_grant",
+        "evaluation_grant_id": current_user.get("evaluation_grant_id", ""),
+        "execution_mode": current_user.get("execution_mode", ""),
+        "real_runtime_execution": current_user.get("real_runtime_execution") is True,
+        "endpoint_authority_source": current_user.get("endpoint_authority_source", ""),
+        "task_authority_source": current_user.get("task_authority_source", ""),
+        "evaluation_request_limit": _as_int_or_none(current_user.get("evaluation_request_limit")),
+        "evaluation_request_used": _as_int_or_none(current_user.get("evaluation_request_used")),
+        "evaluation_request_remaining": _as_int_or_none(current_user.get("evaluation_request_remaining")),
+        "production_allowed": current_user.get("production_allowed") is True,
+    }
+
+
 class UsageLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         started = time.perf_counter()
@@ -70,6 +87,7 @@ class UsageLogMiddleware(BaseHTTPMiddleware):
         pricing_record.pop("endpoint", None)
         units_charged = int(pricing_record["units_charged"])
         quota_record = _quota_usage_record(current_user, units_charged=units_charged)
+        evaluation_record = _evaluation_usage_record(current_user)
 
         append_usage_log({
             "created_at": datetime.now(UTC).isoformat(),
@@ -87,6 +105,7 @@ class UsageLogMiddleware(BaseHTTPMiddleware):
             "role": current_user.get("role", ""),
             **pricing_record,
             **quota_record,
+            **evaluation_record,
         })
 
         return response
