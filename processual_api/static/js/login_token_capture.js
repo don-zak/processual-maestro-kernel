@@ -230,6 +230,15 @@
     if (tabs) tabs.hidden = true;
   }
 
+  function clearMfaEnrollmentMaterial() {
+    const secret = document.getElementById('identity-mfa-enrollment-secret');
+    const uri = document.getElementById('identity-mfa-enrollment-uri');
+    const code = document.getElementById('identity-mfa-enrollment-code');
+    if (secret) secret.textContent = '';
+    if (uri) uri.textContent = '';
+    if (code) code.value = '';
+  }
+
   function showMfaChallenge() {
     buildMfaChallenge();
     hideLoginInputs();
@@ -260,6 +269,7 @@
   }
 
   function showRecoveryCodes(codes) {
+    clearMfaEnrollmentMaterial();
     buildRecoveryCodes();
     hideLoginInputs();
     const challenge = document.getElementById('identity-mfa-challenge');
@@ -277,6 +287,7 @@
     pendingCsrfToken = '';
     completedIdentityToken = '';
     recoveryMode = false;
+    clearMfaEnrollmentMaterial();
     ['identity-mfa-challenge', 'identity-mfa-enrollment', 'identity-mfa-recovery-codes'].forEach((id) => {
       const panel = document.getElementById(id);
       if (panel) panel.hidden = true;
@@ -288,10 +299,8 @@
     if (loginButton) loginButton.hidden = false;
     if (tabs) tabs.hidden = false;
     const code = document.getElementById('identity-mfa-code');
-    const enrollmentCode = document.getElementById('identity-mfa-enrollment-code');
     const recoveryList = document.getElementById('identity-mfa-recovery-code-list');
     if (code) code.value = '';
-    if (enrollmentCode) enrollmentCode.value = '';
     if (recoveryList) recoveryList.textContent = '';
   }
 
