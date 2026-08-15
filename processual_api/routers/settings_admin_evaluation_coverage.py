@@ -32,12 +32,14 @@ async def evaluation_coverage_plan(
     response_model=dict,
 )
 async def evaluation_coverage_status(
+    client_id: str | None = Query(default=None),
     evaluation_grant_id: str | None = Query(default=None),
     api_key_id: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     await require_active_platform_admin(current_user)
     return summarize_evaluation_endpoint_coverage(
+        client_id=client_id,
         evaluation_grant_id=evaluation_grant_id,
         api_key_id=api_key_id,
     )
