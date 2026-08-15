@@ -6,10 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
     '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-single-owner';
-  const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
-    'script[data-admin-api-key-evaluation-lifecycle]';
-  const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
-    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation03-single-owner';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
   const EXTERNAL_CATEGORY = 'external_evaluation';
@@ -128,15 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
         Enter the development API key for this browser session. It is stored in sessionStorage only.
       </div>
       <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
-        <input
-          id="admin-evaluation-dev-api-key"
-          type="password"
-          autocomplete="off"
-          placeholder="Development API key"
-        >
-        <button id="admin-evaluation-dev-api-key-save" class="btn primary" type="button">
-          Verify & Load Controls
-        </button>
+        <input id="admin-evaluation-dev-api-key" type="password" autocomplete="off" placeholder="Development API key">
+        <button id="admin-evaluation-dev-api-key-save" class="btn primary" type="button">Verify & Load Controls</button>
       </div>
       <div class="muted" data-evaluation-dev-auth-message style="margin-top:var(--s-1)"></div>
     `;
@@ -157,16 +146,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (input) input.value = '';
         if (button) button.disabled = true;
         if (message) {
-          message.textContent =
-            'Credential saved for this tab. Verifying administrator authority...';
+          message.textContent = 'Credential saved for this tab. Verifying administrator authority...';
         }
         setEvaluationAccessStatus('Verifying local development administrator credential...');
         await checkAdminSession();
       } catch (error) {
         if (button) button.disabled = false;
         if (message) {
-          message.textContent =
-            'Unable to store the development credential for this browser session.';
+          message.textContent = 'Unable to store the development credential for this browser session.';
         }
       }
     }
@@ -217,22 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(script);
   }
 
-  function loadApiKeyEvaluationLifecycle() {
-    if (document.querySelector(API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR)) return;
-    const script = document.createElement('script');
-    script.src = API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC;
-    script.dataset.adminApiKeyEvaluationLifecycle = 'true';
-    script.addEventListener('load', () => {
-      if (!document.body.dataset.adminApiKeyEvaluationLifecycle) {
-        document.body.dataset.adminApiKeyEvaluationLifecycle = 'loading';
-      }
-    });
-    script.addEventListener('error', () => {
-      document.body.dataset.adminApiKeyEvaluationLifecycle = 'load-error';
-    });
-    document.body.appendChild(script);
-  }
-
   function wait(delayMs) {
     return new Promise((resolve) => window.setTimeout(resolve, delayMs));
   }
@@ -276,16 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function checkAdminSession() {
-    const protectedBlocks = Array.from(document.querySelectorAll('.mono-block')).filter((el) =>
-      (el.textContent || '').includes('Checking admin session')
-    );
-
-    function writeProtected(message) {
-      protectedBlocks.forEach((el) => {
-        el.textContent = message;
-      });
-    }
-
     try {
       const headers =
         window.PMK_ADMIN_AUTH && typeof PMK_ADMIN_AUTH.headers === 'function'
@@ -300,9 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
           true
         );
         renderDevelopmentAuthBootstrap();
-        writeProtected(
-          'Admin auth token missing. Login did not persist a Bearer token for admin API calls.'
-        );
         return;
       }
 
@@ -310,14 +268,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) {
         document.body.dataset.adminSession = 'error-' + response.status;
         document.body.dataset.adminEvaluationGrants = 'auth-error';
-        setEvaluationAccessStatus(
-          'Administrator verification failed: HTTP ' + response.status,
-          true
-        );
+        setEvaluationAccessStatus('Administrator verification failed: HTTP ' + response.status, true);
         if (response.status === 401 || response.status === 403) {
           renderDevelopmentAuthBootstrap();
         }
-        writeProtected('Admin session check failed: HTTP ' + response.status);
         return;
       }
 
@@ -329,20 +283,18 @@ document.addEventListener('DOMContentLoaded', () => {
           'The current session is authenticated but does not have administrator authority for this area.',
           true
         );
-        writeProtected('Session exists, but admin scope was not found.');
         return;
       }
 
       clearDevelopmentAuthBootstrap();
       document.body.dataset.adminSession = 'ok';
-      writeProtected('Admin session verified. Backend scopes remain the authority.');
+      setEvaluationAccessStatus('Administrator verified. Governed evaluation controls are loading.');
       loadApiKeyProvisioningWorkspace();
       dispatchAdminSessionVerified(me);
 
       if (canManageEvaluationGrants(me)) {
         document.body.dataset.adminEvaluationGrants = 'authorized';
         loadEvaluationGrantControls();
-        loadApiKeyEvaluationLifecycle();
       } else {
         document.body.dataset.adminEvaluationGrants = 'not-authorized';
         setEvaluationAccessStatus(
@@ -357,7 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'Administrator verification failed: ' + (error.message || String(error)),
         true
       );
-      writeProtected('Admin session check failed: ' + (error.message || String(error)));
     }
   }
 
