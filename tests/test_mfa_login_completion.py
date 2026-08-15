@@ -47,6 +47,10 @@ def test_first_identity_login_can_enroll_totp_and_shows_recovery_codes_once() ->
         "Recovery codes — shown once",
         "They are not saved in browser storage.",
         "completedIdentityToken",
+        "function clearMfaEnrollmentMaterial()",
+        "if (secret) secret.textContent = ''",
+        "if (uri) uri.textContent = ''",
+        "clearMfaEnrollmentMaterial();",
     ]
     for marker in required:
         assert marker in source
