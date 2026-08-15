@@ -34,6 +34,7 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
 )
 from processual_api.services.evaluation_grants import evaluation_task_allowed
 
+from . import cgt_governor as runtime_host
 from . import settings as settings_router
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from . import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
@@ -215,6 +216,12 @@ async def execute_evaluation_runtime_task(
         "next_readiness_stage": "maestro_task_consumption",
         "raw_secret_visible": False,
     }
+
+
+# cgt_governor.router is an already-registered root runtime router with no
+# prefix. Hosting this sub-router there preserves the explicit
+# /evaluation/runtime/* path without routing Evaluation keys through /settings.
+runtime_host.router.include_router(router)
 
 
 __all__ = [
