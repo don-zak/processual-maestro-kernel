@@ -25,12 +25,18 @@ def _configure_log_path(monkeypatch, tmp_path) -> None:
     )
 
 
-def _append_success(method: str, path: str) -> None:
+def _append_success(
+    method: str,
+    path: str,
+    *,
+    grant_id: str,
+    key_id: str,
+) -> None:
     usage_log_store.append_usage_log(
         {
-            "client_id": "evaluation-client",
+            "client_id": "evaluation-campaign-client",
             "user_id": "evaluation-user",
-            "api_key_id": "evalkey-coverage",
+            "api_key_id": key_id,
             "api_key_prefix": "pmk_example...",
             "auth_method": "api_key",
             "session_type": "api_key",
@@ -40,7 +46,7 @@ def _append_success(method: str, path: str) -> None:
             "latency_ms": 12.5,
             "role": "client",
             "entitlement_source": "admin_evaluation_grant",
-            "evaluation_grant_id": "eval-coverage",
+            "evaluation_grant_id": grant_id,
             "execution_mode": "evaluation_runtime",
             "real_runtime_execution": True,
             "endpoint_authority_source": "canonical_runtime_access_policy",
@@ -77,7 +83,7 @@ def test_evaluation_usage_metadata_is_emitted_without_raw_secret() -> None:
     assert "raw_api_key" not in record
 
 
-def test_protected_coverage_is_incomplete_until_every_protected_endpoint_succeeds(
+def test_campaign_coverage_aggregates_multiple_bounded_grants_by_client_id(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -88,22 +94,33 @@ def test_protected_coverage_is_incomplete_until_every_protected_endpoint_succeed
         if (policy.method, policy.path) not in PUBLIC_PROBES
     ]
 
-    for policy in protected[:-1]:
-        _append_success(policy.method, policy.path)
+    for index, policy in enumerate(protected[:-1]):
+        _append_success(
+            policy.method,
+            policy.path,
+            grant_id=f"eval-campaign-{index % 3}",
+            key_id=f"evalkey-campaign-{index % 3}",
+        )
 
     summary = usage_log_store.summarize_evaluation_endpoint_coverage(
-        evaluation_grant_id="eval-coverage",
+        client_id="evaluation-campaign-client",
     )
 
+    assert summary["campaign_correlation"] == "client_id"
     assert summary["protected_endpoint_count"] == len(protected)
     assert summary["protected_endpoint_success_count"] == len(protected) - 1
     assert summary["protected_runtime_coverage_complete"] is False
     assert summary["protected_coverage_percent"] < 100
 
     missing = protected[-1]
-    _append_success(missing.method, missing.path)
+    _append_success(
+        missing.method,
+        missing.path,
+        grant_id="eval-campaign-2",
+        key_id="evalkey-campaign-2",
+    )
     complete = usage_log_store.summarize_evaluation_endpoint_coverage(
-        evaluation_grant_id="eval-coverage",
+        client_id="evaluation-campaign-client",
     )
 
     assert complete["protected_endpoint_success_count"] == len(protected)
@@ -125,6 +142,7 @@ def test_failed_runtime_attempt_does_not_count_as_endpoint_success(
     )
     usage_log_store.append_usage_log(
         {
+            "client_id": "evaluation-campaign-client",
             "api_key_id": "evalkey-coverage",
             "auth_method": "api_key",
             "method": policy.method,
@@ -140,7 +158,7 @@ def test_failed_runtime_attempt_does_not_count_as_endpoint_success(
     )
 
     summary = usage_log_store.summarize_evaluation_endpoint_coverage(
-        evaluation_grant_id="eval-coverage",
+        client_id="evaluation-campaign-client",
     )
     row = next(
         endpoint
@@ -169,6 +187,7 @@ def test_coverage_status_route_remains_super_admin_only(monkeypatch, tmp_path) -
 
     result = asyncio.run(
         coverage_route.evaluation_coverage_status(
+            client_id=None,
             evaluation_grant_id=None,
             api_key_id=None,
             current_user=current_user,
