@@ -128,7 +128,10 @@ def test_evaluation_runtime_full_allowed_denied_revoke_sequence(
     with pytest.raises(HTTPException) as unselected:
         _authenticate(raw_key, "GET", "/health/ready")
     assert unselected.value.status_code == 403
-    assert "not allowed" in str(unselected.value.detail).lower()
+    assert (
+        str(unselected.value.detail)
+        == "Evaluation grant does not allow this runtime endpoint."
+    )
 
     with pytest.raises(HTTPException) as control_plane:
         _authenticate(
