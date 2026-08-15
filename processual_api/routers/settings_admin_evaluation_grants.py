@@ -1,4 +1,4 @@
-"""Supervisor-governed evaluation access outside paid subscription flows."""
+"""Super-admin governed evaluation access outside paid subscription flows."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from processual_api.auth.security import (
     get_current_user,
     hash_api_key,
 )
+from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
 from processual_api.integrations.integration_task_catalog import (
     get_integration_task,
     task_catalog_payload,
@@ -37,6 +38,12 @@ PILOT_DEFAULT_SCOPES = [
     "run:govern",
     "read:reports",
 ]
+EVALUATION_EXECUTION_MODE = "evaluation_runtime"
+
+
+class EvaluationEndpointSelection(BaseModel):
+    method: str = Field(min_length=3, max_length=10)
+    path: str = Field(min_length=1, max_length=300)
 
 
 class EvaluationGrantCreate(BaseModel):
@@ -45,6 +52,7 @@ class EvaluationGrantCreate(BaseModel):
     issued_to: str = Field(min_length=1, max_length=240)
     purpose: str = Field(min_length=10, max_length=500)
     allowed_task_ids: list[str] = Field(min_length=1, max_length=24)
+    allowed_endpoints: list[EvaluationEndpointSelection] = Field(min_length=1, max_length=32)
     allowed_scopes: list[str] = Field(
         default_factory=lambda: list(PILOT_DEFAULT_SCOPES),
         min_length=1,
@@ -113,6 +121,43 @@ def _safe_scopes(values: list[str]) -> list[str]:
             detail="At least one evaluation scope is required.",
         )
     return scopes
+
+
+def _endpoint_selection(
+    values: list[EvaluationEndpointSelection],
+    allowed_scopes: list[str],
+) -> list[dict[str, str]]:
+    selected: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    scope_set = {str(scope).strip().lower() for scope in allowed_scopes}
+
+    for value in values:
+        method = value.method.strip().upper()
+        path = value.path.strip()
+        key = (method, path)
+        if key in seen:
+            continue
+        policy = get_api_key_access_policy(method, path)
+        if policy is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Endpoint is not eligible for evaluation access: {method} {path}",
+            )
+        required_scopes = set(policy.required_scopes)
+        if not required_scopes.issubset(scope_set):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Endpoint scope derivation mismatch: {method} {path}",
+            )
+        seen.add(key)
+        selected.append({"method": method, "path": path})
+
+    if not selected:
+        raise HTTPException(
+            status_code=422,
+            detail="At least one eligible evaluation endpoint is required.",
+        )
+    return selected
 
 
 def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
@@ -215,6 +260,7 @@ async def create_evaluation_grant(
     now = datetime.now(UTC)
     actor, role = _actor(current_user)
     scopes = _safe_scopes(body.allowed_scopes)
+    endpoints = _endpoint_selection(body.allowed_endpoints, scopes)
     task_ids, task_scope_ids = _task_selection(body.allowed_task_ids)
 
     grant = {
@@ -226,6 +272,7 @@ async def create_evaluation_grant(
         "purpose": body.purpose.strip(),
         "allowed_task_ids": task_ids,
         "task_scope_ids": task_scope_ids,
+        "allowed_endpoints": endpoints,
         "allowed_scopes": scopes,
         "max_requests": int(body.max_requests),
         "created_at": now.isoformat(),
@@ -236,6 +283,9 @@ async def create_evaluation_grant(
         "subscription_required": False,
         "entitlement_source": "admin_evaluation_grant",
         "task_authority_source": "integration_task_catalog",
+        "endpoint_authority_source": "canonical_runtime_access_policy",
+        "execution_mode": EVALUATION_EXECUTION_MODE,
+        "real_runtime_execution": True,
         "production_allowed": False,
     }
     grants.append(grant)
@@ -293,6 +343,7 @@ async def issue_evaluation_key(
         raise HTTPException(status_code=404, detail="Evaluation grant not found.")
 
     scopes = list(grant.get("allowed_scopes") or [])
+    endpoints = list(grant.get("allowed_endpoints") or [])
     task_ids = list(grant.get("allowed_task_ids") or [])
     task_scope_ids = list(grant.get("task_scope_ids") or [])
     client_id = str(grant.get("client_id") or "")
@@ -303,6 +354,7 @@ async def issue_evaluation_key(
             grant_id=grant_id,
             client_id=client_id,
             requested_scopes=scopes,
+            requested_endpoints=endpoints,
             requested_task_ids=task_ids,
             quota_limit=max_requests,
         )
@@ -325,9 +377,11 @@ async def issue_evaluation_key(
         "prefix": raw_key[:12] + "...",
         "hashed": _hash_key(raw_key),
         "scopes": scopes,
+        "allowed_endpoints": endpoints,
         "allowed_task_ids": task_ids,
         "task_scope_ids": task_scope_ids,
         "task_authority_source": "integration_task_catalog",
+        "endpoint_authority_source": "canonical_runtime_access_policy",
         "profile": "client",
         "category": "pilot_client",
         "role": "client",
@@ -338,6 +392,8 @@ async def issue_evaluation_key(
         "evaluation_grant_id": grant_id,
         "entitlement_source": "admin_evaluation_grant",
         "subscription_required": False,
+        "execution_mode": EVALUATION_EXECUTION_MODE,
+        "real_runtime_execution": True,
         "plan_id": "Starter",
         "quota_policy": {
             "id": "evaluation_grant",
@@ -376,9 +432,13 @@ async def issue_evaluation_key(
             "client_id": client_id,
             "evaluation_grant_id": grant_id,
             "scopes": scopes,
+            "allowed_endpoints": endpoints,
             "allowed_task_ids": task_ids,
             "task_scope_ids": task_scope_ids,
             "task_authority_source": "integration_task_catalog",
+            "endpoint_authority_source": "canonical_runtime_access_policy",
+            "execution_mode": EVALUATION_EXECUTION_MODE,
+            "real_runtime_execution": True,
             "quota_limit": max_requests,
             "expires_at": entry["expires_at"],
             "subscription_required": False,
@@ -386,7 +446,7 @@ async def issue_evaluation_key(
         },
         "onboarding_usage": {
             "header": "X-API-Key",
-            "example_endpoint": "/adapters/status",
+            "example_endpoint": endpoints[0]["path"] if endpoints else "/adapters/status",
         },
     }
 
