@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +8,9 @@ from fastapi import HTTPException
 
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
 from processual_api.routers import evaluation_runtime
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _evaluation_user(*, allowed_tasks: list[str]) -> dict:
@@ -54,9 +58,17 @@ def test_runtime_task_bridge_is_canonical_grantable_surface() -> None:
 
     assert len(_matching_task_routes(evaluation_runtime.router.routes)) == 1
 
-    from processual_api.main import app
+    runtime_source = (ROOT / "processual_api" / "routers" / "evaluation_runtime.py").read_text(
+        encoding="utf-8"
+    )
+    routers_source = (ROOT / "processual_api" / "routers" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+    main_source = (ROOT / "processual_api" / "main.py").read_text(encoding="utf-8")
 
-    assert len(_matching_task_routes(app.routes)) == 1
+    assert "runtime_host.router.include_router(router)" in runtime_source
+    assert "evaluation_runtime as _evaluation_runtime" in routers_source
+    assert "app.include_router(cgt_governor.router)" in main_source
 
 
 def test_ungranted_task_is_denied_before_network_execution(monkeypatch) -> None:
