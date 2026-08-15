@@ -1,74 +1,48 @@
 document.addEventListener('DOMContentLoaded', () => {
   const PAGE_ID = 'page-admin-api-keys';
   const CARD_ID = 'admin-api-key-lifecycle-card';
+  const CATEGORY_SURFACE_ID = 'admin-api-key-category-surface';
+  const STANDARD_LIFECYCLE_ID = 'admin-api-key-standard-lifecycle';
+  const EXTERNAL_LIFECYCLE_ID = 'admin-api-key-external-evaluation-card';
+  const EXTERNAL_BODY_ID = 'admin-api-key-external-evaluation-body';
+  const EVALUATION_HOST_ID = 'admin-evaluation-grants';
+  const EXTERNAL_CATEGORY = 'external_evaluation';
   const SUPERVISOR_SESSION_KEY_ENDPOINT = '/settings/admin/supervisor-session-keys';
   const SUPERVISOR_SESSION_KEY_STORAGE_KEY = 'pmk_supervisor_session_key';
 
   function formatAdminApiErrorValue(value) {
-    if (value === null || value === undefined || value === '') {
-      return '';
-    }
-
-    if (typeof value === 'string') {
-      return value;
-    }
-
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'string') return value;
     if (Array.isArray(value)) {
-      return value
-        .map((item) => formatAdminApiErrorValue(item))
-        .filter(Boolean)
-        .join(' | ');
+      return value.map((item) => formatAdminApiErrorValue(item)).filter(Boolean).join(' | ');
     }
-
     if (typeof value === 'object') {
       const preferred = [
-        'error',
-        'code',
-        'message',
-        'msg',
-        'reason',
-        'required_scope',
-        'required_scopes',
-        'provided_scope',
-        'provided_scopes',
-        'field',
-        'loc',
-        'type',
+        'error', 'code', 'message', 'msg', 'reason', 'required_scope',
+        'required_scopes', 'provided_scope', 'provided_scopes', 'field', 'loc', 'type',
       ];
-
       const parts = [];
       preferred.forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(value, key)) {
           const formatted = formatAdminApiErrorValue(value[key]);
-          if (formatted) {
-            parts.push(`${key}: ${formatted}`);
-          }
+          if (formatted) parts.push(`${key}: ${formatted}`);
         }
       });
-
-      if (parts.length) {
-        return parts.join(' | ');
-      }
-
+      if (parts.length) return parts.join(' | ');
       try {
         return JSON.stringify(value);
       } catch (error) {
         return String(value);
       }
     }
-
     return String(value);
   }
 
   function formatAdminApiError(data, status) {
-    if (!data) {
-      return `HTTP ${status}`;
-    }
-
+    if (!data) return `HTTP ${status}`;
     const detail = Object.prototype.hasOwnProperty.call(data, 'detail') ? data.detail : null;
     const error = Object.prototype.hasOwnProperty.call(data, 'error') ? data.error : null;
     const message = Object.prototype.hasOwnProperty.call(data, 'message') ? data.message : null;
-
     return (
       formatAdminApiErrorValue(detail) ||
       formatAdminApiErrorValue(error) ||
@@ -78,11 +52,11 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-
   const KEY_CATEGORIES = [
     ['client_api', 'Client API - normal client access'],
     ['pilot_client', 'Pilot Client - introductory access / pilot access'],
     ['external_partner', 'External Partner - scoped partner access'],
+    [EXTERNAL_CATEGORY, 'External Evaluation Access - governed sandbox evaluation'],
     ['service_integration', 'Service Integration - server-to-server access'],
     ['billing_service', 'Billing Service - Lemon Squeezy or billing sync'],
     ['support_viewer', 'Support Viewer - read-only support access'],
@@ -160,37 +134,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // CLIENT.post('/settings/api-keys'
 
   const SUPERVISOR_SESSION_KEY_FIELDS = [
-    'session_key_id',
-    'level',
-    'issued_to',
-    'session_label',
-    'reason',
-    'status',
-    'created_at',
-    'expires_at',
-    'last_used_at',
-    'revoked_at',
-    'revocation_reason',
+    'session_key_id', 'level', 'issued_to', 'session_label', 'reason', 'status',
+    'created_at', 'expires_at', 'last_used_at', 'revoked_at', 'revocation_reason',
   ];
 
   const METADATA_FIELDS = [
-    'key_id',
-    'prefix',
-    'label',
-    'category',
-    'role',
-    'scopes',
-    'client_id',
-    'user_id',
-    'plan_id',
-    'quota_limit',
-    'quota_used',
-    'status',
-    'usage_count',
-    'last_used_at',
-    'created_at',
-    'expires_at',
-    'revoked_at',
+    'key_id', 'prefix', 'label', 'category', 'role', 'scopes', 'client_id', 'user_id',
+    'plan_id', 'quota_limit', 'quota_used', 'status', 'usage_count', 'last_used_at',
+    'created_at', 'expires_at', 'revoked_at',
   ];
 
   function page() {
@@ -206,7 +157,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (auth && typeof auth.headers === 'function') {
       return { ...auth.headers(), ...extra };
     }
-
     const token =
       localStorage.getItem('access_token') ||
       localStorage.getItem('auth_token') ||
@@ -214,11 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sessionStorage.getItem('access_token') ||
       sessionStorage.getItem('auth_token') ||
       sessionStorage.getItem('admin_token');
-
-    return {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...extra,
-    };
+    return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
   }
 
   async function request(method, path, payload) {
@@ -226,11 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
       method,
       headers: authHeaders({ 'Content-Type': 'application/json' }),
     };
-
-    if (payload !== undefined) {
-      options.body = JSON.stringify(payload);
-    }
-
+    if (payload !== undefined) options.body = JSON.stringify(payload);
     const response = await fetch(endpoint(path), options);
     const text = await response.text();
     let data = {};
@@ -241,11 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         data = { raw: text };
       }
     }
-
-    if (!response.ok) {
-      throw new Error(formatAdminApiError(data, response.status));
-    }
-
+    if (!response.ok) throw new Error(formatAdminApiError(data, response.status));
     return data;
   }
 
@@ -267,10 +205,49 @@ document.addEventListener('DOMContentLoaded', () => {
     return document.getElementById('admin-api-key-category')?.value || 'client_api';
   }
 
+  function dispatchCategoryChanged() {
+    try {
+      window.dispatchEvent(new CustomEvent('pmk-api-key-category-changed', {
+        detail: { category: selectedCategory() },
+      }));
+    } catch {
+      window.dispatchEvent(new Event('pmk-api-key-category-changed'));
+    }
+  }
+
+  function applyLifecycleCategory() {
+    const external = selectedCategory() === EXTERNAL_CATEGORY;
+    const standard = document.getElementById(STANDARD_LIFECYCLE_ID);
+    const evaluation = document.getElementById(EXTERNAL_LIFECYCLE_ID);
+    const evaluationBody = document.getElementById(EXTERNAL_BODY_ID);
+
+    if (standard) {
+      standard.hidden = external;
+      standard.style.display = external ? 'none' : '';
+    }
+    if (evaluation) {
+      evaluation.hidden = !external;
+      evaluation.style.display = external ? '' : 'none';
+      evaluation.dataset.activated = external ? 'true' : 'false';
+    }
+    if (evaluationBody) {
+      evaluationBody.hidden = !external;
+      evaluationBody.style.display = external ? '' : 'none';
+    }
+
+    if (external) {
+      window.PMK_ADMIN_SESSION?.check?.();
+    }
+    dispatchCategoryChanged();
+  }
+
   function applyCategoryDefaults() {
     const category = selectedCategory();
+    if (category === EXTERNAL_CATEGORY) {
+      applyLifecycleCategory();
+      return;
+    }
     const defaults = CATEGORY_DEFAULTS[category] || CATEGORY_DEFAULTS.client_api;
-
     const role = document.getElementById('admin-api-key-role');
     const scopes = document.getElementById('admin-api-key-scopes');
     const purpose = document.getElementById('admin-api-key-purpose');
@@ -278,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const clientId = document.getElementById('admin-api-key-client-id');
     const userId = document.getElementById('admin-api-key-user-id');
     const issuedTo = document.getElementById('admin-api-key-issued-to');
-
     if (role) role.value = defaults.role;
     if (scopes) scopes.value = defaults.scopes.join('\n');
     if (purpose) purpose.value = defaults.purpose || '';
@@ -286,14 +262,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (clientId) clientId.value = defaults.clientId || '';
     if (userId) userId.value = defaults.userId || '';
     if (issuedTo) issuedTo.value = defaults.issuedTo || '';
+    applyLifecycleCategory();
   }
 
   function parseScopes() {
     const raw = document.getElementById('admin-api-key-scopes')?.value || '';
-    return raw
-      .split(/[\n,]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
+    return raw.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
   }
 
   function optionalValue(id) {
@@ -327,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderOneTimeKey(result) {
     const target = document.getElementById('admin-api-key-create-result');
     if (!target) return;
-
     const raw = result.api_key ?? '';
     target.innerHTML = `
       <div class="admin-note ok">
@@ -345,13 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
         issued_to metadata, revocable access, and X-API-Key usage examples.
       </div>
     `;
-
     document.getElementById('admin-api-key-copy-created')?.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(raw);
-      } catch {
-        // Clipboard may be unavailable in some browsers.
-      }
+      } catch {}
     });
   }
 
@@ -373,70 +343,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const status = document.getElementById('admin-supervisor-session-status');
     const level = document.getElementById('admin-supervisor-session-level');
     const scopes = document.getElementById('admin-supervisor-session-scopes');
-
-    if (status) {
-      status.textContent = message || 'Supervisor session: browser key updated';
-    }
-    if (level) {
-      level.textContent = 'Level: pending validation on next authenticated request';
-    }
-    if (scopes) {
-      scopes.textContent = 'Scopes: validated by backend through X-Supervisor-Session-Key';
-    }
+    if (status) status.textContent = message || 'Supervisor session: browser key updated';
+    if (level) level.textContent = 'Level: pending validation on next authenticated request';
+    if (scopes) scopes.textContent = 'Scopes: validated by backend through X-Supervisor-Session-Key';
   }
 
   function dispatchSupervisorSessionKeyUpdated() {
     try {
       window.dispatchEvent(new CustomEvent('pmk-supervisor-session-key-updated'));
-    } catch {
-      // CustomEvent may be unavailable in very old browsers.
-    }
+    } catch {}
   }
 
   function storeSupervisorSessionKeyForAdmin(raw) {
     if (!raw) return;
-
     try {
       sessionStorage.setItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY, raw);
-    } catch {
-      // Session storage may be unavailable in restricted browser contexts.
-    }
-
-    updateSupervisorSessionCardAfterUse(
-      'Supervisor session: key stored for this browser session'
-    );
+    } catch {}
+    updateSupervisorSessionCardAfterUse('Supervisor session: key stored for this browser session');
     dispatchSupervisorSessionKeyUpdated();
-
     const target = document.getElementById('admin-supervisor-key-use-status');
-    if (target) {
-      target.textContent = 'Supervisor key stored in this browser session.';
-    }
+    if (target) target.textContent = 'Supervisor key stored in this browser session.';
   }
 
   function clearSupervisorSessionKeyForAdmin() {
-    try {
-      sessionStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY);
-    } catch {}
-
-    try {
-      localStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY);
-    } catch {}
-
-    updateSupervisorSessionCardAfterUse(
-      'Supervisor session: no browser key stored'
-    );
+    try { sessionStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY); } catch {}
+    try { localStorage.removeItem(SUPERVISOR_SESSION_KEY_STORAGE_KEY); } catch {}
+    updateSupervisorSessionCardAfterUse('Supervisor session: no browser key stored');
     dispatchSupervisorSessionKeyUpdated();
-
     const target = document.getElementById('admin-supervisor-key-use-status');
-    if (target) {
-      target.textContent = 'Supervisor key cleared from this browser session.';
-    }
+    if (target) target.textContent = 'Supervisor key cleared from this browser session.';
   }
 
   function renderOneTimeSupervisorSessionKey(result) {
     const target = document.getElementById('admin-supervisor-key-create-result');
     if (!target) return;
-
     const raw = result.raw_key || '';
     const record = result.record || {};
     target.innerHTML = `
@@ -453,15 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ${escapeHtml(record.level || '')} / ${escapeHtml(record.issued_to || '')}
       </div>
     `;
-
     document.getElementById('admin-supervisor-key-copy-created')?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(raw);
-      } catch {
-        // Clipboard may be unavailable in some browsers.
-      }
+      try { await navigator.clipboard.writeText(raw); } catch {}
     });
-
     document.getElementById('admin-supervisor-key-use-created')?.addEventListener('click', () => {
       storeSupervisorSessionKeyForAdmin(raw);
     });
@@ -470,11 +404,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function metadataDisplayValue(item, field) {
     if (!item) return '';
     let value = field === 'scopes' ? scopesText(item[field]) : item[field];
-
     if ((value === undefined || value === null || value === '') && field === 'key_id') {
       value = item.id || '';
     }
-
     if (Array.isArray(value)) return value.join(', ');
     if (value && typeof value === 'object') return JSON.stringify(value);
     return value ?? '';
@@ -506,9 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="admin-api-key-metadata-card-grid">
             ${renderMetadataCardFields(fields, item)}
           </div>
-          <div class="admin-actions">
-            ${actionHtml || ''}
-          </div>
+          <div class="admin-actions">${actionHtml || ''}</div>
         </div>
       </details>
     `;
@@ -518,15 +448,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!Array.isArray(keys) || keys.length === 0) {
       return '<div class="admin-note">No supervisor session keys found. Issue a supervisor key to create one.</div>';
     }
-
     const cards = keys.map((key) => {
       const sessionKeyId = key.session_key_id || '';
-      const summary = [
-        sessionKeyId || 'supervisor-session-key',
-        key.level || 'level pending',
-        key.status || 'status pending',
-      ].join(' / ');
-
+      const summary = [sessionKeyId || 'supervisor-session-key', key.level || 'level pending', key.status || 'status pending'].join(' / ');
       return renderMetadataDetailsCard({
         className: 'admin-api-key-metadata-card admin-supervisor-session-metadata-card',
         summary,
@@ -534,23 +458,16 @@ document.addEventListener('DOMContentLoaded', () => {
         item: key,
         actionHtml: `
           <button class="btn danger admin-supervisor-key-revoke"
-            data-session-key-id="${escapeHtml(sessionKeyId)}" type="button">
-            Revoke
-          </button>
+            data-session-key-id="${escapeHtml(sessionKeyId)}" type="button">Revoke</button>
         `,
       });
     }).join('');
-
-    return `
-      <div class="admin-api-key-metadata-card-list admin-supervisor-session-metadata-card-list">
-        ${cards}
-      </div>
-    `;
+    return `<div class="admin-api-key-metadata-card-list admin-supervisor-session-metadata-card-list">${cards}</div>`;
   }
+
   async function refreshSupervisorSessionKeys() {
     const target = document.getElementById('admin-supervisor-key-table');
     if (!target) return;
-
     target.innerHTML = '<div class="admin-note">Loading supervisor session key metadata ...</div>';
     try {
       const data = await request('GET', SUPERVISOR_SESSION_KEY_ENDPOINT);
@@ -562,29 +479,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function issueSupervisorSessionKey() {
     const target = document.getElementById('admin-supervisor-key-create-result');
-    if (target) {
-      target.innerHTML = '<div class="admin-note">Issuing supervisor session key ...</div>';
-    }
-
+    if (target) target.innerHTML = '<div class="admin-note">Issuing supervisor session key ...</div>';
     try {
       const created = await request('POST', SUPERVISOR_SESSION_KEY_ENDPOINT, buildSupervisorSessionKeyPayload());
       renderOneTimeSupervisorSessionKey(created);
       await refreshSupervisorSessionKeys();
     } catch (error) {
-      if (target) {
-        target.innerHTML = `<div class="admin-note danger">Supervisor key issue failed: ${escapeHtml(error.message)}</div>`;
-      }
+      if (target) target.innerHTML = `<div class="admin-note danger">Supervisor key issue failed: ${escapeHtml(error.message)}</div>`;
     }
   }
 
   async function revokeSupervisorSessionKey(sessionKeyId) {
     if (!sessionKeyId) return;
-
-    const ok = window.confirm(
-      `Revoke supervisor session key ${sessionKeyId}? This disables the browser session key.`
-    );
+    const ok = window.confirm(`Revoke supervisor session key ${sessionKeyId}? This disables the browser session key.`);
     if (!ok) return;
-
     await request('POST', `${SUPERVISOR_SESSION_KEY_ENDPOINT}/${sessionKeyId}/revoke`, {
       reason: 'Revoked from Admin API Keys page.',
     });
@@ -603,7 +511,6 @@ document.addEventListener('DOMContentLoaded', () => {
           Raw supervisor keys are shown once after issue. Safe metadata omits secret values and stored hashes.
           Backend enforcement remains authoritative.
         </div>
-
         <div class="admin-grid">
           <label>Supervisor level
             <select id="admin-supervisor-key-level">
@@ -611,29 +518,17 @@ document.addEventListener('DOMContentLoaded', () => {
               <option value="operations_supervisor">operations_supervisor</option>
             </select>
           </label>
-          <label>Issued to
-            <input id="admin-supervisor-key-issued-to" placeholder="ops@example.com" />
-          </label>
-          <label>Session label
-            <input id="admin-supervisor-key-label" placeholder="browser session label" />
-          </label>
-          <label>Expires at
-            <input id="admin-supervisor-key-expires-at" placeholder="2026-07-05T18:00:00+00:00" />
-          </label>
+          <label>Issued to<input id="admin-supervisor-key-issued-to" placeholder="ops@example.com" /></label>
+          <label>Session label<input id="admin-supervisor-key-label" placeholder="browser session label" /></label>
+          <label>Expires at<input id="admin-supervisor-key-expires-at" placeholder="2026-07-05T18:00:00+00:00" /></label>
         </div>
-
-        <label>Reason
-          <input id="admin-supervisor-key-reason" placeholder="why this supervised session is needed" />
-        </label>
-
+        <label>Reason<input id="admin-supervisor-key-reason" placeholder="why this supervised session is needed" /></label>
         <div class="admin-actions">
           <button id="admin-supervisor-key-issue-btn" class="btn primary" type="button">Issue Supervisor Key</button>
           <button id="admin-supervisor-key-refresh-btn" class="btn secondary" type="button">Refresh Supervisor Keys</button>
           <button id="admin-supervisor-key-clear-session" class="btn secondary" type="button">Clear supervisor session key</button>
         </div>
-
         <div id="admin-supervisor-key-create-result"></div>
-
         <h3>Safe supervisor session key metadata</h3>
         <div class="admin-note">
           The cards render safe metadata only: session_key_id, level, issued_to,
@@ -649,39 +544,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!Array.isArray(keys) || keys.length === 0) {
       return '<div class="admin-note">No active API keys found. Use Generate governed key to create one.</div>';
     }
-
     const cards = keys.map((key) => {
       const keyId = key.key_id || key.id || '';
-      const summary = [
-        keyId || 'api-key',
-        key.label || key.category || 'metadata',
-        key.status || 'status pending',
-      ].join(' / ');
-
+      const summary = [keyId || 'api-key', key.label || key.category || 'metadata', key.status || 'status pending'].join(' / ');
       return renderMetadataDetailsCard({
         className: 'admin-api-key-metadata-card',
         summary,
         fields: METADATA_FIELDS,
         item: key,
         actionHtml: `
-          <button class="btn danger admin-api-key-revoke"
-            data-key-id="${escapeHtml(keyId)}" type="button">
-            Revoke
-          </button>
+          <button class="btn danger admin-api-key-revoke" data-key-id="${escapeHtml(keyId)}" type="button">Revoke</button>
         `,
       });
     }).join('');
-
-    return `
-      <div class="admin-api-key-metadata-card-list">
-        ${cards}
-      </div>
-    `;
+    return `<div class="admin-api-key-metadata-card-list">${cards}</div>`;
   }
+
   async function refreshKeys() {
     const target = document.getElementById('admin-api-key-table');
     if (!target) return;
-
     target.innerHTML = '<div class="admin-note">Loading API key metadata from /settings/api-keys ...</div>';
     try {
       const keys = await request('GET', '/settings/api-keys');
@@ -693,43 +574,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function createKey() {
     const result = document.getElementById('admin-api-key-create-result');
+    if (selectedCategory() === EXTERNAL_CATEGORY) {
+      if (result) {
+        result.innerHTML = '<div class="admin-note danger">Standard API key generation is blocked for External Evaluation. Use the evaluation grant lifecycle.</div>';
+      }
+      return;
+    }
     if (result) {
       result.innerHTML = '<div class="admin-note">Creating governed API key through POST /settings/api-keys ...</div>';
     }
-
     try {
       const created = await request('POST', '/settings/api-keys', buildPayload());
       renderOneTimeKey(created);
       await refreshKeys();
     } catch (error) {
-      if (result) {
-        result.innerHTML = `<div class="admin-note danger">API key creation failed: ${escapeHtml(error.message)}</div>`;
-      }
+      if (result) result.innerHTML = `<div class="admin-note danger">API key creation failed: ${escapeHtml(error.message)}</div>`;
     }
   }
 
   async function revokeKey(keyId) {
     if (!keyId) return;
-
-    const ok = window.confirm(
-      `Revoke API key ${keyId}? This DELETE /settings/api-keys/${keyId} action disables future use.`
-    );
+    const ok = window.confirm(`Revoke API key ${keyId}? This DELETE /settings/api-keys/${keyId} action disables future use.`);
     if (!ok) return;
-
     await request('DELETE', `/settings/api-keys/${keyId}`);
     await refreshKeys();
   }
 
   function categoryOptions() {
-    return KEY_CATEGORIES
-      .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
-      .join('');
+    return KEY_CATEGORIES.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join('');
   }
 
   function renderCard() {
     const root = page();
     if (!root) return;
-
     let card = document.getElementById(CARD_ID);
     if (!card) {
       card = document.createElement('div');
@@ -742,8 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <h2>Admin API Key Lifecycle</h2>
       <div class="admin-note">
         API keys can run Processual Maestro from outside the browser login through the
-        <strong>X-API-Key</strong> header. This is governed programmatic access,
-        not an authentication bypass.
+        <strong>X-API-Key</strong> header. This is governed programmatic access, not an authentication bypass.
       </div>
       <div class="admin-note">
         Tunisia introductory access positioning: use API keys as introductory access,
@@ -755,84 +631,110 @@ document.addEventListener('DOMContentLoaded', () => {
         can create and revoke. <strong>viewer_admin</strong> is read-only. Backend scopes remain authoritative.
       </div>
 
-      <div class="admin-grid">
+      <section id="${CATEGORY_SURFACE_ID}" class="card flat" style="margin-top:var(--s-4)">
+        <div class="sec-hdr">
+          <div class="sh-title">API Key Category</div>
+          <div class="sh-sub">single lifecycle authority - selecting a category changes the active preparation flow</div>
+        </div>
         <label>Category
           <select id="admin-api-key-category">${categoryOptions()}</select>
         </label>
-        <label>Role
-          <input id="admin-api-key-role" value="client" />
-        </label>
-        <label>Plan ID
-          <input id="admin-api-key-plan-id" placeholder="Starter / Pro / Business" />
-        </label>
-        <label>Quota override
-          <input id="admin-api-key-quota-limit-override" type="number" placeholder="optional quota_limit_override" />
-        </label>
-        <label>Expires at
-          <input id="admin-api-key-expires-at" placeholder="2026-12-31T00:00:00+00:00" />
-        </label>
-        <label>Label
-          <input id="admin-api-key-label" placeholder="Pilot client key" />
-        </label>
-        <label>Client ID
-          <input id="admin-api-key-client-id" placeholder="client_id" />
-        </label>
-        <label>User ID
-          <input id="admin-api-key-user-id" placeholder="user_id" />
-        </label>
-        <label>Purpose
-          <input id="admin-api-key-purpose" placeholder="purpose" />
-        </label>
-        <label>Issued to
-          <input id="admin-api-key-issued-to" placeholder="issued_to" />
-        </label>
-      </div>
+        <div class="muted" style="margin-top:var(--s-2)">
+          External Evaluation uses the evaluation-grant authority and never falls through to standard key generation.
+        </div>
+      </section>
 
-      <label>Scopes
-        <textarea id="admin-api-key-scopes" rows="6" spellcheck="false"></textarea>
-      </label>
-
-      <div class="admin-actions">
-        <button id="admin-api-key-generate-btn" class="btn primary" type="button">Generate governed key</button>
-        <button id="admin-api-key-refresh-btn" class="btn secondary" type="button">Refresh</button>
-      </div>
-
-      <div id="admin-api-key-create-result"></div>
-
-      <h3>External usage examples</h3>
-      <div class="mono-block" style="white-space:pre-wrap">curl.exe -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" http://127.0.0.1:8000/adapters/status
+      <section id="${STANDARD_LIFECYCLE_ID}" style="margin-top:var(--s-4)">
+        <div class="admin-grid">
+          <label>Role<input id="admin-api-key-role" value="client" /></label>
+          <label>Plan ID<input id="admin-api-key-plan-id" placeholder="Starter / Pro / Business" /></label>
+          <label>Quota override<input id="admin-api-key-quota-limit-override" type="number" placeholder="optional quota_limit_override" /></label>
+          <label>Expires at<input id="admin-api-key-expires-at" placeholder="2026-12-31T00:00:00+00:00" /></label>
+          <label>Label<input id="admin-api-key-label" placeholder="Pilot client key" /></label>
+          <label>Client ID<input id="admin-api-key-client-id" placeholder="client_id" /></label>
+          <label>User ID<input id="admin-api-key-user-id" placeholder="user_id" /></label>
+          <label>Purpose<input id="admin-api-key-purpose" placeholder="purpose" /></label>
+          <label>Issued to<input id="admin-api-key-issued-to" placeholder="issued_to" /></label>
+        </div>
+        <label>Scopes<textarea id="admin-api-key-scopes" rows="6" spellcheck="false"></textarea></label>
+        <div class="admin-actions">
+          <button id="admin-api-key-generate-btn" class="btn primary" type="button">Generate governed key</button>
+          <button id="admin-api-key-refresh-btn" class="btn secondary" type="button">Refresh</button>
+        </div>
+        <div id="admin-api-key-create-result"></div>
+        <h3>External usage examples</h3>
+        <div class="mono-block" style="white-space:pre-wrap">curl.exe -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" http://127.0.0.1:8000/adapters/status
 
 curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" -d "{}" http://127.0.0.1:8000/cgt/govern</div>
+        <h3>Safe metadata cards</h3>
+        <div class="admin-note">
+          The cards render safe metadata only: key_id, prefix, label, category, role, scopes,
+          client_id, user_id, plan_id, quota_limit, quota_used, status, usage_count,
+          last_used_at, created_at, expires_at, revoked_at.
+        </div>
+        <div id="admin-api-key-table"></div>
+        ${renderSupervisorSessionKeyPanel()}
+      </section>
 
-      <h3>Safe metadata cards</h3>
-      <div class="admin-note">
-        The cards render safe metadata only: key_id, prefix, label, category, role, scopes,
-        client_id, user_id, plan_id, quota_limit, quota_used, status, usage_count,
-        last_used_at, created_at, expires_at, revoked_at.
-      </div>
-      <div id="admin-api-key-table"></div>
-
-      ${renderSupervisorSessionKeyPanel()}
+      <section id="${EXTERNAL_LIFECYCLE_ID}" class="card flat" hidden style="display:none;margin-top:var(--s-4)" data-category-owned="true" data-activated="false">
+        <div class="sec-hdr">
+          <div class="sh-title">External Evaluation Lifecycle</div>
+          <div class="sh-sub">verify → provision → bind tasks → create grant → issue once → test → revoke</div>
+        </div>
+        <div class="admin-note">
+          External Evaluation is sandbox-only, temporary, quota-bound, and production-disabled. All lifecycle stages remain visible; privileged controls unlock only after administrator verification.
+        </div>
+        <div id="${EXTERNAL_BODY_ID}" hidden style="display:none;margin-top:var(--s-3)">
+          <section class="card flat" data-evaluation-verification-stage="true">
+            <div class="sec-hdr">
+              <div class="sh-title">Administrator Verification</div>
+              <div class="sh-sub">required before governed provisioning and one-time issue controls are enabled</div>
+            </div>
+            <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
+              <div class="admin-note" data-evaluation-access-status>
+                Administrator verification is required before evaluation grant controls can be enabled.
+              </div>
+              <div class="muted" style="margin-top:var(--s-2)">
+                Backend scopes remain authoritative. Raw API keys are shown only at issue time.
+              </div>
+            </div>
+          </section>
+          <section id="admin-api-key-external-provisioning-slot" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Operational Profile & Eligible Endpoints</div>
+              <div class="sh-sub">locked until administrator verification; backend catalogs remain authoritative</div>
+            </div>
+            <div class="admin-note">Provisioning controls load here after administrator verification.</div>
+          </section>
+          <section id="admin-api-key-evaluation-preview" class="card flat" style="margin-top:var(--s-3)">
+            <div class="sec-hdr">
+              <div class="sh-title">Evaluation Access Preview</div>
+              <div class="sh-sub">safe pre-issue summary</div>
+            </div>
+            <div class="admin-note">Preview remains locked until profile, endpoints, tasks, identity, duration, and quota are ready.</div>
+          </section>
+        </div>
+      </section>
     `;
 
     const categorySelect = document.getElementById('admin-api-key-category');
     if (categorySelect) categorySelect.value = 'service_integration';
     applyCategoryDefaults();
 
-    document.getElementById('admin-api-key-category')?.addEventListener('change', applyCategoryDefaults);
+    categorySelect?.addEventListener('change', applyCategoryDefaults);
     document.getElementById('admin-api-key-generate-btn')?.addEventListener('click', createKey);
     document.getElementById('admin-api-key-refresh-btn')?.addEventListener('click', refreshKeys);
     document.getElementById('admin-supervisor-key-issue-btn')?.addEventListener('click', issueSupervisorSessionKey);
     document.getElementById('admin-supervisor-key-refresh-btn')?.addEventListener('click', refreshSupervisorSessionKeys);
     document.getElementById('admin-supervisor-key-clear-session')?.addEventListener('click', clearSupervisorSessionKeyForAdmin);
     document.getElementById('admin-supervisor-session-clear-key')?.addEventListener('click', clearSupervisorSessionKeyForAdmin);
+
     card.addEventListener('click', (event) => {
       const button = event.target.closest('.admin-supervisor-key-revoke');
       if (button) {
         revokeSupervisorSessionKey(button.dataset.sessionKeyId);
         return;
       }
-
       const apiButton = event.target.closest('.admin-api-key-revoke');
       if (!apiButton) return;
       revokeKey(apiButton.dataset.keyId);
@@ -842,13 +744,17 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
     refreshSupervisorSessionKeys();
   }
 
+  window.PMK_ADMIN_API_KEY_LIFECYCLE = {
+    selectedCategory,
+    applyLifecycleCategory,
+  };
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', renderCard);
   } else {
     renderCard();
   }
 });
-
 
 // ADMIN-INTEGRATION-KEYS-11F pending bridge begin
 (function () {
@@ -870,31 +776,25 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
 
   function applyBridgePayload(payload) {
     if (!payload || !payload.client_id) return false;
-
     let applied = false;
-
     const category = document.getElementById('admin-api-key-category');
     if (category) {
       category.value = 'service_integration';
       category.dispatchEvent(new Event('change', { bubbles: true }));
       applied = true;
     }
-
     applied = setBridgeInput('admin-api-key-client-id', payload.client_id) || applied;
     applied = setBridgeInput('admin-api-key-user-id', payload.user_id) || applied;
-    applied =
-      setBridgeInput('admin-api-key-plan-id', payload.requested_plan) || applied;
+    applied = setBridgeInput('admin-api-key-plan-id', payload.requested_plan) || applied;
     applied = setBridgeInput('admin-api-key-purpose', payload.purpose) || applied;
     applied = setBridgeInput('admin-api-key-label', payload.label) || applied;
     applied = setBridgeInput('admin-api-key-issued-to', payload.issued_to) || applied;
-
     const result = document.getElementById('admin-api-key-create-result');
     if (result && applied) {
       result.textContent =
         'Loaded integration key context from Admin client request. ' +
         'No raw secrets are shown. Production connector approval remains separate.';
     }
-
     return applied;
   }
 
