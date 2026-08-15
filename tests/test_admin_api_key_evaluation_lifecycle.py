@@ -34,6 +34,36 @@ def test_primary_renderer_owns_external_evaluation_category_and_surfaces() -> No
         assert marker in source
 
 
+def test_complete_external_evaluation_stage_map_is_visible_from_renderer() -> None:
+    source = _source(API_KEYS)
+
+    stages = [
+        "1. Administrator Verification",
+        "2. Operational Profile",
+        "3. Eligible Endpoints & Derived Runtime Scopes",
+        "4. Canonical Tasks",
+        "5. Evaluation Identity & Limits",
+        "6. Access Preview & Readiness",
+        "7. Create Grant & One-Time API Key",
+        "8. Endpoint Test & Revocation",
+    ]
+    for stage in stages:
+        assert stage in source
+
+    assert "All lifecycle stages remain visible before verification" in source
+    assert "LOCKED" in source
+
+
+def test_verification_and_grant_hosts_are_separate_fixed_renderer_surfaces() -> None:
+    source = _source(API_KEYS)
+
+    assert "admin-evaluation-verification-controls" in source
+    assert "admin-evaluation-grants" in source
+    assert "admin-api-key-evaluation-verification-stage" in source
+    assert "admin-api-key-evaluation-grant-stage" in source
+    assert "small verification stage; it never owns the rest of the lifecycle" in source
+
+
 def test_external_evaluation_has_no_legacy_activation_or_secondary_mode() -> None:
     api_keys = _source(API_KEYS)
     provisioning = _source(PROVISIONING)
@@ -57,11 +87,12 @@ def test_primary_renderer_hard_blocks_standard_key_creation_for_evaluation() -> 
     assert create_source.index("return;") < create_source.index("request('POST', '/settings/api-keys'")
 
 
-def test_session_is_presentation_neutral_and_does_not_create_lifecycle_dom() -> None:
+def test_session_is_presentation_neutral_and_uses_renderer_verification_host() -> None:
     source = _source(SESSION)
 
+    assert "const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls'" in source
     assert "function evaluationHost()" in source
-    assert "document.getElementById(EVALUATION_HOST_ID)" in source
+    assert "document.getElementById(VERIFICATION_HOST_ID)" in source
     assert "document.createElement('section')" not in source
     assert "document.createElement('div')" in source  # local credential bootstrap only
     assert "ensureEvaluationGrantPlaceholder" not in source
