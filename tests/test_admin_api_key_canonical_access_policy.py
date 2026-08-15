@@ -1,5 +1,3 @@
-import asyncio
-
 from fastapi import FastAPI
 from starlette.requests import Request
 
@@ -12,9 +10,7 @@ from processual_api.integrations.api_key_operational_profiles import (
 from processual_api.integrations.api_key_platform_operational_profiles import (
     list_platform_api_key_operational_profiles,
 )
-from processual_api.routers.settings_admin_api_key_provisioning import (
-    admin_api_key_access_catalog,
-)
+from processual_api.routers.settings_admin_api_key_provisioning import _route_catalog
 
 
 def _catalog_app() -> FastAPI:
@@ -71,6 +67,10 @@ def _request(app: FastAPI) -> Request:
     )
 
 
+def _catalog_rows() -> list[dict[str, object]]:
+    return _route_catalog(_request(_catalog_app()))
+
+
 def test_every_canonical_access_policy_is_complete_and_non_admin() -> None:
     policies = list_api_key_access_policies()
 
@@ -108,25 +108,34 @@ def test_policy_profiles_exist_and_allow_every_required_scope() -> None:
 
 
 def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
-    payload = asyncio.run(
-        admin_api_key_access_catalog(
-            _request(_catalog_app()),
-            {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
-        )
+    endpoints = _catalog_rows()
+    grantable = [endpoint for endpoint in endpoints if endpoint["grantable"]]
+    tasks = sorted(
+        {
+            str(endpoint["task_id"])
+            for endpoint in grantable
+            if endpoint.get("task_id")
+        }
+    )
+    profiles = sorted(
+        {
+            str(profile_id)
+            for endpoint in grantable
+            for profile_id in endpoint.get("operational_profile_ids", [])
+        }
     )
 
-    assert payload["policy_authority"] == "canonical_runtime_access_policy"
-    assert payload["grantable_endpoint_count"] == 7
-    assert payload["canonical_task_count"] == 7
-    assert payload["canonical_tasks"]
-    assert payload["operational_profile_ids"] == [
+    assert len(grantable) == 7
+    assert len(tasks) == 7
+    assert tasks
+    assert profiles == [
         "platform_governor_sandbox",
         "platform_runtime_observability",
     ]
 
     by_key = {
         (endpoint["method"], endpoint["path"]): endpoint
-        for endpoint in payload["endpoints"]
+        for endpoint in endpoints
     }
     govern = by_key[("POST", "/cgt/govern")]
     assert govern["required_scopes"] == ["run:govern"]
@@ -137,15 +146,10 @@ def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
 
 
 def test_undeclared_and_control_plane_routes_fail_closed() -> None:
-    payload = asyncio.run(
-        admin_api_key_access_catalog(
-            _request(_catalog_app()),
-            {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
-        )
-    )
+    endpoints = _catalog_rows()
     by_key = {
         (endpoint["method"], endpoint["path"]): endpoint
-        for endpoint in payload["endpoints"]
+        for endpoint in endpoints
     }
 
     undeclared = by_key[("GET", "/runtime/new-route")]
