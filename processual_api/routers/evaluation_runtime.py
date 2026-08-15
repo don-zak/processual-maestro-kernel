@@ -37,6 +37,9 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
     resolve_active_sandbox_execution_grant,
 )
 from processual_api.services.evaluation_grants import evaluation_task_allowed
+from processual_api.services.evaluation_outcome_runtime import (
+    evaluate_completed_task_outcome,
+)
 
 from . import cgt_governor as runtime_host
 from . import settings as settings_router
@@ -140,10 +143,11 @@ async def execute_evaluation_runtime_task(
 ) -> dict[str, Any]:
     """Execute one pre-provisioned external operation for an allowed canonical task.
 
-    For canonical READ tasks, successful governed external execution plus a valid
-    canonical mapping is the declared task operation and can be marked completed.
-    Draft and approval-gated write tasks remain incomplete until a dedicated
-    downstream consumer performs their declared operation.
+    Canonical READ completion and Evaluation success are deliberately separate.
+    A completed READ task receives semantic outcome validation against a
+    Super-Administrator-provisioned hashed expectation bound to the prepared
+    synthetic content contract. Draft and approval-gated write tasks remain
+    incomplete until a dedicated downstream consumer performs their operation.
     """
 
     _require_evaluation_credential(current_user)
@@ -219,8 +223,19 @@ async def execute_evaluation_runtime_task(
         result=result,
     )
     task_completed = completion["maestro_task_completed"] is True
+    outcome = evaluate_completed_task_outcome(
+        raw=raw,
+        binding_id=spec.binding_id,
+        task_id=task_id,
+        canonical_result=dict(result.get("canonical_input") or {}),
+        content_contract=content,
+        maestro_task_completed=task_completed,
+    )
+    outcome_passed = outcome.get("outcome_validation_passed") is True
     evaluation_stage = (
-        "canonical_task_completed"
+        "outcome_validated"
+        if task_completed and outcome_passed
+        else "canonical_task_completed"
         if task_completed
         else "external_operation_executed"
     )
@@ -242,9 +257,16 @@ async def execute_evaluation_runtime_task(
         "external_evidence_sha256": result.get("evidence_sha256"),
         "task_completion_sha256": completion.get("completion_sha256"),
         "completion_stage": completion.get("completion_stage"),
+        "outcome_validation_status": outcome.get("outcome_validation_status"),
+        "outcome_validation_passed": outcome_passed,
+        "outcome_validation_sha256": outcome.get("outcome_validation_sha256"),
+        "expectation_sha256": outcome.get("expectation_sha256"),
+        "field_check_count": outcome.get("field_check_count", 0),
+        "matched_field_count": outcome.get("matched_field_count", 0),
         "completed_at": result.get("completed_at"),
         "evaluation_stage": evaluation_stage,
         "maestro_task_completed": task_completed,
+        "raw_expected_values_persisted": False,
         "raw_secret_visible": False,
     }
     _append_evidence(raw, evidence)
@@ -253,15 +275,19 @@ async def execute_evaluation_runtime_task(
     return {
         **result,
         **completion,
+        **outcome,
         "evaluation_runtime": True,
         "evaluation_grant_id": current_user.get("evaluation_grant_id"),
         "task_authority_enforced": True,
         "evaluation_stage": evaluation_stage,
         "next_readiness_stage": (
-            "outcome_quality_validation"
+            "failure_retry_validation"
+            if task_completed and outcome_passed
+            else "outcome_quality_validation"
             if task_completed
             else "maestro_task_consumption"
         ),
+        "raw_expected_values_persisted": False,
         "raw_secret_visible": False,
     }
 
