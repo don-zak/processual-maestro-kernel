@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any, Mapping
+from typing import Any
 
 EVALUATION_IDEMPOTENCY_STORAGE_KEY = "evaluation_runtime_idempotency_v1"
 
