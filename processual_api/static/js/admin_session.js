@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
     '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-single-owner';
-  const EVALUATION_HOST_ID = 'admin-evaluation-grants';
+  const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls';
   const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
   const EXTERNAL_CATEGORY = 'external_evaluation';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function evaluationHost() {
-    return document.getElementById(EVALUATION_HOST_ID);
+    return document.getElementById(VERIFICATION_HOST_ID);
   }
 
   function setEvaluationAccessStatus(message, danger = false) {
@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     script.dataset.adminEvaluationGrants = 'true';
     script.addEventListener('load', () => {
       document.body.dataset.adminEvaluationGrants = 'loaded';
+      setEvaluationAccessStatus('Administrator verified. Evaluation grant controls are loaded.');
     });
     script.addEventListener('error', () => {
       evaluationLoadFailure(
