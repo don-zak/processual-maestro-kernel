@@ -31,14 +31,14 @@ def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards():
         assert token in script
 
 
-def test_admin_session_uses_auth_bridge_headers():
+def test_admin_session_uses_super_admin_authority_bridge_headers():
     script = (STATIC_DIR / "js" / "admin_session.js").read_text(encoding="utf-8")
 
     required = [
         "PMK_ADMIN_AUTH.headers",
-        "fetch('/auth/me'",
-        "Administrator credential is required",
-        "Administrator verified",
+        "fetch(AUTHORITY_ENDPOINT",
+        "Super Administrator",
+        "platform_admin",
         "window.PMK_ADMIN_SESSION",
     ]
 
