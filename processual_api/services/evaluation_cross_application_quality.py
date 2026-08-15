@@ -8,7 +8,8 @@ as representative of another and does not fabricate external-run evidence.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from processual_api.services.evaluation_quality_assessment import (
     assess_evaluation_campaign_quality,
