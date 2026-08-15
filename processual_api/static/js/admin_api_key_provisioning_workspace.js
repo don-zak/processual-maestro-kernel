@@ -8,6 +8,7 @@
   let operationalProfiles = [];
   let accessCatalog = [];
   let initAttempts = 0;
+  let hydrationPromise = null;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -166,7 +167,7 @@
             </label>
           `;
         }).join('')
-      : '<div class="admin-note danger">No grantable runtime endpoints are available.</div>';
+      : '<div class="admin-note">No endpoint catalog loaded yet.</div>';
 
     allTarget.innerHTML = accessCatalog.length
       ? `
@@ -182,13 +183,13 @@
           </div>
         </details>
       `
-      : '<div class="muted">Backend route catalog unavailable.</div>';
+      : '<div class="muted">Backend route inventory is locked until administrator verification.</div>';
 
     grantableTarget.querySelectorAll('[data-api-key-access-endpoint]').forEach((input) => {
       input.addEventListener('change', syncScopesFromEndpointSelection);
     });
 
-    if (status) {
+    if (status && accessCatalog.length) {
       status.textContent = `${grantable.length} grantable endpoint(s) from ${accessCatalog.length} registered route/method entries.`;
     }
     syncScopesFromEndpointSelection();
@@ -229,7 +230,10 @@
         .map((profile) => `<option value="${escapeHtml(profile.profile_id)}">${escapeHtml(profile.display_name || profile.profile_id)}</option>`)
         .join('');
       select.disabled = false;
-      if (status) status.textContent = `${operationalProfiles.length} backend-governed operational profiles available.`;
+      if (status) {
+        status.className = 'muted';
+        status.textContent = `${operationalProfiles.length} backend-governed operational profiles available.`;
+      }
       renderProfileDetails();
       renderPreview();
     } catch (error) {
@@ -258,6 +262,29 @@
     }
   }
 
+  async function hydrateWorkspace() {
+    const workspace = document.getElementById(WORKSPACE_ID);
+    if (!workspace || document.body.dataset.adminSession !== 'ok') return;
+    if (workspace.dataset.workspaceHydrated === 'true') return;
+    if (hydrationPromise) return hydrationPromise;
+
+    workspace.dataset.workspaceHydration = 'loading';
+    const profileStatus = document.getElementById('admin-api-key-operational-profile-status');
+    const catalogStatus = document.getElementById('admin-api-key-access-catalog-status');
+    if (profileStatus) profileStatus.textContent = 'Administrator verified. Loading operational profiles...';
+    if (catalogStatus) catalogStatus.textContent = 'Administrator verified. Loading eligible endpoint catalog...';
+
+    hydrationPromise = Promise.all([loadOperationalProfiles(), loadAccessCatalog()])
+      .then(() => {
+        workspace.dataset.workspaceHydrated = 'true';
+        workspace.dataset.workspaceHydration = 'loaded';
+      })
+      .finally(() => {
+        hydrationPromise = null;
+      });
+    return hydrationPromise;
+  }
+
   function initializeWorkspace() {
     const workspace = document.getElementById(WORKSPACE_ID);
     if (!workspace) {
@@ -268,7 +295,11 @@
       return;
     }
 
-    if (workspace.dataset.workspaceInitialized === 'true') return;
+    if (workspace.dataset.workspaceInitialized === 'true') {
+      hydrateWorkspace();
+      return;
+    }
+
     workspace.dataset.workspaceInitialized = 'true';
     workspace.innerHTML = `
       <div class="sec-hdr">
@@ -277,19 +308,29 @@
       </div>
       <label>Operational profile
         <select id="admin-api-key-operational-profile" disabled>
-          <option value="">Loading backend catalog...</option>
+          <option value="">LOCKED — verify administrator first</option>
         </select>
       </label>
-      <div id="admin-api-key-operational-profile-status" class="muted" style="margin-top:var(--s-2)"></div>
-      <div id="admin-api-key-operational-profile-details"></div>
+      <div id="admin-api-key-operational-profile-status" class="muted" style="margin-top:var(--s-2)">
+        Operational profiles are visible here after administrator verification.
+      </div>
+      <div id="admin-api-key-operational-profile-details">
+        <div class="muted">Profile selection is operational intent only and never grants scopes.</div>
+      </div>
 
       <div class="sec-hdr" style="margin-top:var(--s-3)">
         <div class="sh-title">Eligible Endpoints</div>
         <div class="sh-sub">only routes explicitly declared grantable by backend policy</div>
       </div>
-      <div id="admin-api-key-access-catalog-status" class="muted"></div>
-      <div id="admin-api-key-grantable-endpoints"></div>
-      <div id="admin-api-key-access-selection-status" class="admin-note" style="margin-top:var(--s-2)"></div>
+      <div id="admin-api-key-access-catalog-status" class="muted">
+        LOCKED — verify administrator to load the backend grantability catalog.
+      </div>
+      <div id="admin-api-key-grantable-endpoints">
+        <div class="admin-note">Eligible endpoint choices will appear here after verification.</div>
+      </div>
+      <div id="admin-api-key-access-selection-status" class="admin-note" style="margin-top:var(--s-2)">
+        No endpoint selected. Runtime scopes are derived only from explicit eligible endpoint selections.
+      </div>
 
       <div class="sec-hdr" style="margin-top:var(--s-3)">
         <div class="sh-title">Derived Runtime Scopes</div>
@@ -301,7 +342,9 @@
         <div class="sh-title">Backend Route Inventory</div>
         <div class="sh-sub">registered route visibility does not imply grantability</div>
       </div>
-      <div id="admin-api-key-all-endpoints"></div>
+      <div id="admin-api-key-all-endpoints">
+        <div class="muted">Backend route inventory is locked until administrator verification.</div>
+      </div>
       <div id="admin-api-key-access-preview"></div>
     `;
 
@@ -311,17 +354,20 @@
       dispatchSelectionChanged();
     });
 
-    loadOperationalProfiles();
-    loadAccessCatalog();
-    document.body.dataset.adminApiKeyProvisioningWorkspace = 'loaded';
+    renderPreview();
+    document.body.dataset.adminApiKeyProvisioningWorkspace = 'rendered-locked';
+    hydrateWorkspace();
   }
 
   window.PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE = {
     initialize: initializeWorkspace,
+    hydrate: hydrateWorkspace,
     renderPreview,
     selectedScopes: selectedEndpointScopes,
     selectedEndpoints,
   };
+
+  window.addEventListener('pmk-admin-session-verified', hydrateWorkspace);
 
   initializeWorkspace();
 })();
