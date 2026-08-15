@@ -64,9 +64,16 @@
     });
   }
 
+  function explicitSuperAdminMode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('identity') === '1' && params.get('mode') === 'admin';
+  }
+
   function safeIdentityDestination() {
     const requested = new URLSearchParams(window.location.search).get('next') || '';
-    if (!requested.startsWith('/')) return '/console';
+    if (!requested.startsWith('/')) {
+      return explicitSuperAdminMode() ? '/admin#api-keys' : '/console';
+    }
     try {
       const target = new URL(requested, window.location.origin);
       if (target.origin !== window.location.origin) return '/console';
@@ -111,6 +118,7 @@
   const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
   const message = (en, ar) => currentLanguage() === 'ar' ? ar : en;
   const isUserMode = () => document.getElementById('tab-user')?.classList.contains('active') === true;
+  const isIdentityMode = () => isUserMode() || explicitSuperAdminMode();
 
   function showError(text) {
     const error = document.getElementById('login-error');
@@ -122,6 +130,61 @@
   function clearError() {
     const error = document.getElementById('login-error');
     if (error) error.style.display = 'none';
+  }
+
+  function buildPasswordVisibilityToggle() {
+    const input = document.getElementById('login-password');
+    if (!input || document.getElementById('login-password-visibility')) return;
+
+    const parent = input.parentElement;
+    if (!parent) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    parent.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+    input.style.paddingRight = '4.75rem';
+
+    const toggle = document.createElement('button');
+    toggle.id = 'login-password-visibility';
+    toggle.type = 'button';
+    toggle.setAttribute('aria-label', 'Show password');
+    toggle.setAttribute('aria-pressed', 'false');
+    toggle.textContent = 'Show';
+    Object.assign(toggle.style, {
+      position: 'absolute',
+      right: '0.8rem',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      border: '0',
+      background: 'transparent',
+      color: 'var(--amber)',
+      fontFamily: 'var(--font-data)',
+      fontSize: '10px',
+      cursor: 'pointer',
+      padding: '0.25rem',
+    });
+    toggle.addEventListener('click', () => {
+      const reveal = input.type === 'password';
+      input.type = reveal ? 'text' : 'password';
+      toggle.setAttribute('aria-pressed', String(reveal));
+      toggle.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+      toggle.textContent = reveal ? 'Hide' : 'Show';
+      input.focus();
+    });
+    wrapper.appendChild(toggle);
+  }
+
+  function syncIdentityModePresentation() {
+    const username = document.getElementById('login-username');
+    const usernameLabel = username?.closest('.inp-group')?.querySelector('.inp-label');
+    if (isIdentityMode()) {
+      if (username) username.placeholder = 'email@example.com';
+      if (usernameLabel) usernameLabel.textContent = message('Email', 'البريد الإلكتروني');
+      return;
+    }
+    if (username) username.placeholder = 'admin';
+    if (usernameLabel) usernameLabel.textContent = message('Username', 'اسم المستخدم');
   }
 
   function pendingAuthHeaders(extra = {}) {
@@ -432,18 +495,44 @@
     buildMfaChallenge();
     buildMfaEnrollment();
     buildRecoveryCodes();
+    buildPasswordVisibilityToggle();
+
     const loginButton = document.getElementById('login-btn');
     const password = document.getElementById('login-password');
     const userTab = document.getElementById('tab-user');
     const adminTab = document.getElementById('tab-admin');
-    const username = document.getElementById('login-username');
-    loginButton?.addEventListener('click', (event) => { if (!isUserMode()) return; event.preventDefault(); event.stopImmediatePropagation(); identityLogin(); }, true);
-    password?.addEventListener('keydown', (event) => { if (event.key !== 'Enter' || !isUserMode()) return; event.preventDefault(); event.stopImmediatePropagation(); identityLogin(); }, true);
-    userTab?.addEventListener('click', () => { resetMfaChallenge(); if (username) username.placeholder = 'email@example.com'; });
-    adminTab?.addEventListener('click', resetMfaChallenge);
-    document.getElementById('lang-en')?.addEventListener('click', syncMfaChallengeLanguage);
-    document.getElementById('lang-ar')?.addEventListener('click', syncMfaChallengeLanguage);
-    if (isUserMode() && username) username.placeholder = 'email@example.com';
+
+    loginButton?.addEventListener('click', (event) => {
+      if (!isIdentityMode()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      identityLogin();
+    }, true);
+    password?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || !isIdentityMode()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      identityLogin();
+    }, true);
+
+    userTab?.addEventListener('click', () => {
+      resetMfaChallenge();
+      syncIdentityModePresentation();
+    });
+    adminTab?.addEventListener('click', () => {
+      resetMfaChallenge();
+      syncIdentityModePresentation();
+    });
+    document.getElementById('lang-en')?.addEventListener('click', () => {
+      syncMfaChallengeLanguage();
+      syncIdentityModePresentation();
+    });
+    document.getElementById('lang-ar')?.addEventListener('click', () => {
+      syncMfaChallengeLanguage();
+      syncIdentityModePresentation();
+    });
+
+    syncIdentityModePresentation();
   }
 
   window.PMK_LOGIN_TOKEN_CAPTURE = {
@@ -452,6 +541,7 @@
     installFetchCapture,
     installIdentityMfaLogin,
     safeIdentityDestination,
+    explicitSuperAdminMode,
   };
   installFetchCapture();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installIdentityMfaLogin, { once: true });
