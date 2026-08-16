@@ -21,7 +21,14 @@ from processual_api.integrations.integration_readiness import (
     summarize_integration_readiness,
 )
 
-from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_platform_admin_step_up, require_scope
+from ..auth.security import (
+    _pbkdf2_hash_api_key,
+    generate_api_key,
+    get_current_user,
+    hash_api_key,
+    require_platform_admin_step_up,
+    require_scope,
+)
 from ..billing.usage_pricing import (
     BILLING_POLICY,
     ENTERPRISE_INTEGRATION_PLANS,
