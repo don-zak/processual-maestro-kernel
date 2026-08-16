@@ -45,6 +45,27 @@ def _client(
 
     app = FastAPI()
     app.include_router(settings_routes.router)
+
+    issue_route = next(
+        route
+        for route in settings_routes.router.routes
+        if getattr(route, "path", None) == "/settings/admin/supervisor-session-keys"
+        and "POST" in getattr(route, "methods", set())
+    )
+    issue_dependency = issue_route.dependant.dependencies[0].call
+
+    async def _platform_admin_step_up_user() -> dict:
+        return {
+            "sub": "platform-admin@example.test",
+            "user_id": "platform-admin@example.test",
+            "client_id": "platform-admin@example.test",
+            "session_type": "identity_user",
+            "role": "client",
+            "scopes": ["evaluation"],
+            "mfa_pending": False,
+        }
+
+    app.dependency_overrides[issue_dependency] = _platform_admin_step_up_user
     return TestClient(app), fallback_data
 
 

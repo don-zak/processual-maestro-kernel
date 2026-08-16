@@ -1,169 +1,30 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC =
-    '/console/js/admin_evaluation_grants.js?v=adminevaltasks06-lifecycle-final';
+    '/console/js/admin_evaluation_grants.js?v=adminevaltasks08-super-admin';
+  const EVALUATION_COVERAGE_SCRIPT_SELECTOR = 'script[data-admin-evaluation-coverage]';
+  const EVALUATION_COVERAGE_SCRIPT_SRC =
+    '/console/js/admin_evaluation_coverage.js?v=adminevalcoverage01';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC =
-    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final';
-  const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
-    'script[data-admin-api-key-evaluation-lifecycle]';
-  const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
-    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation02-lifecycle-final';
-  const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card';
-  const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card';
-  const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body';
-  const EVALUATION_HOST_ID = 'admin-evaluation-grants';
-  const EVALUATION_DEV_AUTH_ID = 'admin-evaluation-dev-auth';
-  const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
+    '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace05-super-admin';
+  const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls';
+  const SUPER_ADMIN_SIGN_IN_ID = 'admin-evaluation-super-admin-sign-in';
   const EXTERNAL_CATEGORY = 'external_evaluation';
-  const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
-  const ADMIN_ROLES = new Set([
-    'admin',
-    'administrator',
-    'owner_admin',
-    'security_admin',
-    'billing_admin',
-    'ops_admin',
-    'support_admin',
-  ]);
-  const EVALUATION_ADMIN_ROLES = new Set([
-    'admin',
-    'owner_admin',
-    'security_admin',
-    'billing_admin',
-  ]);
+  const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority';
   const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500];
-
-  function normalizedRole(me) {
-    return String(
-      me.role ||
-        me.user_role ||
-        me.account_role ||
-        (me.user && me.user.role) ||
-        ''
-    )
-      .trim()
-      .toLowerCase();
-  }
-
-  function normalizedScopes(me) {
-    const raw = me.scopes || me.permissions || [];
-    return Array.isArray(raw)
-      ? raw.map((scope) => String(scope || '').trim().toLowerCase()).filter(Boolean)
-      : [];
-  }
-
-  function isAdminSession(me) {
-    const role = normalizedRole(me);
-    const scopes = normalizedScopes(me);
-    return (
-      role === 'admin' ||
-      role === 'administrator' ||
-      ADMIN_ROLES.has(role) ||
-      scopes.includes('admin') ||
-      scopes.includes('admin:settings') ||
-      scopes.some(
-        (scope) =>
-          scope === '*' ||
-          scope.startsWith('admin:')
-      )
-    );
-  }
-
-  function canManageEvaluationGrants(me) {
-    const role = normalizedRole(me);
-    const scopes = new Set(normalizedScopes(me));
-    return (
-      EVALUATION_ADMIN_ROLES.has(role) ||
-      scopes.has('*') ||
-      scopes.has('admin:*') ||
-      scopes.has('admin:api_keys:write')
-    );
-  }
-
-  function isLocalDevelopmentOrigin() {
-    return LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname);
-  }
 
   function externalEvaluationSelected() {
     return document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY;
   }
 
-  function placeEvaluationWorkspaceInsideCard() {
-    if (!externalEvaluationSelected()) return;
-    const body = document.getElementById(EVALUATION_BODY_ID);
-    const host = document.getElementById(EVALUATION_HOST_ID);
-    const workspace = document.getElementById(PROVISIONING_WORKSPACE_ID);
-    if (!body || !workspace) return;
-    if (workspace.parentElement === body) return;
-    body.insertBefore(workspace, host || body.firstChild);
-  }
-
-  function ensureEvaluationGrantPlaceholder() {
-    let host = document.getElementById(EVALUATION_HOST_ID);
-    if (host) return host;
-
-    const lifecycleCard = document.getElementById(API_KEY_LIFECYCLE_CARD_ID);
-    if (!lifecycleCard) return null;
-
-    let card = document.getElementById(EVALUATION_CARD_ID);
-    if (!card) {
-      card = document.createElement('section');
-      card.id = EVALUATION_CARD_ID;
-      card.className = 'card flat';
-      card.style.marginTop = 'var(--s-4)';
-      card.dataset.lifecycleEmbedded = 'true';
-      card.dataset.categoryOwned = 'true';
-      card.dataset.activated = 'false';
-      card.hidden = true;
-      card.innerHTML = `
-        <div class="sec-hdr">
-          <div class="sh-title">External Evaluation Lifecycle</div>
-          <div class="sh-sub">verify → provision → bind tasks → create grant → issue once → test → revoke</div>
-        </div>
-        <div class="admin-note">
-          This lifecycle is selected only from API Key Category. Standard key generation is disabled while External Evaluation is selected. Production access remains disabled.
-        </div>
-        <div id="${EVALUATION_BODY_ID}" hidden style="margin-top:var(--s-3)">
-          <section class="card flat" data-evaluation-verification-stage="true">
-            <div class="sec-hdr">
-              <div class="sh-title">Administrator Verification</div>
-              <div class="sh-sub">required before governed provisioning and API key issue controls are enabled</div>
-            </div>
-            <div id="${EVALUATION_HOST_ID}" class="card flat" data-evaluation-grant-placeholder="true">
-              <div class="admin-note" data-evaluation-access-status>
-                Select External Evaluation Access to verify administrator authority and load governed controls.
-              </div>
-              <div class="muted" style="margin-top:var(--s-2)">
-                Backend scopes remain authoritative. Raw API keys are shown only at issue time.
-              </div>
-            </div>
-          </section>
-        </div>
-      `;
-
-      const lifecycleForm = lifecycleCard.querySelector('.admin-grid');
-      if (lifecycleForm) lifecycleCard.insertBefore(card, lifecycleForm);
-      else lifecycleCard.appendChild(card);
-    }
-
-    return document.getElementById(EVALUATION_HOST_ID);
-  }
-
-  function syncEvaluationSelectionState() {
-    const card = document.getElementById(EVALUATION_CARD_ID);
-    const body = document.getElementById(EVALUATION_BODY_ID);
-    if (!card || !body) return;
-    const selected = externalEvaluationSelected();
-    card.hidden = !selected;
-    body.hidden = !selected;
-    card.dataset.activated = selected ? 'true' : 'false';
-    if (selected) placeEvaluationWorkspaceInsideCard();
+  function evaluationHost() {
+    return document.getElementById(VERIFICATION_HOST_ID);
   }
 
   function setEvaluationAccessStatus(message, danger = false) {
-    const host = ensureEvaluationGrantPlaceholder();
+    const host = evaluationHost();
     if (!host) return;
     const target = host.querySelector('[data-evaluation-access-status]');
     if (!target) return;
@@ -171,322 +32,194 @@ document.addEventListener('DOMContentLoaded', () => {
     target.textContent = message;
   }
 
-  function clearDevelopmentAuthBootstrap() {
-    document.getElementById(EVALUATION_DEV_AUTH_ID)?.remove();
+  function clearSuperAdminSignInAction() {
+    document.getElementById(SUPER_ADMIN_SIGN_IN_ID)?.remove();
   }
 
-  function renderDevelopmentAuthBootstrap() {
-    if (!isLocalDevelopmentOrigin()) return;
-    if (!externalEvaluationSelected()) return;
-    const host = ensureEvaluationGrantPlaceholder();
-    if (!host) return;
-
-    const existing = document.getElementById(EVALUATION_DEV_AUTH_ID);
-    if (existing) {
-      const existingInput = existing.querySelector('#admin-evaluation-dev-api-key');
-      const existingButton = existing.querySelector('#admin-evaluation-dev-api-key-save');
-      const existingMessage = existing.querySelector('[data-evaluation-dev-auth-message]');
-      if (existingButton) existingButton.disabled = false;
-      if (existingMessage) {
-        existingMessage.textContent =
-          'Credential was not accepted. Enter another development API key.';
-      }
-      existingInput?.focus();
-      return;
-    }
-
-    const bootstrap = document.createElement('div');
-    bootstrap.id = EVALUATION_DEV_AUTH_ID;
-    bootstrap.className = 'admin-note';
-    bootstrap.style.marginTop = 'var(--s-3)';
-    bootstrap.innerHTML = `
-      <div style="font-weight:700">Local development credential</div>
-      <div class="muted" style="margin-top:var(--s-1)">
-        Enter the development API key for this browser session. It is stored in sessionStorage only.
+  function renderSuperAdminSignInAction() {
+    const host = evaluationHost();
+    if (!host || document.getElementById(SUPER_ADMIN_SIGN_IN_ID)) return;
+    const wrapper = document.createElement('div');
+    wrapper.id = SUPER_ADMIN_SIGN_IN_ID;
+    wrapper.className = 'admin-actions';
+    wrapper.style.marginTop = 'var(--s-3)';
+    wrapper.innerHTML = `
+      <a class="btn primary" href="/login?mode=admin&identity=1&next=%2Fadmin%23api-keys">
+        Sign in as Super Administrator
+      </a>
+      <div class="muted" style="margin-top:var(--s-2)">
+        Uses the identity-session email/password + MFA flow. API keys and legacy admin sessions cannot unlock this lifecycle.
       </div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-2);margin-top:var(--s-2);align-items:center">
-        <input
-          id="admin-evaluation-dev-api-key"
-          type="password"
-          autocomplete="off"
-          placeholder="Development API key"
-        >
-        <button id="admin-evaluation-dev-api-key-save" class="btn primary" type="button">
-          Verify & Load Controls
-        </button>
-      </div>
-      <div class="muted" data-evaluation-dev-auth-message style="margin-top:var(--s-1)"></div>
     `;
-    host.appendChild(bootstrap);
-
-    const input = bootstrap.querySelector('#admin-evaluation-dev-api-key');
-    const button = bootstrap.querySelector('#admin-evaluation-dev-api-key-save');
-    const message = bootstrap.querySelector('[data-evaluation-dev-auth-message]');
-
-    async function saveCredential() {
-      const value = String(input?.value || '').trim();
-      if (!value) {
-        if (message) message.textContent = 'Enter a development API key.';
-        return;
-      }
-
-      try {
-        sessionStorage.setItem('api_key', value);
-        if (input) input.value = '';
-        if (button) button.disabled = true;
-        if (message) {
-          message.textContent =
-            'Credential saved for this tab. Verifying administrator authority...';
-        }
-        setEvaluationAccessStatus('Verifying local development administrator credential...');
-        await checkAdminSession();
-      } catch (error) {
-        if (button) button.disabled = false;
-        if (message) {
-          message.textContent =
-            'Unable to store the development credential for this browser session.';
-        }
-      }
-    }
-
-    button?.addEventListener('click', saveCredential);
-    input?.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      saveCredential();
-    });
-  }
-
-  function evaluationLoadFailure(message) {
-    document.body.dataset.adminEvaluationGrants = 'load-error';
-    setEvaluationAccessStatus(message, true);
+    host.appendChild(wrapper);
   }
 
   function loadEvaluationGrantControls() {
     if (document.querySelector(EVALUATION_SCRIPT_SELECTOR)) return;
-
-    setEvaluationAccessStatus('Authorized. Loading evaluation grant controls...');
     const script = document.createElement('script');
     script.src = EVALUATION_SCRIPT_SRC;
     script.dataset.adminEvaluationGrants = 'true';
     script.addEventListener('load', () => {
-      document.body.dataset.adminEvaluationGrants = 'loaded';
-      window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
+      document.body.dataset.adminEvaluationUi = 'loaded';
     });
     script.addEventListener('error', () => {
-      evaluationLoadFailure(
-        'Evaluation grant controls could not be loaded. Reload the admin page after verifying the local static assets.'
-      );
+      document.body.dataset.adminEvaluationUi = 'load-error';
+      setEvaluationAccessStatus('Evaluation UI assets could not be loaded.', true);
+    });
+    document.body.appendChild(script);
+  }
+
+  function loadEvaluationCoverageControls() {
+    if (document.querySelector(EVALUATION_COVERAGE_SCRIPT_SELECTOR)) return;
+    const script = document.createElement('script');
+    script.src = EVALUATION_COVERAGE_SCRIPT_SRC;
+    script.dataset.adminEvaluationCoverage = 'true';
+    script.addEventListener('error', () => {
+      document.body.dataset.adminEvaluationCoverage = 'load-error';
     });
     document.body.appendChild(script);
   }
 
   function loadApiKeyProvisioningWorkspace() {
-    if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) {
-      placeEvaluationWorkspaceInsideCard();
-      return;
-    }
-
+    if (document.querySelector(API_KEY_WORKSPACE_SCRIPT_SELECTOR)) return;
     const script = document.createElement('script');
     script.src = API_KEY_WORKSPACE_SCRIPT_SRC;
     script.dataset.adminApiKeyProvisioningWorkspace = 'true';
-    script.addEventListener('load', () => {
-      if (!document.body.dataset.adminApiKeyProvisioningWorkspace) {
-        document.body.dataset.adminApiKeyProvisioningWorkspace = 'loading';
-      }
-      window.setTimeout(placeEvaluationWorkspaceInsideCard, 0);
-      window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
-    });
     script.addEventListener('error', () => {
       document.body.dataset.adminApiKeyProvisioningWorkspace = 'load-error';
     });
     document.body.appendChild(script);
   }
 
-  function loadApiKeyEvaluationLifecycle() {
-    if (document.querySelector(API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR)) return;
-
-    const script = document.createElement('script');
-    script.src = API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC;
-    script.dataset.adminApiKeyEvaluationLifecycle = 'true';
-    script.addEventListener('load', () => {
-      if (!document.body.dataset.adminApiKeyEvaluationLifecycle) {
-        document.body.dataset.adminApiKeyEvaluationLifecycle = 'loading';
-      }
-      window.setTimeout(placeEvaluationWorkspaceInsideCard, 0);
-    });
-    script.addEventListener('error', () => {
-      document.body.dataset.adminApiKeyEvaluationLifecycle = 'load-error';
-    });
-    document.body.appendChild(script);
+  function authHeaders() {
+    if (window.PMK_ADMIN_AUTH && typeof PMK_ADMIN_AUTH.headers === 'function') {
+      return PMK_ADMIN_AUTH.headers();
+    }
+    return new Headers({ 'Content-Type': 'application/json' });
   }
 
   function wait(delayMs) {
     return new Promise((resolve) => window.setTimeout(resolve, delayMs));
   }
 
-  async function fetchAdminIdentity(headers) {
-    const response = await fetch('/auth/me', {
+  async function fetchSuperAdminAuthority(headers) {
+    const request = () => fetch(AUTHORITY_ENDPOINT, {
       method: 'GET',
       credentials: 'include',
       headers,
     });
 
-    if (response.ok || response.status !== 503) {
-      return response;
-    }
+    let response = await request();
+    if (response.ok || response.status !== 503) return response;
 
     for (const delayMs of SESSION_RETRY_DELAYS_MS) {
       document.body.dataset.adminSession = 'retrying-503';
-      document.body.dataset.adminEvaluationGrants = 'auth-retrying';
+      document.body.dataset.adminEvaluationGrants = 'authority-retrying';
       setEvaluationAccessStatus(
-        'Administrator verification is temporarily unavailable. Retrying safely...'
+        'Super Administrator authority verification is temporarily unavailable. Retrying safely...'
       );
       await wait(delayMs);
-      const retry = await fetch('/auth/me', {
-        method: 'GET',
-        credentials: 'include',
-        headers,
-      });
-      if (retry.ok || retry.status !== 503) {
-        return retry;
-      }
+      response = await request();
+      if (response.ok || response.status !== 503) return response;
     }
-
     return response;
   }
 
-  function dispatchAdminSessionVerified(me) {
+  function dispatchSuperAdminVerified(authority) {
     try {
-      window.dispatchEvent(
-        new CustomEvent('pmk-admin-session-verified', {
-          detail: {
-            role: normalizedRole(me),
-            scopes: normalizedScopes(me),
-          },
-        })
-      );
+      window.dispatchEvent(new CustomEvent('pmk-admin-session-verified', {
+        detail: {
+          authority: authority.authority || 'platform_admin',
+          exclusiveSuperAdministrator: true,
+        },
+      }));
     } catch {
       window.dispatchEvent(new Event('pmk-admin-session-verified'));
     }
   }
 
   async function checkAdminSession() {
-    ensureEvaluationGrantPlaceholder();
-    syncEvaluationSelectionState();
-
-    const protectedBlocks = Array.from(
-      document.querySelectorAll('.mono-block')
-    ).filter((el) =>
-      (el.textContent || '').includes('Checking admin session')
-    );
-
-    function writeProtected(message) {
-      protectedBlocks.forEach((el) => {
-        el.textContent = message;
-      });
-    }
+    if (!externalEvaluationSelected()) return;
 
     try {
-      const headers =
-        window.PMK_ADMIN_AUTH &&
-        typeof PMK_ADMIN_AUTH.headers === 'function'
-          ? PMK_ADMIN_AUTH.headers()
-          : new Headers({ 'Content-Type': 'application/json' });
-
-      if (!headers.has('Authorization') && !headers.has('X-API-Key')) {
-        document.body.dataset.adminSession = 'auth-missing';
-        document.body.dataset.adminEvaluationGrants = 'auth-missing';
-        const message =
-          'Administrator credential is required before evaluation grant controls can be shown.';
-        setEvaluationAccessStatus(message, true);
-        if (externalEvaluationSelected()) {
-          renderDevelopmentAuthBootstrap();
-        }
-        writeProtected(
-          'Admin auth token missing. Login did not persist a Bearer token for admin API calls.'
-        );
-        return;
-      }
-
-      const response = await fetchAdminIdentity(headers);
-
-      if (!response.ok) {
-        document.body.dataset.adminSession = 'error-' + response.status;
-        document.body.dataset.adminEvaluationGrants = 'auth-error';
-        setEvaluationAccessStatus(
-          'Administrator verification failed: HTTP ' + response.status,
-          true
-        );
-        if (
-          (response.status === 401 || response.status === 403) &&
-          externalEvaluationSelected()
-        ) {
-          renderDevelopmentAuthBootstrap();
-        }
-        writeProtected('Admin session check failed: HTTP ' + response.status);
-        return;
-      }
-
-      const me = await response.json();
-      if (!isAdminSession(me)) {
-        document.body.dataset.adminSession = 'not-admin';
-        document.body.dataset.adminEvaluationGrants = 'not-authorized';
-        setEvaluationAccessStatus(
-          'The current session is authenticated but does not have administrator authority for this area.',
-          true
-        );
-        writeProtected('Session exists, but admin scope was not found.');
-        return;
-      }
-
-      clearDevelopmentAuthBootstrap();
-      document.body.dataset.adminSession = 'ok';
-      writeProtected(
-        'Admin session verified. Backend scopes remain the authority.'
+      document.body.dataset.adminEvaluationGrants = 'verifying-authority';
+      setEvaluationAccessStatus(
+        'Verifying exclusive Super Administrator authority (platform_admin)...'
       );
-      loadApiKeyProvisioningWorkspace();
-      dispatchAdminSessionVerified(me);
 
-      if (canManageEvaluationGrants(me)) {
-        document.body.dataset.adminEvaluationGrants = 'authorized';
-        loadEvaluationGrantControls();
-        loadApiKeyEvaluationLifecycle();
-      } else {
+      const response = await fetchSuperAdminAuthority(authHeaders());
+      if (!response.ok) {
+        document.body.dataset.adminSession = response.status === 401 ? 'auth-missing' : 'not-super-admin';
+        document.body.dataset.adminEvaluationGrants = 'not-authorized';
+        if (response.status === 401) {
+          setEvaluationAccessStatus(
+            'Super Administrator identity session is required. API keys and legacy admin sessions cannot unlock External Evaluation.',
+            true
+          );
+          renderSuperAdminSignInAction();
+        } else if (response.status === 403) {
+          setEvaluationAccessStatus(
+            'Access denied. External Evaluation is exclusive to an active Super Administrator (platform_admin). owner_admin, security_admin, billing_admin, wildcard scopes, and API keys are not sufficient.',
+            true
+          );
+          renderSuperAdminSignInAction();
+        } else {
+          setEvaluationAccessStatus(
+            `Super Administrator authority verification failed: HTTP ${response.status}`,
+            true
+          );
+        }
+        return;
+      }
+
+      const authority = await response.json();
+      if (
+        authority.authorized !== true ||
+        authority.authority !== 'platform_admin' ||
+        authority.exclusive_super_administrator !== true
+      ) {
+        document.body.dataset.adminSession = 'not-super-admin';
         document.body.dataset.adminEvaluationGrants = 'not-authorized';
         setEvaluationAccessStatus(
-          'Administrator session verified, but evaluation grant management requires owner, security, billing, wildcard, or admin:api_keys:write authority.',
+          'Access denied. Backend did not confirm exclusive Super Administrator authority.',
           true
         );
+        renderSuperAdminSignInAction();
+        return;
       }
+
+      clearSuperAdminSignInAction();
+      document.body.dataset.adminSession = 'ok';
+      document.body.dataset.adminEvaluationGrants = 'authorized';
+      document.body.dataset.adminEvaluationAuthority = 'platform_admin';
+      setEvaluationAccessStatus(
+        'Super Administrator verified. External Evaluation lifecycle controls are unlocked.'
+      );
+      dispatchSuperAdminVerified(authority);
     } catch (error) {
       document.body.dataset.adminSession = 'error';
       document.body.dataset.adminEvaluationGrants = 'auth-error';
       setEvaluationAccessStatus(
-        'Administrator verification failed: ' + (error.message || String(error)),
+        'Super Administrator authority verification failed: ' + (error.message || String(error)),
         true
-      );
-      writeProtected(
-        'Admin session check failed: ' + (error.message || String(error))
       );
     }
   }
 
-  window.PMK_ADMIN_SESSION = {
-    check: checkAdminSession,
-    syncEvaluationSelectionState,
-  };
+  window.PMK_ADMIN_SESSION = { check: checkAdminSession };
 
-  window.addEventListener('pmk-api-key-category-changed', async () => {
-    syncEvaluationSelectionState();
-    if (externalEvaluationSelected()) {
-      await checkAdminSession();
-    } else {
-      clearDevelopmentAuthBootstrap();
+  window.addEventListener('pmk-api-key-category-changed', () => {
+    if (!externalEvaluationSelected()) {
+      clearSuperAdminSignInAction();
+      document.body.dataset.adminEvaluationGrants = 'inactive';
     }
   });
 
-  ensureEvaluationGrantPlaceholder();
-  syncEvaluationSelectionState();
-  checkAdminSession();
+  // Render the complete lifecycle immediately. Privileged catalogs and actions
+  // hydrate only after the backend confirms exclusive platform_admin authority.
+  loadApiKeyProvisioningWorkspace();
+  loadEvaluationGrantControls();
+  loadEvaluationCoverageControls();
+
+  if (externalEvaluationSelected()) checkAdminSession();
 });

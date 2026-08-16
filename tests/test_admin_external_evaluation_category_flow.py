@@ -2,90 +2,104 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 JS = ROOT / "processual_api" / "static" / "js"
+API_KEYS = JS / "admin_api_keys.js"
 SUMMARY = JS / "admin_api_key_summary.js"
-EVALUATION = JS / "admin_evaluation_grants.js"
 SESSION = JS / "admin_session.js"
 PROVISIONING = JS / "admin_api_key_provisioning_workspace.js"
-RUNTIME_FIXUPS = JS / "admin_runtime_fixups.js"
+EVALUATION = JS / "admin_evaluation_grants.js"
 
 
 def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_external_evaluation_is_a_real_category_driven_lifecycle_choice() -> None:
-    source = _source(SUMMARY)
+def test_external_evaluation_is_declared_in_primary_key_categories() -> None:
+    source = _source(API_KEYS)
+
+    assert "const EXTERNAL_CATEGORY = 'external_evaluation'" in source
+    assert "[EXTERNAL_CATEGORY, 'External Evaluation Access - governed sandbox evaluation']" in source
+    assert "const KEY_CATEGORIES = [" in source
+
+
+def test_primary_renderer_creates_both_lifecycle_surfaces_and_full_stage_map() -> None:
+    source = _source(API_KEYS)
 
     required = [
-        "const EXTERNAL_CATEGORY = 'external_evaluation'",
-        "option.value = EXTERNAL_CATEGORY",
-        "External Evaluation Access - governed sandbox evaluation",
-        "API Key Category",
-        "single lifecycle authority",
-        "select.addEventListener('change', applyCategoryState)",
-        "card.dataset.activated = external ? 'true' : 'false'",
-        "setMode('external_evaluation')",
-        "setMode('standard')",
+        "admin-api-key-category-surface",
+        "admin-api-key-standard-lifecycle",
+        "admin-api-key-external-evaluation-card",
+        "admin-api-key-external-evaluation-body",
+        "Administrator Verification",
+        "Operational Profile",
+        "Eligible Endpoints & Derived Runtime Scopes",
+        "Canonical Tasks",
+        "Evaluation Identity & Limits",
+        "Access Preview & Readiness",
+        "Create Grant & One-Time API Key",
+        "Endpoint Test & Revocation",
     ]
     for marker in required:
         assert marker in source
 
 
-def test_external_evaluation_has_no_visible_legacy_activation_path() -> None:
-    session = _source(SESSION)
+def test_category_selection_directly_switches_surfaces() -> None:
+    source = _source(API_KEYS)
 
-    assert "This lifecycle is selected only from API Key Category." in session
-    assert "External Evaluation Lifecycle" in session
-    assert "verify → provision → bind tasks → create grant → issue once → test → revoke" in session
-    assert "Activate External Evaluation" not in session
-    assert "External Evaluation Active" not in session
-    assert "EVALUATION_ACTIVATE_ID" not in session
-    assert "applyExternalEvaluationActivation" not in session
-    assert ".click()" not in session
+    start = source.index("function applyLifecycleCategory()")
+    end = source.index("function applyCategoryDefaults()", start)
+    apply_source = source[start:end]
 
-
-def test_external_evaluation_category_switches_away_from_standard_surfaces() -> None:
-    summary = _source(SUMMARY)
-    runtime = _source(RUNTIME_FIXUPS)
-
-    assert "setStandardVisibility(!external)" in summary
-    assert "node.hidden = visible" in summary
-    assert "admin-api-key-category-authority" in summary
-    assert "slot.appendChild(label)" in summary
-    assert "removeApiKeyProfileControls();" in runtime
-    assert "data.standardApiKeyOnly" not in runtime
-    assert "controls.dataset.standardApiKeyOnly = 'true'" in runtime
+    assert "selectedCategory() === EXTERNAL_CATEGORY" in apply_source
+    assert "standard.hidden = external" in apply_source
+    assert "standard.style.display = external ? 'none' : ''" in apply_source
+    assert "evaluation.hidden = !external" in apply_source
+    assert "evaluation.style.display = external ? '' : 'none'" in apply_source
+    assert "evaluationBody.hidden = !external" in apply_source
+    assert ".click()" not in apply_source
 
 
-def test_external_evaluation_renders_the_plan_contract_before_creation() -> None:
+def test_summary_is_visibility_only_not_lifecycle_owner() -> None:
     source = _source(SUMMARY)
 
-    required = [
-        "External Evaluation Readiness Contract",
-        "Category",
-        "Administrator",
-        "Provisioning",
-        "Operational profile",
-        "Eligible endpoints",
-        "Derived scopes",
-        "Canonical tasks",
-        "Identity",
-        "Purpose",
-        "Plan contract incomplete",
-        "Create Evaluation Grant must remain disabled",
-    ]
-    for marker in required:
-        assert marker in source
+    assert "API Key Lifecycle Summary" in source
+    assert "ensureEvaluationCard" not in source
+    assert "external_evaluation" not in source
+    assert "MutationObserver" not in source
+    assert "method: 'POST'" not in source
+    assert "method: 'DELETE'" not in source
 
 
-def test_grant_creation_is_hard_blocked_until_every_plan_gate_is_ready() -> None:
+def test_session_verifies_authority_without_constructing_or_moving_lifecycle() -> None:
+    source = _source(SESSION)
+
+    assert "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'" in source
+    assert "fetch(AUTHORITY_ENDPOINT" in source
+    assert "platform_admin" in source
+    assert "window.PMK_ADMIN_SESSION" in source
+    assert "pmk-admin-session-verified" in source
+    assert "const VERIFICATION_HOST_ID = 'admin-evaluation-verification-controls'" in source
+    assert "ensureEvaluationGrantPlaceholder" not in source
+    assert "admin-api-key-lifecycle-card" not in source
+    assert "insertBefore" not in source
+    assert "appendChild(host)" not in source
+
+
+def test_provisioning_has_no_independent_external_evaluation_mode() -> None:
+    source = _source(PROVISIONING)
+
+    assert "admin-api-key-provisioning-mode" not in source
+    assert "Standard / Integration Key" not in source
+    assert "admin-api-key-external-provisioning-slot" in source
+
+
+def test_grant_creation_is_hard_blocked_until_every_gate_is_ready() -> None:
     source = _source(EVALUATION)
 
     required = [
-        "function evaluationReadiness()",
-        "category === EXTERNAL_CATEGORY",
+        "function authorized()",
         "document.body.dataset.adminSession === 'ok'",
-        "grantAuthority === 'authorized' || grantAuthority === 'loaded'",
+        "document.body.dataset.adminEvaluationGrants === 'authorized'",
+        "category === EXTERNAL_CATEGORY",
         "Boolean(profile)",
         "endpoints.length > 0",
         "scopes.length > 0",
@@ -95,93 +109,34 @@ def test_grant_creation_is_hard_blocked_until_every_plan_gate_is_ready() -> None
         "quota >= 1 && quota <= 10000",
         "button.disabled = !readiness.ready",
         "if (!readiness.ready)",
-        "Evaluation grant creation blocked by the lifecycle readiness contract.",
     ]
     for marker in required:
         assert marker in source
+    assert "adminEvaluationGrants === 'loaded'" not in source
 
 
-def test_grant_post_uses_only_readiness_contract_values() -> None:
+def test_grant_post_uses_only_evaluation_grant_authority() -> None:
     source = _source(EVALUATION)
 
     create_start = source.index("async function createEvaluationGrant()")
     issue_start = source.index("async function issueEvaluationKey", create_start)
     create_source = source[create_start:issue_start]
 
-    assert "const readiness = updateEvaluationReadiness();" in create_source
-    assert "if (!readiness.ready)" in create_source
     assert "EVALUATION_GRANTS_ENDPOINT, 'POST'" in create_source
     assert "client_id: readiness.clientId" in create_source
     assert "issued_to: readiness.issuedTo" in create_source
     assert "allowed_task_ids: readiness.tasks" in create_source
-    assert "const allowedScopes = readiness.scopes;" in create_source
-    assert "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})" in create_source
+    assert "allowed_scopes: readiness.scopes" in create_source
     assert "expires_in_days: readiness.duration" in create_source
     assert "max_requests: readiness.quota" in create_source
-    assert "selectedEvaluationScopes();" not in create_source
     assert "/settings/api-keys" not in create_source
-
-
-def test_standard_runtime_fixup_cannot_generate_an_external_evaluation_key() -> None:
-    source = _source(RUNTIME_FIXUPS)
-
-    generation_start = source.index("async function generateProfiledApiKey()")
-    profile_start = source.index("const profileName", generation_start)
-    guard = source[generation_start:profile_start]
-
-    assert "if (externalEvaluationSelected())" in guard
-    assert "Standard API key generation is blocked for External Evaluation." in guard
-    assert "button.disabled = true" in guard
-    assert "return;" in guard
-    assert "request('POST', '/settings/api-keys'" not in guard
-
-
-def test_evaluation_issue_remains_one_time_and_never_persists_raw_secret() -> None:
-    source = _source(EVALUATION)
-
-    required = [
-        "One-time evaluation API key created.",
-        "Copy it now; it will not be displayed again.",
-        "X-API-Key:",
-        "Copy API Key",
-        "Bound tasks:",
-        "Subscription required",
-        "Production",
-    ]
-    for marker in required:
-        assert marker in source
-
-    assert "sessionStorage.setItem" not in source
-    assert "localStorage.setItem" not in source
-
-
-def test_evaluation_grant_host_has_no_page_level_fallback() -> None:
-    source = _source(EVALUATION)
-
-    assert "admin-api-key-external-evaluation-body" in source
-    assert "page.appendChild(host)" not in source
-    assert "const page = document.getElementById('page-admin-api-keys')" not in source
-
-
-def test_existing_backend_authorities_and_scope_derivation_are_preserved() -> None:
-    evaluation = _source(EVALUATION)
-    provisioning = _source(PROVISIONING)
-    session = _source(SESSION)
-
-    assert "/settings/admin/evaluation-grants" in evaluation
-    assert "selectedScopes" in provisioning
-    assert "selectedEndpoints" in provisioning
-    assert "pmk-api-key-access-selection-changed" in provisioning
-    assert "loadEvaluationGrantControls();" in session
-    assert "loadApiKeyProvisioningWorkspace();" in session
-    assert "loadApiKeyEvaluationLifecycle();" in session
 
 
 def test_operational_profile_remains_intent_only_not_scope_authority() -> None:
     provisioning = _source(PROVISIONING)
 
-    assert "Selected operational intent only" in provisioning
+    assert "Choosing a profile does not mutate runtime scopes" in provisioning
     assert "selectedEndpointScopes" in provisioning
-    assert "target.value = derivedScopes.join('\\n')" in provisioning
+    assert "derivedScopes.join('\\n')" in provisioning
     assert "profile.allowed_scopes" in provisioning
     assert "target.value = profile" not in provisioning

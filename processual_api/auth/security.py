@@ -15,6 +15,7 @@ from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBea
 
 from ..admin_audit_log import append_admin_audit_event
 from ..services.api_key_store import verify_dynamic_api_key
+from ..services.evaluation_grants import evaluation_endpoint_allowed
 from ..settings import settings
 from ..supervisor_session_keys import validate_supervisor_session_key
 
@@ -24,6 +25,7 @@ try:
 except ImportError:
     jwt: Any = None  # type: ignore[no-redef]
     PyJWTError: type[Exception] = Exception  # type: ignore[no-redef]
+
 
 class _PBKDF2CompatBcrypt:
     """Tiny bcrypt-compatible fallback for minimal local/test environments.
@@ -43,7 +45,10 @@ class _PBKDF2CompatBcrypt:
 
     @staticmethod
     def checkpw(password: bytes, hashed_password: bytes) -> bool:
-        return _verify_pbkdf2_api_key(password.decode("utf-8"), hashed_password.decode("utf-8"))
+        return _verify_pbkdf2_api_key(
+            password.decode("utf-8"),
+            hashed_password.decode("utf-8"),
+        )
 
 
 try:
@@ -52,7 +57,10 @@ except ImportError:
     _bcrypt_lib = _PBKDF2CompatBcrypt()  # type: ignore[assignment]
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-_supervisor_session_key_header = APIKeyHeader(name="X-Supervisor-Session-Key", auto_error=False)
+_supervisor_session_key_header = APIKeyHeader(
+    name="X-Supervisor-Session-Key",
+    auto_error=False,
+)
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -95,7 +103,12 @@ def _record_supervisor_session_key_denied(
 ) -> None:
     append_admin_audit_event(
         audit_path=_auth_admin_audit_path(),
-        actor=str(user.get("email") or user.get("sub") or user.get("user_id") or "admin"),
+        actor=str(
+            user.get("email")
+            or user.get("sub")
+            or user.get("user_id")
+            or "admin"
+        ),
         actor_level=_supervisor_actor_level_for_audit(user),
         action="supervisor_session_key_denied",
         target_type="supervisor_session",
@@ -175,7 +188,6 @@ def _apply_supervisor_session_header(
     return _merge_supervisor_session_user(user, session)
 
 
-
 def _get_jwt_secret() -> str:
     return settings.jwt_secret
 
@@ -197,10 +209,14 @@ def create_access_token(
     platform_authorities: tuple[str, ...] = (),
 ) -> str:
     if jwt is None:
-        raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
+        raise RuntimeError(
+            "PyJWT is not installed. Install with: pip install PyJWT[crypto]"
+        )
     now = datetime.now(UTC)
     expire = now + (
-        expires_delta if expires_delta is not None else timedelta(minutes=settings.jwt_expire_minutes)
+        expires_delta
+        if expires_delta is not None
+        else timedelta(minutes=settings.jwt_expire_minutes)
     )
     payload = {
         "sub": subject,
@@ -216,29 +232,45 @@ def create_access_token(
         payload["sid"] = session_id
     if organization_id is not None:
         payload["organization_id"] = organization_id
-    return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
-
-
+    return jwt.encode(
+        payload,
+        _get_jwt_secret(),
+        algorithm=_get_jwt_algorithm(),
+    )
 
 
 def verify_access_token(token: str) -> dict:
     if jwt is None:
-        raise RuntimeError("PyJWT is not installed. Install with: pip install PyJWT[crypto]")
+        raise RuntimeError(
+            "PyJWT is not installed. Install with: pip install PyJWT[crypto]"
+        )
     try:
-        payload = jwt.decode(token, _get_jwt_secret(), algorithms=[_get_jwt_algorithm()])
+        payload = jwt.decode(
+            token,
+            _get_jwt_secret(),
+            algorithms=[_get_jwt_algorithm()],
+        )
         return payload
     except PyJWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
 
 
-def _pbkdf2_hash_api_key(api_key: str, *, iterations: int = 260_000) -> str:
-    """Hash API keys with a stdlib fallback when bcrypt is unavailable.
-
-    Production deployments should install bcrypt, but the fallback keeps local
-    tests and minimal installations from failing with a 500 on /auth/api-key.
-    """
+def _pbkdf2_hash_api_key(
+    api_key: str,
+    *,
+    iterations: int = 260_000,
+) -> str:
+    """Hash API keys with a stdlib fallback when bcrypt is unavailable."""
     salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", api_key.encode("utf-8"), salt, iterations)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        api_key.encode("utf-8"),
+        salt,
+        iterations,
+    )
     return "pbkdf2_sha256${}${}${}".format(
         iterations,
         base64.urlsafe_b64encode(salt).decode("ascii"),
@@ -254,7 +286,12 @@ def _verify_pbkdf2_api_key(plain_key: str, hashed_key: str) -> bool:
         iterations = int(iterations_raw)
         salt = base64.urlsafe_b64decode(salt_b64.encode("ascii"))
         expected = base64.urlsafe_b64decode(digest_b64.encode("ascii"))
-        actual = hashlib.pbkdf2_hmac("sha256", plain_key.encode("utf-8"), salt, iterations)
+        actual = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain_key.encode("utf-8"),
+            salt,
+            iterations,
+        )
         return hmac.compare_digest(actual, expected)
     except Exception:
         return False
@@ -263,7 +300,10 @@ def _verify_pbkdf2_api_key(plain_key: str, hashed_key: str) -> bool:
 def hash_api_key(api_key: str) -> str:
     if _bcrypt_lib is None:
         raise RuntimeError("bcrypt is not installed. Install with: pip install bcrypt")
-    return _bcrypt_lib.hashpw(api_key.encode("utf-8"), _bcrypt_lib.gensalt()).decode("utf-8")
+    return _bcrypt_lib.hashpw(
+        api_key.encode("utf-8"),
+        _bcrypt_lib.gensalt(),
+    ).decode("utf-8")
 
 
 def verify_api_key(plain_key: str, hashed_key: str) -> bool:
@@ -271,7 +311,10 @@ def verify_api_key(plain_key: str, hashed_key: str) -> bool:
         return _verify_pbkdf2_api_key(plain_key, hashed_key)
     if _bcrypt_lib is None:
         raise RuntimeError("bcrypt is not installed. Install with: pip install bcrypt")
-    return _bcrypt_lib.checkpw(plain_key.encode("utf-8"), hashed_key.encode("utf-8"))
+    return _bcrypt_lib.checkpw(
+        plain_key.encode("utf-8"),
+        hashed_key.encode("utf-8"),
+    )
 
 
 def generate_api_key() -> str:
@@ -329,7 +372,9 @@ async def _validate_identity_session(
                 .where(
                     OrganizationMembership.user_id == user_uuid,
                     OrganizationMembership.status == "active",
-                    OrganizationMembership.role.in_(("organization_owner", "organization_admin")),
+                    OrganizationMembership.role.in_(
+                        ("organization_owner", "organization_admin")
+                    ),
                 )
                 .limit(1)
             )
@@ -348,11 +393,16 @@ async def _validate_identity_session(
             detail="Session authority unavailable",
         ) from exc
     if row is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
     auth_session, user = row
     now = datetime.now(UTC)
     authoritative_organization = (
-        str(auth_session.organization_id) if auth_session.organization_id is not None else None
+        str(auth_session.organization_id)
+        if auth_session.organization_id is not None
+        else None
     )
     if (
         auth_session.revoked_at is not None
@@ -360,7 +410,10 @@ async def _validate_identity_session(
         or user.status != "active"
         or organization_id != authoritative_organization
     ):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
     mfa_required = (
         active_mfa_factor_id is not None
         or privileged_membership_id is not None
@@ -429,6 +482,15 @@ async def get_current_user(
     if api_key:
         dynamic_user = verify_dynamic_api_key(api_key)
         if dynamic_user:
+            if not evaluation_endpoint_allowed(
+                dynamic_user,
+                method=request.method,
+                path=request.url.path,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Evaluation grant does not allow this runtime endpoint.",
+                )
             request.state.current_user = dynamic_user
             return dynamic_user
 
@@ -439,7 +501,6 @@ async def get_current_user(
             and runtime_env not in {"production", "prod"}
             and not settings.is_production
         )
-
 
         if allow_env_fallback:
             for stored_key in settings.api_keys:
@@ -458,15 +519,21 @@ async def get_current_user(
                     request.state.current_user = user
                     return user
 
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
 
+
 def require_scope(required_scope: str):
-    async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
+    async def _scope_dependency(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
         scopes = current_user.get("scopes", [])
 
         if "*" in scopes:
@@ -487,9 +554,14 @@ def require_recent_mfa(max_age_seconds: int = 300):
     if max_age_seconds < 60 or max_age_seconds > 1800:
         raise ValueError("MFA step-up lifetime is outside its safe range.")
 
-    async def _recent_mfa_dependency(current_user: dict = Depends(get_current_user)) -> dict:
+    async def _recent_mfa_dependency(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
         if current_user.get("session_type") != "identity_user":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Identity session required.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Identity session required.",
+            )
         try:
             session_id = uuid.UUID(str(current_user["session_id"]))
             user_id = uuid.UUID(str(current_user["user_id"]))
@@ -518,7 +590,8 @@ def require_recent_mfa(max_age_seconds: int = 300):
             or auth_session.revoked_at is not None
             or auth_session.expires_at <= now
             or auth_session.mfa_satisfied_at is None
-            or auth_session.mfa_satisfied_at < now - timedelta(seconds=max_age_seconds)
+            or auth_session.mfa_satisfied_at
+            < now - timedelta(seconds=max_age_seconds)
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -527,6 +600,7 @@ def require_recent_mfa(max_age_seconds: int = 300):
         return current_user
 
     return _recent_mfa_dependency
+
 
 def require_platform_admin_step_up(
     max_age_seconds: int | None = None,
@@ -629,7 +703,11 @@ def require_quota(quota_scope: str = "evaluation"):
         from ..billing.usage_pricing import pricing_decision
         from ..services.quota_store import consume_quota
 
-        pricing_item_count = getattr(request.state, "pricing_item_count", None)
+        pricing_item_count = getattr(
+            request.state,
+            "pricing_item_count",
+            None,
+        )
         if not isinstance(pricing_item_count, int):
             pricing_item_count = None
 
@@ -649,13 +727,18 @@ def require_quota(quota_scope: str = "evaluation"):
                 amount=pricing.units_charged,
             )
         except HTTPException as exc:
-            detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
+            detail: dict[str, Any] = (
+                exc.detail if isinstance(exc.detail, dict) else {}
+            )
             if detail.get("error") == "quota_exceeded":
                 rejected_user = dict(current_user)
                 rejected_user["quota_rejected"] = True
                 rejected_user["quota"] = {
                     "scope": detail.get("quota_scope", quota_scope),
-                    "plan_id": detail.get("plan_id", current_user.get("plan_id", "")),
+                    "plan_id": detail.get(
+                        "plan_id",
+                        current_user.get("plan_id", ""),
+                    ),
                     "limit": detail.get("quota_limit"),
                     "used": detail.get("quota_used"),
                     "requested": detail.get(

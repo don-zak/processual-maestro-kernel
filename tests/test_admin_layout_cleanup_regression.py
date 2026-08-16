@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "processual_api" / "static"
@@ -16,6 +15,10 @@ def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards():
 
     required = [
         "pruneLegacyPlaceholders",
+        "pruneLegacyApiKeyPlaceholders",
+        "admin-api-key-static-generate-btn",
+        "admin-api-key-static-refresh-btn",
+        "control?.closest('.card')?.remove()",
         "Checking admin session",
         "Planned usage view",
         "System-level provider settings",
@@ -28,15 +31,15 @@ def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards():
         assert token in script
 
 
-def test_admin_session_uses_auth_bridge_headers():
+def test_admin_session_uses_super_admin_authority_bridge_headers():
     script = (STATIC_DIR / "js" / "admin_session.js").read_text(encoding="utf-8")
 
     required = [
         "PMK_ADMIN_AUTH.headers",
-        "fetch('/auth/me'",
-        "Admin auth token missing",
-        "Admin session verified",
-        "Backend scopes remain the authority",
+        "fetch(AUTHORITY_ENDPOINT",
+        "Super Administrator",
+        "platform_admin",
+        "window.PMK_ADMIN_SESSION",
     ]
 
     for token in required:

@@ -49,6 +49,27 @@ def _client(tmp_path: Path, monkeypatch) -> TestClient:
 
     app = FastAPI()
     app.include_router(settings_routes.router)
+
+    issue_route = next(
+        route
+        for route in settings_routes.router.routes
+        if getattr(route, "path", None) == "/settings/admin/supervisor-session-keys"
+        and "POST" in getattr(route, "methods", set())
+    )
+    issue_dependency = issue_route.dependant.dependencies[0].call
+
+    async def _platform_admin_step_up_user() -> dict:
+        return {
+            "sub": "platform-admin@example.test",
+            "user_id": "platform-admin@example.test",
+            "client_id": "platform-admin@example.test",
+            "session_type": "identity_user",
+            "role": "client",
+            "scopes": ["evaluation"],
+            "mfa_pending": False,
+        }
+
+    app.dependency_overrides[issue_dependency] = _platform_admin_step_up_user
     return TestClient(app)
 
 
@@ -199,3 +220,36 @@ def test_missing_supervisor_session_key_revoke_returns_404(
     )
 
     assert response.status_code == 404
+
+
+def test_legacy_admin_settings_token_cannot_issue_supervisor_session_key(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    key_path = tmp_path / "supervisor_session_keys.json"
+    audit_path = tmp_path / "admin_audit.jsonl"
+
+    monkeypatch.setattr(
+        settings_routes,
+        "_supervisor_session_key_store_path",
+        lambda: key_path,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        settings_routes,
+        "_admin_audit_path",
+        lambda: audit_path,
+        raising=False,
+    )
+
+    app = FastAPI()
+    app.include_router(settings_routes.router)
+    client = TestClient(app)
+
+    response = client.post(
+        "/settings/admin/supervisor-session-keys",
+        headers=_headers(),
+        json=_issue_payload(),
+    )
+
+    assert response.status_code == 403

@@ -99,25 +99,55 @@ def _is_expired(value: str | None) -> bool:
         return False
 
 
+def _is_governed_evaluation_key(key: dict[str, Any]) -> bool:
+    return (
+        key.get("entitlement_source") == "admin_evaluation_grant"
+        and bool(key.get("evaluation_grant_id"))
+    )
+
+
+def _evaluation_request_quota(key: dict[str, Any]) -> tuple[int, int]:
+    limit = int(
+        key.get("evaluation_request_limit")
+        or key.get("quota_limit")
+        or 0
+    )
+    used = int(key.get("evaluation_request_used", 0) or 0)
+    return limit, used
+
+
 def _public_identity(
     user_id: str,
     raw: dict[str, Any],
     key: dict[str, Any],
 ) -> dict[str, Any]:
+    identity_user_id = user_id
+    if _is_governed_evaluation_key(key):
+        evaluation_user_id = str(key.get("user_id") or "").strip()
+        if evaluation_user_id:
+            identity_user_id = evaluation_user_id
+
     client_id = (
         key.get("client_id")
         or raw.get("client_id")
         or raw.get("subscription", {}).get("client_id")
-        or user_id
+        or identity_user_id
     )
 
     scopes = key.get("scopes")
     if not isinstance(scopes, list) or not scopes:
         scopes = DEFAULT_CLIENT_SCOPES
 
+    request_limit, request_used = _evaluation_request_quota(key)
+    request_remaining = (
+        max(request_limit - request_used, 0)
+        if _is_governed_evaluation_key(key) and request_limit > 0
+        else None
+    )
+
     return {
-        "sub": user_id,
-        "user_id": user_id,
+        "sub": identity_user_id,
+        "user_id": identity_user_id,
         "client_id": client_id,
         "role": key.get("role", "client"),
         "auth_method": "api_key",
@@ -128,9 +158,17 @@ def _public_identity(
         "evaluation_grant_id": key.get("evaluation_grant_id"),
         "entitlement_source": key.get("entitlement_source"),
         "subscription_required": key.get("subscription_required", True),
+        "execution_mode": key.get("execution_mode"),
+        "real_runtime_execution": key.get("real_runtime_execution", False),
+        "production_allowed": key.get("production_allowed", False),
+        "allowed_endpoints": list(key.get("allowed_endpoints") or []),
+        "endpoint_authority_source": key.get("endpoint_authority_source"),
         "allowed_task_ids": list(key.get("allowed_task_ids") or []),
         "task_scope_ids": list(key.get("task_scope_ids") or []),
         "task_authority_source": key.get("task_authority_source"),
+        "evaluation_request_limit": request_limit,
+        "evaluation_request_used": request_used,
+        "evaluation_request_remaining": request_remaining,
     }
 
 
@@ -184,6 +222,21 @@ def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
 
             if not _verify_stored_key(api_key, hashed):
                 continue
+
+            if _is_governed_evaluation_key(key):
+                request_limit, request_used = _evaluation_request_quota(key)
+                if request_limit <= 0 or request_used >= request_limit:
+                    key["evaluation_request_state"] = (
+                        "evaluation_request_quota_exhausted"
+                    )
+                    key["evaluation_request_last_rejected_at"] = now
+                    raw["api_keys"] = keys
+                    _safe_save_json(path, raw)
+                    return None
+                key["evaluation_request_limit"] = request_limit
+                key["evaluation_request_used"] = request_used + 1
+                key["evaluation_request_state"] = "active"
+                key["evaluation_request_last_used_at"] = now
 
             key["last_used_at"] = now
             key["usage_count"] = int(

@@ -20,6 +20,7 @@ _PLATFORM_PROFILES: tuple[dict[str, object], ...] = (
         "forbidden_scopes": (
             "run:analyze",
             "run:govern",
+            "run:evaluation",
             "admin:*",
             "production_write",
             "connector_runtime:execute",
@@ -47,6 +48,7 @@ _PLATFORM_PROFILES: tuple[dict[str, object], ...] = (
             "run:govern",
         ),
         "forbidden_scopes": (
+            "run:evaluation",
             "admin:*",
             "production_write",
             "connector_runtime:execute",
@@ -60,6 +62,33 @@ _PLATFORM_PROFILES: tuple[dict[str, object], ...] = (
         "production_allowed": False,
         "runtime_connector_approved": False,
         "next_action": "Use only for governed sandbox CGT and governor execution.",
+    },
+    {
+        "profile_id": "platform_evaluation_runtime",
+        "display_name": "Platform Evaluation Runtime",
+        "base_key_profile": "service_integration",
+        "client_visible": True,
+        "environment": "sandbox",
+        "allowed_scopes": (
+            "run:evaluation",
+        ),
+        "forbidden_scopes": (
+            "admin:*",
+            "production_write",
+            "connector_runtime:execute",
+        ),
+        "read_only": False,
+        "write_allowed": True,
+        "restricted_allowed": True,
+        "requires_enterprise_plan": False,
+        "requires_integration_readiness": True,
+        "requires_supervisor_for_write": True,
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "next_action": (
+            "Use only with a Super-Administrator-issued Evaluation Grant whose "
+            "endpoint, task, expiry, quota, and prepared execution authority are explicit."
+        ),
     },
 )
 

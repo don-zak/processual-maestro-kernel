@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 
+from processual_api.auth.platform_admin_authority import require_active_platform_admin
 from processual_api.auth.security import get_current_user
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
 from processual_api.integrations.api_key_operational_profiles import (
@@ -14,39 +15,6 @@ from processual_api.integrations.api_key_platform_operational_profiles import (
 )
 
 from . import settings as settings_module
-
-_ALLOWED_ADMIN_ROLES = {
-    "admin",
-    "owner_admin",
-    "security_admin",
-    "ops_admin",
-}
-_ALLOWED_ADMIN_SCOPES = {
-    "*",
-    "admin:*",
-    "admin:settings",
-    "admin:api_keys:read",
-    "admin:api_keys:write",
-}
-
-
-def _require_api_key_provisioning_admin(current_user: dict) -> None:
-    role = str(
-        current_user.get("role")
-        or current_user.get("admin_role")
-        or ""
-    ).strip().lower()
-    scopes = {
-        str(scope).strip().lower()
-        for scope in current_user.get("scopes") or []
-        if scope
-    }
-    if role in _ALLOWED_ADMIN_ROLES or scopes.intersection(_ALLOWED_ADMIN_SCOPES):
-        return
-    raise HTTPException(
-        status_code=403,
-        detail="API key provisioning catalog requires administrator authority.",
-    )
 
 
 def _route_catalog(request: Request) -> list[dict[str, object]]:
@@ -106,9 +74,9 @@ def _route_catalog(request: Request) -> list[dict[str, object]]:
 async def admin_api_key_operational_profiles(
     current_user: dict = Depends(get_current_user),
 ):
-    """Return safe operational profiles for the admin provisioning workspace."""
+    """Return safe operational profiles for the exclusive Super Admin workspace."""
 
-    _require_api_key_provisioning_admin(current_user)
+    await require_active_platform_admin(current_user)
     payload = api_key_operational_profiles_payload()
     profiles = [
         *list(payload.get("profiles") or []),
@@ -125,6 +93,7 @@ async def admin_api_key_operational_profiles(
         ],
         "raw_secret_visible": False,
         "admin_provisioning_catalog": True,
+        "exclusive_super_administrator": True,
     }
 
 
@@ -136,9 +105,9 @@ async def admin_api_key_access_catalog(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """Return registered API routes plus the canonical key-grantable subset."""
+    """Return routes plus the canonical key-grantable subset for Super Admin only."""
 
-    _require_api_key_provisioning_admin(current_user)
+    await require_active_platform_admin(current_user)
     endpoints = _route_catalog(request)
     grantable = [endpoint for endpoint in endpoints if endpoint["grantable"]]
     scopes = sorted(
@@ -177,5 +146,6 @@ async def admin_api_key_access_catalog(
         "operational_profile_ids": profiles,
         "production_allowed": False,
         "raw_secret_visible": False,
+        "exclusive_super_administrator": True,
         "endpoints": endpoints,
     }
