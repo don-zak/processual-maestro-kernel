@@ -121,11 +121,17 @@ def _public_identity(
     raw: dict[str, Any],
     key: dict[str, Any],
 ) -> dict[str, Any]:
+    identity_user_id = user_id
+    if _is_governed_evaluation_key(key):
+        evaluation_user_id = str(key.get("user_id") or "").strip()
+        if evaluation_user_id:
+            identity_user_id = evaluation_user_id
+
     client_id = (
         key.get("client_id")
         or raw.get("client_id")
         or raw.get("subscription", {}).get("client_id")
-        or user_id
+        or identity_user_id
     )
 
     scopes = key.get("scopes")
@@ -140,8 +146,8 @@ def _public_identity(
     )
 
     return {
-        "sub": user_id,
-        "user_id": user_id,
+        "sub": identity_user_id,
+        "user_id": identity_user_id,
         "client_id": client_id,
         "role": key.get("role", "client"),
         "auth_method": "api_key",
