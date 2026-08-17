@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
-import uuid
 
 from processual_api.admin_marketplace.commercial_offer_projection import (
     build_lemon_squeezy_draft_offer_projections,
