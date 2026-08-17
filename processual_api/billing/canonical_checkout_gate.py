@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final, Mapping
+from typing import Final
 
 LEGACY_CHECKOUT_FIELDS: Final = frozenset({"variant_id", "plan", "billing"})
 
