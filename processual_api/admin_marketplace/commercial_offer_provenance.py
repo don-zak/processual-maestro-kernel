@@ -31,6 +31,7 @@ class CommercialOfferProvenance:
     authoritative_price_amount: str
     settlement_currency: str
     settlement_amount: str
+    exchange_rate_value: str | None
     exchange_rate_source: str | None
     exchange_rate_reference: str | None
     exchange_rate_observed_at: str | None
@@ -63,6 +64,7 @@ class CommercialOfferProvenance:
                 raise ValueError(f"{field_name} must be positive and finite")
         if self.sales_channel == "maestro_direct":
             required_fx = (
+                self.exchange_rate_value,
                 self.exchange_rate_source,
                 self.exchange_rate_reference,
                 self.exchange_rate_observed_at,
@@ -70,10 +72,14 @@ class CommercialOfferProvenance:
             )
             if any(value is None or not str(value).strip() for value in required_fx):
                 raise ValueError("Maestro Direct provenance requires complete FX evidence")
+            rate = Decimal(str(self.exchange_rate_value))
+            if not rate.is_finite() or rate <= 0:
+                raise ValueError("Maestro Direct provenance FX rate is invalid")
         elif self.sales_channel == "lemon_squeezy":
             if any(
                 value is not None
                 for value in (
+                    self.exchange_rate_value,
                     self.exchange_rate_source,
                     self.exchange_rate_reference,
                     self.exchange_rate_observed_at,
@@ -119,6 +125,11 @@ def build_offer_provenance(
         authoritative_price_amount=str(projection.authoritative_price_usd),
         settlement_currency=projection.currency,
         settlement_amount=str(projection.amount),
+        exchange_rate_value=(
+            None
+            if projection.exchange_rate_value is None
+            else str(projection.exchange_rate_value)
+        ),
         exchange_rate_source=projection.exchange_rate_source,
         exchange_rate_reference=projection.exchange_rate_reference,
         exchange_rate_observed_at=(
