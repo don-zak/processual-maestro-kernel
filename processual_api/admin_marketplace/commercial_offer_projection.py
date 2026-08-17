@@ -31,6 +31,7 @@ class CommercialOfferProjection:
     source_offer_id: str
     source_pricebook_version: str
     source_pricing_version: str
+    exchange_rate_value: Decimal | None = None
     exchange_rate_source: str | None = None
     exchange_rate_reference: str | None = None
     exchange_rate_observed_at: datetime | None = None
@@ -51,8 +52,16 @@ class CommercialOfferProjection:
             raise ValueError("offer projection amount must be positive and finite")
         if not self.authoritative_price_usd.is_finite() or self.authoritative_price_usd <= 0:
             raise ValueError("authoritative USD price must be positive and finite")
-        if self.sales_channel == "lemon_squeezy" and self.amount != self.authoritative_price_usd:
-            raise ValueError("Lemon Squeezy amount must equal authoritative USD price")
+        if self.sales_channel == "lemon_squeezy":
+            if self.amount != self.authoritative_price_usd:
+                raise ValueError("Lemon Squeezy amount must equal authoritative USD price")
+            if self.exchange_rate_value is not None:
+                raise ValueError("Lemon Squeezy offer must not contain an FX rate")
+        if self.sales_channel == "maestro_direct":
+            if self.exchange_rate_value is None:
+                raise ValueError("Maestro Direct offer requires an FX rate")
+            if not self.exchange_rate_value.is_finite() or self.exchange_rate_value <= 0:
+                raise ValueError("Maestro Direct FX rate must be positive and finite")
 
 
 def _checkout_candidates() -> dict[tuple[str, str], dict[str, object]]:
@@ -134,6 +143,7 @@ def build_maestro_direct_draft_offer_projection(
         source_offer_id=str(offer["offer_id"]),
         source_pricebook_version=str(offer["pricebook_version"]),
         source_pricing_version=str(offer["pricing_source_version"]),
+        exchange_rate_value=exchange_rate_quote.rate,
         exchange_rate_source=exchange_rate_quote.source,
         exchange_rate_reference=exchange_rate_quote.reference,
         exchange_rate_observed_at=exchange_rate_quote.observed_at,
