@@ -115,18 +115,42 @@ async def test_checkout_resolution_requires_lemon_squeezy_channel() -> None:
 
 
 @pytest.mark.asyncio
-async def test_checkout_resolution_requires_verified_provider_binding() -> None:
+async def test_checkout_resolution_requires_provider_binding() -> None:
+    engine, factory = await _session_factory()
+    try:
+        async with factory() as session:
+            await _seed_offer(session, status="published")
+            with pytest.raises(CanonicalCheckoutGateError) as captured:
+                await resolve_canonical_checkout_in_session(
+                    session=session,
+                    offer_ref="starter-monthly",
+                )
+        assert captured.value.reason_code == "verified_provider_binding_required"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("binding_status", ("pending", "revoked"))
+async def test_checkout_resolution_requires_verified_provider_binding(
+    binding_status: str,
+) -> None:
     engine, factory = await _session_factory()
     try:
         async with factory() as session:
             offer = await _seed_offer(session, status="published")
+            verified = binding_status == "revoked"
             session.add(
                 AdminMarketOfferProviderBinding(
                     id=uuid.uuid4(),
                     offer_id=offer.id,
                     provider="lemon_squeezy",
                     provider_variant_id="12345",
-                    status="pending",
+                    status=binding_status,
+                    verification_reference=(
+                        "ls-variant-12345" if verified else None
+                    ),
+                    verified_at=NOW if verified else None,
                     created_at=NOW,
                     updated_at=NOW,
                 )
