@@ -11,19 +11,19 @@ from copy import deepcopy
 from typing import Any
 
 from processual_api.billing.commercial_catalog_contracts import (
+    BYOK_ONLY,
     CATALOG_CONTRACT_VERSION,
     CATALOG_STATUS,
-    OfferVisibility,
     build_catalog_plan_contracts,
 )
 from processual_api.billing.maestro_group1_selected_pricing import (
+    PROVIDER_COST_INCLUDED,
     SELECTED_PROPOSAL_VERSION,
 )
-from processual_api.billing.usage_pricing import BILLING_POLICY
 
 SUBSCRIPTION_CATALOG_VERSION = CATALOG_CONTRACT_VERSION
 SUBSCRIPTION_PRICING_STATUS = CATALOG_STATUS
-PROVIDER_COST_INCLUDED = False
+BILLING_POLICY = "byok" if BYOK_ONLY else "provider_managed"
 PROVIDER_COST_NOTE = (
     "Provider costs are not included. Clients bring their own provider/API key."
 )
@@ -44,9 +44,7 @@ def _plan_payload(contract: Any) -> dict[str, Any]:
             "is still required."
         ),
         "audience": contract.audience.value,
-        "commercially_listed": (
-            contract.visibility is OfferVisibility.PUBLIC_CANDIDATE
-        ),
+        "commercially_listed": True,
         "pricing_status": SUBSCRIPTION_PRICING_STATUS,
         "price_label": PRICE_LABEL,
         "monthly_price_usd": str(contract.monthly_price_usd),
