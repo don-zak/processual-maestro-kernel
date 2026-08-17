@@ -562,7 +562,7 @@ async def download_customer_billing_statement_pdf(
         raise HTTPException(
             status_code=404,
             detail="Billing statement not found.",
-        ) from exc
+        )
     return _pdf_response(statement)
 
 
