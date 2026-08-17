@@ -16,9 +16,7 @@ from processual_api.billing.commercial_catalog_contracts import (
     BYOK_ONLY,
     build_catalog_plan_contracts,
 )
-from processual_api.billing.maestro_group1_selected_pricing import (
-    PROVIDER_COST_INCLUDED,
-)
+from processual_api.billing.maestro_group1_selected_pricing import PROVIDER_COST_INCLUDED
 from processual_api.billing.plan_fulfillment_catalog import PLAN_CODE_ALIASES
 from processual_api.billing.usage_pricing import (
     PRICING_VERSION,
