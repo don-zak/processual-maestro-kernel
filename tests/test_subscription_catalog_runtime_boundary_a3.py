@@ -8,6 +8,7 @@ PACKAGE_ROOT = REPO_ROOT / "processual_api"
 TESTS_ROOT = REPO_ROOT / "tests"
 SHIM_PATH = PACKAGE_ROOT / "billing" / "subscription_catalog.py"
 ALLOWED_TEST_CONSUMERS = {
+    Path("tests/test_billing_pricing_catalog.py"),
     Path("tests/test_subscription_pricing_catalog.py"),
 }
 
