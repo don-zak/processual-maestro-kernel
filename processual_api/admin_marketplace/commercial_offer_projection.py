@@ -23,6 +23,7 @@ class CommercialOfferProjection:
     billing_period: str
     currency: str
     amount: Decimal
+    authoritative_price_usd: Decimal
     status: str
     effective_at: datetime | None
     expires_at: datetime | None
@@ -48,6 +49,10 @@ class CommercialOfferProjection:
             raise ValueError("Maestro Direct draft offers must settle in TND")
         if not self.amount.is_finite() or self.amount <= 0:
             raise ValueError("offer projection amount must be positive and finite")
+        if not self.authoritative_price_usd.is_finite() or self.authoritative_price_usd <= 0:
+            raise ValueError("authoritative USD price must be positive and finite")
+        if self.sales_channel == "lemon_squeezy" and self.amount != self.authoritative_price_usd:
+            raise ValueError("Lemon Squeezy amount must equal authoritative USD price")
 
 
 def _checkout_candidates() -> dict[tuple[str, str], dict[str, object]]:
@@ -83,6 +88,7 @@ def build_lemon_squeezy_draft_offer_projections() -> tuple[CommercialOfferProjec
                 billing_period=period,
                 currency="USD",
                 amount=amount_usd,
+                authoritative_price_usd=amount_usd,
                 status="draft",
                 effective_at=None,
                 expires_at=None,
@@ -120,6 +126,7 @@ def build_maestro_direct_draft_offer_projection(
         billing_period=normalized_period,
         currency="TND",
         amount=amount_tnd,
+        authoritative_price_usd=amount_usd,
         status="draft",
         effective_at=None,
         expires_at=None,
