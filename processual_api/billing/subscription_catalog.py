@@ -1,7 +1,10 @@
 """Backward-compatible import surface for the canonical pricing catalog.
 
 The legacy subscription catalog no longer owns plan definitions or commercial
-values. New code should import from ``processual_api.billing.pricing_catalog``.
+values. Compatibility identifiers such as ``enterprise_integration_starter``
+and ``enterprise_integration`` are resolved by ``pricing_catalog`` against the
+canonical commercial catalog/alias policy. New code should import from
+``processual_api.billing.pricing_catalog``.
 """
 
 from processual_api.billing.pricing_catalog import (
