@@ -87,32 +87,121 @@ def _identity_customer_ref(current_user: dict) -> str:
         or current_user.get("user_id")
         or current_user.get("sub")
     )
-    if not candidate:
-        raise HTTPException(status_code=401, detail="Invalid identity session.")
-    return str(candidate)
+    try:
+        return str(uuid.UUID(str(candidate)))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Billing access denied.",
+        ) from exc
 
 
-def _billing_user_id(current_user: dict) -> str | None:
-    value = current_user.get("user_id") or current_user.get("sub")
-    return str(value) if value else None
+def _billing_user_id(current_user: dict) -> str:
+    return str(
+        current_user.get("user_id")
+        or current_user.get("sub")
+        or ""
+    ).strip()
 
 
-def _statement_summary(statement: dict[str, Any]) -> dict[str, Any]:
+def _require_billing_admin(current_user: dict) -> None:
+    role = str(
+        current_user.get("role")
+        or current_user.get("admin_role")
+        or ""
+    ).strip()
+    raw_scopes = (
+        current_user.get("scopes")
+        or current_user.get("permissions")
+        or []
+    )
+    if isinstance(raw_scopes, str):
+        raw_scopes = [raw_scopes]
+    scopes = {
+        str(scope).strip()
+        for scope in raw_scopes
+        if str(scope).strip()
+    }
+
+    if role in {
+        "admin",
+        "administrator",
+        "owner_admin",
+        "billing_admin",
+    }:
+        return
+    if scopes.intersection(
+        {
+            "admin:*",
+            "admin:billing:read",
+            "admin:billing:write",
+        }
+    ):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="Billing statement supervisor access denied.",
+    )
+
+
+def _statement_summary(
+    statement: dict[str, Any],
+    *,
+    admin: bool = False,
+) -> dict[str, Any]:
+    prefix = "/billing/admin/statements" if admin else "/billing/statements"
     return {
-        "statement_ref": statement.get("statement_ref"),
-        "period": statement.get("period"),
-        "issued_at": statement.get("issued_at"),
-        "currency": statement.get("currency"),
-        "total_amount": statement.get("total_amount"),
-        "status": statement.get("status"),
+        "statement_ref": statement["statement_ref"],
+        "statement_sha256": statement["statement_sha256"],
+        "issued_at": statement["issued_at"],
+        "client_id": statement["client_id"],
+        "period": statement["billing_period"]["period"],
+        "plan_id": statement["plan"]["plan_id"],
+        "consumed_units": statement["balance"]["consumed_units"],
+        "remaining_units": statement["balance"]["remaining_units"],
+        "top_up_units": statement["balance"]["top_up_units"],
+        "additional_package_count": len(
+            statement.get("additional_packages")
+            or []
+        ),
+        "reconciled": bool(
+            statement["reconciliation"]["reconciled"]
+        ),
+        "top_ups_reconciled": bool(
+            statement["reconciliation"]["top_ups_reconciled"]
+        ),
+        "pdf_url": (
+            f"{prefix}/{statement['statement_ref']}/pdf"
+        ),
     }
 
 
-def _load_verified_statement(statement_ref: str) -> dict[str, Any]:
-    try:
-        return load_statement(_DATA_DIR, statement_ref=statement_ref)
-    except (FileNotFoundError, BillingStatementIntegrityError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="Billing statement not found.") from exc
+def _existing_period_statement(
+    *,
+    client_id: str,
+    period: str,
+) -> dict[str, Any] | None:
+    matches = [
+        statement
+        for statement in list_statements(
+            _DATA_DIR,
+            client_id=client_id,
+        )
+        if str(
+            statement.get("billing_period", {}).get("period")
+            or ""
+        )
+        == period
+    ]
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Multiple immutable billing statements exist "
+                "for this client and period."
+            ),
+        )
+    return matches[0] if matches else None
 
 
 async def _issue_statement(
@@ -121,57 +210,112 @@ async def _issue_statement(
     user_id: str,
     period: str,
 ) -> dict[str, Any]:
+    existing = _existing_period_statement(
+        client_id=client_id,
+        period=period,
+    )
+    if existing is not None:
+        return existing
+
     try:
-        snapshot = await load_billing_authority_snapshot(
-            customer_ref=client_id,
-            user_id=user_id,
-        )
-        client_settings = read_client_settings(_DATA_DIR, client_id=client_id)
-        usage_records = read_usage_records(
-            _DATA_DIR,
-            client_id=client_id,
-            period=period,
+        quota_cycle, granted_top_ups = (
+            await load_billing_authority_snapshot(
+                client_id=client_id,
+                period=period,
+            )
         )
         statement = build_billing_statement(
             client_id=client_id,
+            user_id=user_id,
             period=period,
-            authority_snapshot=snapshot,
-            client_settings=client_settings,
-            usage_records=usage_records,
+            usage_records=read_usage_records(_DATA_DIR),
+            raw_settings=read_client_settings(
+                _DATA_DIR,
+                user_id,
+            ),
+            quota_cycle=quota_cycle,
+            granted_top_ups=granted_top_ups,
         )
-        persist_statement(_DATA_DIR, statement)
-        return statement
-    except (BillingAuthorityError, BillingStatementIntegrityError, ValueError) as exc:
+        return persist_statement(_DATA_DIR, statement)
+    except (
+        BillingAuthorityError,
+        BillingStatementIntegrityError,
+        ValueError,
+    ) as exc:
         raise HTTPException(
             status_code=409,
-            detail="Unable to issue billing statement from current authority state.",
+            detail=str(exc),
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing statement authority is unavailable.",
         ) from exc
 
 
-@router.get("/pricing-catalog", response_model=dict)
-async def pricing_catalog() -> dict[str, object]:
-    return public_subscription_catalog()
+def _load_verified_statement(
+    statement_ref: str,
+) -> dict[str, Any]:
+    try:
+        return load_statement(_DATA_DIR, statement_ref)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Billing statement not found.",
+        ) from exc
+    except BillingStatementIntegrityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Billing statement integrity verification failed."
+            ),
+        ) from exc
 
 
-@router.get("/offer-pricebook", response_model=dict)
-async def offer_pricebook() -> dict[str, object]:
-    return public_offer_pricebook()
+def _pdf_response(statement: dict[str, Any]) -> Response:
+    try:
+        content = render_statement_pdf(statement)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing statement PDF rendering is unavailable.",
+        ) from exc
+    except BillingStatementIntegrityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Billing statement integrity verification failed."
+            ),
+        ) from exc
 
-
-@router.get("/public-plan-journey", response_model=dict)
-async def public_plan_journey() -> dict[str, object]:
-    return public_plan_journey_catalog()
+    statement_ref = str(statement["statement_ref"])
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{statement_ref}.pdf"'
+            ),
+            "X-Maestro-Statement-SHA256": (
+                statement["statement_sha256"]
+            ),
+        },
+    )
 
 
 @router.post("/checkout", response_model=dict)
-async def checkout(
+async def create_checkout(
     body: dict,
-    current_user: dict = Depends(get_identity_user),
-) -> dict[str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, object]:
     api_key = _required_environment("LEMONSQUEEZY_API_KEY")
     store_id = _required_environment("LEMONSQUEEZY_STORE_ID")
-    success_url = _required_environment("LEMONSQUEEZY_SUCCESS_URL")
-    cancel_url = _required_environment("LEMONSQUEEZY_CANCEL_URL")
+    success_url = _required_environment(
+        "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL"
+    )
+    cancel_url = _required_environment(
+        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL"
+    )
 
     variant_id = str(body.get("variant_id") or "").strip()
     if not variant_id:
@@ -393,7 +537,7 @@ async def get_customer_billing_statement(
 
 
 @router.get("/statements/{statement_ref}/pdf")
-async def get_customer_billing_statement_pdf(
+async def download_customer_billing_statement_pdf(
     statement_ref: str,
     current_user: dict = Depends(get_identity_user),
 ) -> Response:
@@ -404,15 +548,100 @@ async def get_customer_billing_statement_pdf(
             status_code=404,
             detail="Billing statement not found.",
         )
-    return Response(
-        content=render_statement_pdf(statement),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="{statement_ref}.pdf"'
-            )
-        },
+    return _pdf_response(statement)
+
+
+@router.get("/admin/statements", response_model=dict)
+async def list_admin_billing_statements(
+    client_id: str | None = None,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _require_billing_admin(current_user)
+    items = [
+        _statement_summary(item, admin=True)
+        for item in list_statements(
+            _DATA_DIR,
+            client_id=client_id,
+        )
+    ]
+    return {
+        "status": "ready",
+        "statement_count": len(items),
+        "statements": items,
+    }
+
+
+@router.post(
+    "/admin/statements/{client_id}/{period}",
+    response_model=dict,
+    status_code=201,
+)
+async def issue_admin_billing_statement(
+    client_id: str,
+    period: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _require_billing_admin(current_user)
+    try:
+        normalized_client_id = str(uuid.UUID(client_id))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid billing client identifier.",
+        ) from exc
+
+    statement = await _issue_statement(
+        client_id=normalized_client_id,
+        user_id=normalized_client_id,
+        period=period,
     )
+    return {
+        "status": "issued",
+        "statement": statement,
+    }
+
+
+@router.get("/admin/statements/{statement_ref}", response_model=dict)
+async def get_admin_billing_statement(
+    statement_ref: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _require_billing_admin(current_user)
+    return {
+        "status": "verified",
+        "statement": _load_verified_statement(statement_ref),
+    }
+
+
+@router.get("/admin/statements/{statement_ref}/pdf")
+async def download_admin_billing_statement_pdf(
+    statement_ref: str,
+    current_user: dict = Depends(get_current_user),
+) -> Response:
+    _require_billing_admin(current_user)
+    statement = _load_verified_statement(statement_ref)
+    return _pdf_response(statement)
+
+
+@router.get("/public-plan-journey")
+async def get_public_plan_journey() -> dict[str, object]:
+    return public_plan_journey_catalog()
+
+
+@router.get("/pricing-catalog")
+async def get_pricing_catalog() -> dict[str, object]:
+    return public_subscription_catalog()
+
+
+@router.get("/offer-pricebook")
+async def get_offer_pricebook() -> dict[str, object]:
+    return public_offer_pricebook()
+
+
+@router.get("/unit-cost-assumptions")
+async def get_unit_cost_assumptions() -> dict[str, object]:
+    """Return the public-safe draft unit cost assumptions model."""
+    return build_unit_cost_assumptions()
 
 
 install_secure_lemon_squeezy_webhook_route(router)
