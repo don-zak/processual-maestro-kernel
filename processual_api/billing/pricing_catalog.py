@@ -12,16 +12,12 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Final
 
+from processual_api.billing import maestro_group1_selected_pricing, usage_pricing
 from processual_api.billing.commercial_catalog_contracts import (
     BYOK_ONLY,
     build_catalog_plan_contracts,
 )
-from processual_api.billing.maestro_group1_selected_pricing import PROVIDER_COST_INCLUDED
 from processual_api.billing.plan_fulfillment_catalog import PLAN_CODE_ALIASES
-from processual_api.billing.usage_pricing import (
-    PRICING_VERSION,
-    monthly_unit_allowance as legacy_monthly_unit_allowance,
-)
 
 SUBSCRIPTION_CATALOG_VERSION: Final = "2026-07-subscriptions-draft-v1"
 SUBSCRIPTION_PRICING_STATUS: Final = "draft"
@@ -141,7 +137,7 @@ def _plan_payload(
         features = [item.value for item in contract.entitlements]
     else:
         # Internal-only compatibility plans are operational, not commercial plans.
-        allowance = legacy_monthly_unit_allowance(plan_id)
+        allowance = usage_pricing.monthly_unit_allowance(plan_id)
         features = list(plan_definition["features"])
 
     if allowance <= 0:
@@ -159,7 +155,9 @@ def _plan_payload(
         "yearly_price_usd": None,
         "monthly_unit_allowance": allowance,
         "billing_policy": BILLING_POLICY,
-        "provider_cost_included": PROVIDER_COST_INCLUDED,
+        "provider_cost_included": (
+            maestro_group1_selected_pricing.PROVIDER_COST_INCLUDED
+        ),
         "provider_cost_note": PROVIDER_COST_NOTE,
         "checkout_enabled": False,
         "lemon_variant_key_monthly": None,
@@ -197,10 +195,12 @@ def public_subscription_catalog() -> dict[str, Any]:
     plans = list_subscription_plans(include_unlisted=True)
     return {
         "catalog_version": SUBSCRIPTION_CATALOG_VERSION,
-        "pricing_version": PRICING_VERSION,
+        "pricing_version": usage_pricing.PRICING_VERSION,
         "pricing_status": SUBSCRIPTION_PRICING_STATUS,
         "billing_policy": BILLING_POLICY,
-        "provider_cost_included": PROVIDER_COST_INCLUDED,
+        "provider_cost_included": (
+            maestro_group1_selected_pricing.PROVIDER_COST_INCLUDED
+        ),
         "provider_cost_note": PROVIDER_COST_NOTE,
         "checkout_enabled": any(plan["checkout_enabled"] for plan in plans),
         "plans": plans,
