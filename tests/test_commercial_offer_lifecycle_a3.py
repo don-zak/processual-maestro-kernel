@@ -57,6 +57,18 @@ def test_publication_is_blocked_until_canonical_provenance_is_verified() -> None
     assert decision.reason_code == "canonical_projection_provenance_required"
 
 
+def test_verified_canonical_offer_can_transition_from_approved_to_published() -> None:
+    decision = evaluate_offer_lifecycle_transition(
+        current_status="approved",
+        target_status="published",
+        authority=_authority(),
+        canonical_projection_verified=True,
+    )
+
+    assert decision.allowed is True
+    assert decision.reason_code == "offer_status_transition_allowed"
+
+
 def test_publication_requires_recent_mfa_before_provenance_is_considered() -> None:
     with pytest.raises(AdminMarketplaceStepUpRequiredError):
         evaluate_offer_lifecycle_transition(
