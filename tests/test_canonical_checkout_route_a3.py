@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from typing import Any
 
 import httpx
 import pytest
@@ -80,15 +81,20 @@ async def test_checkout_route_uses_resolved_provider_variant_and_offer_ref(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self) -> object:
             return object()
 
-        async def __aexit__(self, exc_type, exc, traceback):
+        async def __aexit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> bool:
             return False
 
-    captured_request: dict[str, object] = {}
+    captured_request: dict[str, Any] = {}
 
-    async def fake_resolve(*, session, offer_ref: str):
+    async def fake_resolve(*, session: object, offer_ref: str):
         del session
         assert offer_ref == "starter-monthly"
         return CanonicalCheckoutResolution(
@@ -119,13 +125,24 @@ async def test_checkout_route_uses_resolved_provider_variant_and_offer_ref(
         def __init__(self, *, timeout: int) -> None:
             assert timeout == 15
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> FakeAsyncClient:
             return self
 
-        async def __aexit__(self, exc_type, exc, traceback):
+        async def __aexit__(
+            self,
+            exc_type: object,
+            exc: object,
+            traceback: object,
+        ) -> bool:
             return False
 
-        async def post(self, url: str, *, json, headers):
+        async def post(
+            self,
+            url: str,
+            *,
+            json: dict[str, Any],
+            headers: dict[str, str],
+        ) -> FakeResponse:
             captured_request.update(
                 {"url": url, "json": json, "headers": headers}
             )
