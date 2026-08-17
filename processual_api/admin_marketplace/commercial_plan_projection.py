@@ -14,8 +14,8 @@ from processual_api.billing.commercial_catalog_contracts import (
 )
 from processual_api.billing.plan_fulfillment_catalog import (
     PLAN_FULFILLMENT_CATALOG_VERSION,
-    QUOTA_METRIC_CODE,
     PLAN_FULFILLMENT_SPECS,
+    QUOTA_METRIC_CODE,
 )
 
 COMMERCIAL_PLAN_PROJECTION_VERSION: Final = "2026-08-admin-market-plan-projection-v1"
