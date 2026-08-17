@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -195,3 +196,14 @@ def test_checkout_route_has_no_legacy_variant_authority() -> None:
     assert "require_canonical_checkout_request" in checkout_source
     assert "resolve_canonical_checkout_in_session" in checkout_source
     assert "resolution.provider_variant_id" in checkout_source
+
+
+def test_production_env_has_no_legacy_checkout_variant_keys() -> None:
+    env_path = Path(__file__).resolve().parents[1] / ".env.production.example"
+    legacy_keys = {
+        line.split("=", 1)[0]
+        for line in env_path.read_text(encoding="utf-8-sig").splitlines()
+        if line.startswith("LS_VARIANT_")
+    }
+
+    assert legacy_keys == set()
