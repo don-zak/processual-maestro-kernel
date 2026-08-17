@@ -7,6 +7,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from processual_api.admin_marketplace.commercial_catalog_materialization import (
+    materialize_canonical_commercial_catalog_in_session,
+)
 from processual_api.admin_marketplace.commercial_offer_provider_binding import (
     AdminMarketOfferProviderBinding,
 )
@@ -89,6 +92,30 @@ async def test_checkout_resolution_blocks_draft_offer_without_binding() -> None:
                     session=session,
                     offer_ref="starter-monthly",
                 )
+        assert captured.value.reason_code == "published_offer_required"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialized_canonical_catalog_stays_checkout_closed() -> None:
+    engine, factory = await _session_factory()
+    try:
+        async with factory() as session:
+            materialized = await materialize_canonical_commercial_catalog_in_session(
+                session=session,
+                generated_at=NOW,
+            )
+            await session.commit()
+
+            assert materialized.offers
+            offer_ref = materialized.offers[0].offer_code
+            with pytest.raises(CanonicalCheckoutGateError) as captured:
+                await resolve_canonical_checkout_in_session(
+                    session=session,
+                    offer_ref=offer_ref,
+                )
+
         assert captured.value.reason_code == "published_offer_required"
     finally:
         await engine.dispose()
