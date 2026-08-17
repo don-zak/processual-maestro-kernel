@@ -3,8 +3,13 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "processual_api"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = REPO_ROOT / "processual_api"
+TESTS_ROOT = REPO_ROOT / "tests"
 SHIM_PATH = PACKAGE_ROOT / "billing" / "subscription_catalog.py"
+ALLOWED_TEST_CONSUMERS = {
+    Path("tests/test_subscription_pricing_catalog.py"),
+}
 
 
 def _subscription_catalog_imports(path: Path) -> list[str]:
@@ -38,11 +43,26 @@ def test_subscription_catalog_is_not_a_runtime_dependency() -> None:
             continue
         imports = _subscription_catalog_imports(path)
         if imports:
-            violations[str(path.relative_to(PACKAGE_ROOT.parent))] = imports
+            violations[str(path.relative_to(REPO_ROOT))] = imports
 
     assert violations == {}, (
         "subscription_catalog is compatibility-only; runtime code must import "
         f"pricing_catalog directly: {violations}"
+    )
+
+
+def test_subscription_catalog_repo_consumers_are_explicitly_allowlisted() -> None:
+    consumers: set[Path] = set()
+
+    for path in TESTS_ROOT.rglob("*.py"):
+        if _subscription_catalog_imports(path):
+            consumers.add(path.relative_to(REPO_ROOT))
+
+    assert consumers == ALLOWED_TEST_CONSUMERS, (
+        "Update the legacy-consumer inventory intentionally before adding or "
+        "removing a subscription_catalog compatibility consumer: "
+        f"expected={sorted(map(str, ALLOWED_TEST_CONSUMERS))}, "
+        f"actual={sorted(map(str, consumers))}"
     )
 
 
