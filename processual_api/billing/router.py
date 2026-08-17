@@ -17,6 +17,13 @@ from processual_api.admin_marketplace.subscription_access import (
 )
 from processual_api.auth.security import get_current_user
 from processual_api.auth.session_router import get_identity_user
+from processual_api.billing.canonical_checkout_gate import (
+    CanonicalCheckoutGateError,
+    require_canonical_checkout_request,
+)
+from processual_api.billing.canonical_checkout_resolution import (
+    resolve_canonical_checkout_in_session,
+)
 from processual_api.billing.customer_billing_authority import (
     BillingAuthorityError,
     load_billing_authority_snapshot,
@@ -57,18 +64,6 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 router.routes.extend(direct_checkout_router.routes)
 router.routes.extend(plan_capability_router.routes)
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-
-_VARIANTS = {
-    "starter": os.environ.get("LS_VARIANT_STARTER", ""),
-    "starter_yearly": os.environ.get("LS_VARIANT_STARTER_YEARLY", ""),
-    "professional": os.environ.get("LS_VARIANT_PROFESSIONAL", ""),
-    "professional_yearly": os.environ.get(
-        "LS_VARIANT_PROFESSIONAL_YEARLY",
-        "",
-    ),
-    "enterprise": os.environ.get("LS_VARIANT_ENTERPRISE", ""),
-    "enterprise_yearly": os.environ.get("LS_VARIANT_ENTERPRISE_YEARLY", ""),
-}
 
 
 def _required_environment(name: str) -> str:
@@ -308,6 +303,42 @@ async def create_checkout(
     body: dict,
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, object]:
+    try:
+        checkout_request = require_canonical_checkout_request(body)
+    except CanonicalCheckoutGateError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid checkout request.",
+        ) from exc
+
+    try:
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            resolution = await resolve_canonical_checkout_in_session(
+                session=session,
+                offer_ref=checkout_request.offer_ref,
+            )
+    except CanonicalCheckoutGateError as exc:
+        status_code = 404 if exc.reason_code == "canonical_offer_not_found" else 409
+        detail = (
+            "Checkout offer not found."
+            if status_code == 404
+            else "Checkout offer is not available."
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing service is temporarily unavailable.",
+        ) from exc
+
+    variant_id = resolution.provider_variant_id
+    if not variant_id.isdigit():
+        raise HTTPException(
+            status_code=503,
+            detail="Billing service is temporarily unavailable.",
+        )
+
     api_key = _required_environment("LEMONSQUEEZY_API_KEY")
     store_id = _required_environment("LEMONSQUEEZY_STORE_ID")
     success_url = _required_environment(
@@ -316,30 +347,13 @@ async def create_checkout(
     cancel_url = _required_environment(
         "LEMONSQUEEZY_CHECKOUT_CANCEL_URL"
     )
-
-    variant_id = str(body.get("variant_id") or "").strip()
-    if not variant_id:
-        plan = str(
-            body.get("plan") or "professional"
-        ).strip().lower()
-        billing_period = str(
-            body.get("billing") or "monthly"
-        ).strip().lower()
-        variant_key = (
-            f"{plan}_yearly"
-            if billing_period == "yearly"
-            else plan
-        )
-        variant_id = _VARIANTS.get(variant_key, "").strip()
-
-    if not variant_id.isdigit() or not store_id.isdigit():
+    if not store_id.isdigit():
         raise HTTPException(
-            status_code=400,
-            detail="Invalid checkout request.",
+            status_code=503,
+            detail="Billing service is temporarily unavailable.",
         )
 
     customer_ref = _identity_customer_ref(current_user)
-    email = str(body.get("email") or "").strip()
 
     try:
         import httpx
@@ -351,10 +365,11 @@ async def create_checkout(
             "cancel_url": cancel_url,
             "custom_data": {
                 "customer_ref": customer_ref,
+                "offer_ref": resolution.offer_ref,
             },
         }
-        if email:
-            attributes["customer_email"] = email
+        if checkout_request.email:
+            attributes["customer_email"] = checkout_request.email
         payload = {
             "data": {
                 "type": "checkouts",
@@ -547,7 +562,7 @@ async def download_customer_billing_statement_pdf(
         raise HTTPException(
             status_code=404,
             detail="Billing statement not found.",
-        )
+        ) from exc
     return _pdf_response(statement)
 
 
