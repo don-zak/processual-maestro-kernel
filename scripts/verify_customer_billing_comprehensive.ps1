@@ -171,7 +171,8 @@ try {
         "tests/test_canonical_checkout_gate_a3.py",
         "tests/test_canonical_checkout_resolution_a3.py",
         "tests/test_canonical_checkout_route_a3.py",
-        "tests/test_subscription_catalog_runtime_boundary_a3.py"
+        "tests/test_subscription_catalog_runtime_boundary_a3.py",
+        "tests/test_legacy_plan_history_deletion_gate_a3.py"
     )
 
     $phaseResults = @()
