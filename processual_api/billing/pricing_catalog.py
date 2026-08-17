@@ -22,6 +22,9 @@ from processual_api.billing.plan_fulfillment_catalog import PLAN_CODE_ALIASES
 SUBSCRIPTION_CATALOG_VERSION: Final = "2026-07-subscriptions-draft-v1"
 SUBSCRIPTION_PRICING_STATUS: Final = "draft"
 BILLING_POLICY: Final = "byok" if BYOK_ONLY else "provider_managed"
+PROVIDER_COST_INCLUDED: Final = (
+    maestro_group1_selected_pricing.PROVIDER_COST_INCLUDED
+)
 PROVIDER_COST_NOTE: Final = (
     "Provider costs are not included. Clients bring their own provider/API key."
 )
@@ -155,9 +158,7 @@ def _plan_payload(
         "yearly_price_usd": None,
         "monthly_unit_allowance": allowance,
         "billing_policy": BILLING_POLICY,
-        "provider_cost_included": (
-            maestro_group1_selected_pricing.PROVIDER_COST_INCLUDED
-        ),
+        "provider_cost_included": PROVIDER_COST_INCLUDED,
         "provider_cost_note": PROVIDER_COST_NOTE,
         "checkout_enabled": False,
         "lemon_variant_key_monthly": None,
@@ -198,9 +199,7 @@ def public_subscription_catalog() -> dict[str, Any]:
         "pricing_version": usage_pricing.PRICING_VERSION,
         "pricing_status": SUBSCRIPTION_PRICING_STATUS,
         "billing_policy": BILLING_POLICY,
-        "provider_cost_included": (
-            maestro_group1_selected_pricing.PROVIDER_COST_INCLUDED
-        ),
+        "provider_cost_included": PROVIDER_COST_INCLUDED,
         "provider_cost_note": PROVIDER_COST_NOTE,
         "checkout_enabled": any(plan["checkout_enabled"] for plan in plans),
         "plans": plans,
