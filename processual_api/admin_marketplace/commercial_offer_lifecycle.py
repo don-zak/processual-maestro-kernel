@@ -15,7 +15,7 @@ OFFER_PUBLICATION_PROVENANCE_REQUIRED: Final = True
 _ALLOWED_TRANSITIONS: Final[dict[str, frozenset[str]]] = {
     "draft": frozenset({"under_review", "retired"}),
     "under_review": frozenset({"draft", "approved", "retired"}),
-    "approved": frozenset({"under_review", "retired"}),
+    "approved": frozenset({"under_review", "published", "retired"}),
     "published": frozenset({"suspended", "retired"}),
     "suspended": frozenset({"under_review", "retired"}),
     "retired": frozenset(),
@@ -69,15 +69,18 @@ def evaluate_offer_lifecycle_transition(
             required_action=action,
         )
 
-    if target == "published":
-        if OFFER_PUBLICATION_PROVENANCE_REQUIRED and not canonical_projection_verified:
-            return OfferLifecycleDecision(
-                current_status=current,
-                target_status=target,
-                allowed=False,
-                reason_code="canonical_projection_provenance_required",
-                required_action=action,
-            )
+    if (
+        target == "published"
+        and OFFER_PUBLICATION_PROVENANCE_REQUIRED
+        and not canonical_projection_verified
+    ):
+        return OfferLifecycleDecision(
+            current_status=current,
+            target_status=target,
+            allowed=False,
+            reason_code="canonical_projection_provenance_required",
+            required_action=action,
+        )
 
     return OfferLifecycleDecision(
         current_status=current,
