@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -84,13 +85,25 @@ def _usd_amount(offer: dict[str, object], billing_period: str) -> Decimal:
     return (Decimal(cents) / Decimal("100")).quantize(Decimal("0.01"))
 
 
+def _identity_suffix(*parts: object) -> str:
+    identity = "|".join(str(part) for part in parts)
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+
+
 def build_lemon_squeezy_draft_offer_projections() -> tuple[CommercialOfferProjection, ...]:
     projections: list[CommercialOfferProjection] = []
     for (plan_code, period), offer in _checkout_candidates().items():
         amount_usd = _usd_amount(offer, period)
+        pricing_version = str(offer["pricing_source_version"])
+        identity_suffix = _identity_suffix(
+            pricing_version,
+            offer["pricebook_version"],
+            offer["offer_id"],
+            amount_usd,
+        )
         projections.append(
             CommercialOfferProjection(
-                offer_code=f"{plan_code}_{period}_lemon_draft",
+                offer_code=f"{plan_code}_{period}_lemon_{identity_suffix}",
                 plan_code=plan_code,
                 display_name=f"{offer['plan_display_name']} {period.title()} — Lemon Squeezy",
                 sales_channel="lemon_squeezy",
@@ -104,7 +117,7 @@ def build_lemon_squeezy_draft_offer_projections() -> tuple[CommercialOfferProjec
                 customer_specific=False,
                 source_offer_id=str(offer["offer_id"]),
                 source_pricebook_version=str(offer["pricebook_version"]),
-                source_pricing_version=str(offer["pricing_source_version"]),
+                source_pricing_version=pricing_version,
             )
         )
     return tuple(projections)
@@ -127,8 +140,20 @@ def build_maestro_direct_draft_offer_projection(
         amount_usd=amount_usd,
         usd_tnd_rate=exchange_rate_quote.rate,
     )
+    pricing_version = str(offer["pricing_source_version"])
+    identity_suffix = _identity_suffix(
+        pricing_version,
+        offer["pricebook_version"],
+        offer["offer_id"],
+        amount_usd,
+        exchange_rate_quote.rate,
+        exchange_rate_quote.source,
+        exchange_rate_quote.reference,
+        exchange_rate_quote.observed_at.isoformat(),
+        exchange_rate_quote.expires_at.isoformat(),
+    )
     return CommercialOfferProjection(
-        offer_code=f"{normalized_plan}_{normalized_period}_tn_draft",
+        offer_code=f"{normalized_plan}_{normalized_period}_tn_{identity_suffix}",
         plan_code=normalized_plan,
         display_name=f"{offer['plan_display_name']} {normalized_period.title()} — Tunisia",
         sales_channel="maestro_direct",
@@ -142,7 +167,7 @@ def build_maestro_direct_draft_offer_projection(
         customer_specific=False,
         source_offer_id=str(offer["offer_id"]),
         source_pricebook_version=str(offer["pricebook_version"]),
-        source_pricing_version=str(offer["pricing_source_version"]),
+        source_pricing_version=pricing_version,
         exchange_rate_value=exchange_rate_quote.rate,
         exchange_rate_source=exchange_rate_quote.source,
         exchange_rate_reference=exchange_rate_quote.reference,
