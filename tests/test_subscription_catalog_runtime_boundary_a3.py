@@ -12,8 +12,12 @@ ALLOWED_TEST_CONSUMERS = {
 }
 
 
+def _read_python_source(path: Path) -> str:
+    return path.read_text(encoding="utf-8-sig")
+
+
 def _subscription_catalog_imports(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = ast.parse(_read_python_source(path), filename=str(path))
     violations: list[str] = []
 
     for node in ast.walk(tree):
@@ -68,7 +72,7 @@ def test_subscription_catalog_repo_consumers_are_explicitly_allowlisted() -> Non
 
 def test_subscription_catalog_remains_a_thin_pricing_catalog_shim() -> None:
     tree = ast.parse(
-        SHIM_PATH.read_text(encoding="utf-8"),
+        _read_python_source(SHIM_PATH),
         filename=str(SHIM_PATH),
     )
     imports = [
