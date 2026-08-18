@@ -4,11 +4,16 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.admin_governance.models import AdministratorInvitation
-from processual_api.auth.models import IdentityPlatformAuthority, IdentityUser
+from processual_api.auth.models import (
+    AuthMfaFactor,
+    AuthMfaRecoveryCode,
+    IdentityPlatformAuthority,
+    IdentityUser,
+)
 
 
 class SqlAlchemyAdministratorInvitationRepository:
@@ -62,6 +67,76 @@ class SqlAlchemyAdministratorInvitationRepository:
             .with_for_update()
         )
 
+    async def onboarding_user_for_update(self, *, user_id: uuid.UUID):
+        return await self._session.scalar(
+            select(IdentityUser).where(IdentityUser.id == user_id).with_for_update()
+        )
+
+    async def active_mfa_factor_for_update(self, *, user_id: uuid.UUID):
+        return await self._session.scalar(
+            select(AuthMfaFactor)
+            .where(AuthMfaFactor.user_id == user_id, AuthMfaFactor.status == "active")
+            .order_by(AuthMfaFactor.created_at.desc())
+            .limit(1)
+            .with_for_update()
+        )
+
+    async def pending_mfa_factor_for_update(self, *, user_id: uuid.UUID):
+        return await self._session.scalar(
+            select(AuthMfaFactor)
+            .where(AuthMfaFactor.user_id == user_id, AuthMfaFactor.status == "pending")
+            .order_by(AuthMfaFactor.created_at.desc())
+            .limit(1)
+            .with_for_update()
+        )
+
+    async def disable_pending_mfa_factors(
+        self,
+        *,
+        user_id: uuid.UUID,
+        disabled_at: datetime,
+    ) -> None:
+        await self._session.execute(
+            update(AuthMfaFactor)
+            .where(AuthMfaFactor.user_id == user_id, AuthMfaFactor.status == "pending")
+            .values(status="disabled", disabled_at=disabled_at)
+        )
+
+    def add_pending_mfa_factor(
+        self,
+        *,
+        factor_id: uuid.UUID,
+        user_id: uuid.UUID,
+        label: str,
+        ciphertext: bytes,
+        key_version: str,
+    ) -> None:
+        self._session.add(
+            AuthMfaFactor(
+                id=factor_id,
+                user_id=user_id,
+                factor_type="totp",
+                label=label,
+                status="pending",
+                secret_ciphertext=ciphertext,
+                secret_key_version=key_version,
+            )
+        )
+
+    async def replace_mfa_recovery_codes(
+        self,
+        *,
+        factor_id: uuid.UUID,
+        code_hashes: tuple[str, ...],
+    ) -> None:
+        await self._session.execute(
+            delete(AuthMfaRecoveryCode).where(AuthMfaRecoveryCode.factor_id == factor_id)
+        )
+        self._session.add_all(
+            AuthMfaRecoveryCode(factor_id=factor_id, code_hash=code_hash)
+            for code_hash in code_hashes
+        )
+
     def add_onboarding_identity(
         self,
         *,
@@ -97,6 +172,17 @@ class SqlAlchemyAdministratorInvitationRepository:
         invitation.onboarding_mfa_proof_hash = mfa_proof_hash
         invitation.onboarding_mfa_proof_expires_at = mfa_proof_expires_at
         invitation.updated_at = bound_at
+
+    @staticmethod
+    def complete_mfa_onboarding(
+        invitation: AdministratorInvitation,
+        *,
+        completed_at: datetime,
+    ) -> None:
+        invitation.status = "accepted"
+        invitation.onboarding_mfa_proof_hash = None
+        invitation.onboarding_mfa_proof_expires_at = None
+        invitation.updated_at = completed_at
 
     def add_invitation(self, **values) -> AdministratorInvitation:
         row = AdministratorInvitation(
