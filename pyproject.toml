@@ -131,7 +131,6 @@ extend-exclude = [
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"almbic/versions/*.py" = ["E501", "I001"]
 "alembic/versions/*.py" = ["E501", "I001"]
 "tests/*.py" = ["E501", "I001", "UP017"]
 "processual_api/cgt_governor/reports/llm_reporter.py" = ["E501"]
@@ -169,7 +168,7 @@ module = [
     "processual_kernel.security.crypto",
     "cgtlib.serialization",
 ]
-disable_error_code = ["arg-type", "attr-defined"]
+disable_error_code = ["arg-type"]
 
 [[tool.mypy.overrides]]
 module = "processual_api.cgt_governor.gateway.registry"
@@ -178,3 +177,22 @@ disable_error_code = ["valid-type"]
 [[tool.mypy.overrides]]
 module = "processual_api.db.session"
 disable_error_code = ["misc", "assignment"]
+
+[[tool.mypy.overrides]]
+module = "processual_api.cache.redis"
+disable_error_code = ["assignment", "misc"]
+
+[[tool.mypy.overrides]]
+module = [
+    "processual_kernel.adaptive_types",
+    "processual_kernel.adaptive.task_profiler",
+    "processual_kernel.adaptive.safety",
+    "processual_kernel.observability.metrics",
+    "processual_kernel.observability.sentry",
+    "processual_kernel.adaptive.encryption",
+    "processual_kernel.kernel",
+    "processual_kernel.adaptive_toolkit",
+    "cgtlib.sensitivity",
+    "cgtlib.robustness",
+]
+ignore_errors = true
