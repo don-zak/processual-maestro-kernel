@@ -13,12 +13,25 @@ from processual_api.services.sandbox_api_key_persistence import (
 )
 
 
+class DurableSandboxApiKeyDenied(PermissionError):
+    """A matching durable sandbox key exists but cannot receive authority."""
+
+
+def _deny(reason: str) -> None:
+    raise DurableSandboxApiKeyDenied(reason)
+
+
 async def verify_durable_sandbox_api_key(api_key: str) -> dict[str, Any] | None:
     """Verify a sandbox API key against durable PostgreSQL authority.
 
-    Database/runtime failures are intentionally allowed to propagate so the
-    authentication boundary can fail closed rather than silently granting a
-    legacy identity.
+    ``None`` means no durable key matched the presented secret and therefore a
+    caller may evaluate an explicitly supported legacy source. A matching
+    durable key that is revoked, expired, malformed, or bound to an unavailable
+    subscription raises ``DurableSandboxApiKeyDenied`` so it can never fall
+    through to weaker legacy authority.
+
+    Database/runtime failures intentionally propagate. The HTTP authentication
+    boundary must convert those failures to service-unavailable and fail closed.
     """
 
     if not api_key or not api_key.startswith("pmk_"):
@@ -35,27 +48,28 @@ async def verify_durable_sandbox_api_key(api_key: str) -> dict[str, Any] | None:
 
         now = datetime.now(UTC)
         for key in candidates:
+            if not _verify_stored_key(api_key, key.key_hash):
+                continue
+
             if key.environment != "sandbox":
-                continue
+                _deny("durable_sandbox_key_environment_invalid")
             if key.status != "enabled" or key.revoked_at is not None:
-                continue
+                _deny("durable_sandbox_key_revoked_or_disabled")
             if key.expires_at <= now:
                 key.status = "expired"
                 await session.commit()
-                continue
-            if not _verify_stored_key(api_key, key.key_hash):
-                continue
+                _deny("durable_sandbox_key_expired")
 
             runtime = await runtimes.get_by_subscription_id(
                 key.subscription_id,
                 for_update=True,
             )
             if runtime is None:
-                return None
+                _deny("durable_sandbox_subscription_runtime_missing")
             if runtime.customer_ref != key.client_ref:
-                return None
+                _deny("durable_sandbox_subscription_customer_mismatch")
             if runtime.access_stage not in {"active", "grace"}:
-                return None
+                _deny("durable_sandbox_subscription_not_active")
 
             key.mark_used(at=now)
             await session.commit()
@@ -78,3 +92,9 @@ async def verify_durable_sandbox_api_key(api_key: str) -> dict[str, Any] | None:
             }
 
     return None
+
+
+__all__ = [
+    "DurableSandboxApiKeyDenied",
+    "verify_durable_sandbox_api_key",
+]
