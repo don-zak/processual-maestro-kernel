@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +58,11 @@ def _effective_at(subscription: AdminMarketSubscription) -> datetime:
         raise SubscriptionRuntimeError(
             "active subscription backfill requires an effective timestamp."
         )
+    if value.tzinfo is None:
+        # SQLAlchemy's SQLite dialect drops tzinfo even for DateTime(timezone=True).
+        # Persisted marketplace timestamps are UTC, so restore that contract at the
+        # persistence/domain boundary before passing the value to runtime bootstrap.
+        return value.replace(tzinfo=UTC)
     return value
 
 
