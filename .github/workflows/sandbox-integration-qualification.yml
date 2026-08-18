@@ -7,7 +7,9 @@ on:
       - processual_api/auth/security.py
       - processual_api/integrations/**
       - processual_api/routers/client_api_keys_18.py
+      - processual_api/routers/settings_admin_evaluation_grants.py
       - processual_api/routers/settings_endpoint_discovery_qualification_runtime.py
+      - processual_api/services/evaluation_grant_*.py
       - processual_api/services/sandbox_api_key_*.py
       - processual_api/static/css/admin_integration_center_18.css
       - processual_api/static/js/admin_integration_center_18.js
@@ -105,7 +107,7 @@ jobs:
       - name: Upgrade isolated PostgreSQL to Alembic head
         run: alembic upgrade head
 
-      - name: Verify sandbox authority migration
+      - name: Verify sandbox and evaluation authority migrations
         run: |
           python - <<'PY'
           import asyncio
@@ -115,11 +117,19 @@ jobs:
               conn = await asyncpg.connect("postgresql://maestro:maestro_qualification@127.0.0.1:5432/maestro_qualification")
               try:
                   revision = await conn.fetchval("SELECT version_num FROM alembic_version")
-                  assert revision == "20260818_0055", revision
-                  exists = await conn.fetchval(
-                      "SELECT to_regclass('public.sandbox_api_key_authority') IS NOT NULL"
+                  assert revision == "20260818_0056", revision
+                  tables = (
+                      "sandbox_api_key_authority",
+                      "evaluation_grant_authority",
+                      "evaluation_api_key_authority",
+                      "evaluation_usage_ledger",
                   )
-                  assert exists is True
+                  for table in tables:
+                      exists = await conn.fetchval(
+                          "SELECT to_regclass($1) IS NOT NULL",
+                          f"public.{table}",
+                      )
+                      assert exists is True, table
               finally:
                   await conn.close()
 
@@ -137,7 +147,9 @@ jobs:
             processual_api/integrations/enterprise_endpoint_request_mapping.py \
             processual_api/integrations/enterprise_sandbox_execution.py \
             processual_api/routers/client_api_keys_18.py \
+            processual_api/routers/settings_admin_evaluation_grants.py \
             processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
+            processual_api/services/evaluation_grant_persistence.py \
             processual_api/services/sandbox_api_key_authority.py \
             processual_api/services/sandbox_api_key_mode.py \
             processual_api/services/sandbox_api_key_persistence.py \
@@ -188,7 +200,7 @@ jobs:
             echo "workflow=Sandbox Integration Qualification"
             echo "postgres=17"
             echo "redis=7"
-            echo "alembic_expected_head=20260818_0055"
+            echo "alembic_expected_head=20260818_0056"
             echo "clean_alembic_chain_tested=true"
             echo "postgres_json_migration_contract=true"
             echo "durable_sandbox_auth_fail_closed_tests=true"
@@ -201,6 +213,9 @@ jobs:
             echo "endpoint_provenance_tamper_tests=true"
             echo "endpoint_discovery_runtime_tests=true"
             echo "endpoint_source_identity_attestation_tests=true"
+            echo "evaluation_authority_schema_present=true"
+            echo "evaluation_authority_runtime_wired=false"
+            echo "evaluation_authority_concurrency_proven=false"
             echo "integration_center_ui_contract_tests=true"
             echo "production_credentials=false"
             echo "external_provider_credentials=false"
