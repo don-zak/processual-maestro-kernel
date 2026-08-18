@@ -1,10 +1,10 @@
 """Controlled acquisition of immutable external API descriptions.
 
 The caller never supplies a URL. A server-owned catalog binds a source identity
-to one GitHub repository and contract family. Runtime input is limited to an
-immutable commit and a repository-relative path accepted by that catalog entry.
-The fetch target is constructed by this module and remains non-production
-evidence only.
+to one GitHub repository, contract family, approved revisions, and path prefixes.
+Runtime input is limited to an immutable commit and a repository-relative path
+accepted by that catalog entry. The fetch target is constructed by this module
+and remains non-production evidence only.
 """
 
 from __future__ import annotations
@@ -51,7 +51,8 @@ class TrustedGitHubSourceDefinition:
     repository: str
     contract_family: str
     allowed_path_prefixes: tuple[str, ...]
-    policy_version: str = "github-allowlist-r1"
+    allowed_revisions: tuple[str, ...]
+    policy_version: str = "github-allowlist-r2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +116,13 @@ def _safe_prefix(value: str) -> str:
     )
 
 
+def _safe_revision(value: str, *, error_code: str) -> str:
+    revision = str(value or "").strip().lower()
+    if not _GIT_COMMIT.fullmatch(revision):
+        raise TrustedEndpointSourceAcquisitionError(error_code)
+    return revision
+
+
 def _definition_from_mapping(value: dict[str, Any]) -> TrustedGitHubSourceDefinition:
     source_identity_id = str(value.get("source_identity_id") or "").strip().lower()
     if not _SOURCE_ID.fullmatch(source_identity_id):
@@ -125,7 +133,16 @@ def _definition_from_mapping(value: dict[str, Any]) -> TrustedGitHubSourceDefini
     if not isinstance(prefixes_raw, list) or not prefixes_raw:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_path_prefixes_required")
     prefixes = tuple(_safe_prefix(str(item)) for item in prefixes_raw)
-    policy_version = str(value.get("policy_version") or "github-allowlist-r1").strip()
+    revisions_raw = value.get("allowed_revisions")
+    if not isinstance(revisions_raw, list) or not revisions_raw:
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_revisions_required")
+    revisions = tuple(
+        _safe_revision(str(item), error_code="trusted_source_revision_invalid")
+        for item in revisions_raw
+    )
+    if len(revisions) != len(set(revisions)):
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_duplicate_revision")
+    policy_version = str(value.get("policy_version") or "github-allowlist-r2").strip()
     if not policy_version or len(policy_version) > 80:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_policy_version_invalid")
     return TrustedGitHubSourceDefinition(
@@ -133,6 +150,7 @@ def _definition_from_mapping(value: dict[str, Any]) -> TrustedGitHubSourceDefini
         repository=repository,
         contract_family=family,
         allowed_path_prefixes=prefixes,
+        allowed_revisions=revisions,
         policy_version=policy_version,
     )
 
@@ -212,9 +230,9 @@ async def acquire_trusted_github_endpoint_source(
 ) -> AcquiredTrustedEndpointSource:
     definitions = trusted_github_source_catalog_from_env() if catalog is None else catalog
     definition = _select_definition(source_identity_id, definitions)
-    revision = str(source_revision or "").strip().lower()
-    if not _GIT_COMMIT.fullmatch(revision):
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_commit_invalid")
+    revision = _safe_revision(source_revision, error_code="trusted_source_commit_invalid")
+    if revision not in definition.allowed_revisions:
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_revision_not_allowlisted")
     path = _safe_path(source_path)
     if not _path_allowed(path, definition.allowed_path_prefixes):
         raise TrustedEndpointSourceAcquisitionError("trusted_source_path_not_allowlisted")
