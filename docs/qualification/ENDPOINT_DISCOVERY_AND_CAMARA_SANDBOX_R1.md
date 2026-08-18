@@ -113,7 +113,7 @@ Run `#52` completed successfully and proved the focused commercial sandbox suite
 
 Run `#61` completed successfully after the newer endpoint hardening and therefore provides focused CI evidence for Swagger media inheritance, undefined security-scheme rejection, server-derived source pinning, caller-boolean bypass prevention, bundled external-reference enforcement, and provenance drift/tamper contracts.
 
-The subsequent server-owned source-identity attestation layer is implemented and wired into the qualification workflow, but its own post-change CI run is still pending at the time of this document update.
+Run `#68` completed successfully after the server-owned source-identity attestation change. PostgreSQL/Redis service checks, the clean Alembic chain, focused Ruff, focused qualification tests, evidence recording, artifact upload, and cleanup all completed successfully. The workflow now includes explicit source-identity attestation tests covering default-untrusted behavior, exact server-trusted tuple matching, and fail-closed tuple drift.
 
 No production/provider credentials are present in this runner and `external_network_proof=false` remains explicit.
 
@@ -160,7 +160,6 @@ The same discovery/provenance process applies to proprietary, legacy, and generi
 ## Next implementation gates
 
 1. `ENDPOINT-DISCOVERY-QUALITY-01`
-   - obtain a green run for the server-owned source-identity attestation layer;
    - add controlled source acquisition so trusted registry records are produced from an allowlisted provider repository/artifact path rather than manually asserted metadata;
    - expose safe discovery/source-identity state in Integration Center without implying live provider connectivity.
 2. `CAMARA-CONTRACT-QUALIFICATION-01`
@@ -185,4 +184,4 @@ The same discovery/provenance process applies to proprietary, legacy, and generi
 
 `ExternalApiIntegrationQualified=False`
 
-Reason: endpoint extraction/path/provenance hardening is CI-proven through run `#61`; source identity is now explicitly separated from pinning and has fail-closed server-registry semantics, but that newest attestation change still needs CI proof. Trusted external-provider acquisition and real provider sandbox evidence also remain outstanding.
+Reason: endpoint extraction/path/provenance and source-identity attestation controls are focused-CI-proven through runs `#61` and `#68`. Trusted external-provider acquisition, provider authenticity evidence, and real provider sandbox proof remain outstanding.
