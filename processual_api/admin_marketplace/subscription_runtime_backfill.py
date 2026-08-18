@@ -8,6 +8,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.admin_marketplace.commercial_plan_projection import (
+    build_commercial_plan_projections,
     build_subscription_quota_profiles,
 )
 from processual_api.admin_marketplace.models import (
@@ -88,6 +89,10 @@ async def backfill_active_subscription_runtime_in_session(
     if not subscriptions:
         return SubscriptionRuntimeBackfillResult(scanned=0, created=0)
 
+    projections = {
+        projection.plan_code: projection
+        for projection in build_commercial_plan_projections()
+    }
     profiles = {
         profile.profile_ref: profile
         for profile in build_subscription_quota_profiles()
@@ -105,24 +110,35 @@ async def backfill_active_subscription_runtime_in_session(
                 "active subscription backfill requires an authoritative plan."
             )
 
+        plan_code = plan.plan_code.strip().lower()
+        projection = projections.get(plan_code)
+        if projection is None:
+            raise SubscriptionRuntimeError(
+                "active subscription plan is not in the canonical commercial catalog."
+            )
+
         entitlement_profile_ref = plan.entitlement_profile_ref.strip().lower()
         quota_profile_ref = plan.quota_profile_ref.strip().lower()
-        if not entitlement_profile_ref or not quota_profile_ref:
+        if (
+            entitlement_profile_ref != projection.entitlement_profile_ref
+            or quota_profile_ref != projection.quota_profile_ref
+        ):
             raise SubscriptionRuntimeError(
-                "active subscription plan is missing runtime profile bindings."
+                "active subscription plan runtime bindings diverge from the canonical projection."
             )
-        quota_profile = profiles.get(quota_profile_ref)
+
+        quota_profile = profiles.get(projection.quota_profile_ref)
         if quota_profile is None:
             raise SubscriptionRuntimeError(
-                "active subscription plan references an unknown quota profile."
+                "canonical subscription quota profile is unavailable."
             )
 
         await bootstrap_subscription_runtime_in_unit(
             source=SubscriptionRuntimeBootstrapInput(
                 subscription_id=subscription.id,
                 customer_ref=subscription.customer_ref,
-                entitlement_profile_ref=entitlement_profile_ref,
-                quota_profile_ref=quota_profile_ref,
+                entitlement_profile_ref=projection.entitlement_profile_ref,
+                quota_profile_ref=projection.quota_profile_ref,
                 subscription_status=subscription.status,
                 effective_at=_effective_at(subscription),
             ),
