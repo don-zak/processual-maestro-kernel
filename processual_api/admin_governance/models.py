@@ -54,6 +54,10 @@ class AdministratorInvitation(Base):
         ForeignKey("identity_users.id", ondelete="SET NULL"),
     )
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    onboarding_mfa_proof_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    onboarding_mfa_proof_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     cancelled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("identity_users.id", ondelete="SET NULL"),
