@@ -30,8 +30,8 @@ def test_governance_workspace_registers_admin_page_and_navigation() -> None:
     js = _read(GOVERNANCE_JS)
 
     required = [
-        "api.pageIds.governance = 'page-admin-governance'",
-        "api.labelToPage.administrators = 'governance'",
+        "navApi.pageIds.governance = 'page-admin-governance'",
+        "navApi.labelToPage.administrators = 'governance'",
         'data-admin-page="governance"',
         "Administrators &amp; Access",
         "Platform governance",
