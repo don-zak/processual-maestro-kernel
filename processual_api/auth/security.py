@@ -19,6 +19,7 @@ from ..services.sandbox_api_key_authority import (
     DurableSandboxApiKeyDenied,
     verify_durable_sandbox_api_key,
 )
+from ..services.sandbox_api_key_mode import durable_sandbox_api_keys_enabled
 from ..settings import settings
 from ..supervisor_session_keys import validate_supervisor_session_key
 
@@ -181,13 +182,7 @@ def _apply_supervisor_session_header(
 
 
 def _durable_sandbox_api_key_authority_enabled() -> bool:
-    explicit = os.environ.get("PMK_DURABLE_SANDBOX_API_KEYS", "").strip().lower()
-    if explicit in {"1", "true", "yes", "on"}:
-        return True
-    if explicit in {"0", "false", "no", "off"}:
-        return False
-    database_url = os.environ.get("DATABASE_URL", "").strip().lower()
-    return database_url.startswith(("postgresql://", "postgresql+asyncpg://"))
+    return durable_sandbox_api_keys_enabled()
 
 
 async def _verify_api_key_authority(api_key: str) -> dict[str, Any] | None:
