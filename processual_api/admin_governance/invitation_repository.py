@@ -48,6 +48,13 @@ class SqlAlchemyAdministratorInvitationRepository:
             .limit(1)
         )
 
+    async def invitation_by_id(self, *, invitation_id: uuid.UUID):
+        return await self._session.scalar(
+            select(AdministratorInvitation)
+            .where(AdministratorInvitation.id == invitation_id)
+            .limit(1)
+        )
+
     def add_invitation(self, **values) -> AdministratorInvitation:
         row = AdministratorInvitation(
             id=values["invitation_id"],
