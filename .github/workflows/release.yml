@@ -61,7 +61,7 @@ jobs:
         run: python -m processual_api.release_gate
 
       - name: Verify declared migration head
-        run: python -m alembic heads | grep "20260818_0052 (head)"
+        run: python -m alembic heads | grep "20260818_0053 (head)"
 
       - name: Apply staging schema migrations
         run: python -m alembic upgrade head
@@ -77,7 +77,7 @@ jobs:
           test "$replay" = "subscription-runtime-backfill scanned=0 created=0"
 
       - name: Verify staging database migration head
-        run: python -m alembic current | grep "20260818_0052"
+        run: python -m alembic current | grep "20260818_0053"
 
       - name: Commercial staging smoke gate
         run: python -m processual_api.staging_smoke
