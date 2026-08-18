@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hmac
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from processual_api.auth.security import get_current_user
 from processual_api.integrations.endpoint_binding_provenance import (
@@ -22,7 +23,12 @@ from processual_api.integrations.endpoint_discovery_quality import (
     canonical_api_description_sha256,
 )
 from processual_api.integrations.endpoint_source_attestation import (
+    TrustedEndpointSourceRecord,
     attest_endpoint_source_identity,
+)
+from processual_api.integrations.trusted_endpoint_source_acquisition import (
+    TrustedEndpointSourceAcquisitionError,
+    acquire_trusted_github_endpoint_source,
 )
 
 from . import settings as settings_module
@@ -45,6 +51,25 @@ class EndpointDiscoveryQualificationRequest(BaseModel):
     # not used to establish source or external-reference authority.
     release_pinned: bool | None = None
     external_references_resolved: bool | None = None
+    operation_id: str = Field(min_length=1, max_length=300)
+
+
+class TrustedEndpointDiscoveryQualificationRequest(BaseModel):
+    """Select one immutable server-allowlisted source without caller metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_identity_id: str = Field(
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-z0-9][a-z0-9_.-]{2,127}$",
+    )
+    source_revision: str = Field(
+        min_length=40,
+        max_length=64,
+        pattern=r"^[0-9a-f]{40,64}$",
+    )
+    source_path: str = Field(min_length=1, max_length=500)
     operation_id: str = Field(min_length=1, max_length=300)
 
 
@@ -121,6 +146,124 @@ def _safe_projection(
     }
 
 
+def _qualification_from_evidence(
+    *,
+    spec: Any,
+    api_description: dict[str, Any],
+    contract_family: str,
+    source_reference: str,
+    source_kind: str,
+    source_revision: str,
+    source_pin_verified: bool,
+    operation_id: str,
+    trusted_sources: Sequence[TrustedEndpointSourceRecord] = (),
+) -> tuple[dict[str, Any], EndpointBindingProvenance]:
+    # External references deliberately remain fail-closed. Qualification accepts
+    # only self-contained descriptions; neither caller claims nor source identity
+    # can grant reference-resolution authority.
+    assessment = assess_endpoint_discovery(
+        api_description,
+        contract_family=contract_family,
+        source_reference=source_reference,
+        release_pinned=source_pin_verified,
+        external_references_resolved=False,
+    )
+    source_attestation = attest_endpoint_source_identity(
+        source_reference=source_reference,
+        source_kind=source_kind,
+        source_revision=source_revision,
+        source_sha256=assessment["source_sha256"],
+        contract_family=assessment["contract_family"],
+        trusted_sources=trusted_sources,
+    )
+    assessment.update(
+        {
+            "source_kind": source_kind,
+            "source_revision": source_revision,
+            "source_pin_verified": source_pin_verified,
+            "source_identity_id": source_attestation.source_identity_id,
+            "source_identity_verified": source_attestation.source_identity_verified,
+            "source_identity_policy_version": (
+                source_attestation.source_identity_policy_version
+            ),
+            "source_identity_verification_method": (
+                source_attestation.source_identity_verification_method
+            ),
+        }
+    )
+    provenance = qualify_binding_from_discovery(
+        spec,
+        assessment,
+        operation_id=operation_id,
+    )
+    return assessment, provenance
+
+
+def _persist_qualification(
+    *,
+    user_id: str,
+    raw: dict[str, Any],
+    binding_id: str,
+    provenance: EndpointBindingProvenance,
+) -> None:
+    items = [
+        item
+        for item in _stored_provenance(raw)
+        if str(item.get("binding_id") or "") != binding_id
+    ]
+    items.append({"binding_id": binding_id, **provenance.model_dump()})
+    raw[DISCOVERY_PROVENANCE_STORAGE_KEY] = items[-100:]
+    settings_module._save_raw(user_id, raw)
+
+
+def _qualification_response(
+    *,
+    binding_id: str,
+    assessment: dict[str, Any],
+    provenance: EndpointBindingProvenance,
+) -> dict[str, Any]:
+    return {
+        "status": "discovery_qualified",
+        "persisted": True,
+        "assessment": {
+            "source_reference": assessment["source_reference"],
+            "source_sha256": assessment["source_sha256"],
+            "source_kind": assessment["source_kind"],
+            "source_revision": assessment["source_revision"],
+            "source_pin_verified": assessment["source_pin_verified"],
+            "source_identity_id": assessment["source_identity_id"],
+            "source_identity_verified": assessment["source_identity_verified"],
+            "source_identity_policy_version": assessment[
+                "source_identity_policy_version"
+            ],
+            "source_identity_verification_method": assessment[
+                "source_identity_verification_method"
+            ],
+            "title": assessment["title"],
+            "version": assessment["version"],
+            "dialect": assessment["dialect"],
+            "contract_family": assessment["contract_family"],
+            "operation_count": assessment["operation_count"],
+            "defined_security_schemes": assessment["defined_security_schemes"],
+            "undefined_security_schemes": assessment["undefined_security_schemes"],
+            "external_reference_count": assessment["external_reference_count"],
+            "external_references_resolved": assessment["external_references_resolved"],
+            "blocker_codes": assessment["blocker_codes"],
+            "warning_codes": assessment["warning_codes"],
+            "discovery_quality_passed": assessment["discovery_quality_passed"],
+            "binding_generation_ready": assessment["binding_generation_ready"],
+        },
+        "provenance": _safe_projection(
+            binding_id,
+            provenance,
+            matches_binding=True,
+        ),
+        "production_allowed": False,
+        "runtime_connector_approved": False,
+        "raw_secret_visible": False,
+    }
+
+
 @settings_module.router.get(
     "/enterprise-integration/endpoint-bindings/{binding_id}/discovery-qualification",
     response_model=dict,
@@ -162,42 +305,14 @@ async def qualify_endpoint_binding_discovery(
     spec = binding_runtime._find_binding(raw, binding_id)
     source_kind, source_revision, source_pin_verified = _verified_source_pin(body)
     try:
-        # External references are deliberately fail-closed here. A caller must
-        # submit a self-contained/bundled description before qualification;
-        # the deprecated boolean claim cannot turn an unresolved $ref into
-        # verified evidence.
-        assessment = assess_endpoint_discovery(
-            body.api_description,
+        assessment, provenance = _qualification_from_evidence(
+            spec=spec,
+            api_description=body.api_description,
             contract_family=body.contract_family,
-            source_reference=body.source_reference,
-            release_pinned=source_pin_verified,
-            external_references_resolved=False,
-        )
-        source_attestation = attest_endpoint_source_identity(
             source_reference=body.source_reference,
             source_kind=source_kind,
             source_revision=source_revision,
-            source_sha256=assessment["source_sha256"],
-            contract_family=assessment["contract_family"],
-        )
-        assessment.update(
-            {
-                "source_kind": source_kind,
-                "source_revision": source_revision,
-                "source_pin_verified": source_pin_verified,
-                "source_identity_id": source_attestation.source_identity_id,
-                "source_identity_verified": source_attestation.source_identity_verified,
-                "source_identity_policy_version": (
-                    source_attestation.source_identity_policy_version
-                ),
-                "source_identity_verification_method": (
-                    source_attestation.source_identity_verification_method
-                ),
-            }
-        )
-        provenance = qualify_binding_from_discovery(
-            spec,
-            assessment,
+            source_pin_verified=source_pin_verified,
             operation_id=body.operation_id,
         )
     except (
@@ -210,60 +325,83 @@ async def qualify_endpoint_binding_discovery(
             detail=str(exc),
         ) from exc
 
-    items = [
-        item
-        for item in _stored_provenance(raw)
-        if str(item.get("binding_id") or "") != binding_id
-    ]
-    items.append({"binding_id": binding_id, **provenance.model_dump()})
-    raw[DISCOVERY_PROVENANCE_STORAGE_KEY] = items[-100:]
-    settings_module._save_raw(user_id, raw)
+    _persist_qualification(
+        user_id=user_id,
+        raw=raw,
+        binding_id=binding_id,
+        provenance=provenance,
+    )
+    return _qualification_response(
+        binding_id=binding_id,
+        assessment=assessment,
+        provenance=provenance,
+    )
 
-    return {
-        "status": "discovery_qualified",
-        "persisted": True,
-        "assessment": {
-            "source_reference": assessment["source_reference"],
-            "source_sha256": assessment["source_sha256"],
-            "source_kind": source_kind,
-            "source_revision": source_revision,
-            "source_pin_verified": source_pin_verified,
-            "source_identity_id": source_attestation.source_identity_id,
-            "source_identity_verified": source_attestation.source_identity_verified,
-            "source_identity_policy_version": (
-                source_attestation.source_identity_policy_version
-            ),
-            "source_identity_verification_method": (
-                source_attestation.source_identity_verification_method
-            ),
-            "title": assessment["title"],
-            "version": assessment["version"],
-            "dialect": assessment["dialect"],
-            "contract_family": assessment["contract_family"],
-            "operation_count": assessment["operation_count"],
-            "defined_security_schemes": assessment["defined_security_schemes"],
-            "undefined_security_schemes": assessment["undefined_security_schemes"],
-            "external_reference_count": assessment["external_reference_count"],
-            "external_references_resolved": assessment["external_references_resolved"],
-            "blocker_codes": assessment["blocker_codes"],
-            "warning_codes": assessment["warning_codes"],
-            "discovery_quality_passed": assessment["discovery_quality_passed"],
-            "binding_generation_ready": assessment["binding_generation_ready"],
-        },
-        "provenance": _safe_projection(
-            binding_id,
-            provenance,
-            matches_binding=True,
-        ),
-        "production_allowed": False,
-        "runtime_connector_approved": False,
-        "raw_secret_visible": False,
-    }
+
+@settings_module.router.post(
+    "/enterprise-integration/endpoint-bindings/{binding_id}/discovery-qualification/trusted-source",
+    response_model=dict,
+)
+async def qualify_endpoint_binding_from_trusted_source(
+    binding_id: str,
+    body: TrustedEndpointDiscoveryQualificationRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Acquire one server-allowlisted immutable source and qualify its operation."""
+
+    user_id, raw = _require_enterprise(current_user)
+    spec = binding_runtime._find_binding(raw, binding_id)
+    try:
+        acquired = await acquire_trusted_github_endpoint_source(
+            source_identity_id=body.source_identity_id,
+            source_revision=body.source_revision,
+            source_path=body.source_path,
+        )
+        record = acquired.trusted_record
+        assessment, provenance = _qualification_from_evidence(
+            spec=spec,
+            api_description=acquired.api_description,
+            contract_family=record.contract_family,
+            source_reference=record.source_reference,
+            source_kind=record.source_kind,
+            source_revision=record.source_revision,
+            source_pin_verified=True,
+            operation_id=body.operation_id,
+            trusted_sources=(record,),
+        )
+    except (
+        TrustedEndpointSourceAcquisitionError,
+        EndpointDiscoveryError,
+        EndpointBindingProvenanceError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    _persist_qualification(
+        user_id=user_id,
+        raw=raw,
+        binding_id=binding_id,
+        provenance=provenance,
+    )
+    response = _qualification_response(
+        binding_id=binding_id,
+        assessment=assessment,
+        provenance=provenance,
+    )
+    response["trusted_source_acquired"] = True
+    response["trusted_source_repository"] = acquired.repository
+    response["trusted_source_path"] = acquired.path
+    return response
 
 
 __all__ = [
     "DISCOVERY_PROVENANCE_STORAGE_KEY",
     "EndpointDiscoveryQualificationRequest",
+    "TrustedEndpointDiscoveryQualificationRequest",
     "get_endpoint_discovery_qualification",
     "qualify_endpoint_binding_discovery",
+    "qualify_endpoint_binding_from_trusted_source",
 ]
