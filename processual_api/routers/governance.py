@@ -32,12 +32,16 @@ from processual_api.admin_governance.invitation_service import (
 )
 from processual_api.admin_governance.models import AdministratorPermissionGrant
 from processual_api.admin_governance.permission_authority import (
+    AdministratorGovernanceAction,
     AdministratorGovernanceAuthorityContext,
+    evaluate_administrator_governance_authority,
 )
 from processual_api.auth.models import IdentityPlatformAuthority
 from processual_api.auth.security import require_platform_admin_step_up, require_recent_mfa
 from processual_api.db.session import get_session_factory
 from processual_api.schemas.governance import (
+    AdministratorActivityListResponse,
+    AdministratorActivityResponse,
     AdministratorAuthorityResponse,
     AdministratorGovernanceResponse,
     AdministratorInvitationCancellationRequest,
@@ -46,6 +50,8 @@ from processual_api.schemas.governance import (
     AdministratorInvitationIssueResponse,
     AdministratorLifecycleRequest,
     AdministratorLifecycleResponse,
+    AdministratorSessionListResponse,
+    AdministratorSessionResponse,
     AdministratorSessionRevocationResponse,
 )
 from processual_api.services.admin_governance_read import (
@@ -72,6 +78,24 @@ def _authority_unavailable(exc: Exception) -> HTTPException:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Administrator governance authority unavailable.",
     )
+
+
+def _authorize_governance_read(
+    *,
+    context: AdministratorGovernanceAuthorityContext,
+    action: AdministratorGovernanceAction,
+) -> None:
+    if "platform_admin" in context.platform_authorities:
+        return
+    decision = evaluate_administrator_governance_authority(
+        context=context,
+        action=action,
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator governance read denied.",
+        )
 
 
 def get_administrator_governance_read_service() -> AdministratorGovernanceReadService:
@@ -192,6 +216,80 @@ async def list_administrator_governance(
         administrators=response_rows,
         count=len(response_rows),
     )
+
+
+@router.get(
+    "/activity",
+    response_model=AdministratorActivityListResponse,
+)
+async def list_administrator_governance_activity(
+    limit: int = 50,
+    authority_context: AdministratorGovernanceAuthorityContext = Depends(
+        get_delegated_governance_authority_context
+    ),
+    service: AdministratorGovernanceReadService = Depends(
+        get_administrator_governance_read_service
+    ),
+) -> AdministratorActivityListResponse:
+    _authorize_governance_read(
+        context=authority_context,
+        action=AdministratorGovernanceAction.VIEW_ACTIVITY,
+    )
+    try:
+        rows = await service.list_activity(limit=limit)
+    except Exception as exc:
+        raise _authority_unavailable(exc) from exc
+    events = tuple(
+        AdministratorActivityResponse(
+            event_id=row.event_id,
+            event_type=row.event_type,
+            actor_user_id=row.actor_user_id,
+            subject_user_id=row.subject_user_id,
+            invitation_id=row.invitation_id,
+            permission=row.permission,
+            reason=row.reason,
+            occurred_at=row.occurred_at,
+        )
+        for row in rows
+    )
+    return AdministratorActivityListResponse(events=events, count=len(events))
+
+
+@router.get(
+    "/administrators/{user_id}/sessions",
+    response_model=AdministratorSessionListResponse,
+)
+async def list_administrator_sessions(
+    user_id: uuid.UUID,
+    authority_context: AdministratorGovernanceAuthorityContext = Depends(
+        get_delegated_governance_authority_context
+    ),
+    service: AdministratorGovernanceReadService = Depends(
+        get_administrator_governance_read_service
+    ),
+) -> AdministratorSessionListResponse:
+    _authorize_governance_read(
+        context=authority_context,
+        action=AdministratorGovernanceAction.VIEW_SESSIONS,
+    )
+    try:
+        rows = await service.list_sessions(user_id=user_id)
+    except Exception as exc:
+        raise _authority_unavailable(exc) from exc
+    sessions = tuple(
+        AdministratorSessionResponse(
+            session_id=row.session_id,
+            user_id=row.user_id,
+            authenticated_at=row.authenticated_at,
+            mfa_satisfied_at=row.mfa_satisfied_at,
+            last_seen_at=row.last_seen_at,
+            expires_at=row.expires_at,
+            revoked_at=row.revoked_at,
+            revoke_reason=row.revoke_reason,
+        )
+        for row in rows
+    )
+    return AdministratorSessionListResponse(sessions=sessions, count=len(sessions))
 
 
 @router.post(
@@ -404,6 +502,8 @@ __all__ = [
     "get_delegated_governance_authority_context",
     "issue_administrator_invitation",
     "list_administrator_governance",
+    "list_administrator_governance_activity",
+    "list_administrator_sessions",
     "platform_admin_step_up_dependency",
     "restore_administrator",
     "revoke_administrator_session",
