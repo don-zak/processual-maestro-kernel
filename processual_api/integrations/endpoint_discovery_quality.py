@@ -22,7 +22,7 @@ class EndpointDiscoveryError(ValueError):
     """The supplied API description cannot be safely inventoried."""
 
 
-def _digest(document: Mapping[str, Any]) -> str:
+def canonical_api_description_sha256(document: Mapping[str, Any]) -> str:
     payload = json.dumps(
         document,
         sort_keys=True,
@@ -311,6 +311,7 @@ def assess_endpoint_discovery(
         }
     )
     external_refs = sorted(_external_refs(document))
+    all_external_refs_resolved = not external_refs or external_references_resolved
     server_hints = _server_hints(document, dialect)
 
     blockers: list[str] = []
@@ -325,7 +326,7 @@ def assess_endpoint_discovery(
         blockers.append("path_parameter_contract_invalid")
     if undefined_security_schemes:
         blockers.append("security_scheme_definition_required")
-    if external_refs and not external_references_resolved:
+    if not all_external_refs_resolved:
         blockers.append("external_schema_references_must_be_resolved")
 
     if family == "camara":
@@ -361,7 +362,7 @@ def assess_endpoint_discovery(
     return {
         "source": "parsed_api_description",
         "source_reference": provenance,
-        "source_sha256": _digest(document),
+        "source_sha256": canonical_api_description_sha256(document),
         "title": title,
         "version": version,
         "dialect": dialect,
@@ -372,7 +373,7 @@ def assess_endpoint_discovery(
         "undefined_security_schemes": undefined_security_schemes,
         "external_references": external_refs,
         "external_reference_count": len(external_refs),
-        "external_references_resolved": external_references_resolved,
+        "external_references_resolved": all_external_refs_resolved,
         "server_hints": list(server_hints),
         "duplicate_operation_ids": duplicate_operation_ids,
         "missing_operation_id_count": missing_operation_id_count,
@@ -390,4 +391,5 @@ def assess_endpoint_discovery(
 __all__ = [
     "EndpointDiscoveryError",
     "assess_endpoint_discovery",
+    "canonical_api_description_sha256",
 ]
