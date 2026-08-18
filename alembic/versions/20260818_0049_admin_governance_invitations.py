@@ -6,7 +6,7 @@ Revises: 20260817_0048
 
 from __future__ import annotations
 
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 
 revision = "20260818_0049"
@@ -89,6 +89,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if not context.is_offline_mode():
+        bind = op.get_bind()
+        row = bind.execute(
+            sa.text("SELECT id FROM admin_governance_invitations LIMIT 1")
+        ).first()
+        if row is not None:
+            raise RuntimeError(
+                "Downgrade blocked: administrator governance invitations exist"
+            )
+
     op.drop_index(
         "ix_admin_governance_invitations_inviter_created",
         table_name="admin_governance_invitations",
