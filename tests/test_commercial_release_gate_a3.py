@@ -53,8 +53,8 @@ def _valid_environment() -> dict[str, str]:
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
-    assert staging.expected_alembic_head == "20260818_0052"
-    assert EXPECTED_ALEMBIC_HEAD == "20260818_0052"
+    assert staging.expected_alembic_head == "20260818_0053"
+    assert EXPECTED_ALEMBIC_HEAD == "20260818_0053"
     assert set(staging.checks) == {
         "required_values",
         "secret_strength",
@@ -136,7 +136,7 @@ def test_release_workflow_requires_migration_rehearsal_before_publish() -> None:
         "python -m processual_api.release_gate",
         "MIGRATION_BACKUP_REFERENCE: ${{ secrets.MIGRATION_BACKUP_REFERENCE }}",
         "MIGRATION_RESTORE_REHEARSAL_REFERENCE: ${{ secrets.MIGRATION_RESTORE_REHEARSAL_REFERENCE }}",
-        "20260818_0052 (head)",
+        "20260818_0053 (head)",
         "Verify declared migration head",
         "Apply staging schema migrations",
         "python -m alembic upgrade head",
