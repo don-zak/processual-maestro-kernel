@@ -301,31 +301,11 @@
 
   function secretsOperationsView() {
     const items = [
-      {
-        title: "Infisical provider health",
-        status: "local lab verified",
-        description: "Provider details remain supervisor-only.",
-      },
-      {
-        title: "Machine identity isolation",
-        status: "verified",
-        description: "dev and ci remain environment scoped.",
-      },
-      {
-        title: "Secret value exposure",
-        status: "blocked",
-        description: "Only references and lifecycle state are visible here.",
-      },
-      {
-        title: "Restart persistence",
-        status: "pending proof",
-        description: "Operational gate remains open before real staging.",
-      },
-      {
-        title: "Encrypted backup and restore",
-        status: "not started",
-        description: "Required before final staging approval.",
-      },
+      { title: "Infisical provider health", status: "local lab verified", description: "Provider details remain supervisor-only." },
+      { title: "Machine identity isolation", status: "verified", description: "dev and ci remain environment scoped." },
+      { title: "Secret value exposure", status: "blocked", description: "Only references and lifecycle state are visible here." },
+      { title: "Restart persistence", status: "pending proof", description: "Operational gate remains open before real staging." },
+      { title: "Encrypted backup and restore", status: "not started", description: "Required before final staging approval." },
     ];
 
     return `
@@ -360,15 +340,11 @@
     const cases = normalizedCases();
     const progress = asArray(state.progress.actions || state.progress);
 
-    if (state.active === "cases") {
-      return rows(cases, "No route-backed integration cases are available yet.");
-    }
+    if (state.active === "cases") return rows(cases, "No route-backed integration cases are available yet.");
     if (state.active === "platforms") return platformsView();
     if (state.active === "security") return securityView();
     if (state.active === "secrets") return secretsOperationsView();
-    if (state.active === "evidence") {
-      return rows(progress, "No pilot evidence progress has been recorded.");
-    }
+    if (state.active === "evidence") return rows(progress, "No pilot evidence progress has been recorded.");
 
     return `
       <div class="ic18-grid">
@@ -401,19 +377,37 @@
       </div>`;
   }
 
+  function activateTab(root, key, focus) {
+    if (!TABS.some(([candidate]) => candidate === key)) return;
+    state.active = key;
+    render();
+    if (focus) {
+      window.requestAnimationFrame(() => {
+        const activeTab = root.querySelector(`[data-ic18-tab="${key}"]`);
+        if (activeTab) activeTab.focus();
+      });
+    }
+  }
+
   function bindInteractions(root) {
     root.querySelectorAll("[data-ic18-tab]").forEach((button) => {
-      button.addEventListener("click", () => {
-        state.active = button.dataset.ic18Tab;
-        render();
+      button.addEventListener("click", () => activateTab(root, button.dataset.ic18Tab, false));
+      button.addEventListener("keydown", (event) => {
+        const index = TABS.findIndex(([key]) => key === button.dataset.ic18Tab);
+        let nextIndex = index;
+        if (event.key === "ArrowRight") nextIndex = (index + 1) % TABS.length;
+        else if (event.key === "ArrowLeft") nextIndex = (index - 1 + TABS.length) % TABS.length;
+        else if (event.key === "Home") nextIndex = 0;
+        else if (event.key === "End") nextIndex = TABS.length - 1;
+        else return;
+        event.preventDefault();
+        activateTab(root, TABS[nextIndex][0], true);
       });
     });
 
     root.querySelectorAll("[data-admin-page]").forEach((button) => {
       button.addEventListener("click", () => {
-        if (window.PMK_ADMIN_NAV) {
-          window.PMK_ADMIN_NAV.setActivePage(button.dataset.adminPage);
-        }
+        if (window.PMK_ADMIN_NAV) window.PMK_ADMIN_NAV.setActivePage(button.dataset.adminPage);
       });
     });
   }
@@ -430,7 +424,7 @@
     const summary = counts();
     const tabs = TABS.map(
       ([key, label]) =>
-        `<button type="button" class="ic18-tab ${state.active === key ? "active" : ""}" data-ic18-tab="${key}" aria-selected="${state.active === key ? "true" : "false"}">${label}</button>`
+        `<button type="button" role="tab" id="ic18-tab-${key}" class="ic18-tab ${state.active === key ? "active" : ""}" data-ic18-tab="${key}" aria-controls="ic18-panel-${key}" aria-selected="${state.active === key ? "true" : "false"}" tabindex="${state.active === key ? "0" : "-1"}">${label}</button>`
     ).join("");
 
     root.innerHTML = `
@@ -469,14 +463,10 @@
             </div>
           </div>
           <div class="ic18-tabs" role="tablist" aria-label="Integration center views">${tabs}</div>
-          <div class="ic18-tab-body">${tabBody()}</div>
+          <div class="ic18-tab-body" role="tabpanel" id="ic18-panel-${state.active}" aria-labelledby="ic18-tab-${state.active}">${tabBody()}</div>
         </section>
 
-        ${
-          state.error
-            ? `<div class="ic18-empty" role="alert">Some route-backed data could not be loaded: ${escapeHtml(state.error)}</div>`
-            : ""
-        }
+        ${state.error ? `<div class="ic18-empty" role="alert">Some route-backed data could not be loaded: ${escapeHtml(state.error)}</div>` : ""}
       </div>`;
 
     bindInteractions(root);
@@ -507,9 +497,6 @@
 
   window.PMK_INTEGRATION_CENTER_18 = { load, render };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", load);
-  } else {
-    load();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", load);
+  else load();
 })();
