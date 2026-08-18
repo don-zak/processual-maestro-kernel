@@ -149,7 +149,7 @@ def test_tampered_digest_is_rejected_when_record_is_rehydrated() -> None:
         _assessment(),
         operation_id="getCustomerContext",
     ).model_dump()
-    provenance["source_sha256"] = "not-a-digest"
+    provenance["source_sha256"] = "z" * 64
 
     with pytest.raises(ValueError, match="SHA-256"):
         provenance_matches_binding(spec, provenance)
