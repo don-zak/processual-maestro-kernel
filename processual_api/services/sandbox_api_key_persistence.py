@@ -159,10 +159,11 @@ class SqlAlchemySandboxApiKeyRepository:
         *,
         for_update: bool = False,
     ) -> list[SandboxApiKeyAuthority]:
+        # Authentication must see disabled/revoked/expired rows too. Filtering
+        # them here would turn an authoritative denial into an apparent miss,
+        # which could incorrectly permit a legacy fallback for the same secret.
         statement = select(SandboxApiKeyAuthority).where(
-            SandboxApiKeyAuthority.key_prefix == key_prefix,
-            SandboxApiKeyAuthority.status == "enabled",
-            SandboxApiKeyAuthority.revoked_at.is_(None),
+            SandboxApiKeyAuthority.key_prefix == key_prefix
         )
         if for_update:
             statement = statement.with_for_update()
