@@ -42,3 +42,13 @@ class AdministratorInvitationCancellationResponse(BaseModel):
     cancelled_by_user_id: uuid.UUID
     cancelled_at: datetime
     status: str
+
+
+class AdministratorLifecycleRequest(BaseModel):
+    reason: str = Field(min_length=12, max_length=500)
+
+
+class AdministratorLifecycleResponse(BaseModel):
+    user_id: uuid.UUID
+    status: str
+    occurred_at: datetime
