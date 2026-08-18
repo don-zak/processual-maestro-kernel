@@ -56,13 +56,21 @@ def _assessment() -> dict:
             }
         },
     }
-    return assess_endpoint_discovery(
+    assessment = assess_endpoint_discovery(
         document,
         contract_family="generic_enterprise",
         source_reference="customer-api/releases/v1.4.2/openapi.json",
         release_pinned=True,
         external_references_resolved=True,
     )
+    assessment.update(
+        {
+            "source_kind": "artifact_sha256",
+            "source_revision": assessment["source_sha256"],
+            "source_pin_verified": True,
+        }
+    )
+    return assessment
 
 
 def test_exact_discovered_operation_creates_non_production_provenance() -> None:
@@ -74,6 +82,9 @@ def test_exact_discovered_operation_creates_non_production_provenance() -> None:
     )
 
     assert provenance.source_sha256
+    assert provenance.source_kind == "artifact_sha256"
+    assert provenance.source_revision == provenance.source_sha256
+    assert provenance.source_pin_verified is True
     assert provenance.operation_id == "getCustomerContext"
     assert provenance.method == "GET"
     assert provenance.path == "/customers/{customer_id}"
@@ -116,6 +127,28 @@ def test_discovery_rejects_unqualified_assessment() -> None:
     assessment = {**_assessment(), "binding_generation_ready": False}
 
     with pytest.raises(EndpointBindingProvenanceError, match="generation_must_be_ready"):
+        qualify_binding_from_discovery(
+            _binding(),
+            assessment,
+            operation_id="getCustomerContext",
+        )
+
+
+def test_discovery_rejects_unverified_source_pin() -> None:
+    assessment = {**_assessment(), "source_pin_verified": False}
+
+    with pytest.raises(EndpointBindingProvenanceError, match="source_pin_must_be_verified"):
+        qualify_binding_from_discovery(
+            _binding(),
+            assessment,
+            operation_id="getCustomerContext",
+        )
+
+
+def test_discovery_rejects_artifact_revision_not_matching_document_digest() -> None:
+    assessment = {**_assessment(), "source_revision": "a" * 64}
+
+    with pytest.raises(EndpointBindingProvenanceError, match="artifact_source_digest_mismatch"):
         qualify_binding_from_discovery(
             _binding(),
             assessment,
