@@ -101,7 +101,25 @@ class SqlAlchemyOfferProviderBindingRepository:
         self._session.add(binding)
 
 
+def is_verified_lemon_squeezy_binding(
+    binding: object | None,
+    *,
+    offer_id: object,
+) -> bool:
+    if binding is None or offer_id is None:
+        return False
+    return bool(
+        getattr(binding, "offer_id", None) == offer_id
+        and str(getattr(binding, "provider", "")).strip().lower() == "lemon_squeezy"
+        and str(getattr(binding, "status", "")).strip().lower() == "verified"
+        and str(getattr(binding, "provider_variant_id", "")).strip()
+        and str(getattr(binding, "verification_reference", "")).strip()
+        and getattr(binding, "verified_at", None) is not None
+    )
+
+
 __all__ = [
     "AdminMarketOfferProviderBinding",
     "SqlAlchemyOfferProviderBindingRepository",
+    "is_verified_lemon_squeezy_binding",
 ]
