@@ -659,6 +659,13 @@ def require_quota(quota_scope: str = "evaluation"):
         request: Request,
         current_user: dict = Depends(get_current_user),
     ) -> dict:
+        from processual_api.admin_marketplace.subscription_runtime import (
+            SubscriptionRuntimeError,
+        )
+        from processual_api.services.sandbox_api_key_usage import (
+            record_sandbox_api_key_usage,
+        )
+
         from ..billing.usage_pricing import pricing_decision
         from ..services.quota_store import consume_quota
 
@@ -672,6 +679,78 @@ def require_quota(quota_scope: str = "evaluation"):
         )
         request.state.pricing_decision = pricing
         request.state.pricing_units_charged = pricing.units_charged
+
+        if current_user.get("session_type") == "sandbox_api_key":
+            if pricing.units_charged <= 0:
+                request.state.current_user = current_user
+                return current_user
+
+            seed = (
+                request.headers.get("Idempotency-Key")
+                or request.headers.get("X-Request-ID")
+                or str(uuid.uuid4())
+            )
+            material = "|".join(
+                (
+                    str(current_user.get("api_key_id") or ""),
+                    seed,
+                    request.method.upper(),
+                    pricing.endpoint,
+                )
+            )
+            durable_idempotency_key = (
+                "sandbox-api-key:"
+                + hashlib.sha256(material.encode("utf-8")).hexdigest()
+            )
+            try:
+                usage = await record_sandbox_api_key_usage(
+                    current_user=current_user,
+                    method=request.method,
+                    endpoint=pricing.endpoint,
+                    metric_code=pricing.billing_scope,
+                    units=pricing.units_charged,
+                    idempotency_key=durable_idempotency_key,
+                )
+            except SubscriptionRuntimeError as exc:
+                if "quota limit exceeded" in str(exc).lower():
+                    rejected_user = dict(current_user)
+                    rejected_user["quota_rejected"] = True
+                    rejected_user["quota"] = {
+                        "scope": pricing.billing_scope,
+                        "requested": pricing.units_charged,
+                        "rejected": True,
+                        "source": "subscription_usage_ledger",
+                    }
+                    request.state.current_user = rejected_user
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail={
+                            "error": "quota_exceeded",
+                            "quota_scope": pricing.billing_scope,
+                            "quota_requested": pricing.units_charged,
+                            "quota_source": "subscription_usage_ledger",
+                        },
+                    ) from exc
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Subscription usage denied.",
+                ) from exc
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Subscription usage authority unavailable.",
+                ) from exc
+
+            checked_user = dict(current_user)
+            checked_user["quota"] = {
+                "scope": pricing.billing_scope,
+                "charged": pricing.units_charged,
+                "usage_id": str(usage.id),
+                "source": "subscription_usage_ledger",
+                "rejected": False,
+            }
+            request.state.current_user = checked_user
+            return checked_user
 
         try:
             checked_user = consume_quota(
