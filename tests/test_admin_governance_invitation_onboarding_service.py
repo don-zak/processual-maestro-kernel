@@ -24,6 +24,8 @@ class FakeInvitation:
     expires_at: datetime
     accepted_by_user_id: uuid.UUID | None = None
     accepted_at: datetime | None = None
+    onboarding_mfa_proof_hash: str | None = None
+    onboarding_mfa_proof_expires_at: datetime | None = None
 
 
 class FakeRepository:
@@ -48,6 +50,8 @@ class FakeRepository:
     def bind_invitation_to_onboarding_identity(self, invitation, **values) -> None:
         invitation.accepted_by_user_id = values["user_id"]
         invitation.accepted_at = values["bound_at"]
+        invitation.onboarding_mfa_proof_hash = values["mfa_proof_hash"]
+        invitation.onboarding_mfa_proof_expires_at = values["mfa_proof_expires_at"]
 
 
 class FakeUnitOfWork:
@@ -83,6 +87,7 @@ def _service(repository: FakeRepository) -> tuple[AdministratorInvitationOnboard
         password_service=PasswordService(),
         clock=lambda: datetime(2026, 8, 18, 10, 0, tzinfo=UTC),
         user_id_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000050"),
+        proof_factory=lambda: "mfa-proof-" + "x" * 40,
     )
     return service, unit
 
@@ -104,6 +109,12 @@ async def test_start_creates_pending_identity_and_consumes_invitation_once() -> 
     assert receipt.next_action == "enroll_mfa"
     assert receipt.user_id == invitation.accepted_by_user_id
     assert receipt.email_normalized == "admin@example.com"
+    assert receipt.mfa_proof == "mfa-proof-" + "x" * 40
+    assert receipt.mfa_proof_expires_at == datetime(2026, 8, 18, 10, 15, tzinfo=UTC)
+    assert invitation.onboarding_mfa_proof_hash == hashlib.sha256(
+        receipt.mfa_proof.encode("utf-8")
+    ).hexdigest()
+    assert invitation.onboarding_mfa_proof_hash != receipt.mfa_proof
     assert repository.identity_values is not None
     assert repository.identity_values["display_name"] == "Admin Example"
     assert str(repository.identity_values["password_hash"]).startswith("$argon2id$")
