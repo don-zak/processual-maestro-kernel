@@ -40,6 +40,9 @@ _SUPPORTED_FAMILIES = frozenset(
     {"camara", "tm_forum", "proprietary", "legacy", "generic_enterprise"}
 )
 
+CAMARA_QOD_R32_COMMIT = "9cb179fd3b63f43d564c76689295cd681e723548"
+CAMARA_QOD_R32_PATH = "code/API_definitions/quality-on-demand.yaml"
+
 
 class TrustedEndpointSourceAcquisitionError(ValueError):
     """A trusted-source request could not be safely acquired or validated."""
@@ -53,6 +56,16 @@ class TrustedGitHubSourceDefinition:
     allowed_path_prefixes: tuple[str, ...]
     allowed_revisions: tuple[str, ...]
     policy_version: str = "github-allowlist-r2"
+
+
+CAMARA_QOD_R32_QUALIFICATION_CANDIDATE = TrustedGitHubSourceDefinition(
+    source_identity_id="camara.quality_on_demand.r3_2",
+    repository="camaraproject/QualityOnDemand",
+    contract_family="camara",
+    allowed_path_prefixes=("code/API_definitions",),
+    allowed_revisions=(CAMARA_QOD_R32_COMMIT,),
+    policy_version="camara-public-release-review-r1",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,6 +302,9 @@ async def acquire_trusted_github_endpoint_source(
 
 __all__ = [
     "AcquiredTrustedEndpointSource",
+    "CAMARA_QOD_R32_COMMIT",
+    "CAMARA_QOD_R32_PATH",
+    "CAMARA_QOD_R32_QUALIFICATION_CANDIDATE",
     "MAX_TRUSTED_SOURCE_BYTES",
     "TrustedEndpointSourceAcquisitionError",
     "TrustedGitHubSourceDefinition",
