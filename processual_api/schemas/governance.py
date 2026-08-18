@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GovernanceReport(BaseModel):
@@ -31,3 +31,14 @@ class AdministratorAuthorityResponse(BaseModel):
 class AdministratorGovernanceResponse(BaseModel):
     administrators: tuple[AdministratorAuthorityResponse, ...]
     count: int
+
+
+class AdministratorInvitationCancellationRequest(BaseModel):
+    reason: str = Field(min_length=12, max_length=500)
+
+
+class AdministratorInvitationCancellationResponse(BaseModel):
+    invitation_id: uuid.UUID
+    cancelled_by_user_id: uuid.UUID
+    cancelled_at: datetime
+    status: str
