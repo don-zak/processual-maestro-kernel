@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 
 from processual_api.integrations.endpoint_discovery_quality import (
     canonical_api_description_sha256,
@@ -159,12 +160,13 @@ async def test_trusted_route_stays_fail_closed_when_acquisition_did_not_resolve_
         operation_id="getCustomerContext",
     )
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(HTTPException) as exc:
         await runtime.qualify_endpoint_binding_from_trusted_source(
             "binding.crm.customer_context",
             body,
             current_user={"sub": "client-1"},
         )
 
-    assert "discovery_quality_must_pass" in str(exc.value)
+    assert exc.value.status_code == 422
+    assert "discovery_quality_must_pass" in str(exc.value.detail)
     assert runtime.DISCOVERY_PROVENANCE_STORAGE_KEY not in raw
