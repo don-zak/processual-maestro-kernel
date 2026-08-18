@@ -153,13 +153,30 @@ def test_integration_center_has_accessible_navigation_and_status_semantics():
     center = _text("processual_api/static/js/admin_integration_center_18.js")
 
     assert 'role="tablist"' in center
+    assert 'role="tab"' in center
+    assert 'role="tabpanel"' in center
+    assert 'aria-controls="ic18-panel-${key}"' in center
+    assert 'aria-labelledby="ic18-tab-${state.active}"' in center
     assert 'aria-selected="${state.active === key ? "true" : "false"}"' in center
+    assert 'tabindex="${state.active === key ? "0" : "-1"}"' in center
     assert 'role="status"' in center
     assert 'role="alert"' in center
     assert 'aria-label="Environment authority"' in center
     assert 'aria-label="Integration readiness metrics"' in center
     assert 'aria-label="Readiness legend"' in center
     assert 'type="button"' in center
+
+
+def test_integration_center_tabs_support_standard_keyboard_navigation():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert 'event.key === "ArrowRight"' in center
+    assert 'event.key === "ArrowLeft"' in center
+    assert 'event.key === "Home"' in center
+    assert 'event.key === "End"' in center
+    assert "event.preventDefault()" in center
+    assert "window.requestAnimationFrame" in center
+    assert "activeTab.focus()" in center
 
 
 def test_stage18_new_ui_does_not_embed_secret_material():
