@@ -110,10 +110,11 @@ def is_verified_lemon_squeezy_binding(
         return False
     return bool(
         getattr(binding, "offer_id", None) == offer_id
-        and str(getattr(binding, "provider", "")).strip().lower() == "lemon_squeezy"
-        and str(getattr(binding, "status", "")).strip().lower() == "verified"
-        and str(getattr(binding, "provider_variant_id", "")).strip()
-        and str(getattr(binding, "verification_reference", "")).strip()
+        and str(getattr(binding, "provider", "") or "").strip().lower()
+        == "lemon_squeezy"
+        and str(getattr(binding, "status", "") or "").strip().lower() == "verified"
+        and str(getattr(binding, "provider_variant_id", "") or "").strip()
+        and str(getattr(binding, "verification_reference", "") or "").strip()
         and getattr(binding, "verified_at", None) is not None
     )
 
