@@ -13,7 +13,7 @@ from processual_api.services.sandbox_api_key_persistence import (
 )
 
 
-class DurableSandboxApiKeyDenied(PermissionError):
+class DurableSandboxApiKeyDenied(PermissionError):  # noqa: N818
     """A matching durable sandbox key exists but cannot receive authority."""
 
 
