@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
+from uuid import UUID
 
 
 REVIEW_SUPERVISOR_PERMISSIONS = frozenset(
@@ -29,20 +29,20 @@ PERMISSIONS_BY_SUPERVISION_LEVEL = {
 
 
 class AdministratorOnboardingActivationRepository(Protocol):
-    async def invitation_for_update(self, *, invitation_id: uuid.UUID): ...
-    async def onboarding_user_for_update(self, *, user_id: uuid.UUID): ...
-    async def active_mfa_factor_for_update(self, *, user_id: uuid.UUID): ...
-    async def active_platform_admin(self, *, user_id: uuid.UUID): ...
+    async def invitation_for_update(self, *, invitation_id: UUID): ...
+    async def onboarding_user_for_update(self, *, user_id: UUID): ...
+    async def active_mfa_factor_for_update(self, *, user_id: UUID): ...
+    async def active_platform_admin(self, *, user_id: UUID): ...
     async def platform_authority_for_update(
         self,
         *,
-        user_id: uuid.UUID,
+        user_id: UUID,
         authority: str,
     ): ...
     async def permission_grant_for_update(
         self,
         *,
-        user_id: uuid.UUID,
+        user_id: UUID,
         permission: str,
     ): ...
     def add_platform_supervisor_authority(self, **values): ...
@@ -67,8 +67,8 @@ class AdministratorOnboardingActivationConflictError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class AdministratorOnboardingActivationReceipt:
-    invitation_id: uuid.UUID
-    user_id: uuid.UUID
+    invitation_id: UUID
+    user_id: UUID
     supervision_level: str
     platform_authority: str
     permissions: tuple[str, ...]
@@ -108,8 +108,8 @@ class AdministratorOnboardingActivationService:
     async def activate(
         self,
         *,
-        invitation_id: uuid.UUID,
-        user_id: uuid.UUID,
+        invitation_id: UUID,
+        user_id: UUID,
     ) -> AdministratorOnboardingActivationReceipt:
         now = self._now()
         async with self._unit_of_work_factory() as unit:
