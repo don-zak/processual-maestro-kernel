@@ -89,9 +89,13 @@ class SqlAlchemyAdministratorInvitationRepository:
         *,
         user_id: uuid.UUID,
         bound_at: datetime,
+        mfa_proof_hash: str,
+        mfa_proof_expires_at: datetime,
     ) -> None:
         invitation.accepted_by_user_id = user_id
         invitation.accepted_at = bound_at
+        invitation.onboarding_mfa_proof_hash = mfa_proof_hash
+        invitation.onboarding_mfa_proof_expires_at = mfa_proof_expires_at
         invitation.updated_at = bound_at
 
     def add_invitation(self, **values) -> AdministratorInvitation:
