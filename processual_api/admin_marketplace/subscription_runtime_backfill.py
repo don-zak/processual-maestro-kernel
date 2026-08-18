@@ -37,8 +37,18 @@ class SubscriptionRuntimeBackfillResult:
 
 class _BootstrapUnit:
     def __init__(self, session: AsyncSession) -> None:
+        self._session = session
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
+
+    async def __aenter__(self) -> _BootstrapUnit:
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        return None
+
+    async def commit(self) -> None:
+        await self._session.commit()
 
 
 def _effective_at(subscription: AdminMarketSubscription) -> datetime:
