@@ -20,6 +20,7 @@ class AdministratorInvitationRepository(Protocol):
     async def identity_exists(self, *, email_normalized: str) -> bool: ...
     def add_invitation(self, **values): ...
     def add_invitation_delivery_outbox(self, **values): ...
+    def add_governance_audit_event(self, **values): ...
 
 
 class AdministratorInvitationUnitOfWork(Protocol):
@@ -157,6 +158,15 @@ class AdministratorInvitationService:
                 attempts=0,
                 next_attempt_at=now,
                 created_at=now,
+            )
+            repository.add_governance_audit_event(
+                event_type="administrator_invitation_issued",
+                actor_user_id=actor_user_id,
+                subject_user_id=None,
+                invitation_id=invitation_id,
+                permission=None,
+                reason=reason,
+                occurred_at=now,
             )
             await unit.commit()
 
