@@ -4,7 +4,7 @@ import os
 import uuid
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from processual_api.db.session import close_db, get_session_factory, init_db
 from processual_api.services.evaluation_grant_persistence import (
@@ -35,7 +35,7 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
 
     await init_db()
     session_factory = get_session_factory()
-    grant_uuid = None
+    grant_uuid: uuid.UUID | None = None
     try:
         grant = await create_durable_evaluation_grant(
             owner_user_ref=owner_ref,
@@ -60,7 +60,6 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
         assert items[0]["grant_id"] == grant["grant_id"]
         assert items[0]["active_key_count"] == 0
 
-        issued_ids: list[str] = []
         raw_keys: list[str] = []
         for index in range(3):
             key, raw_key = await issue_durable_evaluation_key(
@@ -68,7 +67,6 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
                 owner_user_ref=owner_ref,
                 label=f"Evaluation lifecycle {index}",
             )
-            issued_ids.append(key["key_id"])
             raw_keys.append(raw_key)
             assert raw_key.startswith("pmk_")
             assert raw_key not in repr(key)
@@ -87,20 +85,8 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
             )
 
         async with session_factory() as session:
-            stored_grant = await session.scalar(
-                EvaluationGrantAuthority.__table__.select().where(
-                    EvaluationGrantAuthority.grant_ref == grant["grant_id"]
-                )
-            )
-            assert stored_grant is not None
-            row = await session.scalar(
-                EvaluationGrantAuthority.__table__.select().where(
-                    EvaluationGrantAuthority.grant_ref == grant["grant_id"]
-                )
-            )
-            assert row is not None
             grant_record = await session.scalar(
-                __import__("sqlalchemy").select(EvaluationGrantAuthority).where(
+                select(EvaluationGrantAuthority).where(
                     EvaluationGrantAuthority.grant_ref == grant["grant_id"]
                 )
             )
@@ -109,16 +95,17 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
             keys = list(
                 (
                     await session.scalars(
-                        __import__("sqlalchemy").select(EvaluationApiKeyAuthority).where(
+                        select(EvaluationApiKeyAuthority).where(
                             EvaluationApiKeyAuthority.grant_id == grant_uuid
                         )
                     )
                 ).all()
             )
             assert len(keys) == 3
-            for stored, raw_key in zip(keys, raw_keys, strict=False):
-                assert stored.key_hash != raw_key
-                assert raw_key not in stored.key_hash
+            stored_hashes = {stored.key_hash for stored in keys}
+            for raw_key in raw_keys:
+                assert raw_key not in stored_hashes
+                assert all(raw_key not in stored_hash for stored_hash in stored_hashes)
 
         revoked = await revoke_durable_evaluation_grant(
             grant_ref=grant["grant_id"],
@@ -129,7 +116,7 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
 
         async with session_factory() as session:
             grant_record = await session.scalar(
-                __import__("sqlalchemy").select(EvaluationGrantAuthority).where(
+                select(EvaluationGrantAuthority).where(
                     EvaluationGrantAuthority.grant_ref == grant["grant_id"]
                 )
             )
@@ -138,7 +125,7 @@ async def test_durable_evaluation_grant_key_lifecycle_is_transactional() -> None
             keys = list(
                 (
                     await session.scalars(
-                        __import__("sqlalchemy").select(EvaluationApiKeyAuthority).where(
+                        select(EvaluationApiKeyAuthority).where(
                             EvaluationApiKeyAuthority.grant_id == grant_record.id
                         )
                     )
