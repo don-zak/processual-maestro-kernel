@@ -55,6 +55,45 @@ class SqlAlchemyAdministratorInvitationRepository:
             .limit(1)
         )
 
+    async def invitation_for_update(self, *, invitation_id: uuid.UUID):
+        return await self._session.scalar(
+            select(AdministratorInvitation)
+            .where(AdministratorInvitation.id == invitation_id)
+            .with_for_update()
+        )
+
+    def add_onboarding_identity(
+        self,
+        *,
+        user_id: uuid.UUID,
+        email_normalized: str,
+        display_name: str,
+        password_hash: str,
+        verified_at: datetime,
+    ) -> IdentityUser:
+        user = IdentityUser(
+            id=user_id,
+            email_normalized=email_normalized,
+            display_name=display_name,
+            password_hash=password_hash,
+            status="pending_verification",
+            email_verified_at=verified_at,
+            password_changed_at=verified_at,
+        )
+        self._session.add(user)
+        return user
+
+    @staticmethod
+    def bind_invitation_to_onboarding_identity(
+        invitation: AdministratorInvitation,
+        *,
+        user_id: uuid.UUID,
+        bound_at: datetime,
+    ) -> None:
+        invitation.accepted_by_user_id = user_id
+        invitation.accepted_at = bound_at
+        invitation.updated_at = bound_at
+
     def add_invitation(self, **values) -> AdministratorInvitation:
         row = AdministratorInvitation(
             id=values["invitation_id"],
