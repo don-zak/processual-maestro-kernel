@@ -38,10 +38,13 @@ _REQUIRED_VALUES = (
     "AUTH_MFA_CURRENT_KEY_VERSION",
     "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
     "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION",
+    "LEMONSQUEEZY_API_KEY",
     "LEMONSQUEEZY_STORE_ID",
     "LEMONSQUEEZY_WEBHOOK_SECRET",
     "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
     "LEMONSQUEEZY_CHECKOUT_CANCEL_URL",
+    "MIGRATION_BACKUP_REFERENCE",
+    "MIGRATION_RESTORE_REHEARSAL_REFERENCE",
 )
 
 
@@ -125,6 +128,14 @@ def evaluate_release_environment(
     if values.get("RATE_LIMIT_ENABLED", "true").strip().lower() != "true":
         raise RuntimeError("release gate: RATE_LIMIT_ENABLED must be true")
     checks.append("runtime_controls")
+
+    if resolved["MIGRATION_BACKUP_REFERENCE"] == resolved[
+        "MIGRATION_RESTORE_REHEARSAL_REFERENCE"
+    ]:
+        raise RuntimeError(
+            "release gate: migration backup and restore rehearsal references must differ"
+        )
+    checks.append("migration_rehearsal_evidence")
 
     return ReleaseGateResult(
         environment=environment,

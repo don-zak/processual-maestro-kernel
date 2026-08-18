@@ -35,10 +35,13 @@ jobs:
       AUTH_MFA_CURRENT_KEY_VERSION: ${{ secrets.AUTH_MFA_CURRENT_KEY_VERSION }}
       ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON: ${{ secrets.ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON }}
       ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION: ${{ secrets.ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION }}
+      LEMONSQUEEZY_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}
       LEMONSQUEEZY_STORE_ID: ${{ secrets.LEMONSQUEEZY_STORE_ID }}
       LEMONSQUEEZY_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_WEBHOOK_SECRET }}
       LEMONSQUEEZY_CHECKOUT_SUCCESS_URL: ${{ secrets.LEMONSQUEEZY_CHECKOUT_SUCCESS_URL }}
       LEMONSQUEEZY_CHECKOUT_CANCEL_URL: ${{ secrets.LEMONSQUEEZY_CHECKOUT_CANCEL_URL }}
+      MIGRATION_BACKUP_REFERENCE: ${{ secrets.MIGRATION_BACKUP_REFERENCE }}
+      MIGRATION_RESTORE_REHEARSAL_REFERENCE: ${{ secrets.MIGRATION_RESTORE_REHEARSAL_REFERENCE }}
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
 
     steps:
@@ -57,8 +60,24 @@ jobs:
       - name: Commercial release environment gate
         run: python -m processual_api.release_gate
 
-      - name: Verify migration head
+      - name: Verify declared migration head
         run: python -m alembic heads | grep "20260809_0046 (head)"
+
+      - name: Apply staging schema migrations
+        run: python -m alembic upgrade head
+
+      - name: Backfill legacy subscription runtime
+        run: python -m processual_api.admin_marketplace.subscription_runtime_backfill
+
+      - name: Verify subscription runtime backfill replay is empty
+        shell: bash
+        run: |
+          replay="$(python -m processual_api.admin_marketplace.subscription_runtime_backfill)"
+          echo "$replay"
+          test "$replay" = "subscription-runtime-backfill scanned=0 created=0"
+
+      - name: Verify staging database migration head
+        run: python -m alembic current | grep "20260809_0046"
 
       - name: Commercial staging smoke gate
         run: python -m processual_api.staging_smoke
@@ -82,6 +101,7 @@ jobs:
             tests/test_admin_marketplace_subscription_runtime_usage_bundle_a3.py \
             tests/test_admin_marketplace_subscription_runtime_bootstrap_a3.py \
             tests/test_admin_marketplace_subscription_runtime_migration_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_backfill_a3.py \
             tests/test_subscription_middleware_database_runtime_a3.py \
             tests/test_migration_regression_lock_a3.py \
             tests/test_sqlite_migration_chain.py \

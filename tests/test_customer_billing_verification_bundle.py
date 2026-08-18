@@ -14,7 +14,7 @@ def test_comprehensive_billing_verification_script_exists_and_chains_full_progra
         "Customer billing contract and gateways",
         "Maestro Units, quota, plan, and usage regressions",
         "Top-up purchase, grant, and reversal lifecycle",
-        "API readiness, Settings, and admin UI boundaries",
+        "API readiness, Settings, admin UI, and canonical billing boundaries",
         "verify_full_program_local.ps1",
         "customer-billing-comprehensive-verification.json",
         "customer-billing-comprehensive-verification.md",

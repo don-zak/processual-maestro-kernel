@@ -167,14 +167,19 @@ try {
         "tests/test_settings_runtime_wiring_regression.py",
         "tests/test_settings_enterprise_integration_runtime.py",
         "tests/test_admin_subscription_analytics_ui.py",
-        "tests/test_admin_subscription_analytics_regression.py"
+        "tests/test_admin_subscription_analytics_regression.py",
+        "tests/test_canonical_checkout_gate_a3.py",
+        "tests/test_canonical_checkout_resolution_a3.py",
+        "tests/test_canonical_checkout_route_a3.py",
+        "tests/test_subscription_catalog_runtime_boundary_a3.py",
+        "tests/test_legacy_plan_history_deletion_gate_a3.py"
     )
 
     $phaseResults = @()
     $phaseResults += Invoke-PytestPhase -PhaseId "01-billing-contract" -Label "Customer billing contract and gateways" -Tests $billingContractTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
     $phaseResults += Invoke-PytestPhase -PhaseId "02-commercial-regressions" -Label "Maestro Units, quota, plan, and usage regressions" -Tests $commercialRegressionTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
     $phaseResults += Invoke-PytestPhase -PhaseId "03-topup-lifecycle" -Label "Top-up purchase, grant, and reversal lifecycle" -Tests $topUpLifecycleTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
-    $phaseResults += Invoke-PytestPhase -PhaseId "04-boundary-regressions" -Label "API readiness, Settings, and admin UI boundaries" -Tests $boundaryRegressionTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
+    $phaseResults += Invoke-PytestPhase -PhaseId "04-boundary-regressions" -Label "API readiness, Settings, admin UI, and canonical billing boundaries" -Tests $boundaryRegressionTests -EvidenceDirectory $EvidenceDirectory -PythonCommand $PythonCommand
 
     $fullProgram = $null
     if (-not $SkipFullProgram) {
