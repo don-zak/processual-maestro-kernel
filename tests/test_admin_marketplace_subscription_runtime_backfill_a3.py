@@ -176,7 +176,7 @@ async def test_backfill_rolls_back_batch_when_any_plan_is_not_canonical() -> Non
         async with factory() as session:
             with pytest.raises(
                 SubscriptionRuntimeError,
-                match="unknown quota profile",
+                match="canonical commercial catalog",
             ):
                 await backfill_active_subscription_runtime_in_session(
                     session=session
@@ -194,5 +194,36 @@ async def test_backfill_rolls_back_batch_when_any_plan_is_not_canonical() -> Non
             )
             assert runtime_count == 0
             assert quota_count == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_backfill_rejects_canonical_plan_with_drifted_runtime_binding() -> None:
+    engine = await _engine()
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        plan = _canonical_plan()
+        plan.entitlement_profile_ref = "drifted:entitlements:v0"
+        subscription = _subscription(plan=plan)
+        async with factory() as session:
+            session.add_all([plan, subscription])
+            await session.commit()
+
+        async with factory() as session:
+            with pytest.raises(
+                SubscriptionRuntimeError,
+                match="diverge from the canonical projection",
+            ):
+                await backfill_active_subscription_runtime_in_session(
+                    session=session
+                )
+            await session.rollback()
+
+        async with factory() as session:
+            runtime_count = await session.scalar(
+                select(func.count()).select_from(AdminMarketSubscriptionRuntime)
+            )
+            assert runtime_count == 0
     finally:
         await engine.dispose()
