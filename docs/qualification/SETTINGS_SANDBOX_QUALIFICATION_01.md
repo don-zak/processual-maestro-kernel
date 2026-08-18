@@ -132,7 +132,7 @@ Run `#103` proved the cutover end-to-end:
 
 ## Stage 1I — Qualification environment
 
-Status: GREEN FOR DURABLE API-KEY AUTHORITY AND PRODUCTION CUTOVER
+Status: GREEN FOR DURABLE API-KEY AUTHORITY, PRODUCTION CUTOVER, AND TRUSTED-SOURCE CONTRACTS
 
 The current qualification workflow uses:
 
@@ -153,16 +153,49 @@ Important successful runs:
 - `#89`: evaluation auth service + no-overshoot concurrency;
 - `#95`: evaluation HTTP/auth/quota runtime wiring and focused regression suite;
 - `#96`: runtime-wired/concurrency evidence artifact confirmation;
-- `#103`: production legacy dynamic API-key cutover and regression proof.
+- `#103`: production legacy dynamic API-key cutover and regression proof;
+- `#113`: controlled trusted-source acquisition plus streaming response-size cutoff;
+- `#115`: trusted-source acquisition wired into endpoint discovery qualification with exact server-owned source identity attestation.
+
+## Stage 1J — Controlled trusted external-source acquisition
+
+Status: CONTRACT-COMPLETE / CI-PROVEN / LIVE-PROVIDER-PROOF OPEN
+
+The external API-description path no longer needs caller-supplied source authority to establish trusted provenance.
+
+`trusted_endpoint_source_acquisition.py` provides a server-owned GitHub source catalog. The caller can select only:
+
+- an allowlisted `source_identity_id`;
+- an immutable lowercase hexadecimal commit SHA;
+- a repository-relative JSON/YAML path under a server-allowlisted prefix.
+
+The caller cannot supply an arbitrary URL. The runtime constructs a fixed `https://raw.githubusercontent.com/{owner}/{repo}/{commit}/{path}` target from the server catalog, disables redirects and proxy-environment inheritance, requires public-address DNS resolution for the fixed host, bounds accepted source bytes to 2 MiB while streaming, parses JSON/YAML with safe YAML loading, and derives the canonical API-description digest server-side.
+
+The trusted-source endpoint qualification request forbids extra fields. A client therefore cannot smuggle `source_reference`, `contract_family`, or an `api_description` into the trusted path. Those values are derived from the acquired source and its server-owned catalog record.
+
+The trusted qualification route then:
+
+1. acquires the immutable source from the server-owned catalog selection;
+2. assesses the acquired API description through the existing discovery-quality gate;
+3. attests publisher/source identity only by matching the exact acquired `TrustedEndpointSourceRecord` tuple;
+4. persists only the safe provenance record, not the raw API description;
+5. keeps `production_allowed=False` and `runtime_connector_approved=False`.
+
+Tests prove path traversal/moving refs/redirects/oversize sources are rejected, streaming stops immediately after the 2 MiB limit is crossed, caller-supplied trusted-source metadata is structurally forbidden, acquisition failure cannot persist provenance, and successful acquisition yields `source_identity_verification_method=server_trusted_exact_tuple`.
+
+Run `#113` is green for the acquisition hardening. Run `#115` is green for the route wiring and exact trusted-source provenance path.
+
+This is contract qualification only. The CI suite still records `trusted_source_live_fetch=false`, `external_provider_credentials=false`, and `external_network_proof=false`. No real provider/operator release has been selected or fetched by the qualification runner, and no provider authenticity or sandbox connectivity claim is made yet.
 
 ## External integration and UI qualification
 
 Status: OPEN
 
-These remain separate from durable Settings API-key persistence and production cutover:
+These remain separate from durable Settings API-key persistence, production cutover, and trusted-source contract wiring:
 
-- trusted acquisition/provider-authenticity verification for external API descriptions;
-- pinned real provider/operator sandbox releases and credentials;
+- select and live-fetch at least one real immutable provider/standards release from the server-owned source catalog;
+- validate provider/operator authenticity and release provenance for the selected source;
+- qualify real provider/operator sandbox targets and credentials;
 - CAMARA/TM Forum provider-specific qualification;
 - external-client/browser E2E;
 - rendered Integration Center visual QA.
@@ -173,10 +206,13 @@ Static Integration Center contracts are present, but rendered browser qualificat
 
 The internal API-key authority blockers are closed for the qualified production policy: commercial sandbox keys are durable, administrator evaluation keys are durable, and Settings-JSON dynamic credentials are non-authoritative in production.
 
+The trusted-source acquisition and qualification **contract** blocker is also closed: the server can acquire an immutable allowlisted source without arbitrary URLs and can bind exact server-owned source identity into non-production endpoint provenance.
+
 The umbrella gate remains open because:
 
 1. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
-2. trusted provider-source acquisition and real provider/operator sandbox evidence remain required for the external-integration portions of the umbrella release qualification.
+2. a real trusted provider/standards source has not yet been live-acquired and authenticated as qualification evidence;
+3. real provider/operator sandbox endpoint/credential evidence remains absent for CAMARA/TM Forum/other external integrations.
 
 ## Mandatory acceptance conditions
 
@@ -193,12 +229,17 @@ Now proven by focused qualification:
 9. evaluation route/auth/quota runtime wiring does not use Settings JSON in durable mode;
 10. legacy Settings-JSON dynamic keys cannot authenticate or mutate usage state in production;
 11. the legacy-enable flag cannot override the production cutover;
-12. sandbox/evaluation authority cannot become production authority implicitly.
+12. sandbox/evaluation authority cannot become production authority implicitly;
+13. trusted source acquisition cannot be redirected to caller-controlled arbitrary URLs or moving refs;
+14. trusted-source response size is enforced during streaming;
+15. trusted endpoint source identity is derived from an exact server-owned acquired tuple, not caller metadata;
+16. trusted-source qualification persists safe provenance only and cannot grant runtime/production authority.
 
 Still required before the broad Settings umbrella gate closes:
 
-13. complete external-client/browser qualification evidence;
-14. complete trusted external-source/provider sandbox qualification where the umbrella release depends on those integrations.
+17. complete external-client/browser qualification evidence;
+18. live-acquire and authenticate real immutable external provider/standards release evidence;
+19. complete real provider/operator sandbox qualification where the umbrella release depends on those integrations.
 
 ## Gate state
 
@@ -206,4 +247,10 @@ Still required before the broad Settings umbrella gate closes:
 
 `SandboxApiKeysQualified=False`
 
-Reason: the internal API-key authority chain and production legacy cutover now have green focused evidence, but the broad Settings release gate still includes external/browser qualification that has not been executed. No production authority is claimed by the qualification runner.
+`EndpointDiscoveryQualityQualified=False`
+
+`CAMARAConnectorQualified=False`
+
+`ExternalApiIntegrationQualified=False`
+
+Reason: the internal API-key authority chain, production legacy cutover, and trusted-source acquisition/qualification contracts now have green focused evidence, but no real trusted provider release or external sandbox connectivity has been qualified and the broad Settings release gate still includes external/browser evidence that has not been executed. No production authority is claimed by the qualification runner.
