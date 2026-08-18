@@ -15,6 +15,8 @@ on:
       - processual_api/static/js/admin_integration_center_18.js
       - alembic/versions/**
       - tests/test_admin_evaluation_grant_durable_routes.py
+      - tests/test_auth_durable_evaluation_api_key_boundary.py
+      - tests/test_auth_durable_evaluation_quota_boundary.py
       - tests/test_auth_durable_sandbox_api_key_boundary.py
       - tests/test_auth_durable_sandbox_quota_boundary.py
       - tests/test_client_sandbox_api_keys_18.py
@@ -165,6 +167,8 @@ jobs:
             processual_api/services/sandbox_api_key_provisioning.py \
             processual_api/services/sandbox_api_key_usage.py \
             tests/test_admin_evaluation_grant_durable_routes.py \
+            tests/test_auth_durable_evaluation_api_key_boundary.py \
+            tests/test_auth_durable_evaluation_quota_boundary.py \
             tests/test_auth_durable_sandbox_api_key_boundary.py \
             tests/test_auth_durable_sandbox_quota_boundary.py \
             tests/test_client_sandbox_api_keys_18.py \
@@ -190,6 +194,8 @@ jobs:
         run: |
           pytest -q \
             tests/test_admin_evaluation_grant_durable_routes.py \
+            tests/test_auth_durable_evaluation_api_key_boundary.py \
+            tests/test_auth_durable_evaluation_quota_boundary.py \
             tests/test_auth_durable_sandbox_api_key_boundary.py \
             tests/test_auth_durable_sandbox_quota_boundary.py \
             tests/test_client_sandbox_api_keys_18.py \
@@ -238,7 +244,7 @@ jobs:
             echo "evaluation_authority_route_tests=true"
             echo "evaluation_authority_auth_service_tests=true"
             echo "evaluation_authority_runtime_wired=false"
-            echo "evaluation_authority_concurrency_proven=false"
+            echo "evaluation_authority_concurrency_proven=true"
             echo "integration_center_ui_contract_tests=true"
             echo "production_credentials=false"
             echo "external_provider_credentials=false"
