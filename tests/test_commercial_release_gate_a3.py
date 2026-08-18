@@ -128,6 +128,7 @@ def test_release_workflow_requires_gates_before_publish() -> None:
     required = (
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
+        "LEMONSQUEEZY_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}",
         "Verify migration head",
         "20260809_0046",
         "Commercial staging smoke gate",
