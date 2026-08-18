@@ -19,9 +19,9 @@ Verified in repository code:
 
 ## Stage 1B — Security regression lock
 
-Status: IMPLEMENTED / CURRENT QUALIFICATION RUN PENDING
+Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
 
-Coverage now includes:
+Green qualification evidence from `Sandbox Integration Qualification` run `#52` covers:
 
 - hash-only persisted key material;
 - valid durable sandbox-key authentication;
@@ -53,7 +53,7 @@ The existing usage service obtains row locks for runtime and quota authority, ve
 
 ## Stage 1D — Durable sandbox API-key authority
 
-Status: IMPLEMENTED / REAL POSTGRESQL LIFECYCLE PROOF ADDED, CI PENDING
+Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
 
 Migration `20260818_0055_sandbox_api_key_authority.py` and PostgreSQL model/repository `processual_api/services/sandbox_api_key_persistence.py` provide the durable authority.
 
@@ -72,21 +72,21 @@ No raw secret column exists.
 
 `verify_durable_sandbox_api_key()` grants an identity only when the presented secret matches a durable row, that row is enabled/unrevoked/unexpired, the customer matches the subscription runtime, and runtime access is `active` or `grace`.
 
-`get_current_user()` now evaluates durable sandbox authority before the legacy verifier whenever durable mode is enabled. A durable denial returns 401; a durable database/runtime failure returns 503; neither condition may fall through to legacy authority.
+`get_current_user()` evaluates durable sandbox authority before the legacy verifier whenever durable mode is enabled. A durable denial returns 401; a durable database/runtime failure returns 503; neither condition may fall through to legacy authority.
 
 The shared durable-mode policy is mandatory in production. `APP_ENV=production`, `ENVIRONMENT=production|prod`, or `settings.is_production=True` overrides an explicit `PMK_DURABLE_SANDBOX_API_KEYS=false`. Explicit disable remains a transition-only local/test option.
 
-A real PostgreSQL lifecycle qualification test now exercises:
+Run `#52` executed the real PostgreSQL lifecycle:
 
 `issue -> authenticate -> rotate -> old secret denied -> new secret accepted -> revoke -> denied -> deterministic cleanup`
 
-It also queries the durable row to prove the raw secret is not persisted. This test is present in the qualification workflow but is not counted as proof until the workflow completes successfully.
+The test also queried the durable row and proved the raw secret was not persisted.
 
 ## Stage 1E — Durable Settings client provisioning
 
-Status: IMPLEMENTED / CI PENDING
+Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
 
-`/settings/client/api-keys` create/list/rotate/revoke routes now use durable PostgreSQL provisioning when durable mode is enabled.
+`/settings/client/api-keys` create/list/rotate/revoke routes use durable PostgreSQL provisioning when durable mode is enabled.
 
 Provisioning requires exactly one authoritative active subscription whose:
 
@@ -101,11 +101,11 @@ Legacy Settings JSON persistence remains available only as an explicit non-produ
 
 ## Stage 1F — Durable usage and quota boundary
 
-Status: IMPLEMENTED / REAL CONCURRENCY PROOF ADDED, CI PENDING
+Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
 
 For identities authenticated as `session_type=sandbox_api_key`, `require_quota()` no longer calls the JSON `quota_store`.
 
-Metered requests are sent to the existing subscription usage service using the authenticated subscription/customer/key identity. The request receives a bounded internal SHA-256 idempotency key. Free requests do not create usage ledger rows.
+Metered requests are sent to the existing subscription usage service using the authenticated subscription/customer/key identity. The request receives a bounded internal SHA-256 idempotency key. Free requests do not create usage-ledger rows.
 
 Failure posture:
 
@@ -114,13 +114,13 @@ Failure posture:
 - database/usage authority failure -> HTTP 503;
 - no durable-key quota failure can fall through to JSON quota state.
 
-A real PostgreSQL concurrency test now creates an isolated quota of 5 units and launches 10 simultaneous one-unit reservations. The required proof is exactly 5 successes, 5 quota rejections, `used_units=5`, five immutable ledger rows totalling five units, followed by deterministic cleanup. The test is present in CI but is not counted as passed evidence until the workflow succeeds.
+Run `#52` executed a real PostgreSQL concurrency proof with an isolated quota of 5 units and 10 simultaneous one-unit reservations. The test passed only after proving exactly 5 successes, 5 quota rejections, `used_units=5`, five immutable ledger rows totalling five units, followed by deterministic cleanup.
 
 ## Stage 1G — Qualification environment
 
-Status: ACTIVE / LATEST RUN PENDING
+Status: GREEN FOR THE FOCUSED COMMERCIAL SANDBOX SUITE
 
-`Sandbox Integration Qualification` runs against:
+`Sandbox Integration Qualification` run `#52` completed successfully against:
 
 - PostgreSQL 17;
 - Redis 7;
@@ -128,11 +128,11 @@ Status: ACTIVE / LATEST RUN PENDING
 - no production credentials;
 - no external provider credentials.
 
-The runner repeatedly proved a clean Alembic upgrade to head after a PostgreSQL JSON compatibility defect was fixed in migration `20260807_0039`.
+The run passed service connectivity, a clean Alembic upgrade to head, direct verification of the durable sandbox authority migration, focused Ruff checks, the focused pytest qualification suite, evidence recording, artifact upload, and cleanup.
 
-The workflow now includes focused lint/contracts for durable auth, provisioning, quota/usage, production durable-mode enforcement, endpoint discovery/provenance/path composition, and Integration Center UI contracts, plus the real PostgreSQL lifecycle and concurrency tests.
+The workflow covers durable auth, provisioning, quota/usage, production durable-mode enforcement, endpoint discovery/provenance/path composition, Integration Center UI contracts, real PostgreSQL key lifecycle, and real PostgreSQL parallel quota/no-overshoot behavior.
 
-A previous run exposed a circular import caused by loading the Admin Marketplace runtime repository while `auth.security` was still initializing. The runtime repository import is now lazy inside the durable verifier while retaining an injection seam for focused tests. A newer qualification run must pass before this is accepted as closed evidence.
+A prior circular import exposed by CI was closed by lazily loading the Admin Marketplace runtime repository from the durable verifier while retaining a test injection seam. Run `#52` passed after this fix.
 
 ## Separate authority: admin evaluation grants
 
@@ -149,29 +149,30 @@ Therefore broad statements such as "all Settings/Admin API keys are durable" are
 
 ## Remaining blockers for SETTINGS-SANDBOX-QUALIFICATION-01
 
-The gate remains open because:
+The focused commercial subscription sandbox chain now has green PostgreSQL qualification evidence. The umbrella gate remains open because:
 
-1. the current qualification run must pass after the circular-import fix;
-2. real PostgreSQL key lifecycle and parallel no-overshoot tests are written but not yet accepted as green CI evidence;
-3. subscription-independent admin evaluation keys remain JSON-backed and require a separate durability decision;
-4. legacy API-key fallback remains a controlled transition surface for durable no-match cases and requires an explicit production cutover/migration policy before legacy authority can be retired;
-5. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
-6. real provider/operator sandbox evidence remains outside this Settings key qualification and is required separately for external connector qualification.
+1. subscription-independent admin evaluation keys remain JSON-backed and require a separate durability decision;
+2. legacy API-key fallback remains a controlled transition surface for durable no-match cases and requires an explicit production cutover/migration policy before legacy authority can be retired;
+3. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
+4. real provider/operator sandbox evidence remains outside this Settings key qualification and is required separately for external connector qualification.
 
 ## Mandatory acceptance conditions
 
-The resulting implementation must prove:
+For the commercial subscription sandbox path, run `#52` now proves:
 
 1. raw secret is never persisted;
-2. client/owner, environment, plan, scopes, expiry, purpose and audit actor are durable;
+2. client/owner, environment, plan, scopes, expiry, purpose and issuing actor are durable;
 3. revoked and expired durable keys fail immediately;
 4. subscription state removes runtime authority;
 5. durable denial and authority failure cannot fall through to legacy state;
 6. quota reservation is atomic and idempotent;
 7. parallel requests cannot exceed quota;
 8. sandbox authority cannot become production authority implicitly;
-9. qualification data can be cleaned up deterministically;
-10. every remaining non-durable API-key authority is explicitly migrated, excluded, or blocked before the broad qualification gate closes.
+9. qualification data is cleaned up deterministically.
+
+The remaining umbrella condition is:
+
+10. every remaining non-durable API-key authority must be explicitly migrated, excluded, or blocked before the broad Settings sandbox gate closes.
 
 ## Gate state
 
@@ -179,4 +180,4 @@ The resulting implementation must prove:
 
 `SandboxApiKeysQualified=False`
 
-Reason: the durable commercial sandbox chain is now wired in code and real PostgreSQL lifecycle/concurrency qualification tests have been added, but the latest CI evidence is still pending and the separate admin evaluation-key authority remains JSON-backed.
+Reason: the commercial subscription sandbox key chain has green focused PostgreSQL qualification evidence, but the separate admin evaluation-key authority remains JSON-backed and the legacy no-match production cutover policy is not yet closed.
