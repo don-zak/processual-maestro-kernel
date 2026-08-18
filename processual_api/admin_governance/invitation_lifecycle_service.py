@@ -72,7 +72,7 @@ class AdministratorInvitationLifecycleService:
                 "Recent platform-administrator MFA step-up is required."
             )
 
-        cancellation_reason = self._normalize_reason(reason)
+        self._normalize_reason(reason)
         now = self._now()
 
         async with self._unit_of_work_factory() as unit:
