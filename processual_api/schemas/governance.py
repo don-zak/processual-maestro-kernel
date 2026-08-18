@@ -34,6 +34,27 @@ class AdministratorGovernanceResponse(BaseModel):
     count: int
 
 
+class AdministratorInvitationResponse(BaseModel):
+    invitation_id: uuid.UUID
+    email_normalized: str
+    supervision_level: str
+    status: str
+    invited_by_user_id: uuid.UUID
+    invite_reason: str
+    expires_at: datetime
+    accepted_by_user_id: uuid.UUID | None
+    accepted_at: datetime | None
+    cancelled_by_user_id: uuid.UUID | None
+    cancelled_at: datetime | None
+    cancellation_reason: str | None
+    created_at: datetime
+
+
+class AdministratorInvitationListResponse(BaseModel):
+    invitations: tuple[AdministratorInvitationResponse, ...]
+    count: int
+
+
 class AdministratorActivityResponse(BaseModel):
     event_id: uuid.UUID
     event_type: str
