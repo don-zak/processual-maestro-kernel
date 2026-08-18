@@ -16,12 +16,13 @@
     ['Recent MFA step-up', 'Sensitive governance operations require a recent authenticator verification.'],
     ['Session revocation', 'Freeze or revoke immediately terminates active administrator sessions.'],
     ['No self-escalation', 'Administrators cannot increase their own role or permission scope.'],
-    ['Last-super-admin guard', 'The final active Super Administrator cannot be frozen or revoked.'],
+    ['Last-super-admin guard', 'Platform Administrator authority is not a delegated lifecycle target.'],
   ];
 
   let administrators = [];
   let activeFilter = 'all';
   let searchTerm = '';
+  let selectedSessionUserId = '';
 
   function htmlEscape(value) {
     return String(value || '')
@@ -83,6 +84,10 @@
       '<thead><tr><th>Administrator</th><th>Role</th><th>Granted</th><th>Status</th><th>Actions</th></tr></thead>',
       '<tbody id="ag-table-body"><tr class="ag-empty-row"><td colspan="5">Loading administrator governance data…</td></tr></tbody>',
       '</table></div><p id="ag-foundation-note" class="ag-note">Governance mutations are server-authorized and require the matching recent MFA step-up and exact permission.</p></section>',
+      '<section class="ag-grid">',
+      '<div class="ag-card"><p class="ag-eyebrow">Sessions</p><h2>Administrator sessions</h2><p class="ag-muted">Select an administrator to inspect sessions and revoke an active session.</p><div id="ag-sessions"><div class="ag-empty-row">No administrator selected.</div></div></div>',
+      '<div class="ag-card"><p class="ag-eyebrow">Audit timeline</p><h2>Immutable governance activity</h2><div id="ag-activity"><div class="ag-empty-row">Loading governance activity…</div></div></div>',
+      '</section>',
       '<section class="ag-grid"><div class="ag-card"><p class="ag-eyebrow">Permission model</p><h2>Bounded access domains</h2><div class="ag-domain-list">' + domainMarkup() + '</div></div>',
       '<div class="ag-card"><p class="ag-eyebrow">Security invariants</p><h2>Non-negotiable controls</h2><div class="ag-security-list">' + securityMarkup() + '</div></div></section>',
       '<section class="ag-card"><p class="ag-eyebrow">Engineering governance</p><h2>Code review and development access</h2>',
@@ -120,7 +125,7 @@
     const state = normalizedState(item);
     const lifecycle = state === 'frozen' ? 'restore' : 'freeze';
     return '<button type="button" class="ag-tab" data-governance-action="' + lifecycle + '" data-user-id="' + htmlEscape(item.user_id) + '">' + lifecycle + '</button> ' +
-      '<button type="button" class="ag-tab" data-governance-action="revoke" data-user-id="' + htmlEscape(item.user_id) + '">revoke session</button>';
+      '<button type="button" class="ag-tab" data-governance-action="sessions" data-user-id="' + htmlEscape(item.user_id) + '">sessions</button>';
   }
 
   function renderTable() {
@@ -157,6 +162,55 @@
     }
   }
 
+  function renderActivity(events) {
+    const root = document.getElementById('ag-activity');
+    if (!root) return;
+    if (!events.length) {
+      root.innerHTML = '<div class="ag-empty-row">No governance activity recorded.</div>';
+      return;
+    }
+    root.innerHTML = events.map(function (item) {
+      const occurred = item.occurred_at ? new Date(item.occurred_at).toLocaleString() : '—';
+      return '<div class="ag-security-item"><div><strong>' + htmlEscape(item.event_type) + '</strong><br><small>' + htmlEscape(item.reason) + '</small><br><small class="ag-muted">subject ' + htmlEscape(item.subject_user_id) + ' · ' + htmlEscape(occurred) + '</small></div><span class="ag-status">audit</span></div>';
+    }).join('');
+  }
+
+  async function loadActivity() {
+    try {
+      const payload = await requestJson('/governance/activity?limit=50', { method: 'GET' });
+      renderActivity(Array.isArray(payload.events) ? payload.events : []);
+    } catch (error) {
+      const root = document.getElementById('ag-activity');
+      if (root) root.innerHTML = '<div class="ag-empty-row">' + htmlEscape(error.message) + '</div>';
+    }
+  }
+
+  function renderSessions(sessions) {
+    const root = document.getElementById('ag-sessions');
+    if (!root) return;
+    if (!sessions.length) {
+      root.innerHTML = '<div class="ag-empty-row">No sessions found for this administrator.</div>';
+      return;
+    }
+    root.innerHTML = sessions.map(function (item) {
+      const active = !item.revoked_at && new Date(item.expires_at).getTime() > Date.now();
+      const statusLabel = active ? 'active' : (item.revoked_at ? 'revoked' : 'expired');
+      const button = active
+        ? '<button class="ag-tab" type="button" data-session-revoke="' + htmlEscape(item.session_id) + '">revoke</button>'
+        : '';
+      return '<div class="ag-security-item"><div><strong>' + htmlEscape(item.session_id) + '</strong><br><small>authenticated ' + htmlEscape(new Date(item.authenticated_at).toLocaleString()) + '</small></div><span><span class="ag-status">' + statusLabel + '</span> ' + button + '</span></div>';
+    }).join('');
+  }
+
+  async function loadSessions(userId) {
+    selectedSessionUserId = userId;
+    const payload = await requestJson(
+      '/governance/administrators/' + encodeURIComponent(userId) + '/sessions',
+      { method: 'GET' }
+    );
+    renderSessions(Array.isArray(payload.sessions) ? payload.sessions : []);
+  }
+
   async function inviteAdministrator() {
     const email = window.prompt('Administrator email');
     if (!email) return;
@@ -170,23 +224,39 @@
       body: JSON.stringify({ email: email, supervision_level: level, reason: reason, expires_in_hours: 48 })
     });
     window.alert('Administrator invitation queued for delivery.');
+    await loadActivity();
   }
 
   async function lifecycleAction(action, userId) {
+    if (action === 'sessions') {
+      await loadSessions(userId);
+      return;
+    }
     const reason = window.prompt('Reason for ' + action);
     if (!reason) return;
-    let url = '/governance/administrators/' + encodeURIComponent(userId) + '/' + action;
-    if (action === 'revoke') {
-      const sessionId = window.prompt('Session ID to revoke');
-      if (!sessionId) return;
-      url = '/governance/administrators/' + encodeURIComponent(userId) + '/sessions/' + encodeURIComponent(sessionId) + '/revoke';
-    }
+    const url = '/governance/administrators/' + encodeURIComponent(userId) + '/' + action;
     await requestJson(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: reason })
     });
-    await loadAdministrators();
+    await Promise.all([loadAdministrators(), loadActivity()]);
+    if (selectedSessionUserId === userId) await loadSessions(userId);
+  }
+
+  async function revokeSelectedSession(sessionId) {
+    if (!selectedSessionUserId) return;
+    const reason = window.prompt('Reason for revoke session');
+    if (!reason) return;
+    await requestJson(
+      '/governance/administrators/' + encodeURIComponent(selectedSessionUserId) + '/sessions/' + encodeURIComponent(sessionId) + '/revoke',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason })
+      }
+    );
+    await Promise.all([loadSessions(selectedSessionUserId), loadActivity()]);
   }
 
   function bindControls() {
@@ -211,6 +281,12 @@
       const button = event.target.closest('[data-governance-action]');
       if (!button) return;
       lifecycleAction(button.dataset.governanceAction, button.dataset.userId)
+        .catch(function (error) { window.alert(error.message); });
+    });
+    document.getElementById('ag-sessions').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-session-revoke]');
+      if (!button) return;
+      revokeSelectedSession(button.dataset.sessionRevoke)
         .catch(function (error) { window.alert(error.message); });
     });
   }
@@ -241,7 +317,7 @@
       page.innerHTML = pageMarkup();
       main.appendChild(page);
       bindControls();
-      loadAdministrators();
+      Promise.all([loadAdministrators(), loadActivity()]);
     }
     navApi.bindNavButtons();
     if (window.location.hash === '#governance') navApi.setActivePage('governance');
