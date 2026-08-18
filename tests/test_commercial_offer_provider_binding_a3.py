@@ -1,10 +1,31 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
+
+import pytest
 from sqlalchemy import CheckConstraint, UniqueConstraint
 
 from processual_api.admin_marketplace.commercial_offer_provider_binding import (
     AdminMarketOfferProviderBinding,
+    is_verified_lemon_squeezy_binding,
 )
+
+NOW = datetime(2026, 8, 17, 13, 30, tzinfo=UTC)
+OFFER_ID = "offer-001"
+
+
+def _binding(**changes: object) -> SimpleNamespace:
+    values = {
+        "offer_id": OFFER_ID,
+        "provider": "lemon_squeezy",
+        "provider_variant_id": "variant-001",
+        "status": "verified",
+        "verification_reference": "verify-001",
+        "verified_at": NOW,
+    }
+    values.update(changes)
+    return SimpleNamespace(**values)
 
 
 def test_provider_binding_is_channel_metadata_not_pricing_authority() -> None:
@@ -62,3 +83,35 @@ def test_provider_binding_verification_state_is_database_constrained() -> None:
         "verification_reference" in expression and "verified_at" in expression
         for expression in checks
     )
+
+
+def test_verified_binding_readiness_requires_complete_matching_identity() -> None:
+    assert is_verified_lemon_squeezy_binding(
+        _binding(),
+        offer_id=OFFER_ID,
+    ) is True
+
+
+@pytest.mark.parametrize(
+    ("changes", "offer_id"),
+    [
+        ({"offer_id": "offer-002"}, OFFER_ID),
+        ({"provider": "other"}, OFFER_ID),
+        ({"status": "pending"}, OFFER_ID),
+        ({"provider_variant_id": "   "}, OFFER_ID),
+        ({"verification_reference": "   "}, OFFER_ID),
+        ({"verified_at": None}, OFFER_ID),
+    ],
+)
+def test_verified_binding_readiness_fails_closed(
+    changes: dict[str, object],
+    offer_id: object,
+) -> None:
+    assert is_verified_lemon_squeezy_binding(
+        _binding(**changes),
+        offer_id=offer_id,
+    ) is False
+
+
+def test_verified_binding_readiness_rejects_missing_binding() -> None:
+    assert is_verified_lemon_squeezy_binding(None, offer_id=OFFER_ID) is False
