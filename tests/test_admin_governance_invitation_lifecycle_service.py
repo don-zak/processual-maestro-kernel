@@ -35,6 +35,7 @@ class FakeRepository:
     def __init__(self) -> None:
         self.actor = object()
         self.invitation: FakeInvitation | None = FakeInvitation()
+        self.audit: dict[str, object] | None = None
 
     async def active_platform_admin(self, *, user_id: uuid.UUID):
         return self.actor if user_id == ACTOR_ID else None
@@ -43,6 +44,10 @@ class FakeRepository:
         if invitation_id != INVITATION_ID:
             return None
         return self.invitation
+
+    def add_governance_audit_event(self, **values):
+        self.audit = values
+        return values
 
 
 class FakeUnitOfWork:
@@ -92,6 +97,15 @@ async def test_cancel_pending_invitation_is_atomic() -> None:
     assert repository.invitation.cancelled_at == NOW
     assert repository.invitation.cancellation_reason == REASON
     assert repository.invitation.updated_at == NOW
+    assert repository.audit == {
+        "event_type": "administrator_invitation_cancelled",
+        "actor_user_id": ACTOR_ID,
+        "subject_user_id": None,
+        "invitation_id": INVITATION_ID,
+        "permission": None,
+        "reason": REASON,
+        "occurred_at": NOW,
+    }
 
 
 @pytest.mark.asyncio
@@ -111,6 +125,7 @@ async def test_cancel_requires_recent_step_up() -> None:
         )
 
     assert unit.committed is False
+    assert repository.audit is None
     assert repository.invitation is not None
     assert repository.invitation.status == "pending"
 
@@ -133,6 +148,7 @@ async def test_cancel_requires_active_platform_admin() -> None:
         )
 
     assert unit.committed is False
+    assert repository.audit is None
 
 
 @pytest.mark.asyncio
@@ -170,6 +186,7 @@ async def test_non_pending_or_consumed_or_expired_invitation_cannot_be_cancelled
         )
 
     assert unit.committed is False
+    assert repository.audit is None
 
 
 @pytest.mark.asyncio
@@ -190,3 +207,4 @@ async def test_unknown_invitation_cannot_be_cancelled() -> None:
         )
 
     assert unit.committed is False
+    assert repository.audit is None
