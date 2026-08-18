@@ -23,7 +23,7 @@ def _binding() -> EnterpriseEndpointBindingSpec:
         base_url="https://sandbox.customer.example/api",
         method="GET",
         path="/customers/{customer_id}",
-        required_scope_ids=["customer:read"],
+        required_scope_ids=["crm:read"],
         path_parameters={"customer_id": "$task.customer_id"},
         field_mapping={"customer_id": "$.id"},
     )
