@@ -17,6 +17,9 @@ from processual_api.admin_marketplace.audit_contracts import (
     CommercialAuditRecord,
     CommercialResourceType,
 )
+from processual_api.admin_marketplace.commercial_plan_projection import (
+    build_subscription_quota_profiles,
+)
 from processual_api.admin_marketplace.errors import (
     CommercialOrderNotFoundError,
     SubscriptionActivationConflictError,
@@ -34,6 +37,13 @@ from processual_api.admin_marketplace.persistence.errors import (
 from processual_api.admin_marketplace.persistence.protocols import (
     AdminMarketplaceUnitOfWork,
 )
+from processual_api.admin_marketplace.subscription_quota_profiles import (
+    SubscriptionQuotaProfile,
+)
+from processual_api.admin_marketplace.subscription_runtime_bootstrap import (
+    SubscriptionRuntimeBootstrapInput,
+    bootstrap_subscription_runtime_in_unit,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +60,20 @@ class SubscriptionActivationResult:
     order_status: str
     activated_at: datetime
     reason_code: str
+
+
+def _quota_profile_for_ref(quota_profile_ref: str) -> SubscriptionQuotaProfile:
+    normalized = quota_profile_ref.strip().lower()
+    matches = tuple(
+        profile
+        for profile in build_subscription_quota_profiles()
+        if profile.profile_ref == normalized
+    )
+    if len(matches) != 1:
+        raise SubscriptionActivationNotReadyError(
+            "authoritative_quota_profile_required"
+        )
+    return matches[0]
 
 
 class SubscriptionActivationOrchestrator:
@@ -191,6 +215,7 @@ class SubscriptionActivationOrchestrator:
                 raise SubscriptionActivationNotReadyError(
                     "entitlement_and_quota_profiles_required"
                 )
+            quota_profile = _quota_profile_for_ref(plan.quota_profile_ref)
 
             decision = evaluate_activation_gate(
                 ActivationGateInput(
@@ -265,6 +290,18 @@ class SubscriptionActivationOrchestrator:
             order.updated_at = now
             unit.subscriptions.add(subscription)
             unit.entitlement_activations.add(activation)
+            await bootstrap_subscription_runtime_in_unit(
+                source=SubscriptionRuntimeBootstrapInput(
+                    subscription_id=subscription.id,
+                    customer_ref=order.customer_ref,
+                    entitlement_profile_ref=plan.entitlement_profile_ref,
+                    quota_profile_ref=plan.quota_profile_ref,
+                    subscription_status=subscription.status,
+                    effective_at=now,
+                ),
+                quota_profile=quota_profile,
+                uow=unit,
+            )
             unit.commercial_audit.append(
                 _activation_audit(
                     event_id=self._event_id_factory(),
