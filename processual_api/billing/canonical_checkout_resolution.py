@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.admin_marketplace.commercial_offer_provider_binding import (
     AdminMarketOfferProviderBinding,
+    is_verified_lemon_squeezy_binding,
 )
 from processual_api.admin_marketplace.models import AdminMarketOffer
 from processual_api.billing.canonical_checkout_gate import (
@@ -43,12 +44,9 @@ async def resolve_canonical_checkout_in_session(
             AdminMarketOfferProviderBinding.offer_id == offer.id
         )
     )
-    binding_verified = bool(
-        binding is not None
-        and binding.provider == "lemon_squeezy"
-        and binding.status == "verified"
-        and binding.verification_reference
-        and binding.verified_at is not None
+    binding_verified = is_verified_lemon_squeezy_binding(
+        binding,
+        offer_id=offer.id,
     )
 
     require_checkout_publication_ready(
