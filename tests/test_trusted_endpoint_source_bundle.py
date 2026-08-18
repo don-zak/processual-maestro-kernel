@@ -268,14 +268,14 @@ async def test_bundle_file_limit_fails_closed() -> None:
 @pytest.mark.asyncio
 async def test_bundle_digest_is_deterministic_from_sorted_path_digest_manifest() -> None:
     root = (
-        "openapi: 3.1.0\n"
-        "info: {title: Bundle API, version: 1.0.0}\n"
-        "paths: {}\n"
-        "components:\n"
-        "  schemas:\n"
-        "    B: {$ref: '../../common/b.yaml#/x'}\n"
-        "    A: {$ref: '../../common/a.yaml#/x'}\n"
-    ).encode()
+        b"openapi: 3.1.0\n"
+        b"info: {title: Bundle API, version: 1.0.0}\n"
+        b"paths: {}\n"
+        b"components:\n"
+        b"  schemas:\n"
+        b"    B: {$ref: '../../common/b.yaml#/x'}\n"
+        b"    A: {$ref: '../../common/a.yaml#/x'}\n"
+    )
     documents = {
         "openapi/releases/v1/openapi.yaml": root,
         "openapi/common/a.yaml": _common(),
