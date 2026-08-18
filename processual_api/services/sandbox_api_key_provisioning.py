@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -16,6 +15,7 @@ from processual_api.admin_marketplace.subscription_runtime_persistence import (
     AdminMarketSubscriptionRuntime,
 )
 from processual_api.db.session import get_session_factory
+from processual_api.services.sandbox_api_key_mode import durable_sandbox_api_keys_enabled
 from processual_api.services.sandbox_api_key_persistence import (
     SandboxApiKeyAuthority,
     SqlAlchemySandboxApiKeyRepository,
@@ -27,13 +27,7 @@ class SandboxApiKeyProvisioningError(RuntimeError):
 
 
 def durable_sandbox_api_key_provisioning_enabled() -> bool:
-    explicit = os.environ.get("PMK_DURABLE_SANDBOX_API_KEYS", "").strip().lower()
-    if explicit in {"1", "true", "yes", "on"}:
-        return True
-    if explicit in {"0", "false", "no", "off"}:
-        return False
-    database_url = os.environ.get("DATABASE_URL", "").strip().lower()
-    return database_url.startswith(("postgresql://", "postgresql+asyncpg://"))
+    return durable_sandbox_api_keys_enabled()
 
 
 def _hash_raw_key(raw_key: str, *, iterations: int = 260_000) -> str:
