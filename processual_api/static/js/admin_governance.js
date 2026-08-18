@@ -85,6 +85,7 @@
       '<thead><tr><th>Administrator</th><th>Role</th><th>Granted</th><th>Status</th><th>Actions</th></tr></thead>',
       '<tbody id="ag-table-body"><tr class="ag-empty-row"><td colspan="5">Loading administrator governance data…</td></tr></tbody>',
       '</table></div><p id="ag-foundation-note" class="ag-note">Governance mutations are server-authorized and require the matching recent MFA step-up and exact permission.</p></section>',
+      '<section class="ag-card"><p class="ag-eyebrow">Invitations</p><h2>Administrator invitation lifecycle</h2><p class="ag-muted">Pending and recent invitations expose provenance only; invitation tokens and encrypted delivery payloads are never returned here.</p><div id="ag-invitations"><div class="ag-empty-row">Loading administrator invitations…</div></div></section>',
       '<section class="ag-grid">',
       '<div class="ag-card"><p class="ag-eyebrow">Sessions</p><h2>Administrator sessions</h2><p class="ag-muted">Select an administrator to inspect sessions. Session revocation is available only for delegated Platform Supervisors.</p><div id="ag-sessions"><div class="ag-empty-row">No administrator selected.</div></div></div>',
       '<div class="ag-card"><p class="ag-eyebrow">Audit timeline</p><h2>Immutable governance activity</h2><div id="ag-activity"><div class="ag-empty-row">Loading governance activity…</div></div></div>',
@@ -164,6 +165,34 @@
     }
   }
 
+  function renderInvitations(invitations) {
+    const root = document.getElementById('ag-invitations');
+    if (!root) return;
+    if (!invitations.length) {
+      root.innerHTML = '<div class="ag-empty-row">No administrator invitations recorded.</div>';
+      return;
+    }
+    root.innerHTML = invitations.map(function (item) {
+      const expires = item.expires_at ? new Date(item.expires_at).toLocaleString() : '—';
+      const canCancel = item.status === 'pending' && new Date(item.expires_at).getTime() > Date.now();
+      const reason = item.cancellation_reason || item.invite_reason || '';
+      const button = canCancel
+        ? '<button class="ag-tab" type="button" data-invitation-cancel="' + htmlEscape(item.invitation_id) + '">cancel</button>'
+        : '';
+      return '<div class="ag-security-item"><div><strong>' + htmlEscape(item.email_normalized) + '</strong><br><small>' + htmlEscape(item.supervision_level) + ' · expires ' + htmlEscape(expires) + '</small><br><small class="ag-muted">' + htmlEscape(reason) + '</small></div><span><span class="ag-status">' + htmlEscape(item.status) + '</span> ' + button + '</span></div>';
+    }).join('');
+  }
+
+  async function loadInvitations() {
+    try {
+      const payload = await requestJson('/governance/administrator-invitations?limit=100', { method: 'GET' });
+      renderInvitations(Array.isArray(payload.invitations) ? payload.invitations : []);
+    } catch (error) {
+      const root = document.getElementById('ag-invitations');
+      if (root) root.innerHTML = '<div class="ag-empty-row">' + htmlEscape(error.message) + '</div>';
+    }
+  }
+
   function renderActivity(events) {
     const root = document.getElementById('ag-activity');
     if (!root) return;
@@ -228,7 +257,21 @@
       body: JSON.stringify({ email: email, supervision_level: level, reason: reason, expires_in_hours: 48 })
     });
     window.alert('Administrator invitation queued for delivery.');
-    await loadActivity();
+    await Promise.all([loadInvitations(), loadActivity()]);
+  }
+
+  async function cancelInvitation(invitationId) {
+    const reason = window.prompt('Reason for invitation cancellation');
+    if (!reason) return;
+    await requestJson(
+      '/governance/administrator-invitations/' + encodeURIComponent(invitationId) + '/cancel',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason })
+      }
+    );
+    await Promise.all([loadInvitations(), loadActivity()]);
   }
 
   async function lifecycleAction(action, userId) {
@@ -291,6 +334,12 @@
       lifecycleAction(button.dataset.governanceAction, button.dataset.userId)
         .catch(function (error) { window.alert(error.message); });
     });
+    document.getElementById('ag-invitations').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-invitation-cancel]');
+      if (!button) return;
+      cancelInvitation(button.dataset.invitationCancel)
+        .catch(function (error) { window.alert(error.message); });
+    });
     document.getElementById('ag-sessions').addEventListener('click', function (event) {
       const button = event.target.closest('[data-session-revoke]');
       if (!button) return;
@@ -325,7 +374,7 @@
       page.innerHTML = pageMarkup();
       main.appendChild(page);
       bindControls();
-      Promise.all([loadAdministrators(), loadActivity()]);
+      Promise.all([loadAdministrators(), loadInvitations(), loadActivity()]);
     }
     navApi.bindNavButtons();
     if (window.location.hash === '#governance') navApi.setActivePage('governance');
