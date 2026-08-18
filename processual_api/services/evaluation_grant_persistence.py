@@ -212,6 +212,19 @@ class SqlAlchemyEvaluationAuthorityRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def get_grant_by_id(
+        self,
+        grant_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> EvaluationGrantAuthority | None:
+        statement = select(EvaluationGrantAuthority).where(
+            EvaluationGrantAuthority.id == grant_id
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
     async def get_grant_by_ref(
         self,
         grant_ref: str,
@@ -220,6 +233,19 @@ class SqlAlchemyEvaluationAuthorityRepository:
     ) -> EvaluationGrantAuthority | None:
         statement = select(EvaluationGrantAuthority).where(
             EvaluationGrantAuthority.grant_ref == grant_ref
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
+    async def get_key_by_id(
+        self,
+        key_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> EvaluationApiKeyAuthority | None:
+        statement = select(EvaluationApiKeyAuthority).where(
+            EvaluationApiKeyAuthority.id == key_id
         )
         if for_update:
             statement = statement.with_for_update()
@@ -240,11 +266,15 @@ class SqlAlchemyEvaluationAuthorityRepository:
         for_update: bool = False,
     ) -> list[EvaluationApiKeyAuthority]:
         now = datetime.now(UTC)
-        statement = select(EvaluationApiKeyAuthority).where(
-            EvaluationApiKeyAuthority.grant_id == grant_id,
-            EvaluationApiKeyAuthority.status == "enabled",
-            EvaluationApiKeyAuthority.revoked_at.is_(None),
-            EvaluationApiKeyAuthority.expires_at > now,
+        statement = (
+            select(EvaluationApiKeyAuthority)
+            .where(
+                EvaluationApiKeyAuthority.grant_id == grant_id,
+                EvaluationApiKeyAuthority.status == "enabled",
+                EvaluationApiKeyAuthority.revoked_at.is_(None),
+                EvaluationApiKeyAuthority.expires_at > now,
+            )
+            .order_by(EvaluationApiKeyAuthority.created_at.asc())
         )
         if for_update:
             statement = statement.with_for_update()
