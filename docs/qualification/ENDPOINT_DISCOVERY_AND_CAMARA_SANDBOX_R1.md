@@ -14,11 +14,12 @@ The repository has a governed discovery/binding/execution chain:
 1. `integration_task_catalog.py` defines provider-neutral Maestro tasks and canonical inputs.
 2. `endpoint_discovery_quality.py` inventories parsed OpenAPI/Swagger contracts and blocks unsafe or incomplete discovery results.
 3. `endpoint_binding_provenance.py` requires verified immutable-source metadata, binds one exact operation to a secret-free binding fingerprint, and detects drift.
-4. `enterprise_endpoint_bindings.py` binds an external operation to a canonical task, adapter contract, credential profile, scopes, request parameters, response mapping, allowed status codes, and timeout.
-5. `enterprise_endpoint_request_mapping.py` maps canonical task inputs into JSON request bodies without allowing arbitrary canonical fields.
-6. `enterprise_sandbox_execution.py` performs governed HTTPS execution with redirect blocking, DNS resolution, public-address enforcement, `trust_env` disabled, response-size limits, JSON-only response handling, transient credentials, mapping validation, task-injection evidence, and explicit non-production posture.
-7. `settings_endpoint_discovery_qualification_runtime.py` re-runs discovery assessment server-side, derives immutable source pin status instead of trusting caller booleans, stores only safe provenance metadata, and reports changed bindings as `drifted`.
-8. `sandbox_operational_readiness.py` requires binding, mapping, customer-scoped secret reference, non-production content contract, hardened live proof, and provisioning fingerprint before reporting `sandbox_ready`.
+4. `endpoint_source_attestation.py` keeps immutable content pinning separate from publisher/source identity and only verifies identity when an exact source tuple matches a server-maintained trusted record.
+5. `enterprise_endpoint_bindings.py` binds an external operation to a canonical task, adapter contract, credential profile, scopes, request parameters, response mapping, allowed status codes, and timeout.
+6. `enterprise_endpoint_request_mapping.py` maps canonical task inputs into JSON request bodies without allowing arbitrary canonical fields.
+7. `enterprise_sandbox_execution.py` performs governed HTTPS execution with redirect blocking, DNS resolution, public-address enforcement, `trust_env` disabled, response-size limits, JSON-only response handling, transient credentials, mapping validation, task-injection evidence, and explicit non-production posture.
+8. `settings_endpoint_discovery_qualification_runtime.py` re-runs discovery assessment server-side, derives immutable source pin status instead of trusting caller booleans, attaches server-owned source-identity attestation, stores only safe provenance metadata, and reports changed bindings as `drifted`.
+9. `sandbox_operational_readiness.py` requires binding, mapping, customer-scoped secret reference, non-production content contract, hardened live proof, and provisioning fingerprint before reporting `sandbox_ready`.
 
 This is a qualification foundation. It is not provider connectivity or production authority.
 
@@ -41,7 +42,7 @@ This is a qualification foundation. It is not provider connectivity or productio
 
 Binding generation is blocked for unpinned input, missing/duplicate `operationId`, invalid path parameters, undefined security schemes, unresolved external references, or missing response contracts.
 
-Swagger 2.0 now correctly inherits root-level `consumes` and `produces` when an operation does not override them. Operation-level media declarations override the root defaults. Security requirements must reference definitions present under OpenAPI `components.securitySchemes` or Swagger `securityDefinitions`.
+Swagger 2.0 correctly inherits root-level `consumes` and `produces` when an operation does not override them. Operation-level media declarations override the root defaults. Security requirements must reference definitions present under OpenAPI `components.securitySchemes` or Swagger `securityDefinitions`.
 
 CAMARA adds OpenAPI 3, non-WIP version, `x-camara-commonalities`, and versioned-server requirements.
 
@@ -67,19 +68,34 @@ The resulting provenance record stores:
 - source kind;
 - source revision;
 - `source_pin_verified=True`;
+- source-identity attestation fields;
 - exact operation ID;
 - contract family and API version;
 - method/path;
 - binding fingerprint;
 - explicit non-production/runtime-denied posture.
 
-`qualify_binding_from_discovery()` itself now rejects assessments without a verified source pin, so another internal caller cannot bypass the Settings route by supplying an asserted `release_pinned=True` assessment.
+`qualify_binding_from_discovery()` rejects assessments without a verified source pin, so another internal caller cannot bypass the Settings route by supplying an asserted `release_pinned=True` assessment.
 
-External `$ref` handling is also fail-closed at the Settings boundary: qualification requires a self-contained/bundled description. A caller-provided `external_references_resolved=True` flag cannot convert an external reference into evidence.
+External `$ref` handling is fail-closed at the Settings boundary: qualification requires a self-contained/bundled description. A caller-provided `external_references_resolved=True` flag cannot convert an external reference into evidence.
 
-An existing provenance record without the new verified-source fields no longer rehydrates as qualified and therefore requires requalification under the stronger boundary.
+An existing provenance record without the stronger verified-source fields does not rehydrate as qualified and therefore requires requalification under the stronger boundary.
 
-This improves content/source integrity but still does not prove that a git commit actually belongs to a claimed external provider repository. Provider acquisition/attestation remains a separate controlled-source step.
+## Source identity attestation boundary
+
+Immutable content and source identity are separate facts.
+
+A matching artifact digest or structurally pinned git revision proves only that the submitted content is pinned. It does not prove which provider or standards body published it.
+
+`endpoint_source_attestation.py` therefore uses an exact server-owned tuple:
+
+`contract family + source reference + source kind + source revision + source SHA-256`
+
+Only an exact match against a trusted server registry yields `source_identity_verified=True`. The default registry is deliberately empty, so arbitrary caller metadata cannot become provider identity. Any tuple drift, digest change, family change, or source-reference change fails closed to `source_identity_verified=False`.
+
+Source identity attestation never grants `production_allowed` or `runtime_connector_approved`. Those remain separate qualification gates.
+
+The current registry mechanism is intentionally a policy seam, not yet a trusted acquisition channel. A reviewed administrator/catalog acquisition path still has to populate trusted source records from an allowlisted provider repository or content-addressed artifact process.
 
 ## Binding mutation / drift protection
 
@@ -95,7 +111,9 @@ The raw OpenAPI/Swagger description is not stored in Settings provenance state.
 
 Run `#52` completed successfully and proved the focused commercial sandbox suite, including the clean migration chain, durable API-key lifecycle, durable quota/usage, PostgreSQL concurrency/no-overshoot, existing endpoint path/provenance contracts, and static Integration Center contracts.
 
-The newer Swagger media/security and verified-source provenance changes were implemented after run `#52`; they require a subsequent green run before being counted as completed CI evidence.
+Run `#61` completed successfully after the newer endpoint hardening and therefore provides focused CI evidence for Swagger media inheritance, undefined security-scheme rejection, server-derived source pinning, caller-boolean bypass prevention, bundled external-reference enforcement, and provenance drift/tamper contracts.
+
+The subsequent server-owned source-identity attestation layer is implemented and wired into the qualification workflow, but its own post-change CI run is still pending at the time of this document update.
 
 No production/provider credentials are present in this runner and `external_network_proof=false` remains explicit.
 
@@ -129,22 +147,22 @@ If no current task accurately represents the operation, a dedicated reviewed ada
 
 CAMARA discovery must use a pinned API release aligned with a specific meta-release and matching Commonalities / Identity and Consent Management guidance. WIP definitions are not acceptable qualification sources.
 
-The current local source-pin mechanism proves submitted-content identity or structural git-revision provenance. It does not yet fetch/attest a CAMARA repository commit or release tag from a trusted acquisition channel. A controlled provider-source acquisition step remains required before `CAMARAOpenAPIQualified` can become true.
+The current source-pin mechanism proves submitted-content identity or structural git-revision provenance. The source-attestation seam can distinguish trusted server records from caller claims, but the repository does not yet acquire/attest a CAMARA repository commit or release tag through a trusted provider-controlled channel. Controlled provider-source acquisition remains required before `CAMARAOpenAPIQualified` can become true.
 
 A CAMARA live proof additionally requires an operator or channel-partner sandbox implementation, managed sandbox credential reference, controlled non-production test data, and retained evidence. An OpenAPI document proves contract shape; it does not prove operator availability, credential approval, or production readiness.
 
 ## TM Forum and other platforms
 
-TM Forum is represented as a runtime contract family and is used for Telecom Ticketing and Order Management reference contracts. Swagger 2.0 global media declarations are now handled correctly, but real compatibility still requires a specific pinned provider/operator artifact and sandbox proof.
+TM Forum is represented as a runtime contract family and is used for Telecom Ticketing and Order Management reference contracts. Swagger 2.0 global media declarations are handled correctly, but real compatibility still requires a specific pinned provider/operator artifact and sandbox proof.
 
 The same discovery/provenance process applies to proprietary, legacy, and generic Enterprise APIs. Provider version, immutable contract acquisition, change policy, authentication profile, sandbox endpoint, acceptance tests, and mapping evidence remain provider/customer inputs.
 
 ## Next implementation gates
 
 1. `ENDPOINT-DISCOVERY-QUALITY-01`
-   - obtain a green run for Swagger media/security and verified-source provenance changes;
-   - add a controlled source-acquisition/attestation layer so provider repository/release identity is verified rather than merely structurally pinned;
-   - expose safe discovery state in Integration Center without implying live provider connectivity.
+   - obtain a green run for the server-owned source-identity attestation layer;
+   - add controlled source acquisition so trusted registry records are produced from an allowlisted provider repository/artifact path rather than manually asserted metadata;
+   - expose safe discovery/source-identity state in Integration Center without implying live provider connectivity.
 2. `CAMARA-CONTRACT-QUALIFICATION-01`
    - select one concrete CAMARA API and pinned release;
    - acquire it through a trusted source path and bundle external references;
@@ -167,4 +185,4 @@ The same discovery/provenance process applies to proprietary, legacy, and generi
 
 `ExternalApiIntegrationQualified=False`
 
-Reason: endpoint extraction/path/provenance controls are substantially hardened and the prior focused suite is green, but the newest source/media/security changes still need CI proof and trusted external-provider source acquisition plus real provider sandbox evidence remain outstanding.
+Reason: endpoint extraction/path/provenance hardening is CI-proven through run `#61`; source identity is now explicitly separated from pinning and has fail-closed server-registry semantics, but that newest attestation change still needs CI proof. Trusted external-provider acquisition and real provider sandbox evidence also remain outstanding.
