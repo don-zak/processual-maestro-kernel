@@ -9,6 +9,9 @@ from processual_api.admin_marketplace.authority import (
     AdminMarketplaceAuthorityContext,
     require_admin_marketplace_authority,
 )
+from processual_api.admin_marketplace.commercial_offer_provider_binding import (
+    is_verified_lemon_squeezy_binding,
+)
 
 OFFER_PUBLICATION_PROVENANCE_REQUIRED: Final = True
 
@@ -45,6 +48,8 @@ def evaluate_offer_lifecycle_transition(
     target_status: str,
     authority: AdminMarketplaceAuthorityContext,
     canonical_projection_verified: bool = False,
+    sales_channel: str | None = None,
+    provider_binding_verified: bool = False,
 ) -> OfferLifecycleDecision:
     current = current_status.strip().lower()
     target = target_status.strip().lower()
@@ -82,6 +87,19 @@ def evaluate_offer_lifecycle_transition(
             required_action=action,
         )
 
+    if (
+        target == "published"
+        and str(sales_channel or "").strip().lower() == "lemon_squeezy"
+        and not provider_binding_verified
+    ):
+        return OfferLifecycleDecision(
+            current_status=current,
+            target_status=target,
+            allowed=False,
+            reason_code="verified_provider_binding_required",
+            required_action=action,
+        )
+
     return OfferLifecycleDecision(
         current_status=current,
         target_status=target,
@@ -98,16 +116,24 @@ def apply_offer_lifecycle_transition(
     authority: AdminMarketplaceAuthorityContext,
     now: datetime,
     canonical_projection_verified: bool = False,
+    provider_binding: object | None = None,
 ) -> OfferLifecycleDecision:
     if now.tzinfo is None:
         raise ValueError("offer lifecycle clock must be timezone-aware")
 
     current_status = str(getattr(offer, "status", ""))
+    sales_channel = str(getattr(offer, "sales_channel", ""))
+    provider_binding_verified = is_verified_lemon_squeezy_binding(
+        provider_binding,
+        offer_id=getattr(offer, "id", None),
+    )
     decision = evaluate_offer_lifecycle_transition(
         current_status=current_status,
         target_status=target_status,
         authority=authority,
         canonical_projection_verified=canonical_projection_verified,
+        sales_channel=sales_channel,
+        provider_binding_verified=provider_binding_verified,
     )
     if not decision.allowed:
         return decision
