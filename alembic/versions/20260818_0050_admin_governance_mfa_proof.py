@@ -14,6 +14,8 @@ down_revision = "20260818_0049"
 branch_labels = None
 depends_on = None
 
+PROOF_INDEX = "uq_admin_governance_invitations_onboarding_mfa_proof_hash"
+
 
 def upgrade() -> None:
     op.add_column(
@@ -28,10 +30,11 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
-    op.create_unique_constraint(
-        op.f("uq_admin_governance_invitations_onboarding_mfa_proof_hash"),
+    op.create_index(
+        PROOF_INDEX,
         "admin_governance_invitations",
         ["onboarding_mfa_proof_hash"],
+        unique=True,
     )
 
 
@@ -49,11 +52,7 @@ def downgrade() -> None:
                 "Downgrade blocked: administrator onboarding MFA proofs exist"
             )
 
-    op.drop_constraint(
-        op.f("uq_admin_governance_invitations_onboarding_mfa_proof_hash"),
-        "admin_governance_invitations",
-        type_="unique",
-    )
+    op.drop_index(PROOF_INDEX, table_name="admin_governance_invitations")
     op.drop_column(
         "admin_governance_invitations",
         "onboarding_mfa_proof_expires_at",
