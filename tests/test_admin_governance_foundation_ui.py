@@ -45,8 +45,12 @@ def test_governance_workspace_uses_real_read_api_without_fabricated_records() ->
     required = [
         "fetch('/governance/administrators', { method: 'GET' })",
         "Array.isArray(payload.administrators)",
+        "/governance/activity?limit=50",
+        "/sessions",
         "Loading administrator governance data",
         "No administrators match the current filters.",
+        "Immutable governance activity",
+        "Administrator sessions",
     ]
     for marker in required:
         assert marker in js
@@ -60,6 +64,7 @@ def test_privileged_controls_use_server_authorized_mutation_routes() -> None:
         "method: 'POST'",
         "/governance/administrator-invitations",
         "data-governance-action=\"",
+        "data-session-revoke",
         "/sessions/",
         "/revoke",
         "Governance mutations are server-authorized",
@@ -68,6 +73,17 @@ def test_privileged_controls_use_server_authorized_mutation_routes() -> None:
         assert marker in js
     assert 'id="ag-invite-admin" type="button" disabled' not in js
     assert "invitation_token" not in js
+
+
+def test_platform_admin_is_not_exposed_as_delegated_lifecycle_target() -> None:
+    js = _read(GOVERNANCE_JS)
+    required = [
+        "item.authority !== 'platform_supervisor'",
+        "selectedSessionCanRevoke",
+        "Platform Administrator authority is not a delegated lifecycle target.",
+    ]
+    for marker in required:
+        assert marker in js
 
 
 def test_governance_read_controls_support_search_and_state_filters() -> None:
