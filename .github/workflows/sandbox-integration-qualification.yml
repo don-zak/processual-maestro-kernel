@@ -257,6 +257,8 @@ jobs:
             echo "endpoint_discovery_runtime_tests=true"
             echo "endpoint_source_identity_attestation_tests=true"
             echo "trusted_source_acquisition_contract_tests=true"
+            echo "trusted_source_streaming_limit_tests=true"
+            echo "trusted_source_qualification_route_tests=true"
             echo "trusted_source_live_fetch=false"
             echo "evaluation_authority_schema_present=true"
             echo "evaluation_authority_lifecycle_postgres=true"
