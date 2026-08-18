@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - processual_api/auth/security.py
       - processual_api/integrations/**
       - processual_api/routers/settings_endpoint_discovery_qualification_runtime.py
       - processual_api/services/sandbox_api_key_*.py
       - processual_api/static/css/admin_integration_center_18.css
       - processual_api/static/js/admin_integration_center_18.js
       - alembic/versions/**
+      - tests/test_auth_durable_sandbox_api_key_boundary.py
       - tests/test_endpoint_binding_provenance.py
       - tests/test_endpoint_discovery_quality.py
       - tests/test_endpoint_path_composition_security.py
@@ -120,6 +122,7 @@ jobs:
       - name: Ruff focused qualification slice
         run: |
           ruff check \
+            processual_api/auth/security.py \
             processual_api/integrations/endpoint_binding_provenance.py \
             processual_api/integrations/endpoint_discovery_quality.py \
             processual_api/integrations/enterprise_endpoint_bindings.py \
@@ -128,6 +131,7 @@ jobs:
             processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
             processual_api/services/sandbox_api_key_authority.py \
             processual_api/services/sandbox_api_key_persistence.py \
+            tests/test_auth_durable_sandbox_api_key_boundary.py \
             tests/test_endpoint_binding_provenance.py \
             tests/test_endpoint_discovery_quality.py \
             tests/test_endpoint_path_composition_security.py \
@@ -141,6 +145,7 @@ jobs:
       - name: Run focused qualification contracts
         run: |
           pytest -q \
+            tests/test_auth_durable_sandbox_api_key_boundary.py \
             tests/test_endpoint_binding_provenance.py \
             tests/test_endpoint_discovery_quality.py \
             tests/test_endpoint_path_composition_security.py \
@@ -162,6 +167,7 @@ jobs:
             echo "alembic_expected_head=20260818_0055"
             echo "clean_alembic_chain_tested=true"
             echo "postgres_json_migration_contract=true"
+            echo "durable_sandbox_auth_fail_closed_tests=true"
             echo "endpoint_path_composition_tests=true"
             echo "endpoint_provenance_tamper_tests=true"
             echo "endpoint_discovery_runtime_tests=true"
