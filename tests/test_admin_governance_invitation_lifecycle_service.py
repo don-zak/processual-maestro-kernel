@@ -16,6 +16,7 @@ NOW = datetime(2026, 8, 18, 15, 30, tzinfo=UTC)
 ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000071")
 INVITATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000072")
 USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000073")
+REASON = "Security review no longer requires this administrator"
 
 
 @dataclass
@@ -26,6 +27,7 @@ class FakeInvitation:
     expires_at: datetime = NOW + timedelta(hours=24)
     cancelled_by_user_id: uuid.UUID | None = None
     cancelled_at: datetime | None = None
+    cancellation_reason: str | None = None
     updated_at: datetime | None = None
 
 
@@ -77,7 +79,7 @@ async def test_cancel_pending_invitation_is_atomic() -> None:
     receipt = await service.cancel(
         invitation_id=INVITATION_ID,
         actor_user_id=ACTOR_ID,
-        reason="Security review no longer requires this administrator",
+        reason=REASON,
         recent_step_up=True,
     )
 
@@ -88,6 +90,7 @@ async def test_cancel_pending_invitation_is_atomic() -> None:
     assert repository.invitation.status == "cancelled"
     assert repository.invitation.cancelled_by_user_id == ACTOR_ID
     assert repository.invitation.cancelled_at == NOW
+    assert repository.invitation.cancellation_reason == REASON
     assert repository.invitation.updated_at == NOW
 
 
@@ -103,7 +106,7 @@ async def test_cancel_requires_recent_step_up() -> None:
         await service.cancel(
             invitation_id=INVITATION_ID,
             actor_user_id=ACTOR_ID,
-            reason="Security review no longer requires this administrator",
+            reason=REASON,
             recent_step_up=False,
         )
 
@@ -125,7 +128,7 @@ async def test_cancel_requires_active_platform_admin() -> None:
         await service.cancel(
             invitation_id=INVITATION_ID,
             actor_user_id=ACTOR_ID,
-            reason="Security review no longer requires this administrator",
+            reason=REASON,
             recent_step_up=True,
         )
 
@@ -162,7 +165,7 @@ async def test_non_pending_or_consumed_or_expired_invitation_cannot_be_cancelled
         await service.cancel(
             invitation_id=INVITATION_ID,
             actor_user_id=ACTOR_ID,
-            reason="Security review no longer requires this administrator",
+            reason=REASON,
             recent_step_up=True,
         )
 
@@ -182,7 +185,7 @@ async def test_unknown_invitation_cannot_be_cancelled() -> None:
         await service.cancel(
             invitation_id=INVITATION_ID,
             actor_user_id=ACTOR_ID,
-            reason="Security review no longer requires this administrator",
+            reason=REASON,
             recent_step_up=True,
         )
 
