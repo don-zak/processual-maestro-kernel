@@ -48,7 +48,7 @@ class AdministratorActivityView:
     event_id: uuid.UUID
     event_type: str
     actor_user_id: uuid.UUID | None
-    subject_user_id: uuid.UUID
+    subject_user_id: uuid.UUID | None
     invitation_id: uuid.UUID | None
     permission: str | None
     reason: str
