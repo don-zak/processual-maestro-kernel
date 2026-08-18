@@ -23,8 +23,10 @@ on:
       - tests/test_endpoint_path_composition_security.py
       - tests/test_endpoint_source_attestation.py
       - tests/test_enterprise_endpoint_bindings.py
+      - tests/test_evaluation_api_key_postgres_authority.py
       - tests/test_evaluation_grant_mode.py
       - tests/test_evaluation_grant_postgres_lifecycle.py
+      - tests/test_evaluation_usage_postgres_concurrency.py
       - tests/test_postgres_migration_compatibility_contract.py
       - tests/test_sandbox_api_key_mode.py
       - tests/test_sandbox_api_key_postgres_lifecycle.py
@@ -152,9 +154,11 @@ jobs:
             processual_api/routers/client_api_keys_18.py \
             processual_api/routers/settings_admin_evaluation_grants.py \
             processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
+            processual_api/services/evaluation_grant_authority.py \
             processual_api/services/evaluation_grant_mode.py \
             processual_api/services/evaluation_grant_persistence.py \
             processual_api/services/evaluation_grant_provisioning.py \
+            processual_api/services/evaluation_grant_usage.py \
             processual_api/services/sandbox_api_key_authority.py \
             processual_api/services/sandbox_api_key_mode.py \
             processual_api/services/sandbox_api_key_persistence.py \
@@ -169,8 +173,10 @@ jobs:
             tests/test_endpoint_path_composition_security.py \
             tests/test_endpoint_source_attestation.py \
             tests/test_enterprise_endpoint_bindings.py \
+            tests/test_evaluation_api_key_postgres_authority.py \
             tests/test_evaluation_grant_mode.py \
             tests/test_evaluation_grant_postgres_lifecycle.py \
+            tests/test_evaluation_usage_postgres_concurrency.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
             tests/test_sandbox_api_key_postgres_lifecycle.py \
@@ -192,8 +198,10 @@ jobs:
             tests/test_endpoint_path_composition_security.py \
             tests/test_endpoint_source_attestation.py \
             tests/test_enterprise_endpoint_bindings.py \
+            tests/test_evaluation_api_key_postgres_authority.py \
             tests/test_evaluation_grant_mode.py \
             tests/test_evaluation_grant_postgres_lifecycle.py \
+            tests/test_evaluation_usage_postgres_concurrency.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
             tests/test_sandbox_api_key_postgres_lifecycle.py \
@@ -228,6 +236,7 @@ jobs:
             echo "evaluation_authority_lifecycle_postgres=true"
             echo "evaluation_authority_production_mode_enforced=true"
             echo "evaluation_authority_route_tests=true"
+            echo "evaluation_authority_auth_service_tests=true"
             echo "evaluation_authority_runtime_wired=false"
             echo "evaluation_authority_concurrency_proven=false"
             echo "integration_center_ui_contract_tests=true"
