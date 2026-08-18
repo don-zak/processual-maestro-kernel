@@ -9,6 +9,9 @@ from processual_api.integrations.endpoint_source_attestation import (
     attest_endpoint_source_identity,
 )
 from processual_api.integrations.trusted_endpoint_source_acquisition import (
+    CAMARA_QOD_R32_COMMIT,
+    CAMARA_QOD_R32_PATH,
+    CAMARA_QOD_R32_QUALIFICATION_CANDIDATE,
     MAX_TRUSTED_SOURCE_BYTES,
     TrustedEndpointSourceAcquisitionError,
     TrustedGitHubSourceDefinition,
@@ -53,6 +56,54 @@ def _openapi_json() -> bytes:
             },
         }
     ).encode("utf-8")
+
+
+def test_camara_qod_r32_candidate_is_exact_but_not_runtime_enabled(monkeypatch) -> None:
+    monkeypatch.delenv("PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES", raising=False)
+    candidate = CAMARA_QOD_R32_QUALIFICATION_CANDIDATE
+
+    assert candidate.source_identity_id == "camara.quality_on_demand.r3_2"
+    assert candidate.repository == "camaraproject/QualityOnDemand"
+    assert candidate.contract_family == "camara"
+    assert candidate.allowed_path_prefixes == ("code/API_definitions",)
+    assert candidate.allowed_revisions == (CAMARA_QOD_R32_COMMIT,)
+    assert candidate.policy_version == "camara-public-release-review-r1"
+    assert CAMARA_QOD_R32_PATH == "code/API_definitions/quality-on-demand.yaml"
+    assert trusted_github_source_catalog_from_env() == ()
+
+
+@pytest.mark.asyncio
+async def test_camara_candidate_can_only_acquire_its_reviewed_revision_and_path() -> None:
+    body = b"""openapi: 3.0.3
+info:
+  title: Quality-On-Demand
+  version: 1.1.0
+paths: {}
+"""
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, content=body)
+
+    acquired = await acquire_trusted_github_endpoint_source(
+        source_identity_id=CAMARA_QOD_R32_QUALIFICATION_CANDIDATE.source_identity_id,
+        source_revision=CAMARA_QOD_R32_COMMIT,
+        source_path=CAMARA_QOD_R32_PATH,
+        catalog=(CAMARA_QOD_R32_QUALIFICATION_CANDIDATE,),
+        transport=httpx.MockTransport(handler),
+        resolve_host=_public_resolver,
+    )
+
+    assert seen["url"] == (
+        "https://raw.githubusercontent.com/camaraproject/QualityOnDemand/"
+        f"{CAMARA_QOD_R32_COMMIT}/{CAMARA_QOD_R32_PATH}"
+    )
+    assert acquired.api_description["info"]["version"] == "1.1.0"
+    assert acquired.trusted_record.source_identity_id == "camara.quality_on_demand.r3_2"
+    assert acquired.trusted_record.contract_family == "camara"
+    assert acquired.production_allowed is False
+    assert acquired.runtime_connector_approved is False
 
 
 @pytest.mark.asyncio
