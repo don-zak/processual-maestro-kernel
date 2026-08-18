@@ -188,6 +188,19 @@ def _parse_api_description(content: bytes, path: str) -> dict[str, Any]:
     return parsed
 
 
+async def _read_bounded_response(response: httpx.Response) -> bytes:
+    content = bytearray()
+    async for chunk in response.aiter_bytes():
+        if not chunk:
+            continue
+        if len(content) + len(chunk) > MAX_TRUSTED_SOURCE_BYTES:
+            raise TrustedEndpointSourceAcquisitionError("trusted_source_size_invalid")
+        content.extend(chunk)
+    if not content:
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_size_invalid")
+    return bytes(content)
+
+
 async def acquire_trusted_github_endpoint_source(
     *,
     source_identity_id: str,
@@ -217,17 +230,24 @@ async def acquire_trusted_github_endpoint_source(
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            response = await client.get(url, headers={"Accept": "application/octet-stream"})
+            async with client.stream(
+                "GET",
+                url,
+                headers={"Accept": "application/octet-stream"},
+            ) as response:
+                if 300 <= response.status_code < 400:
+                    raise TrustedEndpointSourceAcquisitionError(
+                        "trusted_source_redirect_rejected"
+                    )
+                if response.status_code != 200:
+                    raise TrustedEndpointSourceAcquisitionError(
+                        "trusted_source_fetch_status_invalid"
+                    )
+                content = await _read_bounded_response(response)
+    except TrustedEndpointSourceAcquisitionError:
+        raise
     except httpx.HTTPError as exc:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_fetch_failed") from exc
-
-    if 300 <= response.status_code < 400:
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_redirect_rejected")
-    if response.status_code != 200:
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_fetch_status_invalid")
-    content = response.content
-    if not content or len(content) > MAX_TRUSTED_SOURCE_BYTES:
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_size_invalid")
 
     document = _parse_api_description(content, path)
     digest = canonical_api_description_sha256(document)
