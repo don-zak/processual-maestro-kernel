@@ -59,24 +59,59 @@ def _external_refs(value: Any) -> set[str]:
     return refs
 
 
-def _operation_security_scopes(
+def _operation_security(
     operation: Mapping[str, Any],
     root_security: Any,
-) -> tuple[str, ...]:
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     security = operation.get("security", root_security)
+    schemes: set[str] = set()
     scopes: set[str] = set()
     if not isinstance(security, list):
-        return ()
+        return (), ()
     for requirement in security:
         if not isinstance(requirement, Mapping):
             continue
-        for values in requirement.values():
+        for raw_scheme, values in requirement.items():
+            scheme = str(raw_scheme or "").strip()
+            if scheme:
+                schemes.add(scheme)
             if isinstance(values, list):
                 scopes.update(str(value).strip() for value in values if str(value).strip())
-    return tuple(sorted(scopes))
+    return tuple(sorted(schemes)), tuple(sorted(scopes))
 
 
-def _request_media_types(operation: Mapping[str, Any], dialect: str) -> tuple[str, ...]:
+def _defined_security_schemes(
+    document: Mapping[str, Any],
+    dialect: str,
+) -> set[str]:
+    if dialect.startswith("openapi_"):
+        components = document.get("components")
+        if not isinstance(components, Mapping):
+            return set()
+        definitions = components.get("securitySchemes")
+    else:
+        definitions = document.get("securityDefinitions")
+    if not isinstance(definitions, Mapping):
+        return set()
+    return {str(name).strip() for name in definitions if str(name).strip()}
+
+
+def _swagger_media_types(
+    operation: Mapping[str, Any],
+    document: Mapping[str, Any],
+    key: str,
+) -> tuple[str, ...]:
+    values = operation.get(key) if key in operation else document.get(key)
+    if not isinstance(values, list):
+        return ()
+    return tuple(sorted(str(value).strip() for value in values if str(value).strip()))
+
+
+def _request_media_types(
+    operation: Mapping[str, Any],
+    document: Mapping[str, Any],
+    dialect: str,
+) -> tuple[str, ...]:
     if dialect.startswith("openapi_"):
         body = operation.get("requestBody")
         if not isinstance(body, Mapping):
@@ -85,13 +120,14 @@ def _request_media_types(operation: Mapping[str, Any], dialect: str) -> tuple[st
         if not isinstance(content, Mapping):
             return ()
         return tuple(sorted(str(key) for key in content))
-    consumes = operation.get("consumes")
-    if isinstance(consumes, list):
-        return tuple(sorted(str(value) for value in consumes))
-    return ()
+    return _swagger_media_types(operation, document, "consumes")
 
 
-def _response_media_types(operation: Mapping[str, Any], dialect: str) -> tuple[str, ...]:
+def _response_media_types(
+    operation: Mapping[str, Any],
+    document: Mapping[str, Any],
+    dialect: str,
+) -> tuple[str, ...]:
     responses = operation.get("responses")
     if not isinstance(responses, Mapping):
         return ()
@@ -104,9 +140,7 @@ def _response_media_types(operation: Mapping[str, Any], dialect: str) -> tuple[s
             if isinstance(content, Mapping):
                 media.update(str(key) for key in content)
     else:
-        produces = operation.get("produces")
-        if isinstance(produces, list):
-            media.update(str(value) for value in produces)
+        media.update(_swagger_media_types(operation, document, "produces"))
     return tuple(sorted(media))
 
 
@@ -155,6 +189,7 @@ def _operation_inventory(
         raise EndpointDiscoveryError("api_description_paths_required")
 
     root_security = document.get("security")
+    defined_security_schemes = _defined_security_schemes(document, dialect)
     operations: list[dict[str, Any]] = []
     operation_ids: list[str] = []
 
@@ -183,6 +218,13 @@ def _operation_inventory(
                 if isinstance(responses, Mapping)
                 else ()
             )
+            security_schemes, security_scopes = _operation_security(
+                raw_operation,
+                root_security,
+            )
+            undefined_security_schemes = sorted(
+                set(security_schemes) - defined_security_schemes
+            )
             operations.append(
                 {
                     "operation_id": operation_id or None,
@@ -192,11 +234,15 @@ def _operation_inventory(
                     "tags": [str(tag) for tag in raw_operation.get("tags", [])]
                     if isinstance(raw_operation.get("tags"), list)
                     else [],
-                    "security_scopes": list(
-                        _operation_security_scopes(raw_operation, root_security)
+                    "security_schemes": list(security_schemes),
+                    "security_scopes": list(security_scopes),
+                    "undefined_security_schemes": undefined_security_schemes,
+                    "request_media_types": list(
+                        _request_media_types(raw_operation, document, dialect)
                     ),
-                    "request_media_types": list(_request_media_types(raw_operation, dialect)),
-                    "response_media_types": list(_response_media_types(raw_operation, dialect)),
+                    "response_media_types": list(
+                        _response_media_types(raw_operation, document, dialect)
+                    ),
                     "response_codes": list(response_codes),
                     "path_parameters": sorted(expected_path_params),
                     "missing_path_parameter_declarations": missing_path_params,
@@ -257,6 +303,13 @@ def assess_endpoint_discovery(
         or bool(operation["non_required_path_parameters"])
         for operation in operations
     )
+    undefined_security_schemes = sorted(
+        {
+            scheme
+            for operation in operations
+            for scheme in operation["undefined_security_schemes"]
+        }
+    )
     external_refs = sorted(_external_refs(document))
     server_hints = _server_hints(document, dialect)
 
@@ -270,6 +323,8 @@ def assess_endpoint_discovery(
         blockers.append("operation_id_required")
     if path_parameter_blockers:
         blockers.append("path_parameter_contract_invalid")
+    if undefined_security_schemes:
+        blockers.append("security_scheme_definition_required")
     if external_refs and not external_references_resolved:
         blockers.append("external_schema_references_must_be_resolved")
 
@@ -313,6 +368,8 @@ def assess_endpoint_discovery(
         "contract_family": family,
         "operation_count": len(operations),
         "operations": operations,
+        "defined_security_schemes": sorted(_defined_security_schemes(document, dialect)),
+        "undefined_security_schemes": undefined_security_schemes,
         "external_references": external_refs,
         "external_reference_count": len(external_refs),
         "external_references_resolved": external_references_resolved,
