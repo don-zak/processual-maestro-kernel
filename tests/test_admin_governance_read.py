@@ -102,24 +102,29 @@ class _ConflictAdministratorLifecycleService:
         raise AdministratorLifecycleConflictError("conflict")
 
 
-def _delegated_context() -> AdministratorGovernanceAuthorityContext:
+def _context(*permissions: str, platform_admin: bool = False):
+    authority = "platform_admin" if platform_admin else "platform_supervisor"
     return AdministratorGovernanceAuthorityContext(
         user_id=str(ACTOR_ID),
         session_id="00000000-0000-0000-0000-000000000444",
         identity_active=True,
-        platform_authorities=frozenset({"platform_supervisor"}),
-        active_permissions=frozenset({"governance.administrator.freeze"}),
+        platform_authorities=frozenset({authority}),
+        active_permissions=frozenset(permissions),
         recent_mfa_step_up=True,
     )
 
 
-def _app_with(service) -> FastAPI:
+def _delegated_context() -> AdministratorGovernanceAuthorityContext:
+    return _context("governance.administrator.freeze")
+
+
+def _app_with(service, context=None) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[platform_admin_step_up_dependency] = lambda: {
-        "session_type": "identity_user",
-        "user_id": str(ACTOR_ID),
-    }
+    resolved_context = context or _context(platform_admin=True)
+    app.dependency_overrides[get_delegated_governance_authority_context] = (
+        lambda: resolved_context
+    )
     app.dependency_overrides[get_administrator_governance_read_service] = lambda: service
     return app
 
@@ -145,7 +150,6 @@ def _app_with_administrator_lifecycle_service(service) -> FastAPI:
 
 def test_administrator_governance_read_returns_authoritative_identity_rows() -> None:
     client = TestClient(_app_with(_ReadService()))
-
     response = client.get("/governance/administrators")
 
     assert response.status_code == 200
@@ -165,9 +169,20 @@ def test_administrator_governance_read_returns_authoritative_identity_rows() -> 
     }
 
 
+def test_delegated_administrator_read_requires_exact_permission() -> None:
+    allowed = TestClient(
+        _app_with(_ReadService(), _context("governance.administrators.view"))
+    )
+    denied = TestClient(
+        _app_with(_ReadService(), _context("governance.activity.view"))
+    )
+
+    assert allowed.get("/governance/administrators").status_code == 200
+    assert denied.get("/governance/administrators").status_code == 403
+
+
 def test_administrator_governance_read_fails_closed_when_authority_store_fails() -> None:
     client = TestClient(_app_with(_FailingReadService()))
-
     response = client.get("/governance/administrators")
 
     assert response.status_code == 503
@@ -182,7 +197,6 @@ def test_administrator_governance_read_requires_authentication_by_default() -> N
     client = TestClient(app)
 
     response = client.get("/governance/administrators")
-
     assert response.status_code == 401
 
 
