@@ -8,7 +8,10 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from processual_api.admin_governance.models import AdministratorGovernanceAuditEvent
+from processual_api.admin_governance.models import (
+    AdministratorGovernanceAuditEvent,
+    AdministratorInvitation,
+)
 from processual_api.auth.models import AuthSession, IdentityPlatformAuthority, IdentityUser
 
 
@@ -21,6 +24,23 @@ class AdministratorAuthorityView:
     authority: str
     authority_status: str
     granted_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AdministratorInvitationView:
+    invitation_id: uuid.UUID
+    email_normalized: str
+    supervision_level: str
+    status: str
+    invited_by_user_id: uuid.UUID
+    invite_reason: str
+    expires_at: datetime
+    accepted_by_user_id: uuid.UUID | None
+    accepted_at: datetime | None
+    cancelled_by_user_id: uuid.UUID | None
+    cancelled_at: datetime | None
+    cancellation_reason: str | None
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +112,40 @@ class AdministratorGovernanceReadService:
             for user, authority in rows
         )
 
+    async def list_invitations(
+        self,
+        *,
+        limit: int = 100,
+    ) -> tuple[AdministratorInvitationView, ...]:
+        bounded_limit = max(1, min(limit, 200))
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(AdministratorInvitation)
+                    .order_by(AdministratorInvitation.created_at.desc())
+                    .limit(bounded_limit)
+                )
+            ).all()
+
+        return tuple(
+            AdministratorInvitationView(
+                invitation_id=row.id,
+                email_normalized=row.email_normalized,
+                supervision_level=row.supervision_level,
+                status=row.status,
+                invited_by_user_id=row.invited_by_user_id,
+                invite_reason=row.invite_reason,
+                expires_at=row.expires_at,
+                accepted_by_user_id=row.accepted_by_user_id,
+                accepted_at=row.accepted_at,
+                cancelled_by_user_id=row.cancelled_by_user_id,
+                cancelled_at=row.cancelled_at,
+                cancellation_reason=row.cancellation_reason,
+                created_at=row.created_at,
+            )
+            for row in rows
+        )
+
     async def list_activity(
         self,
         *,
@@ -154,5 +208,6 @@ __all__ = [
     "AdministratorActivityView",
     "AdministratorAuthorityView",
     "AdministratorGovernanceReadService",
+    "AdministratorInvitationView",
     "AdministratorSessionView",
 ]
