@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -315,6 +315,15 @@ def map_response_to_task_input(
     }
 
 
+def _path_segment(value: Any) -> str:
+    """Encode one task-derived path value so it cannot alter route structure."""
+
+    text = str(value)
+    if not text:
+        raise EndpointBindingError("path parameter values must not be empty")
+    return quote(text, safe="")
+
+
 def build_request_preview(
     spec: EnterpriseEndpointBindingSpec,
     task_input: dict[str, Any],
@@ -335,9 +344,12 @@ def build_request_preview(
             raise EndpointBindingError(
                 f"path parameter {name!r} is not present in endpoint path"
             )
-        path = path.replace(token, str(resolve(source)))
+        path = path.replace(token, _path_segment(resolve(source)))
     for name, source in spec.query_parameters.items():
         query[name] = resolve(source)
+
+    if "{" in path or "}" in path:
+        raise EndpointBindingError("endpoint path contains unresolved parameters")
 
     return {
         "binding_id": spec.binding_id,
