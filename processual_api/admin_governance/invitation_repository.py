@@ -15,6 +15,8 @@ from processual_api.admin_governance.models import (
 from processual_api.auth.models import (
     AuthMfaFactor,
     AuthMfaRecoveryCode,
+    AuthRefreshToken,
+    AuthSession,
     IdentityPlatformAuthority,
     IdentityUser,
 )
@@ -74,6 +76,46 @@ class SqlAlchemyAdministratorInvitationRepository:
     async def onboarding_user_for_update(self, *, user_id: uuid.UUID):
         return await self._session.scalar(
             select(IdentityUser).where(IdentityUser.id == user_id).with_for_update()
+        )
+
+    async def administrator_for_update(self, *, user_id: uuid.UUID):
+        return await self._session.scalar(
+            select(IdentityUser).where(IdentityUser.id == user_id).with_for_update()
+        )
+
+    async def platform_supervisor_for_update(self, *, user_id: uuid.UUID):
+        return await self._session.scalar(
+            select(IdentityPlatformAuthority)
+            .where(
+                IdentityPlatformAuthority.user_id == user_id,
+                IdentityPlatformAuthority.authority == "platform_supervisor",
+            )
+            .with_for_update()
+        )
+
+    async def revoke_all_sessions(
+        self,
+        *,
+        user_id: uuid.UUID,
+        revoked_at: datetime,
+        reason: str,
+    ) -> None:
+        session_ids = select(AuthSession.id).where(AuthSession.user_id == user_id)
+        await self._session.execute(
+            update(AuthRefreshToken)
+            .where(
+                AuthRefreshToken.session_id.in_(session_ids),
+                AuthRefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=revoked_at)
+        )
+        await self._session.execute(
+            update(AuthSession)
+            .where(
+                AuthSession.user_id == user_id,
+                AuthSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=revoked_at, revoke_reason=reason)
         )
 
     async def platform_authority_for_update(
