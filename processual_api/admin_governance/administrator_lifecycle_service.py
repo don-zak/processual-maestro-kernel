@@ -16,6 +16,20 @@ from processual_api.admin_governance.permission_authority import (
 class AdministratorLifecycleRepository(Protocol):
     async def administrator_for_update(self, *, user_id: uuid.UUID): ...
     async def platform_supervisor_for_update(self, *, user_id: uuid.UUID): ...
+    async def administrator_session_for_update(
+        self,
+        *,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ): ...
+
+    async def revoke_session(
+        self,
+        *,
+        session,
+        revoked_at: datetime,
+        reason: str,
+    ) -> None: ...
 
     async def revoke_all_sessions(
         self,
@@ -61,6 +75,13 @@ class AdministratorLifecycleReceipt:
     occurred_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class AdministratorSessionRevocationReceipt:
+    user_id: uuid.UUID
+    session_id: uuid.UUID
+    revoked_at: datetime
+
+
 class AdministratorLifecycleService:
     def __init__(
         self,
@@ -96,6 +117,68 @@ class AdministratorLifecycleService:
         )
         if not decision.allowed:
             raise AdministratorLifecycleDeniedError(decision.reason_code)
+
+    async def revoke_session(
+        self,
+        *,
+        target_user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        authority_context: AdministratorGovernanceAuthorityContext,
+        reason: str,
+    ) -> AdministratorSessionRevocationReceipt:
+        self._authorize(
+            context=authority_context,
+            action=AdministratorGovernanceAction.REVOKE_SESSION,
+        )
+        actor_user_id = uuid.UUID(authority_context.user_id)
+        normalized_reason = self._normalize_reason(reason)
+        now = self._now()
+
+        async with self._unit_of_work_factory() as unit:
+            repository = unit.repository
+            user = await repository.administrator_for_update(user_id=target_user_id)
+            authority = await repository.platform_supervisor_for_update(
+                user_id=target_user_id
+            )
+            if user is None or authority is None or authority.status != "active":
+                raise AdministratorLifecycleConflictError(
+                    "Administrator is not an active platform supervisor."
+                )
+            if user.status != "active":
+                raise AdministratorLifecycleConflictError(
+                    "Administrator is not in an active state."
+                )
+
+            session = await repository.administrator_session_for_update(
+                session_id=session_id,
+                user_id=target_user_id,
+            )
+            if session is None or session.revoked_at is not None or session.expires_at <= now:
+                raise AdministratorLifecycleConflictError(
+                    "Administrator session is not revocable."
+                )
+
+            await repository.revoke_session(
+                session=session,
+                revoked_at=now,
+                reason="administrator_session_revoked",
+            )
+            repository.add_governance_audit_event(
+                event_type="administrator_session_revoked",
+                actor_user_id=actor_user_id,
+                subject_user_id=target_user_id,
+                invitation_id=None,
+                permission=AdministratorGovernanceAction.REVOKE_SESSION.value,
+                reason=normalized_reason,
+                occurred_at=now,
+            )
+            await unit.commit()
+
+        return AdministratorSessionRevocationReceipt(
+            user_id=target_user_id,
+            session_id=session_id,
+            revoked_at=now,
+        )
 
     async def freeze(
         self,
@@ -209,4 +292,5 @@ __all__ = [
     "AdministratorLifecycleDeniedError",
     "AdministratorLifecycleReceipt",
     "AdministratorLifecycleService",
+    "AdministratorSessionRevocationReceipt",
 ]
