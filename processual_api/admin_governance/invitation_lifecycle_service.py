@@ -10,6 +10,7 @@ from typing import Protocol
 class AdministratorInvitationLifecycleRepository(Protocol):
     async def active_platform_admin(self, *, user_id: uuid.UUID): ...
     async def invitation_for_update(self, *, invitation_id: uuid.UUID): ...
+    def add_governance_audit_event(self, **values): ...
 
 
 class AdministratorInvitationLifecycleUnitOfWork(Protocol):
@@ -109,6 +110,15 @@ class AdministratorInvitationLifecycleService:
             invitation.cancelled_at = now
             invitation.cancellation_reason = normalized_reason
             invitation.updated_at = now
+            repository.add_governance_audit_event(
+                event_type="administrator_invitation_cancelled",
+                actor_user_id=actor_user_id,
+                subject_user_id=None,
+                invitation_id=invitation_id,
+                permission=None,
+                reason=normalized_reason,
+                occurred_at=now,
+            )
             await unit.commit()
 
         return AdministratorInvitationCancellationReceipt(
