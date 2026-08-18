@@ -22,6 +22,7 @@ on:
       - tests/test_endpoint_path_composition_security.py
       - tests/test_endpoint_source_attestation.py
       - tests/test_enterprise_endpoint_bindings.py
+      - tests/test_evaluation_grant_postgres_lifecycle.py
       - tests/test_postgres_migration_compatibility_contract.py
       - tests/test_sandbox_api_key_mode.py
       - tests/test_sandbox_api_key_postgres_lifecycle.py
@@ -150,6 +151,7 @@ jobs:
             processual_api/routers/settings_admin_evaluation_grants.py \
             processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
             processual_api/services/evaluation_grant_persistence.py \
+            processual_api/services/evaluation_grant_provisioning.py \
             processual_api/services/sandbox_api_key_authority.py \
             processual_api/services/sandbox_api_key_mode.py \
             processual_api/services/sandbox_api_key_persistence.py \
@@ -163,6 +165,7 @@ jobs:
             tests/test_endpoint_path_composition_security.py \
             tests/test_endpoint_source_attestation.py \
             tests/test_enterprise_endpoint_bindings.py \
+            tests/test_evaluation_grant_postgres_lifecycle.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
             tests/test_sandbox_api_key_postgres_lifecycle.py \
@@ -183,6 +186,7 @@ jobs:
             tests/test_endpoint_path_composition_security.py \
             tests/test_endpoint_source_attestation.py \
             tests/test_enterprise_endpoint_bindings.py \
+            tests/test_evaluation_grant_postgres_lifecycle.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
             tests/test_sandbox_api_key_postgres_lifecycle.py \
@@ -214,6 +218,7 @@ jobs:
             echo "endpoint_discovery_runtime_tests=true"
             echo "endpoint_source_identity_attestation_tests=true"
             echo "evaluation_authority_schema_present=true"
+            echo "evaluation_authority_lifecycle_postgres=true"
             echo "evaluation_authority_runtime_wired=false"
             echo "evaluation_authority_concurrency_proven=false"
             echo "integration_center_ui_contract_tests=true"
