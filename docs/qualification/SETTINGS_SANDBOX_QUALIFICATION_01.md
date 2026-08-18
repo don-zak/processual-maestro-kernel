@@ -86,7 +86,7 @@ Status: COMPLETE / POSTGRESQL-CONCURRENCY-PROVEN / RUNTIME-WIRED
 
 1. durable commercial sandbox authority;
 2. durable evaluation authority;
-3. permitted legacy transition authority.
+3. permitted non-production legacy transition authority.
 
 A matching durable evaluation denial returns 401 and cannot fall through. Durable evaluation authority/database failure returns 503. When durable evaluation mode is enabled, a legacy identity claiming `entitlement_source=admin_evaluation_grant` is rejected instead of becoming a second evaluation source of truth.
 
@@ -103,11 +103,36 @@ Valid durable evaluation keys receive `session_type=evaluation_api_key`, grant/k
 
 Run `#89` proved service-level authentication and real PostgreSQL quota concurrency. Ten simultaneous one-unit reservations against `max_requests=5` produced exactly five successes and five quota rejections, `used_requests=5`, `rejected_requests=5`, and five ledger rows totaling five units. Duplicate idempotency did not recharge quota.
 
-Run `#95` then proved the full runtime wiring and regression slice: Alembic `0056`, authority-table verification, focused Ruff, durable evaluation route/auth/quota boundaries, real PostgreSQL lifecycle/auth/concurrency, commercial sandbox regressions, endpoint contracts, and evidence upload all passed.
+Run `#95` proved the full runtime wiring and regression slice. Run `#96` repeated the green runtime slice while recording `evaluation_authority_runtime_wired=true` and `evaluation_authority_concurrency_proven=true` in the uploaded qualification evidence.
 
-## Stage 1H — Qualification environment
+## Stage 1H — Production legacy dynamic API-key cutover
 
-Status: GREEN FOR COMMERCIAL + EVALUATION DURABLE AUTHORITY
+Status: COMPLETE / CI-PROVEN / FAIL-CLOSED
+
+The remaining Settings-JSON dynamic API-key authority is now explicitly transition-only.
+
+`legacy_api_key_mode.py` defines the cutover policy:
+
+- `APP_ENV=production`, `ENVIRONMENT=production|prod`, or `settings.is_production=True` permanently disables Settings-JSON dynamic API-key authority;
+- `PMK_LEGACY_DYNAMIC_API_KEYS=true` cannot reopen legacy authority in production;
+- non-production environments may retain the legacy authority during migration and may explicitly disable it with `PMK_LEGACY_DYNAMIC_API_KEYS=false`.
+
+The policy is enforced inside `api_key_store.verify_dynamic_api_key()` itself, before any `settings_*.json` scan, hash verification, usage mutation, or identity construction. This prevents another internal caller from bypassing the authentication boundary and resurrecting an obsolete credential.
+
+The production cutover deliberately does not delete or rewrite old Settings JSON credentials automatically. Existing legacy records may remain on disk as inert historical state; they cannot authenticate in production and their usage metadata is not mutated by a rejected production attempt.
+
+Run `#103` proved the cutover end-to-end:
+
+- a real hash-only legacy dynamic key remains usable in the explicit non-production transition path;
+- the same valid key is rejected with 401 in production even when `PMK_LEGACY_DYNAMIC_API_KEYS=true` requests enablement;
+- the rejected production attempt leaves `usage_count=0` and `last_used_at=None`;
+- a direct call to `verify_dynamic_api_key()` is also fail-closed in production;
+- the focused commercial/evaluation/endpoint/UI regression slice remains green;
+- the uploaded evidence records `legacy_dynamic_api_key_production_cutover=true`.
+
+## Stage 1I — Qualification environment
+
+Status: GREEN FOR DURABLE API-KEY AUTHORITY AND PRODUCTION CUTOVER
 
 The current qualification workflow uses:
 
@@ -126,21 +151,15 @@ Important successful runs:
 - `#72`: evaluation authority schema/migration;
 - `#76`: evaluation lifecycle;
 - `#89`: evaluation auth service + no-overshoot concurrency;
-- `#95`: evaluation HTTP/auth/quota runtime wiring and focused regression suite.
-
-## Legacy authority transition
-
-Status: OPEN
-
-The subscription-independent evaluation authority is no longer an outstanding JSON durability blocker in durable mode. The remaining API-key transition issue is broader legacy no-match authority outside governed evaluation identities.
-
-A production cutover/migration policy is still required before broad legacy dynamic API-key authority can be retired. That policy must define migration/invalidation behavior and demonstrate that a durable no-match cannot unintentionally resurrect an obsolete credential after cutover.
+- `#95`: evaluation HTTP/auth/quota runtime wiring and focused regression suite;
+- `#96`: runtime-wired/concurrency evidence artifact confirmation;
+- `#103`: production legacy dynamic API-key cutover and regression proof.
 
 ## External integration and UI qualification
 
 Status: OPEN
 
-These remain separate from durable Settings API-key persistence:
+These remain separate from durable Settings API-key persistence and production cutover:
 
 - trusted acquisition/provider-authenticity verification for external API descriptions;
 - pinned real provider/operator sandbox releases and credentials;
@@ -152,15 +171,16 @@ Static Integration Center contracts are present, but rendered browser qualificat
 
 ## Remaining blockers for SETTINGS-SANDBOX-QUALIFICATION-01
 
-The previous admin-evaluation durability blocker is closed. The umbrella gate remains open because:
+The internal API-key authority blockers are closed for the qualified production policy: commercial sandbox keys are durable, administrator evaluation keys are durable, and Settings-JSON dynamic credentials are non-authoritative in production.
 
-1. the broader legacy API-key no-match transition still needs an explicit production cutover/migration policy and proof;
-2. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
-3. real provider/operator sandbox evidence is required separately for external connector qualification.
+The umbrella gate remains open because:
+
+1. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
+2. trusted provider-source acquisition and real provider/operator sandbox evidence remain required for the external-integration portions of the umbrella release qualification.
 
 ## Mandatory acceptance conditions
 
-Now proven by focused PostgreSQL qualification:
+Now proven by focused qualification:
 
 1. raw commercial and evaluation secrets are never persisted;
 2. commercial keys are bound to authoritative subscription/runtime state;
@@ -171,12 +191,14 @@ Now proven by focused PostgreSQL qualification:
 7. parallel requests cannot exceed either tested quota authority;
 8. production cannot disable either durable authority through transition flags;
 9. evaluation route/auth/quota runtime wiring does not use Settings JSON in durable mode;
-10. sandbox/evaluation authority cannot become production authority implicitly.
+10. legacy Settings-JSON dynamic keys cannot authenticate or mutate usage state in production;
+11. the legacy-enable flag cannot override the production cutover;
+12. sandbox/evaluation authority cannot become production authority implicitly.
 
-Still required before the broad Settings gate closes:
+Still required before the broad Settings umbrella gate closes:
 
-11. define and prove the legacy no-match production cutover/migration policy;
-12. complete the remaining external/browser qualification evidence relevant to the umbrella Settings release gate.
+13. complete external-client/browser qualification evidence;
+14. complete trusted external-source/provider sandbox qualification where the umbrella release depends on those integrations.
 
 ## Gate state
 
@@ -184,4 +206,4 @@ Still required before the broad Settings gate closes:
 
 `SandboxApiKeysQualified=False`
 
-Reason: both commercial subscription sandbox keys and subscription-independent evaluation keys now have durable PostgreSQL lifecycle/auth/quota evidence, including no-overshoot concurrency and runtime wiring. The broad gate remains open because the legacy API-key production cutover policy and external/browser qualification evidence are not yet closed.
+Reason: the internal API-key authority chain and production legacy cutover now have green focused evidence, but the broad Settings release gate still includes external/browser qualification that has not been executed. No production authority is claimed by the qualification runner.
