@@ -29,6 +29,10 @@
     ['7. Qualification', 'Security, accessibility, responsive UX and end-to-end governance tests.'],
   ];
 
+  let administrators = [];
+  let activeFilter = 'all';
+  let searchTerm = '';
+
   function htmlEscape(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
@@ -68,28 +72,28 @@
       '    <button class="ag-primary" id="ag-invite-admin" type="button" disabled aria-describedby="ag-foundation-note">Invite administrator</button>',
       '  </section>',
       '  <section class="ag-summary" aria-label="Administrator governance summary">',
-      '    <div class="ag-metric"><span>Active</span><strong>—</strong></div>',
-      '    <div class="ag-metric"><span>Pending</span><strong>—</strong></div>',
-      '    <div class="ag-metric"><span>Frozen</span><strong>—</strong></div>',
-      '    <div class="ag-metric"><span>Security risks</span><strong>—</strong></div>',
+      '    <div class="ag-metric"><span>Active</span><strong id="ag-count-active">—</strong></div>',
+      '    <div class="ag-metric"><span>Pending</span><strong id="ag-count-pending">—</strong></div>',
+      '    <div class="ag-metric"><span>Frozen</span><strong id="ag-count-frozen">—</strong></div>',
+      '    <div class="ag-metric"><span>Security risks</span><strong id="ag-count-risks">—</strong></div>',
       '  </section>',
       '  <section class="ag-card">',
       '    <div class="ag-toolbar">',
-      '      <input class="ag-search" type="search" placeholder="Search administrators by name or email" aria-label="Search administrators" disabled>',
+      '      <input class="ag-search" id="ag-search" type="search" placeholder="Search administrators by name or email" aria-label="Search administrators" disabled>',
       '      <div class="ag-tabs" role="tablist" aria-label="Administrator state filters">',
-      '        <button class="ag-tab" role="tab" type="button" aria-selected="true">All</button>',
-      '        <button class="ag-tab" role="tab" type="button" aria-selected="false">Active</button>',
-      '        <button class="ag-tab" role="tab" type="button" aria-selected="false">Pending</button>',
-      '        <button class="ag-tab" role="tab" type="button" aria-selected="false">Frozen</button>',
+      '        <button class="ag-tab" data-filter="all" role="tab" type="button" aria-selected="true">All</button>',
+      '        <button class="ag-tab" data-filter="active" role="tab" type="button" aria-selected="false">Active</button>',
+      '        <button class="ag-tab" data-filter="pending" role="tab" type="button" aria-selected="false">Pending</button>',
+      '        <button class="ag-tab" data-filter="frozen" role="tab" type="button" aria-selected="false">Frozen</button>',
       '      </div>',
       '    </div>',
       '    <div class="ag-table-wrap">',
       '      <table class="ag-table">',
-      '        <thead><tr><th>Administrator</th><th>Role</th><th>Access</th><th>MFA</th><th>Last active</th><th>Status</th></tr></thead>',
-      '        <tbody><tr class="ag-empty-row"><td colspan="6">Governance read API is not connected yet. No administrator data is fabricated in this foundation phase.</td></tr></tbody>',
+      '        <thead><tr><th>Administrator</th><th>Role</th><th>Access</th><th>MFA</th><th>Granted</th><th>Status</th></tr></thead>',
+      '        <tbody id="ag-table-body"><tr class="ag-empty-row"><td colspan="6">Loading administrator governance data…</td></tr></tbody>',
       '      </table>',
       '    </div>',
-      '    <p id="ag-foundation-note" class="ag-note">Foundation mode: invitation, permission mutation, freeze and revoke controls remain intentionally disabled until server-side authority checks, audit persistence and session invalidation are implemented.</p>',
+      '    <p id="ag-foundation-note" class="ag-note">Read-only governance mode: administrator identity data is loaded from the server. Invitation, permission mutation, freeze and revoke controls remain intentionally disabled until their matching server-side authority, audit and session lifecycle are implemented.</p>',
       '  </section>',
       '  <section class="ag-grid">',
       '    <div class="ag-card">',
@@ -118,10 +122,125 @@
       '    <p class="ag-eyebrow">Delivery sequence</p>',
       '    <h2>Governance development roadmap</h2>',
       '    <div class="ag-roadmap">' + roadmapMarkup() + '</div>',
-      '    <p class="ag-footnote">This page is deliberately honest about readiness: visual structure is live in the branch, while privileged controls stay inert until the matching backend and tests exist.</p>',
+      '    <p class="ag-footnote">Read access is now backed by the identity authority service. Privileged mutations stay inert until the matching server-side controls and tests exist.</p>',
       '  </section>',
       '</div>'
     ].join('');
+  }
+
+  function normalizedState(item) {
+    if (item.user_status === 'locked' || item.user_status === 'disabled') return 'frozen';
+    if (item.user_status === 'pending_verification') return 'pending';
+    if (item.user_status === 'active' && item.authority_status === 'active') return 'active';
+    return 'other';
+  }
+
+  function roleLabel(authority) {
+    if (authority === 'platform_admin') return 'Platform Administrator';
+    if (authority === 'platform_supervisor') return 'Platform Supervisor';
+    return authority || 'Unknown';
+  }
+
+  function statusTone(state) {
+    if (state === 'active') return 'success';
+    if (state === 'pending') return 'warning';
+    if (state === 'frozen') return 'danger';
+    return '';
+  }
+
+  function visibleAdministrators() {
+    return administrators.filter(function (item) {
+      const state = normalizedState(item);
+      if (activeFilter !== 'all' && state !== activeFilter) return false;
+      if (!searchTerm) return true;
+      const haystack = (item.display_name + ' ' + item.email + ' ' + roleLabel(item.authority)).toLowerCase();
+      return haystack.includes(searchTerm);
+    });
+  }
+
+  function renderSummary() {
+    const counts = { active: 0, pending: 0, frozen: 0 };
+    administrators.forEach(function (item) {
+      const state = normalizedState(item);
+      if (Object.prototype.hasOwnProperty.call(counts, state)) counts[state] += 1;
+    });
+    const active = document.getElementById('ag-count-active');
+    const pending = document.getElementById('ag-count-pending');
+    const frozen = document.getElementById('ag-count-frozen');
+    const risks = document.getElementById('ag-count-risks');
+    if (active) active.textContent = String(counts.active);
+    if (pending) pending.textContent = String(counts.pending);
+    if (frozen) frozen.textContent = String(counts.frozen);
+    if (risks) risks.textContent = String(counts.frozen);
+  }
+
+  function renderTable() {
+    const body = document.getElementById('ag-table-body');
+    if (!body) return;
+    const items = visibleAdministrators();
+    if (!items.length) {
+      body.innerHTML = '<tr class="ag-empty-row"><td colspan="6">No administrators match the current filters.</td></tr>';
+      return;
+    }
+    body.innerHTML = items.map(function (item) {
+      const state = normalizedState(item);
+      const granted = item.granted_at ? new Date(item.granted_at).toLocaleString() : '—';
+      return [
+        '<tr>',
+        '<td><strong>' + htmlEscape(item.display_name) + '</strong><br><small class="ag-muted">' + htmlEscape(item.email) + '</small></td>',
+        '<td>' + htmlEscape(roleLabel(item.authority)) + '</td>',
+        '<td>Identity authority</td>',
+        '<td>Required</td>',
+        '<td>' + htmlEscape(granted) + '</td>',
+        '<td><span class="ag-status" data-tone="' + htmlEscape(statusTone(state)) + '">' + htmlEscape(state) + '</span></td>',
+        '</tr>'
+      ].join('');
+    }).join('');
+  }
+
+  function setLoadFailure(message) {
+    const body = document.getElementById('ag-table-body');
+    if (body) body.innerHTML = '<tr class="ag-empty-row"><td colspan="6">' + htmlEscape(message) + '</td></tr>';
+  }
+
+  async function loadAdministrators() {
+    try {
+      const response = await fetch('/governance/administrators', { method: 'GET' });
+      if (!response.ok) {
+        if (response.status === 401) throw new Error('Authentication is required to load administrator governance data.');
+        if (response.status === 403) throw new Error('A recent Platform Administrator MFA verification is required.');
+        throw new Error('Administrator governance data is temporarily unavailable.');
+      }
+      const payload = await response.json();
+      administrators = Array.isArray(payload.administrators) ? payload.administrators : [];
+      renderSummary();
+      renderTable();
+      const search = document.getElementById('ag-search');
+      if (search) search.disabled = false;
+    } catch (error) {
+      administrators = [];
+      renderSummary();
+      setLoadFailure(error && error.message ? error.message : 'Administrator governance data is temporarily unavailable.');
+    }
+  }
+
+  function bindReadControls() {
+    const search = document.getElementById('ag-search');
+    if (search) {
+      search.addEventListener('input', function () {
+        searchTerm = search.value.trim().toLowerCase();
+        renderTable();
+      });
+    }
+    document.querySelectorAll('.ag-tab[data-filter]').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        activeFilter = tab.dataset.filter || 'all';
+        document.querySelectorAll('.ag-tab[data-filter]').forEach(function (candidate) {
+          candidate.setAttribute('aria-selected', candidate === tab ? 'true' : 'false');
+        });
+        renderTable();
+      });
+    });
   }
 
   function install() {
@@ -152,6 +271,8 @@
       page.innerHTML = pageMarkup();
       const settingsPage = document.getElementById('page-admin-system-settings');
       main.insertBefore(page, settingsPage || null);
+      bindReadControls();
+      loadAdministrators();
     }
 
     navApi.bindNavButtons();
