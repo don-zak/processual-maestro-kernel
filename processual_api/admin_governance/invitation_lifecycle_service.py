@@ -72,7 +72,7 @@ class AdministratorInvitationLifecycleService:
                 "Recent platform-administrator MFA step-up is required."
             )
 
-        self._normalize_reason(reason)
+        normalized_reason = self._normalize_reason(reason)
         now = self._now()
 
         async with self._unit_of_work_factory() as unit:
@@ -107,6 +107,7 @@ class AdministratorInvitationLifecycleService:
             invitation.status = "cancelled"
             invitation.cancelled_by_user_id = actor_user_id
             invitation.cancelled_at = now
+            invitation.cancellation_reason = normalized_reason
             invitation.updated_at = now
             await unit.commit()
 
