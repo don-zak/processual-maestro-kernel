@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - pyproject.toml
       - processual_api/auth/security.py
       - processual_api/integrations/**
       - processual_api/routers/client_api_keys_18.py
@@ -42,6 +43,7 @@ on:
       - tests/test_settings_sandbox_qualification_01.py
       - tests/test_sandbox_api_key_authority_postgres_contract.py
       - tests/test_stage18_integration_center_ui_r1.py
+      - tests/test_trusted_endpoint_source_acquisition.py
       - .github/workflows/sandbox-integration-qualification.yml
 
 permissions:
@@ -158,6 +160,7 @@ jobs:
             processual_api/integrations/enterprise_endpoint_bindings.py \
             processual_api/integrations/enterprise_endpoint_request_mapping.py \
             processual_api/integrations/enterprise_sandbox_execution.py \
+            processual_api/integrations/trusted_endpoint_source_acquisition.py \
             processual_api/routers/client_api_keys_18.py \
             processual_api/routers/settings_admin_evaluation_grants.py \
             processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
@@ -198,7 +201,8 @@ jobs:
             tests/test_settings_endpoint_discovery_qualification_runtime.py \
             tests/test_settings_sandbox_qualification_01.py \
             tests/test_sandbox_api_key_authority_postgres_contract.py \
-            tests/test_stage18_integration_center_ui_r1.py
+            tests/test_stage18_integration_center_ui_r1.py \
+            tests/test_trusted_endpoint_source_acquisition.py
 
       - name: Run focused qualification contracts
         run: |
@@ -228,7 +232,8 @@ jobs:
             tests/test_settings_endpoint_discovery_qualification_runtime.py \
             tests/test_settings_sandbox_qualification_01.py \
             tests/test_sandbox_api_key_authority_postgres_contract.py \
-            tests/test_stage18_integration_center_ui_r1.py
+            tests/test_stage18_integration_center_ui_r1.py \
+            tests/test_trusted_endpoint_source_acquisition.py
 
       - name: Record qualification environment
         if: always()
@@ -251,6 +256,8 @@ jobs:
             echo "endpoint_provenance_tamper_tests=true"
             echo "endpoint_discovery_runtime_tests=true"
             echo "endpoint_source_identity_attestation_tests=true"
+            echo "trusted_source_acquisition_contract_tests=true"
+            echo "trusted_source_live_fetch=false"
             echo "evaluation_authority_schema_present=true"
             echo "evaluation_authority_lifecycle_postgres=true"
             echo "evaluation_authority_production_mode_enforced=true"
