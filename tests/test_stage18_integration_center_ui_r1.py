@@ -55,7 +55,11 @@ def test_stage18_workspace_styles_are_loaded_and_responsive():
     assert "@media(max-width:620px)" in institution_css
     assert ".ic18-metrics" in integration_center_css
     assert ".ic18-rail" in integration_center_css
+    assert ".ic18-platform-grid" in integration_center_css
+    assert ".ic18-readiness-step" in integration_center_css
     assert "@media(max-width:640px)" in integration_center_css
+    assert "@media(prefers-reduced-motion:reduce)" in integration_center_css
+
 
 def test_enterprise_workspace_exposes_operational_tracks_and_tasks():
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
@@ -93,6 +97,44 @@ def test_enterprise_workspace_limits_supervisor_to_decision_gate():
     assert "raw_secret_visible=false" in workspace
 
 
+def test_integration_center_platforms_distinguish_contract_from_live_proof():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "Platform qualification, not logo compatibility" in center
+    assert "Architecture family" in center
+    assert "Pinned API release" in center
+    assert "Semantic task mapping" in center
+    assert "Live operator sandbox" in center
+    assert "No executable CAMARA connector is approved" in center
+    assert "Provider API version" in center
+    assert "Live provider proof" in center
+    assert "Production authority" in center
+    assert "Blocked" in center
+
+
+def test_integration_center_exposes_real_transport_guardrails():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "HTTPS-only destinations" in center
+    assert "Public-address DNS verification" in center
+    assert "Redirect following" in center
+    assert "Path-segment composition" in center
+    assert "percent-encoded as one route segment" in center
+    assert "JSON-only parsing with a 1 MiB response ceiling" in center
+
+
+def test_integration_center_has_accessible_navigation_and_status_semantics():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert 'role="tablist"' in center
+    assert 'aria-selected="${state.active === key ? "true" : "false"}"' in center
+    assert 'role="status"' in center
+    assert 'role="alert"' in center
+    assert 'aria-label="Environment authority"' in center
+    assert 'aria-label="Integration readiness metrics"' in center
+    assert 'type="button"' in center
+
+
 def test_stage18_new_ui_does_not_embed_secret_material():
     combined = "\n".join(
         [
@@ -111,6 +153,4 @@ def test_stage18_new_ui_does_not_embed_secret_material():
     for marker in forbidden:
         assert marker not in combined
 
-    # Reject realistic embedded secret values while allowing ordinary UI
-    # identifiers such as task-status, task-list, and data-save-task.
     assert re.search(r"(?<![a-z0-9_-])sk-[a-z0-9_-]{16,}", combined) is None
