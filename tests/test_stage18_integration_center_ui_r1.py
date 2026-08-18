@@ -102,14 +102,40 @@ def test_integration_center_platforms_distinguish_contract_from_live_proof():
 
     assert "Platform qualification, not logo compatibility" in center
     assert "Architecture family" in center
-    assert "Pinned API release" in center
+    assert "Reviewed release candidate" in center
+    assert "Server-enabled trusted source" in center
+    assert "Live source acquisition" in center
     assert "Semantic task mapping" in center
     assert "Live operator sandbox" in center
-    assert "No executable CAMARA connector is approved" in center
+    assert "Production approval" in center
     assert "Provider API version" in center
     assert "Live provider proof" in center
-    assert "Production authority" in center
     assert "Blocked" in center
+
+
+def test_integration_center_camara_candidate_is_pinned_without_overclaiming():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "Quality on Demand · r3.2 candidate" in center
+    assert "QoD v1.1.0" in center
+    assert "9cb179f" in center
+    assert "code/API_definitions/quality-on-demand.yaml" in center
+    assert "Spec candidate pinned" in center
+    assert "default runtime trusted-source catalog remains empty" in center
+    assert "Live source acquisition\", \"Not proven\"" in center
+    assert "Live operator sandbox\", \"Blocked\"" in center
+    assert "Production approval\", \"Blocked\"" in center
+    assert "CAMARAConnectorQualified=True" not in center
+    assert "Production allowed" not in center
+
+
+def test_integration_center_status_semantics_do_not_treat_not_proven_as_warning():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "not proven" in center
+    assert "/reject|block|fail|expired|no-go|not qualified|disabled|not proven/" in center
+    assert "Ready / pinned" in center
+    assert "Blocked / not proven" in center
 
 
 def test_integration_center_exposes_real_transport_guardrails():
@@ -132,6 +158,7 @@ def test_integration_center_has_accessible_navigation_and_status_semantics():
     assert 'role="alert"' in center
     assert 'aria-label="Environment authority"' in center
     assert 'aria-label="Integration readiness metrics"' in center
+    assert 'aria-label="Readiness legend"' in center
     assert 'type="button"' in center
 
 
