@@ -21,6 +21,9 @@ from processual_api.integrations.endpoint_discovery_quality import (
     assess_endpoint_discovery,
     canonical_api_description_sha256,
 )
+from processual_api.integrations.endpoint_source_attestation import (
+    attest_endpoint_source_identity,
+)
 
 from . import settings as settings_module
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
@@ -134,6 +137,7 @@ async def get_endpoint_discovery_qualification(
             "binding_id": binding_id,
             "qualification_state": "not_qualified",
             "provenance_matches_binding": False,
+            "source_identity_verified": False,
             "production_allowed": False,
             "runtime_connector_approved": False,
             "raw_secret_visible": False,
@@ -169,11 +173,26 @@ async def qualify_endpoint_binding_discovery(
             release_pinned=source_pin_verified,
             external_references_resolved=False,
         )
+        source_attestation = attest_endpoint_source_identity(
+            source_reference=body.source_reference,
+            source_kind=source_kind,
+            source_revision=source_revision,
+            source_sha256=assessment["source_sha256"],
+            contract_family=assessment["contract_family"],
+        )
         assessment.update(
             {
                 "source_kind": source_kind,
                 "source_revision": source_revision,
                 "source_pin_verified": source_pin_verified,
+                "source_identity_id": source_attestation.source_identity_id,
+                "source_identity_verified": source_attestation.source_identity_verified,
+                "source_identity_policy_version": (
+                    source_attestation.source_identity_policy_version
+                ),
+                "source_identity_verification_method": (
+                    source_attestation.source_identity_verification_method
+                ),
             }
         )
         provenance = qualify_binding_from_discovery(
@@ -209,6 +228,14 @@ async def qualify_endpoint_binding_discovery(
             "source_kind": source_kind,
             "source_revision": source_revision,
             "source_pin_verified": source_pin_verified,
+            "source_identity_id": source_attestation.source_identity_id,
+            "source_identity_verified": source_attestation.source_identity_verified,
+            "source_identity_policy_version": (
+                source_attestation.source_identity_policy_version
+            ),
+            "source_identity_verification_method": (
+                source_attestation.source_identity_verification_method
+            ),
             "title": assessment["title"],
             "version": assessment["version"],
             "dialect": assessment["dialect"],
