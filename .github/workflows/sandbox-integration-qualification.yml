@@ -45,6 +45,7 @@ on:
       - tests/test_stage18_integration_center_ui_r1.py
       - tests/test_trusted_endpoint_source_acquisition.py
       - tests/test_trusted_endpoint_source_bundle.py
+      - tests/test_trusted_endpoint_source_runtime_bundle.py
       - .github/workflows/sandbox-integration-qualification.yml
 
 permissions:
@@ -204,7 +205,8 @@ jobs:
             tests/test_sandbox_api_key_authority_postgres_contract.py \
             tests/test_stage18_integration_center_ui_r1.py \
             tests/test_trusted_endpoint_source_acquisition.py \
-            tests/test_trusted_endpoint_source_bundle.py
+            tests/test_trusted_endpoint_source_bundle.py \
+            tests/test_trusted_endpoint_source_runtime_bundle.py
 
       - name: Run focused qualification contracts
         run: |
@@ -236,7 +238,8 @@ jobs:
             tests/test_sandbox_api_key_authority_postgres_contract.py \
             tests/test_stage18_integration_center_ui_r1.py \
             tests/test_trusted_endpoint_source_acquisition.py \
-            tests/test_trusted_endpoint_source_bundle.py
+            tests/test_trusted_endpoint_source_bundle.py \
+            tests/test_trusted_endpoint_source_runtime_bundle.py
 
       - name: Record qualification environment
         if: always()
@@ -265,6 +268,7 @@ jobs:
             echo "trusted_source_revision_allowlist_tests=true"
             echo "trusted_source_relative_ref_bundle_tests=true"
             echo "trusted_source_bundle_resource_limit_tests=true"
+            echo "trusted_source_bundle_route_tests=true"
             echo "camara_qod_r32_candidate_pin_tests=true"
             echo "integration_center_evidence_ladder_tests=true"
             echo "integration_center_keyboard_accessibility_tests=true"
