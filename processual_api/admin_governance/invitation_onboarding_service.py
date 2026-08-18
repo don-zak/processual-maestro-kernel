@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import secrets
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from processual_api.auth.normalization import normalize_display_name
 from processual_api.auth.passwords import PasswordService
+
+ONBOARDING_MFA_PROOF_TTL = timedelta(minutes=15)
 
 
 class AdministratorInvitationOnboardingRepository(Protocol):
@@ -41,6 +44,8 @@ class AdministratorInvitationOnboardingReceipt:
     user_id: uuid.UUID
     email_normalized: str
     supervision_level: str
+    mfa_proof: str
+    mfa_proof_expires_at: datetime
     next_action: str = "enroll_mfa"
 
 
@@ -52,11 +57,13 @@ class AdministratorInvitationOnboardingService:
         password_service: PasswordService,
         clock: Callable[[], datetime] | None = None,
         user_id_factory: Callable[[], uuid.UUID] | None = None,
+        proof_factory: Callable[[], str] | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._password_service = password_service
         self._clock = clock or (lambda: datetime.now(UTC))
         self._user_id_factory = user_id_factory or uuid.uuid4
+        self._proof_factory = proof_factory or (lambda: secrets.token_urlsafe(32))
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -84,6 +91,11 @@ class AdministratorInvitationOnboardingService:
         normalized_name = normalize_display_name(display_name)
         password_hash = self._password_service.hash_password(password)
         now = self._now()
+        mfa_proof = self._proof_factory()
+        if not isinstance(mfa_proof, str) or len(mfa_proof) < 32:
+            raise RuntimeError("Administrator onboarding MFA proof generation failed.")
+        mfa_proof_hash = hashlib.sha256(mfa_proof.encode("utf-8")).hexdigest()
+        mfa_proof_expires_at = now + ONBOARDING_MFA_PROOF_TTL
 
         async with self._unit_of_work_factory() as unit_of_work:
             repository = unit_of_work.repository
@@ -125,6 +137,8 @@ class AdministratorInvitationOnboardingService:
                 invitation,
                 user_id=user_id,
                 bound_at=now,
+                mfa_proof_hash=mfa_proof_hash,
+                mfa_proof_expires_at=mfa_proof_expires_at,
             )
             await unit_of_work.commit()
 
@@ -132,6 +146,8 @@ class AdministratorInvitationOnboardingService:
             user_id=user_id,
             email_normalized=invitation.email_normalized,
             supervision_level=invitation.supervision_level,
+            mfa_proof=mfa_proof,
+            mfa_proof_expires_at=mfa_proof_expires_at,
         )
 
 
@@ -139,4 +155,5 @@ __all__ = [
     "AdministratorInvitationOnboardingDeniedError",
     "AdministratorInvitationOnboardingReceipt",
     "AdministratorInvitationOnboardingService",
+    "ONBOARDING_MFA_PROOF_TTL",
 ]
