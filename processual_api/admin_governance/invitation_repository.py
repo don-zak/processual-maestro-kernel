@@ -93,6 +93,36 @@ class SqlAlchemyAdministratorInvitationRepository:
             .with_for_update()
         )
 
+    async def administrator_session_for_update(
+        self,
+        *,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ):
+        return await self._session.scalar(
+            select(AuthSession)
+            .where(AuthSession.id == session_id, AuthSession.user_id == user_id)
+            .with_for_update()
+        )
+
+    async def revoke_session(
+        self,
+        *,
+        session: AuthSession,
+        revoked_at: datetime,
+        reason: str,
+    ) -> None:
+        session.revoked_at = revoked_at
+        session.revoke_reason = reason
+        await self._session.execute(
+            update(AuthRefreshToken)
+            .where(
+                AuthRefreshToken.session_id == session.id,
+                AuthRefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=revoked_at)
+        )
+
     async def revoke_all_sessions(
         self,
         *,
