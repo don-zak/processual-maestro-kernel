@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import re
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
@@ -17,6 +19,7 @@ from processual_api.integrations.endpoint_binding_provenance import (
 from processual_api.integrations.endpoint_discovery_quality import (
     EndpointDiscoveryError,
     assess_endpoint_discovery,
+    canonical_api_description_sha256,
 )
 
 from . import settings as settings_module
@@ -24,14 +27,21 @@ from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from . import settings_enterprise_integration_runtime as enterprise_runtime
 
 DISCOVERY_PROVENANCE_STORAGE_KEY = "enterprise_endpoint_discovery_provenance_v1"
+_GIT_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class EndpointDiscoveryQualificationRequest(BaseModel):
     api_description: dict[str, Any]
     contract_family: str = Field(min_length=1, max_length=80)
     source_reference: str = Field(min_length=1, max_length=1000)
-    release_pinned: bool
-    external_references_resolved: bool
+    source_kind: str = Field(default="unverified", min_length=1, max_length=40)
+    source_revision: str = Field(default="", max_length=128)
+    # Deprecated transition claims. They remain parseable so older clients get a
+    # fail-closed qualification result rather than a schema error, but they are
+    # not used to establish source or external-reference authority.
+    release_pinned: bool | None = None
+    external_references_resolved: bool | None = None
     operation_id: str = Field(min_length=1, max_length=300)
 
 
@@ -62,6 +72,33 @@ def _find_provenance(
         except ValueError:
             return None
     return None
+
+
+def _verified_source_pin(
+    body: EndpointDiscoveryQualificationRequest,
+) -> tuple[str, str, bool]:
+    source_kind = body.source_kind.strip().lower()
+    source_revision = body.source_revision.strip().lower()
+    source_reference = body.source_reference.strip().lower()
+    document_sha256 = canonical_api_description_sha256(body.api_description)
+
+    if source_kind == "artifact_sha256":
+        if source_revision.startswith("sha256:"):
+            source_revision = source_revision.removeprefix("sha256:")
+        verified = bool(
+            _SHA256.fullmatch(source_revision)
+            and hmac.compare_digest(source_revision, document_sha256)
+        )
+        return source_kind, source_revision, verified
+
+    if source_kind == "git_commit":
+        verified = bool(
+            _GIT_COMMIT.fullmatch(source_revision)
+            and source_revision in source_reference
+        )
+        return source_kind, source_revision, verified
+
+    return source_kind, source_revision, False
 
 
 def _safe_projection(
@@ -119,13 +156,25 @@ async def qualify_endpoint_binding_discovery(
 ) -> dict[str, Any]:
     user_id, raw = _require_enterprise(current_user)
     spec = binding_runtime._find_binding(raw, binding_id)
+    source_kind, source_revision, source_pin_verified = _verified_source_pin(body)
     try:
+        # External references are deliberately fail-closed here. A caller must
+        # submit a self-contained/bundled description before qualification;
+        # the deprecated boolean claim cannot turn an unresolved $ref into
+        # verified evidence.
         assessment = assess_endpoint_discovery(
             body.api_description,
             contract_family=body.contract_family,
             source_reference=body.source_reference,
-            release_pinned=body.release_pinned,
-            external_references_resolved=body.external_references_resolved,
+            release_pinned=source_pin_verified,
+            external_references_resolved=False,
+        )
+        assessment.update(
+            {
+                "source_kind": source_kind,
+                "source_revision": source_revision,
+                "source_pin_verified": source_pin_verified,
+            }
         )
         provenance = qualify_binding_from_discovery(
             spec,
@@ -157,11 +206,18 @@ async def qualify_endpoint_binding_discovery(
         "assessment": {
             "source_reference": assessment["source_reference"],
             "source_sha256": assessment["source_sha256"],
+            "source_kind": source_kind,
+            "source_revision": source_revision,
+            "source_pin_verified": source_pin_verified,
             "title": assessment["title"],
             "version": assessment["version"],
             "dialect": assessment["dialect"],
             "contract_family": assessment["contract_family"],
             "operation_count": assessment["operation_count"],
+            "defined_security_schemes": assessment["defined_security_schemes"],
+            "undefined_security_schemes": assessment["undefined_security_schemes"],
+            "external_reference_count": assessment["external_reference_count"],
+            "external_references_resolved": assessment["external_references_resolved"],
             "blocker_codes": assessment["blocker_codes"],
             "warning_codes": assessment["warning_codes"],
             "discovery_quality_passed": assessment["discovery_quality_passed"],
