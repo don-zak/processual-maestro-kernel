@@ -1,4 +1,4 @@
-"""Governance status routes and administrator governance reads."""
+"""Governance status routes and administrator governance lifecycle."""
 
 from __future__ import annotations
 
@@ -20,6 +20,16 @@ from processual_api.admin_governance.invitation_lifecycle_service import (
 from processual_api.admin_governance.invitation_repository import (
     SqlAlchemyAdministratorInvitationUnitOfWork,
 )
+from processual_api.admin_governance.invitation_runtime import (
+    AdministratorInvitationRuntimeUnavailableError,
+    build_administrator_invitation_service,
+)
+from processual_api.admin_governance.invitation_service import (
+    AdministratorInvitationCommand,
+    AdministratorInvitationConflictError,
+    AdministratorInvitationDeniedError,
+    AdministratorInvitationService,
+)
 from processual_api.admin_governance.models import AdministratorPermissionGrant
 from processual_api.admin_governance.permission_authority import (
     AdministratorGovernanceAuthorityContext,
@@ -32,8 +42,11 @@ from processual_api.schemas.governance import (
     AdministratorGovernanceResponse,
     AdministratorInvitationCancellationRequest,
     AdministratorInvitationCancellationResponse,
+    AdministratorInvitationIssueRequest,
+    AdministratorInvitationIssueResponse,
     AdministratorLifecycleRequest,
     AdministratorLifecycleResponse,
+    AdministratorSessionRevocationResponse,
 )
 from processual_api.services.admin_governance_read import (
     AdministratorGovernanceReadService,
@@ -54,27 +67,33 @@ async def governance_status():
     }
 
 
+def _authority_unavailable(exc: Exception) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Administrator governance authority unavailable.",
+    )
+
+
 def get_administrator_governance_read_service() -> AdministratorGovernanceReadService:
     try:
         session_factory = get_session_factory()
     except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
-
+        raise _authority_unavailable(exc) from exc
     return AdministratorGovernanceReadService(session_factory=session_factory)
+
+
+def get_administrator_invitation_service() -> AdministratorInvitationService:
+    try:
+        return build_administrator_invitation_service()
+    except AdministratorInvitationRuntimeUnavailableError as exc:
+        raise _authority_unavailable(exc) from exc
 
 
 def get_administrator_invitation_lifecycle_service() -> AdministratorInvitationLifecycleService:
     try:
         session_factory = get_session_factory()
     except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
-
+        raise _authority_unavailable(exc) from exc
     return AdministratorInvitationLifecycleService(
         unit_of_work_factory=lambda: SqlAlchemyAdministratorInvitationUnitOfWork(
             session_factory
@@ -86,11 +105,7 @@ def get_administrator_lifecycle_service() -> AdministratorLifecycleService:
     try:
         session_factory = get_session_factory()
     except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
-
+        raise _authority_unavailable(exc) from exc
     return AdministratorLifecycleService(
         unit_of_work_factory=lambda: SqlAlchemyAdministratorInvitationUnitOfWork(
             session_factory
@@ -134,10 +149,7 @@ async def get_delegated_governance_authority_context(
             detail="Delegated governance step-up required.",
         ) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
+        raise _authority_unavailable(exc) from exc
 
     return AdministratorGovernanceAuthorityContext(
         user_id=str(user_id),
@@ -160,15 +172,10 @@ async def list_administrator_governance(
     ),
 ) -> AdministratorGovernanceResponse:
     del current_user
-
     try:
         administrators = await service.list_administrators()
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
-
+        raise _authority_unavailable(exc) from exc
     response_rows = tuple(
         AdministratorAuthorityResponse(
             user_id=row.user_id,
@@ -184,6 +191,55 @@ async def list_administrator_governance(
     return AdministratorGovernanceResponse(
         administrators=response_rows,
         count=len(response_rows),
+    )
+
+
+@router.post(
+    "/administrator-invitations",
+    response_model=AdministratorInvitationIssueResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def issue_administrator_invitation(
+    payload: AdministratorInvitationIssueRequest,
+    current_user: dict = Depends(platform_admin_step_up_dependency),
+    service: AdministratorInvitationService = Depends(get_administrator_invitation_service),
+) -> AdministratorInvitationIssueResponse:
+    try:
+        actor_user_id = uuid.UUID(str(current_user["user_id"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrator step-up required.",
+        ) from exc
+    try:
+        receipt = await service.issue(
+            actor_user_id=actor_user_id,
+            command=AdministratorInvitationCommand(
+                email=payload.email,
+                supervision_level=payload.supervision_level,
+                reason=payload.reason,
+                expires_in_hours=payload.expires_in_hours,
+            ),
+            recent_step_up=True,
+        )
+    except AdministratorInvitationDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator invitation issuance denied.",
+        ) from exc
+    except AdministratorInvitationConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Administrator invitation cannot be issued.",
+        ) from exc
+    except Exception as exc:
+        raise _authority_unavailable(exc) from exc
+    return AdministratorInvitationIssueResponse(
+        invitation_id=receipt.invitation_id,
+        delivery_outbox_id=receipt.delivery_outbox_id,
+        email_normalized=receipt.email_normalized,
+        supervision_level=receipt.supervision_level,
+        expires_at=receipt.expires_at,
     )
 
 
@@ -206,7 +262,6 @@ async def cancel_administrator_invitation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Platform administrator step-up required.",
         ) from exc
-
     try:
         receipt = await service.cancel(
             invitation_id=invitation_id,
@@ -225,17 +280,31 @@ async def cancel_administrator_invitation(
             detail="Administrator invitation is not cancellable.",
         ) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
-
+        raise _authority_unavailable(exc) from exc
     return AdministratorInvitationCancellationResponse(
         invitation_id=receipt.invitation_id,
         cancelled_by_user_id=receipt.cancelled_by_user_id,
         cancelled_at=receipt.cancelled_at,
         status=receipt.status,
     )
+
+
+async def _lifecycle_response(coro, *, denied_detail: str, conflict_detail: str):
+    try:
+        receipt = await coro
+    except AdministratorLifecycleDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=denied_detail,
+        ) from exc
+    except AdministratorLifecycleConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=conflict_detail,
+        ) from exc
+    except Exception as exc:
+        raise _authority_unavailable(exc) from exc
+    return receipt
 
 
 @router.post(
@@ -250,32 +319,77 @@ async def freeze_administrator(
     ),
     service: AdministratorLifecycleService = Depends(get_administrator_lifecycle_service),
 ) -> AdministratorLifecycleResponse:
-    try:
-        receipt = await service.freeze(
+    receipt = await _lifecycle_response(
+        service.freeze(
             target_user_id=user_id,
             authority_context=authority_context,
             reason=payload.reason,
-        )
-    except AdministratorLifecycleDeniedError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrator freeze denied.",
-        ) from exc
-    except AdministratorLifecycleConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Administrator is not freezable.",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Administrator governance authority unavailable.",
-        ) from exc
-
+        ),
+        denied_detail="Administrator freeze denied.",
+        conflict_detail="Administrator is not freezable.",
+    )
     return AdministratorLifecycleResponse(
         user_id=receipt.user_id,
         status=receipt.status,
         occurred_at=receipt.occurred_at,
+    )
+
+
+@router.post(
+    "/administrators/{user_id}/restore",
+    response_model=AdministratorLifecycleResponse,
+)
+async def restore_administrator(
+    user_id: uuid.UUID,
+    payload: AdministratorLifecycleRequest,
+    authority_context: AdministratorGovernanceAuthorityContext = Depends(
+        get_delegated_governance_authority_context
+    ),
+    service: AdministratorLifecycleService = Depends(get_administrator_lifecycle_service),
+) -> AdministratorLifecycleResponse:
+    receipt = await _lifecycle_response(
+        service.restore(
+            target_user_id=user_id,
+            authority_context=authority_context,
+            reason=payload.reason,
+        ),
+        denied_detail="Administrator restore denied.",
+        conflict_detail="Administrator is not restorable.",
+    )
+    return AdministratorLifecycleResponse(
+        user_id=receipt.user_id,
+        status=receipt.status,
+        occurred_at=receipt.occurred_at,
+    )
+
+
+@router.post(
+    "/administrators/{user_id}/sessions/{session_id}/revoke",
+    response_model=AdministratorSessionRevocationResponse,
+)
+async def revoke_administrator_session(
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+    payload: AdministratorLifecycleRequest,
+    authority_context: AdministratorGovernanceAuthorityContext = Depends(
+        get_delegated_governance_authority_context
+    ),
+    service: AdministratorLifecycleService = Depends(get_administrator_lifecycle_service),
+) -> AdministratorSessionRevocationResponse:
+    receipt = await _lifecycle_response(
+        service.revoke_session(
+            target_user_id=user_id,
+            session_id=session_id,
+            authority_context=authority_context,
+            reason=payload.reason,
+        ),
+        denied_detail="Administrator session revocation denied.",
+        conflict_detail="Administrator session is not revocable.",
+    )
+    return AdministratorSessionRevocationResponse(
+        user_id=receipt.user_id,
+        session_id=receipt.session_id,
+        revoked_at=receipt.revoked_at,
     )
 
 
@@ -285,9 +399,13 @@ __all__ = [
     "freeze_administrator",
     "get_administrator_governance_read_service",
     "get_administrator_invitation_lifecycle_service",
+    "get_administrator_invitation_service",
     "get_administrator_lifecycle_service",
     "get_delegated_governance_authority_context",
+    "issue_administrator_invitation",
     "list_administrator_governance",
     "platform_admin_step_up_dependency",
+    "restore_administrator",
+    "revoke_administrator_session",
     "router",
 ]
