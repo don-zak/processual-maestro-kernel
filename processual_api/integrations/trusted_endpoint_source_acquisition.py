@@ -34,6 +34,7 @@ _RAW_GITHUB_HOST = "raw.githubusercontent.com"
 _GITHUB_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
 _SOURCE_ID = re.compile(r"^[a-z0-9][a-z0-9_.-]{2,127}$")
+_SAFE_REPOSITORY_PATH = re.compile(r"^[A-Za-z0-9._/-]+$")
 _SUPPORTED_FAMILIES = frozenset(
     {"camara", "tm_forum", "proprietary", "legacy", "generic_enterprise"}
 )
@@ -77,24 +78,40 @@ def _safe_repository(value: str) -> str:
     return f"{parts[0]}/{parts[1]}"
 
 
-def _safe_path(value: str) -> str:
+def _normalized_repository_path(value: str, *, error_code: str) -> str:
     raw = str(value or "").strip()
-    if not raw or raw.startswith("/") or "\\" in raw or len(raw) > 500:
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_path_invalid")
+    if (
+        not raw
+        or raw.startswith("/")
+        or "\\" in raw
+        or len(raw) > 500
+        or not _SAFE_REPOSITORY_PATH.fullmatch(raw)
+    ):
+        raise TrustedEndpointSourceAcquisitionError(error_code)
     path = PurePosixPath(raw)
     if any(part in {"", ".", ".."} for part in path.parts):
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_path_invalid")
+        raise TrustedEndpointSourceAcquisitionError(error_code)
     normalized = path.as_posix()
+    if normalized != raw:
+        raise TrustedEndpointSourceAcquisitionError(error_code)
+    return normalized
+
+
+def _safe_path(value: str) -> str:
+    normalized = _normalized_repository_path(
+        value,
+        error_code="trusted_source_path_invalid",
+    )
     if not normalized.lower().endswith((".json", ".yaml", ".yml")):
         raise TrustedEndpointSourceAcquisitionError("trusted_source_format_not_allowed")
     return normalized
 
 
 def _safe_prefix(value: str) -> str:
-    prefix = _safe_path(value) if str(value).lower().endswith((".json", ".yaml", ".yml")) else str(value).strip()
-    if prefix.startswith("/") or "\\" in prefix or ".." in PurePosixPath(prefix).parts:
-        raise TrustedEndpointSourceAcquisitionError("trusted_source_path_prefix_invalid")
-    return prefix.rstrip("/")
+    return _normalized_repository_path(
+        str(value or "").rstrip("/"),
+        error_code="trusted_source_path_prefix_invalid",
+    )
 
 
 def _definition_from_mapping(value: dict[str, Any]) -> TrustedGitHubSourceDefinition:
