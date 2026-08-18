@@ -7,7 +7,11 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from processual_api.admin_governance.models import AdministratorInvitation
+from processual_api.admin_governance.models import (
+    AdministratorGovernanceAuditEvent,
+    AdministratorInvitation,
+    AdministratorPermissionGrant,
+)
 from processual_api.auth.models import (
     AuthMfaFactor,
     AuthMfaRecoveryCode,
@@ -70,6 +74,36 @@ class SqlAlchemyAdministratorInvitationRepository:
     async def onboarding_user_for_update(self, *, user_id: uuid.UUID):
         return await self._session.scalar(
             select(IdentityUser).where(IdentityUser.id == user_id).with_for_update()
+        )
+
+    async def platform_authority_for_update(
+        self,
+        *,
+        user_id: uuid.UUID,
+        authority: str,
+    ):
+        return await self._session.scalar(
+            select(IdentityPlatformAuthority)
+            .where(
+                IdentityPlatformAuthority.user_id == user_id,
+                IdentityPlatformAuthority.authority == authority,
+            )
+            .with_for_update()
+        )
+
+    async def permission_grant_for_update(
+        self,
+        *,
+        user_id: uuid.UUID,
+        permission: str,
+    ):
+        return await self._session.scalar(
+            select(AdministratorPermissionGrant)
+            .where(
+                AdministratorPermissionGrant.user_id == user_id,
+                AdministratorPermissionGrant.permission == permission,
+            )
+            .with_for_update()
         )
 
     async def active_mfa_factor_for_update(self, *, user_id: uuid.UUID):
@@ -157,6 +191,70 @@ class SqlAlchemyAdministratorInvitationRepository:
         )
         self._session.add(user)
         return user
+
+    def add_platform_supervisor_authority(
+        self,
+        *,
+        user_id: uuid.UUID,
+        granted_by_user_id: uuid.UUID,
+        reason: str,
+        granted_at: datetime,
+    ) -> IdentityPlatformAuthority:
+        row = IdentityPlatformAuthority(
+            user_id=user_id,
+            authority="platform_supervisor",
+            status="active",
+            granted_by_user_id=granted_by_user_id,
+            grant_reason=reason,
+            granted_at=granted_at,
+        )
+        self._session.add(row)
+        return row
+
+    def add_permission_grant(
+        self,
+        *,
+        user_id: uuid.UUID,
+        permission: str,
+        invitation_id: uuid.UUID,
+        granted_by_user_id: uuid.UUID,
+        reason: str,
+        granted_at: datetime,
+    ) -> AdministratorPermissionGrant:
+        row = AdministratorPermissionGrant(
+            user_id=user_id,
+            permission=permission,
+            status="active",
+            source_invitation_id=invitation_id,
+            granted_by_user_id=granted_by_user_id,
+            grant_reason=reason,
+            granted_at=granted_at,
+        )
+        self._session.add(row)
+        return row
+
+    def add_governance_audit_event(
+        self,
+        *,
+        event_type: str,
+        actor_user_id: uuid.UUID | None,
+        subject_user_id: uuid.UUID,
+        invitation_id: uuid.UUID | None,
+        permission: str | None,
+        reason: str,
+        occurred_at: datetime,
+    ) -> AdministratorGovernanceAuditEvent:
+        row = AdministratorGovernanceAuditEvent(
+            event_type=event_type,
+            actor_user_id=actor_user_id,
+            subject_user_id=subject_user_id,
+            invitation_id=invitation_id,
+            permission=permission,
+            reason=reason,
+            occurred_at=occurred_at,
+        )
+        self._session.add(row)
+        return row
 
     @staticmethod
     def bind_invitation_to_onboarding_identity(
