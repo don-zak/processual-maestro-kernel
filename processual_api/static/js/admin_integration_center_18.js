@@ -120,8 +120,8 @@
 
   function statusTone(status) {
     const value = String(status || "").toLowerCase();
-    if (/complete|ready|approved|verified|healthy|allowed|passed/.test(value)) return "good";
-    if (/reject|block|fail|expired|no-go|not qualified|disabled/.test(value)) return "locked";
+    if (/complete|ready|approved|verified|healthy|allowed|passed|pinned/.test(value)) return "good";
+    if (/reject|block|fail|expired|no-go|not qualified|disabled|not proven/.test(value)) return "locked";
     return "warn";
   }
 
@@ -190,19 +190,22 @@
     const platforms = [
       {
         family: "CAMARA · GSMA Open Gateway",
-        title: "CAMARA qualification profile",
+        title: "Quality on Demand · r3.2 candidate",
         description:
-          "Release-pinned OpenAPI discovery, Commonalities/ICM alignment and operator sandbox proof before connector authority.",
-        verdict: "Not qualified",
-        contract: "Family recognized",
-        sandbox: "Provider proof required",
+          "Reviewed public CAMARA release candidate pinned to an exact repository, commit and API-definition path. This is specification evidence only; provider connectivity and runtime authority remain separate gates.",
+        verdict: "Spec candidate pinned",
+        contract: "QoD v1.1.0",
+        sandbox: "Not proven",
         production: "Blocked",
-        note: "No executable CAMARA connector is approved. Moving branches and WIP specifications are not qualification evidence.",
+        note: "Pinned candidate: camaraproject/QualityOnDemand @ 9cb179f · code/API_definitions/quality-on-demand.yaml. The default runtime trusted-source catalog remains empty until server policy explicitly enables the source.",
         steps: [
-          ["Architecture family", "Ready", "Contract family exists in the governed runtime model."],
-          ["Pinned API release", "Pending", "Select an immutable CAMARA release and record source SHA-256."],
-          ["Semantic task mapping", "Pending", "Map each API operation to a canonical Maestro task without forced reuse."],
-          ["Live operator sandbox", "Blocked", "Requires operator or channel-partner endpoint and managed test credentials."],
+          ["Architecture family", "Ready", "CAMARA is recognized in the governed integration contract model."],
+          ["Reviewed release candidate", "Pinned", "Public r3.2 / QoD v1.1.0 candidate is bound to exact commit 9cb179f and API-definition path."],
+          ["Server-enabled trusted source", "Pending", "A deployment-owned allowlist must explicitly enable the reviewed source; code presence alone grants no authority."],
+          ["Live source acquisition", "Not proven", "Qualification CI has not yet fetched this public release over the external network."],
+          ["Semantic task mapping", "Pending", "Each selected operation must map to a canonical Maestro task and preserve source provenance."],
+          ["Live operator sandbox", "Blocked", "Requires an operator or channel-partner endpoint, managed test credentials and acceptance fixtures."],
+          ["Production approval", "Blocked", "Specification or sandbox proof cannot implicitly grant production runtime authority."],
         ],
       },
       {
@@ -246,12 +249,12 @@
         <div>
           <p class="ic18-eyebrow">Standards readiness</p>
           <h2>Platform qualification, not logo compatibility</h2>
-          <p>Every platform is separated into architecture, specification, mapping and live proof so the console never presents a planned integration as operational authority.</p>
+          <p>Every platform is separated into architecture, reviewed specification, server enablement, live acquisition, semantic mapping, provider sandbox proof and production approval so a pinned document is never presented as operational authority.</p>
         </div>
         <div class="ic18-legend" aria-label="Readiness legend">
-          ${pill("Ready", "good")}
+          ${pill("Ready / pinned", "good")}
           ${pill("Pending review", "warn")}
-          ${pill("Blocked / unproven", "locked")}
+          ${pill("Blocked / not proven", "locked")}
         </div>
       </div>
       <div class="ic18-platform-grid">${platforms.map(platformCard).join("")}</div>`;
@@ -388,8 +391,8 @@
           </div>
           ${rows(
             [
-              { title: "Qualify endpoint discovery provenance", status: "in progress", description: "Pinned specifications and digest-backed operation inventory." },
-              { title: "Wire durable sandbox API-key authority", status: "next", description: "PostgreSQL identity, subscription and quota authority." },
+              { title: "Qualify trusted source provenance", status: "in progress", description: "Reviewed revisions, server enablement and digest-backed operation inventory." },
+              { title: "Map CAMARA QoD operations", status: "next", description: "Preserve exact release provenance while mapping selected operations to canonical Maestro tasks." },
               { title: "Run real provider sandbox proof", status: "blocked", description: "Requires provider endpoint, managed credentials and acceptance fixtures." },
             ],
             ""
