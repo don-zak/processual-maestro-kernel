@@ -21,6 +21,7 @@ on:
       - tests/test_enterprise_endpoint_bindings.py
       - tests/test_postgres_migration_compatibility_contract.py
       - tests/test_sandbox_api_key_mode.py
+      - tests/test_sandbox_api_key_usage_postgres_concurrency.py
       - tests/test_settings_endpoint_discovery_qualification_runtime.py
       - tests/test_settings_sandbox_qualification_01.py
       - tests/test_sandbox_api_key_authority_postgres_contract.py
@@ -148,6 +149,7 @@ jobs:
             tests/test_enterprise_endpoint_bindings.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
+            tests/test_sandbox_api_key_usage_postgres_concurrency.py \
             tests/test_settings_endpoint_discovery_qualification_runtime.py \
             tests/test_settings_sandbox_qualification_01.py \
             tests/test_sandbox_api_key_authority_postgres_contract.py \
@@ -165,6 +167,7 @@ jobs:
             tests/test_enterprise_endpoint_bindings.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
+            tests/test_sandbox_api_key_usage_postgres_concurrency.py \
             tests/test_settings_endpoint_discovery_qualification_runtime.py \
             tests/test_settings_sandbox_qualification_01.py \
             tests/test_sandbox_api_key_authority_postgres_contract.py \
@@ -184,6 +187,7 @@ jobs:
             echo "durable_sandbox_auth_fail_closed_tests=true"
             echo "durable_sandbox_key_provisioning_route_tests=true"
             echo "durable_sandbox_usage_ledger_tests=true"
+            echo "durable_sandbox_quota_concurrency_postgres=true"
             echo "production_durable_mode_enforced=true"
             echo "endpoint_path_composition_tests=true"
             echo "endpoint_provenance_tamper_tests=true"
