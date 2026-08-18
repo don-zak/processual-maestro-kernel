@@ -6,14 +6,24 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from processual_api.admin_governance.administrator_lifecycle_service import (
+    AdministratorLifecycleConflictError,
+    AdministratorLifecycleDeniedError,
+    AdministratorLifecycleReceipt,
+)
 from processual_api.admin_governance.invitation_lifecycle_service import (
     AdministratorInvitationCancellationReceipt,
     AdministratorInvitationLifecycleConflictError,
     AdministratorInvitationLifecycleDeniedError,
 )
+from processual_api.admin_governance.permission_authority import (
+    AdministratorGovernanceAuthorityContext,
+)
 from processual_api.routers.governance import (
     get_administrator_governance_read_service,
     get_administrator_invitation_lifecycle_service,
+    get_administrator_lifecycle_service,
+    get_delegated_governance_authority_context,
     platform_admin_step_up_dependency,
     router,
 )
@@ -21,7 +31,9 @@ from processual_api.services.admin_governance_read import AdministratorAuthority
 
 ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 INVITATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000222")
+TARGET_ID = uuid.UUID("00000000-0000-0000-0000-000000000333")
 CANCELLED_AT = datetime(2026, 8, 18, 17, 0, tzinfo=UTC)
+LIFECYCLE_AT = datetime(2026, 8, 18, 18, 0, tzinfo=UTC)
 
 
 class _ReadService:
@@ -67,6 +79,40 @@ class _ConflictInvitationLifecycleService:
         raise AdministratorInvitationLifecycleConflictError("conflict")
 
 
+class _AdministratorLifecycleService:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def freeze(self, **values):
+        self.calls.append(values)
+        return AdministratorLifecycleReceipt(
+            user_id=values["target_user_id"],
+            status="locked",
+            occurred_at=LIFECYCLE_AT,
+        )
+
+
+class _DeniedAdministratorLifecycleService:
+    async def freeze(self, **values):
+        raise AdministratorLifecycleDeniedError("denied")
+
+
+class _ConflictAdministratorLifecycleService:
+    async def freeze(self, **values):
+        raise AdministratorLifecycleConflictError("conflict")
+
+
+def _delegated_context() -> AdministratorGovernanceAuthorityContext:
+    return AdministratorGovernanceAuthorityContext(
+        user_id=str(ACTOR_ID),
+        session_id="00000000-0000-0000-0000-000000000444",
+        identity_active=True,
+        platform_authorities=frozenset({"platform_supervisor"}),
+        active_permissions=frozenset({"governance.administrator.freeze"}),
+        recent_mfa_step_up=True,
+    )
+
+
 def _app_with(service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
@@ -86,6 +132,14 @@ def _app_with_invitation_service(service) -> FastAPI:
         "user_id": str(ACTOR_ID),
     }
     app.dependency_overrides[get_administrator_invitation_lifecycle_service] = lambda: service
+    return app
+
+
+def _app_with_administrator_lifecycle_service(service) -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_delegated_governance_authority_context] = _delegated_context
+    app.dependency_overrides[get_administrator_lifecycle_service] = lambda: service
     return app
 
 
@@ -186,6 +240,69 @@ def test_cancel_administrator_invitation_validates_reason_before_service_call() 
 
     response = client.post(
         f"/governance/administrator-invitations/{INVITATION_ID}/cancel",
+        json={"reason": "too short"},
+    )
+
+    assert response.status_code == 422
+    assert service.calls == []
+
+
+def test_freeze_administrator_returns_lifecycle_receipt() -> None:
+    service = _AdministratorLifecycleService()
+    client = TestClient(_app_with_administrator_lifecycle_service(service))
+
+    response = client.post(
+        f"/governance/administrators/{TARGET_ID}/freeze",
+        json={"reason": "Security review requires temporary administrator suspension"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": str(TARGET_ID),
+        "status": "locked",
+        "occurred_at": "2026-08-18T18:00:00Z",
+    }
+    assert service.calls == [
+        {
+            "target_user_id": TARGET_ID,
+            "authority_context": _delegated_context(),
+            "reason": "Security review requires temporary administrator suspension",
+        }
+    ]
+
+
+def test_freeze_administrator_maps_denial_and_conflict() -> None:
+    denied = TestClient(
+        _app_with_administrator_lifecycle_service(
+            _DeniedAdministratorLifecycleService()
+        )
+    )
+    response = denied.post(
+        f"/governance/administrators/{TARGET_ID}/freeze",
+        json={"reason": "Security review requires temporary administrator suspension"},
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Administrator freeze denied."}
+
+    conflict = TestClient(
+        _app_with_administrator_lifecycle_service(
+            _ConflictAdministratorLifecycleService()
+        )
+    )
+    response = conflict.post(
+        f"/governance/administrators/{TARGET_ID}/freeze",
+        json={"reason": "Security review requires temporary administrator suspension"},
+    )
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Administrator is not freezable."}
+
+
+def test_freeze_administrator_validates_reason_before_service_call() -> None:
+    service = _AdministratorLifecycleService()
+    client = TestClient(_app_with_administrator_lifecycle_service(service))
+
+    response = client.post(
+        f"/governance/administrators/{TARGET_ID}/freeze",
         json={"reason": "too short"},
     )
 
