@@ -27,10 +27,10 @@ def _runtime_repository_class():
     global SqlAlchemySubscriptionRuntimeRepository
     if SqlAlchemySubscriptionRuntimeRepository is None:
         from processual_api.admin_marketplace.subscription_runtime_persistence import (
-            SqlAlchemySubscriptionRuntimeRepository as repository_class,
+            SqlAlchemySubscriptionRuntimeRepository as RuntimeRepositoryClass,
         )
 
-        SqlAlchemySubscriptionRuntimeRepository = repository_class
+        SqlAlchemySubscriptionRuntimeRepository = RuntimeRepositoryClass
     return SqlAlchemySubscriptionRuntimeRepository
 
 
