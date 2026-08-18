@@ -346,3 +346,31 @@
     install();
   }
 })();
+
+(function bootstrapAdminGovernance() {
+  function install() {
+    const api = window.PMK_ADMIN_NAV;
+    if (!api) return;
+
+    if (!document.querySelector('link[data-admin-governance-style]')) {
+      const style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = '/console/css/admin_governance.css?v=governance-foundation-1';
+      style.dataset.adminGovernanceStyle = 'true';
+      document.head.appendChild(style);
+    }
+
+    if (!document.querySelector('script[data-admin-governance-script]')) {
+      const script = document.createElement('script');
+      script.src = '/console/js/admin_governance.js?v=governance-foundation-1';
+      script.dataset.adminGovernanceScript = 'true';
+      document.body.appendChild(script);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install);
+  } else {
+    install();
+  }
+})();
