@@ -96,6 +96,12 @@ def test_production_env_template_covers_billing_keys():
         "LEMONSQUEEZY_WEBHOOK_SECRET",
         "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
         "LEMONSQUEEZY_CHECKOUT_CANCEL_URL",
+    ]
+
+    missing = [key for key in required if key not in values]
+    assert not missing, f"Missing billing env keys: {missing}"
+
+    legacy_checkout_keys = [
         "LS_VARIANT_STARTER",
         "LS_VARIANT_STARTER_YEARLY",
         "LS_VARIANT_PROFESSIONAL",
@@ -103,9 +109,11 @@ def test_production_env_template_covers_billing_keys():
         "LS_VARIANT_ENTERPRISE",
         "LS_VARIANT_ENTERPRISE_YEARLY",
     ]
-
-    missing = [key for key in required if key not in values]
-    assert not missing, f"Missing billing env keys: {missing}"
+    present_legacy = [key for key in legacy_checkout_keys if key in values]
+    assert not present_legacy, (
+        "Legacy checkout variant keys must stay out of production config: "
+        f"{present_legacy}"
+    )
 
 
 def test_production_env_template_covers_provider_keys_and_customer_owned_model():
