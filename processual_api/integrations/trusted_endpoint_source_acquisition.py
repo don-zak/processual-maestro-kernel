@@ -3,19 +3,23 @@
 The caller never supplies a URL. A server-owned catalog binds a source identity
 to one GitHub repository, contract family, approved revisions, and path prefixes.
 Runtime input is limited to an immutable commit and a repository-relative path
-accepted by that catalog entry. The fetch target is constructed by this module
-and remains non-production evidence only.
+accepted by that catalog entry. Relative $ref resources may be resolved only
+inside separately allowlisted repository prefixes, at the same repository and
+immutable commit. The result remains non-production evidence only.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import posixpath
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
@@ -31,6 +35,9 @@ from processual_api.integrations.enterprise_sandbox_execution import (
 )
 
 MAX_TRUSTED_SOURCE_BYTES = 2 * 1024 * 1024
+MAX_TRUSTED_SOURCE_BUNDLE_BYTES = 8 * 1024 * 1024
+MAX_TRUSTED_SOURCE_BUNDLE_FILES = 16
+MAX_TRUSTED_SOURCE_REF_DEPTH = 8
 _RAW_GITHUB_HOST = "raw.githubusercontent.com"
 _GITHUB_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
@@ -55,6 +62,7 @@ class TrustedGitHubSourceDefinition:
     contract_family: str
     allowed_path_prefixes: tuple[str, ...]
     allowed_revisions: tuple[str, ...]
+    allowed_reference_prefixes: tuple[str, ...] = ()
     policy_version: str = "github-allowlist-r2"
 
 
@@ -64,6 +72,7 @@ CAMARA_QOD_R32_QUALIFICATION_CANDIDATE = TrustedGitHubSourceDefinition(
     contract_family="camara",
     allowed_path_prefixes=("code/API_definitions",),
     allowed_revisions=(CAMARA_QOD_R32_COMMIT,),
+    allowed_reference_prefixes=("code/common",),
     policy_version="camara-public-release-review-r1",
 )
 
@@ -74,6 +83,9 @@ class AcquiredTrustedEndpointSource:
     trusted_record: TrustedEndpointSourceRecord
     repository: str
     path: str
+    external_references_resolved: bool = False
+    source_bundle_sha256: str = ""
+    source_bundle_paths: tuple[str, ...] = ()
     fetch_host: str = _RAW_GITHUB_HOST
     production_allowed: bool = False
     runtime_connector_approved: bool = False
@@ -146,6 +158,10 @@ def _definition_from_mapping(value: dict[str, Any]) -> TrustedGitHubSourceDefini
     if not isinstance(prefixes_raw, list) or not prefixes_raw:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_path_prefixes_required")
     prefixes = tuple(_safe_prefix(str(item)) for item in prefixes_raw)
+    references_raw = value.get("allowed_reference_prefixes", [])
+    if not isinstance(references_raw, list):
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_reference_prefixes_invalid")
+    reference_prefixes = tuple(_safe_prefix(str(item)) for item in references_raw)
     revisions_raw = value.get("allowed_revisions")
     if not isinstance(revisions_raw, list) or not revisions_raw:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_revisions_required")
@@ -164,6 +180,7 @@ def _definition_from_mapping(value: dict[str, Any]) -> TrustedGitHubSourceDefini
         contract_family=family,
         allowed_path_prefixes=prefixes,
         allowed_revisions=revisions,
+        allowed_reference_prefixes=reference_prefixes,
         policy_version=policy_version,
     )
 
@@ -219,6 +236,44 @@ def _parse_api_description(content: bytes, path: str) -> dict[str, Any]:
     return parsed
 
 
+def _document_references(value: Any) -> tuple[str, ...]:
+    references: list[str] = []
+
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, child in node.items():
+                if key == "$ref" and isinstance(child, str):
+                    references.append(child)
+                else:
+                    visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(value)
+    return tuple(references)
+
+
+def _resolve_relative_reference(parent_path: str, reference: str) -> str | None:
+    raw = str(reference or "").strip()
+    if not raw:
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_ref_invalid")
+    if raw.startswith("#"):
+        return None
+    if "\\" in raw or "%" in raw or "?" in raw or raw.startswith(("/", "//")):
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_ref_external_rejected")
+    parsed = urlsplit(raw)
+    if parsed.scheme or parsed.netloc or parsed.query:
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_ref_external_rejected")
+    relative_path = parsed.path
+    if not relative_path or not _SAFE_REPOSITORY_PATH.fullmatch(relative_path):
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_ref_invalid")
+    combined = posixpath.normpath(posixpath.join(posixpath.dirname(parent_path), relative_path))
+    if combined in {"", ".", ".."} or combined.startswith("../") or combined.startswith("/"):
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_ref_repository_escape")
+    return _safe_path(combined)
+
+
 async def _read_bounded_response(response: httpx.Response) -> bytes:
     content = bytearray()
     async for chunk in response.aiter_bytes():
@@ -230,6 +285,37 @@ async def _read_bounded_response(response: httpx.Response) -> bytes:
     if not content:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_size_invalid")
     return bytes(content)
+
+
+async def _fetch_repository_document(
+    *,
+    client: httpx.AsyncClient,
+    repository: str,
+    revision: str,
+    path: str,
+) -> tuple[dict[str, Any], int]:
+    owner, repository_name = repository.split("/", 1)
+    url = f"https://{_RAW_GITHUB_HOST}/{owner}/{repository_name}/{revision}/{path}"
+    async with client.stream(
+        "GET",
+        url,
+        headers={"Accept": "application/octet-stream"},
+    ) as response:
+        if 300 <= response.status_code < 400:
+            raise TrustedEndpointSourceAcquisitionError("trusted_source_redirect_rejected")
+        if response.status_code != 200:
+            raise TrustedEndpointSourceAcquisitionError("trusted_source_fetch_status_invalid")
+        content = await _read_bounded_response(response)
+    return _parse_api_description(content, path), len(content)
+
+
+def _bundle_digest(documents: dict[str, dict[str, Any]]) -> str:
+    manifest = [
+        [path, canonical_api_description_sha256(document)]
+        for path, document in sorted(documents.items())
+    ]
+    payload = json.dumps(manifest, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 async def acquire_trusted_github_endpoint_source(
@@ -250,9 +336,9 @@ async def acquire_trusted_github_endpoint_source(
     if not _path_allowed(path, definition.allowed_path_prefixes):
         raise TrustedEndpointSourceAcquisitionError("trusted_source_path_not_allowlisted")
 
-    owner, repository = definition.repository.split("/", 1)
-    url = f"https://{_RAW_GITHUB_HOST}/{owner}/{repository}/{revision}/{path}"
     await resolve_host(_RAW_GITHUB_HOST, 443)
+    documents: dict[str, dict[str, Any]] = {}
+    total_bytes = 0
 
     try:
         async with httpx.AsyncClient(
@@ -261,26 +347,41 @@ async def acquire_trusted_github_endpoint_source(
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            async with client.stream(
-                "GET",
-                url,
-                headers={"Accept": "application/octet-stream"},
-            ) as response:
-                if 300 <= response.status_code < 400:
-                    raise TrustedEndpointSourceAcquisitionError(
-                        "trusted_source_redirect_rejected"
-                    )
-                if response.status_code != 200:
-                    raise TrustedEndpointSourceAcquisitionError(
-                        "trusted_source_fetch_status_invalid"
-                    )
-                content = await _read_bounded_response(response)
+            async def acquire_path(current_path: str, depth: int) -> None:
+                nonlocal total_bytes
+                if current_path in documents:
+                    return
+                if depth > MAX_TRUSTED_SOURCE_REF_DEPTH:
+                    raise TrustedEndpointSourceAcquisitionError("trusted_source_ref_depth_exceeded")
+                if len(documents) >= MAX_TRUSTED_SOURCE_BUNDLE_FILES:
+                    raise TrustedEndpointSourceAcquisitionError("trusted_source_bundle_file_limit")
+                document, content_bytes = await _fetch_repository_document(
+                    client=client,
+                    repository=definition.repository,
+                    revision=revision,
+                    path=current_path,
+                )
+                total_bytes += content_bytes
+                if total_bytes > MAX_TRUSTED_SOURCE_BUNDLE_BYTES:
+                    raise TrustedEndpointSourceAcquisitionError("trusted_source_bundle_size_invalid")
+                documents[current_path] = document
+                for reference in _document_references(document):
+                    reference_path = _resolve_relative_reference(current_path, reference)
+                    if reference_path is None:
+                        continue
+                    if not _path_allowed(reference_path, definition.allowed_reference_prefixes):
+                        raise TrustedEndpointSourceAcquisitionError(
+                            "trusted_source_ref_path_not_allowlisted"
+                        )
+                    await acquire_path(reference_path, depth + 1)
+
+            await acquire_path(path, 0)
     except TrustedEndpointSourceAcquisitionError:
         raise
     except httpx.HTTPError as exc:
         raise TrustedEndpointSourceAcquisitionError("trusted_source_fetch_failed") from exc
 
-    document = _parse_api_description(content, path)
+    document = documents[path]
     digest = canonical_api_description_sha256(document)
     reference = f"github:{definition.repository}@{revision}:{path}"
     trusted_record = TrustedEndpointSourceRecord(
@@ -292,11 +393,15 @@ async def acquire_trusted_github_endpoint_source(
         source_sha256=digest,
         policy_version=definition.policy_version,
     )
+    paths = tuple(sorted(documents))
     return AcquiredTrustedEndpointSource(
         api_description=document,
         trusted_record=trusted_record,
         repository=definition.repository,
         path=path,
+        external_references_resolved=len(paths) > 1,
+        source_bundle_sha256=_bundle_digest(documents),
+        source_bundle_paths=paths,
     )
 
 
@@ -305,7 +410,10 @@ __all__ = [
     "CAMARA_QOD_R32_COMMIT",
     "CAMARA_QOD_R32_PATH",
     "CAMARA_QOD_R32_QUALIFICATION_CANDIDATE",
+    "MAX_TRUSTED_SOURCE_BUNDLE_BYTES",
+    "MAX_TRUSTED_SOURCE_BUNDLE_FILES",
     "MAX_TRUSTED_SOURCE_BYTES",
+    "MAX_TRUSTED_SOURCE_REF_DEPTH",
     "TrustedEndpointSourceAcquisitionError",
     "TrustedGitHubSourceDefinition",
     "acquire_trusted_github_endpoint_source",
