@@ -9,37 +9,39 @@ platforms can be called from the Maestro sandbox.
 
 ## Current repository capability
 
-The repository already has a strong governed binding/execution chain:
+The repository has a governed discovery/binding/execution chain:
 
 1. `integration_task_catalog.py` defines provider-neutral Maestro tasks and
    canonical inputs.
-2. `enterprise_endpoint_bindings.py` binds an approved external operation to a
-   canonical task, adapter contract, credential profile, scopes, request
-   parameters, response mapping, allowed status codes, and timeout.
-3. `enterprise_endpoint_request_mapping.py` maps canonical task inputs into JSON
+2. `endpoint_discovery_quality.py` inventories a parsed OpenAPI/Swagger contract
+   and blocks unsafe or incomplete discovery results.
+3. `endpoint_binding_provenance.py` binds one exact discovered operation to a
+   secret-free SHA-256 fingerprint of the endpoint binding and detects drift.
+4. `enterprise_endpoint_bindings.py` binds an external operation to a canonical
+   task, adapter contract, credential profile, scopes, request parameters,
+   response mapping, allowed status codes, and timeout.
+5. `enterprise_endpoint_request_mapping.py` maps canonical task inputs into JSON
    request bodies without allowing arbitrary canonical fields.
-4. `enterprise_sandbox_execution.py` performs governed HTTPS execution with
+6. `enterprise_sandbox_execution.py` performs governed HTTPS execution with
    redirect blocking, DNS resolution, public-address enforcement, `trust_env`
    disabled, response-size limits, JSON-only response handling, transient
    credentials, mapping validation, task-injection evidence, and explicit
    non-production posture.
-5. `sandbox_operational_readiness.py` requires binding, mapping, customer-scoped
+7. `settings_endpoint_discovery_qualification_runtime.py` re-runs discovery
+   assessment server-side, stores only safe provenance metadata, and reports a
+   previously qualified binding as `drifted` if its current fingerprint changes.
+8. `sandbox_operational_readiness.py` requires binding, mapping, customer-scoped
    secret reference, non-production content contract, hardened live proof, and a
    provisioning fingerprint before reporting `sandbox_ready`.
 
-This is a useful execution foundation. It is not, by itself, an endpoint
-*discovery* authority.
+This is a qualification foundation. It is not provider connectivity or
+production authority.
 
-## Finding: endpoint discovery was previously manual
+## Endpoint discovery quality gate
 
-Before this R1 slice, the binding contract expected `base_url`, `method`,
-`path`, scopes, field mapping, and status codes to already be known. The
-repository did not contain a dedicated OpenAPI/Swagger discovery quality gate
-that could prove these values were extracted from a pinned external contract.
-
-`processual_api/integrations/endpoint_discovery_quality.py` now fills that
-read-only boundary. It does not fetch a URL and does not execute a request. It
-accepts an already parsed and review-pinned API description and inventories:
+Before this R1 slice, endpoint values were expected to be entered or known
+manually. `endpoint_discovery_quality.py` now accepts an already parsed API
+description and inventories:
 
 - API dialect (`OpenAPI 3.0`, `OpenAPI 3.1`, or `Swagger 2.0`);
 - title and API version;
@@ -51,92 +53,84 @@ accepts an already parsed and review-pinned API description and inventories:
 - response status contracts;
 - external `$ref` dependencies;
 - server/base-path hints;
-- SHA-256 of the supplied contract;
-- immutable source provenance supplied by the qualification runner.
+- canonical SHA-256 of the supplied contract;
+- source provenance supplied to the qualification request.
 
-Binding generation remains blocked when a required quality condition fails.
+Binding generation is blocked for moving/unpinned input, missing or duplicate
+operation IDs, invalid path-parameter contracts, unresolved external references,
+or missing response contracts. CAMARA adds OpenAPI 3, non-WIP version,
+`x-camara-commonalities`, and versioned-server requirements.
 
-## Endpoint extraction quality gates
+## Path composition hardening: implemented
 
-An extracted endpoint is not considered binding-ready merely because a parser
-can find a path. Qualification requires all of the following:
+`enterprise_endpoint_bindings.build_request_preview()` now percent-encodes each
+task-derived path value as one path segment and rejects unresolved placeholders.
+Regression tests cover `/`, `?`, `#`, dot-segment input, already encoded
+separators, Unicode values, and ordinary identifiers.
 
-- source points to a reviewed immutable release/tag/artifact, not a moving
-  branch;
-- supported OpenAPI/Swagger dialect;
-- title and semantic API version are present;
-- every operation used for binding has a unique `operationId`;
-- every `{pathParameter}` has a declared and required path parameter contract;
-- external schema references are resolved/bundled before qualification;
-- response contracts are declared;
-- request media type is reviewed for body methods;
-- security scopes are extracted and compared to Maestro scopes rather than
-  copied into authority automatically;
-- endpoint method/path is still validated against the canonical Maestro task;
-- no discovered operation grants production authority automatically.
+This prevents canonical task values from changing the route shape after a
+binding has been validated.
 
-## Additional path-composition blocker
+## Discovery provenance binding: implemented, CI proof pending
 
-`enterprise_endpoint_bindings.build_request_preview()` currently substitutes
-canonical task values into path placeholders as strings. Before the discovery
-pipeline can be declared fully qualified, path values must be percent-encoded
-as path-segment data and tests must prove that `/`, `?`, `#`, `..`, and encoded
-separator input cannot change the intended endpoint route.
+`endpoint_binding_provenance.py` creates a non-production provenance record only
+when:
 
-This is a binding-quality blocker even though the network execution layer
-already blocks redirects and non-public destinations.
+- discovery quality passed;
+- binding generation is ready;
+- one `operationId` matches exactly once;
+- discovered method and path match the binding exactly;
+- source reference, source SHA-256, contract family, and API version are present;
+- discovery itself does not grant production or runtime authority.
 
-## Sandbox execution environment inventory
+The record also carries a SHA-256 fingerprint over behavior-affecting,
+secret-free binding fields including base URL, method, path, task/adapter,
+credential profile reference, scopes, request parameters, response mapping,
+status codes, and timeout.
 
-### Available in repository
+`settings_endpoint_discovery_qualification_runtime.py` recomputes the discovery
+assessment server-side from the supplied API description. It does not persist
+the raw API description. It stores only safe provenance metadata. A later
+binding mutation makes `provenance_matches_binding=False` and the runtime state
+becomes `drifted`; an old record therefore cannot silently retain active
+qualification after endpoint changes.
 
-- Python 3.14 project configuration.
-- FastAPI/httpx execution stack.
-- SQLAlchemy/asyncpg/Alembic database dependencies.
-- Redis client dependency.
-- A Redis-backed `Durable Preproduction Qualification` workflow that can be
-  manually dispatched and uploads qualification evidence.
-- Enterprise sandbox credential resolver using deployment environment references
-  (`MAESTRO_SANDBOX_AUTHORIZATION_<PROFILE>` or
-  `MAESTRO_SANDBOX_API_KEY_<PROFILE>`).
-- sandbox secret-reference/content/readiness contracts.
-- external HTTP sandbox executor with DNS/public-IP checks and evidence hashes.
+This still does not prove that the named source reference is externally
+reachable or that a provider/operator deployed the contract. The content digest
+binds the exact submitted document; external release/provider verification
+remains a separate qualification step.
 
-### Missing for this exact qualification
+## Sandbox qualification environment
 
-The existing durable preproduction workflow starts Redis but does not start a
-PostgreSQL service and does not exercise endpoint discovery, durable sandbox API
-keys, or external connector live proof. Therefore it cannot currently prove the
-full Settings Sandbox chain.
+`Sandbox Integration Qualification` now provisions isolated PostgreSQL 17 and
+Redis 7, performs a clean `alembic upgrade head`, verifies the sandbox authority
+migration, runs focused Ruff and qualification tests, and uploads evidence.
+Changes anywhere under `alembic/versions/**` retrigger the clean-chain test.
 
-A dedicated qualification runner is still required with:
+The first PostgreSQL run exposed an older migration defect in
+`20260807_0039_top_up_quota_grants.py`: direct equality against a PostgreSQL
+`json` column was not portable. The migration now casts inserted entitlement
+payloads to JSON and compares empty/null JSON through a text projection. A
+regression contract prevents the unsafe comparison from returning.
 
-- isolated PostgreSQL at the declared Alembic head;
-- isolated Redis;
-- no production credentials;
-- pinned provider OpenAPI artifacts;
-- provider/operator sandbox credentials supplied as managed secrets/references;
-- controlled outbound HTTPS and DNS;
-- test fixtures or synthetic customer content;
-- concurrency tests for quota authority;
-- endpoint discovery/binding/mapping tests;
-- deterministic cleanup;
-- evidence artifact upload.
+A subsequent run proved the clean Alembic chain through `20260818_0055` and
+passed Ruff. Its focused pytest slice reached 60 passing tests and one test
+fixture assertion mismatch; that assertion was corrected to exercise the
+intended SHA-256 validator. The latest qualification run remains the source of
+truth for final pass/fail status.
+
+No production/provider credentials are present in this runner and
+`external_network_proof=false` remains explicit.
 
 ## CAMARA assessment
 
-### What the repository currently supports
+### Current posture
 
-The generic runtime contract vocabulary recognizes `camara` as a contract
-family. This is only an architecture classification.
+The runtime contract vocabulary recognizes `camara` as a contract family. This
+is architecture classification only. There is no registered executable CAMARA
+connector in the repository today.
 
-There is currently no registered executable CAMARA connector in the repository.
-The Telecom reference connectors are CRM, Billing, Ticketing, Order Management,
-and Network Assurance references, and their current contract families are
-proprietary, legacy, or TM Forum. Their external API versions remain
-`pending_operator_input`.
-
-Therefore the correct current statement is:
+The correct current state remains:
 
 `CAMARAArchitectureFamilyRecognized=True`
 
@@ -148,69 +142,69 @@ Therefore the correct current statement is:
 
 `CAMARAProductionApproved=False`
 
-### Why CAMARA must not be mapped blindly to Network Assurance
+### Semantic mapping requirement
 
-CAMARA APIs are capability-specific. Examples include identity/fraud prevention,
-location, device information, communication quality/QoS, payments/charging, and
-other network APIs. Their subject identifiers, consent/security profiles,
-request bodies, and operational semantics are not equivalent to the existing
-Maestro `network_assurance` task family.
+CAMARA APIs are capability-specific. Identity/fraud prevention, location,
+device information, communication quality/QoS, payments/charging, and other
+network APIs do not automatically map to the existing Maestro
+`network_assurance` task family.
 
-A CAMARA API must therefore receive an explicit semantic mapping review:
+Each API requires an explicit review:
 
 `CAMARA operation -> CAMARA scopes/security -> Maestro adapter contract ->
 Maestro task -> canonical inputs -> data classification -> entitlement -> quota`
 
-If no current Maestro task accurately represents the CAMARA operation, the
-correct action is to add a reviewed adapter/task contract, not to force the API
-into the nearest existing task.
+If no current task accurately represents the operation, a dedicated reviewed
+adapter/task contract must be added instead of forcing the API into a nearby
+semantic category.
 
-### CAMARA release qualification
+### Release and live sandbox qualification
 
-CAMARA endpoint discovery must use a pinned API release that is aligned with a
-specific CAMARA meta-release and matching Commonalities / Identity and Consent
-Management guidance. WIP API definitions are not acceptable qualification
-sources. The discovery gate also requires the CAMARA
-`x-camara-commonalities` declaration and a versioned server contract before
-binding generation can be considered ready.
+CAMARA discovery must use a pinned API release aligned with a specific
+meta-release and matching Commonalities / Identity and Consent Management
+guidance. WIP definitions are not acceptable qualification sources.
 
 A CAMARA live proof additionally requires an operator or channel-partner sandbox
-implementation. A CAMARA OpenAPI document alone proves an API contract, not that
-an operator endpoint or credential has been approved.
+implementation, managed sandbox credential reference, controlled non-production
+test data, and retained evidence. An OpenAPI document proves a contract shape;
+it does not prove operator availability, credential approval, or production
+readiness.
 
 ## TM Forum and other platforms
 
-The repository already contains TM Forum as a runtime contract family and uses
-it for the Telecom Ticketing and Order Management reference contracts. This is
-still architecture-level compatibility until a specific operator/provider API
-version is reviewed and a real endpoint binding is qualified.
+TM Forum is represented as a runtime contract family and is used for Telecom
+Ticketing and Order Management reference contracts. This remains
+architecture/contract-level compatibility until a specific provider API version
+and real sandbox binding are qualified.
 
-The same discovery process applies to proprietary, legacy, and generic
-Enterprise APIs. The difference is that provider-specific qualification may not
-have a cross-industry meta-release. In those cases the immutable contract source,
-provider version, change policy, authentication profile, sandbox endpoint,
-acceptance tests, and mapping evidence become mandatory customer/provider input.
+The same discovery/provenance process applies to proprietary, legacy, and
+generic Enterprise APIs. Provider version, immutable contract input, change
+policy, authentication profile, sandbox endpoint, acceptance tests, and mapping
+evidence remain provider/customer inputs.
 
 ## Next implementation gates
 
 1. `ENDPOINT-DISCOVERY-QUALITY-01`
-   - run focused tests for the new discovery module;
-   - add path-segment encoding/route-injection protection;
-   - bind discovery output to binding creation with a source SHA/provenance check.
+   - obtain a green qualification run for path composition, provenance, runtime
+     drift, migration, API-key, and UI contracts;
+   - expose the safe discovery state in Integration Center without implying live
+     provider connectivity.
 2. `CAMARA-CONTRACT-QUALIFICATION-01`
    - select one concrete CAMARA API and pinned release;
    - bundle/resolve external references;
    - inventory operations/security/test assets;
-   - decide whether an existing Maestro adapter/task is semantically valid;
-   - otherwise create a dedicated reviewed task contract.
+   - create a dedicated semantic Maestro task/adapter contract where necessary.
 3. `CAMARA-SANDBOX-PROVIDER-01`
-   - identify an operator/channel partner sandbox implementation;
+   - identify an operator/channel-partner sandbox implementation;
    - register target and managed secret references;
    - run hardened live proof with non-production data;
    - retain evidence without raw credentials or raw provider payloads.
 4. `SETTINGS-SANDBOX-QUALIFICATION-01`
-   - continue durable API-key wiring and PostgreSQL/Redis quota qualification;
-   - only then bind external-client authority to the qualified endpoint pipeline.
+   - wire durable API-key authentication with fail-closed durable-match
+     semantics;
+   - migrate issuance/rotation/revocation authority to PostgreSQL;
+   - connect metered requests to existing durable subscription usage authority;
+   - execute concurrency/no-overshoot proof.
 
 ## Gate state
 
@@ -220,7 +214,9 @@ acceptance tests, and mapping evidence become mandatory customer/provider input.
 
 `ExternalApiIntegrationQualified=False`
 
-Reason: discovery quality tooling now exists in code, but path-composition
-hardening, focused CI execution, pinned provider specifications, real provider
-sandboxes, durable API-key wiring, and PostgreSQL/Redis end-to-end evidence are
-still outstanding.
+Reason: path composition and server-side provenance/drift controls are now
+implemented, and the clean PostgreSQL migration chain has been demonstrated in
+CI. A fully green latest qualification run, pinned external provider releases,
+real provider sandboxes, durable API-key wiring, quota concurrency evidence, and
+rendered browser qualification are still required before any higher gate can be
+raised.
