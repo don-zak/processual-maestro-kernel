@@ -9,6 +9,11 @@ from processual_api.services.sandbox_api_key_persistence import (
     SqlAlchemySandboxApiKeyRepository,
 )
 
+# Kept as a module-level injection seam for focused authority tests. The real
+# repository is loaded lazily to avoid importing Admin Marketplace routers while
+# auth.security is still being initialized.
+SqlAlchemySubscriptionRuntimeRepository: Any = None
+
 
 class DurableSandboxApiKeyDenied(PermissionError):  # noqa: N818
     """A matching durable sandbox key exists but cannot receive authority."""
@@ -16,6 +21,17 @@ class DurableSandboxApiKeyDenied(PermissionError):  # noqa: N818
 
 def _deny(reason: str) -> None:
     raise DurableSandboxApiKeyDenied(reason)
+
+
+def _runtime_repository_class():
+    global SqlAlchemySubscriptionRuntimeRepository
+    if SqlAlchemySubscriptionRuntimeRepository is None:
+        from processual_api.admin_marketplace.subscription_runtime_persistence import (
+            SqlAlchemySubscriptionRuntimeRepository as repository_class,
+        )
+
+        SqlAlchemySubscriptionRuntimeRepository = repository_class
+    return SqlAlchemySubscriptionRuntimeRepository
 
 
 async def verify_durable_sandbox_api_key(api_key: str) -> dict[str, Any] | None:
@@ -34,20 +50,11 @@ async def verify_durable_sandbox_api_key(api_key: str) -> dict[str, Any] | None:
     if not api_key or not api_key.startswith("pmk_"):
         return None
 
-    # Import the Admin Marketplace runtime repository only after auth/security
-    # has finished module initialization. Importing it at module scope triggers
-    # admin_marketplace package router registration, which imports auth routes
-    # and creates a circular dependency while get_current_user is still being
-    # defined.
-    from processual_api.admin_marketplace.subscription_runtime_persistence import (
-        SqlAlchemySubscriptionRuntimeRepository,
-    )
-
     prefix = api_key[:12]
     session_factory = get_session_factory()
     async with session_factory() as session:
         keys = SqlAlchemySandboxApiKeyRepository(session)
-        runtimes = SqlAlchemySubscriptionRuntimeRepository(session)
+        runtimes = _runtime_repository_class()(session)
         candidates = await keys.candidates_by_prefix(prefix, for_update=True)
         if not candidates:
             return None
