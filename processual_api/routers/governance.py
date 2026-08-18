@@ -48,6 +48,8 @@ from processual_api.schemas.governance import (
     AdministratorInvitationCancellationResponse,
     AdministratorInvitationIssueRequest,
     AdministratorInvitationIssueResponse,
+    AdministratorInvitationListResponse,
+    AdministratorInvitationResponse,
     AdministratorLifecycleRequest,
     AdministratorLifecycleResponse,
     AdministratorSessionListResponse,
@@ -190,12 +192,17 @@ async def get_delegated_governance_authority_context(
     response_model=AdministratorGovernanceResponse,
 )
 async def list_administrator_governance(
-    current_user: dict = Depends(platform_admin_step_up_dependency),
+    authority_context: AdministratorGovernanceAuthorityContext = Depends(
+        get_delegated_governance_authority_context
+    ),
     service: AdministratorGovernanceReadService = Depends(
         get_administrator_governance_read_service
     ),
 ) -> AdministratorGovernanceResponse:
-    del current_user
+    _authorize_governance_read(
+        context=authority_context,
+        action=AdministratorGovernanceAction.VIEW_ADMINISTRATORS,
+    )
     try:
         administrators = await service.list_administrators()
     except Exception as exc:
@@ -215,6 +222,46 @@ async def list_administrator_governance(
     return AdministratorGovernanceResponse(
         administrators=response_rows,
         count=len(response_rows),
+    )
+
+
+@router.get(
+    "/administrator-invitations",
+    response_model=AdministratorInvitationListResponse,
+)
+async def list_administrator_invitations(
+    limit: int = 100,
+    current_user: dict = Depends(platform_admin_step_up_dependency),
+    service: AdministratorGovernanceReadService = Depends(
+        get_administrator_governance_read_service
+    ),
+) -> AdministratorInvitationListResponse:
+    del current_user
+    try:
+        rows = await service.list_invitations(limit=limit)
+    except Exception as exc:
+        raise _authority_unavailable(exc) from exc
+    invitations = tuple(
+        AdministratorInvitationResponse(
+            invitation_id=row.invitation_id,
+            email_normalized=row.email_normalized,
+            supervision_level=row.supervision_level,
+            status=row.status,
+            invited_by_user_id=row.invited_by_user_id,
+            invite_reason=row.invite_reason,
+            expires_at=row.expires_at,
+            accepted_by_user_id=row.accepted_by_user_id,
+            accepted_at=row.accepted_at,
+            cancelled_by_user_id=row.cancelled_by_user_id,
+            cancelled_at=row.cancelled_at,
+            cancellation_reason=row.cancellation_reason,
+            created_at=row.created_at,
+        )
+        for row in rows
+    )
+    return AdministratorInvitationListResponse(
+        invitations=invitations,
+        count=len(invitations),
     )
 
 
@@ -503,6 +550,7 @@ __all__ = [
     "issue_administrator_invitation",
     "list_administrator_governance",
     "list_administrator_governance_activity",
+    "list_administrator_invitations",
     "list_administrator_sessions",
     "platform_admin_step_up_dependency",
     "restore_administrator",
