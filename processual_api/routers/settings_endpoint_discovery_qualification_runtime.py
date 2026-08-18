@@ -157,16 +157,14 @@ def _qualification_from_evidence(
     source_pin_verified: bool,
     operation_id: str,
     trusted_sources: Sequence[TrustedEndpointSourceRecord] = (),
+    external_references_resolved: bool = False,
 ) -> tuple[dict[str, Any], EndpointBindingProvenance]:
-    # External references deliberately remain fail-closed. Qualification accepts
-    # only self-contained descriptions; neither caller claims nor source identity
-    # can grant reference-resolution authority.
     assessment = assess_endpoint_discovery(
         api_description,
         contract_family=contract_family,
         source_reference=source_reference,
         release_pinned=source_pin_verified,
-        external_references_resolved=False,
+        external_references_resolved=external_references_resolved,
     )
     source_attestation = attest_endpoint_source_identity(
         source_reference=source_reference,
@@ -368,6 +366,7 @@ async def qualify_endpoint_binding_from_trusted_source(
             source_pin_verified=True,
             operation_id=body.operation_id,
             trusted_sources=(record,),
+            external_references_resolved=acquired.external_references_resolved,
         )
     except (
         TrustedEndpointSourceAcquisitionError,
@@ -394,6 +393,8 @@ async def qualify_endpoint_binding_from_trusted_source(
     response["trusted_source_acquired"] = True
     response["trusted_source_repository"] = acquired.repository
     response["trusted_source_path"] = acquired.path
+    response["trusted_source_bundle_sha256"] = acquired.source_bundle_sha256
+    response["trusted_source_bundle_paths"] = list(acquired.source_bundle_paths)
     return response
 
 
