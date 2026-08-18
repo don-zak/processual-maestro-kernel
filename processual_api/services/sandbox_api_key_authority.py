@@ -3,9 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from processual_api.admin_marketplace.subscription_runtime_persistence import (
-    SqlAlchemySubscriptionRuntimeRepository,
-)
 from processual_api.db.session import get_session_factory
 from processual_api.services.api_key_store import _verify_stored_key
 from processual_api.services.sandbox_api_key_persistence import (
@@ -36,6 +33,15 @@ async def verify_durable_sandbox_api_key(api_key: str) -> dict[str, Any] | None:
 
     if not api_key or not api_key.startswith("pmk_"):
         return None
+
+    # Import the Admin Marketplace runtime repository only after auth/security
+    # has finished module initialization. Importing it at module scope triggers
+    # admin_marketplace package router registration, which imports auth routes
+    # and creates a circular dependency while get_current_user is still being
+    # defined.
+    from processual_api.admin_marketplace.subscription_runtime_persistence import (
+        SqlAlchemySubscriptionRuntimeRepository,
+    )
 
     prefix = api_key[:12]
     session_factory = get_session_factory()
