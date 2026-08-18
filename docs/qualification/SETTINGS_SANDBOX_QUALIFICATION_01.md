@@ -8,171 +8,175 @@ Qualify the Settings sandbox API-key path end-to-end without granting production
 
 Status: COMPLETE
 
-Verified in repository code:
+The repository now separates two non-production API-key authorities instead of forcing them into one model:
 
-- Client self-service issuance is restricted to client-visible, read-only sandbox operational profiles.
-- Self-service keys are marked `environment=sandbox`.
-- `production_allowed=False` and `runtime_connector_approved=False` are preserved at issuance and authentication.
-- Raw API-key material is returned only from create/rotate responses; durable persistence contains a one-way hash and non-secret prefix, never the raw secret.
-- The commercial runtime already contains PostgreSQL subscription runtime, quota-account, and immutable usage-ledger authority.
-- Admin evaluation grants are a separate subscription-independent authority and must not be represented as paid-subscription sandbox keys.
+1. commercial subscription sandbox keys backed by `sandbox_api_key_authority` and the subscription usage ledger;
+2. subscription-independent administrator evaluation grants backed by `evaluation_grant_authority`, `evaluation_api_key_authority`, and `evaluation_usage_ledger`.
 
-## Stage 1B — Security regression lock
+Both paths preserve visible-once raw-key handling, hash-only durable persistence, explicit expiry/revocation, fail-closed authority errors, and `production_allowed=False`.
 
-Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
+## Stage 1B — Commercial sandbox authentication boundary
 
-Green qualification evidence from `Sandbox Integration Qualification` run `#52` covers:
+Status: COMPLETE / POSTGRESQL-PROVEN
 
-- hash-only persisted key material;
-- valid durable sandbox-key authentication;
-- revoked and expired durable-key denial;
-- suspended-subscription denial;
-- explicit fail-closed durable-match semantics;
-- durable authority failure returning service-unavailable instead of falling through to legacy JSON;
-- preservation of non-production authority.
+The commercial path remains qualified by run `#52` and subsequent regression runs:
 
-The durable verifier uses three semantically distinct outcomes:
+- durable key authority is checked before legacy state;
+- matching revoked/disabled/expired keys cannot fall through;
+- suspended or mismatched subscription authority is denied;
+- authority/database failure returns service-unavailable rather than weaker fallback;
+- production cannot disable durable commercial sandbox authority;
+- raw secrets are never persisted.
 
-1. no matching durable secret: transition-compatible legacy evaluation may continue;
-2. matching durable secret accepted: durable identity is authoritative;
-3. matching durable secret denied: no legacy fallback is permitted.
+## Stage 1C — Commercial durable quota authority
 
-Revoked/disabled/expired rows remain visible to prefix candidate lookup so a matching revoked secret cannot be misclassified as an authority miss.
+Status: COMPLETE / POSTGRESQL-CONCURRENCY-PROVEN
 
-## Stage 1C — Durable quota authority selection
+Durable commercial sandbox identities use the existing subscription runtime and immutable usage ledger. `require_quota()` never sends `session_type=sandbox_api_key` identities to the JSON `quota_store`.
 
-Status: COMPLETE
+The real PostgreSQL concurrency proof reserves 10 simultaneous one-unit requests against a five-unit quota and requires exactly five successes, five rejections, `used_units=5`, and five ledger rows totaling five units.
 
-No competing quota ledger was introduced. Durable sandbox keys reuse the existing PostgreSQL commercial runtime:
+## Stage 1D — Commercial durable key lifecycle
 
-- `admin_market_subscription_runtime`;
-- `admin_market_subscription_quota_accounts`;
-- `admin_market_subscription_usage_ledger`.
+Status: COMPLETE / POSTGRESQL-PROVEN
 
-The existing usage service obtains row locks for runtime and quota authority, verifies active/grace subscription access, checks customer/quota-profile binding, applies the quota reservation, and writes an idempotent immutable usage-ledger row in the same unit of work.
+Migration `20260818_0055_sandbox_api_key_authority.py` provides hash-only commercial sandbox key persistence bound to an authoritative subscription.
 
-## Stage 1D — Durable sandbox API-key authority
+The real lifecycle proof is:
 
-Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
+`issue -> authenticate -> rotate -> old denied -> new accepted -> revoke -> denied`
 
-Migration `20260818_0055_sandbox_api_key_authority.py` and PostgreSQL model/repository `processual_api/services/sandbox_api_key_persistence.py` provide the durable authority.
+This table intentionally requires a subscription foreign key and is not reused for subscription-independent evaluation grants.
 
-The durable record contains:
+## Stage 1E — Durable administrator evaluation authority
 
-- hash and non-secret prefix only;
-- client and owner binding;
-- subscription and plan binding;
-- operational profile and scopes;
-- label, purpose, issued-to and issuing actor;
-- mandatory `environment=sandbox` database constraint;
-- enabled/revoked/expired/disabled state;
-- expiry, revocation, last-use and usage metadata.
+Status: COMPLETE / POSTGRESQL-PROVEN
 
-No raw secret column exists.
+Migration `20260818_0056_evaluation_grant_authority.py` adds three independent authorities:
 
-`verify_durable_sandbox_api_key()` grants an identity only when the presented secret matches a durable row, that row is enabled/unrevoked/unexpired, the customer matches the subscription runtime, and runtime access is `active` or `grace`.
+- `evaluation_grant_authority`;
+- `evaluation_api_key_authority`;
+- `evaluation_usage_ledger`.
 
-`get_current_user()` evaluates durable sandbox authority before the legacy verifier whenever durable mode is enabled. A durable denial returns 401; a durable database/runtime failure returns 503; neither condition may fall through to legacy authority.
+No artificial subscription is created. The grant owns the quota and the evaluation keys reference the grant directly.
 
-The shared durable-mode policy is mandatory in production. `APP_ENV=production`, `ENVIRONMENT=production|prod`, or `settings.is_production=True` overrides an explicit `PMK_DURABLE_SANDBOX_API_KEYS=false`. Explicit disable remains a transition-only local/test option.
+Database invariants include positive quota, non-negative usage/rejections, `used_requests <= max_requests`, constrained lifecycle states, unique key hashes, and idempotent usage ledger keys.
 
-Run `#52` executed the real PostgreSQL lifecycle:
+Run `#72` proved the clean Alembic chain through `20260818_0056` and verified all authority tables on PostgreSQL 17.
 
-`issue -> authenticate -> rotate -> old secret denied -> new secret accepted -> revoke -> denied -> deterministic cleanup`
+Run `#76` proved the durable evaluation lifecycle:
 
-The test also queried the durable row and proved the raw secret was not persisted.
+`create grant -> list -> issue three keys -> fourth key rejected -> raw secrets absent from persistence -> revoke grant -> all active keys revoked`
 
-## Stage 1E — Durable Settings client provisioning
+## Stage 1F — Evaluation production-mode and route boundary
 
-Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
+Status: COMPLETE / CI-PROVEN
 
-`/settings/client/api-keys` create/list/rotate/revoke routes use durable PostgreSQL provisioning when durable mode is enabled.
+`evaluation_grant_mode.py` makes PostgreSQL durable authority the default when PostgreSQL is configured and forces durable evaluation authority in production even if `PMK_DURABLE_EVALUATION_AUTHORITY=false` is supplied.
 
-Provisioning requires exactly one authoritative active subscription whose:
+Explicit legacy evaluation JSON mode remains a non-production transition mechanism only.
 
-- customer matches the authenticated client;
-- canonical plan code matches the eligible plan;
-- runtime customer matches;
-- runtime access stage is `active` or `grace`.
+`/settings/admin/evaluation-grants` create/list/issue/revoke routes use the PostgreSQL authority whenever durable mode is enabled. Route boundary tests prove these durable paths do not read or write `evaluation_grants_v1` or Settings `api_keys` JSON state. Durable failures do not trigger JSON fallback.
 
-Write paths lock authoritative subscription/runtime state. The maximum-active-key check is performed inside the same transaction. Rotation revokes the old durable key and inserts the replacement in one transaction. The raw replacement secret is returned only once.
+## Stage 1G — Evaluation authentication and quota boundary
 
-Legacy Settings JSON persistence remains available only as an explicit non-production transition path.
+Status: COMPLETE / POSTGRESQL-CONCURRENCY-PROVEN / RUNTIME-WIRED
 
-## Stage 1F — Durable usage and quota boundary
+`get_current_user()` now evaluates API-key authority in this order:
 
-Status: COMPLETE FOR THE COMMERCIAL SUBSCRIPTION SANDBOX PATH
+1. durable commercial sandbox authority;
+2. durable evaluation authority;
+3. permitted legacy transition authority.
 
-For identities authenticated as `session_type=sandbox_api_key`, `require_quota()` no longer calls the JSON `quota_store`.
+A matching durable evaluation denial returns 401 and cannot fall through. Durable evaluation authority/database failure returns 503. When durable evaluation mode is enabled, a legacy identity claiming `entitlement_source=admin_evaluation_grant` is rejected instead of becoming a second evaluation source of truth.
 
-Metered requests are sent to the existing subscription usage service using the authenticated subscription/customer/key identity. The request receives a bounded internal SHA-256 idempotency key. Free requests do not create usage-ledger rows.
+Valid durable evaluation keys receive `session_type=evaluation_api_key`, grant/key authority identifiers, allowed scopes/tasks, `subscription_required=False`, and `quota_source=evaluation_usage_ledger`.
 
-Failure posture:
+`require_quota()` routes `evaluation_api_key` identities only to `evaluation_usage_ledger`:
 
-- quota exhaustion -> HTTP 429 with `quota_source=subscription_usage_ledger`;
-- subscription/runtime denial -> fail closed;
-- database/usage authority failure -> HTTP 503;
-- no durable-key quota failure can fall through to JSON quota state.
+- free requests do not create usage rows;
+- bounded SHA-256 request idempotency is used;
+- quota exhaustion returns 429 with `quota_source=evaluation_usage_ledger`;
+- inactive grant/key or subject/task mismatch fails closed;
+- authority failure returns 503;
+- no evaluation-key quota path falls through to JSON `quota_store`.
 
-Run `#52` executed a real PostgreSQL concurrency proof with an isolated quota of 5 units and 10 simultaneous one-unit reservations. The test passed only after proving exactly 5 successes, 5 quota rejections, `used_units=5`, five immutable ledger rows totalling five units, followed by deterministic cleanup.
+Run `#89` proved service-level authentication and real PostgreSQL quota concurrency. Ten simultaneous one-unit reservations against `max_requests=5` produced exactly five successes and five quota rejections, `used_requests=5`, `rejected_requests=5`, and five ledger rows totaling five units. Duplicate idempotency did not recharge quota.
 
-## Stage 1G — Qualification environment
+Run `#95` then proved the full runtime wiring and regression slice: Alembic `0056`, authority-table verification, focused Ruff, durable evaluation route/auth/quota boundaries, real PostgreSQL lifecycle/auth/concurrency, commercial sandbox regressions, endpoint contracts, and evidence upload all passed.
 
-Status: GREEN FOR THE FOCUSED COMMERCIAL SANDBOX SUITE
+## Stage 1H — Qualification environment
 
-`Sandbox Integration Qualification` run `#52` completed successfully against:
+Status: GREEN FOR COMMERCIAL + EVALUATION DURABLE AUTHORITY
+
+The current qualification workflow uses:
 
 - PostgreSQL 17;
 - Redis 7;
-- Alembic head `20260818_0055`;
+- Alembic head `20260818_0056`;
 - no production credentials;
-- no external provider credentials.
+- no external provider credentials;
+- no external network proof.
 
-The run passed service connectivity, a clean Alembic upgrade to head, direct verification of the durable sandbox authority migration, focused Ruff checks, the focused pytest qualification suite, evidence recording, artifact upload, and cleanup.
+Important successful runs:
 
-The workflow covers durable auth, provisioning, quota/usage, production durable-mode enforcement, endpoint discovery/provenance/path composition, Integration Center UI contracts, real PostgreSQL key lifecycle, and real PostgreSQL parallel quota/no-overshoot behavior.
+- `#52`: commercial sandbox lifecycle/quota foundation;
+- `#61`: endpoint discovery hardening;
+- `#68`: server-owned source-identity attestation;
+- `#72`: evaluation authority schema/migration;
+- `#76`: evaluation lifecycle;
+- `#89`: evaluation auth service + no-overshoot concurrency;
+- `#95`: evaluation HTTP/auth/quota runtime wiring and focused regression suite.
 
-A prior circular import exposed by CI was closed by lazily loading the Admin Marketplace runtime repository from the durable verifier while retaining a test injection seam. Run `#52` passed after this fix.
+## Legacy authority transition
 
-## Separate authority: admin evaluation grants
+Status: OPEN
 
-Status: NOT DURABLE / OUTSIDE COMMERCIAL SUBSCRIPTION AUTHORITY
+The subscription-independent evaluation authority is no longer an outstanding JSON durability blocker in durable mode. The remaining API-key transition issue is broader legacy no-match authority outside governed evaluation identities.
 
-`/settings/admin/evaluation-grants/{grant_id}/issue-key` issues subscription-independent pilot/evaluation keys with `subscription_required=False`. Its grant and key state still lives in Settings JSON and uses a separate evaluation-grant quota model.
+A production cutover/migration policy is still required before broad legacy dynamic API-key authority can be retired. That policy must define migration/invalidation behavior and demonstrate that a durable no-match cannot unintentionally resurrect an obsolete credential after cutover.
 
-This path must not be inserted into `sandbox_api_key_authority` by inventing a subscription because that table intentionally requires an authoritative subscription foreign key.
+## External integration and UI qualification
 
-Therefore broad statements such as "all Settings/Admin API keys are durable" are not yet valid. Before full Settings sandbox qualification, the evaluation path needs one of two explicit outcomes:
+Status: OPEN
 
-1. a separate durable evaluation-grant/key/quota authority with equivalent revocation, expiry, atomic quota and concurrency proof; or
-2. explicit exclusion/disablement of subscription-independent evaluation-key issuance in the environment being commercially qualified.
+These remain separate from durable Settings API-key persistence:
+
+- trusted acquisition/provider-authenticity verification for external API descriptions;
+- pinned real provider/operator sandbox releases and credentials;
+- CAMARA/TM Forum provider-specific qualification;
+- external-client/browser E2E;
+- rendered Integration Center visual QA.
+
+Static Integration Center contracts are present, but rendered browser qualification has not been claimed.
 
 ## Remaining blockers for SETTINGS-SANDBOX-QUALIFICATION-01
 
-The focused commercial subscription sandbox chain now has green PostgreSQL qualification evidence. The umbrella gate remains open because:
+The previous admin-evaluation durability blocker is closed. The umbrella gate remains open because:
 
-1. subscription-independent admin evaluation keys remain JSON-backed and require a separate durability decision;
-2. legacy API-key fallback remains a controlled transition surface for durable no-match cases and requires an explicit production cutover/migration policy before legacy authority can be retired;
-3. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
-4. real provider/operator sandbox evidence remains outside this Settings key qualification and is required separately for external connector qualification.
+1. the broader legacy API-key no-match transition still needs an explicit production cutover/migration policy and proof;
+2. external-client/browser E2E and rendered Integration Center visual QA remain outstanding;
+3. real provider/operator sandbox evidence is required separately for external connector qualification.
 
 ## Mandatory acceptance conditions
 
-For the commercial subscription sandbox path, run `#52` now proves:
+Now proven by focused PostgreSQL qualification:
 
-1. raw secret is never persisted;
-2. client/owner, environment, plan, scopes, expiry, purpose and issuing actor are durable;
-3. revoked and expired durable keys fail immediately;
-4. subscription state removes runtime authority;
-5. durable denial and authority failure cannot fall through to legacy state;
-6. quota reservation is atomic and idempotent;
-7. parallel requests cannot exceed quota;
-8. sandbox authority cannot become production authority implicitly;
-9. qualification data is cleaned up deterministically.
+1. raw commercial and evaluation secrets are never persisted;
+2. commercial keys are bound to authoritative subscription/runtime state;
+3. evaluation keys are bound to independent durable grants without fabricated subscriptions;
+4. revoked/expired durable keys fail immediately;
+5. durable denial and authority failure cannot fall through to weaker evaluation state;
+6. commercial and evaluation quota reservations use durable idempotent ledgers;
+7. parallel requests cannot exceed either tested quota authority;
+8. production cannot disable either durable authority through transition flags;
+9. evaluation route/auth/quota runtime wiring does not use Settings JSON in durable mode;
+10. sandbox/evaluation authority cannot become production authority implicitly.
 
-The remaining umbrella condition is:
+Still required before the broad Settings gate closes:
 
-10. every remaining non-durable API-key authority must be explicitly migrated, excluded, or blocked before the broad Settings sandbox gate closes.
+11. define and prove the legacy no-match production cutover/migration policy;
+12. complete the remaining external/browser qualification evidence relevant to the umbrella Settings release gate.
 
 ## Gate state
 
@@ -180,4 +184,4 @@ The remaining umbrella condition is:
 
 `SandboxApiKeysQualified=False`
 
-Reason: the commercial subscription sandbox key chain has green focused PostgreSQL qualification evidence, but the separate admin evaluation-key authority remains JSON-backed and the legacy no-match production cutover policy is not yet closed.
+Reason: both commercial subscription sandbox keys and subscription-independent evaluation keys now have durable PostgreSQL lifecycle/auth/quota evidence, including no-overshoot concurrency and runtime wiring. The broad gate remains open because the legacy API-key production cutover policy and external/browser qualification evidence are not yet closed.
