@@ -243,7 +243,7 @@ jobs:
             echo "evaluation_authority_production_mode_enforced=true"
             echo "evaluation_authority_route_tests=true"
             echo "evaluation_authority_auth_service_tests=true"
-            echo "evaluation_authority_runtime_wired=false"
+            echo "evaluation_authority_runtime_wired=true"
             echo "evaluation_authority_concurrency_proven=true"
             echo "integration_center_ui_contract_tests=true"
             echo "production_credentials=false"
