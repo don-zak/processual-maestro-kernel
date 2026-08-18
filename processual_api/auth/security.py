@@ -15,6 +15,10 @@ from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBea
 
 from ..admin_audit_log import append_admin_audit_event
 from ..services.api_key_store import verify_dynamic_api_key
+from ..services.sandbox_api_key_authority import (
+    DurableSandboxApiKeyDenied,
+    verify_durable_sandbox_api_key,
+)
 from ..settings import settings
 from ..supervisor_session_keys import validate_supervisor_session_key
 
@@ -24,6 +28,7 @@ try:
 except ImportError:
     jwt: Any = None  # type: ignore[no-redef]
     PyJWTError: type[Exception] = Exception  # type: ignore[no-redef]
+
 
 class _PBKDF2CompatBcrypt:
     """Tiny bcrypt-compatible fallback for minimal local/test environments.
@@ -175,6 +180,35 @@ def _apply_supervisor_session_header(
     return _merge_supervisor_session_user(user, session)
 
 
+def _durable_sandbox_api_key_authority_enabled() -> bool:
+    explicit = os.environ.get("PMK_DURABLE_SANDBOX_API_KEYS", "").strip().lower()
+    if explicit in {"1", "true", "yes", "on"}:
+        return True
+    if explicit in {"0", "false", "no", "off"}:
+        return False
+    database_url = os.environ.get("DATABASE_URL", "").strip().lower()
+    return database_url.startswith(("postgresql://", "postgresql+asyncpg://"))
+
+
+async def _verify_api_key_authority(api_key: str) -> dict[str, Any] | None:
+    if _durable_sandbox_api_key_authority_enabled():
+        try:
+            durable_user = await verify_durable_sandbox_api_key(api_key)
+        except DurableSandboxApiKeyDenied as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Sandbox API key authority unavailable",
+            ) from exc
+        if durable_user is not None:
+            return durable_user
+
+    return verify_dynamic_api_key(api_key)
+
 
 def _get_jwt_secret() -> str:
     return settings.jwt_secret
@@ -217,8 +251,6 @@ def create_access_token(
     if organization_id is not None:
         payload["organization_id"] = organization_id
     return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
-
-
 
 
 def verify_access_token(token: str) -> dict:
@@ -427,7 +459,7 @@ async def get_current_user(
         return user
 
     if api_key:
-        dynamic_user = verify_dynamic_api_key(api_key)
+        dynamic_user = await _verify_api_key_authority(api_key)
         if dynamic_user:
             request.state.current_user = dynamic_user
             return dynamic_user
@@ -439,7 +471,6 @@ async def get_current_user(
             and runtime_env not in {"production", "prod"}
             and not settings.is_production
         )
-
 
         if allow_env_fallback:
             for stored_key in settings.api_keys:
@@ -464,6 +495,7 @@ async def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
+
 
 def require_scope(required_scope: str):
     async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
@@ -527,6 +559,7 @@ def require_recent_mfa(max_age_seconds: int = 300):
         return current_user
 
     return _recent_mfa_dependency
+
 
 def require_platform_admin_step_up(
     max_age_seconds: int | None = None,
