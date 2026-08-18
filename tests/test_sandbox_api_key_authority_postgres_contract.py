@@ -120,6 +120,21 @@ def test_durable_sandbox_key_is_explicitly_denied_when_subscription_is_suspended
     assert session.commits == 0
 
 
+def test_revoked_durable_key_is_explicit_denial_not_no_match(monkeypatch) -> None:
+    key = _key()
+    key.mark_revoked()
+    session = _patch_repositories(monkeypatch, key, access_stage="active")
+
+    with pytest.raises(
+        authority.DurableSandboxApiKeyDenied,
+        match="revoked_or_disabled",
+    ):
+        asyncio.run(authority.verify_durable_sandbox_api_key("pmk_sandbox_secret"))
+
+    assert key.usage_count == 0
+    assert session.commits == 0
+
+
 def test_durable_sandbox_key_expires_before_runtime_authority(monkeypatch) -> None:
     key = _key(expires_at=datetime.now(UTC) - timedelta(seconds=1))
     session = _patch_repositories(monkeypatch, key, access_stage="active")
