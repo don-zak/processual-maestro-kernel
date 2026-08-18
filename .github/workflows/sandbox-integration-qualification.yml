@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - processual_api/integrations/**
+      - processual_api/routers/settings_endpoint_discovery_qualification_runtime.py
       - processual_api/services/sandbox_api_key_*.py
       - processual_api/static/css/admin_integration_center_18.css
       - processual_api/static/js/admin_integration_center_18.js
@@ -14,6 +15,7 @@ on:
       - tests/test_endpoint_path_composition_security.py
       - tests/test_enterprise_endpoint_bindings.py
       - tests/test_postgres_migration_compatibility_contract.py
+      - tests/test_settings_endpoint_discovery_qualification_runtime.py
       - tests/test_settings_sandbox_qualification_01.py
       - tests/test_sandbox_api_key_authority_postgres_contract.py
       - tests/test_stage18_integration_center_ui_r1.py
@@ -123,6 +125,7 @@ jobs:
             processual_api/integrations/enterprise_endpoint_bindings.py \
             processual_api/integrations/enterprise_endpoint_request_mapping.py \
             processual_api/integrations/enterprise_sandbox_execution.py \
+            processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
             processual_api/services/sandbox_api_key_authority.py \
             processual_api/services/sandbox_api_key_persistence.py \
             tests/test_endpoint_binding_provenance.py \
@@ -130,6 +133,7 @@ jobs:
             tests/test_endpoint_path_composition_security.py \
             tests/test_enterprise_endpoint_bindings.py \
             tests/test_postgres_migration_compatibility_contract.py \
+            tests/test_settings_endpoint_discovery_qualification_runtime.py \
             tests/test_settings_sandbox_qualification_01.py \
             tests/test_sandbox_api_key_authority_postgres_contract.py \
             tests/test_stage18_integration_center_ui_r1.py
@@ -142,6 +146,7 @@ jobs:
             tests/test_endpoint_path_composition_security.py \
             tests/test_enterprise_endpoint_bindings.py \
             tests/test_postgres_migration_compatibility_contract.py \
+            tests/test_settings_endpoint_discovery_qualification_runtime.py \
             tests/test_settings_sandbox_qualification_01.py \
             tests/test_sandbox_api_key_authority_postgres_contract.py \
             tests/test_stage18_integration_center_ui_r1.py
@@ -159,6 +164,7 @@ jobs:
             echo "postgres_json_migration_contract=true"
             echo "endpoint_path_composition_tests=true"
             echo "endpoint_provenance_tamper_tests=true"
+            echo "endpoint_discovery_runtime_tests=true"
             echo "integration_center_ui_contract_tests=true"
             echo "production_credentials=false"
             echo "external_provider_credentials=false"
