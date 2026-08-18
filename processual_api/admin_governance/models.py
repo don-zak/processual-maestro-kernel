@@ -148,8 +148,8 @@ class AdministratorGovernanceAuditEvent(Base):
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("identity_users.id", ondelete="SET NULL")
     )
-    subject_user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("identity_users.id", ondelete="RESTRICT"), nullable=False
+    subject_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("identity_users.id", ondelete="RESTRICT")
     )
     invitation_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("admin_governance_invitations.id", ondelete="SET NULL")
