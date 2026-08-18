@@ -6,6 +6,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from processual_api.services import sandbox_api_key_authority as authority
 from processual_api.services.sandbox_api_key_persistence import SandboxApiKeyAuthority
 
@@ -78,7 +80,11 @@ def _patch_repositories(monkeypatch, key, *, access_stage: str) -> _Session:
 
     monkeypatch.setattr(authority, "SqlAlchemySandboxApiKeyRepository", _Keys)
     monkeypatch.setattr(authority, "SqlAlchemySubscriptionRuntimeRepository", _Runtime)
-    monkeypatch.setattr(authority, "_verify_stored_key", lambda raw, hashed: raw == "pmk_sandbox_secret" and hashed == key.key_hash)
+    monkeypatch.setattr(
+        authority,
+        "_verify_stored_key",
+        lambda raw, hashed: raw == "pmk_sandbox_secret" and hashed == key.key_hash,
+    )
     return session
 
 
@@ -98,13 +104,18 @@ def test_durable_sandbox_key_requires_active_subscription_runtime(monkeypatch) -
     assert session.commits == 1
 
 
-def test_durable_sandbox_key_is_denied_when_subscription_is_suspended(monkeypatch) -> None:
+def test_durable_sandbox_key_is_explicitly_denied_when_subscription_is_suspended(
+    monkeypatch,
+) -> None:
     key = _key()
     session = _patch_repositories(monkeypatch, key, access_stage="suspended")
 
-    identity = asyncio.run(authority.verify_durable_sandbox_api_key("pmk_sandbox_secret"))
+    with pytest.raises(
+        authority.DurableSandboxApiKeyDenied,
+        match="subscription_not_active",
+    ):
+        asyncio.run(authority.verify_durable_sandbox_api_key("pmk_sandbox_secret"))
 
-    assert identity is None
     assert key.usage_count == 0
     assert session.commits == 0
 
@@ -113,9 +124,20 @@ def test_durable_sandbox_key_expires_before_runtime_authority(monkeypatch) -> No
     key = _key(expires_at=datetime.now(UTC) - timedelta(seconds=1))
     session = _patch_repositories(monkeypatch, key, access_stage="active")
 
-    identity = asyncio.run(authority.verify_durable_sandbox_api_key("pmk_sandbox_secret"))
+    with pytest.raises(authority.DurableSandboxApiKeyDenied, match="key_expired"):
+        asyncio.run(authority.verify_durable_sandbox_api_key("pmk_sandbox_secret"))
 
-    assert identity is None
     assert key.status == "expired"
     assert key.usage_count == 0
     assert session.commits == 1
+
+
+def test_non_matching_candidate_allows_no_match_result(monkeypatch) -> None:
+    key = _key()
+    session = _patch_repositories(monkeypatch, key, access_stage="active")
+
+    identity = asyncio.run(authority.verify_durable_sandbox_api_key("pmk_sandbox_other"))
+
+    assert identity is None
+    assert key.usage_count == 0
+    assert session.commits == 0
