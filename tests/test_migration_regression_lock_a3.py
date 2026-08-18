@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260818_0051"
+HEAD_REVISION = "20260818_0052"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -101,6 +101,8 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260818_0050:20260818_0049"),
         ("upgrade", "20260818_0050:20260818_0051"),
         ("downgrade", "20260818_0051:20260818_0050"),
+        ("upgrade", "20260818_0051:20260818_0052"),
+        ("downgrade", "20260818_0052:20260818_0051"),
     )
 
     for command, revision_range in ranges:
@@ -212,6 +214,10 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260818_0051_admin_governance_permissions_audit.py": (
             "Downgrade blocked: administrator governance permission or audit records exist",
+            "context.is_offline_mode()",
+        ),
+        "20260818_0052_admin_governance_delivery_outbox.py": (
+            "Downgrade blocked: administrator governance delivery outbox records exist",
             "context.is_offline_mode()",
         ),
     }
