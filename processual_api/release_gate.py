@@ -59,26 +59,26 @@ class ReleaseGateResult:
 def _required_value(environment: Mapping[str, str], name: str) -> str:
     value = environment.get(name, "").strip()
     if not value:
-        raise ValueError(f"Missing required release value: {name}")
+        raise RuntimeError(f"release gate: missing required release value: {name}")
     return value
 
 
 def _reject_placeholder(name: str, value: str) -> None:
     normalized = value.lower()
     if any(marker in normalized for marker in _PLACEHOLDER_MARKERS):
-        raise ValueError(f"Release value {name} contains a placeholder marker.")
+        raise RuntimeError(f"release gate: release value {name} contains a placeholder marker")
 
 
 def _require_secret_strength(name: str, value: str, *, minimum: int = 32) -> None:
     _reject_placeholder(name, value)
     if len(value) < minimum:
-        raise ValueError(f"Release secret {name} is too short.")
+        raise RuntimeError(f"release gate: release secret {name} is too short")
 
 
 def _require_https_url(name: str, value: str) -> None:
     parsed = urlparse(value)
     if parsed.scheme != "https" or not parsed.netloc:
-        raise ValueError(f"Release URL {name} must be HTTPS.")
+        raise RuntimeError(f"release gate: release URL {name} must be HTTPS")
     _reject_placeholder(name, value)
 
 
@@ -88,7 +88,7 @@ def evaluate_release_environment(
     values = os.environ if environment is None else environment
     release_environment = _required_value(values, "ENVIRONMENT").lower()
     if release_environment not in ALLOWED_RELEASE_ENVIRONMENTS:
-        raise ValueError("Release gate only permits staging or production.")
+        raise RuntimeError("release gate: only staging or production is permitted")
 
     required = {name: _required_value(values, name) for name in _REQUIRED_VALUES}
 
@@ -108,11 +108,15 @@ def evaluate_release_environment(
     ):
         _require_secret_strength(name, required[name])
 
+    store_id = required["LEMONSQUEEZY_STORE_ID"]
+    if not store_id.isdigit() or int(store_id) <= 0:
+        raise RuntimeError("release gate: LEMONSQUEEZY_STORE_ID must be a positive integer")
+
     cors_origins = tuple(
         value.strip() for value in required["CORS_ORIGINS"].split(",") if value.strip()
     )
     if not cors_origins:
-        raise ValueError("CORS_ORIGINS must contain at least one origin.")
+        raise RuntimeError("release gate: CORS_ORIGINS must contain at least one origin")
     for origin in cors_origins:
         _require_https_url("CORS_ORIGINS", origin)
 
@@ -126,24 +130,26 @@ def evaluate_release_environment(
 
     database_url = urlparse(required["DATABASE_URL"])
     if database_url.scheme not in {"postgresql", "postgresql+asyncpg"}:
-        raise ValueError("DATABASE_URL must use PostgreSQL for a release.")
+        raise RuntimeError("release gate: DATABASE_URL must use PostgreSQL")
     redis_url = urlparse(required["REDIS_URL"])
     if redis_url.scheme not in {"redis", "rediss"}:
-        raise ValueError("REDIS_URL must use Redis for a release.")
+        raise RuntimeError("release gate: REDIS_URL must use Redis")
 
     if values.get("API_DEBUG", "").strip().lower() != "false":
-        raise ValueError("API_DEBUG must be false for a release.")
+        raise RuntimeError("release gate: API_DEBUG must be false")
     if values.get("AUDIT_ENABLED", "").strip().lower() != "true":
-        raise ValueError("AUDIT_ENABLED must be true for a release.")
+        raise RuntimeError("release gate: AUDIT_ENABLED must be true")
     if values.get("RATE_LIMIT_ENABLED", "").strip().lower() != "true":
-        raise ValueError("RATE_LIMIT_ENABLED must be true for a release.")
+        raise RuntimeError("release gate: RATE_LIMIT_ENABLED must be true")
 
     backup_reference = required["MIGRATION_BACKUP_REFERENCE"]
     restore_reference = required["MIGRATION_RESTORE_REHEARSAL_REFERENCE"]
     _reject_placeholder("MIGRATION_BACKUP_REFERENCE", backup_reference)
     _reject_placeholder("MIGRATION_RESTORE_REHEARSAL_REFERENCE", restore_reference)
     if backup_reference == restore_reference:
-        raise ValueError("Migration backup and restore rehearsal references must differ.")
+        raise RuntimeError(
+            "release gate: migration backup and restore rehearsal references must differ"
+        )
 
     return ReleaseGateResult(
         environment=release_environment,
@@ -163,7 +169,7 @@ def evaluate_release_environment(
 def main() -> int:
     try:
         result = evaluate_release_environment()
-    except ValueError as exc:
+    except RuntimeError as exc:
         print(f"commercial-release-gate: FAIL: {exc}", file=sys.stderr)
         return 1
 
