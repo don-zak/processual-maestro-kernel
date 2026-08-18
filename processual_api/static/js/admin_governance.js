@@ -23,6 +23,7 @@
   let activeFilter = 'all';
   let searchTerm = '';
   let selectedSessionUserId = '';
+  let selectedSessionCanRevoke = false;
 
   function htmlEscape(value) {
     return String(value || '')
@@ -85,7 +86,7 @@
       '<tbody id="ag-table-body"><tr class="ag-empty-row"><td colspan="5">Loading administrator governance data…</td></tr></tbody>',
       '</table></div><p id="ag-foundation-note" class="ag-note">Governance mutations are server-authorized and require the matching recent MFA step-up and exact permission.</p></section>',
       '<section class="ag-grid">',
-      '<div class="ag-card"><p class="ag-eyebrow">Sessions</p><h2>Administrator sessions</h2><p class="ag-muted">Select an administrator to inspect sessions and revoke an active session.</p><div id="ag-sessions"><div class="ag-empty-row">No administrator selected.</div></div></div>',
+      '<div class="ag-card"><p class="ag-eyebrow">Sessions</p><h2>Administrator sessions</h2><p class="ag-muted">Select an administrator to inspect sessions. Session revocation is available only for delegated Platform Supervisors.</p><div id="ag-sessions"><div class="ag-empty-row">No administrator selected.</div></div></div>',
       '<div class="ag-card"><p class="ag-eyebrow">Audit timeline</p><h2>Immutable governance activity</h2><div id="ag-activity"><div class="ag-empty-row">Loading governance activity…</div></div></div>',
       '</section>',
       '<section class="ag-grid"><div class="ag-card"><p class="ag-eyebrow">Permission model</p><h2>Bounded access domains</h2><div class="ag-domain-list">' + domainMarkup() + '</div></div>',
@@ -122,10 +123,11 @@
   }
 
   function actionMarkup(item) {
+    const sessions = '<button type="button" class="ag-tab" data-governance-action="sessions" data-user-id="' + htmlEscape(item.user_id) + '">sessions</button>';
+    if (item.authority !== 'platform_supervisor') return sessions;
     const state = normalizedState(item);
     const lifecycle = state === 'frozen' ? 'restore' : 'freeze';
-    return '<button type="button" class="ag-tab" data-governance-action="' + lifecycle + '" data-user-id="' + htmlEscape(item.user_id) + '">' + lifecycle + '</button> ' +
-      '<button type="button" class="ag-tab" data-governance-action="sessions" data-user-id="' + htmlEscape(item.user_id) + '">sessions</button>';
+    return '<button type="button" class="ag-tab" data-governance-action="' + lifecycle + '" data-user-id="' + htmlEscape(item.user_id) + '">' + lifecycle + '</button> ' + sessions;
   }
 
   function renderTable() {
@@ -195,7 +197,7 @@
     root.innerHTML = sessions.map(function (item) {
       const active = !item.revoked_at && new Date(item.expires_at).getTime() > Date.now();
       const statusLabel = active ? 'active' : (item.revoked_at ? 'revoked' : 'expired');
-      const button = active
+      const button = active && selectedSessionCanRevoke
         ? '<button class="ag-tab" type="button" data-session-revoke="' + htmlEscape(item.session_id) + '">revoke</button>'
         : '';
       return '<div class="ag-security-item"><div><strong>' + htmlEscape(item.session_id) + '</strong><br><small>authenticated ' + htmlEscape(new Date(item.authenticated_at).toLocaleString()) + '</small></div><span><span class="ag-status">' + statusLabel + '</span> ' + button + '</span></div>';
@@ -204,6 +206,8 @@
 
   async function loadSessions(userId) {
     selectedSessionUserId = userId;
+    const selected = administrators.find(function (item) { return item.user_id === userId; });
+    selectedSessionCanRevoke = Boolean(selected && selected.authority === 'platform_supervisor');
     const payload = await requestJson(
       '/governance/administrators/' + encodeURIComponent(userId) + '/sessions',
       { method: 'GET' }
@@ -232,6 +236,10 @@
       await loadSessions(userId);
       return;
     }
+    const target = administrators.find(function (item) { return item.user_id === userId; });
+    if (!target || target.authority !== 'platform_supervisor') {
+      throw new Error('Platform Administrator authority is not a delegated lifecycle target.');
+    }
     const reason = window.prompt('Reason for ' + action);
     if (!reason) return;
     const url = '/governance/administrators/' + encodeURIComponent(userId) + '/' + action;
@@ -245,7 +253,7 @@
   }
 
   async function revokeSelectedSession(sessionId) {
-    if (!selectedSessionUserId) return;
+    if (!selectedSessionUserId || !selectedSessionCanRevoke) return;
     const reason = window.prompt('Reason for revoke session');
     if (!reason) return;
     await requestJson(
