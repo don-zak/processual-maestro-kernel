@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from processual_api.admin_marketplace.models import (
     AdminMarketPlan,
