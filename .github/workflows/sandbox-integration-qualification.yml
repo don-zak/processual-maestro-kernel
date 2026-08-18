@@ -18,6 +18,7 @@ on:
       - tests/test_endpoint_binding_provenance.py
       - tests/test_endpoint_discovery_quality.py
       - tests/test_endpoint_path_composition_security.py
+      - tests/test_endpoint_source_attestation.py
       - tests/test_enterprise_endpoint_bindings.py
       - tests/test_postgres_migration_compatibility_contract.py
       - tests/test_sandbox_api_key_mode.py
@@ -131,6 +132,7 @@ jobs:
             processual_api/auth/security.py \
             processual_api/integrations/endpoint_binding_provenance.py \
             processual_api/integrations/endpoint_discovery_quality.py \
+            processual_api/integrations/endpoint_source_attestation.py \
             processual_api/integrations/enterprise_endpoint_bindings.py \
             processual_api/integrations/enterprise_endpoint_request_mapping.py \
             processual_api/integrations/enterprise_sandbox_execution.py \
@@ -147,6 +149,7 @@ jobs:
             tests/test_endpoint_binding_provenance.py \
             tests/test_endpoint_discovery_quality.py \
             tests/test_endpoint_path_composition_security.py \
+            tests/test_endpoint_source_attestation.py \
             tests/test_enterprise_endpoint_bindings.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
@@ -166,6 +169,7 @@ jobs:
             tests/test_endpoint_binding_provenance.py \
             tests/test_endpoint_discovery_quality.py \
             tests/test_endpoint_path_composition_security.py \
+            tests/test_endpoint_source_attestation.py \
             tests/test_enterprise_endpoint_bindings.py \
             tests/test_postgres_migration_compatibility_contract.py \
             tests/test_sandbox_api_key_mode.py \
@@ -196,6 +200,7 @@ jobs:
             echo "endpoint_path_composition_tests=true"
             echo "endpoint_provenance_tamper_tests=true"
             echo "endpoint_discovery_runtime_tests=true"
+            echo "endpoint_source_identity_attestation_tests=true"
             echo "integration_center_ui_contract_tests=true"
             echo "production_credentials=false"
             echo "external_provider_credentials=false"
