@@ -20,7 +20,7 @@ def test_auth_migration_chain_has_the_current_single_head() -> None:
         text=True,
         env=_alembic_environment(),
     )
-    assert result.stdout.strip() == "20260818_0051 (head)"
+    assert result.stdout.strip() == "20260818_0052 (head)"
     assert result.stdout.count("(head)") == 1
 
 
