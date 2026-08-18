@@ -148,6 +148,11 @@ def test_only_durable_no_match_can_fall_through_to_legacy(monkeypatch) -> None:
         "postgresql://maestro:test@127.0.0.1:5432/qualification",
     )
     monkeypatch.setattr(security, "settings", _settings())
+    monkeypatch.setattr(
+        security,
+        "_durable_evaluation_api_key_authority_enabled",
+        lambda: False,
+    )
 
     async def _durable(_api_key: str):
         return None
@@ -183,6 +188,11 @@ def test_explicit_local_disable_does_not_require_durable_database(monkeypatch) -
         "postgresql://maestro:test@127.0.0.1:5432/qualification",
     )
     monkeypatch.setattr(security, "settings", _settings())
+    monkeypatch.setattr(
+        security,
+        "_durable_evaluation_api_key_authority_enabled",
+        lambda: False,
+    )
 
     async def _durable(_api_key: str):
         raise AssertionError("explicitly disabled durable authority must not run")
