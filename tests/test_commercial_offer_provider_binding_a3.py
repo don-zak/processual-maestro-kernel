@@ -97,9 +97,13 @@ def test_verified_binding_readiness_requires_complete_matching_identity() -> Non
     [
         ({"offer_id": "offer-002"}, OFFER_ID),
         ({"provider": "other"}, OFFER_ID),
+        ({"provider": None}, OFFER_ID),
         ({"status": "pending"}, OFFER_ID),
+        ({"status": None}, OFFER_ID),
         ({"provider_variant_id": "   "}, OFFER_ID),
+        ({"provider_variant_id": None}, OFFER_ID),
         ({"verification_reference": "   "}, OFFER_ID),
+        ({"verification_reference": None}, OFFER_ID),
         ({"verified_at": None}, OFFER_ID),
     ],
 )
