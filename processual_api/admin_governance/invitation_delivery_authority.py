@@ -72,7 +72,11 @@ class AdministratorInvitationDeliveryAuthority:
         expires_at = invitation.expires_at
         if expires_at.tzinfo is None:
             raise self._deny()
-        if invitation.status != "pending" or expires_at <= self._now():
+        if (
+            invitation.status != "pending"
+            or invitation.accepted_by_user_id is not None
+            or expires_at <= self._now()
+        ):
             raise self._deny()
 
         return AdministratorInvitationDeliveryGrant(
