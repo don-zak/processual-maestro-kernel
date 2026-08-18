@@ -85,13 +85,12 @@ def upgrade() -> None:
                 sa.text(
                     f"""
                     UPDATE {CYCLE_TABLE}
-                    SET entitlement_codes = '{_offline_literal(entitlements_json)}',
+                    SET entitlement_codes = '{_offline_literal(entitlements_json)}'::json,
                         plan_catalog_version = '{_offline_literal(CATALOG_VERSION)}'
                     WHERE plan_code = '{_offline_literal(plan_code)}'
                       AND (
                           entitlement_codes IS NULL
-                          OR entitlement_codes = '[]'
-                          OR entitlement_codes = 'null'
+                          OR entitlement_codes::text IN ('[]', 'null')
                       )
                     """
                 )
@@ -103,13 +102,12 @@ def upgrade() -> None:
                 sa.text(
                     f"""
                     UPDATE {CYCLE_TABLE}
-                    SET entitlement_codes = :entitlements,
+                    SET entitlement_codes = CAST(:entitlements AS json),
                         plan_catalog_version = :version
                     WHERE plan_code = :plan_code
                       AND (
                           entitlement_codes IS NULL
-                          OR entitlement_codes = '[]'
-                          OR entitlement_codes = 'null'
+                          OR entitlement_codes::text IN ('[]', 'null')
                       )
                     """
                 ),
@@ -126,8 +124,7 @@ def upgrade() -> None:
                 SELECT plan_code
                 FROM {CYCLE_TABLE}
                 WHERE entitlement_codes IS NULL
-                   OR entitlement_codes = '[]'
-                   OR entitlement_codes = 'null'
+                   OR entitlement_codes::text IN ('[]', 'null')
                 LIMIT 1
                 """
             )
