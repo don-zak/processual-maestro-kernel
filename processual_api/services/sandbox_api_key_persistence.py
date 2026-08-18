@@ -4,7 +4,19 @@ import json
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, Uuid, func, select
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,14 +27,30 @@ class SandboxApiKeyAuthority(Base):
     __tablename__ = "sandbox_api_key_authority"
     __table_args__ = (
         CheckConstraint("environment = 'sandbox'", name="environment"),
-        CheckConstraint("status IN ('enabled','revoked','expired','disabled')", name="status"),
+        CheckConstraint(
+            "status IN ('enabled','revoked','expired','disabled')",
+            name="status",
+        ),
         CheckConstraint("usage_count >= 0", name="usage_count"),
         UniqueConstraint("key_hash", name="uq_sandbox_api_key_authority_hash"),
-        Index("ix_sandbox_api_key_authority_client_status", "client_ref", "status", "expires_at"),
-        Index("ix_sandbox_api_key_authority_subscription", "subscription_id", "status"),
+        Index(
+            "ix_sandbox_api_key_authority_client_status",
+            "client_ref",
+            "status",
+            "expires_at",
+        ),
+        Index(
+            "ix_sandbox_api_key_authority_subscription",
+            "subscription_id",
+            "status",
+        ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     key_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     key_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
     client_ref: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -39,13 +67,32 @@ class SandboxApiKeyAuthority(Base):
     purpose: Mapped[str] = mapped_column(String(240), nullable=False)
     issued_to: Mapped[str] = mapped_column(String(128), nullable=False)
     issued_by_actor_ref: Mapped[str] = mapped_column(String(128), nullable=False)
-    environment: Mapped[str] = mapped_column(String(16), nullable=False, default="sandbox")
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="enabled")
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    environment: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="sandbox",
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="enabled",
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    usage_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    usage_count: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -56,7 +103,9 @@ class SandboxApiKeyAuthority(Base):
     @property
     def scopes(self) -> list[str]:
         value = json.loads(self.scopes_json)
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
             raise ValueError("Sandbox API-key scopes must be a JSON string list.")
         return value
 
@@ -80,7 +129,9 @@ class SqlAlchemySandboxApiKeyRepository:
         *,
         for_update: bool = False,
     ) -> SandboxApiKeyAuthority | None:
-        statement = select(SandboxApiKeyAuthority).where(SandboxApiKeyAuthority.id == key_id)
+        statement = select(SandboxApiKeyAuthority).where(
+            SandboxApiKeyAuthority.id == key_id
+        )
         if for_update:
             statement = statement.with_for_update()
         return await self._session.scalar(statement)
