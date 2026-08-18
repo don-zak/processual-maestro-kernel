@@ -34,6 +34,38 @@ class AdministratorGovernanceResponse(BaseModel):
     count: int
 
 
+class AdministratorActivityResponse(BaseModel):
+    event_id: uuid.UUID
+    event_type: str
+    actor_user_id: uuid.UUID | None
+    subject_user_id: uuid.UUID
+    invitation_id: uuid.UUID | None
+    permission: str | None
+    reason: str
+    occurred_at: datetime
+
+
+class AdministratorActivityListResponse(BaseModel):
+    events: tuple[AdministratorActivityResponse, ...]
+    count: int
+
+
+class AdministratorSessionResponse(BaseModel):
+    session_id: uuid.UUID
+    user_id: uuid.UUID
+    authenticated_at: datetime
+    mfa_satisfied_at: datetime | None
+    last_seen_at: datetime | None
+    expires_at: datetime
+    revoked_at: datetime | None
+    revoke_reason: str | None
+
+
+class AdministratorSessionListResponse(BaseModel):
+    sessions: tuple[AdministratorSessionResponse, ...]
+    count: int
+
+
 class AdministratorInvitationIssueRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     supervision_level: Literal["operations_supervisor", "review_supervisor"]
