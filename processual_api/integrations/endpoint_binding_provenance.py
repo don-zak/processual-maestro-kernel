@@ -39,6 +39,10 @@ class EndpointBindingProvenance(BaseModel):
     source_kind: str = Field(min_length=1, max_length=40)
     source_revision: str = Field(min_length=40, max_length=64)
     source_pin_verified: bool = True
+    source_identity_id: str | None = Field(default=None, max_length=200)
+    source_identity_verified: bool = False
+    source_identity_policy_version: str | None = Field(default=None, max_length=80)
+    source_identity_verification_method: str = Field(default="unverified", max_length=80)
     operation_id: str = Field(min_length=1, max_length=300)
     contract_family: str = Field(min_length=1, max_length=80)
     api_version: str = Field(min_length=1, max_length=120)
@@ -96,6 +100,11 @@ class EndpointBindingProvenance(BaseModel):
             raise ValueError("artifact source revision must match source SHA-256")
         if self.source_kind == "git_commit" and self.source_revision not in self.source_reference.lower():
             raise ValueError("git commit revision must be present in source reference")
+        if self.source_identity_verified:
+            if not self.source_identity_id or not self.source_identity_policy_version:
+                raise ValueError("verified source identity requires server policy provenance")
+            if self.source_identity_verification_method != "server_trusted_exact_tuple":
+                raise ValueError("verified source identity requires server trusted exact tuple")
         return self
 
 
@@ -204,6 +213,12 @@ def qualify_binding_from_discovery(
         source_kind=source_kind,
         source_revision=source_revision,
         source_pin_verified=True,
+        source_identity_id=assessment.get("source_identity_id"),
+        source_identity_verified=assessment.get("source_identity_verified") is True,
+        source_identity_policy_version=assessment.get("source_identity_policy_version"),
+        source_identity_verification_method=str(
+            assessment.get("source_identity_verification_method") or "unverified"
+        ),
         operation_id=operation_id,
         contract_family=family,
         api_version=api_version,
