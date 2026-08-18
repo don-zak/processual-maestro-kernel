@@ -221,6 +221,36 @@ async def test_oversize_response_is_rejected() -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_streaming_cutoff_stops_consuming_after_limit_is_crossed() -> None:
+    class GuardedStream(httpx.AsyncByteStream):
+        def __init__(self) -> None:
+            self.yielded = 0
+
+        async def __aiter__(self):
+            self.yielded += 1
+            yield b"{" + b" " * (MAX_TRUSTED_SOURCE_BYTES - 1)
+            self.yielded += 1
+            yield b"x"
+            raise AssertionError("stream must stop immediately after crossing the size limit")
+
+    stream = GuardedStream()
+
+    with pytest.raises(TrustedEndpointSourceAcquisitionError, match="size_invalid"):
+        await acquire_trusted_github_endpoint_source(
+            source_identity_id="standards.example",
+            source_revision=COMMIT,
+            source_path="openapi/releases/v1/openapi.json",
+            catalog=_catalog(),
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, stream=stream)
+            ),
+            resolve_host=_public_resolver,
+        )
+
+    assert stream.yielded == 2
+
+
 def test_catalog_is_server_owned_environment_configuration(monkeypatch) -> None:
     monkeypatch.setenv(
         "PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES",
