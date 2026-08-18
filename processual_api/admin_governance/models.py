@@ -3,7 +3,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from processual_api.db.base import Base
@@ -76,4 +85,113 @@ class AdministratorInvitation(Base):
     )
 
 
-__all__ = ["AdministratorInvitation"]
+class AdministratorPermissionGrant(Base):
+    __tablename__ = "admin_governance_permission_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "permission",
+            name="uq_admin_governance_permission_user_permission",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'revoked')",
+            name="status_allowed",
+        ),
+        Index(
+            "ix_admin_governance_permission_user_status",
+            "user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    permission: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
+    source_invitation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_governance_invitations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    granted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    grant_reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    revocation_reason: Mapped[str | None] = mapped_column(String(500))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AdministratorGovernanceAuditEvent(Base):
+    __tablename__ = "admin_governance_audit_events"
+    __table_args__ = (
+        Index(
+            "ix_admin_governance_audit_subject_occurred",
+            "subject_user_id",
+            "occurred_at",
+        ),
+        Index(
+            "ix_admin_governance_audit_event_occurred",
+            "event_type",
+            "occurred_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="SET NULL"),
+    )
+    subject_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("identity_users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    invitation_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("admin_governance_invitations.id", ondelete="SET NULL"),
+    )
+    permission: Mapped[str | None] = mapped_column(String(120))
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+__all__ = [
+    "AdministratorGovernanceAuditEvent",
+    "AdministratorInvitation",
+    "AdministratorPermissionGrant",
+]
