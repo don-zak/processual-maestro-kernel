@@ -246,6 +246,7 @@
         target.pathname.startsWith('/applications') ||
         target.pathname.startsWith('/admin-marketplace') ||
         target.pathname.startsWith('/billing') ||
+        target.pathname.startsWith('/governance') ||
         target.pathname.startsWith('/health/')
       );
     } catch (error) {
