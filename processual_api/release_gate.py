@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-EXPECTED_ALEMBIC_HEAD = "20260818_0050"
+EXPECTED_ALEMBIC_HEAD = "20260818_0051"
 ALLOWED_RELEASE_ENVIRONMENTS = {"staging", "production"}
 _PLACEHOLDER_MARKERS = (
     "replace_with",
