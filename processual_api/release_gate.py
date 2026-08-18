@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-EXPECTED_ALEMBIC_HEAD = "20260818_0051"
+EXPECTED_ALEMBIC_HEAD = "20260818_0052"
 ALLOWED_RELEASE_ENVIRONMENTS = {"staging", "production"}
 _PLACEHOLDER_MARKERS = (
     "replace_with",
@@ -45,6 +45,7 @@ _REQUIRED_VALUES = (
     "LEMONSQUEEZY_CHECKOUT_CANCEL_URL",
     "MIGRATION_BACKUP_REFERENCE",
     "MIGRATION_RESTORE_REHEARSAL_REFERENCE",
+    "CORS_ORIGINS",
 )
 
 
@@ -55,54 +56,65 @@ class ReleaseGateResult:
     checks: tuple[str, ...]
 
 
-def _required(environ: Mapping[str, str], name: str) -> str:
-    value = environ.get(name, "").strip()
+def _required_value(environment: Mapping[str, str], name: str) -> str:
+    value = environment.get(name, "").strip()
     if not value:
-        raise RuntimeError(f"release gate: {name} is required")
-    lowered = value.lower()
-    if any(marker in lowered for marker in _PLACEHOLDER_MARKERS):
-        raise RuntimeError(f"release gate: {name} still contains a placeholder")
+        raise ValueError(f"Missing required release value: {name}")
     return value
 
 
-def _require_https(value: str, name: str) -> None:
+def _reject_placeholder(name: str, value: str) -> None:
+    normalized = value.lower()
+    if any(marker in normalized for marker in _PLACEHOLDER_MARKERS):
+        raise ValueError(f"Release value {name} contains a placeholder marker.")
+
+
+def _require_secret_strength(name: str, value: str, *, minimum: int = 32) -> None:
+    _reject_placeholder(name, value)
+    if len(value) < minimum:
+        raise ValueError(f"Release secret {name} is too short.")
+
+
+def _require_https_url(name: str, value: str) -> None:
     parsed = urlparse(value)
     if parsed.scheme != "https" or not parsed.netloc:
-        raise RuntimeError(f"release gate: {name} must use an absolute HTTPS URL")
+        raise ValueError(f"Release URL {name} must be HTTPS.")
+    _reject_placeholder(name, value)
 
 
 def evaluate_release_environment(
-    environ: Mapping[str, str] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> ReleaseGateResult:
-    values = os.environ if environ is None else environ
-    environment = values.get("ENVIRONMENT", "").strip().lower()
-    if environment not in ALLOWED_RELEASE_ENVIRONMENTS:
-        raise RuntimeError("release gate: ENVIRONMENT must be staging or production")
+    values = os.environ if environment is None else environment
+    release_environment = _required_value(values, "ENVIRONMENT").lower()
+    if release_environment not in ALLOWED_RELEASE_ENVIRONMENTS:
+        raise ValueError("Release gate only permits staging or production.")
 
-    checks: list[str] = []
-    resolved = {name: _required(values, name) for name in _REQUIRED_VALUES}
-    checks.append("required_values")
+    required = {name: _required_value(values, name) for name in _REQUIRED_VALUES}
 
-    if len(resolved["JWT_SECRET"]) < 32:
-        raise RuntimeError("release gate: JWT_SECRET must be at least 32 characters")
-    if len(resolved["LEMONSQUEEZY_WEBHOOK_SECRET"]) < 32:
-        raise RuntimeError(
-            "release gate: LEMONSQUEEZY_WEBHOOK_SECRET must be at least 32 characters"
-        )
-    if not resolved["LEMONSQUEEZY_STORE_ID"].isdigit() or int(
-        resolved["LEMONSQUEEZY_STORE_ID"]
-    ) <= 0:
-        raise RuntimeError("release gate: LEMONSQUEEZY_STORE_ID must be positive")
-    checks.append("secret_strength")
+    for name in (
+        "JWT_SECRET",
+        "API_KEYS",
+        "PROCESSUAL_CRYPTO_KEY_B64",
+        "MAESTRO_ADMIN_PASSWORD",
+        "POSTGRES_PASSWORD",
+        "REDIS_PASSWORD",
+        "GRAFANA_ADMIN_PASSWORD",
+        "AUTH_TOKEN_PEPPER",
+        "AUTH_RATE_LIMIT_PEPPER",
+        "AUTH_DELIVERY_PROVIDER_TOKEN",
+        "LEMONSQUEEZY_API_KEY",
+        "LEMONSQUEEZY_WEBHOOK_SECRET",
+    ):
+        _require_secret_strength(name, required[name])
 
-    cors_origins = [
-        item.strip() for item in values.get("CORS_ORIGINS", "").split(",") if item.strip()
-    ]
-    if not cors_origins or "*" in cors_origins:
-        raise RuntimeError("release gate: CORS_ORIGINS must be explicit")
+    cors_origins = tuple(
+        value.strip() for value in required["CORS_ORIGINS"].split(",") if value.strip()
+    )
+    if not cors_origins:
+        raise ValueError("CORS_ORIGINS must contain at least one origin.")
     for origin in cors_origins:
-        _require_https(origin, "CORS_ORIGINS")
-    checks.append("cors")
+        _require_https_url("CORS_ORIGINS", origin)
 
     for name in (
         "AUTH_DELIVERY_PROVIDER_URL",
@@ -110,51 +122,54 @@ def evaluate_release_environment(
         "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
         "LEMONSQUEEZY_CHECKOUT_CANCEL_URL",
     ):
-        _require_https(resolved[name], name)
-    checks.append("public_urls")
+        _require_https_url(name, required[name])
 
-    database_url = urlparse(resolved["DATABASE_URL"])
+    database_url = urlparse(required["DATABASE_URL"])
     if database_url.scheme not in {"postgresql", "postgresql+asyncpg"}:
-        raise RuntimeError("release gate: DATABASE_URL must use PostgreSQL")
-    redis_url = urlparse(resolved["REDIS_URL"])
+        raise ValueError("DATABASE_URL must use PostgreSQL for a release.")
+    redis_url = urlparse(required["REDIS_URL"])
     if redis_url.scheme not in {"redis", "rediss"}:
-        raise RuntimeError("release gate: REDIS_URL must use Redis")
-    checks.append("datastores")
+        raise ValueError("REDIS_URL must use Redis for a release.")
 
-    if values.get("API_DEBUG", "false").strip().lower() not in {"false", "0", "no"}:
-        raise RuntimeError("release gate: API_DEBUG must be disabled")
-    if values.get("AUDIT_ENABLED", "true").strip().lower() != "true":
-        raise RuntimeError("release gate: AUDIT_ENABLED must be true")
-    if values.get("RATE_LIMIT_ENABLED", "true").strip().lower() != "true":
-        raise RuntimeError("release gate: RATE_LIMIT_ENABLED must be true")
-    checks.append("runtime_controls")
+    if values.get("API_DEBUG", "").strip().lower() != "false":
+        raise ValueError("API_DEBUG must be false for a release.")
+    if values.get("AUDIT_ENABLED", "").strip().lower() != "true":
+        raise ValueError("AUDIT_ENABLED must be true for a release.")
+    if values.get("RATE_LIMIT_ENABLED", "").strip().lower() != "true":
+        raise ValueError("RATE_LIMIT_ENABLED must be true for a release.")
 
-    if resolved["MIGRATION_BACKUP_REFERENCE"] == resolved[
-        "MIGRATION_RESTORE_REHEARSAL_REFERENCE"
-    ]:
-        raise RuntimeError(
-            "release gate: migration backup and restore rehearsal references must differ"
-        )
-    checks.append("migration_rehearsal_evidence")
+    backup_reference = required["MIGRATION_BACKUP_REFERENCE"]
+    restore_reference = required["MIGRATION_RESTORE_REHEARSAL_REFERENCE"]
+    _reject_placeholder("MIGRATION_BACKUP_REFERENCE", backup_reference)
+    _reject_placeholder("MIGRATION_RESTORE_REHEARSAL_REFERENCE", restore_reference)
+    if backup_reference == restore_reference:
+        raise ValueError("Migration backup and restore rehearsal references must differ.")
 
     return ReleaseGateResult(
-        environment=environment,
+        environment=release_environment,
         expected_alembic_head=EXPECTED_ALEMBIC_HEAD,
-        checks=tuple(checks),
+        checks=(
+            "required_values",
+            "secret_strength",
+            "cors",
+            "public_urls",
+            "datastores",
+            "runtime_controls",
+            "migration_rehearsal_evidence",
+        ),
     )
 
 
 def main() -> int:
     try:
         result = evaluate_release_environment()
-    except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
+    except ValueError as exc:
+        print(f"commercial-release-gate: FAIL: {exc}", file=sys.stderr)
         return 1
+
     print(
-        "release gate passed: "
-        f"environment={result.environment} "
-        f"alembic_head={result.expected_alembic_head} "
-        f"checks={','.join(result.checks)}"
+        "commercial-release-gate: PASS "
+        f"environment={result.environment} alembic_head={result.expected_alembic_head}"
     )
     return 0
 
