@@ -17,6 +17,7 @@ from processual_api.integrations.trusted_endpoint_source_acquisition import (
 )
 
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
+OTHER_COMMIT = "89abcdef0123456789abcdef0123456789abcdef"
 
 
 def _catalog() -> tuple[TrustedGitHubSourceDefinition, ...]:
@@ -26,6 +27,7 @@ def _catalog() -> tuple[TrustedGitHubSourceDefinition, ...]:
             repository="standards/example-api",
             contract_family="generic_enterprise",
             allowed_path_prefixes=("openapi/releases",),
+            allowed_revisions=(COMMIT,),
         ),
     )
 
@@ -186,6 +188,24 @@ async def test_moving_ref_is_rejected_before_network() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unapproved_immutable_revision_is_rejected_before_network() -> None:
+    async def no_network(_host: str, _port: int) -> tuple[str, ...]:
+        raise AssertionError("unapproved revision must not resolve")
+
+    with pytest.raises(
+        TrustedEndpointSourceAcquisitionError,
+        match="revision_not_allowlisted",
+    ):
+        await acquire_trusted_github_endpoint_source(
+            source_identity_id="standards.example",
+            source_revision=OTHER_COMMIT,
+            source_path="openapi/releases/v1/openapi.json",
+            catalog=_catalog(),
+            resolve_host=no_network,
+        )
+
+
+@pytest.mark.asyncio
 async def test_redirect_is_rejected_and_not_followed() -> None:
     requests: list[str] = []
 
@@ -261,7 +281,8 @@ def test_catalog_is_server_owned_environment_configuration(monkeypatch) -> None:
                     "repository": "camaraproject/example",
                     "contract_family": "camara",
                     "allowed_path_prefixes": ["code/API_definitions"],
-                    "policy_version": "operator-reviewed-r1",
+                    "allowed_revisions": [COMMIT],
+                    "policy_version": "operator-reviewed-r2",
                 }
             ]
         ),
@@ -273,6 +294,46 @@ def test_catalog_is_server_owned_environment_configuration(monkeypatch) -> None:
     assert catalog[0].repository == "camaraproject/example"
     assert catalog[0].contract_family == "camara"
     assert catalog[0].allowed_path_prefixes == ("code/API_definitions",)
+    assert catalog[0].allowed_revisions == (COMMIT,)
+
+
+def test_catalog_requires_explicit_approved_revisions(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES",
+        json.dumps(
+            [
+                {
+                    "source_identity_id": "standards.example",
+                    "repository": "standards/example-api",
+                    "contract_family": "generic_enterprise",
+                    "allowed_path_prefixes": ["openapi/releases"],
+                }
+            ]
+        ),
+    )
+
+    with pytest.raises(TrustedEndpointSourceAcquisitionError, match="revisions_required"):
+        trusted_github_source_catalog_from_env()
+
+
+def test_catalog_rejects_duplicate_approved_revision(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES",
+        json.dumps(
+            [
+                {
+                    "source_identity_id": "standards.example",
+                    "repository": "standards/example-api",
+                    "contract_family": "generic_enterprise",
+                    "allowed_path_prefixes": ["openapi/releases"],
+                    "allowed_revisions": [COMMIT, COMMIT],
+                }
+            ]
+        ),
+    )
+
+    with pytest.raises(TrustedEndpointSourceAcquisitionError, match="duplicate_revision"):
+        trusted_github_source_catalog_from_env()
 
 
 def test_catalog_rejects_duplicate_identity(monkeypatch) -> None:
@@ -281,6 +342,7 @@ def test_catalog_rejects_duplicate_identity(monkeypatch) -> None:
         "repository": "standards/example-api",
         "contract_family": "generic_enterprise",
         "allowed_path_prefixes": ["openapi/releases"],
+        "allowed_revisions": [COMMIT],
     }
     monkeypatch.setenv("PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES", json.dumps([item, item]))
 
