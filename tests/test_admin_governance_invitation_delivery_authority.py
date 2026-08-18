@@ -21,6 +21,7 @@ class FakeInvitation:
     token_hash: str
     status: str
     expires_at: datetime
+    accepted_by_user_id: uuid.UUID | None = None
 
 
 class FakeRepository:
@@ -101,6 +102,18 @@ async def test_authorize_rejects_unknown_invitation_with_generic_error() -> None
 @pytest.mark.parametrize("status", ["accepted", "expired", "cancelled"])
 async def test_authorize_rejects_non_pending_invitation(status: str) -> None:
     invitation = _invitation(status=status)
+
+    with pytest.raises(AdministratorInvitationDeliveryDeniedError):
+        await _authority(FakeRepository(invitation)).authorize(
+            invitation_id=invitation.id,
+            invitation_token="invite-secret",
+        )
+
+
+@pytest.mark.asyncio
+async def test_authorize_rejects_invitation_already_bound_to_onboarding_identity() -> None:
+    invitation = _invitation()
+    invitation.accepted_by_user_id = uuid.uuid4()
 
     with pytest.raises(AdministratorInvitationDeliveryDeniedError):
         await _authority(FakeRepository(invitation)).authorize(
