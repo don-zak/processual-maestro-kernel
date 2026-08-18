@@ -45,12 +45,16 @@ def test_governance_workspace_uses_real_read_api_without_fabricated_records() ->
     required = [
         "fetch('/governance/administrators', { method: 'GET' })",
         "Array.isArray(payload.administrators)",
+        "/governance/administrator-invitations?limit=100",
+        "Array.isArray(payload.invitations)",
         "/governance/activity?limit=50",
         "/sessions",
         "Loading administrator governance data",
+        "Loading administrator invitations",
         "No administrators match the current filters.",
         "Immutable governance activity",
         "Administrator sessions",
+        "Administrator invitation lifecycle",
     ]
     for marker in required:
         assert marker in js
@@ -63,6 +67,7 @@ def test_privileged_controls_use_server_authorized_mutation_routes() -> None:
         'id="ag-invite-admin" type="button"',
         "method: 'POST'",
         "/governance/administrator-invitations",
+        "data-invitation-cancel",
         "data-governance-action=\"",
         "data-session-revoke",
         "/sessions/",
@@ -73,6 +78,7 @@ def test_privileged_controls_use_server_authorized_mutation_routes() -> None:
         assert marker in js
     assert 'id="ag-invite-admin" type="button" disabled' not in js
     assert "invitation_token" not in js
+    assert "payload_ciphertext" not in js
 
 
 def test_platform_admin_is_not_exposed_as_delegated_lifecycle_target() -> None:
