@@ -25,6 +25,7 @@ class FakeInvitationRepository:
         self.active_invitation = None
         self.added: dict[str, object] | None = None
         self.outbox: dict[str, object] | None = None
+        self.audit: dict[str, object] | None = None
 
     async def active_platform_admin(self, *, user_id: uuid.UUID):
         del user_id
@@ -44,6 +45,10 @@ class FakeInvitationRepository:
 
     def add_invitation_delivery_outbox(self, **values):
         self.outbox = values
+        return values
+
+    def add_governance_audit_event(self, **values):
+        self.audit = values
         return values
 
 
@@ -83,13 +88,14 @@ async def test_issue_persists_hash_only_invitation_and_encrypted_outbox_atomical
     repository = FakeInvitationRepository()
     service, unit, cipher = _service(repository)
     actor_id = uuid.uuid4()
+    reason = "Approved for bounded commercial operations supervision."
 
     receipt = await service.issue(
         actor_user_id=actor_id,
         command=AdministratorInvitationCommand(
             email="  ADMIN.EXAMPLE@Example.COM ",
             supervision_level="operations_supervisor",
-            reason="Approved for bounded commercial operations supervision.",
+            reason=reason,
             expires_in_hours=48,
         ),
         recent_step_up=True,
@@ -100,6 +106,15 @@ async def test_issue_persists_hash_only_invitation_and_encrypted_outbox_atomical
     assert receipt.invitation_token
     assert repository.added is not None
     assert repository.outbox is not None
+    assert repository.audit == {
+        "event_type": "administrator_invitation_issued",
+        "actor_user_id": actor_id,
+        "subject_user_id": None,
+        "invitation_id": receipt.invitation_id,
+        "permission": None,
+        "reason": reason,
+        "occurred_at": datetime(2026, 8, 18, 10, 0, tzinfo=UTC),
+    }
     assert repository.added["token_hash"] == hashlib.sha256(
         receipt.invitation_token.encode("utf-8")
     ).hexdigest()
@@ -137,6 +152,7 @@ async def test_issue_requires_recent_platform_admin_mfa_step_up() -> None:
     assert unit.committed is False
     assert repository.added is None
     assert repository.outbox is None
+    assert repository.audit is None
 
 
 @pytest.mark.asyncio
@@ -156,6 +172,7 @@ async def test_issue_requires_active_platform_admin_actor() -> None:
         )
     assert unit.committed is False
     assert repository.outbox is None
+    assert repository.audit is None
 
 
 @pytest.mark.asyncio
