@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from processual_api.integrations.endpoint_discovery_quality import (
     canonical_api_description_sha256,
 )
+from processual_api.integrations.endpoint_source_attestation import (
+    TrustedEndpointSourceRecord,
+)
 from processual_api.integrations.enterprise_endpoint_bindings import BINDING_STORAGE_KEY
+from processual_api.integrations.trusted_endpoint_source_acquisition import (
+    AcquiredTrustedEndpointSource,
+    TrustedEndpointSourceAcquisitionError,
+)
 from processual_api.routers import settings_endpoint_discovery_qualification_runtime as runtime
+
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 
 def _binding_payload() -> dict:
@@ -78,6 +88,27 @@ def _request() -> runtime.EndpointDiscoveryQualificationRequest:
         release_pinned=True,
         external_references_resolved=True,
         operation_id="getCustomerContext",
+    )
+
+
+def _trusted_acquisition() -> AcquiredTrustedEndpointSource:
+    document = _api_description()
+    path = "openapi/releases/v1.4.2/openapi.json"
+    reference = f"github:standards/customer-api@{COMMIT}:{path}"
+    record = TrustedEndpointSourceRecord(
+        source_identity_id="standards.customer-api",
+        contract_family="generic_enterprise",
+        source_reference=reference,
+        source_kind="git_commit",
+        source_revision=COMMIT,
+        source_sha256=canonical_api_description_sha256(document),
+        policy_version="reviewed-catalog-r1",
+    )
+    return AcquiredTrustedEndpointSource(
+        api_description=document,
+        trusted_record=record,
+        repository="standards/customer-api",
+        path=path,
     )
 
 
@@ -193,13 +224,12 @@ async def test_external_reference_claim_cannot_replace_bundling(monkeypatch) -> 
 async def test_git_commit_pin_requires_revision_in_source_reference(monkeypatch) -> None:
     raw = {BINDING_STORAGE_KEY: [_binding_payload()]}
     monkeypatch.setattr(runtime, "_require_enterprise", lambda _user: ("client-1", raw))
-    commit = "0123456789abcdef0123456789abcdef01234567"
     body = runtime.EndpointDiscoveryQualificationRequest(
         api_description=_api_description(),
         contract_family="generic_enterprise",
-        source_reference=f"customer-api@{commit}:openapi.json",
+        source_reference=f"customer-api@{COMMIT}:openapi.json",
         source_kind="git_commit",
-        source_revision=commit,
+        source_revision=COMMIT,
         operation_id="getCustomerContext",
     )
 
@@ -211,7 +241,112 @@ async def test_git_commit_pin_requires_revision_in_source_reference(monkeypatch)
 
     assert result["assessment"]["source_pin_verified"] is True
     assert result["provenance"]["source_kind"] == "git_commit"
-    assert result["provenance"]["source_revision"] == commit
+    assert result["provenance"]["source_revision"] == COMMIT
+
+
+def test_trusted_source_request_forbids_caller_supplied_source_metadata() -> None:
+    with pytest.raises(ValidationError):
+        runtime.TrustedEndpointDiscoveryQualificationRequest.model_validate(
+            {
+                "source_identity_id": "standards.customer-api",
+                "source_revision": COMMIT,
+                "source_path": "openapi/releases/v1.4.2/openapi.json",
+                "operation_id": "getCustomerContext",
+                "source_reference": "https://evil.example/openapi.json",
+                "contract_family": "camara",
+                "api_description": _api_description(),
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_trusted_source_route_derives_identity_from_acquisition_and_persists_only_provenance(
+    monkeypatch,
+) -> None:
+    raw = {BINDING_STORAGE_KEY: [_binding_payload()]}
+    saved: dict = {}
+    acquired = _trusted_acquisition()
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(runtime, "_require_enterprise", lambda _user: ("client-1", raw))
+    monkeypatch.setattr(
+        runtime.settings_module,
+        "_save_raw",
+        lambda user_id, payload: saved.update({"user_id": user_id, "raw": payload}),
+    )
+
+    async def fake_acquire(**kwargs):
+        seen.update({key: str(value) for key, value in kwargs.items()})
+        return acquired
+
+    monkeypatch.setattr(runtime, "acquire_trusted_github_endpoint_source", fake_acquire)
+    body = runtime.TrustedEndpointDiscoveryQualificationRequest(
+        source_identity_id="standards.customer-api",
+        source_revision=COMMIT,
+        source_path="openapi/releases/v1.4.2/openapi.json",
+        operation_id="getCustomerContext",
+    )
+
+    result = await runtime.qualify_endpoint_binding_from_trusted_source(
+        "binding.crm.customer_context",
+        body,
+        current_user={"sub": "client-1"},
+    )
+
+    assert seen == {
+        "source_identity_id": "standards.customer-api",
+        "source_revision": COMMIT,
+        "source_path": "openapi/releases/v1.4.2/openapi.json",
+    }
+    assert result["trusted_source_acquired"] is True
+    assert result["trusted_source_repository"] == "standards/customer-api"
+    assert result["assessment"]["source_reference"] == acquired.trusted_record.source_reference
+    assert result["assessment"]["contract_family"] == "generic_enterprise"
+    assert result["assessment"]["source_identity_id"] == "standards.customer-api"
+    assert result["assessment"]["source_identity_verified"] is True
+    assert result["assessment"]["source_identity_verification_method"] == (
+        "server_trusted_exact_tuple"
+    )
+    assert result["provenance"]["source_identity_verified"] is True
+    assert result["production_allowed"] is False
+    assert result["runtime_connector_approved"] is False
+    stored = saved["raw"][runtime.DISCOVERY_PROVENANCE_STORAGE_KEY][0]
+    assert stored["source_identity_verified"] is True
+    assert stored["source_identity_id"] == "standards.customer-api"
+    assert "api_description" not in stored
+    assert "paths" not in stored
+
+
+@pytest.mark.asyncio
+async def test_trusted_source_acquisition_failure_does_not_persist(monkeypatch) -> None:
+    raw = {BINDING_STORAGE_KEY: [_binding_payload()]}
+    monkeypatch.setattr(runtime, "_require_enterprise", lambda _user: ("client-1", raw))
+    monkeypatch.setattr(
+        runtime.settings_module,
+        "_save_raw",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("must not persist")),
+    )
+
+    async def fail_acquire(**_kwargs):
+        raise TrustedEndpointSourceAcquisitionError("trusted_source_identity_not_allowlisted")
+
+    monkeypatch.setattr(runtime, "acquire_trusted_github_endpoint_source", fail_acquire)
+    body = runtime.TrustedEndpointDiscoveryQualificationRequest(
+        source_identity_id="standards.customer-api",
+        source_revision=COMMIT,
+        source_path="openapi/releases/v1.4.2/openapi.json",
+        operation_id="getCustomerContext",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await runtime.qualify_endpoint_binding_from_trusted_source(
+            "binding.crm.customer_context",
+            body,
+            current_user={"sub": "client-1"},
+        )
+
+    assert exc.value.status_code == 422
+    assert "identity_not_allowlisted" in str(exc.value.detail)
+    assert runtime.DISCOVERY_PROVENANCE_STORAGE_KEY not in raw
 
 
 @pytest.mark.asyncio
