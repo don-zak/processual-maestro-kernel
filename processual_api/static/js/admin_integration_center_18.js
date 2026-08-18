@@ -120,8 +120,8 @@
 
   function statusTone(status) {
     const value = String(status || "").toLowerCase();
-    if (/complete|ready|approved|verified|healthy|allowed/.test(value)) return "good";
-    if (/reject|block|fail|expired|no-go/.test(value)) return "locked";
+    if (/complete|ready|approved|verified|healthy|allowed|passed/.test(value)) return "good";
+    if (/reject|block|fail|expired|no-go|not qualified|disabled/.test(value)) return "locked";
     return "warn";
   }
 
@@ -139,12 +139,160 @@
               <div class="ic18-row">
                 <div>
                   <strong>${escapeHtml(title)}</strong>
-                  <span>${escapeHtml(status)}</span>
+                  <span>${escapeHtml(item.description || status)}</span>
                 </div>
                 ${pill(String(status).replace(/_/g, " "), statusTone(status))}
               </div>`;
           })
           .join("")}
+      </div>`;
+  }
+
+  function readinessStep(label, status, help) {
+    const tone = statusTone(status);
+    return `
+      <div class="ic18-readiness-step ${tone}">
+        <span class="ic18-readiness-dot" aria-hidden="true"></span>
+        <div>
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(help)}</small>
+        </div>
+        ${pill(status, tone)}
+      </div>`;
+  }
+
+  function platformCard(platform) {
+    return `
+      <article class="ic18-platform-card">
+        <div class="ic18-platform-head">
+          <div>
+            <span class="ic18-platform-kicker">${escapeHtml(platform.family)}</span>
+            <h3>${escapeHtml(platform.title)}</h3>
+            <p>${escapeHtml(platform.description)}</p>
+          </div>
+          ${pill(platform.verdict, statusTone(platform.verdict))}
+        </div>
+        <div class="ic18-platform-meta">
+          <div><span>Contract</span><strong>${escapeHtml(platform.contract)}</strong></div>
+          <div><span>Sandbox</span><strong>${escapeHtml(platform.sandbox)}</strong></div>
+          <div><span>Production</span><strong>${escapeHtml(platform.production)}</strong></div>
+        </div>
+        <div class="ic18-readiness-list">
+          ${platform.steps.map((step) => readinessStep(step[0], step[1], step[2])).join("")}
+        </div>
+        <div class="ic18-platform-foot">
+          <span>${escapeHtml(platform.note)}</span>
+        </div>
+      </article>`;
+  }
+
+  function platformsView() {
+    const platforms = [
+      {
+        family: "CAMARA · GSMA Open Gateway",
+        title: "CAMARA qualification profile",
+        description:
+          "Release-pinned OpenAPI discovery, Commonalities/ICM alignment and operator sandbox proof before connector authority.",
+        verdict: "Not qualified",
+        contract: "Family recognized",
+        sandbox: "Provider proof required",
+        production: "Blocked",
+        note: "No executable CAMARA connector is approved. Moving branches and WIP specifications are not qualification evidence.",
+        steps: [
+          ["Architecture family", "Ready", "Contract family exists in the governed runtime model."],
+          ["Pinned API release", "Pending", "Select an immutable CAMARA release and record source SHA-256."],
+          ["Semantic task mapping", "Pending", "Map each API operation to a canonical Maestro task without forced reuse."],
+          ["Live operator sandbox", "Blocked", "Requires operator or channel-partner endpoint and managed test credentials."],
+        ],
+      },
+      {
+        family: "TM Forum Open APIs",
+        title: "TM Forum qualification profile",
+        description:
+          "Existing ticketing and order-management references are architecture contracts; provider API version and CTK evidence remain case scoped.",
+        verdict: "Contract only",
+        contract: "References present",
+        sandbox: "Unproven",
+        production: "Blocked",
+        note: "Provider-specific conformance must be demonstrated against an exact API version and sandbox target.",
+        steps: [
+          ["Reference contracts", "Ready", "Ticketing and order management use the TM Forum contract family."],
+          ["Provider API version", "Pending", "External API versions remain operator/provider inputs."],
+          ["Endpoint mapping", "Pending", "Discovery provenance and canonical request/response mappings required."],
+          ["Live provider proof", "Blocked", "No live external-network qualification is claimed here."],
+        ],
+      },
+      {
+        family: "Operator & enterprise APIs",
+        title: "Case-scoped proprietary integrations",
+        description:
+          "Legacy, proprietary and generic enterprise integrations use the same discovery, binding, secret-reference and sandbox evidence pipeline.",
+        verdict: "Case scoped",
+        contract: "Supported",
+        sandbox: "Per case",
+        production: "Blocked",
+        note: "No hostname, credential or provider assumption is promoted globally across customers.",
+        steps: [
+          ["Adapter contract", "Ready", "Canonical sector/domain boundaries exist."],
+          ["Endpoint discovery", "Pending", "Review-pinned OpenAPI/Swagger description required when available."],
+          ["Credential reference", "Pending", "Secret material remains outside endpoint configuration."],
+          ["Acceptance evidence", "Pending", "Case-specific sandbox proof and cleanup are required."],
+        ],
+      },
+    ];
+
+    return `
+      <div class="ic18-section-intro">
+        <div>
+          <p class="ic18-eyebrow">Standards readiness</p>
+          <h2>Platform qualification, not logo compatibility</h2>
+          <p>Every platform is separated into architecture, specification, mapping and live proof so the console never presents a planned integration as operational authority.</p>
+        </div>
+        <div class="ic18-legend" aria-label="Readiness legend">
+          ${pill("Ready", "good")}
+          ${pill("Pending review", "warn")}
+          ${pill("Blocked / unproven", "locked")}
+        </div>
+      </div>
+      <div class="ic18-platform-grid">${platforms.map(platformCard).join("")}</div>`;
+  }
+
+  function securityView() {
+    return `
+      <div class="ic18-grid">
+        <section class="ic18-panel">
+          <div class="ic18-panel-head">
+            <div>
+              <h2>Transport guardrails</h2>
+              <small>Controls applied before a sandbox request may leave the application boundary.</small>
+            </div>
+            ${pill("Fail closed", "good")}
+          </div>
+          ${rows(
+            [
+              { title: "HTTPS-only destinations", status: "verified", description: "Endpoint bindings reject non-HTTPS base URLs." },
+              { title: "Public-address DNS verification", status: "verified", description: "Private, loopback, link-local, reserved and metadata targets are rejected." },
+              { title: "Redirect following", status: "blocked", description: "3xx responses are not followed by the sandbox executor." },
+              { title: "Path-segment composition", status: "verified", description: "Task-derived path values are percent-encoded as one route segment." },
+              { title: "Response boundary", status: "verified", description: "JSON-only parsing with a 1 MiB response ceiling." },
+            ],
+            ""
+          )}
+        </section>
+        <section class="ic18-panel">
+          <div class="ic18-panel-head">
+            <div>
+              <h2>Authority boundary</h2>
+              <small>Network reachability never implies runtime or production permission.</small>
+            </div>
+          </div>
+          <div class="ic18-readiness-list">
+            ${readinessStep("Endpoint discovered", "Pending", "A pinned specification must pass the discovery quality gate.")}
+            ${readinessStep("Binding schema", "Pending", "Task, scopes and canonical mapping must validate.")}
+            ${readinessStep("Sandbox execution", "Pending", "Customer/operator test endpoint and managed credentials required.")}
+            ${readinessStep("Production authority", "Blocked", "Separate approval path remains mandatory.")}
+          </div>
+        </section>
       </div>`;
   }
 
@@ -212,41 +360,8 @@
     if (state.active === "cases") {
       return rows(cases, "No route-backed integration cases are available yet.");
     }
-
-    if (state.active === "platforms") {
-      return rows(
-        [
-          {
-            title: "CAMARA / GSMA Open Gateway",
-            status: "catalogue planned",
-            description: "Capability and conformance profile per integration case.",
-          },
-          {
-            title: "TM Forum Open APIs",
-            status: "catalogue planned",
-            description: "API version, CTK and mapping evidence per case.",
-          },
-          {
-            title: "Operator-specific profiles",
-            status: "case scoped",
-            description: "No global operator assumptions.",
-          },
-        ],
-        ""
-      );
-    }
-
-    if (state.active === "security") {
-      return rows(
-        [
-          { title: "DNS and TLS readiness", status: "reference only" },
-          { title: "OAuth / OIDC and consent", status: "supervisor review" },
-          { title: "Credential binding", status: "vault reference only" },
-        ],
-        ""
-      );
-    }
-
+    if (state.active === "platforms") return platformsView();
+    if (state.active === "security") return securityView();
     if (state.active === "secrets") return secretsOperationsView();
     if (state.active === "evidence") {
       return rows(progress, "No pilot evidence progress has been recorded.");
@@ -273,9 +388,9 @@
           </div>
           ${rows(
             [
-              { title: "Consolidate existing readiness cases", status: "in progress" },
-              { title: "Attach CAMARA/TM Forum profiles per case", status: "next" },
-              { title: "Expose safe institution projection", status: "next" },
+              { title: "Qualify endpoint discovery provenance", status: "in progress", description: "Pinned specifications and digest-backed operation inventory." },
+              { title: "Wire durable sandbox API-key authority", status: "next", description: "PostgreSQL identity, subscription and quota authority." },
+              { title: "Run real provider sandbox proof", status: "blocked", description: "Requires provider endpoint, managed credentials and acceptance fixtures." },
             ],
             ""
           )}
@@ -305,14 +420,14 @@
     if (!root) return;
 
     if (state.loading) {
-      root.innerHTML = '<div class="ic18-empty">Loading integration readiness, cases and pilot evidence…</div>';
+      root.innerHTML = '<div class="ic18-empty" role="status">Loading integration readiness, cases and pilot evidence…</div>';
       return;
     }
 
     const summary = counts();
     const tabs = TABS.map(
       ([key, label]) =>
-        `<button class="ic18-tab ${state.active === key ? "active" : ""}" data-ic18-tab="${key}">${label}</button>`
+        `<button type="button" class="ic18-tab ${state.active === key ? "active" : ""}" data-ic18-tab="${key}" aria-selected="${state.active === key ? "true" : "false"}">${label}</button>`
     ).join("");
 
     root.innerHTML = `
@@ -321,13 +436,13 @@
           <div>
             <p class="ic18-eyebrow">Stage 18 · Supervisor workspace</p>
             <h1>External Integration Center</h1>
-            <p>Unified control plane for institution intake, CAMARA and TM Forum alignment, API contracts, network and security readiness, sandbox qualification, evidence and supervisor decisions.</p>
+            <p>Unified control plane for institution intake, standards alignment, endpoint contracts, network and security readiness, sandbox qualification, evidence and supervisor decisions.</p>
             <div class="ic18-actions">
-              <button class="ic18-button" data-ic18-tab="cases">Review cases</button>
-              <button class="ic18-button ghost" data-admin-page="operator-pilot-handoff">Open pilot handoff</button>
+              <button type="button" class="ic18-button" data-ic18-tab="cases">Review cases</button>
+              <button type="button" class="ic18-button ghost" data-admin-page="operator-pilot-handoff">Open pilot handoff</button>
             </div>
           </div>
-          <div class="ic18-verdict">
+          <div class="ic18-verdict" aria-label="Environment authority">
             <div><span>Local qualification</span><strong>Allowed</strong></div>
             <div><span>Real staging</span><strong>NO-GO</strong></div>
             <div><span>Production</span><strong>NO-GO</strong></div>
@@ -335,7 +450,7 @@
           </div>
         </section>
 
-        <section class="ic18-metrics">
+        <section class="ic18-metrics" aria-label="Integration readiness metrics">
           ${metric("Integration cases", summary.cases, "Route-backed records")}
           ${metric("Open cases", summary.open, "Need supervisor attention")}
           ${metric("Inputs received", summary.received, "Ready for review")}
@@ -350,13 +465,13 @@
               <small>Case-scoped views prevent platform and customer complexity from leaking across the program.</small>
             </div>
           </div>
-          <div class="ic18-tabs">${tabs}</div>
-          <div style="margin-top:1rem">${tabBody()}</div>
+          <div class="ic18-tabs" role="tablist" aria-label="Integration center views">${tabs}</div>
+          <div class="ic18-tab-body">${tabBody()}</div>
         </section>
 
         ${
           state.error
-            ? `<div class="ic18-empty">Some route-backed data could not be loaded: ${escapeHtml(state.error)}</div>`
+            ? `<div class="ic18-empty" role="alert">Some route-backed data could not be loaded: ${escapeHtml(state.error)}</div>`
             : ""
         }
       </div>`;
