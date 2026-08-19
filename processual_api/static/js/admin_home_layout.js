@@ -14,6 +14,7 @@
       '#page-admin-home [data-admin-runtime-grid]:not(#admin-home-runtime-surface){display:contents}',
       'main{height:calc(100vh - 76px);overflow:auto!important;padding-bottom:96px!important}',
       '@media (max-width:980px){#admin-home-runtime-surface{grid-template-columns:1fr}}',
+      '@media (max-width:600px){#page-admin-home{padding:12px 8px 72px!important;overflow-x:hidden!important}#admin-home-runtime-surface{grid-template-columns:minmax(0,1fr);gap:14px;margin:16px 0 72px;max-width:100%;overflow:hidden}#admin-home-runtime-surface .card{min-width:0!important;width:100%!important;max-width:100%!important;min-height:0}#admin-home-runtime-surface .admin-data-table{min-width:0;width:100%;display:block;overflow-x:auto}#admin-home-runtime-surface .admin-kpi-grid{grid-template-columns:minmax(0,1fr)}#page-admin-home #topbar{margin:0;max-width:100%}}',
     ].join('\n');
 
     document.head.appendChild(style);
