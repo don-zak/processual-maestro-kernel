@@ -43,3 +43,11 @@ def test_release_workflow_retains_artifact_dependency_and_license_evidence() -> 
     assert "- name: Upload release evidence" in workflow
     assert "name: release-evidence" in workflow
     assert "path: release-evidence/*" in workflow
+
+
+def test_release_workflow_retains_cyclonedx_dependency_sbom() -> None:
+    workflow = _release_workflow()
+
+    assert "- name: Generate CycloneDX dependency SBOM" in workflow
+    assert "pip-audit --format cyclonedx-json" in workflow
+    assert "release-evidence/python-environment.cdx.json" in workflow
