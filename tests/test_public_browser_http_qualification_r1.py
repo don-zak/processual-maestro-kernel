@@ -64,6 +64,14 @@ def test_public_entry_surfaces_do_not_deliver_ungranted_production_authority() -
     assert "v2.0.0 — qualification" in console.text
 
 
+def test_console_delivers_pinned_chartjs_asset() -> None:
+    response = client.get("/console/")
+
+    assert response.status_code == 200
+    assert "https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" in response.text
+    assert '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>' not in response.text
+
+
 def test_legacy_raw_math_console_surfaces_are_quarantined_from_delivery() -> None:
     response = client.get("/console/")
 
