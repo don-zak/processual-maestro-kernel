@@ -4,4 +4,60 @@
   "evidence_scope": "user-executed external Telefonica Open Gateway sandbox/mock interoperability",
   "execution_commit": "558dc92f5b43b32b05917f52d21e7cae442b7fd6",
   "tool": "tools/telefonica_qod_ciba_probe.ps1",
- 
+  "provider": "telefonica_open_gateway",
+  "environment": "sandbox_mock_candidate",
+  "authorization_flow": "CIBA",
+  "scope": "dpv:RequestedServiceProvision#qod",
+  "qod_base_uri": "https://sandbox.opengateway.telefonica.com/apigateway/qod/v0",
+  "observed_results": {
+    "ciba_authorization_request": {
+      "method": "POST",
+      "path": "/bc-authorize",
+      "http_status": 200,
+      "passed": true
+    },
+    "ciba_token_exchange": {
+      "method": "POST",
+      "path": "/token",
+      "http_status": 200,
+      "passed": true,
+      "access_token_expires_in_seconds": 3600
+    },
+    "create_qod_session": {
+      "method": "POST",
+      "path": "/qod/v0/sessions",
+      "http_status": 201,
+      "passed": true
+    },
+    "get_qod_session": {
+      "method": "GET",
+      "path": "/qod/v0/sessions/{sessionId}",
+      "http_status": 200,
+      "passed": true
+    },
+    "delete_qod_session": {
+      "method": "DELETE",
+      "path": "/qod/v0/sessions/{sessionId}",
+      "http_status": 204,
+      "passed": true
+    }
+  },
+  "authenticated_sandbox_reachability_proven": true,
+  "external_mock_sandbox_proven": true,
+  "operator_network_qos_proven": false,
+  "governed_camara_v1_1_provider_sandbox_proven": false,
+  "runtime_connector_approved": false,
+  "production_allowed": false,
+  "credentials": {
+    "client_id_recorded": false,
+    "client_secret_recorded": false,
+    "access_token_recorded": false,
+    "auth_req_id_recorded": false
+  },
+  "notes": [
+    "The successful execution used the Telefonica interactive API reference route family without the obsolete /ogw segment.",
+    "This record does not claim operator-network QoS enforcement.",
+    "This record does not qualify or alter the pinned CAMARA QoD v1.1.0 governance contract.",
+    "No runtime connector or production authority is granted by this evidence."
+  ]
+}
