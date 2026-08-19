@@ -192,9 +192,20 @@
     const payload = state.camaraQod;
     const routeBacked = Boolean(payload && payload.status === "reviewed_qualification_contract");
     const callableOperations = routeBacked ? asArray(payload.callable_operations) : [];
+    const governanceTasks = routeBacked ? asArray(payload.candidate_task_ids) : [];
+    const governanceEntitlements = routeBacked ? asArray(payload.candidate_entitlement_ids) : [];
+    const governanceQuotas = routeBacked ? asArray(payload.candidate_quota_meters) : [];
     const sourceEnabled = routeBacked && payload.server_trusted_source_enabled === true;
     const semanticReviewed =
       routeBacked && payload.semantic_mapping_state === "proposal_only" && callableOperations.length === 5;
+    const governanceReadyForReview =
+      routeBacked &&
+      payload.governance_candidate_state === "review_required" &&
+      payload.governance_candidate_valid === true &&
+      payload.governance_approved === false &&
+      governanceTasks.length === 5 &&
+      governanceEntitlements.length === 2 &&
+      governanceQuotas.length === 5;
     const liveProven = routeBacked && payload.live_source_acquisition_proven === true;
     const providerSandboxProven = routeBacked && payload.provider_sandbox_proven === true;
     const version = routeBacked && payload.api_version ? payload.api_version : "1.1.0";
@@ -203,17 +214,18 @@
     const repository = routeBacked && payload.repository ? payload.repository : "camaraproject/QualityOnDemand";
     const sourceStatus = sourceEnabled ? "Policy enabled" : "Pending";
     const semanticStatus = semanticReviewed ? "Reviewed proposal" : "Pending";
+    const governanceStatus = governanceReadyForReview ? "Review required" : "Pending";
     const liveStatus = liveProven ? "Proven" : "Not proven";
     const sandboxStatus = providerSandboxProven ? "Proven" : "Blocked";
     const note = routeBacked
-      ? `Server-owned status: ${sourceEnabled ? "trusted-source policy enabled" : "trusted-source policy not enabled"}. ${callableOperations.length} reviewed outbound QoD operations; runtime task registration remains disabled. Pinned source: ${repository} @ ${revision.slice(0, 7)} · ${path}.`
-      : "Qualification status route unavailable. Conservative fallback keeps trusted-source enablement, live acquisition, provider sandbox and runtime authority unproven. Pinned candidate: camaraproject/QualityOnDemand @ 9cb179f · code/API_definitions/quality-on-demand.yaml.";
+      ? `Server-owned status: ${sourceEnabled ? "trusted-source policy enabled" : "trusted-source policy not enabled"}. ${callableOperations.length} reviewed outbound QoD operations; governance candidate ${governanceReadyForReview ? "is complete for review" : "is incomplete"}; runtime task registration remains disabled. Pinned source: ${repository} @ ${revision.slice(0, 7)} · ${path}.`
+      : "Qualification status route unavailable. Conservative fallback keeps trusted-source enablement, live acquisition, governance approval, provider sandbox and runtime authority unproven. Pinned candidate: camaraproject/QualityOnDemand @ 9cb179f · code/API_definitions/quality-on-demand.yaml.";
 
     return {
       family: "CAMARA · GSMA Open Gateway",
       title: "Quality on Demand · r3.2 candidate",
       description:
-        "Reviewed public CAMARA release candidate with a server-owned qualification projection. Specification, policy enablement, semantic review, live acquisition, provider proof and runtime authority remain separate gates.",
+        "Reviewed public CAMARA release candidate with a server-owned qualification projection. Specification, policy enablement, semantic review, governance review, live acquisition, provider proof and runtime authority remain separate gates.",
       verdict: "Spec candidate pinned",
       contract: `QoD v${version}`,
       sandbox: providerSandboxProven ? "Proven" : "Not proven",
@@ -225,8 +237,9 @@
         ["Server-enabled trusted source", sourceStatus, sourceEnabled ? "The deployment-owned catalog exactly enables the reviewed source tuple; this grants acquisition policy only, not runtime authority." : "A deployment-owned allowlist must exactly enable the reviewed source; code presence alone grants no authority."],
         ["Live source acquisition", liveStatus, liveProven ? "The safe server projection reports retained public-source acquisition evidence." : "No retained live public-source qualification evidence is reported by the server projection."],
         ["Semantic task mapping", semanticStatus, semanticReviewed ? `${callableOperations.length} outbound operations have a reviewed proposal and drift gate; proposed tasks are not runtime-registered.` : "Reviewed operation-to-task semantics are not available from the server projection."],
+        ["Governance contract review", governanceStatus, governanceReadyForReview ? `${governanceTasks.length} task candidates, ${governanceEntitlements.length} entitlement candidates and ${governanceQuotas.length} quota meters are internally consistent and still require explicit governance approval.` : "The server projection does not report a complete non-authoritative governance candidate."],
         ["Live operator sandbox", sandboxStatus, providerSandboxProven ? "Provider sandbox evidence is reported by the server projection." : "Requires an operator or channel-partner endpoint, managed test credentials and acceptance fixtures."],
-        ["Production approval", "Blocked", "Specification, policy enablement, semantic review or sandbox proof cannot implicitly grant production runtime authority."],
+        ["Production approval", "Blocked", "Specification, policy enablement, semantic review, governance readiness or sandbox proof cannot implicitly grant production runtime authority."],
       ],
     };
   }
@@ -275,7 +288,7 @@
         <div>
           <p class="ic18-eyebrow">Standards readiness</p>
           <h2>Platform qualification, not logo compatibility</h2>
-          <p>Every platform is separated into architecture, reviewed specification, server enablement, live acquisition, semantic mapping, provider sandbox proof and production approval so a pinned document is never presented as operational authority.</p>
+          <p>Every platform is separated into architecture, reviewed specification, server enablement, live acquisition, semantic mapping, governance review, provider sandbox proof and production approval so a pinned document is never presented as operational authority.</p>
         </div>
         <div class="ic18-legend" aria-label="Readiness legend">
           ${pill("Ready / pinned", "good")}
@@ -394,7 +407,7 @@
           ${rows(
             [
               { title: "Qualify trusted source provenance", status: "in progress", description: "Reviewed revisions, server enablement and digest-backed operation inventory." },
-              { title: "Review/register QoD task contracts", status: "pending governance", description: "The five-operation semantic proposal and drift gate are reviewed; runtime task, entitlement and quota registration remain separate governance decisions." },
+              { title: "Review/register QoD task contracts", status: "pending governance", description: "The five-operation semantic proposal, task candidates, entitlement candidates and quota meters are internally consistent; explicit governance approval is still required before runtime registration." },
               { title: "Run real provider sandbox proof", status: "blocked", description: "Requires provider endpoint, managed credentials and acceptance fixtures." },
             ],
             ""
