@@ -42,11 +42,14 @@ No later workspace may infer a `true` value from green CI alone. Each authority 
 
 ## Public UI / browser truth invariants
 
-- Public UI must not display `Production Ready`, `production`, or an equivalent production-authority claim while `ProductionAuthorityGranted=false`.
+- Public UI and package metadata must not claim production readiness while `ProductionAuthorityGranted=false`.
 - Delivered splash and console HTML are rewritten at the response boundary to qualification wording until production authority is independently granted.
-- Public browser responses carry `X-Content-Type-Options`, `X-Frame-Options`, HSTS, `Referrer-Policy`, and a restrictive baseline `Permissions-Policy`.
-- Static source text, browser-delivered text, and backend authority are separate review surfaces; rendered HTTP behavior is the release-relevant truth.
-- Current browser hardening does not yet constitute a complete CSP or supply-chain policy. External asset policy, CSP design, browser automation, accessibility, and viewport support remain open qualification work.
+- Public browser responses carry `X-Content-Type-Options`, `X-Frame-Options`, HSTS, `Referrer-Policy`, `Permissions-Policy`, and a Content Security Policy.
+- CSP currently restricts external browser dependencies to the explicitly required Google Fonts and jsDelivr sources, blocks objects and framing, constrains forms/base/connect, and upgrades insecure requests.
+- Current console/splash implementation still contains inline script/style behavior, therefore CSP temporarily requires `'unsafe-inline'` for script/style compatibility. Removing that exception requires a controlled extraction/nonce/hash migration and rendered-browser proof; do not delete it by assertion alone.
+- `X-XSS-Protection` is explicitly disabled (`0`); CSP is the browser content policy control.
+- Static source text, browser-delivered text, package metadata, and backend authority are separate review surfaces; rendered HTTP behavior is the release-relevant truth.
+- Browser automation, accessibility scan, viewport/support matrix, error/degraded-state journeys, and external asset pinning/self-hosting remain open qualification work.
 
 ## Supervisor/admin invariants
 
@@ -78,7 +81,7 @@ The following are non-real-environment controls and must be re-proven on the exa
 - public container SBOM scan preventing private-module path leakage;
 - ephemeral PR image identity evidence without publishing an image or inventing a release digest;
 - public offer-to-registration plan/billing-period linkage regression;
-- delivered public UI authority-truth and baseline browser-security regression.
+- delivered public UI authority-truth, package-metadata truth, CSP, and baseline browser-security regression.
 
 The dependency-license inventory is evidence of package metadata only. It is not a legal license-compatibility opinion.
 
@@ -88,29 +91,32 @@ The dependency-license inventory is evidence of package metadata only. It is not
 - An immutable release-candidate image digest is still required from a real published release-candidate artifact. A PR-only image ID is not a substitute.
 - Private image qualification and private image SBOM remain private-trust-domain work.
 - Final configuration/deployment/operator/admin/customer/migration/incident documentation reconciliation and obsolete terminology cleanup remain open.
-- General Packaging cannot close while the opaque-reference topology and legacy public/private boundary migration remain unresolved.
-- Browser qualification remains incomplete until automated rendered-page journeys, accessibility, viewport/support policy, network/error-state behavior, and CSP/external-asset policy are reviewed and evidenced.
+- General Packaging cannot close while opaque-reference implementation/proof and legacy public/private boundary migration remain unresolved.
+- Browser qualification remains incomplete until automated rendered-page journeys, accessibility, viewport/support policy, network/error-state behavior, and CSP inline/external-asset hardening are reviewed and evidenced.
 
 ## Opaque-reference topology status
 
 - The public contract accepts only bounded `formation_ref`, `evidence_ref`, `context_ref`, and `evaluated_at`.
 - The private repository defines a `PrivateReferenceResolver` protocol and generic failure behavior.
-- Current repository review has not established a concrete reviewed registry/backing store plus private-access path that satisfies tenant/type/environment/lifecycle controls.
+- `docs/architecture/OPAQUE_REFERENCE_TOPOLOGY_DECISION_R1.md` now records a **proposed, review-required, non-authoritative** topology: durable PostgreSQL shared-safe reference metadata, a dedicated public issuer, and controlled private resolution through a broker/service boundary.
+- Redis is explicitly not selected as the sole durable reference authority; browser-generated/hash-derived references remain prohibited.
+- The proposal does not select the exact private storage technology, network transport, secret authority, credentials, or production rollout.
+- No concrete registry migration, issuer implementation, private resolver backing mapping, or runtime connector is authorized yet.
 - No future workspace may manufacture references by hashing answer text, scores, vectors, or private data merely to satisfy the API shape.
-- A concrete issuer/registry/resolver implementation remains blocked until the actual system of record and private resolution path are selected and independently reviewed.
 
 ## Current blocking sequence
 
 1. Re-prove all current public CI gates on the exact current public head after any modification.
-2. Continue public browser remediation: rendered journey tests, accessibility, supported viewport contract, error/degraded-state UX, and external-asset/CSP review.
-3. Select and review a real opaque-reference issuance/registry/private-resolution topology; do not invent one from hashes or public raw data.
-4. Migrate remaining legacy raw-score/vector browser/router/report surfaces only after real reference issuance/resolution exists.
-5. Complete remaining General Packaging blockers: product license decision, immutable release-candidate image digest, private image qualification/SBOM, and final documentation reconciliation.
-6. Provision real staging with separately controlled secrets, database/cache/network/runtime resources.
-7. Execute migration backup, migration/backfill/idempotency replay, restore rehearsal, and record real evidence references.
-8. Execute complete commercial E2E including checkout/provider webhook/order/subscription/runtime/quota/usage and renewal/failure/grace/suspension/cancellation/refund paths.
-9. Execute real staging browser, security, load/concurrency, observability, rollback, provider, and operator proofs.
-10. Promote one immutable digest to release candidate, then controlled pilot, then GA only after acceptance criteria pass.
+2. Continue public browser remediation: rendered journey tests, accessibility, supported viewport contract, error/degraded-state UX, CSP inline reduction, and external-asset pinning/self-hosting review.
+3. Review/approve or revise `OPAQUE_REFERENCE_TOPOLOGY_DECISION_R1.md`; only then define the shared-safe schema and public issuer interface.
+4. Implement private resolver/broker only in the private repository after private backing mapping is independently approved.
+5. Migrate remaining legacy raw-score/vector browser/router/report surfaces only after real reference issuance/resolution exists.
+6. Complete remaining General Packaging blockers: product license decision, immutable release-candidate image digest, private image qualification/SBOM, and final documentation reconciliation.
+7. Provision real staging with separately controlled secrets, database/cache/network/runtime resources.
+8. Execute migration backup, migration/backfill/idempotency replay, restore rehearsal, and record real evidence references.
+9. Execute complete commercial E2E including checkout/provider webhook/order/subscription/runtime/quota/usage and renewal/failure/grace/suspension/cancellation/refund paths.
+10. Execute real staging browser, security, load/concurrency, observability, rollback, provider, and operator proofs.
+11. Promote one immutable digest to release candidate, then controlled pilot, then GA only after acceptance criteria pass.
 
 ## Transition protocol
 
