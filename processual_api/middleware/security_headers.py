@@ -11,6 +11,24 @@ _PUBLIC_AUTHORITY_REPLACEMENTS = (
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
     (b"v2.0.0 \xe2\x80\x94 production", b"v2.0.0 \xe2\x80\x94 qualification"),
 )
+_CONTENT_SECURITY_POLICY = "; ".join(
+    (
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "manifest-src 'self'",
+        "media-src 'self'",
+        "worker-src 'self'",
+        "upgrade-insecure-requests",
+    )
+)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -26,7 +44,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["X-XSS-Protection"] = "0"
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
@@ -34,6 +52,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(), payment=()"
         )
+        response.headers["Content-Security-Policy"] = _CONTENT_SECURITY_POLICY
 
         if path == "/admin" or path == "/admin/" or (
             path.startswith("/console/js/")
