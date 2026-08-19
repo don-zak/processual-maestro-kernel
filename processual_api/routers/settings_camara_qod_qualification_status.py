@@ -7,6 +7,9 @@ from typing import Any
 from fastapi import Depends, HTTPException, status
 
 from processual_api.auth.security import get_current_user
+from processual_api.integrations.camara_qod_external_sandbox_qualification import (
+    camara_qod_external_sandbox_qualification_payload,
+)
 from processual_api.integrations.camara_qod_governance_approval import (
     camara_qod_governance_approval_payload,
 )
@@ -15,6 +18,9 @@ from processual_api.integrations.camara_qod_runtime_registration import (
 )
 from processual_api.integrations.camara_qod_semantic_mapping import (
     camara_qod_semantic_mapping_payload,
+)
+from processual_api.integrations.camara_qod_telefonica_compatibility import (
+    camara_qod_telefonica_compatibility_payload,
 )
 from processual_api.integrations.trusted_endpoint_source_acquisition import (
     CAMARA_QOD_R32_QUALIFICATION_CANDIDATE,
@@ -92,6 +98,8 @@ async def get_camara_qod_qualification_status(
     governance_candidate = mapping["governance_candidate"]
     governance_approval = camara_qod_governance_approval_payload()
     runtime_registration = camara_qod_runtime_registration_payload()
+    external_sandbox = camara_qod_external_sandbox_qualification_payload()
+    telefonica_compatibility = camara_qod_telefonica_compatibility_payload()
 
     return {
         "status": "reviewed_qualification_contract",
@@ -147,6 +155,11 @@ async def get_camara_qod_qualification_status(
         "runtime_connector_approved": False,
         "production_allowed": False,
         "raw_secret_visible": False,
+        # External interoperability evidence is explicitly projected as a
+        # separate non-authoritative object. Its own payload remains fail-closed
+        # and cannot upgrade the governed provider/runtime/production gates.
+        "external_sandbox_evidence": external_sandbox,
+        "telefonica_compatibility": telefonica_compatibility,
     }
 
 
