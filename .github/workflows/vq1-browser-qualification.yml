@@ -33,7 +33,7 @@ jobs:
       - name: Install application and qualification dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e '.[api]' -r qualification/vq1-requirements.txt
+          python -m pip install -e '.[api,security,database,cache]' -r qualification/vq1-requirements.txt
 
       - name: Install matching Chromium binary
         run: python -m playwright install --with-deps chromium
