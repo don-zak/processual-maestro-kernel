@@ -75,9 +75,11 @@ async def get_camara_qod_qualification_status(
     enabled = any(
         item.source_identity_id == candidate.source_identity_id
         and item.repository == candidate.repository
+        and item.contract_family == candidate.contract_family
         and item.allowed_revisions == candidate.allowed_revisions
         and item.allowed_path_prefixes == candidate.allowed_path_prefixes
         and item.allowed_reference_prefixes == candidate.allowed_reference_prefixes
+        and item.policy_version == candidate.policy_version
         for item in catalog
     )
     mapping = camara_qod_semantic_mapping_payload()
