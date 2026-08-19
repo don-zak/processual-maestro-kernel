@@ -7,6 +7,12 @@ from typing import Any
 from fastapi import Depends, HTTPException, status
 
 from processual_api.auth.security import get_current_user
+from processual_api.integrations.camara_qod_governance_approval import (
+    camara_qod_governance_approval_payload,
+)
+from processual_api.integrations.camara_qod_runtime_registration import (
+    camara_qod_runtime_registration_payload,
+)
 from processual_api.integrations.camara_qod_semantic_mapping import (
     camara_qod_semantic_mapping_payload,
 )
@@ -60,7 +66,7 @@ def _require_admin_read(current_user: dict[str, Any]) -> None:
 async def get_camara_qod_qualification_status(
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Return review-safe CAMARA qualification state without runtime authority."""
+    """Return review-safe CAMARA qualification state without connector authority."""
 
     _require_admin_read(current_user)
     try:
@@ -83,7 +89,10 @@ async def get_camara_qod_qualification_status(
         for item in catalog
     )
     mapping = camara_qod_semantic_mapping_payload()
-    governance = mapping["governance_candidate"]
+    governance_candidate = mapping["governance_candidate"]
+    governance_approval = camara_qod_governance_approval_payload()
+    runtime_registration = camara_qod_runtime_registration_payload()
+
     return {
         "status": "reviewed_qualification_contract",
         "source_identity_id": mapping["source_identity_id"],
@@ -97,19 +106,44 @@ async def get_camara_qod_qualification_status(
         "callback_operations_excluded_from_outbound_binding": mapping[
             "callback_operations_excluded_from_outbound_binding"
         ],
-        "governance_candidate_state": governance["candidate_state"],
-        "governance_candidate_valid": governance["governance_candidate_valid"],
-        "governance_blocker_codes": governance["governance_blocker_codes"],
-        "candidate_task_ids": governance["candidate_task_ids"],
-        "candidate_entitlement_ids": governance["candidate_entitlement_ids"],
-        "candidate_quota_meters": governance["candidate_quota_meters"],
-        "governance_approved": False,
+        "governance_candidate_state": governance_candidate["candidate_state"],
+        "governance_candidate_valid": governance_candidate[
+            "governance_candidate_valid"
+        ],
+        "governance_blocker_codes": governance_candidate[
+            "governance_blocker_codes"
+        ],
+        "candidate_task_ids": governance_candidate["candidate_task_ids"],
+        "candidate_entitlement_ids": governance_candidate[
+            "candidate_entitlement_ids"
+        ],
+        "candidate_quota_meters": governance_candidate["candidate_quota_meters"],
+        "governance_decision": governance_approval["governance_decision"],
+        "governance_approved": governance_approval["governance_approved"],
+        "approved_governance_version": governance_approval[
+            "approved_governance_version"
+        ],
+        "approved_contract_blob_sha": governance_approval[
+            "approved_contract_blob_sha"
+        ],
         "existing_network_assurance_reused": False,
+        # Local isolated live-source evidence is retained outside this server
+        # projection and must not be inferred from code or CI presence.
         "live_source_acquisition_proven": False,
         "provider_credentials_present": False,
         "provider_network_proof": False,
         "provider_sandbox_proven": False,
-        "runtime_task_registered": False,
+        "runtime_task_registered": runtime_registration[
+            "runtime_task_registered"
+        ],
+        "registered_task_ids": runtime_registration["registered_task_ids"],
+        "registered_entitlement_ids": runtime_registration[
+            "registered_entitlement_ids"
+        ],
+        "registered_quota_meters": runtime_registration[
+            "registered_quota_meters"
+        ],
+        "runtime_default_deny": runtime_registration["default_deny"],
         "runtime_connector_approved": False,
         "production_allowed": False,
         "raw_secret_visible": False,
