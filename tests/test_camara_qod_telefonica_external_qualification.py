@@ -18,9 +18,11 @@ def test_telefonica_external_evidence_is_independent_and_non_authoritative() -> 
         "createSession",
         "getSession",
         "deleteSession",
+        "extendQosSessionDuration",
     )
     assert evidence.authenticated_sandbox_reachability_proven is True
     assert evidence.external_mock_sandbox_proven is True
+    assert evidence.external_mock_extend_proven is True
     assert evidence.operator_network_qos_proven is False
     assert evidence.governed_camara_v1_1_provider_sandbox_proven is False
     assert evidence.runtime_connector_approved is False
@@ -37,6 +39,7 @@ def test_external_qualification_payload_does_not_upgrade_provider_gate() -> None
     assert "telefonica_api_version_differs_from_governed_camara_v1_1" in payload[
         "qualification_blockers"
     ]
+    assert "retrieve_sessions_by_device_unproven" in payload["qualification_blockers"]
 
 
 def test_telefonica_compatibility_is_partial_and_fail_closed() -> None:
@@ -48,6 +51,7 @@ def test_telefonica_compatibility_is_partial_and_fail_closed() -> None:
         "createSession",
         "getSession",
         "deleteSession",
+        "extendQosSessionDuration",
     ]
     assert payload["semantically_matching_operation_ids"] == [
         "createSession",
@@ -58,7 +62,7 @@ def test_telefonica_compatibility_is_partial_and_fail_closed() -> None:
     assert payload["provider_sandbox_proven"] is False
     assert payload["runtime_connector_approved"] is False
     assert payload["production_allowed"] is False
-    assert "telefonica_extend_operation_unproven" in payload["blocker_codes"]
+    assert "telefonica_extend_operation_unproven" not in payload["blocker_codes"]
     assert "telefonica_retrieve_sessions_by_device_unproven" in payload[
         "blocker_codes"
     ]
