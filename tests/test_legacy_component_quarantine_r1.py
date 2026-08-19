@@ -60,6 +60,14 @@ def test_production_code_does_not_depend_on_deprecated_provider_test_route() -> 
     ) == []
 
 
+def test_production_code_does_not_reintroduce_legacy_credit_conversion_helper() -> None:
+    maestro_units_path = PROCESSUAL_API / "billing/maestro_units.py"
+    assert _find_production_surface_references(
+        "credits_from_maestro_units",
+        allowed_paths={maestro_units_path},
+    ) == []
+
+
 def test_quarantined_console_assets_remain_present_only_for_review() -> None:
     for relative in QUARANTINED_CONSOLE_ASSETS:
         assert (ROOT / relative).is_file(), relative
