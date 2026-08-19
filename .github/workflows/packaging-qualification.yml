@@ -87,6 +87,15 @@ jobs:
             tests/test_release_evidence_inventory.py \
             tests/test_release_secret_scan.py
 
+      - name: Diagnose Ruff import ordering for secret scanner
+        shell: bash
+        run: |
+          cp tools/secret_scan.py /tmp/secret_scan.py.before
+          ruff check tools/secret_scan.py --select I001 --fix
+          echo "--- Ruff suggested diff ---"
+          diff -u /tmp/secret_scan.py.before tools/secret_scan.py || true
+          cp /tmp/secret_scan.py.before tools/secret_scan.py
+
       - name: Ruff packaging and trust-boundary scope
         run: |
           ruff check \
