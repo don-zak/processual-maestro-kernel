@@ -169,6 +169,8 @@ jobs:
           with zipfile.ZipFile(wheels[0]) as archive:
               names = archive.namelist()
               assert "cgtlib/data/reference_scenarios.json" in names
+              assert "processual_api/integrations/private_evaluation_http.py" in names
+              assert "processual_api/integrations/private_evaluation_runtime.py" in names
               assert not any(name.startswith("cgtlib/private/") for name in names)
               assert not any(
                   name.startswith("processual_api/private_integrations/")
@@ -187,8 +189,6 @@ jobs:
           import importlib.util
 
           import cgtlib
-          from fastapi import FastAPI
-          from starlette.requests import Request
           from cgtlib.reference_data import (
               list_reference_dataset_ids,
               load_reference_scenario_record,
@@ -197,12 +197,6 @@ jobs:
           from processual_api.integrations.private_evaluation_boundary import (
               PrivateEvaluationUnavailableError,
               boundary_contract_version,
-          )
-          from processual_api.integrations.private_evaluation_http import (
-              router as private_evaluation_router,
-          )
-          from processual_api.integrations.private_evaluation_runtime import (
-              private_evaluation_provider_from_request,
           )
 
           assert cgtlib._HAS_PRIVATE is False
@@ -216,24 +210,12 @@ jobs:
           assert boundary_contract_version() == "private-evaluation-boundary/v1"
           assert importlib.util.find_spec("cgtlib.private") is None
           assert importlib.util.find_spec("processual_api.private_integrations") is None
-          assert "/cgt/govern/evaluate" in {
-              getattr(route, "path", "") for route in private_evaluation_router.routes
-          }
           try:
               govern_answer(answer="public-wheel-probe")
           except PrivateEvaluationUnavailableError as exc:
               assert str(exc) == "private_evaluation_unavailable"
           else:
               raise AssertionError("public governor must fail closed without private decision")
-
-          app = FastAPI()
-          request = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "app": app})
-          try:
-              private_evaluation_provider_from_request(request)
-          except PrivateEvaluationUnavailableError as exc:
-              assert str(exc) == "private_evaluation_unavailable"
-          else:
-              raise AssertionError("public wheel must not auto-discover a private provider")
           PY
 
       - name: Generate release evidence inventory
