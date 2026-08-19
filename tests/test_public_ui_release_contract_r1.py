@@ -47,6 +47,13 @@ def test_registration_page_has_accessible_responsive_baseline() -> None:
     assert 'nav aria-label="Registration links"' in html
 
 
+def test_package_metadata_does_not_claim_ungranted_production_authority() -> None:
+    metadata = (ROOT / "pyproject.toml").read_text()
+
+    assert 'description = "Production-ready' not in metadata
+    assert "under governed qualification" in metadata
+
+
 def test_public_ui_delivery_rewrites_ungranted_production_claims() -> None:
     async def public_home(_request):
         return HTMLResponse('<footer>Production Ready · جاهز للإنتاج</footer>')
