@@ -1,0 +1,186 @@
+"""Reviewed semantic mapping for the pinned CAMARA QoD r3.2 API.
+
+This module deliberately does not register runtime tasks or a connector. It
+records the exact provider operation/scopes and the proposed Maestro semantics
+that must be reviewed before endpoint bindings can become executable.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from types import MappingProxyType
+
+from processual_api.integrations.trusted_endpoint_source_acquisition import (
+    CAMARA_QOD_R32_COMMIT,
+    CAMARA_QOD_R32_PATH,
+)
+
+READ = "read"
+APPROVAL_GATED_WRITE = "approval_gated_write"
+
+
+@dataclass(frozen=True, slots=True)
+class CamaraQodSemanticMapping:
+    operation_id: str
+    method: str
+    path: str
+    camara_scope: str
+    proposed_task_id: str
+    operation_class: str
+    required_input_fields: tuple[str, ...]
+    optional_input_fields: tuple[str, ...]
+    conditional_input_rules: tuple[str, ...]
+    data_classifications: tuple[str, ...]
+    proposed_entitlement_id: str
+    proposed_quota_meter: str
+    runtime_task_registered: bool = False
+    runtime_connector_approved: bool = False
+    production_allowed: bool = False
+
+
+_MAPPINGS = {
+    "createSession": CamaraQodSemanticMapping(
+        operation_id="createSession",
+        method="POST",
+        path="/sessions",
+        camara_scope="quality-on-demand:sessions:create",
+        proposed_task_id="camara.qod.session_create",
+        operation_class=APPROVAL_GATED_WRITE,
+        required_input_fields=("application_server", "qos_profile", "duration_seconds"),
+        optional_input_fields=(
+            "device",
+            "device_ports",
+            "application_server_ports",
+            "notification_sink",
+            "notification_sink_credential_reference",
+        ),
+        conditional_input_rules=(
+            "two_legged_token_requires_device",
+            "three_legged_token_forbids_device",
+            "notification_sink_credential_must_be_managed_reference",
+        ),
+        data_classifications=(
+            "network_identifier",
+            "device_identifier_possible_personal_data",
+            "application_endpoint",
+        ),
+        proposed_entitlement_id="camara_qod_session_manage",
+        proposed_quota_meter="camara_qod_session_create",
+    ),
+    "getSession": CamaraQodSemanticMapping(
+        operation_id="getSession",
+        method="GET",
+        path="/sessions/{sessionId}",
+        camara_scope="quality-on-demand:sessions:read",
+        proposed_task_id="camara.qod.session_get",
+        operation_class=READ,
+        required_input_fields=("session_id",),
+        optional_input_fields=(),
+        conditional_input_rules=(
+            "three_legged_token_subject_must_match_session_subject",
+            "session_must_belong_to_same_api_consumer",
+        ),
+        data_classifications=("session_identifier", "network_service_state"),
+        proposed_entitlement_id="camara_qod_session_read",
+        proposed_quota_meter="camara_qod_session_read",
+    ),
+    "deleteSession": CamaraQodSemanticMapping(
+        operation_id="deleteSession",
+        method="DELETE",
+        path="/sessions/{sessionId}",
+        camara_scope="quality-on-demand:sessions:delete",
+        proposed_task_id="camara.qod.session_delete",
+        operation_class=APPROVAL_GATED_WRITE,
+        required_input_fields=("session_id",),
+        optional_input_fields=(),
+        conditional_input_rules=(
+            "three_legged_token_subject_must_match_session_subject",
+            "session_must_belong_to_same_api_consumer",
+        ),
+        data_classifications=("session_identifier", "network_service_control"),
+        proposed_entitlement_id="camara_qod_session_manage",
+        proposed_quota_meter="camara_qod_session_delete",
+    ),
+    "extendQosSessionDuration": CamaraQodSemanticMapping(
+        operation_id="extendQosSessionDuration",
+        method="POST",
+        path="/sessions/{sessionId}/extend",
+        camara_scope="quality-on-demand:sessions:update",
+        proposed_task_id="camara.qod.session_extend",
+        operation_class=APPROVAL_GATED_WRITE,
+        required_input_fields=("session_id", "requested_additional_duration_seconds"),
+        optional_input_fields=(),
+        conditional_input_rules=(
+            "three_legged_token_subject_must_match_session_subject",
+            "session_must_belong_to_same_api_consumer",
+            "provider_qos_profile_max_duration_applies",
+        ),
+        data_classifications=("session_identifier", "network_service_control"),
+        proposed_entitlement_id="camara_qod_session_manage",
+        proposed_quota_meter="camara_qod_session_update",
+    ),
+    "retrieveSessionsByDevice": CamaraQodSemanticMapping(
+        operation_id="retrieveSessionsByDevice",
+        method="POST",
+        path="/retrieve-sessions",
+        camara_scope="quality-on-demand:sessions:retrieve-by-device",
+        proposed_task_id="camara.qod.sessions_retrieve_by_device",
+        operation_class=READ,
+        required_input_fields=(),
+        optional_input_fields=("device",),
+        conditional_input_rules=(
+            "two_legged_token_requires_device",
+            "three_legged_token_forbids_device",
+            "three_legged_token_subject_selects_device",
+        ),
+        data_classifications=(
+            "device_identifier_possible_personal_data",
+            "network_service_state",
+        ),
+        proposed_entitlement_id="camara_qod_session_read",
+        proposed_quota_meter="camara_qod_session_retrieve_by_device",
+    ),
+}
+
+CAMARA_QOD_R32_SEMANTIC_MAPPINGS = MappingProxyType(_MAPPINGS)
+CAMARA_QOD_R32_CALLABLE_OPERATION_IDS = tuple(_MAPPINGS)
+CAMARA_QOD_R32_CALLBACK_OPERATION_IDS = ("postNotification",)
+
+
+def get_camara_qod_semantic_mapping(operation_id: str) -> CamaraQodSemanticMapping:
+    try:
+        return CAMARA_QOD_R32_SEMANTIC_MAPPINGS[str(operation_id or "").strip()]
+    except KeyError as exc:
+        raise KeyError(f"Unsupported CAMARA QoD operation '{operation_id}'.") from exc
+
+
+def camara_qod_semantic_mapping_payload() -> dict[str, object]:
+    return {
+        "source_identity_id": "camara.quality_on_demand.r3_2",
+        "repository": "camaraproject/QualityOnDemand",
+        "source_revision": CAMARA_QOD_R32_COMMIT,
+        "source_path": CAMARA_QOD_R32_PATH,
+        "api_version": "1.1.0",
+        "mapping_state": "proposal_only",
+        "callable_operations": [asdict(_MAPPINGS[key]) for key in _MAPPINGS],
+        "callback_operations_excluded_from_outbound_binding": list(
+            CAMARA_QOD_R32_CALLBACK_OPERATION_IDS
+        ),
+        "existing_network_assurance_reused": False,
+        "runtime_task_registered": False,
+        "runtime_connector_approved": False,
+        "provider_sandbox_proven": False,
+        "production_allowed": False,
+    }
+
+
+__all__ = [
+    "APPROVAL_GATED_WRITE",
+    "CAMARA_QOD_R32_CALLBACK_OPERATION_IDS",
+    "CAMARA_QOD_R32_CALLABLE_OPERATION_IDS",
+    "CAMARA_QOD_R32_SEMANTIC_MAPPINGS",
+    "CamaraQodSemanticMapping",
+    "READ",
+    "camara_qod_semantic_mapping_payload",
+    "get_camara_qod_semantic_mapping",
+]
