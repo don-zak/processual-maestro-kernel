@@ -19,10 +19,19 @@
     return selected ? selected.value : "individual";
   }
 
-  function selectedPlanId() {
-    const value = new URLSearchParams(window.location.search).get("plan_id");
+  function queryValue(name) {
+    const value = new URLSearchParams(window.location.search).get(name);
     const normalized = String(value || "").trim();
     return normalized || null;
+  }
+
+  function selectedPlanId() {
+    return queryValue("plan_id");
+  }
+
+  function selectedBillingPeriod() {
+    const period = queryValue("billing_period");
+    return period === "monthly" || period === "annual" ? period : null;
   }
 
   function setStatus(message, state) {
@@ -97,6 +106,10 @@
     const planId = selectedPlanId();
     if (planId) {
       payload.selected_plan_id = planId;
+      const billingPeriod = selectedBillingPeriod();
+      if (billingPeriod) {
+        payload.billing_period = billingPeriod;
+      }
     }
 
     return payload;
