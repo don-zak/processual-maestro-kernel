@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import processual_api.cgt_governor.gateway.engine as gateway_module
+import processual_api.cgt_governor.simulation.engine as simulation_module
 from processual_api.cgt_governor.gateway.models import AgentState
 from processual_api.cgt_governor.governor import (
     SanitizedGovernedAnswer,
@@ -120,6 +121,26 @@ def test_public_gateway_source_has_no_legacy_analysis_vector_pipeline() -> None:
         "result.fate",
         "add_evaluation(",
         "sign_response(",
+    )
+    for token in forbidden:
+        assert token not in source
+
+
+def test_public_simulation_fails_closed_before_local_math() -> None:
+    with pytest.raises(PrivateEvaluationUnavailableError) as exc_info:
+        simulation_module.SimulationEngine.run()
+
+    assert str(exc_info.value) == "private_evaluation_unavailable"
+
+
+def test_public_simulation_source_has_no_legacy_analysis_vector_pipeline() -> None:
+    source = Path("processual_api/cgt_governor/simulation/engine.py").read_text("utf-8")
+    forbidden = (
+        "from ..analyzer import",
+        "from ..governor import govern_answer",
+        "analyze_cgt(",
+        "result.fate",
+        "_SIMULATED_ANSWERS",
     )
     for token in forbidden:
         assert token not in source
