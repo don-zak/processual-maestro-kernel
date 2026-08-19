@@ -55,12 +55,44 @@ No later workspace may infer a `true` value from green CI alone. Each authority 
 - Fail-closed commercial feature flags remain false until their real-environment evidence gates are complete.
 - `config/infisical/production-secret-manifest.json` is the canonical value-free secret/config inventory for production qualification.
 
+## General Packaging controls already implemented
+
+The following are non-real-environment controls and must be re-proven on the exact current head before being cited as evidence:
+
+- Python dependency vulnerability audit with `pip-audit`;
+- Python CycloneDX dependency SBOM;
+- installed-environment dependency/license metadata inventory in `release-evidence/dependency-license-review.json`;
+- public/private error-surface regression proving generic private-evaluation errors and no exception-detail forwarding;
+- public wheel/sdist build, metadata validation, installed-wheel smoke, reference-data packaging checks, and private-source exclusion;
+- public Docker build and fail-closed trust-boundary smoke;
+- public container CycloneDX and SPDX SBOM generation from the built image;
+- public container SBOM scan preventing private-module path leakage;
+- ephemeral PR image identity evidence without publishing an image or inventing a release digest.
+
+The dependency-license inventory is evidence of package metadata only. It is not a legal license-compatibility opinion.
+
+## General Packaging blockers still open
+
+- The repository/package owner must explicitly choose and declare the product's distribution license before external distribution; no license is selected by automated qualification.
+- An immutable release-candidate image digest is still required from a real published release-candidate artifact. A PR-only image ID is not a substitute.
+- Private image qualification and private image SBOM remain private-trust-domain work.
+- Final configuration/deployment/operator/admin/customer/migration/incident documentation reconciliation and obsolete terminology cleanup remain open.
+- General Packaging cannot close while the opaque-reference topology and legacy public/private boundary migration remain unresolved.
+
+## Opaque-reference topology status
+
+- The public contract accepts only bounded `formation_ref`, `evidence_ref`, `context_ref`, and `evaluated_at`.
+- The private repository defines a `PrivateReferenceResolver` protocol and generic failure behavior.
+- Current repository review has not established a concrete reviewed registry/backing store plus private-access path that satisfies tenant/type/environment/lifecycle controls.
+- No future workspace may manufacture references by hashing answer text, scores, vectors, or private data merely to satisfy the API shape.
+- A concrete issuer/registry/resolver implementation remains blocked until the actual system of record and private resolution path are selected and independently reviewed.
+
 ## Current blocking sequence
 
-1. Finish repository-wide non-real-environment release qualification and address any CI regression.
+1. Re-prove all current public CI gates on the exact current public head after any modification.
 2. Select and review a real opaque-reference issuance/registry/private-resolution topology; do not invent one from hashes or public raw data.
 3. Migrate remaining legacy raw-score/vector browser/router/report surfaces only after real reference issuance/resolution exists.
-4. Complete General Packaging: dependency/license review, private-error-surface review, public container SBOM, immutable release-candidate image digest, private image qualification/SBOM, configuration/document reconciliation.
+4. Complete remaining General Packaging blockers: product license decision, immutable release-candidate image digest, private image qualification/SBOM, and final documentation reconciliation.
 5. Provision real staging with separately controlled secrets, database/cache/network/runtime resources.
 6. Execute migration backup, migration/backfill/idempotency replay, restore rehearsal, and record real evidence references.
 7. Execute complete commercial E2E including checkout/provider webhook/order/subscription/runtime/quota/usage and renewal/failure/grace/suspension/cancellation/refund paths.
