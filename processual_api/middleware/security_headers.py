@@ -8,6 +8,9 @@ from starlette.responses import PlainTextResponse, Response
 _ADMIN_DOM_CONTRACT_SCRIPT = (
     b'<script src="/console/js/admin_external_evaluation_dom_contract.js?v=admindomcontract01"></script>'
 )
+_VQ1_NARROW_HARDENING_STYLESHEET = (
+    b'<link rel="stylesheet" href="/console/css/vq1_narrow_hardening.css?v=vq1narrow01">'
+)
 _PUBLIC_AUTHORITY_REPLACEMENTS = (
     (b"Production Ready", b"Qualification Build"),
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
@@ -78,9 +81,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if path in {"/console", "/console/", "/console/index.html"}:
             response = await self._pin_public_assets(response)
             response = await self._quarantine_legacy_console_surfaces(response)
+            response = await self._inject_vq1_narrow_hardening(response)
 
         if path in {"/admin", "/admin/"}:
             response = await self._inject_admin_dom_contract(response)
+            response = await self._inject_vq1_narrow_hardening(response)
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -154,6 +159,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 body = _LEGACY_CONSOLE_QUARANTINE_STYLE + body
+        return self._rebuilt_response(response, body)
+
+    async def _inject_vq1_narrow_hardening(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+
+        body = await self._response_body(response)
+        if _VQ1_NARROW_HARDENING_STYLESHEET not in body:
+            if b"</head>" in body:
+                body = body.replace(
+                    b"</head>",
+                    _VQ1_NARROW_HARDENING_STYLESHEET + b"</head>",
+                    1,
+                )
+            else:
+                body = _VQ1_NARROW_HARDENING_STYLESHEET + body
         return self._rebuilt_response(response, body)
 
     async def _inject_admin_dom_contract(self, response: Response) -> Response:
