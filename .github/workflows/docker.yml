@@ -37,6 +37,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build ephemeral public Docker image
+        id: build_ephemeral
         if: github.event_name != 'push'
         uses: docker/build-push-action@v5
         with:
@@ -49,6 +50,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push tagged public Docker image
+        id: build_published
         if: github.event_name == 'push'
         uses: docker/build-push-action@v5
         with:
@@ -92,4 +94,68 @@ jobs:
 
       - name: Record ephemeral public image identity
         if: github.event_name != 'push'
-        run: docker image inspect pmk-public-qualification:${{ github.sha }} --format '{{.Id}}'
+        shell: bash
+        run: |
+          mkdir -p release-evidence
+          docker image inspect pmk-public-qualification:${{ github.sha }} --format '{{.Id}}' \
+            | tee release-evidence/public-ephemeral-image-id.txt
+
+      - name: Record immutable published image digest
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          mkdir -p release-evidence
+          printf '%s\n' '${{ steps.build_published.outputs.digest }}' \
+            | tee release-evidence/public-image-digest.txt
+          grep -Eq '^sha256:[0-9a-f]{64}$' release-evidence/public-image-digest.txt
+
+      - name: Install Syft 1.50.0
+        shell: bash
+        run: |
+          curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin v1.50.0
+          syft version
+
+      - name: Generate public container SBOM
+        shell: bash
+        run: |
+          mkdir -p release-evidence
+          if [ "${{ github.event_name }}" = "push" ]; then
+            target="ghcr.io/${{ github.repository_owner }}/processual-maestro-public@${{ steps.build_published.outputs.digest }}"
+          else
+            target="pmk-public-qualification:${{ github.sha }}"
+          fi
+          syft "$target" \
+            -o cyclonedx-json=release-evidence/public-container.cdx.json \
+            -o spdx-json=release-evidence/public-container.spdx.json
+          test -s release-evidence/public-container.cdx.json
+          test -s release-evidence/public-container.spdx.json
+
+      - name: Verify public container SBOM trust boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          forbidden = (
+              "cgtlib/private",
+              "cgtlib.private",
+              "processual_api/private_integrations",
+              "processual_api.private_integrations",
+          )
+          for path in (
+              Path("release-evidence/public-container.cdx.json"),
+              Path("release-evidence/public-container.spdx.json"),
+          ):
+              payload = json.loads(path.read_text())
+              rendered = json.dumps(payload, sort_keys=True)
+              assert not any(value in rendered for value in forbidden), path
+          PY
+
+      - name: Upload public container evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-container-evidence-${{ github.sha }}
+          path: release-evidence/*
+          if-no-files-found: error
+          retention-days: 14
