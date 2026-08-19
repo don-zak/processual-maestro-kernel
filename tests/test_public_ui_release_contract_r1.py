@@ -25,7 +25,8 @@ def test_offer_to_registration_preserves_plan_and_billing_period() -> None:
     assert 'queryValue("billing_period")' in registration
     assert 'period === "monthly" || period === "annual"' in registration
     assert "payload.selected_plan_id = planId" in registration
-    assert "payload.billing_period = billingPeriod" in registration
+    assert "payload.billing_period = selectedBillingPeriod()" in registration
+    assert "This plan registration link is incomplete." in registration
 
     assert 'billing_period not in ("monthly", "annual")' in service
     assert "billing_period=billing_period" in service
