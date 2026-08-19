@@ -83,6 +83,28 @@ def test_camara_qod_status_route_is_safe_and_fail_closed_by_default() -> None:
     assert payload["callback_operations_excluded_from_outbound_binding"] == [
         "postNotification"
     ]
+    assert payload["governance_candidate_state"] == "review_required"
+    assert payload["governance_candidate_valid"] is True
+    assert payload["governance_blocker_codes"] == []
+    assert payload["candidate_task_ids"] == [
+        "camara.qod.session_create",
+        "camara.qod.session_get",
+        "camara.qod.session_delete",
+        "camara.qod.session_extend",
+        "camara.qod.sessions_retrieve_by_device",
+    ]
+    assert payload["candidate_entitlement_ids"] == [
+        "camara_qod_session_manage",
+        "camara_qod_session_read",
+    ]
+    assert payload["candidate_quota_meters"] == [
+        "camara_qod_session_create",
+        "camara_qod_session_delete",
+        "camara_qod_session_read",
+        "camara_qod_session_retrieve_by_device",
+        "camara_qod_session_update",
+    ]
+    assert payload["governance_approved"] is False
     assert payload["existing_network_assurance_reused"] is False
     assert payload["live_source_acquisition_proven"] is False
     assert payload["provider_credentials_present"] is False
