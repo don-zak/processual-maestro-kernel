@@ -7,7 +7,13 @@ from processual_api.admin_marketplace.commercial_plan_projection import (
     build_commercial_plan_projections,
     build_subscription_quota_profiles,
 )
-from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC
+from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC, maestro_unit_rule
+from processual_api.billing.plan_capability_matrix import (
+    EXECUTION_CAPABILITY_POLICIES,
+    CapabilityStatus,
+    TOOL_CAPABILITIES,
+    plan_can_execute,
+)
 from processual_api.billing.plan_fulfillment_catalog import PLAN_FULFILLMENT_SPECS
 from processual_api.billing.public_plan_journey import public_plan_journey_catalog
 from processual_api.release_gate import _REQUIRED_VALUES
@@ -56,6 +62,35 @@ def test_public_plan_journey_never_claims_unbound_assessment_quota() -> None:
             assert plan["included_quota_units"] is None
 
 
+def test_execution_rights_and_unit_costs_share_one_authority() -> None:
+    for policy in EXECUTION_CAPABILITY_POLICIES.values():
+        rule = maestro_unit_rule(policy.path)
+        assert rule is not None
+        assert policy.quota_metric == MAESTRO_UNIT_METRIC
+        assert rule.units == policy.quota_cost
+        assert rule.capability_code == policy.capability_code
+
+    assert plan_can_execute("starter", "maestro_execution") is True
+    assert plan_can_execute("starter", "enterprise_governance") is False
+    assert plan_can_execute("enterprise_pilot", "enterprise_governance") is True
+
+    advanced = TOOL_CAPABILITIES["advanced_integration"]
+    assert advanced.status is CapabilityStatus.SANDBOX_ONLY
+    assert advanced.production_allowed is False
+    assert plan_can_execute(
+        "enterprise_scale", "advanced_integration", require_production=True
+    ) is False
+
+    durable = TOOL_CAPABILITIES["durable_execution_internal"]
+    assert durable.status is CapabilityStatus.INTERNAL_ONLY
+    assert durable.customer_executable is False
+    assert durable.production_allowed is False
+    assert all(
+        "durable_execution_internal" not in spec.entitlement_codes
+        for spec in PLAN_FULFILLMENT_SPECS.values()
+    )
+
+
 def test_registration_activation_and_usage_are_bound_to_plan_authority() -> None:
     registration = (ROOT / "processual_api/auth/registration_service.py").read_text()
     activation = (
@@ -64,6 +99,7 @@ def test_registration_activation_and_usage_are_bound_to_plan_authority() -> None
     usage = (
         ROOT / "processual_api/admin_marketplace/subscription_quota_usage.py"
     ).read_text()
+    middleware = (ROOT / "processual_api/middleware/subscription.py").read_text()
 
     assert "resolve_direct_registration_plan" in registration
     assert "validate_registration_plan_mode" in registration
@@ -80,6 +116,12 @@ def test_registration_activation_and_usage_are_bound_to_plan_authority() -> None
     assert "command.units > cycle.available_units" in usage
     assert "degraded grace usage cap is exhausted" in usage
     assert "idempotency_key_hash" in usage
+
+    assert "required_execution_capability" in middleware
+    assert "require_plan_entitlement" in middleware
+    assert 'stage == "grace"' in middleware
+    assert 'stage == "suspended"' in middleware
+    assert 'stage == "terminated"' in middleware
 
 
 def test_admin_workspace_exposes_readiness_and_usage_without_becoming_authority() -> None:
