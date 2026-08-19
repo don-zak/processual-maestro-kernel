@@ -32,10 +32,16 @@ from .discord import router as discord_router
 from .execution_observability import router as execution_observability_router
 from .governance import router as governance_router
 from .health import router as health_router
+from .private_evaluation import router as private_evaluation_router
 from .reports import router as reports_router
 from .settings import router as settings_router
 from .telemetry import router as telemetry_router
 from .workflows import router as workflows_router
+
+# Canonical protected-evaluation route is an extension of the existing governor
+# router. The extension itself resolves only explicitly injected providers and
+# contains no private implementation discovery.
+cgt_governor_router.include_router(private_evaluation_router)
 
 __all__ = [
     "health_router",
