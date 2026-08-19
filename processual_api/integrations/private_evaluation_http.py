@@ -9,6 +9,7 @@ from .private_evaluation_boundary import (
     PrivateEvaluationUnavailableError,
     SanitizedPrivateDecision,
     evaluate_through_private_boundary,
+    validate_private_evaluation_request,
 )
 from .private_evaluation_runtime import private_evaluation_provider_from_request
 
@@ -52,7 +53,7 @@ class PrivateEvaluationResponse(BaseModel):
 
 def evaluate_private_request(envelope: PrivateEvaluationEnvelope, request: Request) -> PrivateEvaluationResponse:
     try:
-        contract_request = envelope.to_contract()
+        contract_request = validate_private_evaluation_request(envelope.to_contract())
     except PrivateEvaluationContractViolationError:
         raise HTTPException(status_code=422, detail="private_evaluation_contract_violation") from None
 
