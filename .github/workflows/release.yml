@@ -178,6 +178,10 @@ jobs:
       - name: Generate release evidence inventory
         run: python tools/release_evidence_inventory.py --dist-dir dist --output release-evidence/release-inventory.json
 
+      - name: Generate CycloneDX dependency SBOM
+        shell: bash
+        run: pip-audit --format cyclonedx-json > release-evidence/python-environment.cdx.json
+
       - name: Upload release evidence
         uses: actions/upload-artifact@v4
         with:
