@@ -5,6 +5,7 @@ on:
     paths:
       - processual_api/integrations/camara_public_source_qualification.py
       - processual_api/integrations/camara_qod_semantic_mapping.py
+      - processual_api/integrations/endpoint_discovery_quality.py
       - processual_api/integrations/trusted_endpoint_source_acquisition.py
       - processual_api/routers/__init__.py
       - processual_api/routers/settings_camara_qod_qualification_status.py
@@ -12,6 +13,7 @@ on:
       - tests/test_camara_public_source_qualification.py
       - tests/test_camara_qod_semantic_mapping.py
       - tests/test_camara_qod_qualification_status_route.py
+      - tests/test_endpoint_discovery_quality.py
       - tests/test_stage18_integration_center_ui_r1.py
       - tests/test_trusted_endpoint_source_acquisition.py
       - tests/test_trusted_endpoint_source_bundle.py
@@ -49,11 +51,13 @@ jobs:
           ruff check \
             processual_api/integrations/camara_public_source_qualification.py \
             processual_api/integrations/camara_qod_semantic_mapping.py \
+            processual_api/integrations/endpoint_discovery_quality.py \
             processual_api/integrations/trusted_endpoint_source_acquisition.py \
             processual_api/routers/settings_camara_qod_qualification_status.py \
             tests/test_camara_public_source_qualification.py \
             tests/test_camara_qod_semantic_mapping.py \
             tests/test_camara_qod_qualification_status_route.py \
+            tests/test_endpoint_discovery_quality.py \
             tests/test_stage18_integration_center_ui_r1.py \
             tests/test_trusted_endpoint_source_acquisition.py \
             tests/test_trusted_endpoint_source_bundle.py
@@ -65,6 +69,7 @@ jobs:
             tests/test_camara_public_source_qualification.py \
             tests/test_camara_qod_semantic_mapping.py \
             tests/test_camara_qod_qualification_status_route.py \
+            tests/test_endpoint_discovery_quality.py \
             tests/test_stage18_integration_center_ui_r1.py \
             tests/test_trusted_endpoint_source_acquisition.py \
             tests/test_trusted_endpoint_source_bundle.py
@@ -94,6 +99,7 @@ jobs:
             echo "camara_public_source_runner_tests=$contract_tests_passed"
             echo "camara_qod_semantic_mapping_tests=$contract_tests_passed"
             echo "camara_qod_semantic_drift_tests=$contract_tests_passed"
+            echo "camara_qod_discovery_quality_tests=$contract_tests_passed"
             echo "camara_qod_safe_status_route_tests=$contract_tests_passed"
             echo "camara_qod_route_backed_ui_tests=$contract_tests_passed"
             echo "trusted_source_bundle_limit_tests=$contract_tests_passed"
