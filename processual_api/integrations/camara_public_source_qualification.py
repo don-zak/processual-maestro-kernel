@@ -1,8 +1,9 @@
 """Manual public-standards qualification for the reviewed CAMARA QoD source.
 
-This runner proves only acquisition and contract quality for a public standards
-artifact. It never receives provider credentials, never targets an operator
-sandbox, and never grants runtime or production authority.
+This runner proves only acquisition, source identity, discovery quality, and
+reviewed semantic alignment for a public standards artifact. It never receives
+provider credentials, never targets an operator sandbox, and never grants
+runtime or production authority.
 """
 
 from __future__ import annotations
@@ -14,6 +15,9 @@ from typing import Any
 
 import httpx
 
+from processual_api.integrations.camara_qod_semantic_mapping import (
+    assess_camara_qod_semantic_alignment,
+)
 from processual_api.integrations.endpoint_discovery_quality import assess_endpoint_discovery
 from processual_api.integrations.endpoint_source_attestation import attest_endpoint_source_identity
 from processual_api.integrations.enterprise_sandbox_execution import resolve_public_addresses
@@ -56,8 +60,19 @@ async def qualify_reviewed_camara_qod_public_source(
         contract_family=assessment["contract_family"],
         trusted_sources=(acquired.trusted_record,),
     )
+    semantic = assess_camara_qod_semantic_alignment(assessment["operations"])
+    qualification_ready = bool(
+        assessment["discovery_quality_passed"]
+        and assessment["external_references_resolved"]
+        and attestation.source_identity_verified
+        and semantic["semantic_mapping_aligned"]
+    )
     return {
-        "status": "public_standards_source_acquired",
+        "status": (
+            "public_standards_source_qualified"
+            if qualification_ready
+            else "public_standards_source_not_qualified"
+        ),
         "source_identity_id": attestation.source_identity_id,
         "source_identity_verified": attestation.source_identity_verified,
         "source_identity_policy_version": attestation.source_identity_policy_version,
@@ -78,7 +93,12 @@ async def qualify_reviewed_camara_qod_public_source(
         "warning_codes": assessment["warning_codes"],
         "discovery_quality_passed": assessment["discovery_quality_passed"],
         "binding_generation_ready": assessment["binding_generation_ready"],
+        "semantic_mapping_aligned": semantic["semantic_mapping_aligned"],
+        "semantic_mapping_blocker_codes": semantic["semantic_mapping_blocker_codes"],
+        "semantic_aligned_operation_ids": semantic["aligned_operation_ids"],
+        "public_source_qualification_ready": qualification_ready,
         "production_allowed": False,
+        "runtime_task_registered": False,
         "runtime_connector_approved": False,
         "provider_credentials_present": False,
         "provider_network_proof": False,
@@ -89,7 +109,7 @@ async def qualify_reviewed_camara_qod_public_source(
 def main() -> int:
     evidence = asyncio.run(qualify_reviewed_camara_qod_public_source())
     print(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
-    return 0 if evidence["discovery_quality_passed"] else 1
+    return 0 if evidence["public_source_qualification_ready"] else 1
 
 
 if __name__ == "__main__":
