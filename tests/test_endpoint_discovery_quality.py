@@ -11,8 +11,11 @@ from processual_api.integrations.endpoint_discovery_quality import (
 def _camara_document() -> dict:
     return {
         "openapi": "3.0.3",
-        "info": {"title": "CAMARA Test API", "version": "1.2.0"},
-        "x-camara-commonalities": "0.6",
+        "info": {
+            "title": "CAMARA Test API",
+            "version": "1.2.0",
+            "x-camara-commonalities": "0.6",
+        },
         "servers": [{"url": "https://sandbox.operator.example/camara/test/v1"}],
         "components": {
             "securitySchemes": {
@@ -74,6 +77,22 @@ def test_camara_release_contract_can_pass_discovery_quality() -> None:
     assert result["undefined_security_schemes"] == []
     assert result["network_request_executed"] is False
     assert result["production_allowed"] is False
+
+
+def test_camara_commonalities_metadata_is_required() -> None:
+    document = _camara_document()
+    del document["info"]["x-camara-commonalities"]
+
+    result = assess_endpoint_discovery(
+        document,
+        contract_family="camara",
+        source_reference="camaraproject/example@r3.2:code/API_definitions/example.yaml",
+        release_pinned=True,
+        external_references_resolved=True,
+    )
+
+    assert result["discovery_quality_passed"] is False
+    assert "camara_commonalities_version_required" in result["blocker_codes"]
 
 
 def test_camara_moving_or_wip_contract_is_blocked() -> None:
