@@ -8,8 +8,11 @@ on:
     paths:
       - "pyproject.toml"
       - "cgtlib/**"
+      - "processual_api/integrations/private_evaluation_boundary.py"
       - "tools/release_evidence_inventory.py"
       - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_public_private_source_boundary.py"
       - "tests/test_release_*.py"
       - ".github/workflows/release.yml"
       - ".github/workflows/packaging-qualification.yml"
@@ -17,8 +20,11 @@ on:
     paths:
       - "pyproject.toml"
       - "cgtlib/**"
+      - "processual_api/integrations/private_evaluation_boundary.py"
       - "tools/release_evidence_inventory.py"
       - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_public_private_source_boundary.py"
       - "tests/test_release_*.py"
       - ".github/workflows/release.yml"
       - ".github/workflows/packaging-qualification.yml"
@@ -43,20 +49,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev,api,security]
 
-      - name: Focused packaging regression
+      - name: Focused packaging and trust-boundary regression
         run: |
           python -m pytest -q \
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_private_evaluation_boundary.py \
+            tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
             tests/test_release_evidence_inventory.py
 
-      - name: Ruff packaging scope
+      - name: Ruff packaging and trust-boundary scope
         run: |
           ruff check \
+            processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_private_evaluation_boundary.py \
+            tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
             tests/test_release_evidence_inventory.py \
             --output-format=github
@@ -64,8 +75,12 @@ jobs:
       - name: Flake8 critical errors
         run: flake8 . --count --select=E9,F63,F7,F82 --statistics
 
-      - name: Type check release evidence tool
-        run: mypy tools/release_evidence_inventory.py --ignore-missing-imports
+      - name: Type check boundary and release evidence tools
+        run: |
+          mypy \
+            processual_api/integrations/private_evaluation_boundary.py \
+            tools/release_evidence_inventory.py \
+            --ignore-missing-imports
 
       - name: Dependency vulnerability audit
         run: pip-audit
@@ -76,7 +91,7 @@ jobs:
       - name: Validate distribution metadata
         run: python -m twine check dist/*
 
-      - name: Verify canonical resource in wheel
+      - name: Verify canonical resource and private exclusion in wheel
         shell: bash
         run: |
           python - <<'PY'
@@ -95,7 +110,7 @@ jobs:
               )
           PY
 
-      - name: Smoke test installed wheel resources
+      - name: Smoke test installed wheel resources and public boundary
         shell: bash
         run: |
           python -m venv /tmp/pmk-packaging-smoke
@@ -103,9 +118,14 @@ jobs:
           /tmp/pmk-packaging-smoke/bin/python -m pip install --no-deps dist/*.whl
           cd /tmp
           /tmp/pmk-packaging-smoke/bin/python - <<'PY'
+          import importlib.util
+
           from cgtlib.reference_data import (
               list_reference_dataset_ids,
               load_reference_scenario_record,
+          )
+          from processual_api.integrations.private_evaluation_boundary import (
+              boundary_contract_version,
           )
 
           assert list_reference_dataset_ids() == (
@@ -115,6 +135,9 @@ jobs:
           )
           record = load_reference_scenario_record("boundary_lock_band")
           assert record.scenario_pack.transitions
+          assert boundary_contract_version() == "private-evaluation-boundary/v1"
+          assert importlib.util.find_spec("cgtlib.private") is None
+          assert importlib.util.find_spec("processual_api.private_integrations") is None
           PY
 
       - name: Generate release evidence inventory
