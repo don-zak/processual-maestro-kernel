@@ -16,6 +16,7 @@ on:
       - "processual_api/integrations/private_evaluation_runtime.py"
       - "processual_api/routers/__init__.py"
       - "processual_api/routers/cgt_governor.py"
+      - "tools/dependency_license_review.py"
       - "tools/release_evidence_inventory.py"
       - "tools/secret_scan.py"
       - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
@@ -23,7 +24,9 @@ on:
       - "tests/test_cgtlib_public_fallback_import_boundary.py"
       - "tests/test_cgtlib_public_protected_math_boundary.py"
       - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_dependency_license_review_r1.py"
       - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_private_evaluation_error_surface_r1.py"
       - "tests/test_private_evaluation_route.py"
       - "tests/test_private_evaluation_runtime_binding.py"
       - "tests/test_public_docker_trust_boundary_r1.py"
@@ -44,6 +47,7 @@ on:
       - "processual_api/integrations/private_evaluation_runtime.py"
       - "processual_api/routers/__init__.py"
       - "processual_api/routers/cgt_governor.py"
+      - "tools/dependency_license_review.py"
       - "tools/release_evidence_inventory.py"
       - "tools/secret_scan.py"
       - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
@@ -51,7 +55,9 @@ on:
       - "tests/test_cgtlib_public_fallback_import_boundary.py"
       - "tests/test_cgtlib_public_protected_math_boundary.py"
       - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_dependency_license_review_r1.py"
       - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_private_evaluation_error_surface_r1.py"
       - "tests/test_private_evaluation_route.py"
       - "tests/test_private_evaluation_runtime_binding.py"
       - "tests/test_public_docker_trust_boundary_r1.py"
@@ -90,7 +96,9 @@ jobs:
             tests/test_cgtlib_public_protected_math_boundary.py \
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_dependency_license_review_r1.py \
             tests/test_private_evaluation_boundary.py \
+            tests/test_private_evaluation_error_surface_r1.py \
             tests/test_private_evaluation_route.py \
             tests/test_private_evaluation_runtime_binding.py \
             tests/test_public_docker_trust_boundary_r1.py \
@@ -109,6 +117,7 @@ jobs:
             processual_api/integrations/private_evaluation_boundary.py \
             processual_api/integrations/private_evaluation_http.py \
             processual_api/integrations/private_evaluation_runtime.py \
+            tools/dependency_license_review.py \
             tools/release_evidence_inventory.py \
             tools/secret_scan.py \
             tests/test_cgt_governor_legacy_boundary_debt_r1.py \
@@ -117,7 +126,9 @@ jobs:
             tests/test_cgtlib_public_protected_math_boundary.py \
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_dependency_license_review_r1.py \
             tests/test_private_evaluation_boundary.py \
+            tests/test_private_evaluation_error_surface_r1.py \
             tests/test_private_evaluation_route.py \
             tests/test_private_evaluation_runtime_binding.py \
             tests/test_public_docker_trust_boundary_r1.py \
@@ -220,6 +231,9 @@ jobs:
 
       - name: Generate release evidence inventory
         run: python tools/release_evidence_inventory.py --dist-dir dist --output release-evidence/release-inventory.json
+
+      - name: Generate dependency license review
+        run: python tools/dependency_license_review.py --output release-evidence/dependency-license-review.json
 
       - name: Generate CycloneDX dependency SBOM
         shell: bash
