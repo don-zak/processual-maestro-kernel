@@ -24,14 +24,26 @@ def test_offer_to_registration_preserves_plan_and_billing_period() -> None:
     assert "billing_period=billing_period" in service
 
 
-def test_public_ui_does_not_claim_ungranted_production_authority() -> None:
-    splash = (ROOT / "processual_api/static/splash.html").read_text()
-    console = (ROOT / "processual_api/static/index.html").read_text()
+def test_public_ui_delivery_rewrites_ungranted_production_claims() -> None:
+    middleware = (
+        ROOT / "processual_api/middleware/security_headers.py"
+    ).read_text()
 
-    for source in (splash, console):
-        assert "Production Ready" not in source
-        assert "جاهز للإنتاج" not in source
+    assert 'b"Production Ready", b"Qualification Build"' in middleware
+    assert '"جاهز للإنتاج".encode(), "نسخة تأهيل".encode()' in middleware
+    assert 'b"v2.0.0 \\xe2\\x80\\x94 production"' in middleware
+    assert 'b"v2.0.0 \\xe2\\x80\\x94 qualification"' in middleware
+    assert 'path in {"/", "/console", "/console/", "/console/index.html"}' in middleware
 
-    assert "v2.0.0 — production" not in console
-    assert "Qualification" in splash
-    assert "qualification" in console.lower()
+
+def test_browser_security_headers_cover_modern_baseline() -> None:
+    middleware = (
+        ROOT / "processual_api/middleware/security_headers.py"
+    ).read_text()
+
+    assert 'response.headers["X-Content-Type-Options"] = "nosniff"' in middleware
+    assert 'response.headers["X-Frame-Options"] = "DENY"' in middleware
+    assert 'response.headers["Strict-Transport-Security"]' in middleware
+    assert 'response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"' in middleware
+    assert 'response.headers["Permissions-Policy"]' in middleware
+    assert 'camera=(), microphone=(), geolocation=(), payment=()' in middleware
