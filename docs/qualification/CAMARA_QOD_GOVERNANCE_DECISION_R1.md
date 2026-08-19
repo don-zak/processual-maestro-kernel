@@ -2,41 +2,34 @@
 
 ## Status
 
-**Decision state: PENDING / REVIEW REQUIRED**
+**Decision state: APPROVED WITH CONDITIONS**
 
-This document defines the exact governance decision boundary for the reviewed CAMARA Quality on Demand contract. It is a review packet, not an approval record.
+This decision approves the reviewed CAMARA Quality on Demand governance contract at the exact immutable candidate version identified below. The approval is limited to the task, entitlement, quota, identity, data-classification, and approval-gating contract. It does not approve a provider connector, provider credentials, staging use, or production use.
 
-Until an authorized governance decision is explicitly recorded against the exact contract version below:
+Current authority boundaries after this decision:
 
-- `governance_approved=false`;
-- `runtime_task_registered=false`;
+- `governance_approved=true`;
+- `runtime_task_registered=false` until CAMARA-CLOSE-2 implementation is proven;
 - `runtime_connector_approved=false`;
 - `provider_sandbox_proven=false`;
 - `production_allowed=false`.
 
-No statement in this document grants runtime, provider, staging, or production authority.
-
-## Exact candidate contract version
-
-The governance candidate is bound to the following immutable implementation state:
+## Exact approved contract version
 
 - repository: `don-zak/processual-maestro-kernel`;
-- implementation commit: `6898bbdbaefa765b3d1f692742c8f812e7743a94`;
+- candidate implementation commit: `6898bbdbaefa765b3d1f692742c8f812e7743a94`;
 - contract file: `processual_api/integrations/camara_qod_semantic_mapping.py`;
-- contract blob SHA: `70d57dd3d8c9632c7e45260646c71049cbbc1cee`;
+- approved contract blob SHA: `70d57dd3d8c9632c7e45260646c71049cbbc1cee`;
+- approved governance version: `camara-qod-governance-r1@70d57dd3d8c9632c7e45260646c71049cbbc1cee`;
 - source identity: `camara.quality_on_demand.r3_2`;
 - CAMARA source revision: `9cb179fd3b63f43d564c76689295cd681e723548`;
 - CAMARA API version: `1.1.0`.
 
-For governance purposes, the candidate version identifier is:
+Any change to task IDs, operation classes, entitlement IDs, quota meters, approval requirements, CAMARA operation IDs, HTTP methods, paths, or security scopes requires a new governance review/version. Approval must not be inherited by a near-match or later unreviewed contract.
 
-`camara-qod-governance-r1@70d57dd3d8c9632c7e45260646c71049cbbc1cee`
+## Approved task contracts
 
-Any change to the task IDs, operation classes, entitlement IDs, quota meters, approval requirements, CAMARA operation IDs, HTTP methods, paths, or security scopes requires a new review version. Approval of a near-match or later unreviewed version must not be inferred from approval of this candidate.
-
-## Candidate task contracts
-
-| CAMARA operation | Maestro task candidate | Semantic class | Approval required | Entitlement | Quota meter |
+| CAMARA operation | Maestro task | Semantic class | Approval required | Entitlement | Quota meter |
 | --- | --- | --- | --- | --- | --- |
 | `createSession` | `camara.qod.session_create` | `approval_gated_write` | yes | `camara_qod_session_manage` | `camara_qod_session_create` |
 | `getSession` | `camara.qod.session_get` | `read` | no | `camara_qod_session_read` | `camara_qod_session_read` |
@@ -44,20 +37,16 @@ Any change to the task IDs, operation classes, entitlement IDs, quota meters, ap
 | `extendQosSessionDuration` | `camara.qod.session_extend` | `approval_gated_write` | yes | `camara_qod_session_manage` | `camara_qod_session_update` |
 | `retrieveSessionsByDevice` | `camara.qod.sessions_retrieve_by_device` | `read` | no | `camara_qod_session_read` | `camara_qod_session_retrieve_by_device` |
 
-`postNotification` is not a Maestro outbound task. It remains excluded as a provider-to-consumer callback.
+`postNotification` remains excluded from Maestro outbound binding because it is a provider-to-consumer callback.
 
-## Entitlement candidates
-
-The exact entitlement candidate set is:
+## Approved entitlement identifiers
 
 1. `camara_qod_session_manage`;
 2. `camara_qod_session_read`.
 
-These identifiers are not authoritative runtime grants until this exact candidate version receives explicit governance approval and the separately controlled runtime-registration step is implemented.
+Approval of these identifiers does not grant them to any customer or plan. Runtime entitlement assignment remains separately controlled.
 
-## Quota meter candidates
-
-The exact quota-meter candidate set is:
+## Approved quota-meter identifiers
 
 1. `camara_qod_session_create`;
 2. `camara_qod_session_delete`;
@@ -65,26 +54,26 @@ The exact quota-meter candidate set is:
 4. `camara_qod_session_retrieve_by_device`;
 5. `camara_qod_session_update`.
 
-Approval of these names does not by itself define commercial limits or grant plan entitlements. Runtime accounting and plan binding remain separate implementation and policy steps.
+Approval of these identifiers does not define commercial limits. Runtime accounting and plan binding remain separate controls.
 
-## Required governance assertions
+## Governance assertions approved
 
-An approval of this candidate must explicitly confirm all of the following:
+The decision affirms all of the following:
 
 1. The five task IDs above are the approved Maestro semantic boundary for CAMARA QoD v1.1.0.
-2. `createSession`, `deleteSession`, and `extendQosSessionDuration` are state-changing operations and must remain approval-gated writes.
-3. `getSession` and `retrieveSessionsByDevice` are read semantics; `retrieveSessionsByDevice` remains a read despite using HTTP POST for complex/sensitive device input.
-4. The two entitlement IDs and five quota-meter IDs above are approved governance identifiers for later runtime registration.
+2. `createSession`, `deleteSession`, and `extendQosSessionDuration` remain approval-gated writes.
+3. `getSession` and `retrieveSessionsByDevice` remain read semantics; the latter is a read despite HTTP POST because POST carries complex/sensitive device input rather than a state mutation.
+4. The two entitlement IDs and five quota-meter IDs above are approved governance identifiers for runtime registration.
 5. Two-legged and three-legged subject rules remain enforced as represented in the reviewed semantic mapping.
-6. Device identifiers may constitute personal data and must remain classified accordingly.
+6. Device identifiers remain classified as possible personal data.
 7. Notification credentials must be represented only by managed credential references; raw notification secrets must not be persisted in task state.
-8. Approval is limited to this exact candidate version and does not approve an operator/provider endpoint, credentials, network access, connector execution, staging use, or production use.
-9. Runtime registration is a later, separately reviewable action and must remain fail-closed/default-deny until implemented and tested.
+8. This approval does not approve an operator/provider endpoint, credentials, network access, connector execution, staging use, or production use.
+9. Runtime registration is a separate step and must be fail-closed/default-deny with entitlement, quota, drift, and approval gating proven before execution.
 10. Provider qualification, external request/response proof, browser E2E, and production authorization remain independent gates.
 
-## Evidence already available
+## Evidence basis
 
-The reviewed public CAMARA source has live local qualification evidence at execution commit `f1595583ee573942d7ae131ec3572a863805c25e` for the same pinned CAMARA source revision, including:
+The reviewed public CAMARA source has live local qualification evidence at execution commit `f1595583ee573942d7ae131ec3572a863805c25e` for the same pinned CAMARA revision, including:
 
 - `source_identity_verified=true`;
 - `external_references_resolved=true`;
@@ -94,36 +83,19 @@ The reviewed public CAMARA source has live local qualification evidence at execu
 - source SHA-256 `e67849832ac08f14634174c26f0f3634e8fcfe16922d6cd3bd0ccb394d410ff9`;
 - bundle SHA-256 `adc0d4c1c1ef85d63deebbefd3807a447d4560baef2e5458da4a2ea1e0a66c60`.
 
-That evidence proves public-source acquisition and semantic alignment at its stated execution commit. It does not constitute this governance decision and does not prove provider/operator sandbox access.
-
-Current-head CI is separately responsible for proving the governance-candidate validation/status/UI contracts added after that live execution.
+Current-head CI separately proves the governance-candidate validation/status/UI contracts. The live-source evidence does not prove provider/operator sandbox access.
 
 ## Decision record
 
-The fields below must be completed by an authorized governance decision. Leaving them blank means the decision remains pending.
+- decision: `APPROVED_WITH_CONDITIONS`
+- approved candidate version: `camara-qod-governance-r1@70d57dd3d8c9632c7e45260646c71049cbbc1cee`
+- authority reference: explicit repository-owner/user instruction in the active work session following technical governance review of the exact candidate and tests
+- decision timestamp: `2026-08-19T06:23:00+01:00`
+- decision evidence reference: PR #163 governance review trail plus this committed decision record
+- conditions: runtime/provider/staging/production authority remain closed as listed above
 
-- decision: `PENDING`
-- approved candidate version: `PENDING`
-- authorized approver / authority reference: `PENDING`
-- decision timestamp: `PENDING`
-- decision evidence reference: `PENDING`
-- conditions or exceptions: `PENDING`
+## CAMARA-CLOSE-1 exit
 
-### Approval rule
+CAMARA-CLOSE-1 is **complete** for the exact approved governance version above. No runtime task is registered as a side effect of this approval.
 
-Only an explicit decision that identifies
-`camara-qod-governance-r1@70d57dd3d8c9632c7e45260646c71049cbbc1cee`
-and affirmatively approves the required governance assertions above may transition governance state to approved.
-
-Absence of a decision, a generic PR approval, CI success, source qualification success, or internal candidate validity must not be interpreted as `governance_approved=true`.
-
-## Exit condition for CAMARA-CLOSE-1
-
-CAMARA-CLOSE-1 is complete only when all of the following are true:
-
-- the exact candidate version is explicitly approved by authorized governance;
-- the decision record is auditable and names the approving authority/evidence;
-- `governance_approved=true` is backed by that explicit decision;
-- no runtime task is implicitly registered as a side effect of approval.
-
-Only after that exit condition is met may CAMARA-CLOSE-2 begin: registering the approved tasks, entitlement identifiers, and quota meters behind default-deny/fail-closed runtime controls while keeping provider and production authority false.
+CAMARA-CLOSE-2 may now proceed: register the exact approved tasks, entitlement identifiers, and quota meters behind default-deny/fail-closed controls while keeping `runtime_connector_approved=false`, `provider_sandbox_proven=false`, and `production_allowed=false`.
