@@ -2,7 +2,6 @@ import argparse
 import re
 from pathlib import Path
 
-
 _TEXT_SUFFIXES = {
     ".cfg",
     ".conf",
