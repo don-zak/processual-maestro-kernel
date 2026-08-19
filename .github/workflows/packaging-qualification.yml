@@ -12,6 +12,7 @@ on:
       - "cgtlib/**"
       - "processual_api/cgt_governor/**"
       - "processual_api/integrations/private_evaluation_boundary.py"
+      - "processual_api/integrations/private_evaluation_runtime.py"
       - "processual_api/routers/cgt_governor.py"
       - "tools/release_evidence_inventory.py"
       - "tools/secret_scan.py"
@@ -21,6 +22,7 @@ on:
       - "tests/test_cgtlib_public_protected_math_boundary.py"
       - "tests/test_cgtlib_reference_data*.py"
       - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_private_evaluation_runtime_binding.py"
       - "tests/test_public_docker_trust_boundary_r1.py"
       - "tests/test_public_private_source_boundary.py"
       - "tests/test_release_*.py"
@@ -35,6 +37,7 @@ on:
       - "cgtlib/**"
       - "processual_api/cgt_governor/**"
       - "processual_api/integrations/private_evaluation_boundary.py"
+      - "processual_api/integrations/private_evaluation_runtime.py"
       - "processual_api/routers/cgt_governor.py"
       - "tools/release_evidence_inventory.py"
       - "tools/secret_scan.py"
@@ -44,6 +47,7 @@ on:
       - "tests/test_cgtlib_public_protected_math_boundary.py"
       - "tests/test_cgtlib_reference_data*.py"
       - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_private_evaluation_runtime_binding.py"
       - "tests/test_public_docker_trust_boundary_r1.py"
       - "tests/test_public_private_source_boundary.py"
       - "tests/test_release_*.py"
@@ -81,6 +85,7 @@ jobs:
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
             tests/test_private_evaluation_boundary.py \
+            tests/test_private_evaluation_runtime_binding.py \
             tests/test_public_docker_trust_boundary_r1.py \
             tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
@@ -95,6 +100,7 @@ jobs:
             processual_api/cgt_governor/simulation/__init__.py \
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
+            processual_api/integrations/private_evaluation_runtime.py \
             tools/release_evidence_inventory.py \
             tools/secret_scan.py \
             tests/test_cgt_governor_legacy_boundary_debt_r1.py \
@@ -104,6 +110,7 @@ jobs:
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
             tests/test_private_evaluation_boundary.py \
+            tests/test_private_evaluation_runtime_binding.py \
             tests/test_public_docker_trust_boundary_r1.py \
             tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
@@ -122,6 +129,7 @@ jobs:
             processual_api/cgt_governor/simulation/__init__.py \
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
+            processual_api/integrations/private_evaluation_runtime.py \
             tools/release_evidence_inventory.py \
             tools/secret_scan.py \
             --ignore-missing-imports \
@@ -169,6 +177,8 @@ jobs:
           import importlib.util
 
           import cgtlib
+          from fastapi import FastAPI
+          from starlette.requests import Request
           from cgtlib.reference_data import (
               list_reference_dataset_ids,
               load_reference_scenario_record,
@@ -177,6 +187,9 @@ jobs:
           from processual_api.integrations.private_evaluation_boundary import (
               PrivateEvaluationUnavailableError,
               boundary_contract_version,
+          )
+          from processual_api.integrations.private_evaluation_runtime import (
+              private_evaluation_provider_from_request,
           )
 
           assert cgtlib._HAS_PRIVATE is False
@@ -196,6 +209,15 @@ jobs:
               assert str(exc) == "private_evaluation_unavailable"
           else:
               raise AssertionError("public governor must fail closed without private decision")
+
+          app = FastAPI()
+          request = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "app": app})
+          try:
+              private_evaluation_provider_from_request(request)
+          except PrivateEvaluationUnavailableError as exc:
+              assert str(exc) == "private_evaluation_unavailable"
+          else:
+              raise AssertionError("public wheel must not auto-discover a private provider")
           PY
 
       - name: Generate release evidence inventory
