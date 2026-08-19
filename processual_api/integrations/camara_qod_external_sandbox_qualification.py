@@ -21,10 +21,12 @@ class CamaraQodExternalSandboxEvidence:
     provider_scope: str
     qod_base_uri: str
     evidence_path: str
-    execution_commit: str
+    session_lifecycle_execution_commit: str
+    extend_execution_commit: str
     proven_operations: tuple[str, ...]
     authenticated_sandbox_reachability_proven: bool
     external_mock_sandbox_proven: bool
+    external_mock_extend_proven: bool
     operator_network_qos_proven: bool = False
     governed_camara_v1_1_provider_sandbox_proven: bool = False
     runtime_connector_approved: bool = False
@@ -42,10 +44,17 @@ TELEFONICA_QOD_EXTERNAL_SANDBOX_EVIDENCE: Final = CamaraQodExternalSandboxEviden
         "docs/qualification/evidence/"
         "TELEFONICA_QOD_CIBA_SESSION_LIFECYCLE_2026-08-19.json"
     ),
-    execution_commit="558dc92f5b43b32b05917f52d21e7cae442b7fd6",
-    proven_operations=("createSession", "getSession", "deleteSession"),
+    session_lifecycle_execution_commit="558dc92f5b43b32b05917f52d21e7cae442b7fd6",
+    extend_execution_commit="046835b656be7536d5b5bb9b7ad257503875e655",
+    proven_operations=(
+        "createSession",
+        "getSession",
+        "deleteSession",
+        "extendQosSessionDuration",
+    ),
     authenticated_sandbox_reachability_proven=True,
     external_mock_sandbox_proven=True,
+    external_mock_extend_proven=True,
 )
 
 
