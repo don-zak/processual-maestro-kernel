@@ -57,7 +57,8 @@ def build_dependency_license_review() -> dict[str, Any]:
         "missing_license_metadata": missing_metadata,
         "review_scope": (
             "Installed release-qualification environment metadata inventory. "
-            "This identifies declared or missing package license metadata; it does not make a legal compatibility determination."
+            "This identifies declared or missing package license metadata; "
+            "it does not make a legal compatibility determination."
         ),
     }
 
