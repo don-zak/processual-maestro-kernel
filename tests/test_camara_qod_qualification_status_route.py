@@ -6,6 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from processual_api.auth.security import get_current_user
+from processual_api.integrations.camara_qod_governance_approval import (
+    CAMARA_QOD_APPROVED_GOVERNANCE_VERSION,
+)
 from processual_api.integrations.trusted_endpoint_source_acquisition import (
     CAMARA_QOD_R32_COMMIT,
 )
@@ -67,7 +70,7 @@ def test_camara_qod_status_route_requires_admin_read_scope() -> None:
     assert response.status_code == 403
 
 
-def test_camara_qod_status_route_is_safe_and_fail_closed_by_default() -> None:
+def test_camara_qod_status_route_projects_approved_registration_but_stays_fail_closed() -> None:
     _override_user(_admin_user())
     response = client.get("/settings/admin/integration-center/camara-qod-qualification")
     assert response.status_code == 200
@@ -83,6 +86,9 @@ def test_camara_qod_status_route_is_safe_and_fail_closed_by_default() -> None:
     assert payload["callback_operations_excluded_from_outbound_binding"] == [
         "postNotification"
     ]
+
+    # The immutable candidate remains review metadata; the separate approval
+    # record is the authoritative decision for this exact candidate version.
     assert payload["governance_candidate_state"] == "review_required"
     assert payload["governance_candidate_valid"] is True
     assert payload["governance_blocker_codes"] == []
@@ -104,13 +110,35 @@ def test_camara_qod_status_route_is_safe_and_fail_closed_by_default() -> None:
         "camara_qod_session_retrieve_by_device",
         "camara_qod_session_update",
     ]
-    assert payload["governance_approved"] is False
+    assert payload["governance_decision"] == "approved_with_conditions"
+    assert payload["governance_approved"] is True
+    assert payload["approved_governance_version"] == (
+        CAMARA_QOD_APPROVED_GOVERNANCE_VERSION
+    )
+    assert payload["approved_contract_blob_sha"] == (
+        "70d57dd3d8c9632c7e45260646c71049cbbc1cee"
+    )
+
+    assert payload["runtime_task_registered"] is True
+    assert payload["registered_task_ids"] == payload["candidate_task_ids"]
+    assert payload["registered_entitlement_ids"] == [
+        "camara_qod_session_manage",
+        "camara_qod_session_read",
+    ]
+    assert payload["registered_quota_meters"] == [
+        "camara_qod_session_create",
+        "camara_qod_session_delete",
+        "camara_qod_session_read",
+        "camara_qod_session_retrieve_by_device",
+        "camara_qod_session_update",
+    ]
+    assert payload["runtime_default_deny"] is True
+
     assert payload["existing_network_assurance_reused"] is False
     assert payload["live_source_acquisition_proven"] is False
     assert payload["provider_credentials_present"] is False
     assert payload["provider_network_proof"] is False
     assert payload["provider_sandbox_proven"] is False
-    assert payload["runtime_task_registered"] is False
     assert payload["runtime_connector_approved"] is False
     assert payload["production_allowed"] is False
     assert payload["raw_secret_visible"] is False
