@@ -8,6 +8,7 @@ from processual_api.integrations.camara_qod_semantic_mapping import (
     CAMARA_QOD_R32_CALLBACK_OPERATION_IDS,
     CAMARA_QOD_R32_CALLABLE_OPERATION_IDS,
     READ,
+    assess_camara_qod_semantic_alignment,
     camara_qod_semantic_mapping_payload,
     get_camara_qod_semantic_mapping,
 )
@@ -18,6 +19,20 @@ from processual_api.integrations.trusted_endpoint_source_acquisition import (
     CAMARA_QOD_R32_COMMIT,
     CAMARA_QOD_R32_PATH,
 )
+
+
+def _discovered_operations() -> list[dict[str, object]]:
+    return [
+        {
+            "operation_id": operation_id,
+            "method": get_camara_qod_semantic_mapping(operation_id).method,
+            "path": get_camara_qod_semantic_mapping(operation_id).path,
+            "security_scopes": [
+                get_camara_qod_semantic_mapping(operation_id).camara_scope
+            ],
+        }
+        for operation_id in CAMARA_QOD_R32_CALLABLE_OPERATION_IDS
+    ]
 
 
 def test_qod_r32_callable_operations_and_scopes_are_exact() -> None:
@@ -109,6 +124,56 @@ def test_callback_is_explicitly_excluded_from_outbound_binding() -> None:
     assert CAMARA_QOD_R32_CALLBACK_OPERATION_IDS == ("postNotification",)
     with pytest.raises(KeyError, match="Unsupported CAMARA QoD operation"):
         get_camara_qod_semantic_mapping("postNotification")
+
+
+def test_semantic_alignment_accepts_only_exact_reviewed_inventory() -> None:
+    result = assess_camara_qod_semantic_alignment(_discovered_operations())
+    assert result["semantic_mapping_aligned"] is True
+    assert result["semantic_mapping_blocker_codes"] == []
+    assert result["aligned_operation_ids"] == list(CAMARA_QOD_R32_CALLABLE_OPERATION_IDS)
+    assert result["runtime_task_registered"] is False
+    assert result["runtime_connector_approved"] is False
+    assert result["production_allowed"] is False
+
+
+@pytest.mark.parametrize(
+    "mutation,expected_blocker",
+    [
+        ({"method": "PUT"}, "camara_qod_method_drift:createSession"),
+        ({"path": "/v2/sessions"}, "camara_qod_path_drift:createSession"),
+        (
+            {"security_scopes": ["quality-on-demand:sessions:read"]},
+            "camara_qod_scope_drift:createSession",
+        ),
+    ],
+)
+def test_semantic_alignment_rejects_method_path_or_scope_drift(
+    mutation: dict[str, object],
+    expected_blocker: str,
+) -> None:
+    operations = _discovered_operations()
+    operations[0] = {**operations[0], **mutation}
+    result = assess_camara_qod_semantic_alignment(operations)
+    assert result["semantic_mapping_aligned"] is False
+    assert expected_blocker in result["semantic_mapping_blocker_codes"]
+
+
+def test_semantic_alignment_rejects_missing_and_unreviewed_operations() -> None:
+    operations = _discovered_operations()[1:]
+    operations.append(
+        {
+            "operation_id": "futureUnreviewedOperation",
+            "method": "POST",
+            "path": "/future",
+            "security_scopes": ["quality-on-demand:future"],
+        }
+    )
+    result = assess_camara_qod_semantic_alignment(operations)
+    assert result["semantic_mapping_aligned"] is False
+    assert result["semantic_mapping_blocker_codes"] == [
+        "camara_qod_expected_operation_missing:createSession",
+        "camara_qod_unreviewed_operation_present:futureUnreviewedOperation",
+    ]
 
 
 def test_semantic_mapping_payload_is_pinned_proposal_only_and_non_authoritative() -> None:
