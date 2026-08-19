@@ -7,6 +7,7 @@ from . import client_provider_alias_18 as _client_provider_alias_18  # noqa: F40
 from . import institution_cases_18 as _institution_cases_18  # noqa: F401,E402
 from . import settings_admin_api_key_provisioning as _settings_admin_api_key_provisioning  # noqa: F401,E402
 from . import settings_admin_evaluation_grants as _settings_admin_evaluation_grants  # noqa: F401,E402
+from . import settings_camara_qod_qualification_status as _settings_camara_qod_qualification_status  # noqa: F401,E402
 from . import (  # noqa: F401,E402
     settings_endpoint_discovery_qualification_runtime as _settings_endpoint_discovery_qualification_runtime,
 )
