@@ -37,6 +37,18 @@ def _admin_user() -> dict:
     }
 
 
+def _exact_catalog_entry() -> dict[str, object]:
+    return {
+        "source_identity_id": "camara.quality_on_demand.r3_2",
+        "repository": "camaraproject/QualityOnDemand",
+        "contract_family": "camara",
+        "allowed_path_prefixes": ["code/API_definitions"],
+        "allowed_reference_prefixes": ["code/common"],
+        "allowed_revisions": [CAMARA_QOD_R32_COMMIT],
+        "policy_version": "camara-public-release-review-r1",
+    }
+
+
 def test_camara_qod_status_route_requires_authentication() -> None:
     app.dependency_overrides.clear()
     response = client.get("/settings/admin/integration-center/camara-qod-qualification")
@@ -92,24 +104,34 @@ def test_camara_qod_status_route_reports_exact_server_catalog_enablement(
 ) -> None:
     monkeypatch.setenv(
         "PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES",
-        json.dumps(
-            [
-                {
-                    "source_identity_id": "camara.quality_on_demand.r3_2",
-                    "repository": "camaraproject/QualityOnDemand",
-                    "contract_family": "camara",
-                    "allowed_path_prefixes": ["code/API_definitions"],
-                    "allowed_reference_prefixes": ["code/common"],
-                    "allowed_revisions": [CAMARA_QOD_R32_COMMIT],
-                    "policy_version": "camara-public-release-review-r1",
-                }
-            ]
-        ),
+        json.dumps([_exact_catalog_entry()]),
     )
     _override_user(_admin_user())
     response = client.get("/settings/admin/integration-center/camara-qod-qualification")
     assert response.status_code == 200
     assert response.json()["server_trusted_source_enabled"] is True
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"contract_family": "generic_enterprise"},
+        {"policy_version": "different-review-policy"},
+        {"allowed_reference_prefixes": ["code/common", "documentation"]},
+    ],
+)
+def test_camara_qod_status_route_never_labels_near_match_catalog_as_enabled(
+    monkeypatch,
+    override: dict[str, object],
+) -> None:
+    entry = {**_exact_catalog_entry(), **override}
+    monkeypatch.setenv("PMK_TRUSTED_GITHUB_ENDPOINT_SOURCES", json.dumps([entry]))
+    _override_user(_admin_user())
+
+    response = client.get("/settings/admin/integration-center/camara-qod-qualification")
+
+    assert response.status_code == 200
+    assert response.json()["server_trusted_source_enabled"] is False
 
 
 def test_camara_qod_status_route_rejects_invalid_server_catalog(monkeypatch) -> None:
