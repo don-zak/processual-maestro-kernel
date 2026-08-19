@@ -1,6 +1,6 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import PlainTextResponse, Response
 
 
 _ADMIN_DOM_CONTRACT_SCRIPT = (
@@ -17,6 +17,12 @@ _LEGACY_CONSOLE_SCRIPT_TAGS = (
     b'<script src="js/pages/governor.js"></script>',
     b'<script src="js/pages/cgt.js"></script>',
 )
+_LEGACY_CONSOLE_ASSET_PATHS = {
+    "/console/js/adapters/governor.js",
+    "/console/js/adapters/cgt.js",
+    "/console/js/pages/governor.js",
+    "/console/js/pages/cgt.js",
+}
 _LEGACY_CONSOLE_QUARANTINE_STYLE = (
     b'<style id="legacy-console-quarantine">'
     b'[data-page="cgt"],[data-page="governor"],'
@@ -45,8 +51,14 @@ _CONTENT_SECURITY_POLICY = "; ".join(
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
         path = request.url.path
+        if path in _LEGACY_CONSOLE_ASSET_PATHS:
+            response: Response = PlainTextResponse(
+                "legacy_console_surface_quarantined",
+                status_code=410,
+            )
+        else:
+            response = await call_next(request)
 
         if path in {"/", "/console", "/console/", "/console/index.html"}:
             response = await self._rewrite_public_authority_claims(response)
