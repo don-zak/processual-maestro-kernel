@@ -33,7 +33,7 @@ _TELEFONICA_OPERATIONS: Final = {
     "createSession": ("POST", "/sessions", True),
     "getSession": ("GET", "/sessions/{sessionId}", True),
     "deleteSession": ("DELETE", "/sessions/{sessionId}", True),
-    "extendQosSessionDuration": ("POST", "/sessions/{sessionId}/extend", False),
+    "extendQosSessionDuration": ("POST", "/sessions/{sessionId}/extend", True),
     "retrieveSessionsByDevice": (None, None, False),
 }
 
@@ -69,8 +69,6 @@ def camara_qod_telefonica_compatibility_payload() -> dict[str, object]:
         "operator_network_qos_unproven",
         "runtime_connector_unapproved",
     ]
-    if "extendQosSessionDuration" not in proven_ids:
-        blockers.append("telefonica_extend_operation_unproven")
     if "retrieveSessionsByDevice" not in proven_ids:
         blockers.append("telefonica_retrieve_sessions_by_device_unproven")
 
