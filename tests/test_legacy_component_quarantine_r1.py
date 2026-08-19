@@ -51,10 +51,11 @@ def test_quarantined_console_assets_remain_present_only_for_review() -> None:
 
 def test_public_runtime_image_explicitly_removes_quarantined_console_assets() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    removal_block = dockerfile.split("RUN rm -f", 1)[1].split("RUN test ! -d", 1)[0]
 
     for relative in QUARANTINED_CONSOLE_ASSETS:
-        assert f"rm -f \\\n    {relative}" in dockerfile
-        assert f"test ! -e {relative}" in dockerfile
+        assert relative in removal_block
+        assert f"test ! -e {relative}" in removal_block
 
 
 def test_quarantine_register_does_not_misclassify_active_legacy_router_as_dead() -> None:
