@@ -46,6 +46,7 @@ _PLACEHOLDER_MARKERS = (
     "example",
     "fake",
     "fixture",
+    "local_test",
     "not-a-secret",
     "placeholder",
     "redacted",
@@ -53,6 +54,14 @@ _PLACEHOLDER_MARKERS = (
     "sample",
     "test-only",
     "unit-test",
+)
+_TEST_FIXTURE_LINE_MARKERS = (
+    "raw_secret",
+    "fixture_secret",
+    "test_secret",
+    "fake_secret",
+    "dummy_secret",
+    "without-crypto",
 )
 _CREDENTIAL_NAME = r"(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)"
 
@@ -66,7 +75,7 @@ class SecretFinding:
 
 _PRIVATE_KEY_RULE = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 _QUOTED_CREDENTIAL_ASSIGNMENT_RULE = re.compile(
-    rf"(?i)\b{_CREDENTIAL_NAME}\b\s*(?:=|:)\s*[\"']([^\"']{{12,}})[\"']"
+    rf"(?i)^\s*{_CREDENTIAL_NAME}\s*(?:=|:)\s*[\"']([^\"']{{12,}})[\"']\s*(?:#.*)?$"
 )
 _ENV_CREDENTIAL_ASSIGNMENT_RULE = re.compile(
     rf"(?i)^\s*(?:export\s+)?{_CREDENTIAL_NAME}\s*=\s*([A-Za-z0-9_./:+@%\-]{{12,}})\s*(?:#.*)?$"
@@ -86,6 +95,11 @@ def _is_placeholder(value: str) -> bool:
 def _is_test_path(path: str) -> bool:
     normalized = path.replace("\\", "/")
     return normalized.startswith("tests/") or "/tests/" in f"/{normalized}"
+
+
+def _is_explicit_test_fixture_line(line: str) -> bool:
+    lowered = line.lower()
+    return any(marker in lowered for marker in _TEST_FIXTURE_LINE_MARKERS)
 
 
 def _candidate_files(root: Path) -> Iterable[Path]:
@@ -116,8 +130,11 @@ def scan_text(text: str, *, path: str = "<memory>") -> list[SecretFinding]:
 
         for rule_name, pattern in _HIGH_CONFIDENCE_TOKEN_RULES:
             match = pattern.search(line)
-            if match and not _is_placeholder(match.group(0)):
-                findings.append(SecretFinding(path=path, line=line_number, rule=rule_name))
+            if not match or _is_placeholder(match.group(0)):
+                continue
+            if test_path and _is_explicit_test_fixture_line(line):
+                continue
+            findings.append(SecretFinding(path=path, line=line_number, rule=rule_name))
     return findings
 
 
