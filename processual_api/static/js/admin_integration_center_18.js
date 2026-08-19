@@ -6,6 +6,7 @@
     cases: "/settings/admin/integration-readiness-tracking/cases",
     handoff: "/settings/admin/operator-pilot-handoff",
     progress: "/settings/admin/operator-pilot-handoff/progress",
+    camaraQod: "/settings/admin/integration-center/camara-qod-qualification",
   };
 
   const TABS = [
@@ -22,6 +23,7 @@
     cases: [],
     handoff: null,
     progress: [],
+    camaraQod: null,
     active: "overview",
     loading: true,
     error: "",
@@ -186,28 +188,52 @@
       </article>`;
   }
 
+  function camaraQodPlatform() {
+    const payload = state.camaraQod;
+    const routeBacked = Boolean(payload && payload.status === "reviewed_qualification_contract");
+    const callableOperations = routeBacked ? asArray(payload.callable_operations) : [];
+    const sourceEnabled = routeBacked && payload.server_trusted_source_enabled === true;
+    const semanticReviewed =
+      routeBacked && payload.semantic_mapping_state === "proposal_only" && callableOperations.length === 5;
+    const liveProven = routeBacked && payload.live_source_acquisition_proven === true;
+    const providerSandboxProven = routeBacked && payload.provider_sandbox_proven === true;
+    const version = routeBacked && payload.api_version ? payload.api_version : "1.1.0";
+    const revision = routeBacked && payload.source_revision ? payload.source_revision : "9cb179fd3b63f43d564c76689295cd681e723548";
+    const path = routeBacked && payload.source_path ? payload.source_path : "code/API_definitions/quality-on-demand.yaml";
+    const repository = routeBacked && payload.repository ? payload.repository : "camaraproject/QualityOnDemand";
+    const sourceStatus = sourceEnabled ? "Policy enabled" : "Pending";
+    const semanticStatus = semanticReviewed ? "Reviewed proposal" : "Pending";
+    const liveStatus = liveProven ? "Proven" : "Not proven";
+    const sandboxStatus = providerSandboxProven ? "Proven" : "Blocked";
+    const note = routeBacked
+      ? `Server-owned status: ${sourceEnabled ? "trusted-source policy enabled" : "trusted-source policy not enabled"}. ${callableOperations.length} reviewed outbound QoD operations; runtime task registration remains disabled. Pinned source: ${repository} @ ${revision.slice(0, 7)} · ${path}.`
+      : "Qualification status route unavailable. Conservative fallback keeps trusted-source enablement, live acquisition, provider sandbox and runtime authority unproven. Pinned candidate: camaraproject/QualityOnDemand @ 9cb179f · code/API_definitions/quality-on-demand.yaml.";
+
+    return {
+      family: "CAMARA · GSMA Open Gateway",
+      title: "Quality on Demand · r3.2 candidate",
+      description:
+        "Reviewed public CAMARA release candidate with a server-owned qualification projection. Specification, policy enablement, semantic review, live acquisition, provider proof and runtime authority remain separate gates.",
+      verdict: "Spec candidate pinned",
+      contract: `QoD v${version}`,
+      sandbox: providerSandboxProven ? "Proven" : "Not proven",
+      production: "Blocked",
+      note,
+      steps: [
+        ["Architecture family", "Ready", "CAMARA is recognized in the governed integration contract model."],
+        ["Reviewed release candidate", "Pinned", `Public r3.2 / QoD v${version} is bound to the reviewed immutable source.`],
+        ["Server-enabled trusted source", sourceStatus, sourceEnabled ? "The deployment-owned catalog exactly enables the reviewed source tuple; this grants acquisition policy only, not runtime authority." : "A deployment-owned allowlist must exactly enable the reviewed source; code presence alone grants no authority."],
+        ["Live source acquisition", liveStatus, liveProven ? "The safe server projection reports retained public-source acquisition evidence." : "No retained live public-source qualification evidence is reported by the server projection."],
+        ["Semantic task mapping", semanticStatus, semanticReviewed ? `${callableOperations.length} outbound operations have a reviewed proposal and drift gate; proposed tasks are not runtime-registered.` : "Reviewed operation-to-task semantics are not available from the server projection."],
+        ["Live operator sandbox", sandboxStatus, providerSandboxProven ? "Provider sandbox evidence is reported by the server projection." : "Requires an operator or channel-partner endpoint, managed test credentials and acceptance fixtures."],
+        ["Production approval", "Blocked", "Specification, policy enablement, semantic review or sandbox proof cannot implicitly grant production runtime authority."],
+      ],
+    };
+  }
+
   function platformsView() {
     const platforms = [
-      {
-        family: "CAMARA · GSMA Open Gateway",
-        title: "Quality on Demand · r3.2 candidate",
-        description:
-          "Reviewed public CAMARA release candidate pinned to an exact repository, commit and API-definition path. This is specification evidence only; provider connectivity and runtime authority remain separate gates.",
-        verdict: "Spec candidate pinned",
-        contract: "QoD v1.1.0",
-        sandbox: "Not proven",
-        production: "Blocked",
-        note: "Pinned candidate: camaraproject/QualityOnDemand @ 9cb179f · code/API_definitions/quality-on-demand.yaml. The default runtime trusted-source catalog remains empty until server policy explicitly enables the source.",
-        steps: [
-          ["Architecture family", "Ready", "CAMARA is recognized in the governed integration contract model."],
-          ["Reviewed release candidate", "Pinned", "Public r3.2 / QoD v1.1.0 candidate is bound to exact commit 9cb179f and API-definition path."],
-          ["Server-enabled trusted source", "Pending", "A deployment-owned allowlist must explicitly enable the reviewed source; code presence alone grants no authority."],
-          ["Live source acquisition", "Not proven", "Qualification CI has not yet fetched this public release over the external network."],
-          ["Semantic task mapping", "Pending", "Each selected operation must map to a canonical Maestro task and preserve source provenance."],
-          ["Live operator sandbox", "Blocked", "Requires an operator or channel-partner endpoint, managed test credentials and acceptance fixtures."],
-          ["Production approval", "Blocked", "Specification or sandbox proof cannot implicitly grant production runtime authority."],
-        ],
-      },
+      camaraQodPlatform(),
       {
         family: "TM Forum Open APIs",
         title: "TM Forum qualification profile",
@@ -368,7 +394,7 @@
           ${rows(
             [
               { title: "Qualify trusted source provenance", status: "in progress", description: "Reviewed revisions, server enablement and digest-backed operation inventory." },
-              { title: "Map CAMARA QoD operations", status: "next", description: "Preserve exact release provenance while mapping selected operations to canonical Maestro tasks." },
+              { title: "Review/register QoD task contracts", status: "pending governance", description: "The five-operation semantic proposal and drift gate are reviewed; runtime task, entitlement and quota registration remain separate governance decisions." },
               { title: "Run real provider sandbox proof", status: "blocked", description: "Requires provider endpoint, managed credentials and acceptance fixtures." },
             ],
             ""
@@ -417,7 +443,7 @@
     if (!root) return;
 
     if (state.loading) {
-      root.innerHTML = '<div class="ic18-empty" role="status">Loading integration readiness, cases and pilot evidence…</div>';
+      root.innerHTML = '<div class="ic18-empty" role="status">Loading integration readiness, cases, CAMARA qualification and pilot evidence…</div>';
       return;
     }
 
@@ -481,12 +507,14 @@
       getJson(API.cases),
       getJson(API.handoff),
       getJson(API.progress),
+      getJson(API.camaraQod),
     ]);
 
     state.tracking = results[0].status === "fulfilled" ? results[0].value : null;
     state.cases = results[1].status === "fulfilled" ? results[1].value : [];
     state.handoff = results[2].status === "fulfilled" ? results[2].value : null;
     state.progress = results[3].status === "fulfilled" ? results[3].value : [];
+    state.camaraQod = results[4].status === "fulfilled" ? results[4].value : null;
     state.error = results
       .filter((result) => result.status === "rejected")
       .map((result) => result.reason.message)
