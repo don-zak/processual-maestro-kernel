@@ -1,26 +1,26 @@
-name: Docker Build
+name: Public Docker Build
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "cgtlib/**"
+      - "processual_kernel/**"
+      - "processual_api/**"
+      - ".github/workflows/docker.yml"
+      - "tests/test_public_docker_trust_boundary_r1.py"
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Build target (public|private)"
-        required: true
-        default: "private"
-        type: choice
-        options: [public, private]
 
 jobs:
-  docker:
+  public-docker:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        target: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.target)) || fromJSON('["public"]') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,14 +36,43 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image (${{ matrix.target }})
+      - name: Build public Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          target: public
           push: ${{ github.event_name == 'push' }}
-          target: ${{ matrix.target }}
+          load: ${{ github.event_name != 'push' }}
           tags: |
-            ${{ matrix.target == 'public' && format('ghcr.io/{0}/processual-maestro-public:{1}', github.repository_owner, github.ref_name) || format('ghcr.io/{0}/processual-maestro:{1}', github.repository_owner, github.ref_name) }}
-            ${{ matrix.target == 'public' && format('ghcr.io/{0}/processual-maestro-public:latest', github.repository_owner) || format('ghcr.io/{0}/processual-maestro:latest', github.repository_owner) }}
+            pmk-public-qualification:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/processual-maestro-public:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke public image trust boundary
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          docker run --rm pmk-public-qualification:${{ github.sha }} python - <<'PY'
+          import importlib.util
+
+          import cgtlib
+          from processual_api.cgt_governor.governor import govern_answer
+          from processual_api.integrations.private_evaluation_boundary import (
+              PrivateEvaluationUnavailableError,
+          )
+
+          assert cgtlib._HAS_PRIVATE is False
+          assert importlib.util.find_spec("cgtlib.private") is None
+          assert importlib.util.find_spec("processual_api.private_integrations") is None
+          try:
+              govern_answer(answer="public-container-probe")
+          except PrivateEvaluationUnavailableError as exc:
+              assert str(exc) == "private_evaluation_unavailable"
+          else:
+              raise AssertionError("public container must fail closed without private provider")
+          PY
+
+      - name: Record ephemeral public image identity
+        if: github.event_name != 'push'
+        run: docker image inspect pmk-public-qualification:${{ github.sha }} --format '{{.Id}}'
