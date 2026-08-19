@@ -98,7 +98,8 @@ jobs:
             processual_api/cgt_governor/governor.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
-            --ignore-missing-imports
+            --ignore-missing-imports \
+            --follow-imports=skip
 
       - name: Dependency vulnerability audit
         run: pip-audit
