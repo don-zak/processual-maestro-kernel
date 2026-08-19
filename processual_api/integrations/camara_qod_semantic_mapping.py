@@ -7,8 +7,10 @@ that must be reviewed before endpoint bindings can become executable.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
+from typing import Any
 
 from processual_api.integrations.trusted_endpoint_source_acquisition import (
     CAMARA_QOD_R32_COMMIT,
@@ -154,6 +156,61 @@ def get_camara_qod_semantic_mapping(operation_id: str) -> CamaraQodSemanticMappi
         raise KeyError(f"Unsupported CAMARA QoD operation '{operation_id}'.") from exc
 
 
+def assess_camara_qod_semantic_alignment(
+    discovered_operations: Sequence[Mapping[str, Any]],
+) -> dict[str, object]:
+    """Require exact operation/method/path/scope alignment with the reviewed map."""
+
+    by_id: dict[str, Mapping[str, Any]] = {}
+    blockers: list[str] = []
+    for operation in discovered_operations:
+        operation_id = str(operation.get("operation_id") or "").strip()
+        if not operation_id:
+            blockers.append("camara_qod_operation_id_missing")
+            continue
+        if operation_id in by_id:
+            blockers.append(f"camara_qod_duplicate_operation:{operation_id}")
+            continue
+        by_id[operation_id] = operation
+
+    expected_ids = set(CAMARA_QOD_R32_CALLABLE_OPERATION_IDS)
+    discovered_ids = set(by_id)
+    for operation_id in sorted(expected_ids - discovered_ids):
+        blockers.append(f"camara_qod_expected_operation_missing:{operation_id}")
+    for operation_id in sorted(discovered_ids - expected_ids):
+        blockers.append(f"camara_qod_unreviewed_operation_present:{operation_id}")
+
+    aligned_ids: list[str] = []
+    for operation_id in CAMARA_QOD_R32_CALLABLE_OPERATION_IDS:
+        operation = by_id.get(operation_id)
+        if operation is None:
+            continue
+        mapping = _MAPPINGS[operation_id]
+        method = str(operation.get("method") or "").upper()
+        path = str(operation.get("path") or "")
+        scopes = tuple(sorted(str(scope) for scope in operation.get("security_scopes", ())))
+        expected_scopes = (mapping.camara_scope,)
+        if method != mapping.method:
+            blockers.append(f"camara_qod_method_drift:{operation_id}")
+        if path != mapping.path:
+            blockers.append(f"camara_qod_path_drift:{operation_id}")
+        if scopes != expected_scopes:
+            blockers.append(f"camara_qod_scope_drift:{operation_id}")
+        if method == mapping.method and path == mapping.path and scopes == expected_scopes:
+            aligned_ids.append(operation_id)
+
+    blockers = sorted(set(blockers))
+    return {
+        "semantic_mapping_aligned": not blockers,
+        "semantic_mapping_blocker_codes": blockers,
+        "aligned_operation_ids": aligned_ids,
+        "expected_operation_ids": list(CAMARA_QOD_R32_CALLABLE_OPERATION_IDS),
+        "runtime_task_registered": False,
+        "runtime_connector_approved": False,
+        "production_allowed": False,
+    }
+
+
 def camara_qod_semantic_mapping_payload() -> dict[str, object]:
     return {
         "source_identity_id": "camara.quality_on_demand.r3_2",
@@ -181,6 +238,7 @@ __all__ = [
     "CAMARA_QOD_R32_SEMANTIC_MAPPINGS",
     "CamaraQodSemanticMapping",
     "READ",
+    "assess_camara_qod_semantic_alignment",
     "camara_qod_semantic_mapping_payload",
     "get_camara_qod_semantic_mapping",
 ]
