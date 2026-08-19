@@ -9,6 +9,10 @@ def _credential_line(name: str, value: str) -> str:
     return f'{name} = "{value}"'
 
 
+def _unquoted_credential_line(name: str, value: str) -> str:
+    return f"{name}={value}"
+
+
 def test_secret_scan_detects_private_key_material() -> None:
     marker = "-----BEGIN " + "PRIVATE KEY-----"
     findings = scan_text(f"{marker}\nabc\n-----END " + "PRIVATE KEY-----")
@@ -20,6 +24,11 @@ def test_secret_scan_detects_high_confidence_credential_assignment() -> None:
     assert [finding.rule for finding in findings] == ["credential_assignment"]
 
 
+def test_secret_scan_detects_unquoted_environment_credential() -> None:
+    findings = scan_text(_unquoted_credential_line("CLIENT_" + "SECRET", "real-credential-value-123456"))
+    assert [finding.rule for finding in findings] == ["credential_assignment"]
+
+
 def test_secret_scan_allows_documented_placeholders() -> None:
     text = "\n".join(
         (
@@ -27,6 +36,7 @@ def test_secret_scan_allows_documented_placeholders() -> None:
             _credential_line("api_" + "key", "${API_KEY}"),
             _credential_line("password", "example-password-value"),
             _credential_line("access_" + "token", "redacted-access-token"),
+            _unquoted_credential_line("CLIENT_" + "SECRET", "${CLIENT_SECRET}"),
         )
     )
     assert scan_text(text) == []
@@ -35,6 +45,16 @@ def test_secret_scan_allows_documented_placeholders() -> None:
 def test_secret_scan_does_not_confuse_private_math_terms_with_credentials() -> None:
     text = "SECRET_WEIGHT=0.913 proprietary_equation=x+y threshold=0.42"
     assert scan_text(text) == []
+
+
+def test_secret_scan_tree_includes_key_files(tmp_path: Path) -> None:
+    marker = "-----BEGIN " + "PRIVATE KEY-----"
+    (tmp_path / "fixture.key").write_text(marker, "utf-8")
+
+    findings = scan_tree(tmp_path)
+    assert [(finding.path, finding.rule) for finding in findings] == [
+        ("fixture.key", "private_key_material")
+    ]
 
 
 def test_secret_scan_tree_skips_build_and_generated_evidence(tmp_path: Path) -> None:
