@@ -44,6 +44,7 @@ jobs:
           python -m pip install '.[dev,api,security,database,cache]'
 
       - name: Ruff public-source qualification slice
+        id: ruff_contracts
         run: |
           ruff check \
             processual_api/integrations/camara_public_source_qualification.py \
@@ -58,6 +59,7 @@ jobs:
             tests/test_trusted_endpoint_source_bundle.py
 
       - name: Run public-source qualification contracts
+        id: public_source_contract_tests
         run: |
           pytest -q \
             tests/test_camara_public_source_qualification.py \
@@ -69,15 +71,32 @@ jobs:
 
       - name: Record contract boundary
         if: always()
+        env:
+          RUFF_OUTCOME: ${{ steps.ruff_contracts.outcome }}
+          CONTRACT_TEST_OUTCOME: ${{ steps.public_source_contract_tests.outcome }}
         run: |
           mkdir -p qualification-evidence
+          if [ "$RUFF_OUTCOME" = "success" ]; then
+            ruff_passed=true
+          else
+            ruff_passed=false
+          fi
+          if [ "$CONTRACT_TEST_OUTCOME" = "success" ]; then
+            contract_tests_passed=true
+          else
+            contract_tests_passed=false
+          fi
           {
             echo "workflow=CAMARA Public Source Contracts"
-            echo "camara_public_source_runner_tests=true"
-            echo "camara_qod_semantic_mapping_tests=true"
-            echo "camara_qod_semantic_drift_tests=true"
-            echo "camara_qod_safe_status_route_tests=true"
-            echo "camara_qod_route_backed_ui_tests=true"
+            echo "ruff_contracts_outcome=$RUFF_OUTCOME"
+            echo "public_source_contract_tests_outcome=$CONTRACT_TEST_OUTCOME"
+            echo "ruff_contracts_passed=$ruff_passed"
+            echo "camara_public_source_runner_tests=$contract_tests_passed"
+            echo "camara_qod_semantic_mapping_tests=$contract_tests_passed"
+            echo "camara_qod_semantic_drift_tests=$contract_tests_passed"
+            echo "camara_qod_safe_status_route_tests=$contract_tests_passed"
+            echo "camara_qod_route_backed_ui_tests=$contract_tests_passed"
+            echo "trusted_source_bundle_limit_tests=$contract_tests_passed"
             echo "camara_qod_network_assurance_reuse=false"
             echo "camara_qod_runtime_task_registered=false"
             echo "manual_live_workflow_contract_present=true"
