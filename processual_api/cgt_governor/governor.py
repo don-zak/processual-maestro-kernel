@@ -59,7 +59,7 @@ def govern_sanitized_decision(
     """Apply public policy and repair orchestration to a sanitized private decision."""
 
     try:
-        rank = ExistenceRank(decision.existence_rank.removeprefix("rank:" ).lower())
+        rank = ExistenceRank(decision.existence_rank.removeprefix("rank:").lower())
     except ValueError as exc:
         raise ValueError("unsupported_sanitized_existence_rank") from exc
 
