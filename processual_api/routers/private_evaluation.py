@@ -59,7 +59,7 @@ def evaluate_private_request(envelope: PrivateEvaluationEnvelope, request: Reque
 
     try:
         provider = private_evaluation_provider_from_request(request)
-        decision = evaluate_through_private_boundary(contract_request, provider)
+        decision = evaluate_through_private_boundary(provider, contract_request)
     except PrivateEvaluationUnavailableError:
         raise HTTPException(status_code=503, detail="private_evaluation_unavailable") from None
     except PrivateEvaluationContractViolationError:
