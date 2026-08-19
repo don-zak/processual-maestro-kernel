@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import Any
 
+from processual_api.integrations.integration_task_catalog import SUPPORTED_INTEGRATION_TASKS
 from processual_api.integrations.trusted_endpoint_source_acquisition import (
     CAMARA_QOD_R32_COMMIT,
     CAMARA_QOD_R32_PATH,
@@ -38,6 +39,17 @@ class CamaraQodSemanticMapping:
     runtime_task_registered: bool = False
     runtime_connector_approved: bool = False
     production_allowed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CamaraQodGovernanceCandidate:
+    operation_id: str
+    task_id: str
+    operation_class: str
+    entitlement_id: str
+    quota_meter: str
+    approval_required: bool
+    runtime_registered: bool = False
 
 
 _MAPPINGS = {
@@ -148,6 +160,30 @@ CAMARA_QOD_R32_SEMANTIC_MAPPINGS = MappingProxyType(_MAPPINGS)
 CAMARA_QOD_R32_CALLABLE_OPERATION_IDS = tuple(_MAPPINGS)
 CAMARA_QOD_R32_CALLBACK_OPERATION_IDS = ("postNotification",)
 
+_GOVERNANCE_CANDIDATES = {
+    operation_id: CamaraQodGovernanceCandidate(
+        operation_id=operation_id,
+        task_id=mapping.proposed_task_id,
+        operation_class=mapping.operation_class,
+        entitlement_id=mapping.proposed_entitlement_id,
+        quota_meter=mapping.proposed_quota_meter,
+        approval_required=mapping.operation_class == APPROVAL_GATED_WRITE,
+    )
+    for operation_id, mapping in _MAPPINGS.items()
+}
+CAMARA_QOD_GOVERNANCE_CANDIDATES = MappingProxyType(_GOVERNANCE_CANDIDATES)
+CAMARA_QOD_ENTITLEMENT_CANDIDATES = (
+    "camara_qod_session_manage",
+    "camara_qod_session_read",
+)
+CAMARA_QOD_QUOTA_METER_CANDIDATES = (
+    "camara_qod_session_create",
+    "camara_qod_session_delete",
+    "camara_qod_session_read",
+    "camara_qod_session_retrieve_by_device",
+    "camara_qod_session_update",
+)
+
 
 def get_camara_qod_semantic_mapping(operation_id: str) -> CamaraQodSemanticMapping:
     try:
@@ -211,6 +247,60 @@ def assess_camara_qod_semantic_alignment(
     }
 
 
+def assess_camara_qod_governance_candidate() -> dict[str, object]:
+    """Validate the governance proposal without granting runtime authority."""
+
+    blockers: list[str] = []
+    task_ids: list[str] = []
+    entitlement_ids: set[str] = set()
+    quota_meters: set[str] = set()
+
+    for operation_id in CAMARA_QOD_R32_CALLABLE_OPERATION_IDS:
+        mapping = _MAPPINGS[operation_id]
+        candidate = _GOVERNANCE_CANDIDATES[operation_id]
+        if candidate.task_id != mapping.proposed_task_id:
+            blockers.append(f"camara_qod_governance_task_drift:{operation_id}")
+        if candidate.operation_class != mapping.operation_class:
+            blockers.append(f"camara_qod_governance_operation_class_drift:{operation_id}")
+        if candidate.entitlement_id != mapping.proposed_entitlement_id:
+            blockers.append(f"camara_qod_governance_entitlement_drift:{operation_id}")
+        if candidate.quota_meter != mapping.proposed_quota_meter:
+            blockers.append(f"camara_qod_governance_quota_drift:{operation_id}")
+        if candidate.approval_required is not (
+            mapping.operation_class == APPROVAL_GATED_WRITE
+        ):
+            blockers.append(f"camara_qod_governance_approval_drift:{operation_id}")
+        if candidate.runtime_registered:
+            blockers.append(f"camara_qod_governance_candidate_runtime_enabled:{operation_id}")
+        if candidate.task_id in SUPPORTED_INTEGRATION_TASKS:
+            blockers.append(f"camara_qod_governance_task_already_registered:{operation_id}")
+
+        task_ids.append(candidate.task_id)
+        entitlement_ids.add(candidate.entitlement_id)
+        quota_meters.add(candidate.quota_meter)
+
+    if len(task_ids) != len(set(task_ids)):
+        blockers.append("camara_qod_governance_task_ids_must_be_unique")
+    if tuple(sorted(entitlement_ids)) != CAMARA_QOD_ENTITLEMENT_CANDIDATES:
+        blockers.append("camara_qod_governance_entitlement_set_drift")
+    if tuple(sorted(quota_meters)) != CAMARA_QOD_QUOTA_METER_CANDIDATES:
+        blockers.append("camara_qod_governance_quota_meter_set_drift")
+
+    blockers = sorted(set(blockers))
+    return {
+        "governance_candidate_valid": not blockers,
+        "governance_blocker_codes": blockers,
+        "candidate_task_ids": task_ids,
+        "candidate_entitlement_ids": list(CAMARA_QOD_ENTITLEMENT_CANDIDATES),
+        "candidate_quota_meters": list(CAMARA_QOD_QUOTA_METER_CANDIDATES),
+        "governance_approved": False,
+        "runtime_task_registered": False,
+        "runtime_connector_approved": False,
+        "provider_sandbox_proven": False,
+        "production_allowed": False,
+    }
+
+
 def camara_qod_semantic_mapping_payload() -> dict[str, object]:
     return {
         "source_identity_id": "camara.quality_on_demand.r3_2",
@@ -224,6 +314,14 @@ def camara_qod_semantic_mapping_payload() -> dict[str, object]:
             CAMARA_QOD_R32_CALLBACK_OPERATION_IDS
         ),
         "existing_network_assurance_reused": False,
+        "governance_candidate": {
+            "candidate_state": "review_required",
+            "tasks": [
+                asdict(_GOVERNANCE_CANDIDATES[key])
+                for key in CAMARA_QOD_R32_CALLABLE_OPERATION_IDS
+            ],
+            **assess_camara_qod_governance_candidate(),
+        },
         "runtime_task_registered": False,
         "runtime_connector_approved": False,
         "provider_sandbox_proven": False,
@@ -233,11 +331,16 @@ def camara_qod_semantic_mapping_payload() -> dict[str, object]:
 
 __all__ = [
     "APPROVAL_GATED_WRITE",
+    "CAMARA_QOD_ENTITLEMENT_CANDIDATES",
+    "CAMARA_QOD_GOVERNANCE_CANDIDATES",
+    "CAMARA_QOD_QUOTA_METER_CANDIDATES",
     "CAMARA_QOD_R32_CALLBACK_OPERATION_IDS",
     "CAMARA_QOD_R32_CALLABLE_OPERATION_IDS",
     "CAMARA_QOD_R32_SEMANTIC_MAPPINGS",
+    "CamaraQodGovernanceCandidate",
     "CamaraQodSemanticMapping",
     "READ",
+    "assess_camara_qod_governance_candidate",
     "assess_camara_qod_semantic_alignment",
     "camara_qod_semantic_mapping_payload",
     "get_camara_qod_semantic_mapping",
