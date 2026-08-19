@@ -15,6 +15,8 @@ SOURCE_SHA = os.environ.get("VQ1_SOURCE_SHA", "unknown")
 BASE_URL = os.environ.get("VQ1_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 OUTPUT_DIR = Path(os.environ.get("VQ1_OUTPUT_DIR", "artifacts/vq1"))
 LOCALE = os.environ.get("VQ1_LOCALE", "en")
+VQ1_USERNAME = os.environ.get("VQ1_USERNAME", "admin")
+VQ1_PASSWORD = os.environ.get("VQ1_PASSWORD", "admin")
 
 VIEWPORTS = {
     "desktop-wide": (1440, 900),
@@ -90,6 +92,34 @@ def internal_href(href: str) -> str | None:
     if parsed.query:
         path = f"{path}?{parsed.query}"
     return path
+
+
+def establish_qualification_session(page: Page) -> None:
+    response = page.request.post(
+        f"{BASE_URL}/auth/token",
+        data={"username": VQ1_USERNAME, "password": VQ1_PASSWORD, "role": "admin"},
+    )
+    if not response.ok:
+        raise RuntimeError(f"qualification login failed with HTTP {response.status}")
+    payload = response.json()
+    token = payload.get("access_token")
+    if not token:
+        raise RuntimeError("qualification login response did not include access_token")
+
+    page.add_init_script(
+        """
+        token => {
+          sessionStorage.setItem('maestro_descent_gate_seen', '1');
+          sessionStorage.setItem('maestro_entry_mode', 'admin');
+          sessionStorage.setItem('maestro_role', 'admin');
+          sessionStorage.setItem('maestro_token', token);
+          sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
+          localStorage.removeItem('maestro_token');
+          localStorage.removeItem('maestro_role');
+        }
+        """,
+        token,
+    )
 
 
 def discover_offer_routes(page: Page) -> set[str]:
@@ -302,6 +332,7 @@ def write_outputs(rows: list[EvidenceRow], inventory: dict[str, object], browser
 
 def run(browser: Browser) -> None:
     page = browser.new_page(locale=LOCALE)
+    establish_qualification_session(page)
     routes = set(PUBLIC_ROUTE_SEED)
     routes.update(discover_offer_routes(page))
     console_sections = discover_console_sections(page)
