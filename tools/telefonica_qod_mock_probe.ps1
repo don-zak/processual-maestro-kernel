@@ -50,6 +50,24 @@ function Get-SanitizedPreview {
     return $preview
 }
 
+function Get-HeaderValue {
+    param(
+        [Parameter(Mandatory = $true)]$Headers,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    try {
+        $value = $Headers[$Name]
+        if ($null -eq $value) {
+            return $null
+        }
+        return [string]($value -join ', ')
+    }
+    catch {
+        return $null
+    }
+}
+
 function Invoke-Probe {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -68,14 +86,8 @@ function Invoke-Probe {
             -ErrorAction Stop
 
         $body = [string]$response.Content
-        $contentType = $null
-        if ($response.Headers.Contains('Content-Type')) {
-            $contentType = [string]($response.Headers['Content-Type'] -join ', ')
-        }
-        $server = $null
-        if ($response.Headers.Contains('Server')) {
-            $server = [string]($response.Headers['Server'] -join ', ')
-        }
+        $contentType = Get-HeaderValue -Headers $response.Headers -Name 'Content-Type'
+        $server = Get-HeaderValue -Headers $response.Headers -Name 'Server'
 
         return [ordered]@{
             name = $Name
