@@ -32,3 +32,14 @@ def test_release_workflow_is_not_weaker_than_public_static_gates() -> None:
     assert "- name: Bandit security scan" in workflow
     assert "- name: Dependency vulnerability audit" in workflow
     assert "run: pip-audit" in workflow
+
+
+def test_release_workflow_retains_artifact_dependency_and_license_evidence() -> None:
+    workflow = _release_workflow()
+
+    assert "- name: Generate release evidence inventory" in workflow
+    assert "python tools/release_evidence_inventory.py" in workflow
+    assert "--output release-evidence/release-inventory.json" in workflow
+    assert "- name: Upload release evidence" in workflow
+    assert "name: release-evidence" in workflow
+    assert "path: release-evidence/*" in workflow
