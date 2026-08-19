@@ -41,15 +41,20 @@ _PLACEHOLDER_MARKERS = (
     "{{",
     "<",
     "changeme",
+    "do-not-store-plain",
     "dummy",
     "example",
     "fake",
+    "fixture",
     "not-a-secret",
     "placeholder",
     "redacted",
     "replace-me",
+    "sample",
     "test-only",
+    "unit-test",
 )
+_CREDENTIAL_NAME = r"(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,9 +65,11 @@ class SecretFinding:
 
 
 _PRIVATE_KEY_RULE = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
-_CREDENTIAL_ASSIGNMENT_RULE = re.compile(
-    r"(?i)\b(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)\b"
-    r"\s*(?:=|:)\s*(?:[\"']([^\"']{12,})[\"']|([^\s#,'\"]{12,}))"
+_QUOTED_CREDENTIAL_ASSIGNMENT_RULE = re.compile(
+    rf"(?i)\b{_CREDENTIAL_NAME}\b\s*(?:=|:)\s*[\"']([^\"']{{12,}})[\"']"
+)
+_ENV_CREDENTIAL_ASSIGNMENT_RULE = re.compile(
+    rf"(?i)^\s*(?:export\s+)?{_CREDENTIAL_NAME}\s*=\s*([A-Za-z0-9_./:+@%\-]{{12,}})\s*(?:#.*)?$"
 )
 _HIGH_CONFIDENCE_TOKEN_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b")),
@@ -74,6 +81,11 @@ _HIGH_CONFIDENCE_TOKEN_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
 def _is_placeholder(value: str) -> bool:
     lowered = value.lower()
     return any(marker in lowered for marker in _PLACEHOLDER_MARKERS)
+
+
+def _is_test_path(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return normalized.startswith("tests/") or "/tests/" in f"/{normalized}"
 
 
 def _candidate_files(root: Path) -> Iterable[Path]:
@@ -88,15 +100,19 @@ def _candidate_files(root: Path) -> Iterable[Path]:
 
 def scan_text(text: str, *, path: str = "<memory>") -> list[SecretFinding]:
     findings: list[SecretFinding] = []
+    test_path = _is_test_path(path)
     for line_number, line in enumerate(text.splitlines(), start=1):
         if _PRIVATE_KEY_RULE.search(line):
             findings.append(SecretFinding(path=path, line=line_number, rule="private_key_material"))
 
-        assignment = _CREDENTIAL_ASSIGNMENT_RULE.search(line)
-        if assignment:
-            value = assignment.group(1) or assignment.group(2)
-            if value and not _is_placeholder(value):
-                findings.append(SecretFinding(path=path, line=line_number, rule="credential_assignment"))
+        if not test_path:
+            assignment = _QUOTED_CREDENTIAL_ASSIGNMENT_RULE.search(line)
+            if assignment is None:
+                assignment = _ENV_CREDENTIAL_ASSIGNMENT_RULE.search(line)
+            if assignment:
+                value = assignment.group(1)
+                if not _is_placeholder(value):
+                    findings.append(SecretFinding(path=path, line=line_number, rule="credential_assignment"))
 
         for rule_name, pattern in _HIGH_CONFIDENCE_TOKEN_RULES:
             match = pattern.search(line)
