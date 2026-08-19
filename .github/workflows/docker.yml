@@ -73,10 +73,15 @@ jobs:
           from processual_api.integrations.private_evaluation_boundary import (
               PrivateEvaluationUnavailableError,
           )
+          from processual_api.main import app
 
           assert cgtlib._HAS_PRIVATE is False
           assert importlib.util.find_spec("cgtlib.private") is None
           assert importlib.util.find_spec("processual_api.private_integrations") is None
+          assert "/cgt/govern/evaluate" in {
+              getattr(route, "path", "") for route in app.routes
+          }
+          assert getattr(app.state, "private_evaluation_provider", None) is None
           try:
               govern_answer(answer="public-container-probe")
           except PrivateEvaluationUnavailableError as exc:
