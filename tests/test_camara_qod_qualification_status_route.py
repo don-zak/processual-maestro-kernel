@@ -143,6 +143,33 @@ def test_camara_qod_status_route_projects_approved_registration_but_stays_fail_c
     assert payload["production_allowed"] is False
     assert payload["raw_secret_visible"] is False
 
+    external = payload["external_sandbox_evidence"]
+    assert external["evidence_class"] == "external_mock_interoperability"
+    assert external["authenticated_sandbox_reachability_proven"] is True
+    assert external["external_mock_sandbox_proven"] is True
+    assert external["external_mock_extend_proven"] is True
+    assert external["provider_sandbox_proven"] is False
+    assert external["runtime_connector_approved"] is False
+    assert external["production_allowed"] is False
+    assert external["missing_session_documented_expectation_met"] is False
+    assert external["mock_documentation_divergence_observed"] is True
+
+    compatibility = payload["telefonica_compatibility"]
+    assert compatibility["compatibility_state"] == (
+        "partial_interoperability_with_negative_path_divergence"
+    )
+    assert compatibility["provider_sandbox_proven"] is False
+    assert compatibility["runtime_connector_approved"] is False
+    assert compatibility["production_allowed"] is False
+    assert (
+        "telefonica_missing_session_returns_200_instead_of_documented_404"
+        in compatibility["blocker_codes"]
+    )
+    assert (
+        "telefonica_retrieve_sessions_by_device_unproven"
+        in compatibility["blocker_codes"]
+    )
+
     serialized = json.dumps(payload).lower()
     assert "access_token" not in serialized
     assert "client_secret" not in serialized
