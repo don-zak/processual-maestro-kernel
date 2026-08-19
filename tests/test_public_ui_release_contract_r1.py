@@ -90,6 +90,7 @@ def test_browser_security_headers_cover_modern_baseline() -> None:
     assert response.status_code == 200
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["x-xss-protection"] == "0"
     assert response.headers["strict-transport-security"] == (
         "max-age=31536000; includeSubDomains"
     )
@@ -97,3 +98,22 @@ def test_browser_security_headers_cover_modern_baseline() -> None:
     assert response.headers["permissions-policy"] == (
         "camera=(), microphone=(), geolocation=(), payment=()"
     )
+
+    csp = response.headers["content-security-policy"]
+    for directive in (
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "upgrade-insecure-requests",
+    ):
+        assert directive in csp
+
+    assert "*" not in csp
+    assert "http:" not in csp
