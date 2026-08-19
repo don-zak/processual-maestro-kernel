@@ -11,6 +11,9 @@ _ADMIN_DOM_CONTRACT_SCRIPT = (
 _VQ1_NARROW_HARDENING_STYLESHEET = (
     b'<link rel="stylesheet" href="/console/css/vq1_narrow_hardening.css?v=vq1narrow01">'
 )
+_VQ1_SETTINGS_OWNERSHIP_SCRIPT = (
+    b'<script src="/console/js/vq1_settings_ownership.js?v=vq1ownership01"></script>'
+)
 _PUBLIC_AUTHORITY_REPLACEMENTS = (
     (b"Production Ready", b"Qualification Build"),
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
@@ -82,6 +85,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response = await self._pin_public_assets(response)
             response = await self._quarantine_legacy_console_surfaces(response)
             response = await self._inject_vq1_narrow_hardening(response)
+            response = await self._inject_vq1_settings_ownership(response)
 
         if path in {"/admin", "/admin/"}:
             response = await self._inject_admin_dom_contract(response)
@@ -176,6 +180,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 body = _VQ1_NARROW_HARDENING_STYLESHEET + body
+        return self._rebuilt_response(response, body)
+
+    async def _inject_vq1_settings_ownership(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+
+        body = await self._response_body(response)
+        if _VQ1_SETTINGS_OWNERSHIP_SCRIPT not in body:
+            if b"</body>" in body:
+                body = body.replace(
+                    b"</body>", _VQ1_SETTINGS_OWNERSHIP_SCRIPT + b"</body>", 1
+                )
+            else:
+                body += _VQ1_SETTINGS_OWNERSHIP_SCRIPT
         return self._rebuilt_response(response, body)
 
     async def _inject_admin_dom_contract(self, response: Response) -> Response:
