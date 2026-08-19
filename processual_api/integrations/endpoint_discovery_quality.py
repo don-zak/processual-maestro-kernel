@@ -334,7 +334,11 @@ def assess_endpoint_discovery(
             blockers.append("camara_requires_openapi_3")
         if version.casefold() == "wip":
             blockers.append("camara_wip_version_not_qualifiable")
-        commonalities = str(document.get("x-camara-commonalities") or "").strip()
+        commonalities = str(
+            info.get("x-camara-commonalities")
+            or document.get("x-camara-commonalities")
+            or ""
+        ).strip()
         if not commonalities:
             blockers.append("camara_commonalities_version_required")
         if not server_hints or not any(_VERSIONED_SERVER.search(server) for server in server_hints):
