@@ -83,6 +83,7 @@ jobs:
           ruff check \
             processual_api/cgt_governor/governor.py \
             processual_api/cgt_governor/gateway/engine.py \
+            processual_api/cgt_governor/simulation/__init__.py \
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
@@ -108,6 +109,7 @@ jobs:
           mypy \
             processual_api/cgt_governor/governor.py \
             processual_api/cgt_governor/gateway/engine.py \
+            processual_api/cgt_governor/simulation/__init__.py \
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
