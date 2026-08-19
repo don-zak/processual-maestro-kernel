@@ -1,7 +1,7 @@
 # General Packaging Preflight — 2026-08-19
 
 **Stage:** preparation for Phase F / General Packaging  
-**Status:** **PREFLIGHT ADVANCED — EXACT-HEAD PUBLIC ARTIFACT GATES GREEN; TRUST-BOUNDARY RECONCILIATION STILL OPEN**
+**Status:** **PREFLIGHT ADVANCED — EXACT-SOURCE PUBLIC ARTIFACT GATES GREEN; TRUST-BOUNDARY RECONCILIATION STILL OPEN**
 
 ## Purpose
 
@@ -42,7 +42,7 @@ The qualification branch packaging/release work includes:
 
 These are strong foundations but do not yet satisfy complete General Packaging closure.
 
-## Exact-head qualification evidence
+## Historical exact-head qualification evidence
 
 Evidence-bearing public source SHA:
 
@@ -78,7 +78,28 @@ Public Docker Build run 12 completed successfully through:
 - trust-boundary smoke proving the public container has no private implementation modules and protected evaluation fails closed without private-provider authority;
 - ephemeral image identity recording.
 
-This is non-real-environment build/packaging evidence only. It is not Real Staging qualification and grants no runtime/private-provider/production authority.
+## Current boundary/runtime qualification evidence
+
+Evidence-bearing public source SHA:
+
+`cec49f8eeec7eb5ef0ca55c103ef301462b4df40`
+
+Successful PR-triggered workflows for that exact SHA:
+
+- Packaging Qualification run `32261096359` / run number `143` — **SUCCESS**;
+- Public Docker Build run `32261096365` / run number `30` — **SUCCESS**;
+- CAMARA Public Source Contracts run `32261096358` / run number `200` — **SUCCESS**;
+- Sandbox Integration Qualification run `32261096380` / run number `338` — **SUCCESS**.
+
+Packaging Qualification run 143 completed successfully through focused trust-boundary regression, Ruff, Flake8, focused Mypy, high-confidence secret scanning, pip-audit, wheel/sdist build, Twine metadata validation, canonical resource/private-path wheel inspection, dependency-free installed-wheel fail-closed smoke, release evidence inventory, CycloneDX Python dependency SBOM generation, and evidence upload.
+
+The dependency-free installed-wheel smoke intentionally proves only dependency-independent package behavior. FastAPI/Starlette-dependent HTTP composition is not imported in that `--no-deps` environment. Instead, wheel archive inspection proves `processual_api/integrations/private_evaluation_http.py` and `processual_api/integrations/private_evaluation_runtime.py` are present, while Public Docker Build run 30 provides the full-runtime proof that `/cgt/govern/evaluate` is registered and that no private provider is auto-bound by default.
+
+The canonical public mediation now includes bounded reference-only requests, explicit app-state private-provider injection, default-deny provider lookup, exact six-field sanitized responses, generic boundary errors, and quota enforcement at the public router-composition edge. This does not supply opaque reference issuance/resolution itself and does not authorize private runtime use.
+
+Private Draft PR #49 exact head `5138a8052252d4ce65124c2bb9ac4275cfcbb5f8` separately passed its seven current CI/boundary workflows. That evidence remains inside the private trust-domain qualification path and does not substitute for private image qualification.
+
+All evidence in this section is non-real-environment build/packaging evidence only. It is not Real Staging qualification and grants no runtime/private-provider/operator-network/production authority.
 
 ## Packaging defect corrected during reconciliation
 
@@ -98,7 +119,7 @@ This canonical resource is classified shared/public-safe product data, not priva
 
 ## P-F0 — public/private trust-boundary packaging gate
 
-**Status:** public-side exact-head gate successful; repository-boundary closure still blocked by legacy router debt and remaining review.
+**Status:** public-side exact-source gate successful; repository-boundary closure still blocked by legacy router/client debt, opaque reference issuance/resolution design, and remaining review.
 
 This gate is mandatory and precedes package closure.
 
@@ -136,19 +157,20 @@ Any violation of P-F0 blocks `GeneralPackagingComplete=true` regardless of all o
 
 ## P-F1 — package artifact integrity
 
-**Implementation status:** exact-head packaging gate successful; release-candidate binding/review pending.
+**Implementation status:** current exact-source packaging gate successful; release-candidate binding/review pending.
 
 The packaging/release workflows now:
 
 - build wheel and sdist;
 - verify canonical shared resources inside the wheel;
 - verify private implementation paths are absent from the public wheel;
-- install the wheel in an isolated environment;
-- verify reference data and trust-boundary behavior from the installed artifact;
+- verify the canonical public HTTP/runtime mediation modules are present in the wheel without requiring their optional dependencies in the no-deps smoke;
+- install the wheel in an isolated dependency-free environment;
+- verify reference data and core fail-closed trust-boundary behavior from the installed artifact;
 - run Twine metadata validation;
 - record SHA-256 and sizes for built artifacts in `release-evidence/release-inventory.json`.
 
-Exact-head Packaging Qualification run 116 passed these controls for source SHA `d22238a27462429094003ed71d4c4ae6721e7edf`.
+Current evidence-bearing Packaging Qualification run 143 passed these controls for source SHA `cec49f8eeec7eb5ef0ca55c103ef301462b4df40`.
 
 Still required for closure:
 
@@ -158,7 +180,7 @@ Still required for closure:
 
 ## P-F2 — dependency/security qualification
 
-**Implementation status:** exact-head public gate successful; final review pending.
+**Implementation status:** current exact-source public gate successful; final review pending.
 
 Current gates include:
 
@@ -171,7 +193,7 @@ Current gates include:
 - installed dependency inventory;
 - installed package license metadata inventory.
 
-Packaging Qualification run 116 passed Ruff, Flake8, Mypy, secret scan and pip-audit on the exact evidence-bearing source SHA.
+Packaging Qualification run 143 passed Ruff, Flake8, Mypy, secret scan and pip-audit on source SHA `cec49f8eeec7eb5ef0ca55c103ef301462b4df40`.
 
 Still required:
 
@@ -181,13 +203,13 @@ Still required:
 
 ## P-F3 — SBOM
 
-**Implementation status:** exact-head Python environment SBOM successful; container SBOM open.
+**Implementation status:** current exact-source Python environment SBOM successful; container SBOM open.
 
 The packaging/release workflows emit:
 
 `release-evidence/python-environment.cdx.json`
 
-in CycloneDX JSON format. Packaging Qualification run 116 generated and retained this evidence successfully.
+in CycloneDX JSON format. Packaging Qualification run 143 generated and retained this evidence successfully.
 
 Still required:
 
@@ -197,7 +219,7 @@ Still required:
 
 ## P-F4 — Docker/package boundary qualification
 
-**Status:** public ephemeral image build/trust-boundary smoke successful; container SBOM and private-side image qualification remain open.
+**Status:** current public ephemeral image build/trust-boundary smoke successful; container SBOM and private-side image qualification remain open.
 
 The public repository is now public-image-only:
 
@@ -207,7 +229,7 @@ The public repository is now public-image-only:
 - tag-triggered publishing applies only to the public image;
 - private image build/qualification is explicitly outside the public repository and belongs to private CI/environment.
 
-Public Docker Build run 12 succeeded for exact source SHA `d22238a27462429094003ed71d4c4ae6721e7edf`, including container trust-boundary smoke and image identity recording.
+Public Docker Build run 30 succeeded for source SHA `cec49f8eeec7eb5ef0ca55c103ef301462b4df40`, including full-runtime canonical route registration, default-deny private-provider state, container trust-boundary smoke, and image identity recording.
 
 Still required for closure:
 
@@ -281,7 +303,7 @@ Required:
 
 Major remaining gates are:
 
-1. audit/migration of remaining operational paths that expose raw scores/vectors instead of sanitized decisions, especially `processual_api/routers/cgt_governor.py` and dependent client/report surfaces;
+1. design/proof of opaque reference issuance and private-side resolution topology, followed by migration of remaining operational paths that expose raw scores/vectors instead of sanitized decisions, especially `processual_api/routers/cgt_governor.py` and dependent client/report surfaces;
 2. dependency-license and private-error-surface review;
 3. public container-image SBOM and immutable release-candidate image digest;
 4. separate private image qualification in private CI/environment;
@@ -292,7 +314,7 @@ Major remaining gates are:
 
 ## Phase boundary
 
-General Packaging has exact-head successful public package/image qualification evidence, but it must not be declared complete until trust-boundary reconciliation and remaining required public/private artifact qualification have succeeded.
+General Packaging has successful exact-source public package/image qualification evidence and separate successful private boundary CI evidence, but it must not be declared complete until trust-boundary reconciliation and remaining required public/private artifact qualification have succeeded.
 
 Real-environment tests documented in `DEFERRED_REAL_ENVIRONMENT_READINESS_PROOFS_2026-08-19.md` remain outside this preflight and are not waived.
 
@@ -303,6 +325,12 @@ Current state:
 `GeneralPackagingComplete=false`
 
 `PrivateRuntimeAuthorityGranted=false`
+
+`runtime_connector_approved=false`
+
+`provider_sandbox_proven=false`
+
+`operator_network_qos_proven=false`
 
 `RealStagingQualified=false`
 
