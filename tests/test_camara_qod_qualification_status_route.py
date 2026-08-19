@@ -144,7 +144,10 @@ def test_camara_qod_status_route_projects_approved_registration_but_stays_fail_c
     assert payload["raw_secret_visible"] is False
 
     external = payload["external_sandbox_evidence"]
-    assert external["evidence_class"] == "external_mock_interoperability"
+    assert (
+        external["evidence_class"]
+        == "external_mock_interoperability_with_divergence"
+    )
     assert external["authenticated_sandbox_reachability_proven"] is True
     assert external["external_mock_sandbox_proven"] is True
     assert external["external_mock_extend_proven"] is True
