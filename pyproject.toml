@@ -102,6 +102,9 @@ all = [
 [tool.setuptools]
 include-package-data = false
 
+[tool.setuptools.package-data]
+"cgtlib.data" = ["reference_scenarios.json"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["processual_kernel*", "cgtlib*", "processual_api*"]
