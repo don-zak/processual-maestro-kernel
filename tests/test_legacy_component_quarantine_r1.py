@@ -27,21 +27,37 @@ def test_production_code_does_not_import_compatibility_subscription_catalog() ->
     assert offenders == []
 
 
-def test_production_code_does_not_depend_on_deprecated_provider_alias_route() -> None:
-    forbidden = "/client/provider-connection"
-    alias_path = PROCESSUAL_API / "routers/client_provider_alias_18.py"
+def _find_production_surface_references(
+    forbidden: str,
+    *,
+    allowed_paths: set[Path],
+) -> list[str]:
     offenders: list[str] = []
-
     for path in PROCESSUAL_API.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".js", ".html"}:
             continue
-        if path == alias_path:
+        if path in allowed_paths:
             continue
         text = path.read_text(encoding="utf-8")
         if forbidden in text:
             offenders.append(str(path.relative_to(ROOT)))
+    return offenders
 
-    assert offenders == []
+
+def test_production_code_does_not_depend_on_deprecated_provider_alias_route() -> None:
+    alias_path = PROCESSUAL_API / "routers/client_provider_alias_18.py"
+    assert _find_production_surface_references(
+        "/client/provider-connection",
+        allowed_paths={alias_path},
+    ) == []
+
+
+def test_production_code_does_not_depend_on_deprecated_provider_test_route() -> None:
+    runtime_path = PROCESSUAL_API / "routers/settings_provider_test_runtime.py"
+    assert _find_production_surface_references(
+        "/settings/llm-provider/test",
+        allowed_paths={runtime_path},
+    ) == []
 
 
 def test_quarantined_console_assets_remain_present_only_for_review() -> None:
