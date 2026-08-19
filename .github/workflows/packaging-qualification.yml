@@ -1,0 +1,123 @@
+name: Packaging Qualification
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "cgtlib/**"
+      - "tools/release_evidence_inventory.py"
+      - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_release_*.py"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/packaging-qualification.yml"
+  workflow_dispatch:
+
+jobs:
+  package-evidence:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install packaging qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,security]
+
+      - name: Focused packaging regression
+        run: |
+          python -m pytest -q \
+            tests/test_cgtlib_reference_data_packaging.py \
+            tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_release_packaging_reference_data_gate.py \
+            tests/test_release_evidence_inventory.py
+
+      - name: Ruff packaging scope
+        run: |
+          ruff check \
+            tools/release_evidence_inventory.py \
+            tests/test_cgtlib_reference_data_packaging.py \
+            tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_release_packaging_reference_data_gate.py \
+            tests/test_release_evidence_inventory.py \
+            --output-format=github
+
+      - name: Flake8 critical errors
+        run: flake8 . --count --select=E9,F63,F7,F82 --statistics
+
+      - name: Type check release evidence tool
+        run: mypy tools/release_evidence_inventory.py --ignore-missing-imports
+
+      - name: Dependency vulnerability audit
+        run: pip-audit
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+
+      - name: Verify canonical resource in wheel
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          wheels = sorted(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = archive.namelist()
+              assert "cgtlib/data/reference_scenarios.json" in names
+              assert not any(name.startswith("cgtlib/private/") for name in names)
+              assert not any(
+                  name.startswith("processual_api/private_integrations/")
+                  for name in names
+              )
+          PY
+
+      - name: Smoke test installed wheel resources
+        shell: bash
+        run: |
+          python -m venv /tmp/pmk-packaging-smoke
+          /tmp/pmk-packaging-smoke/bin/python -m pip install --upgrade pip
+          /tmp/pmk-packaging-smoke/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/pmk-packaging-smoke/bin/python - <<'PY'
+          from cgtlib.reference_data import (
+              list_reference_dataset_ids,
+              load_reference_scenario_record,
+          )
+
+          assert list_reference_dataset_ids() == (
+              "balanced_transition_band",
+              "stress_recovery_band",
+              "boundary_lock_band",
+          )
+          record = load_reference_scenario_record("boundary_lock_band")
+          assert record.scenario_pack.transitions
+          PY
+
+      - name: Generate release evidence inventory
+        run: python tools/release_evidence_inventory.py --dist-dir dist --output release-evidence/release-inventory.json
+
+      - name: Generate CycloneDX dependency SBOM
+        shell: bash
+        run: pip-audit --format cyclonedx-json > release-evidence/python-environment.cdx.json
+
+      - name: Upload packaging evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaging-evidence-${{ github.sha }}
+          path: |
+            dist/*
+            release-evidence/*
+          if-no-files-found: error
+          retention-days: 14
