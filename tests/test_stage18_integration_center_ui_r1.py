@@ -107,6 +107,7 @@ def test_integration_center_platforms_distinguish_contract_from_live_proof():
     assert "Server-enabled trusted source" in center
     assert "Live source acquisition" in center
     assert "Semantic task mapping" in center
+    assert "Governance contract review" in center
     assert "Live operator sandbox" in center
     assert "Production approval" in center
     assert "Provider API version" in center
@@ -125,10 +126,16 @@ def test_integration_center_camara_status_is_route_backed_and_fail_closed():
     assert "payload.server_trusted_source_enabled === true" in center
     assert 'payload.semantic_mapping_state === "proposal_only"' in center
     assert "callableOperations.length === 5" in center
+    assert 'payload.governance_candidate_state === "review_required"' in center
+    assert "payload.governance_candidate_valid === true" in center
+    assert "payload.governance_approved === false" in center
+    assert "governanceTasks.length === 5" in center
+    assert "governanceEntitlements.length === 2" in center
+    assert "governanceQuotas.length === 5" in center
     assert "payload.live_source_acquisition_proven === true" in center
     assert "payload.provider_sandbox_proven === true" in center
     assert "Qualification status route unavailable. Conservative fallback" in center
-    assert "trusted-source enablement, live acquisition, provider sandbox and runtime authority unproven" in center
+    assert "governance approval, provider sandbox and runtime authority unproven" in center
 
 
 def test_integration_center_camara_candidate_is_pinned_without_overclaiming():
@@ -141,11 +148,26 @@ def test_integration_center_camara_candidate_is_pinned_without_overclaiming():
     assert "Spec candidate pinned" in center
     assert 'const sourceStatus = sourceEnabled ? "Policy enabled" : "Pending"' in center
     assert 'const semanticStatus = semanticReviewed ? "Reviewed proposal" : "Pending"' in center
+    assert 'const governanceStatus = governanceReadyForReview ? "Review required" : "Pending"' in center
     assert 'const liveStatus = liveProven ? "Proven" : "Not proven"' in center
     assert 'const sandboxStatus = providerSandboxProven ? "Proven" : "Blocked"' in center
+    assert "explicit governance approval is still required before runtime registration" in center
     assert "runtime task registration remains disabled" in center
     assert "CAMARAConnectorQualified=True" not in center
     assert "Production allowed" not in center
+
+
+def test_integration_center_qod_governance_state_is_reviewable_not_authoritative():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "governanceReadyForReview" in center
+    assert "Review required" in center
+    assert "task candidates" in center
+    assert "entitlement candidates" in center
+    assert "quota meters" in center
+    assert "still require explicit governance approval" in center
+    assert "governanceReadyForReview ? \"is complete for review\" : \"is incomplete\"" in center
+    assert "governance approval" in center
 
 
 def test_integration_center_qod_mapping_priority_reflects_governance_not_missing_mapping():
@@ -153,7 +175,7 @@ def test_integration_center_qod_mapping_priority_reflects_governance_not_missing
 
     assert "Review/register QoD task contracts" in center
     assert "pending governance" in center
-    assert "five-operation semantic proposal and drift gate are reviewed" in center
+    assert "five-operation semantic proposal, task candidates, entitlement candidates and quota meters are internally consistent" in center
     assert "Map CAMARA QoD operations" not in center
 
 
