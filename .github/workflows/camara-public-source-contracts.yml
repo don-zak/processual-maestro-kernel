@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - processual_api/integrations/camara_public_source_qualification.py
+      - processual_api/integrations/camara_qod_semantic_mapping.py
       - processual_api/integrations/trusted_endpoint_source_acquisition.py
       - tests/test_camara_public_source_qualification.py
+      - tests/test_camara_qod_semantic_mapping.py
       - tests/test_trusted_endpoint_source_acquisition.py
       - tests/test_trusted_endpoint_source_bundle.py
       - .github/workflows/camara-qod-public-source-qualification.yml
@@ -40,8 +42,10 @@ jobs:
         run: |
           ruff check \
             processual_api/integrations/camara_public_source_qualification.py \
+            processual_api/integrations/camara_qod_semantic_mapping.py \
             processual_api/integrations/trusted_endpoint_source_acquisition.py \
             tests/test_camara_public_source_qualification.py \
+            tests/test_camara_qod_semantic_mapping.py \
             tests/test_trusted_endpoint_source_acquisition.py \
             tests/test_trusted_endpoint_source_bundle.py
 
@@ -49,6 +53,7 @@ jobs:
         run: |
           pytest -q \
             tests/test_camara_public_source_qualification.py \
+            tests/test_camara_qod_semantic_mapping.py \
             tests/test_trusted_endpoint_source_acquisition.py \
             tests/test_trusted_endpoint_source_bundle.py
 
@@ -59,6 +64,9 @@ jobs:
           {
             echo "workflow=CAMARA Public Source Contracts"
             echo "camara_public_source_runner_tests=true"
+            echo "camara_qod_semantic_mapping_tests=true"
+            echo "camara_qod_network_assurance_reuse=false"
+            echo "camara_qod_runtime_task_registered=false"
             echo "manual_live_workflow_contract_present=true"
             echo "trusted_source_live_fetch=false"
             echo "production_credentials=false"
