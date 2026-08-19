@@ -14,9 +14,7 @@ on:
       - "processual_api/static/index.html"
       - "processual_api/static/splash.html"
       - "processual_api/static/register.html"
-      - "processual_api/static/js/admin_*.js"
-      - "processual_api/static/js/pages/offer.js"
-      - "processual_api/static/js/pages/register.js"
+      - "processual_api/static/js/**"
       - "pyproject.toml"
       - ".env.production.example"
       - "config/infisical/**"
@@ -30,6 +28,7 @@ on:
       - "tests/test_release_commercial_entitlement_quota_contract_r1.py"
       - "tests/test_public_ui_release_contract_r1.py"
       - "tests/test_public_browser_http_qualification_r1.py"
+      - "tests/test_legacy_component_quarantine_r1.py"
       - ".github/workflows/program-release-qualification.yml"
   pull_request:
     paths:
@@ -41,9 +40,7 @@ on:
       - "processual_api/static/index.html"
       - "processual_api/static/splash.html"
       - "processual_api/static/register.html"
-      - "processual_api/static/js/admin_*.js"
-      - "processual_api/static/js/pages/offer.js"
-      - "processual_api/static/js/pages/register.js"
+      - "processual_api/static/js/**"
       - "pyproject.toml"
       - ".env.production.example"
       - "config/infisical/**"
@@ -57,6 +54,7 @@ on:
       - "tests/test_release_commercial_entitlement_quota_contract_r1.py"
       - "tests/test_public_ui_release_contract_r1.py"
       - "tests/test_public_browser_http_qualification_r1.py"
+      - "tests/test_legacy_component_quarantine_r1.py"
       - ".github/workflows/program-release-qualification.yml"
   workflow_dispatch:
 
@@ -101,11 +99,12 @@ jobs:
             tests/test_admin_backend_dashboard_regression.py \
             tests/test_release_commercial_entitlement_quota_contract_r1.py::test_admin_workspace_exposes_readiness_and_usage_without_becoming_authority
 
-      - name: Public UI journey, authority, accessibility, and browser security qualification
+      - name: Public UI journey, authority, accessibility, browser security, and legacy quarantine qualification
         run: |
           python -m pytest -q \
             tests/test_public_ui_release_contract_r1.py \
-            tests/test_public_browser_http_qualification_r1.py
+            tests/test_public_browser_http_qualification_r1.py \
+            tests/test_legacy_component_quarantine_r1.py
 
       - name: Production environment and Infisical contract qualification
         run: |
@@ -128,6 +127,7 @@ jobs:
             tests/test_release_commercial_entitlement_quota_contract_r1.py \
             tests/test_public_ui_release_contract_r1.py \
             tests/test_public_browser_http_qualification_r1.py \
+            tests/test_legacy_component_quarantine_r1.py \
             --output-format=github
           flake8 . --count --select=E9,F63,F7,F82 --statistics
 
