@@ -41,7 +41,7 @@ jobs:
           python -m pip install -e '.[api,security,database,cache]' -r qualification/vq1-requirements.txt
 
       - name: Install matching Chromium binary
-        run: python -m playwright install --with-deps chromium
+        run: python -m playwright install chromium
 
       - name: Record Playwright browser installation
         run: python -m playwright install --list
