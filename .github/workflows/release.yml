@@ -175,6 +175,16 @@ jobs:
       - name: Check package metadata
         run: python -m twine check dist/*
 
+      - name: Generate release evidence inventory
+        run: python tools/release_evidence_inventory.py --dist-dir dist --output release-evidence/release-inventory.json
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: release-evidence/*
+          if-no-files-found: error
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
