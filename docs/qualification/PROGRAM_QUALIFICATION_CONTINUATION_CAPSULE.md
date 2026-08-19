@@ -59,6 +59,7 @@ No later workspace may infer a `true` value from green CI alone. Each authority 
 - Quarantined source must not be reconnected merely to restore historical behavior. Replacement requires the sanitized opaque-reference evaluation path after real issuance/resolution exists.
 - `processual_api/billing/subscription_catalog.py` is `COMPATIBILITY_ONLY`; new production imports are forbidden by qualification tests and canonical code must use `processual_api.billing.pricing_catalog`.
 - `processual_api/routers/client_provider_alias_18.py` is `COMPATIBILITY_ONLY`; the current Settings UI uses `/settings/provider-connection`, while the deprecated alias remains only for controlled external compatibility and returns deprecation/link metadata. New internal application/UI dependencies on `/client/provider-connection` are forbidden by qualification tests.
+- `POST /settings/llm-provider/test` is `COMPATIBILITY_ONLY`; the canonical successor is `POST /settings/provider-connection/test`. The legacy route carries deprecation/link successor metadata and new internal application/UI dependencies on it are forbidden by qualification tests.
 - `processual_api/billing/maestro_units.py::credits_from_maestro_units` is a `DELETE_CANDIDATE` only: no production caller was found, but external/public import compatibility must be checked before source removal. The separate legacy `credits` metric read/migration alias remains active and is not a deletion candidate.
 - `processual_api/routers/cgt_governor.py` remains `ACTIVE_LEGACY_DEBT`, not dead code and not a deletion candidate. It must not be partially amputated before opaque-reference issuance/resolution and dependent browser/router/report migrations are complete.
 - Deletion requires a dedicated evidence-bearing review proving no runtime, import, route, dynamic loader, migration, operator, test, documentation, external-compatibility, or rollback dependency remains.
@@ -95,7 +96,8 @@ The following are non-real-environment controls and must be re-proven on the exa
 - ephemeral PR image identity evidence without publishing an image or inventing a release digest;
 - public offer-to-registration plan/billing-period linkage regression;
 - delivered public UI authority-truth, package-metadata truth, CSP, pinned Chart.js delivery, and baseline browser-security regression;
-- rendered HTTP legacy-console quarantine regression and source-reconnection guards for compatibility-only components.
+- rendered HTTP legacy-console quarantine regression and source-reconnection guards for compatibility-only components;
+- provider-status and legacy provider-test compatibility routes covered by explicit retirement metadata and qualification guards.
 
 The dependency-license inventory is evidence of package metadata only. It is not a legal license-compatibility opinion.
 
