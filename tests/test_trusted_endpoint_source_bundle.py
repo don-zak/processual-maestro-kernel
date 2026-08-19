@@ -112,7 +112,7 @@ async def test_camara_style_parent_reference_resolves_at_same_repo_and_commit() 
     [
         ("https://evil.example/common.yaml#/x", "external_rejected"),
         ("//evil.example/common.yaml#/x", "external_rejected"),
-        ("../../../secret.yaml#/x", "repository_escape"),
+        ("../../../../secret.yaml#/x", "repository_escape"),
         ("../drafts/common.yaml#/x", "path_not_allowlisted"),
         ("../common/%2e%2e/secret.yaml#/x", "external_rejected"),
     ],
