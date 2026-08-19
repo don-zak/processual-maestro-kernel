@@ -66,6 +66,8 @@ def camara_qod_telefonica_compatibility_payload() -> dict[str, object]:
 
     blockers = [
         "provider_api_version_v0_10_differs_from_governed_v1_1_0",
+        "telefonica_missing_session_returns_200_instead_of_documented_404",
+        "telefonica_negative_path_conformance_incomplete",
         "operator_network_qos_unproven",
         "runtime_connector_unapproved",
     ]
@@ -76,10 +78,13 @@ def camara_qod_telefonica_compatibility_payload() -> dict[str, object]:
         "provider": TELEFONICA_QOD_EXTERNAL_SANDBOX_EVIDENCE.provider,
         "provider_api_version": TELEFONICA_QOD_EXTERNAL_SANDBOX_EVIDENCE.provider_api_version,
         "governed_api_version": "1.1.0",
-        "compatibility_state": "partial_interoperability_only",
+        "compatibility_state": "partial_interoperability_with_negative_path_divergence",
         "operations": operations,
         "provider_proven_operation_ids": proven_ids,
         "semantically_matching_operation_ids": semantically_matching_ids,
+        "negative_path_conformance_complete": False,
+        "missing_session_documented_expectation_met": False,
+        "mock_documentation_divergence_observed": True,
         "provider_sandbox_proven": False,
         "runtime_connector_approved": False,
         "production_allowed": False,
