@@ -17,6 +17,13 @@ PUBLIC_HTML_ROUTES = (
     "/console/",
 )
 
+QUARANTINED_LEGACY_ASSETS = (
+    "/console/js/adapters/governor.js",
+    "/console/js/adapters/cgt.js",
+    "/console/js/pages/governor.js",
+    "/console/js/pages/cgt.js",
+)
+
 
 def test_public_html_routes_render_with_browser_security_contract() -> None:
     for route in PUBLIC_HTML_ROUTES:
@@ -68,6 +75,15 @@ def test_legacy_raw_math_console_surfaces_are_quarantined_from_delivery() -> Non
     assert 'id="legacy-console-quarantine"' in response.text
     assert '[data-page="cgt"],[data-page="governor"]' in response.text
     assert '#page-cgt,#page-governor{display:none!important}' in response.text
+
+
+def test_quarantined_legacy_assets_return_gone() -> None:
+    for path in QUARANTINED_LEGACY_ASSETS:
+        response = client.get(path)
+        assert response.status_code == 410, path
+        assert response.text == "legacy_console_surface_quarantined", path
+        assert response.headers["x-content-type-options"] == "nosniff", path
+        assert "object-src 'none'" in response.headers["content-security-policy"], path
 
 
 def test_admin_rendered_response_keeps_no_store_and_dom_contract() -> None:
