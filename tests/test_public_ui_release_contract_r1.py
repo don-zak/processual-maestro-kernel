@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from starlette.applications import Starlette
+from starlette.responses import HTMLResponse, PlainTextResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+from processual_api.middleware.security_headers import SecurityHeadersMiddleware
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,25 +32,54 @@ def test_offer_to_registration_preserves_plan_and_billing_period() -> None:
 
 
 def test_public_ui_delivery_rewrites_ungranted_production_claims() -> None:
-    middleware = (
-        ROOT / "processual_api/middleware/security_headers.py"
-    ).read_text()
+    async def public_home(_request):
+        return HTMLResponse(
+            '<footer>Production Ready · جاهز للإنتاج</footer>'
+        )
 
-    assert 'b"Production Ready", b"Qualification Build"' in middleware
-    assert '"جاهز للإنتاج".encode(), "نسخة تأهيل".encode()' in middleware
-    assert 'b"v2.0.0 \\xe2\\x80\\x94 production"' in middleware
-    assert 'b"v2.0.0 \\xe2\\x80\\x94 qualification"' in middleware
-    assert 'path in {"/", "/console", "/console/", "/console/index.html"}' in middleware
+    async def console(_request):
+        return HTMLResponse('<footer>v2.0.0 — production</footer>')
+
+    app = Starlette(
+        routes=[
+            Route("/", public_home),
+            Route("/console/", console),
+        ]
+    )
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    with TestClient(app) as client:
+        splash_response = client.get("/")
+        console_response = client.get("/console/")
+
+    assert splash_response.status_code == 200
+    assert "Production Ready" not in splash_response.text
+    assert "جاهز للإنتاج" not in splash_response.text
+    assert "Qualification Build" in splash_response.text
+    assert "نسخة تأهيل" in splash_response.text
+
+    assert console_response.status_code == 200
+    assert "v2.0.0 — production" not in console_response.text
+    assert "v2.0.0 — qualification" in console_response.text
 
 
 def test_browser_security_headers_cover_modern_baseline() -> None:
-    middleware = (
-        ROOT / "processual_api/middleware/security_headers.py"
-    ).read_text()
+    async def health(_request):
+        return PlainTextResponse("ok")
 
-    assert 'response.headers["X-Content-Type-Options"] = "nosniff"' in middleware
-    assert 'response.headers["X-Frame-Options"] = "DENY"' in middleware
-    assert 'response.headers["Strict-Transport-Security"]' in middleware
-    assert 'response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"' in middleware
-    assert 'response.headers["Permissions-Policy"]' in middleware
-    assert 'camera=(), microphone=(), geolocation=(), payment=()' in middleware
+    app = Starlette(routes=[Route("/health", health)])
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["strict-transport-security"] == (
+        "max-age=31536000; includeSubDomains"
+    )
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["permissions-policy"] == (
+        "camera=(), microphone=(), geolocation=(), payment=()"
+    )
