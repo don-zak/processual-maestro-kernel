@@ -1,0 +1,100 @@
+@media (max-width: 600px) {
+  #main,
+  #content,
+  .page,
+  .page > div,
+  .admin-page,
+  .admin-page .page,
+  .sl18-panels,
+  .sl18-panel {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #content {
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  #topbar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  #topbar > *,
+  #topbar .flex-gap {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #topbar .flex-gap,
+  .sec-hdr,
+  .admin-card-header {
+    flex-wrap: wrap;
+  }
+
+  .grid-2,
+  .grid-2-eq,
+  .grid-2-wide,
+  .grid-3,
+  .grid-4,
+  .settings-grid,
+  .sl18-enterprise-summary,
+  .admin-subscription-analytics-summary,
+  .admin-subscription-analytics-grid,
+  .admin-subscription-analytics-plans {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #page-settings *,
+  .admin-page * {
+    min-width: 0;
+  }
+
+  .sl18-tabs {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px;
+    max-width: 100%;
+    overflow: visible !important;
+  }
+
+  .sl18-tab {
+    flex: 1 1 120px;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .card,
+  .settings-card,
+  .admin-subscription-analytics-card,
+  .admin-page section,
+  .admin-page article {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-page [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .admin-page table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .admin-page pre,
+  .admin-page code,
+  #page-settings pre,
+  #page-settings code,
+  .mono-block {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
