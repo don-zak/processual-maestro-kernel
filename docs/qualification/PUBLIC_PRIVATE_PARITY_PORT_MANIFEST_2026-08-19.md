@@ -1,216 +1,249 @@
-# Public / Private Parity Port Manifest — 2026-08-19
+# Public / Private Controlled Boundary Reconciliation Manifest — 2026-08-19
 
-**Public source baseline:** `don-zak/processual-maestro-kernel@a63b4a7d40643a685caeaafc8cbfd11f59e9d544`  
-**Private target baseline:** `don-zak/processual-maestro-kernel-private@84e3354cd43802176ee93ed94f72144341c0068b`  
-**Status:** **PORT MANIFEST READY — PORT NOT APPLIED**
+> Historical filename retained for traceability. This document supersedes any earlier interpretation of "parity port" as repository mirroring.
 
-## Goal
+**Public repository:** `don-zak/processual-maestro-kernel`  
+**Private repository:** `don-zak/processual-maestro-kernel-private`  
+**Private boundary qualification PR:** Draft PR #49 on `agent/private-public-trust-boundary-r1`  
+**Status:** **CONTROLLED RECONCILIATION IN PROGRESS — NO WHOLE-REPOSITORY PARITY TARGET**
 
-Bring the private product baseline up to the later qualified public shared core while preserving genuine private CGT integrations and public-exclusion boundaries.
+## 1. Governing architecture
 
-## Mandatory preservation set
+The two repositories are separate trust domains, not two editions that must become source-identical.
 
-These are private product boundaries and must survive reconciliation:
+- **Public:** governance, orchestration, product contracts, authentication/commercial authority, persistence, qualification, public-safe formal core, sanitized boundary interfaces.
+- **Private:** proprietary mathematical execution, equations, weights, thresholds, calibration, private vectors/intermediate state, and private provider implementations.
+- **Boundary:** one-way controlled invocation using bounded opaque references, followed by a strictly sanitized decision result.
+
+The approved public decision surface is limited to:
+
+- `existence_rank`
+- `dominant_constraint`
+- `next_gate`
+- `confidence_band`
+- `explanation_code`
+- `policy_version`
+
+No repository reconciliation task may weaken this boundary.
+
+## 2. Mandatory classifications
+
+Every cross-repository difference must be classified before any port:
+
+### `SHARED_PUBLIC_SAFE`
+
+Code/data that is non-proprietary, belongs to the common product contract, and may intentionally converge after focused tests.
+
+### `PRIVATE_PRESERVE`
+
+Private mathematical/provider implementation that must remain private and must never enter public source, package, image, logs, evidence, exceptions, or telemetry.
+
+Mandatory examples:
 
 - `cgtlib/private/`
 - `processual_api/private_integrations/`
-  - `cgt17a/`
-  - `cgt17b/`
-  - `cgt17c/`
-  - `cgt18/`
-  - `cgt_bridge.py`
-- private conditional composition of `routers.cgt17b_private` and `routers.cgt17c_private` when the private package is installed;
-- private Docker/CI behavior that intentionally builds and validates the private target;
-- sanitized private bridge/adapter boundaries that fail closed when private providers are absent or disabled.
+- proprietary equations, weights, thresholds and calibration
+- private vectors and intermediate mathematical state
 
-No item in this preservation set may be copied into the public build.
+### `BOUNDARY_ADAPTER`
 
-## Port Unit P1 — `processual_kernel`
+Code that mediates between public governance and private execution. It must expose only opaque references on input and sanitized decisions on output, fail closed, and avoid private implementation discovery from the public artifact.
 
-Status: **READY TO PORT**.
+### `ARCHITECTURAL_VIOLATION`
 
-Public is the selected shared-core authority for the reviewed drift. Most differences are enum modernization and minor cleanup, not private behavior.
+Any path that mixes public governance with private implementation details, performs protected math as an implicit public fallback, imports private source from the public runtime, or exposes private intermediate values. It must be separated before reconciliation can close.
+
+## 3. Non-negotiable source and runtime invariants
+
+1. Public code must not import or discover `cgtlib.private` or `processual_api.private_integrations`.
+2. Public wheels/images must not contain those paths.
+3. Public runtime must remain importable/buildable/testable without private modules.
+4. Protected operations fail closed when no private provider is available; no public substitute equation is permitted.
+5. Private provider exceptions must be reduced to generic public errors before crossing the boundary.
+6. Public API responses, logs, traces, metrics and qualification evidence must not expose private equations, weights, thresholds, calibration, vectors or intermediate values.
+7. Private implementation remains intentionally different; that difference is not automatically a parity defect.
+8. No second billing/auth/commercial source of truth may be created merely to make the private repository resemble the public repository.
+9. No cross-repository whole-tree copy is permitted.
+10. No direct mutation of private `main`; private changes require a dedicated branch, tests and review.
+
+## 4. Reconciliation unit R1 — shared kernel
+
+**Classification:** `SHARED_PUBLIC_SAFE`, subject to file-level review.
+
+Modernization that is demonstrably non-proprietary may converge. A unit must be reclassified if it gains any dependency on private mathematical state or provider implementation.
 
 Source record:
 
 `docs/qualification/PUBLIC_PRIVATE_KERNEL_RECONCILIATION_UNIT_2026-08-19.md`
 
-Validation after application:
+Required validation:
 
 - focused kernel/adaptive/security tests;
-- private full regression;
-- no private imports introduced into shared kernel.
+- no private imports;
+- public-safe behavior remains standalone.
 
-## Port Unit P2 — `cgtlib` shared formal core
+## 5. Reconciliation unit R2 — `cgtlib`
 
-Status: **PORT MANIFEST READY**.
+The package is no longer treated as a single parity unit.
 
-Required actions:
+### Shared/public-safe portion
 
-- add public `cgtlib/_stable_api.py` to private;
-- converge `cgtlib/api.py`;
-- converge `cgtlib/_fallback.py`;
-- reconcile shared exports in `cgtlib/__init__.py`;
-- preserve `cgtlib/private/`;
-- preserve/verify canonical `cgtlib/data/` resources.
+Examples include canonical non-secret data/resources and dependency-light public API declarations where semantic review confirms they contain no proprietary implementation.
 
-Public qualification branch also repairs a discovered public packaging defect by restoring the shared canonical reference dataset package and regression coverage.
+### Private-preserve portion
 
-Source record:
+`cgtlib/private/` remains an independent proprietary execution boundary.
 
-`docs/qualification/PUBLIC_PRIVATE_CGTLIB_RECONCILIATION_UNIT_2026-08-19.md`
+### Boundary correction already applied on the public qualification branch
 
-## Port Unit P3 — shared database / Alembic foundation
+Public modules that directly imported `cgtlib.private` were identified as architectural violations and changed to use public fail-closed surfaces. The public package now declares `_HAS_PRIVATE=False` and does not discover private engine modules.
 
-Status: **REQUIRED BEFORE PERSISTENCE-BACKED PARITY**.
+Required validation:
 
-Private currently has no Alembic directory while public has the later ordered identity/auth/commercial migration chain.
+- public import succeeds with private modules absent;
+- protected public mathematical calls fail closed rather than reimplementing private math;
+- public wheel excludes private paths;
+- canonical shared reference data remains packaged.
 
-Port/reconcile the public migration lineage and validate one coherent private migration head before treating later auth/commercial persistence as available.
+## 6. Reconciliation unit R3 — database and migrations
 
-Source record:
+**Classification:** generally `SHARED_PUBLIC_SAFE` for public product persistence, but not automatically a private-runtime requirement.
 
-`docs/qualification/PUBLIC_PRIVATE_ADMIN_MIGRATION_RECONCILIATION_UNIT_2026-08-19.md`
+Public auth/commercial/Admin Marketplace persistence remains public authority. Private mathematical execution should consume only the boundary contract it needs; it does not require a mirrored copy of every public persistence module unless a separately reviewed deployment requirement proves that need.
 
-## Port Unit P4 — complete public authentication core
+One coherent migration authority must exist for any deployment that actually hosts public product persistence.
 
-Status: **MAJOR PARITY PORT REQUIRED**.
+## 7. Reconciliation unit R4 — authentication
 
-Private auth is an older three-file surface. Public contains the qualified recovery, delivery, MFA, registration, session, platform authority and operational security program.
+Authentication is a public governance/security authority, not private mathematics.
 
-Required actions:
+Direction:
 
-- port the complete public auth module set and tests;
-- port associated migration/settings/middleware dependencies;
-- reconcile callers of legacy `auth.router` / legacy `security.py` assumptions;
-- do not retain an independent legacy authority path.
+- public auth remains canonical product authority;
+- private execution must not maintain a competing legacy authentication authority merely for parity;
+- private deployments may integrate with authenticated public requests through sanitized identity/context references where required;
+- do not copy public auth wholesale into private unless the deployment topology explicitly requires co-location and the copy is classified `SHARED_PUBLIC_SAFE`.
 
-Source record:
+## 8. Reconciliation unit R5 — Admin Marketplace, billing, quotas and pricing
 
-`docs/qualification/PUBLIC_PRIVATE_AUTH_BILLING_RECONCILIATION_UNIT_2026-08-19.md`
+These remain public commercial/governance authorities.
 
-## Port Unit P5 — shared Admin Marketplace
+Direction:
 
-Status: **MAJOR PARITY PREREQUISITE**.
+- no second private billing/commercial source of truth;
+- private math may receive only the minimum governed entitlement/context references required for a protected operation;
+- private execution does not gain authority to price, bill, approve quota, or mutate commercial state merely because it participates in evaluation.
 
-Private currently has no `processual_api/admin_marketplace/` package. Public billing depends directly on this surface.
+## 9. Reconciliation unit R6 — integration control plane
 
-Port the shared package and corresponding tests/migrations. Live payment-provider authority remains separately gated and is not granted by repository parity.
+Public integration control remains public-side governance.
 
-## Port Unit P6 — billing/commercial/quota/pricing core
-
-Status: **MAJOR PARITY PORT REQUIRED**.
-
-Private billing is an older monolithic router with direct provider calls and JSON-backed runtime state. Public has the later governed commercial authority, secure webhook/inbox/reconciliation, subscription, quota, top-up, billing statement and pricing architecture.
-
-Required actions:
-
-- port public billing and its shared commercial dependencies;
-- retire or convert the legacy private router into a non-authoritative compatibility layer;
-- prevent simultaneous JSON and governed persistence sources of truth;
-- validate checkout/webhook/subscription/quota authority boundaries.
-
-## Port Unit P7 — integration control plane
-
-Status: **SEMANTIC MERGE REQUIRED**.
-
-Public and private already share some exact integration contracts, including reviewed examples such as `adapter_contracts.py` and `connector_registry.py`.
-
-Public contains a much larger later connector/enterprise qualification surface. Private contains a sanitized CGT adapter that calls the private provider fail-closed.
-
-Required direction:
-
-- use the later public integration control plane as shared base;
-- preserve the private CGT adapter/bridge boundary;
-- compare shared-but-different connector binding/credential/runtime contracts before replacement;
-- retain private providers outside the public tree.
-
-## Port Unit P8 — settings, middleware and application composition
-
-Status: **SEMANTIC MERGE REQUIRED**.
-
-Required direction:
-
-- use later public settings/security configuration as base;
-- use later public middleware set/order as base unless a documented private requirement exists;
-- start `processual_api/main.py` from public composition;
-- reintroduce private conditional router discovery/registration;
-- verify private modules remain optional from the shared/public perspective;
-- snapshot-test final private route inventory.
-
-## Port Unit P9 — tests and public-exclusion contract
-
-Required:
-
-- port public tests that define shared product behavior;
-- retain private CGT test suites;
-- run the private full suite;
-- run public-strip/public-boundary tests from the private repository;
-- prove no `cgtlib/private` or `processual_api/private_integrations` material enters public packages/images;
-- verify the public shared core works when private modules are absent.
-
-## Port Unit P10 — build and CI reconciliation
-
-Required:
-
-- preserve the private Docker target and private-only validation workflows;
-- converge shared dependency/build configuration where public is newer;
-- retain private GHCR/package publication boundaries;
-- build both public and private artifacts;
-- run package/Twine validation;
-- verify dependency/security/coverage gates;
-- record exact source and artifact digests.
-
-## Explicitly prohibited shortcut
-
-Do not copy the entire public tree over private.
-
-The private repository contains intentional confidential/private implementation paths and specialized CI/deployment behavior. Conversely, do not preserve every private shared-core file merely because it already exists there; large parts of private auth/billing/settings/runtime are demonstrably older than the qualified public core.
-
-## Application order
-
-Recommended stacked order:
+Required boundary pattern:
 
 ```text
-P1 kernel
-→ P2 cgtlib shared core
-→ P3 migrations/database
-→ P4 auth
-→ P5 Admin Marketplace
-→ P6 billing/commercial/quota/pricing
-→ P7 integration control plane
-→ P8 settings/middleware/main composition
-→ P9 tests/public exclusion
-→ P10 build/CI/package validation
+public admission/governance
+        |
+        | bounded opaque request references
+        v
+sanitized boundary contract
+        |
+        | private-side provider composition only
+        v
+private mathematical execution
+        |
+        | six-field sanitized decision
+        v
+public policy/orchestration
 ```
 
-Tightly coupled units may share one dedicated private parity branch, but review/evidence should retain these unit boundaries.
+The private repository may know its own provider modules. The public repository must not import, discover or introspect them.
 
-## Current publication constraint
+Existing private `processual_api/integrations/cgt_adapter.py` remains a private-side boundary pattern and is protected by Draft PR #49 tests.
 
-The current execution environment does not provide the authenticated local `gh` workflow required by the repository publication procedure for safe private branch creation/commit/push/draft-PR publication.
+## 10. Reconciliation unit R7 — application composition
 
-Therefore this manifest intentionally stops before mutating private `main` or fabricating a cross-repository publication path.
+The earlier strategy "start `main.py` from public and reinsert private routers" is **superseded**.
 
-This is a tooling constraint, not evidence that parity is complete.
+Preferred composition:
 
-## Exit criteria for repository reconciliation
+- public application remains independently runnable and contains no source-level private imports;
+- private execution is composed behind the sanitized provider boundary;
+- if a same-process private deployment is ever required, that composition belongs only to the private deployment repository and must not cause private discovery code to enter the public artifact;
+- public functionality must fail closed when the protected provider is unavailable.
 
-Repository reconciliation is closed only when:
+## 11. Reconciliation unit R8 — tests and packaging
 
-- the port is applied to a dedicated private branch;
-- shared-core differences are intentionally resolved;
-- private-only boundaries are preserved;
-- migrations reconcile to one valid head;
-- public and private suites pass;
-- public-exclusion tests pass;
-- both package/image builds pass;
-- exact drift evidence is retained;
-- the result is reviewed without claiming real staging or production authority.
+Mandatory public gates:
+
+- source scan for forbidden private paths/imports;
+- exact sanitized result-schema test;
+- provider-exception redaction test;
+- public `cgtlib` import without private engine;
+- protected math fail-closed regression;
+- installed-wheel proof that private paths cannot be imported;
+- public governor proof that legacy local-math execution is fail-closed and sanitized decisions drive policy only.
+
+Mandatory private gates:
+
+- private adapter result remains six-field sanitized;
+- no proprietary result vectors/weights/thresholds/equations/calibration are exposed by the adapter;
+- unavailable/disabled provider errors remain generic;
+- private full regression and public-strip/public-boundary suites pass.
+
+## 12. Reconciliation unit R9 — CI, images and evidence
+
+Public CI/evidence may prove only public artifact properties. It must never extract private source or include private implementation in artifacts for convenience.
+
+Private image/build qualification must run in a controlled private context. Public evidence may retain only approved digests/status assertions that do not reveal implementation details.
+
+Container/image SBOM qualification remains separate from the Python-environment SBOM and is not waived.
+
+## 13. Current implementation evidence
+
+Public qualification work now includes:
+
+- neutral `private_evaluation_boundary` contract;
+- exact sanitized decision regression tests;
+- public source private-import exclusion tests;
+- public protected-math fail-closed wrappers;
+- explicit `_HAS_PRIVATE=False` public package behavior;
+- Packaging Qualification wheel-level exclusion and smoke checks;
+- sanitized public governor path with legacy local-math `govern_answer` disabled fail-closed.
+
+Private Draft PR #49 adds adapter-boundary tests on a dedicated private branch. It does not change private mathematical implementation or grant runtime authority.
+
+## 14. Explicitly prohibited shortcuts
+
+Rejected:
+
+- whole-tree public → private copying;
+- private → public source copying;
+- importing private modules conditionally from public code;
+- preserving a public mathematical fallback that duplicates protected private execution;
+- exposing raw vectors/scores merely because older API/tests did so;
+- treating absence of private implementation from public as a parity defect;
+- merging private Draft PR #49 as part of this manifest without independent review;
+- declaring staging or production readiness from repository tests alone.
+
+## 15. Exit criteria
+
+Repository boundary reconciliation closes only when:
+
+- all inspected differences are deliberately classified;
+- all `ARCHITECTURAL_VIOLATION` paths in the runtime boundary are removed or isolated;
+- public source/package/image exclusion proofs pass;
+- private adapter boundary tests pass;
+- public governance consumes only sanitized decisions for protected evaluation;
+- no duplicate auth/billing/commercial authority is introduced;
+- required shared/public-safe drift is intentionally reconciled;
+- build/test evidence is retained with exact source identities;
+- reviewers confirm the trust boundary without granting real-environment authority.
 
 Until then:
 
 `RepositoryReconciliationComplete=false`
+
+`PrivateRuntimeAuthorityGranted=false`
 
 `RealStagingQualified=false`
 
