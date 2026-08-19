@@ -11,6 +11,12 @@ _PUBLIC_AUTHORITY_REPLACEMENTS = (
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
     (b"v2.0.0 \xe2\x80\x94 production", b"v2.0.0 \xe2\x80\x94 qualification"),
 )
+_PUBLIC_ASSET_REPLACEMENTS = (
+    (
+        b'https://cdn.jsdelivr.net/npm/chart.js',
+        b'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js',
+    ),
+)
 _LEGACY_CONSOLE_SCRIPT_TAGS = (
     b'<script src="js/adapters/governor.js"></script>',
     b'<script src="js/adapters/cgt.js"></script>',
@@ -64,6 +70,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response = await self._rewrite_public_authority_claims(response)
 
         if path in {"/console", "/console/", "/console/index.html"}:
+            response = await self._pin_public_assets(response)
             response = await self._quarantine_legacy_console_surfaces(response)
 
         if path in {"/admin", "/admin/"}:
@@ -100,6 +107,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         body = await self._response_body(response)
         for source, replacement in _PUBLIC_AUTHORITY_REPLACEMENTS:
+            body = body.replace(source, replacement)
+        return self._rebuilt_response(response, body)
+
+    async def _pin_public_assets(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+
+        body = await self._response_body(response)
+        for source, replacement in _PUBLIC_ASSET_REPLACEMENTS:
             body = body.replace(source, replacement)
         return self._rebuilt_response(response, body)
 
