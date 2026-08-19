@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "processual-maestro-kernel"
 version = "2.0.0"
-description = "Production-ready Processual Maestro Kernel with CGT v2, security layer, backend API, observability, and Discord monitoring."
+description = "Processual Maestro Kernel with CGT v2, security layer, backend API, observability, and Discord monitoring under governed qualification."
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [{name = "Zakaria Essamit / ChatGPT implementation"}]
