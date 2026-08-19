@@ -83,6 +83,7 @@ async def get_camara_qod_qualification_status(
         for item in catalog
     )
     mapping = camara_qod_semantic_mapping_payload()
+    governance = mapping["governance_candidate"]
     return {
         "status": "reviewed_qualification_contract",
         "source_identity_id": mapping["source_identity_id"],
@@ -96,6 +97,13 @@ async def get_camara_qod_qualification_status(
         "callback_operations_excluded_from_outbound_binding": mapping[
             "callback_operations_excluded_from_outbound_binding"
         ],
+        "governance_candidate_state": governance["candidate_state"],
+        "governance_candidate_valid": governance["governance_candidate_valid"],
+        "governance_blocker_codes": governance["governance_blocker_codes"],
+        "candidate_task_ids": governance["candidate_task_ids"],
+        "candidate_entitlement_ids": governance["candidate_entitlement_ids"],
+        "candidate_quota_meters": governance["candidate_quota_meters"],
+        "governance_approved": False,
         "existing_network_assurance_reused": False,
         "live_source_acquisition_proven": False,
         "provider_credentials_present": False,
