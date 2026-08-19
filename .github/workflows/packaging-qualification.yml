@@ -75,6 +75,7 @@ jobs:
           ruff check \
             processual_api/cgt_governor/governor.py \
             processual_api/cgt_governor/gateway/engine.py \
+            processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
             tests/test_cgt_governor_private_boundary_r1.py \
@@ -96,6 +97,7 @@ jobs:
           mypy \
             processual_api/cgt_governor/governor.py \
             processual_api/cgt_governor/gateway/engine.py \
+            processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
             --ignore-missing-imports \
