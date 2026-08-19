@@ -115,8 +115,24 @@ jobs:
       - name: Ruff check
         run: ruff check . --output-format=github
 
+      - name: Lint (flake8)
+        run: flake8 . --count --select=E9,F63,F7,F82 --statistics
+
+      - name: Type check (mypy)
+        run: |
+          mypy \
+            processual_api/auth/security.py \
+            processual_api/middleware/subscription.py \
+            processual_api/services/operator_pilot_handoff_intake_preview.py \
+            processual_api/cgt_governor/data/storage.py \
+            --ignore-missing-imports \
+            --follow-imports=skip
+
       - name: Bandit security scan
         run: bandit -r cgtlib processual_kernel processual_api
+
+      - name: Dependency vulnerability audit
+        run: pip-audit
 
       - name: Build package
         run: python -m build
