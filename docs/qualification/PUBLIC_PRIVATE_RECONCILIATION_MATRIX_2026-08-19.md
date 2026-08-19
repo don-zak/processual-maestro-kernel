@@ -10,7 +10,7 @@
 
 Classify repository drift before porting the latest approved public core into the private baseline. The goal is to preserve private-only integrations while preventing the private repository from silently freezing an older public core.
 
-This record is read-only analysis of the two `main` branches. It does not authorize merge, release, staging or production.
+This record does not authorize merge, release, staging or production.
 
 ## Classification vocabulary
 
@@ -34,7 +34,7 @@ The root inventory shows exact shared blobs for several repository-control files
 - `CONTRIBUTING.md`
 - `EXTERNAL_READINESS_REPORT.md`
 
-These are evidence that the repositories still share a substantial common ancestry/core.
+These demonstrate substantial shared ancestry/core.
 
 ### MERGE-CANDIDATE root paths
 
@@ -51,42 +51,34 @@ Reason: environment/runtime/build differences can encode private deployment beha
 
 ## 2. `processual_kernel` findings
 
-The inspected top-level kernel surface is mostly shared exactly.
+The kernel reconciliation unit has now been semantically classified **READY TO PORT**.
 
-### IDENTICAL inspected files
+Most kernel files/subtrees are byte-identical. Reviewed differences are shared-core modernization rather than private behavior, principally `str, Enum` → `StrEnum`, plus minor lint cleanup.
 
-Examples with the same blob identity include:
+Confirmed COPY-CANDIDATE examples:
 
-- `processual_kernel/__init__.py`
-- `adaptive_toolkit.py`
-- `cgt_bridge.py`
-- `continuity.py`
-- `governor.py`
-- `kernel.py`
-- `observability/` subtree at the inspected boundary
-
-### COPY/MERGE candidates
-
-The following differ between public and private:
-
-- `processual_kernel/adaptive_types.py`
 - `processual_kernel/audit.py`
 - `processual_kernel/types.py`
-- `processual_kernel/adaptive/`
-- `processual_kernel/notifications/`
-- `processual_kernel/security/`
+- `processual_kernel/adaptive_types.py`
+- `processual_kernel/notifications/types.py`
+- `processual_kernel/security/envelopes.py`
+- `processual_kernel/security/crypto.py`
+- `processual_kernel/security/keyring.py`
+- `processual_kernel/security/policies.py`
+- `processual_kernel/adaptive/ops_governance.py`
+- reviewed adaptive efficiency drift
 
-Default disposition: **COPY-CANDIDATE unless a private-only dependency or contract is found during semantic diff**.
+Detailed record:
 
-These are core-kernel paths. Private drift here should be justified explicitly rather than preserved by default.
+`docs/qualification/PUBLIC_PRIVATE_KERNEL_RECONCILIATION_UNIT_2026-08-19.md`
+
+Private main remains unchanged.
 
 ## 3. `cgtlib` findings
 
-Most inspected CGT library modules are shared exactly, but the private repository also carries private-oriented surface differences.
+Most CGT formal-core modules are shared exactly, but a genuine private-engine boundary exists.
 
 ### IDENTICAL examples
-
-Examples include:
 
 - `cgtlib/aftermath.py`
 - `batch.py`
@@ -97,24 +89,38 @@ Examples include:
 - `constants.py`
 - `errors.py`
 - `evaluators.py`
+- `reference_data.py`
 
-### MERGE-CANDIDATE
+### Shared-core COPY/MERGE candidates
 
-The following inspected entrypoints differ:
-
-- `cgtlib/__init__.py`
-- `cgtlib/_fallback.py`
-- `cgtlib/api.py`
-
-These are not safe overwrite targets because entrypoints/fallbacks may intentionally expose private functionality when available.
+- `cgtlib/api.py` — private still embeds the stable API tuple; public delegates it to `_stable_api.py` and exposes newer reference-data API.
+- `cgtlib/_stable_api.py` — present in public, absent from private; should be added during private core port.
+- `cgtlib/_fallback.py` — public imports stable API from dependency-light `_stable_api.py`; private still imports it through `api.py`.
+- `cgtlib/__init__.py` — reconcile shared exports while preserving private-engine composition behavior.
 
 ### PRIVATE-PRESERVE
 
-Private includes additional data/private material not present on the inspected public surface, including:
+The genuine private boundary is:
 
-- `cgtlib/data/`
+- `cgtlib/private/`
 
-Any deeper private CGT subtree discovered during porting must remain excluded from public build outputs.
+including private compute/equation/calibration/threshold modules. It must remain private and absent from public builds.
+
+### Corrected classification: `cgtlib/data/`
+
+`cgtlib/data/` is **not private-only**. Both repositories contain identical `cgtlib/reference_data.py`, which requires `cgtlib.data/reference_scenarios.json` through `importlib.resources`.
+
+Private contained the canonical non-secret resource package while public main did not. The public qualification branch has therefore restored:
+
+- `cgtlib/data/__init__.py`
+- `cgtlib/data/reference_scenarios.json`
+- `tests/test_cgtlib_reference_data_packaging.py`
+
+The data contains only canonical formal-core scenarios and is shared product material.
+
+Detailed record:
+
+`docs/qualification/PUBLIC_PRIVATE_CGTLIB_RECONCILIATION_UNIT_2026-08-19.md`
 
 ## 4. `processual_api` findings
 
@@ -151,7 +157,7 @@ Public exposes newer/expanded top-level surfaces including:
 - `processual_api/api_readiness_gate.py`
 - `processual_api/execution/`
 
-These must be checked against the private product architecture. If the private product is intended to contain the complete public product plus private integrations, absence is drift and they become port candidates.
+These must be checked against private product architecture. If private is intended to contain the complete public product plus private integrations, absence is drift and they become port candidates.
 
 ### PRIVATE-PRESERVE
 
@@ -160,51 +166,48 @@ Private contains private-only surfaces including:
 - `processual_api/data/`
 - `processual_api/private_integrations/`
 
-These must not be introduced into the public repository and must not be deleted during private reconciliation.
+These must not be introduced into the public repository and must not be deleted during private reconciliation unless deeper semantic review proves a path is actually shared product data, as happened with `cgtlib/data`.
 
 ## 5. Public-exclusion invariant
 
-The public build already documents/enforces the principle that private modules must remain excluded. Reconciliation must preserve this invariant:
+Reconciliation must preserve:
 
-1. private-only paths remain in the private repository;
-2. public build/test/package output contains no private modules;
-3. public shared core can be ported into private without converting private-only code into public dependencies;
-4. private entrypoints may compose private modules, but shared modules must remain usable in the public build without them.
+1. genuine private-only paths remain private;
+2. public build/test/package output contains no private engine/integration modules;
+3. shared public core can be ported into private without converting private-only code into public dependencies;
+4. private entrypoints may compose private modules, but shared modules remain usable when private modules are absent.
 
 ## 6. Safe port order
 
 Do not perform a repository-wide copy.
 
-Recommended order:
-
-1. reconcile `processual_kernel` divergent shared-core files/subtrees;
-2. reconcile safe shared `cgtlib` modules while preserving private entrypoints/data;
-3. reconcile `processual_api/auth` and `billing` against the newer public contracts;
-4. reconcile `processual_api/admin_marketplace`, readiness and execution surfaces into private if product parity requires them;
-5. semantically merge `processual_api/integrations` and `main.py` around private-only registrations;
-6. reconcile Alembic migrations and confirm one coherent private migration head;
-7. reconcile CI/build/container configuration without removing private build requirements;
-8. run private full suite plus public-exclusion checks;
-9. build both public and private images;
+1. `processual_kernel` — classification complete, ready to port on a dedicated private branch.
+2. `cgtlib` — port shared API/fallback contract while preserving `cgtlib/private/`; public package-data defect repaired on qualification branch.
+3. reconcile `processual_api/auth` and `billing` against newer public contracts.
+4. reconcile `processual_api/admin_marketplace`, readiness and execution surfaces into private if product parity requires them.
+5. semantically merge `processual_api/integrations` and `main.py` around private-only registrations.
+6. reconcile Alembic migrations and confirm one coherent private migration head.
+7. reconcile CI/build/container configuration without removing private build requirements.
+8. run private full suite plus public-exclusion checks.
+9. build both public and private images.
 10. retain exact drift/evidence report before declaring repository reconciliation closed.
 
 ## 7. Current decision
 
 **Repository reconciliation is not yet closed.**
 
-The evidence is sufficient to reject two unsafe strategies:
+Unsafe strategies remain rejected:
 
 - copying the entire public repository over private;
-- preserving all private shared-core drift merely because it is in the private repository.
+- preserving all private shared-core drift merely because it exists in the private repository.
 
-The next execution unit is the focused semantic reconciliation of the divergent `processual_kernel` paths, followed by tests, before moving into `processual_api`.
+The current execution unit is deep comparison of `processual_api/auth` and `processual_api/billing`.
 
 ## 8. Authority state
 
-This reconciliation analysis does not change any runtime or release authority:
-
+- no cross-repository code port performed;
+- private `main` unchanged;
 - no merge performed;
-- no public/private cross-repository port performed yet;
 - no staging authority granted;
 - no production authority granted;
 - deferred real-environment proof backlog remains mandatory.
