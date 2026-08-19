@@ -106,10 +106,7 @@
     const planId = selectedPlanId();
     if (planId) {
       payload.selected_plan_id = planId;
-      const billingPeriod = selectedBillingPeriod();
-      if (billingPeriod) {
-        payload.billing_period = billingPeriod;
-      }
+      payload.billing_period = selectedBillingPeriod();
     }
 
     return payload;
@@ -120,6 +117,15 @@
 
     if (!form.reportValidity()) {
       setStatus("Review the highlighted registration fields.", "error");
+      return;
+    }
+
+    const planId = selectedPlanId();
+    if (planId && !selectedBillingPeriod()) {
+      setStatus(
+        "This plan registration link is incomplete. Return to Plans and select monthly or annual billing.",
+        "error",
+      );
       return;
     }
 
