@@ -26,6 +26,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Verify exact source checkout
+        run: test "$(git rev-parse HEAD)" = "$VQ1_SOURCE_SHA"
+
       - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
