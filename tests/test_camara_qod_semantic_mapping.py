@@ -5,9 +5,13 @@ import pytest
 from processual_api.integrations.adapter_contracts import get_adapter_contract
 from processual_api.integrations.camara_qod_semantic_mapping import (
     APPROVAL_GATED_WRITE,
+    CAMARA_QOD_ENTITLEMENT_CANDIDATES,
+    CAMARA_QOD_GOVERNANCE_CANDIDATES,
+    CAMARA_QOD_QUOTA_METER_CANDIDATES,
     CAMARA_QOD_R32_CALLBACK_OPERATION_IDS,
     CAMARA_QOD_R32_CALLABLE_OPERATION_IDS,
     READ,
+    assess_camara_qod_governance_candidate,
     assess_camara_qod_semantic_alignment,
     camara_qod_semantic_mapping_payload,
     get_camara_qod_semantic_mapping,
@@ -176,6 +180,51 @@ def test_semantic_alignment_rejects_missing_and_unreviewed_operations() -> None:
     ]
 
 
+def test_governance_candidate_is_complete_unique_and_non_authoritative() -> None:
+    result = assess_camara_qod_governance_candidate()
+
+    assert result["governance_candidate_valid"] is True
+    assert result["governance_blocker_codes"] == []
+    assert result["candidate_task_ids"] == [
+        CAMARA_QOD_GOVERNANCE_CANDIDATES[operation_id].task_id
+        for operation_id in CAMARA_QOD_R32_CALLABLE_OPERATION_IDS
+    ]
+    assert len(set(result["candidate_task_ids"])) == 5
+    assert tuple(result["candidate_entitlement_ids"]) == CAMARA_QOD_ENTITLEMENT_CANDIDATES
+    assert tuple(result["candidate_quota_meters"]) == CAMARA_QOD_QUOTA_METER_CANDIDATES
+    assert result["governance_approved"] is False
+    assert result["runtime_task_registered"] is False
+    assert result["runtime_connector_approved"] is False
+    assert result["provider_sandbox_proven"] is False
+    assert result["production_allowed"] is False
+
+    for candidate in CAMARA_QOD_GOVERNANCE_CANDIDATES.values():
+        assert candidate.task_id not in SUPPORTED_INTEGRATION_TASKS
+        assert candidate.runtime_registered is False
+
+
+def test_governance_candidate_requires_approval_only_for_write_semantics() -> None:
+    for operation_id, candidate in CAMARA_QOD_GOVERNANCE_CANDIDATES.items():
+        mapping = get_camara_qod_semantic_mapping(operation_id)
+        assert candidate.approval_required is (
+            mapping.operation_class == APPROVAL_GATED_WRITE
+        )
+
+
+def test_governance_entitlement_and_quota_sets_are_exact() -> None:
+    assert CAMARA_QOD_ENTITLEMENT_CANDIDATES == (
+        "camara_qod_session_manage",
+        "camara_qod_session_read",
+    )
+    assert CAMARA_QOD_QUOTA_METER_CANDIDATES == (
+        "camara_qod_session_create",
+        "camara_qod_session_delete",
+        "camara_qod_session_read",
+        "camara_qod_session_retrieve_by_device",
+        "camara_qod_session_update",
+    )
+
+
 def test_semantic_mapping_payload_is_pinned_proposal_only_and_non_authoritative() -> None:
     payload = camara_qod_semantic_mapping_payload()
     assert payload["source_identity_id"] == "camara.quality_on_demand.r3_2"
@@ -192,3 +241,13 @@ def test_semantic_mapping_payload_is_pinned_proposal_only_and_non_authoritative(
     assert payload["callback_operations_excluded_from_outbound_binding"] == [
         "postNotification"
     ]
+
+    governance = payload["governance_candidate"]
+    assert governance["candidate_state"] == "review_required"
+    assert governance["governance_candidate_valid"] is True
+    assert governance["governance_approved"] is False
+    assert governance["runtime_task_registered"] is False
+    assert governance["runtime_connector_approved"] is False
+    assert governance["provider_sandbox_proven"] is False
+    assert governance["production_allowed"] is False
+    assert len(governance["tasks"]) == 5
