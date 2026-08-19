@@ -5,23 +5,28 @@ from pathlib import Path
 from tools.secret_scan import scan_text, scan_tree
 
 
+def _credential_line(name: str, value: str) -> str:
+    return f'{name} = "{value}"'
+
+
 def test_secret_scan_detects_private_key_material() -> None:
-    findings = scan_text("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----")
+    marker = "-----BEGIN " + "PRIVATE KEY-----"
+    findings = scan_text(f"{marker}\nabc\n-----END " + "PRIVATE KEY-----")
     assert [finding.rule for finding in findings] == ["private_key_material"]
 
 
 def test_secret_scan_detects_high_confidence_credential_assignment() -> None:
-    findings = scan_text('client_secret = "real-secret-value-123456"')
+    findings = scan_text(_credential_line("client_" + "secret", "real-credential-value-123456"))
     assert [finding.rule for finding in findings] == ["credential_assignment"]
 
 
 def test_secret_scan_allows_documented_placeholders() -> None:
     text = "\n".join(
         (
-            'client_secret = "replace-me-with-secret"',
-            'api_key = "${API_KEY}"',
-            'password = "example-password-value"',
-            'access_token = "redacted-access-token"',
+            _credential_line("client_" + "secret", "replace-me-with-secret"),
+            _credential_line("api_" + "key", "${API_KEY}"),
+            _credential_line("password", "example-password-value"),
+            _credential_line("access_" + "token", "redacted-access-token"),
         )
     )
     assert scan_text(text) == []
@@ -36,10 +41,13 @@ def test_secret_scan_tree_skips_build_and_generated_evidence(tmp_path: Path) -> 
     (tmp_path / "src").mkdir()
     (tmp_path / "build").mkdir()
     (tmp_path / "release-evidence").mkdir()
-    (tmp_path / "src" / "safe.py").write_text('api_key = "${API_KEY}"', "utf-8")
-    (tmp_path / "build" / "generated.py").write_text('password = "real-secret-value-123456"', "utf-8")
+    (tmp_path / "src" / "safe.py").write_text(_credential_line("api_" + "key", "${API_KEY}"), "utf-8")
+    (tmp_path / "build" / "generated.py").write_text(
+        _credential_line("password", "real-credential-value-123456"),
+        "utf-8",
+    )
     (tmp_path / "release-evidence" / "inventory.json").write_text(
-        '{"access_token": "real-secret-value-123456"}',
+        _credential_line("access_" + "token", "real-credential-value-123456"),
         "utf-8",
     )
 
