@@ -29,6 +29,22 @@ def test_secret_scan_detects_unquoted_environment_credential() -> None:
     assert [finding.rule for finding in findings] == ["credential_assignment"]
 
 
+def test_secret_scan_ignores_runtime_variable_assignment_that_is_not_a_literal() -> None:
+    source = 'api_key = request.headers.get("X-API-Key", "").strip()'
+    assert scan_text(source, path="processual_api/middleware/runtime_capacity.py") == []
+
+
+def test_secret_scan_treats_generic_test_credentials_as_fixtures() -> None:
+    source = _credential_line("password", "owner-chosen-password")
+    assert scan_text(source, path="tests/test_onboarding.py") == []
+
+
+def test_secret_scan_keeps_high_confidence_token_detection_in_tests() -> None:
+    token = "ghp_" + "A" * 36
+    findings = scan_text(f'raw_value = "{token}"', path="tests/test_connector.py")
+    assert [finding.rule for finding in findings] == ["github_token"]
+
+
 def test_secret_scan_allows_documented_placeholders() -> None:
     text = "\n".join(
         (
@@ -40,6 +56,11 @@ def test_secret_scan_allows_documented_placeholders() -> None:
         )
     )
     assert scan_text(text) == []
+
+
+def test_secret_scan_allows_explicit_high_confidence_test_fixture_marker() -> None:
+    token = "sk-" + "test-only-" + "A" * 32
+    assert scan_text(f'raw_secret = "{token}"', path="tests/test_crypto.py") == []
 
 
 def test_secret_scan_does_not_confuse_private_math_terms_with_credentials() -> None:
