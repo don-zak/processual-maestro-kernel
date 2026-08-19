@@ -11,6 +11,18 @@ _PUBLIC_AUTHORITY_REPLACEMENTS = (
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
     (b"v2.0.0 \xe2\x80\x94 production", b"v2.0.0 \xe2\x80\x94 qualification"),
 )
+_LEGACY_CONSOLE_SCRIPT_TAGS = (
+    b'<script src="js/adapters/governor.js"></script>',
+    b'<script src="js/adapters/cgt.js"></script>',
+    b'<script src="js/pages/governor.js"></script>',
+    b'<script src="js/pages/cgt.js"></script>',
+)
+_LEGACY_CONSOLE_QUARANTINE_STYLE = (
+    b'<style id="legacy-console-quarantine">'
+    b'[data-page="cgt"],[data-page="governor"],'
+    b'#page-cgt,#page-governor{display:none!important}'
+    b'</style>'
+)
 _CONTENT_SECURITY_POLICY = "; ".join(
     (
         "default-src 'self'",
@@ -38,6 +50,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         if path in {"/", "/console", "/console/", "/console/index.html"}:
             response = await self._rewrite_public_authority_claims(response)
+
+        if path in {"/console", "/console/", "/console/index.html"}:
+            response = await self._quarantine_legacy_console_surfaces(response)
 
         if path in {"/admin", "/admin/"}:
             response = await self._inject_admin_dom_contract(response)
@@ -74,6 +89,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         body = await self._response_body(response)
         for source, replacement in _PUBLIC_AUTHORITY_REPLACEMENTS:
             body = body.replace(source, replacement)
+        return self._rebuilt_response(response, body)
+
+    async def _quarantine_legacy_console_surfaces(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+
+        body = await self._response_body(response)
+        for script_tag in _LEGACY_CONSOLE_SCRIPT_TAGS:
+            body = body.replace(script_tag, b"")
+        if _LEGACY_CONSOLE_QUARANTINE_STYLE not in body:
+            if b"</head>" in body:
+                body = body.replace(
+                    b"</head>",
+                    _LEGACY_CONSOLE_QUARANTINE_STYLE + b"</head>",
+                    1,
+                )
+            else:
+                body = _LEGACY_CONSOLE_QUARANTINE_STYLE + body
         return self._rebuilt_response(response, body)
 
     async def _inject_admin_dom_contract(self, response: Response) -> Response:
