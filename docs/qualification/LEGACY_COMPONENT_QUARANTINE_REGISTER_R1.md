@@ -25,7 +25,8 @@ Deletion is never inferred from age, naming, or apparent duplication alone.
 | `processual_api/static/js/adapters/cgt.js` | `QUARANTINED_SOURCE` | Same sanitized private-evaluation boundary | Removed from delivered console HTML; direct HTTP request returns `410 Gone` | Same as above |
 | `processual_api/static/js/pages/governor.js` | `QUARANTINED_SOURCE` | Future sanitized governed-decision UI | Removed from delivered console HTML; Governor navigation/page hidden; direct HTTP request returns `410 Gone` | Sanitized replacement UI proven and legacy references removed |
 | `processual_api/static/js/pages/cgt.js` | `QUARANTINED_SOURCE` | Future sanitized evaluation UI | Removed from delivered console HTML; CGT navigation/page hidden; direct HTTP request returns `410 Gone` | Sanitized replacement UI proven and legacy references removed |
-| `processual_api/billing/subscription_catalog.py` | `COMPATIBILITY_ONLY` | `processual_api.billing.pricing_catalog` and canonical commercial contracts | Compatibility facade only; new production imports must be rejected by CI | All known callers/tests migrated to canonical import; external compatibility review completed |
+| `processual_api/billing/subscription_catalog.py` | `COMPATIBILITY_ONLY` | `processual_api.billing.pricing_catalog` and canonical commercial contracts | Compatibility facade only; new production imports are rejected by CI | All known callers/tests migrated to canonical import; external compatibility review completed |
+| `processual_api/routers/client_provider_alias_18.py` | `COMPATIBILITY_ONLY` | `/settings/provider-connection` | Deprecated API alias remains reachable only for external compatibility; current Settings UI uses the canonical route | External clients confirmed migrated; compatibility tests converted to retirement assertions; route registration removed in a dedicated change |
 | `processual_api/routers/cgt_governor.py` | `ACTIVE_LEGACY_DEBT` | Canonical sanitized private evaluation boundary, after real opaque-reference topology implementation | Not quarantined: still contains active historical routes/contracts and therefore must not be deleted or partially amputated | Opaque-reference topology approved and implemented; browser/router/report migration complete; route consumers and persistence contracts reconciled |
 | legacy raw-score/vector report surfaces coupled to `cgt_governor` | `ACTIVE_LEGACY_DEBT` | Sanitized six-field result contract | Remain under architectural quarantine policy; no new public raw-score/vector consumers permitted | Full migration plus evidence that raw mathematical surfaces no longer cross the public/private boundary |
 
@@ -39,9 +40,9 @@ Deletion is never inferred from age, naming, or apparent duplication alone.
 
 ## Compatibility-only rules
 
-1. New production code must import the canonical replacement directly.
-2. Compatibility facades may be exercised only by explicit compatibility tests or known external-contract preservation.
-3. Compatibility facades must not regain commercial/runtime authority.
+1. New production code must import or call the canonical replacement directly.
+2. Compatibility facades/routes may be exercised only by explicit compatibility tests or known external-contract preservation.
+3. Compatibility surfaces must not regain commercial/runtime authority or become dependencies of new UI/application code.
 4. Once all callers are migrated, the component advances to `DELETE_CANDIDATE` for a separate deletion review.
 
 ## Deletion review checklist
@@ -58,6 +59,6 @@ A component may move to `DELETE_CANDIDATE` only when all of the following are de
 
 ## Current safety decision
 
-The four legacy browser CGT/Governor JavaScript files are now source-retained but runtime-disconnected. `subscription_catalog.py` remains compatibility-only. `cgt_governor.py` remains active legacy debt and is explicitly **not** a deletion candidate.
+The four legacy browser CGT/Governor JavaScript files are source-retained but runtime-disconnected. `subscription_catalog.py` and `client_provider_alias_18.py` remain compatibility-only. `cgt_governor.py` remains active legacy debt and is explicitly **not** a deletion candidate.
 
 No private-runtime authority, Real Staging authority, or Production authority is granted by this register.
