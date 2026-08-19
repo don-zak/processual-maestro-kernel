@@ -32,8 +32,11 @@ def test_public_docker_workflow_exposes_only_public_image_build() -> None:
     workflow = _docker_workflow().lower()
     assert "public docker build" in workflow
     assert "target: public" in workflow
-    assert "private" not in workflow
+    assert "target: private" not in workflow
+    assert "options: [public, private]" not in workflow
+    assert "default: \"private\"" not in workflow
     assert "processual-maestro-public" in workflow
+    assert "processual-maestro:latest" not in workflow
 
 
 def test_public_docker_workflow_smokes_private_exclusion_and_fail_closed_behavior() -> None:
