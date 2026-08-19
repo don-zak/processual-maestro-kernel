@@ -32,11 +32,24 @@ def test_offer_to_registration_preserves_plan_and_billing_period() -> None:
     assert "billing_period=billing_period" in service
 
 
+def test_registration_page_has_accessible_responsive_baseline() -> None:
+    html = (ROOT / "processual_api/static/register.html").read_text()
+
+    assert 'name="viewport"' in html
+    assert 'width=device-width, initial-scale=1' in html
+    assert 'for="registration-full-name"' in html
+    assert 'for="registration-email"' in html
+    assert 'for="registration-password"' in html
+    assert 'aria-describedby="password-requirements"' in html
+    assert 'role="status"' in html
+    assert 'aria-live="polite"' in html
+    assert ':focus-visible' in html
+    assert 'nav aria-label="Registration links"' in html
+
+
 def test_public_ui_delivery_rewrites_ungranted_production_claims() -> None:
     async def public_home(_request):
-        return HTMLResponse(
-            '<footer>Production Ready · جاهز للإنتاج</footer>'
-        )
+        return HTMLResponse('<footer>Production Ready · جاهز للإنتاج</footer>')
 
     async def console(_request):
         return HTMLResponse('<footer>v2.0.0 — production</footer>')
