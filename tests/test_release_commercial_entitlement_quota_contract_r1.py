@@ -7,6 +7,7 @@ from processual_api.admin_marketplace.commercial_plan_projection import (
     build_commercial_plan_projections,
     build_subscription_quota_profiles,
 )
+from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC
 from processual_api.billing.plan_fulfillment_catalog import PLAN_FULFILLMENT_SPECS
 from processual_api.billing.public_plan_journey import public_plan_journey_catalog
 
@@ -26,7 +27,7 @@ def test_authoritative_plan_projection_matches_entitlements_and_quota() -> None:
         quota_profile = profiles[projection.quota_profile_ref]
         assert len(quota_profile.metrics) == 1
         assert quota_profile.metrics[0].limit_units == spec.monthly_unit_allowance
-        assert quota_profile.metrics[0].metric_code == "maestro_unit"
+        assert quota_profile.metrics[0].metric_code == MAESTRO_UNIT_METRIC
 
 
 def test_public_plan_journey_never_claims_unbound_assessment_quota() -> None:
