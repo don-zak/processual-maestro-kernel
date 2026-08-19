@@ -11,6 +11,9 @@ QUARANTINED_CONSOLE_ASSETS = (
     "processual_api/static/js/pages/governor.js",
     "processual_api/static/js/pages/cgt.js",
 )
+QUARANTINED_ROOT_ARTIFACTS = (
+    "readiness_report.html",
+)
 
 
 def test_production_code_does_not_import_compatibility_subscription_catalog() -> None:
@@ -80,6 +83,16 @@ def test_public_runtime_image_explicitly_removes_quarantined_console_assets() ->
     for relative in QUARANTINED_CONSOLE_ASSETS:
         assert relative in removal_block
         assert f"test ! -e {relative}" in removal_block
+
+
+def test_quarantined_root_readiness_artifacts_never_enter_runtime_image() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    copy_lines = [line.strip() for line in dockerfile.splitlines() if line.strip().startswith("COPY ")]
+
+    assert "COPY . ." not in copy_lines
+    for relative in QUARANTINED_ROOT_ARTIFACTS:
+        assert (ROOT / relative).is_file(), relative
+        assert all(relative not in line for line in copy_lines), relative
 
 
 def test_quarantine_register_does_not_misclassify_active_legacy_router_as_dead() -> None:
