@@ -10,6 +10,7 @@ from processual_api.admin_marketplace.commercial_plan_projection import (
 from processual_api.billing.maestro_units import MAESTRO_UNIT_METRIC
 from processual_api.billing.plan_fulfillment_catalog import PLAN_FULFILLMENT_SPECS
 from processual_api.billing.public_plan_journey import public_plan_journey_catalog
+from processual_api.release_gate import _REQUIRED_VALUES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,13 +116,39 @@ def test_infisical_manifest_is_value_free_and_fail_closed() -> None:
     assert "INFISICAL_TOKEN" in manifest["prohibited_repository_keys"]
     assert set(manifest["fail_closed_feature_flags"].values()) == {"false"}
 
+    classified = [
+        set(manifest["secret_keys"]),
+        set(manifest["configuration_keys"]),
+        set(manifest["real_staging_evidence_keys"]),
+    ]
+    assert not (classified[0] & classified[1])
+    assert not (classified[0] & classified[2])
+    assert not (classified[1] & classified[2])
+    assert set().union(*classified) == set(_REQUIRED_VALUES)
 
-def test_production_template_keeps_sensitive_values_as_placeholders() -> None:
+
+def test_production_template_covers_release_gate_without_real_evidence() -> None:
     env = (ROOT / ".env.production.example").read_text()
+    declared = {
+        line.split("=", 1)[0]
+        for line in env.splitlines()
+        if line and not line.startswith("#") and "=" in line
+    }
 
     assert "Never commit real secrets" in env
     assert "Use a secret manager for cloud deployments" in env
+    assert set(_REQUIRED_VALUES).issubset(declared)
+    assert "MIGRATION_BACKUP_REFERENCE=" in env
+    assert "MIGRATION_RESTORE_REHEARSAL_REFERENCE=" in env
     assert "MAESTRO_TOP_UP_PURCHASE_ENABLED=false" in env
     assert "MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false" in env
     assert "MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false" in env
     assert "replace_with_long_random_jwt_secret" in env
+
+
+def test_cloud_run_container_honors_port_and_never_migrates_on_startup() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text()
+
+    assert dockerfile.count("${PORT:-8000}") >= 2
+    assert "uvicorn processual_api.main:app" in dockerfile
+    assert "alembic upgrade" not in dockerfile
