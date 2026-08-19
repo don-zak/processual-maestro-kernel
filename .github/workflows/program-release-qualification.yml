@@ -10,6 +10,7 @@ on:
       - "processual_api/billing/**"
       - "processual_api/admin_marketplace/**"
       - "processual_api/middleware/security_headers.py"
+      - "processual_api/routers/client_provider_alias_18.py"
       - "processual_api/static/admin.html"
       - "processual_api/static/index.html"
       - "processual_api/static/splash.html"
@@ -24,6 +25,7 @@ on:
       - "tests/test_admin_marketplace_*.py"
       - "tests/test_assessment_subscription_activation_a3.py"
       - "tests/test_settings_subscription_runtime_regression.py"
+      - "tests/test_client_provider_connection_endpoint_regression.py"
       - "tests/test_admin_backend_dashboard_regression.py"
       - "tests/test_release_commercial_entitlement_quota_contract_r1.py"
       - "tests/test_public_ui_release_contract_r1.py"
@@ -36,6 +38,7 @@ on:
       - "processual_api/billing/**"
       - "processual_api/admin_marketplace/**"
       - "processual_api/middleware/security_headers.py"
+      - "processual_api/routers/client_provider_alias_18.py"
       - "processual_api/static/admin.html"
       - "processual_api/static/index.html"
       - "processual_api/static/splash.html"
@@ -50,6 +53,7 @@ on:
       - "tests/test_admin_marketplace_*.py"
       - "tests/test_assessment_subscription_activation_a3.py"
       - "tests/test_settings_subscription_runtime_regression.py"
+      - "tests/test_client_provider_connection_endpoint_regression.py"
       - "tests/test_admin_backend_dashboard_regression.py"
       - "tests/test_release_commercial_entitlement_quota_contract_r1.py"
       - "tests/test_public_ui_release_contract_r1.py"
@@ -99,11 +103,17 @@ jobs:
             tests/test_admin_backend_dashboard_regression.py \
             tests/test_release_commercial_entitlement_quota_contract_r1.py::test_admin_workspace_exposes_readiness_and_usage_without_becoming_authority
 
-      - name: Public UI journey, authority, accessibility, browser security, and legacy quarantine qualification
+      - name: Public UI, browser security, and legacy quarantine qualification
         run: |
           python -m pytest -q \
             tests/test_public_ui_release_contract_r1.py \
             tests/test_public_browser_http_qualification_r1.py \
+            tests/test_legacy_component_quarantine_r1.py
+
+      - name: Compatibility retirement qualification
+        run: |
+          python -m pytest -q \
+            tests/test_client_provider_connection_endpoint_regression.py \
             tests/test_legacy_component_quarantine_r1.py
 
       - name: Production environment and Infisical contract qualification
@@ -124,6 +134,8 @@ jobs:
             processual_api/admin_marketplace/subscription_runtime_bootstrap.py \
             processual_api/admin_marketplace/subscription_quota_usage.py \
             processual_api/middleware/security_headers.py \
+            processual_api/routers/client_provider_alias_18.py \
+            tests/test_client_provider_connection_endpoint_regression.py \
             tests/test_release_commercial_entitlement_quota_contract_r1.py \
             tests/test_public_ui_release_contract_r1.py \
             tests/test_public_browser_http_qualification_r1.py \
