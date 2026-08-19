@@ -12,10 +12,10 @@ on:
       - "cgtlib/**"
       - "processual_api/cgt_governor/**"
       - "processual_api/integrations/private_evaluation_boundary.py"
+      - "processual_api/integrations/private_evaluation_http.py"
       - "processual_api/integrations/private_evaluation_runtime.py"
       - "processual_api/routers/__init__.py"
       - "processual_api/routers/cgt_governor.py"
-      - "processual_api/routers/private_evaluation.py"
       - "tools/release_evidence_inventory.py"
       - "tools/secret_scan.py"
       - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
@@ -40,10 +40,10 @@ on:
       - "cgtlib/**"
       - "processual_api/cgt_governor/**"
       - "processual_api/integrations/private_evaluation_boundary.py"
+      - "processual_api/integrations/private_evaluation_http.py"
       - "processual_api/integrations/private_evaluation_runtime.py"
       - "processual_api/routers/__init__.py"
       - "processual_api/routers/cgt_governor.py"
-      - "processual_api/routers/private_evaluation.py"
       - "tools/release_evidence_inventory.py"
       - "tools/secret_scan.py"
       - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
@@ -107,8 +107,8 @@ jobs:
             processual_api/cgt_governor/simulation/__init__.py \
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
+            processual_api/integrations/private_evaluation_http.py \
             processual_api/integrations/private_evaluation_runtime.py \
-            processual_api/routers/private_evaluation.py \
             tools/release_evidence_inventory.py \
             tools/secret_scan.py \
             tests/test_cgt_governor_legacy_boundary_debt_r1.py \
@@ -138,8 +138,8 @@ jobs:
             processual_api/cgt_governor/simulation/__init__.py \
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
+            processual_api/integrations/private_evaluation_http.py \
             processual_api/integrations/private_evaluation_runtime.py \
-            processual_api/routers/private_evaluation.py \
             tools/release_evidence_inventory.py \
             tools/secret_scan.py \
             --ignore-missing-imports \
@@ -198,10 +198,12 @@ jobs:
               PrivateEvaluationUnavailableError,
               boundary_contract_version,
           )
+          from processual_api.integrations.private_evaluation_http import (
+              router as private_evaluation_router,
+          )
           from processual_api.integrations.private_evaluation_runtime import (
               private_evaluation_provider_from_request,
           )
-          from processual_api.routers import cgt_governor_router
 
           assert cgtlib._HAS_PRIVATE is False
           assert list_reference_dataset_ids() == (
@@ -215,7 +217,7 @@ jobs:
           assert importlib.util.find_spec("cgtlib.private") is None
           assert importlib.util.find_spec("processual_api.private_integrations") is None
           assert "/cgt/govern/evaluate" in {
-              getattr(route, "path", "") for route in cgt_governor_router.routes
+              getattr(route, "path", "") for route in private_evaluation_router.routes
           }
           try:
               govern_answer(answer="public-wheel-probe")
