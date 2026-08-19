@@ -1,7 +1,7 @@
 # General Packaging Preflight — 2026-08-19
 
 **Stage:** preparation for Phase F / General Packaging  
-**Status:** **PREFLIGHT ONLY — REPOSITORY RECONCILIATION STILL OPEN**
+**Status:** **PREFLIGHT ADVANCED — REPOSITORY RECONCILIATION STILL OPEN**
 
 ## Purpose
 
@@ -22,22 +22,29 @@ The public repository already has:
 - deployment/readiness documents;
 - security/lint/test tooling dependencies.
 
-The release workflow already performs:
+The qualification branch release workflow now includes:
 
 - dependency installation;
 - commercial release environment gate;
-- migration-head check;
+- migration-head verification/application and subscription-runtime backfill checks;
 - commercial staging-smoke contract;
 - focused commercial regression;
 - full pytest suite;
 - Ruff;
+- Flake8 critical-error gate;
+- focused Mypy gate aligned with public CI;
 - Bandit;
+- pip-audit vulnerability gate;
 - `python -m build`;
+- built-wheel resource inspection;
+- isolated installed-wheel reference-data smoke;
 - `twine check`;
-- release artifact upload;
-- GitHub release creation after the release gate.
+- source/artifact/dependency/license evidence inventory;
+- CycloneDX JSON dependency SBOM generation;
+- retained release evidence and distribution artifacts;
+- GitHub release creation only after the release gate.
 
-These are useful packaging foundations but do not yet satisfy the complete General Packaging roadmap.
+These are strong packaging foundations but do not yet satisfy the complete General Packaging roadmap.
 
 ## Packaging defect corrected during reconciliation
 
@@ -49,52 +56,71 @@ The public main baseline lacked the resource package. The qualification branch n
 - `cgtlib/data/reference_scenarios.json`;
 - source-level reference-data regression tests;
 - explicit setuptools package-data declaration for the JSON resource;
-- a regression test for the package-data configuration.
+- a regression test for the package-data configuration;
+- release-workflow inspection proving the JSON is inside the built wheel;
+- an isolated venv smoke that installs the wheel and loads the canonical data from the installed artifact.
 
-This closes the configuration-level risk where source tests could succeed while the built wheel omitted the canonical JSON resource.
+Configuration and workflow contracts are implemented. Actual tag/release execution evidence is still required before this is considered release-qualified.
 
-A later package-build proof must still inspect/install the built wheel and load the resource from the installed artifact before this item is considered fully package-qualified.
+## P-F1 — package artifact integrity
 
-## Remaining packaging gates — repository/CI capable
+**Implementation status:** substantially wired; execution evidence pending.
 
-### P-F1 — package artifact integrity
+The release workflow now:
 
-Required:
+- builds wheel and sdist;
+- verifies the canonical CGT resource is inside the wheel;
+- installs the wheel in an isolated environment;
+- loads canonical reference data from that installed artifact;
+- runs Twine metadata validation;
+- records SHA-256 and sizes for built artifacts in `release-evidence/release-inventory.json`.
 
-- build wheel and sdist from the exact candidate SHA;
-- inspect wheel/sdist contents;
-- verify `cgtlib/data/reference_scenarios.json` is included;
-- install the built wheel into an isolated environment;
-- run a smoke import and canonical reference-data load from the installed package;
-- run Twine metadata validation;
-- record artifact SHA-256 digests.
+Still required for closure:
 
-### P-F2 — dependency/security qualification
+- successful execution on an exact packaging/release candidate SHA;
+- retained artifact/evidence digests from that run.
 
-Required in the packaging/release candidate pipeline:
+## P-F2 — dependency/security qualification
+
+**Implementation status:** advanced.
+
+The release workflow now includes:
 
 - Ruff;
 - Flake8;
 - Mypy;
 - Bandit;
 - pip-audit;
-- secret scan;
-- dependency inventory;
-- license inventory.
+- installed dependency inventory;
+- installed package license metadata inventory.
 
-The current release workflow covers Ruff and Bandit but does not currently show the complete set above.
+Still required:
 
-### P-F3 — SBOM
+- dedicated secret scan gate;
+- successful exact-candidate execution evidence;
+- review of packages with missing/ambiguous license metadata.
 
-Required:
+## P-F3 — SBOM
 
-- generate a machine-readable SBOM for the exact release artifact/image;
-- bind it to source SHA and artifact/image digest;
-- retain it with the release evidence bundle.
+**Implementation status:** wired, execution evidence pending.
 
-No implemented SBOM generation artifact was identified during this preflight.
+The release workflow now uses the already-installed PyPA `pip-audit` tooling to emit:
 
-### P-F4 — Docker/package parity
+`release-evidence/python-environment.cdx.json`
+
+in CycloneDX JSON format after the vulnerability gate succeeds.
+
+The separate `release-inventory.json` remains explicitly labeled as dependency/license evidence rather than an SBOM.
+
+Still required:
+
+- successful SBOM generation on the exact release candidate;
+- bind/retain it beside exact source and package/image digests;
+- later add/verify container-image SBOM coverage when Docker image qualification is performed.
+
+## P-F4 — Docker/package parity
+
+**Status:** open; depends on repository reconciliation.
 
 Required:
 
@@ -107,17 +133,21 @@ Required:
 
 Real staging remains a later phase; ephemeral image smoke is not Real Staging qualification.
 
-### P-F5 — configuration templates
+## P-F5 — configuration templates
+
+**Status:** open after public/private parity.
 
 Required:
 
-- reconcile `.env.example` and `.env.production.example` after public/private parity;
+- reconcile `.env.example` and `.env.production.example`;
 - keep placeholders only, never real credentials;
 - document required versus optional settings;
 - document environment separation;
 - verify default-deny behavior when required authorities are absent.
 
-### P-F6 — migration packaging
+## P-F6 — migration packaging
+
+**Status:** public chain advanced; private parity still open.
 
 Required:
 
@@ -125,9 +155,12 @@ Required:
 - verify exactly one expected head per supported product baseline;
 - verify upgrade path;
 - verify supported downgrade/rollback behavior;
-- verify migration files are present in the package/container as required by deployment tooling.
+- verify migration files are present in the package/container as required by deployment tooling;
+- reconcile the currently absent private Alembic chain during repository parity work.
 
-### P-F7 — documentation package
+## P-F7 — documentation package
+
+**Status:** incomplete.
 
 Required before release-candidate closure:
 
@@ -142,40 +175,36 @@ Required before release-candidate closure:
 - incident-response manual;
 - release notes/changelog reconciliation.
 
-The repository contains substantial historical readiness/deployment documentation, but this preflight did not identify a complete release-oriented manual set satisfying all items as one maintained package.
+The repository contains substantial historical readiness/deployment documentation, but a complete maintained release-oriented manual set has not yet been proven.
 
-### P-F8 — terminology and obsolete-file cleanup
+## P-F8 — terminology and obsolete-file cleanup
+
+**Status:** open.
 
 Required:
 
-- remove temporary/superseded artifacts only after evidence retention needs are checked;
+- remove temporary/superseded artifacts only after evidence-retention needs are checked;
 - normalize current product terminology;
 - ensure stale transition reports are clearly historical and cannot override current authority;
 - ensure release documentation points to the canonical readiness roadmap and current evidence bundle.
 
-## Release workflow gap summary
+## Remaining packaging gap summary
 
-Current release workflow: strong partial foundation.
+The major repository/CI-capable gaps are now:
 
-Still to add or independently prove before packaging closure:
-
-- Flake8;
-- Mypy;
-- pip-audit;
-- secret scan;
-- dependency inventory;
-- license inventory;
-- SBOM;
-- wheel-resource installed-package smoke;
-- public/private Docker image qualification;
-- immutable image/package digest evidence;
-- complete release-oriented operational manual set.
+1. secret scan gate;
+2. review/normalization of ambiguous dependency license metadata;
+3. public/private Docker image qualification after parity port;
+4. immutable image digest + container SBOM evidence;
+5. complete release-oriented operational manuals;
+6. terminology/obsolete-file cleanup;
+7. successful execution evidence for the newly wired release gates.
 
 ## Phase boundary
 
-General Packaging may be prepared now, but it must not be declared complete until repository reconciliation has been applied and both public/private build boundaries are qualified.
+General Packaging may continue in preparation, but it must not be declared complete until repository reconciliation has been applied and both public/private build boundaries are qualified.
 
-Real environment tests documented in `DEFERRED_REAL_ENVIRONMENT_READINESS_PROOFS_2026-08-19.md` remain outside this preflight and are not waived.
+Real-environment tests documented in `DEFERRED_REAL_ENVIRONMENT_READINESS_PROOFS_2026-08-19.md` remain outside this preflight and are not waived.
 
 Current state:
 
