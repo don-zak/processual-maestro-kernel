@@ -46,18 +46,20 @@ No later workspace may infer a `true` value from green CI alone. Each authority 
 - Delivered splash and console HTML are rewritten at the response boundary to qualification wording until production authority is independently granted.
 - Public browser responses carry `X-Content-Type-Options`, `X-Frame-Options`, HSTS, `Referrer-Policy`, `Permissions-Policy`, and a Content Security Policy.
 - CSP currently restricts external browser dependencies to the explicitly required Google Fonts and jsDelivr sources, blocks objects and framing, constrains forms/base/connect, and upgrades insecure requests.
+- Chart.js delivery is pinned to `4.5.1`; an unversioned `npm/chart.js` alias must not be reintroduced. SRI/self-hosting remains separate hardening work and must not be claimed until verified.
 - Current console/splash implementation still contains inline script/style behavior, therefore CSP temporarily requires `'unsafe-inline'` for script/style compatibility. Removing that exception requires a controlled extraction/nonce/hash migration and rendered-browser proof; do not delete it by assertion alone.
 - `X-XSS-Protection` is explicitly disabled (`0`); CSP is the browser content policy control.
 - Static source text, browser-delivered text, package metadata, and backend authority are separate review surfaces; rendered HTTP behavior is the release-relevant truth.
-- Browser automation, accessibility scan, viewport/support matrix, error/degraded-state journeys, and external asset pinning/self-hosting remain open qualification work.
+- Browser automation, accessibility scan, viewport/support matrix, error/degraded-state journeys, SRI/self-hosting, and remaining external-asset hardening remain open qualification work.
 
 ## Legacy component quarantine invariants
 
 - `docs/qualification/LEGACY_COMPONENT_QUARANTINE_REGISTER_R1.md` is the canonical parts-control register for superseded, compatibility-only, quarantined, active-legacy, and deletion-candidate components.
-- `processual_api/static/js/adapters/governor.js`, `processual_api/static/js/adapters/cgt.js`, `processual_api/static/js/pages/governor.js`, and `processual_api/static/js/pages/cgt.js` are `QUARANTINED_SOURCE`: retained in Git for review, removed from delivered console HTML, hidden from console navigation/page delivery, and direct HTTP requests return `410 Gone`.
+- `processual_api/static/js/adapters/governor.js`, `processual_api/static/js/adapters/cgt.js`, `processual_api/static/js/pages/governor.js`, and `processual_api/static/js/pages/cgt.js` are `QUARANTINED_SOURCE`: retained in Git for review, removed from delivered console HTML, hidden from console navigation/page delivery, direct HTTP requests return `410 Gone`, and the files are explicitly removed from the public Docker runtime image.
 - Quarantined source must not be reconnected merely to restore historical behavior. Replacement requires the sanitized opaque-reference evaluation path after real issuance/resolution exists.
 - `processual_api/billing/subscription_catalog.py` is `COMPATIBILITY_ONLY`; new production imports are forbidden by qualification tests and canonical code must use `processual_api.billing.pricing_catalog`.
-- `processual_api/routers/client_provider_alias_18.py` is `COMPATIBILITY_ONLY`; the current Settings UI uses `/settings/provider-connection`, while the deprecated alias remains only for controlled external compatibility. New internal application/UI dependencies on `/client/provider-connection` are forbidden by qualification tests.
+- `processual_api/routers/client_provider_alias_18.py` is `COMPATIBILITY_ONLY`; the current Settings UI uses `/settings/provider-connection`, while the deprecated alias remains only for controlled external compatibility and returns deprecation/link metadata. New internal application/UI dependencies on `/client/provider-connection` are forbidden by qualification tests.
+- `processual_api/billing/maestro_units.py::credits_from_maestro_units` is a `DELETE_CANDIDATE` only: no production caller was found, but external/public import compatibility must be checked before source removal. The separate legacy `credits` metric read/migration alias remains active and is not a deletion candidate.
 - `processual_api/routers/cgt_governor.py` remains `ACTIVE_LEGACY_DEBT`, not dead code and not a deletion candidate. It must not be partially amputated before opaque-reference issuance/resolution and dependent browser/router/report migrations are complete.
 - Deletion requires a dedicated evidence-bearing review proving no runtime, import, route, dynamic loader, migration, operator, test, documentation, external-compatibility, or rollback dependency remains.
 
@@ -87,11 +89,12 @@ The following are non-real-environment controls and must be re-proven on the exa
 - public/private error-surface regression proving generic private-evaluation errors and no exception-detail forwarding;
 - public wheel/sdist build, metadata validation, installed-wheel smoke, reference-data packaging checks, and private-source exclusion;
 - public Docker build and fail-closed trust-boundary smoke;
+- public Docker runtime-image exclusion of quarantined legacy browser sources;
 - public container CycloneDX and SPDX SBOM generation from the built image;
 - public container SBOM scan preventing private-module path leakage;
 - ephemeral PR image identity evidence without publishing an image or inventing a release digest;
 - public offer-to-registration plan/billing-period linkage regression;
-- delivered public UI authority-truth, package-metadata truth, CSP, and baseline browser-security regression;
+- delivered public UI authority-truth, package-metadata truth, CSP, pinned Chart.js delivery, and baseline browser-security regression;
 - rendered HTTP legacy-console quarantine regression and source-reconnection guards for compatibility-only components.
 
 The dependency-license inventory is evidence of package metadata only. It is not a legal license-compatibility opinion.
@@ -103,7 +106,7 @@ The dependency-license inventory is evidence of package metadata only. It is not
 - Private image qualification and private image SBOM remain private-trust-domain work.
 - Final configuration/deployment/operator/admin/customer/migration/incident documentation reconciliation and obsolete terminology cleanup remain open.
 - General Packaging cannot close while opaque-reference implementation/proof and legacy public/private boundary migration remain unresolved.
-- Browser qualification remains incomplete until automated rendered-page journeys, accessibility, viewport/support policy, network/error-state behavior, and CSP inline/external-asset hardening are reviewed and evidenced.
+- Browser qualification remains incomplete until automated rendered-page journeys, accessibility, viewport/support policy, network/error-state behavior, CSP inline reduction, SRI/self-hosting, and remaining external-asset hardening are reviewed and evidenced.
 - Compatibility-only and quarantined components remain in-tree until their explicit deletion gates pass; quarantine is not equivalent to deletion authority.
 
 ## Opaque-reference topology status
@@ -119,8 +122,8 @@ The dependency-license inventory is evidence of package metadata only. It is not
 ## Current blocking sequence
 
 1. Re-prove all current public CI gates on the exact current public head after any modification.
-2. Continue legacy-component inventory and quarantine: classify proven compatibility/obsolete surfaces, prevent new dependencies, and advance components to deletion candidates only after explicit dependency review.
-3. Continue public browser remediation: rendered journey tests, accessibility, supported viewport contract, error/degraded-state UX, CSP inline reduction, and external-asset pinning/self-hosting review.
+2. Continue legacy-component inventory and quarantine: classify proven compatibility/obsolete surfaces, prevent new dependencies, exclude quarantined sources from runtime artifacts, and advance components to deletion candidates only after explicit dependency review.
+3. Continue public browser remediation: rendered journey tests, accessibility, supported viewport contract, error/degraded-state UX, CSP inline reduction, SRI/self-hosting, and external-asset hardening.
 4. Review/approve or revise `OPAQUE_REFERENCE_TOPOLOGY_DECISION_R1.md`; only then define the shared-safe schema and public issuer interface.
 5. Implement private resolver/broker only in the private repository after private backing mapping is independently approved.
 6. Migrate remaining legacy raw-score/vector browser/router/report surfaces only after real reference issuance/resolution exists.
