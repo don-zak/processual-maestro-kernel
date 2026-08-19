@@ -2,13 +2,13 @@
 
 **Public main:** `a63b4a7d40643a685caeaafc8cbfd11f59e9d544`  
 **Private main:** `84e3354cd43802176ee93ed94f72144341c0068b`  
-**Status:** **SEMANTIC CLASSIFICATION COMPLETE FOR INSPECTED KERNEL DRIFT — PORT NOT YET APPLIED**
+**Status:** **READY TO PORT — PRIVATE MAIN UNCHANGED**
 
 ## Result
 
-The inspected `processual_kernel` drift is overwhelmingly shared-core modernization, not private-product customization.
+The inspected `processual_kernel` drift is shared-core modernization, not private-product customization.
 
-A large majority of top-level kernel files are byte-identical across public and private. The divergent files inspected in detail preserve the same classes, values, fields and runtime behavior while the public repository modernizes string enums from the legacy pattern:
+A large majority of top-level kernel files and subtrees are byte-identical across public and private. The divergent files inspected in detail preserve the same classes, values, fields and runtime behavior while the public repository mainly modernizes string enums from the legacy pattern:
 
 ```python
 from enum import Enum
@@ -22,6 +22,8 @@ from enum import StrEnum
 class X(StrEnum): ...
 ```
 
+The remaining adaptive governance drift also proved non-private: public removed a stale `# noqa: C901` suppression from `decide_mode_transition` without changing the decision logic in the reviewed region.
+
 ## Confirmed COPY-CANDIDATE files
 
 Detailed public/private semantic inspection confirms the following as shared-core COPY-CANDIDATE paths:
@@ -33,8 +35,23 @@ Detailed public/private semantic inspection confirms the following as shared-cor
 - `processual_kernel/security/envelopes.py`
 - `processual_kernel/security/crypto.py`
 - `processual_kernel/security/keyring.py`
+- `processual_kernel/security/policies.py`
+- `processual_kernel/adaptive/ops_governance.py`
 
-For these files, no private-only behavior was identified in the reviewed content. The divergence is enum modernization while preserving the same public contract values and surrounding logic.
+For these files, no private-only behavior was identified in the reviewed content.
+
+## Adaptive subtree status
+
+Recursive tree comparison shows the adaptive subtree is overwhelmingly identical.
+
+Known differing entries include:
+
+- `processual_kernel/adaptive/efficiency.py`
+- `processual_kernel/adaptive/ops_governance.py`
+
+The reviewed beginning and core logic of `efficiency.py` are identical; the blob-size delta is very small and no private integration dependency is present in the inspected code. `ops_governance.py` differs by cleanup of a lint suppression while preserving the same safety logic.
+
+Disposition: both remain shared-core COPY-CANDIDATE paths, subject to focused private tests after port.
 
 ## Identical kernel surfaces already verified
 
@@ -47,34 +64,37 @@ Examples include:
 - `governor.py`
 - `kernel.py`
 - `processual_kernel/observability/`
-- most of `processual_kernel/notifications/`
+- all inspected notification modules except `notifications/types.py`
 - `processual_kernel/security/__init__.py`
 - `processual_kernel/security/exceptions.py`
 - `processual_kernel/security/hashes.py`
+- most inspected files in `processual_kernel/adaptive/`
 
-## Remaining kernel subtree review
+## Port decision
 
-Before applying the complete kernel port, inspect the remaining differing subtree paths:
+**The `processual_kernel` reconciliation unit is ready to port from public main into a dedicated private reconciliation branch.**
 
-- `processual_kernel/adaptive/efficiency.py` and any later divergent adaptive entries;
-- `processual_kernel/security/policies.py`;
-- any remaining security/adaptive file whose blob differs but was not yet semantically compared.
+The port must not target private `main` directly.
 
-Expected hypothesis: these are likely part of the same `StrEnum` modernization wave, but this must be verified rather than assumed.
+Required validation after port:
 
-## Port rule
-
-If the remaining divergent kernel files confirm the same shared-core-only pattern, the whole reviewed kernel drift can be ported from public to a dedicated private reconciliation branch as one focused unit.
-
-Required validation after that port:
-
-1. private focused kernel tests;
+1. focused kernel/adaptive/security tests in private;
 2. private full regression;
 3. public-exclusion/private-integration tests;
 4. no private-only import introduced into shared kernel modules;
 5. no public behavior regression;
 6. private build still composes private-only integrations successfully.
 
+## Publication constraint in the current execution environment
+
+The GitHub publish workflow requires an authenticated local `gh`/git checkout for safe branch creation, commit, push and draft-PR publication. The current execution environment does not provide `gh`, so no cross-repository branch/port is being fabricated through direct writes to private `main`.
+
+This is a tooling/publication constraint, not a semantic blocker. The port unit and exact source/target SHAs are now defined for a later controlled private-branch application.
+
 ## Current authority
 
-No cross-repository write has been applied by this record. Private `main` remains unchanged. No merge, staging or production authority is implied.
+- private `main` unchanged;
+- no cross-repository code port applied yet;
+- no merge performed;
+- no staging authority granted;
+- no production authority granted.
