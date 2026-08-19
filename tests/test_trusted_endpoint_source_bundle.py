@@ -6,6 +6,7 @@ import json
 import httpx
 import pytest
 
+import processual_api.integrations.trusted_endpoint_source_acquisition as acquisition
 from processual_api.integrations.endpoint_discovery_quality import (
     canonical_api_description_sha256,
 )
@@ -263,6 +264,44 @@ async def test_bundle_file_limit_fails_closed() -> None:
             transport=httpx.MockTransport(handler),
             resolve_host=_public_resolver,
         )
+
+
+@pytest.mark.asyncio
+async def test_bundle_aggregate_byte_limit_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _root("../../common/health.yaml#/components/schemas/Health")
+    common = _common()
+    aggregate_limit = len(root) + len(common) - 1
+    assert len(root) < aggregate_limit
+    assert len(common) < aggregate_limit
+    monkeypatch.setattr(acquisition, "MAX_TRUSTED_SOURCE_BUNDLE_BYTES", aggregate_limit)
+
+    requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        if str(request.url).endswith("/openapi/releases/v1/openapi.yaml"):
+            return httpx.Response(200, content=root)
+        if str(request.url).endswith("/openapi/common/health.yaml"):
+            return httpx.Response(200, content=common)
+        return httpx.Response(404)
+
+    with pytest.raises(
+        TrustedEndpointSourceAcquisitionError,
+        match="trusted_source_bundle_size_invalid",
+    ):
+        await acquire_trusted_github_endpoint_source(
+            source_identity_id="standards.bundle",
+            source_revision=COMMIT,
+            source_path="openapi/releases/v1/openapi.yaml",
+            catalog=(_definition(),),
+            transport=httpx.MockTransport(handler),
+            resolve_host=_public_resolver,
+        )
+
+    assert requests == 2
 
 
 @pytest.mark.asyncio
