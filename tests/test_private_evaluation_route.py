@@ -11,6 +11,7 @@ from processual_api.integrations.private_evaluation_boundary import (
     SanitizedPrivateDecision,
 )
 from processual_api.integrations.private_evaluation_runtime import bind_private_evaluation_provider
+from processual_api.routers import cgt_governor_router
 from processual_api.routers.private_evaluation import (
     PrivateEvaluationEnvelope,
     PrivateEvaluationResponse,
@@ -113,3 +114,8 @@ def test_private_evaluation_route_keeps_evaluation_quota_guard() -> None:
     source = Path("processual_api/routers/private_evaluation.py").read_text("utf-8")
     assert '@router.post("/cgt/govern/evaluate"' in source
     assert 'Depends(require_quota("evaluation"))' in source
+
+
+def test_private_evaluation_route_is_registered_on_governor_router() -> None:
+    paths = {getattr(route, "path", "") for route in cgt_governor_router.routes}
+    assert "/cgt/govern/evaluate" in paths
