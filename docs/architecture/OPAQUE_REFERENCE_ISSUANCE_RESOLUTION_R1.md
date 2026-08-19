@@ -23,7 +23,7 @@ and returns exactly six sanitized decision fields:
 - `explanation_code`
 - `policy_version`
 
-This record does **not** select a storage backend, authorize a private runtime connector, or define proprietary mathematical inputs. It prevents an unsafe client migration that would invent references which the private trust domain cannot resolve.
+This record does **not** authorize a private runtime connector or define proprietary mathematical inputs. It prevents an unsafe client migration that would invent references which the private trust domain cannot resolve.
 
 ## Non-negotiable trust boundary
 
@@ -90,9 +90,19 @@ The following are architectural violations:
 - copying private records into public persistence merely to make resolution convenient;
 - silently falling back to public/local mathematical execution when resolution fails.
 
-## Required topology decision
+## Topology proposal now under review
 
-No concrete issuer/resolver implementation should be merged until one reviewed topology is selected. The decision must identify:
+`docs/architecture/OPAQUE_REFERENCE_TOPOLOGY_DECISION_R1.md` records the current **proposed, review-required, non-authoritative** topology:
+
+1. durable PostgreSQL persistence for shared-safe reference metadata only;
+2. a dedicated public issuer that generates bounded cryptographically random opaque tokens and enforces tenant/type/environment/lifecycle rules;
+3. controlled private resolution through a broker/service boundary implementing the private resolver protocol;
+4. Redis may assist with short-lived coordination/replay controls but is not the sole durable registry authority;
+5. browser-generated, hash-derived, or payload-derived references remain prohibited.
+
+The proposal intentionally does not select the exact private storage technology, network transport, secret authority, credentials, or production rollout.
+
+No concrete issuer/resolver implementation should be merged until the proposal is reviewed and accepted or revised. The accepted decision must still identify:
 
 1. the public/governance object that causes each reference type to be issued;
 2. the system of record for the public-safe reference registration;
@@ -103,13 +113,11 @@ No concrete issuer/resolver implementation should be merged until one reviewed t
 7. how local development and CI prove default-deny behavior without private source or real secrets;
 8. how Real Staging later proves the actual connector independently.
 
-Candidate topology categories may include a brokered reference registry or a controlled private-access API, but this record intentionally does not choose one without repository/deployment evidence.
-
 ## Migration sequence
 
-1. **Topology decision:** identify the actual systems of record and controlled private resolution path.
-2. **Public contract:** add a public-safe issuer/registry interface and tests; keep it independent of private modules.
-3. **Private implementation:** implement the corresponding `PrivateReferenceResolver` only in the private repository.
+1. **Topology review:** approve or revise `OPAQUE_REFERENCE_TOPOLOGY_DECISION_R1.md`.
+2. **Public contract:** define a public-safe registry schema and issuer interface with tests; keep it independent of private modules and private payloads.
+3. **Private implementation:** implement the corresponding `PrivateReferenceResolver` only in the private repository after the private backing mapping is independently reviewed.
 4. **Composition proof:** bind the private provider explicitly in a controlled non-production runtime and prove default deny when absent.
 5. **Client API:** add a ref-oriented client method that accepts already-issued `{formation_ref, evidence_ref, context_ref, evaluated_at}` and calls `/cgt/govern/evaluate`.
 6. **Legacy migration:** only after issuance/resolution exists, remove raw-score/vector behavior from the legacy browser/router path in controlled slices.
@@ -117,7 +125,7 @@ Candidate topology categories may include a brokered reference registry or a con
 
 ## Current decision state
 
-The repository currently proves the reference-only request contract and private resolver protocol, but no reviewed concrete issuance/registration/resolution topology has been established in this qualification work.
+The repository now has a concrete topology **proposal**, but it remains review-required and non-authoritative. No registry migration, public issuer implementation, private resolver backing mapping, broker transport, or real connector has been approved by this qualification work.
 
 Therefore:
 
