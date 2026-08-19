@@ -1,0 +1,76 @@
+name: CAMARA Public Source Contracts
+
+on:
+  pull_request:
+    paths:
+      - processual_api/integrations/camara_public_source_qualification.py
+      - processual_api/integrations/trusted_endpoint_source_acquisition.py
+      - tests/test_camara_public_source_qualification.py
+      - tests/test_trusted_endpoint_source_acquisition.py
+      - tests/test_trusted_endpoint_source_bundle.py
+      - .github/workflows/camara-qod-public-source-qualification.yml
+      - .github/workflows/camara-public-source-contracts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      APP_ENV: test
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install contract-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api]'
+
+      - name: Ruff public-source qualification slice
+        run: |
+          ruff check \
+            processual_api/integrations/camara_public_source_qualification.py \
+            processual_api/integrations/trusted_endpoint_source_acquisition.py \
+            tests/test_camara_public_source_qualification.py \
+            tests/test_trusted_endpoint_source_acquisition.py \
+            tests/test_trusted_endpoint_source_bundle.py
+
+      - name: Run public-source qualification contracts
+        run: |
+          pytest -q \
+            tests/test_camara_public_source_qualification.py \
+            tests/test_trusted_endpoint_source_acquisition.py \
+            tests/test_trusted_endpoint_source_bundle.py
+
+      - name: Record contract boundary
+        if: always()
+        run: |
+          mkdir -p qualification-evidence
+          {
+            echo "workflow=CAMARA Public Source Contracts"
+            echo "camara_public_source_runner_tests=true"
+            echo "manual_live_workflow_contract_present=true"
+            echo "trusted_source_live_fetch=false"
+            echo "production_credentials=false"
+            echo "external_provider_credentials=false"
+            echo "external_provider_network_proof=false"
+            echo "runtime_connector_approved=false"
+            echo "production_allowed=false"
+          } > qualification-evidence/environment.txt
+
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: camara-public-source-contracts
+          path: qualification-evidence/
