@@ -10,6 +10,10 @@ or stdout. This probe obtains a CIBA auth_req_id, exchanges it for an access
 token, then exercises the subscribed QoD Mobile Request Service Provisioning
 surface using a deterministic mock-safe session lifecycle.
 
+The QoD route is taken from Telefonica's interactive API reference for
+"Create QoD session v0.10": {host}/qod/v0/sessions, where the sandbox host/base
+is https://sandbox.opengateway.telefonica.com/apigateway.
+
 This proves only authenticated external sandbox/mock interoperability. It does
 NOT grant provider network proof, runtime connector approval, or production
 authority, and it does not alter the governed CAMARA QoD v1.1.0 contract.
@@ -29,7 +33,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $Gateway = 'https://sandbox.opengateway.telefonica.com/apigateway'
-$BaseUri = "$Gateway/ogw/qod/v0"
+$BaseUri = "$Gateway/qod/v0"
 $ClientId = [Environment]::GetEnvironmentVariable('TELEFONICA_CLIENT_ID')
 $ClientSecret = [Environment]::GetEnvironmentVariable('TELEFONICA_CLIENT_SECRET')
 
@@ -169,6 +173,7 @@ $addresses = [Net.Dns]::GetHostAddresses('sandbox.opengateway.telefonica.com') |
 
 Write-Host '==> Telefonica QoD CIBA + session lifecycle probe'
 Write-Host "Gateway: $Gateway"
+Write-Host "QoD base: $BaseUri"
 Write-Host "Scope: $Scope"
 Write-Host "Login hint: $LoginHint"
 Write-Host '[PASS] Client credentials loaded from environment (values not printed).'
@@ -232,9 +237,9 @@ if (-not [string]::IsNullOrWhiteSpace($accessToken)) {
     }
     $createBody = $createBodyObject | ConvertTo-Json -Depth 10 -Compress
 
-    Write-Host '==> POST /ogw/qod/v0/sessions'
+    Write-Host '==> POST /qod/v0/sessions'
     $create = Invoke-BearerRequest -Method 'POST' -Uri "$BaseUri/sessions" -AccessToken $accessToken -Body $createBody
-    $createRecord = Add-Record -Records $records -Name 'create_qod_session' -Method 'POST' -Path '/ogw/qod/v0/sessions' -Result $create -ExpectedStatuses @(201) -Extra @{ request_body_sha256 = (Get-Sha256Hex -Value $createBody); synthetic_mock_test_data = $true }
+    $createRecord = Add-Record -Records $records -Name 'create_qod_session' -Method 'POST' -Path '/qod/v0/sessions' -Result $create -ExpectedStatuses @(201) -Extra @{ request_body_sha256 = (Get-Sha256Hex -Value $createBody); synthetic_mock_test_data = $true }
     Write-Host "[$(if ($createRecord.passed) { 'PASS' } else { 'FAIL' })] HTTP $($create.status)"
     if (-not $createRecord.passed -and $createRecord.sanitized_error_preview) {
         Write-Host "  body: $($createRecord.sanitized_error_preview)"
@@ -253,15 +258,15 @@ if (-not [string]::IsNullOrWhiteSpace($accessToken)) {
         $escapedSessionId = [Uri]::EscapeDataString($sessionId)
         $sessionHash = Get-Sha256Hex -Value $sessionId
 
-        Write-Host '==> GET /ogw/qod/v0/sessions/{sessionId}'
+        Write-Host '==> GET /qod/v0/sessions/{sessionId}'
         $getSession = Invoke-BearerRequest -Method 'GET' -Uri "$BaseUri/sessions/$escapedSessionId" -AccessToken $accessToken
-        $getRecord = Add-Record -Records $records -Name 'get_qod_session' -Method 'GET' -Path '/ogw/qod/v0/sessions/{sessionId}' -Result $getSession -ExpectedStatuses @(200) -Extra @{ session_id_sha256 = $sessionHash }
+        $getRecord = Add-Record -Records $records -Name 'get_qod_session' -Method 'GET' -Path '/qod/v0/sessions/{sessionId}' -Result $getSession -ExpectedStatuses @(200) -Extra @{ session_id_sha256 = $sessionHash }
         Write-Host "[$(if ($getRecord.passed) { 'PASS' } else { 'FAIL' })] HTTP $($getSession.status)"
         if (-not $getRecord.passed -and $getRecord.sanitized_error_preview) { Write-Host "  body: $($getRecord.sanitized_error_preview)" }
 
-        Write-Host '==> DELETE /ogw/qod/v0/sessions/{sessionId}'
+        Write-Host '==> DELETE /qod/v0/sessions/{sessionId}'
         $deleteSession = Invoke-BearerRequest -Method 'DELETE' -Uri "$BaseUri/sessions/$escapedSessionId" -AccessToken $accessToken
-        $deleteRecord = Add-Record -Records $records -Name 'delete_qod_session' -Method 'DELETE' -Path '/ogw/qod/v0/sessions/{sessionId}' -Result $deleteSession -ExpectedStatuses @(204, 200) -Extra @{ session_id_sha256 = $sessionHash }
+        $deleteRecord = Add-Record -Records $records -Name 'delete_qod_session' -Method 'DELETE' -Path '/qod/v0/sessions/{sessionId}' -Result $deleteSession -ExpectedStatuses @(204, 200) -Extra @{ session_id_sha256 = $sessionHash }
         Write-Host "[$(if ($deleteRecord.passed) { 'PASS' } else { 'FAIL' })] HTTP $($deleteSession.status)"
         if (-not $deleteRecord.passed -and $deleteRecord.sanitized_error_preview) { Write-Host "  body: $($deleteRecord.sanitized_error_preview)" }
     }
@@ -284,6 +289,8 @@ $summary = [ordered]@{
     provider = 'telefonica_open_gateway'
     environment = 'sandbox_mock_candidate'
     authorization_flow = 'CIBA'
+    qod_route_source = 'telefonica_interactive_api_reference_create_qod_session_v0_10'
+    qod_base_uri = $BaseUri
     scope = $Scope
     login_hint = $LoginHint
     client_id_sha256 = Get-Sha256Hex -Value $ClientId
