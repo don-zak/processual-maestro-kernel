@@ -1,61 +1,38 @@
 # Public / Private Repository Reconciliation Matrix — 2026-08-19
 
 **Public repository:** `don-zak/processual-maestro-kernel`  
-**Public main at review:** `a63b4a7d40643a685caeaafc8cbfd11f59e9d544`  
+**Public baseline inspected:** `a63b4a7d40643a685caeaafc8cbfd11f59e9d544`  
 **Private repository:** `don-zak/processual-maestro-kernel-private`  
-**Private main at review:** `84e3354cd43802176ee93ed94f72144341c0068b`  
-**Status:** **RECONCILIATION IN PROGRESS — NO CROSS-REPOSITORY PORT APPLIED YET**
+**Private baseline inspected:** `84e3354cd43802176ee93ed94f72144341c0068b`  
+**Status:** **TRUST-BOUNDARY RECONCILIATION IN PROGRESS — NO REPOSITORY MIRRORING AUTHORIZED**
 
 ## Purpose
 
-Classify repository drift before porting the latest approved public core into the private baseline. The goal is to preserve private-only integrations while preventing the private repository from silently freezing an older public core.
+Classify repository drift while preserving an intentional trust boundary: the private repository is the proprietary mathematical execution environment, while the public repository owns governance, orchestration and public-safe contracts.
 
-This record does not authorize merge, release, staging or production.
+This matrix does not authorize merge, release, staging, production, whole-tree synchronization, or exposure of private source.
 
 ## Classification vocabulary
 
-- **COPY-CANDIDATE** — shared public-core path whose private equivalent should normally converge to the approved public version after focused tests.
-- **MERGE-CANDIDATE** — shared path with private-specific behavior; requires semantic merge rather than overwrite.
-- **PRIVATE-PRESERVE** — private-only material that must remain absent from public and must not be deleted during public-core porting.
-- **PUBLIC-ONLY / REVIEW** — public functionality absent from the private top-level surface; determine whether it belongs in the private product baseline before porting.
-- **IDENTICAL** — same blob/tree identity at the inspected boundary.
+- **SHARED_PUBLIC_SAFE** — non-proprietary common code/data that may intentionally converge after focused semantic review and tests.
+- **PRIVATE_PRESERVE** — proprietary/private implementation that must remain absent from public source, package, image, logs and evidence.
+- **BOUNDARY_ADAPTER** — controlled mediation between public governance and private execution; public input is bounded/opaque and output is strictly sanitized.
+- **ARCHITECTURAL_VIOLATION** — any path that mixes public governance with private implementation, discovers private modules from public code, performs protected math as a public fallback, or exposes prohibited intermediate/private data.
+- **IDENTICAL** — same blob/tree identity at the inspected boundary; identity alone does not determine whether future changes remain shared-safe.
+
+Historical labels such as `COPY-CANDIDATE`, `MERGE-CANDIDATE` and broad "parity" are superseded where they conflict with these classifications.
 
 ## 1. Root-level findings
 
-### Identical examples
+Several repository-control files were identical at the inspected baselines, including examples such as `.dockerignore`, `.flake8`, `.gitattributes`, `.pre-commit-config.yaml`, `CHANGELOG.md`, `CONTRIBUTING.md`, and `EXTERNAL_READINESS_REPORT.md`.
 
-The root inventory shows exact shared blobs for several repository-control files, including examples such as:
+Differences in `.env.example`, `.env.production.example`, `.gitignore`, `.github/`, `DEPLOYMENT_EXTERNAL.md`, and `Dockerfile` require semantic review. They are not automatically port candidates because build/deployment differences may encode the intentional private trust context.
 
-- `.dockerignore`
-- `.flake8`
-- `.gitattributes`
-- `.pre-commit-config.yaml`
-- `CHANGELOG.md`
-- `CONTRIBUTING.md`
-- `EXTERNAL_READINESS_REPORT.md`
+## 2. `processual_kernel`
 
-These demonstrate substantial shared ancestry/core.
+Most inspected kernel files/subtrees share common ancestry and many are byte-identical. Reviewed differences such as `Enum` modernization and lint cleanup may qualify as **SHARED_PUBLIC_SAFE**.
 
-### MERGE-CANDIDATE root paths
-
-The following root paths differ and must not be overwritten blindly:
-
-- `.env.example`
-- `.env.production.example`
-- `.gitignore`
-- `.github/`
-- `DEPLOYMENT_EXTERNAL.md`
-- `Dockerfile`
-
-Reason: environment/runtime/build differences can encode private deployment behavior or newer public security/configuration contracts. Each requires semantic comparison.
-
-## 2. `processual_kernel` findings
-
-The kernel reconciliation unit has now been semantically classified **READY TO PORT**.
-
-Most kernel files/subtrees are byte-identical. Reviewed differences are shared-core modernization rather than private behavior, principally `str, Enum` → `StrEnum`, plus minor lint cleanup.
-
-Confirmed COPY-CANDIDATE examples:
+Previously reviewed examples include:
 
 - `processual_kernel/audit.py`
 - `processual_kernel/types.py`
@@ -66,148 +43,164 @@ Confirmed COPY-CANDIDATE examples:
 - `processual_kernel/security/keyring.py`
 - `processual_kernel/security/policies.py`
 - `processual_kernel/adaptive/ops_governance.py`
-- reviewed adaptive efficiency drift
 
 Detailed record:
 
 `docs/qualification/PUBLIC_PRIVATE_KERNEL_RECONCILIATION_UNIT_2026-08-19.md`
 
-Private main remains unchanged.
+**Current classification:** reviewed common files may be `SHARED_PUBLIC_SAFE`; no unit-wide blind port is authorized. Any dependency on proprietary mathematical/provider state requires reclassification.
 
-## 3. `cgtlib` findings
+## 3. `cgtlib`
 
-Most CGT formal-core modules are shared exactly, but a genuine private-engine boundary exists.
+`cgtlib` is explicitly split by trust role; it is not one parity unit.
 
-### IDENTICAL examples
-
-- `cgtlib/aftermath.py`
-- `batch.py`
-- `benchmark_surfaces.py`
-- `catalogs.py`
-- `comparative_envelopes.py`
-- `compatibility.py`
-- `constants.py`
-- `errors.py`
-- `evaluators.py`
-- `reference_data.py`
-
-### Shared-core COPY/MERGE candidates
-
-- `cgtlib/api.py` — private still embeds the stable API tuple; public delegates it to `_stable_api.py` and exposes newer reference-data API.
-- `cgtlib/_stable_api.py` — present in public, absent from private; should be added during private core port.
-- `cgtlib/_fallback.py` — public imports stable API from dependency-light `_stable_api.py`; private still imports it through `api.py`.
-- `cgtlib/__init__.py` — reconcile shared exports while preserving private-engine composition behavior.
-
-### PRIVATE-PRESERVE
-
-The genuine private boundary is:
+### `PRIVATE_PRESERVE`
 
 - `cgtlib/private/`
 
-including private compute/equation/calibration/threshold modules. It must remain private and absent from public builds.
+This path contains the proprietary engine boundary and must remain private. It must not be copied into public source/artifacts or used as a public import dependency.
 
-### Corrected classification: `cgtlib/data/`
+### `SHARED_PUBLIC_SAFE`
 
-`cgtlib/data/` is **not private-only**. Both repositories contain identical `cgtlib/reference_data.py`, which requires `cgtlib.data/reference_scenarios.json` through `importlib.resources`.
-
-Private contained the canonical non-secret resource package while public main did not. The public qualification branch has therefore restored:
+`cgtlib/data/` canonical reference resources were reviewed as non-secret product data. The public qualification branch restores:
 
 - `cgtlib/data/__init__.py`
 - `cgtlib/data/reference_scenarios.json`
-- `tests/test_cgtlib_reference_data_packaging.py`
+- package-data declaration and regression coverage.
 
-The data contains only canonical formal-core scenarios and is shared product material.
+Shared API declarations/reference-data helpers may also qualify after file-level review.
+
+### Resolved `ARCHITECTURAL_VIOLATION`
+
+The public qualification branch discovered public `cgtlib` modules that imported `cgtlib.private` directly. Those public dependencies were removed. Public protected operations now use a fail-closed public surface rather than a proprietary fallback, and the public package explicitly reports `_HAS_PRIVATE=False`.
+
+Mandatory continuing tests prove:
+
+- public imports work with private modules absent;
+- public wheels exclude `cgtlib/private/`;
+- protected operations fail closed rather than reproduce protected math;
+- canonical shared data remains available in the installed wheel.
 
 Detailed record:
 
 `docs/qualification/PUBLIC_PRIVATE_CGTLIB_RECONCILIATION_UNIT_2026-08-19.md`
 
-## 4. `processual_api` findings
+## 4. `processual_api`
 
-This is the highest-risk reconciliation surface.
+This remains the highest-risk reconciliation surface because public governance and historical CGT computation have been co-located.
 
-### IDENTICAL inspected boundary
+### Public governance/security authority — generally `SHARED_PUBLIC_SAFE` or public-only authority
 
-- `processual_api/__init__.py`
-- `processual_api/adapters/`
-- `processual_api/cache/`
+Examples:
 
-### Shared but divergent — MERGE/COPY review required
+- authentication/security governance;
+- Admin Marketplace;
+- billing/commercial/quota/pricing authority;
+- database/persistence for public product state;
+- integration admission/qualification/control plane;
+- readiness and execution governance.
 
-Private and public both contain, but with different tree/blob identities:
+Absence of these modules from the private repository is **not automatically drift**. They should not be copied merely to make private resemble public. Private execution should consume only the governed references/contracts it actually requires.
 
-- `processual_api/auth/`
-- `processual_api/billing/`
-- `processual_api/cgt_governor/`
-- `processual_api/db/`
-- `processual_api/dependencies.py`
-- `processual_api/integrations/`
-- `processual_api/main.py`
-- middleware/router/schema/service/static surfaces as discovered in deeper comparison
+### `PRIVATE_PRESERVE`
 
-`processual_api/main.py` is especially high risk: the public and private file sizes differ substantially, so it must be semantically merged around router/runtime registration rather than copied.
-
-### PUBLIC-ONLY / REVIEW at inspected top-level
-
-Public exposes newer/expanded top-level surfaces including:
-
-- `processual_api/admin_marketplace/`
-- `processual_api/admin_audit_log.py`
-- `processual_api/api_readiness.py`
-- `processual_api/api_readiness_gate.py`
-- `processual_api/execution/`
-
-These must be checked against private product architecture. If private is intended to contain the complete public product plus private integrations, absence is drift and they become port candidates.
-
-### PRIVATE-PRESERVE
-
-Private contains private-only surfaces including:
-
-- `processual_api/data/`
 - `processual_api/private_integrations/`
+- private mathematical/provider execution modules;
+- private deployment-only composition that knows those modules.
 
-These must not be introduced into the public repository and must not be deleted during private reconciliation unless deeper semantic review proves a path is actually shared product data, as happened with `cgtlib/data`.
+These must remain absent from public artifacts.
 
-## 5. Public-exclusion invariant
+### `BOUNDARY_ADAPTER`
 
-Reconciliation must preserve:
+The public qualification branch now contains a neutral `processual_api/integrations/private_evaluation_boundary.py` contract. It has no private implementation discovery and accepts only bounded opaque references. Its result is restricted to:
 
-1. genuine private-only paths remain private;
-2. public build/test/package output contains no private engine/integration modules;
-3. shared public core can be ported into private without converting private-only code into public dependencies;
-4. private entrypoints may compose private modules, but shared modules remain usable when private modules are absent.
+- `existence_rank`
+- `dominant_constraint`
+- `next_gate`
+- `confidence_band`
+- `explanation_code`
+- `policy_version`
 
-## 6. Safe port order
+The private repository retains private-side adapter composition on Draft PR #49. Private provider knowledge belongs there, not in public code.
 
-Do not perform a repository-wide copy.
+### `processual_api/main.py`
 
-1. `processual_kernel` — classification complete, ready to port on a dedicated private branch.
-2. `cgtlib` — port shared API/fallback contract while preserving `cgtlib/private/`; public package-data defect repaired on qualification branch.
-3. reconcile `processual_api/auth` and `billing` against newer public contracts.
-4. reconcile `processual_api/admin_marketplace`, readiness and execution surfaces into private if product parity requires them.
-5. semantically merge `processual_api/integrations` and `main.py` around private-only registrations.
-6. reconcile Alembic migrations and confirm one coherent private migration head.
-7. reconcile CI/build/container configuration without removing private build requirements.
-8. run private full suite plus public-exclusion checks.
-9. build both public and private images.
-10. retain exact drift/evidence report before declaring repository reconciliation closed.
+The prior recommendation to start private composition from public `main.py` and reinsert private routers is superseded.
 
-## 7. Current decision
+Current rule:
 
-**Repository reconciliation is not yet closed.**
+- public app remains independently runnable with no source-level private discovery;
+- private deployment may compose private modules only inside the private trust domain;
+- protected public operations fail closed when private execution authority/provider is unavailable.
 
-Unsafe strategies remain rejected:
+### Public CGT governor operational path
 
-- copying the entire public repository over private;
-- preserving all private shared-core drift merely because it exists in the private repository.
+A legacy public governor path historically performed local score/vector/reward computation. Under the adopted trust-boundary architecture, that path cannot be an implicit substitute for private protected execution.
 
-The current execution unit is deep comparison of `processual_api/auth` and `processual_api/billing`.
+The qualification branch now makes legacy `govern_answer()` fail closed and adds `govern_sanitized_decision()` for public policy/repair orchestration from the approved sanitized decision contract. Further router/API migration away from raw score/vector responses remains an open reconciliation item.
 
-## 8. Authority state
+Historical public heuristic/formal-core source is not automatically declared identical to proprietary private mathematics merely because mathematical terms overlap; classification must be evidence-based. However it is non-authoritative for private protected runtime execution.
 
-- no cross-repository code port performed;
-- private `main` unchanged;
-- no merge performed;
-- no staging authority granted;
-- no production authority granted;
-- deferred real-environment proof backlog remains mandatory.
+## 5. Public-exclusion and non-leakage invariants
+
+Reconciliation must preserve all of the following:
+
+1. private-only source remains private;
+2. public source/build/package/image contains no private implementation modules;
+3. public runtime does not import, discover or introspect private modules;
+4. public builds and tests work when private modules are absent;
+5. protected evaluation fails closed if private execution is unavailable;
+6. no private equation/weight/threshold/calibration/vector/intermediate state crosses the boundary;
+7. provider exceptions are collapsed to generic public errors;
+8. public logs/traces/telemetry/evidence do not retain private internals;
+9. public auth/billing/commercial authority is not duplicated inside private merely for parity;
+10. private implementation differences are intentional unless separately classified as shared/public-safe drift.
+
+## 6. Current controlled reconciliation order
+
+No repository-wide copy is permitted.
+
+1. enforce source/package/runtime trust-boundary tests;
+2. remove/isolate public runtime dependencies on private implementation;
+3. qualify the neutral public boundary and private-side sanitized adapter;
+4. migrate public operational governor/API paths away from raw vector/score contracts toward sanitized decisions;
+5. reconcile only file-level `SHARED_PUBLIC_SAFE` kernel/formal-core drift;
+6. keep public auth/Admin Marketplace/billing/quota/pricing as public authority unless deployment topology proves a private co-location requirement;
+7. reconcile build/configuration separately for public and private trust contexts;
+8. qualify public and private artifacts independently;
+9. retain exact digest/evidence records without copying private source into public evidence.
+
+## 7. Private Draft PR boundary status
+
+Private branch `agent/private-public-trust-boundary-r1` and Draft PR #49 are dedicated to boundary qualification. They do not modify private mathematical formulas or grant runtime/staging/production authority.
+
+The private adapter is explicitly private-side only, exposes the six-field sanitized result surface, and is being hardened so private provider exception details do not cross its boundary.
+
+No merge is authorized by this matrix.
+
+## 8. Current decision
+
+**Repository reconciliation remains open.**
+
+Rejected strategies include:
+
+- copying public over private;
+- copying private implementation into public;
+- treating every public-only product module as missing private parity;
+- conditional private-module imports from public runtime;
+- local public protected-math fallback when the private provider is unavailable;
+- returning raw private vectors/intermediate scores through public APIs or evidence.
+
+Primary open runtime item: migrate remaining CGT governor/router/gateway surfaces that expose or rely on legacy raw score/vector contracts to the sanitized decision boundary without weakening public governance functions.
+
+## 9. Authority state
+
+`RepositoryReconciliationComplete=false`
+
+`PrivateRuntimeAuthorityGranted=false`
+
+`RealStagingQualified=false`
+
+`ProductionAuthorityGranted=false`
+
+No merge, staging mutation, production mutation, or real-environment proof is authorized by this record. Deferred real-environment proof remains mandatory.
