@@ -121,6 +121,41 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Verify packaged reference data
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          wheels = sorted(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              assert "cgtlib/data/reference_scenarios.json" in archive.namelist()
+          PY
+
+      - name: Smoke test installed wheel resources
+        shell: bash
+        run: |
+          python -m venv /tmp/pmk-wheel-smoke
+          /tmp/pmk-wheel-smoke/bin/python -m pip install --upgrade pip
+          /tmp/pmk-wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/pmk-wheel-smoke/bin/python - <<'PY'
+          from cgtlib.reference_data import (
+              list_reference_dataset_ids,
+              load_reference_scenario_record,
+          )
+
+          assert list_reference_dataset_ids() == (
+              "balanced_transition_band",
+              "stress_recovery_band",
+              "boundary_lock_band",
+          )
+          record = load_reference_scenario_record("boundary_lock_band")
+          assert record.scenario_pack.transitions
+          PY
+
       - name: Check package metadata
         run: python -m twine check dist/*
 
