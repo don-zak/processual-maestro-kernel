@@ -21,6 +21,23 @@ def test_production_code_does_not_import_compatibility_subscription_catalog() ->
     assert offenders == []
 
 
+def test_production_code_does_not_depend_on_deprecated_provider_alias_route() -> None:
+    forbidden = "/client/provider-connection"
+    alias_path = PROCESSUAL_API / "routers/client_provider_alias_18.py"
+    offenders: list[str] = []
+
+    for path in PROCESSUAL_API.rglob("*"):
+        if not path.is_file() or path.suffix not in {".py", ".js", ".html"}:
+            continue
+        if path == alias_path:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if forbidden in text:
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
 def test_quarantined_console_assets_remain_present_only_for_review() -> None:
     paths = (
         "processual_api/static/js/adapters/governor.js",
