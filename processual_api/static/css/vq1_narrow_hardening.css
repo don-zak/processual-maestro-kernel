@@ -68,6 +68,31 @@
     white-space: normal;
   }
 
+  #page-settings .sl18-panel[data-sl18-panel="integration"] > :is(
+    #set-enterprise-console-card,
+    #set-enterprise-integration-eligibility-card,
+    #set-api-key-integration-card,
+    #set-integration-readiness-card,
+    #set-client-integration-guide-card
+  ) {
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    transform: none !important;
+    overflow: hidden !important;
+  }
+
+  #page-settings .sl18-panel[data-sl18-panel="integration"] .settings-grid,
+  #page-settings .sl18-panel[data-sl18-panel="integration"] .sl18-enterprise-stages,
+  #page-settings .sl18-panel[data-sl18-panel="integration"] [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
   .card,
   .settings-card,
   .admin-subscription-analytics-card,
