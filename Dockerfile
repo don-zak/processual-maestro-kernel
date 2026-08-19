@@ -20,6 +20,19 @@ COPY cgtlib ./cgtlib
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
 
+# Legacy raw-math browser sources are retained in Git for review/history only.
+# They are deliberately absent from the runtime image; HTTP compatibility
+# tombstones are enforced by SecurityHeadersMiddleware at their former paths.
+RUN rm -f \
+    processual_api/static/js/adapters/governor.js \
+    processual_api/static/js/adapters/cgt.js \
+    processual_api/static/js/pages/governor.js \
+    processual_api/static/js/pages/cgt.js \
+    && test ! -e processual_api/static/js/adapters/governor.js \
+    && test ! -e processual_api/static/js/adapters/cgt.js \
+    && test ! -e processual_api/static/js/pages/governor.js \
+    && test ! -e processual_api/static/js/pages/cgt.js
+
 RUN test ! -d cgtlib/private \
     && test ! -d processual_api/private_integrations \
     && pip install --no-cache-dir --upgrade pip \
