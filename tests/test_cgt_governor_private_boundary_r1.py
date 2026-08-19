@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import fields
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import processual_api.cgt_governor.gateway.engine as gateway_module
+from processual_api.cgt_governor.gateway.models import AgentState
 from processual_api.cgt_governor.governor import (
     SanitizedGovernedAnswer,
     govern_answer,
@@ -83,6 +86,40 @@ def test_public_governor_source_does_not_import_local_math_pipeline() -> None:
         "cgt_reward(",
         "premature_speed_risk(",
         "mature_speed_value(",
+    )
+    for token in forbidden:
+        assert token not in source
+
+
+def test_active_gateway_fails_before_local_analysis_or_vector_generation(monkeypatch) -> None:
+    class _Registry:
+        @staticmethod
+        def get(agent_id: str) -> SimpleNamespace:
+            assert agent_id == "agent-1"
+            return SimpleNamespace(state=AgentState.ACTIVE)
+
+    monkeypatch.setattr(gateway_module, "gateway_registry", _Registry())
+
+    with pytest.raises(PrivateEvaluationUnavailableError) as exc_info:
+        gateway_module.GatewayEngine.evaluate(
+            "agent-1",
+            "query content",
+            "agent response",
+            language="en",
+        )
+
+    assert str(exc_info.value) == "private_evaluation_unavailable"
+
+
+def test_public_gateway_source_has_no_legacy_analysis_vector_pipeline() -> None:
+    source = Path("processual_api/cgt_governor/gateway/engine.py").read_text("utf-8")
+    forbidden = (
+        "from ..analyzer import",
+        "from ..governor import govern_answer",
+        "analyze_cgt(",
+        "result.fate",
+        "add_evaluation(",
+        "sign_response(",
     )
     for token in forbidden:
         assert token not in source
