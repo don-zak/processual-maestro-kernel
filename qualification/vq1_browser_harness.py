@@ -106,9 +106,11 @@ def establish_qualification_session(page: Page) -> None:
     if not token:
         raise RuntimeError("qualification login response did not include access_token")
 
+    token_literal = json.dumps(token)
     page.add_init_script(
-        """
-        token => {
+        f"""
+        (() => {{
+          const token = {token_literal};
           sessionStorage.setItem('maestro_descent_gate_seen', '1');
           sessionStorage.setItem('maestro_entry_mode', 'admin');
           sessionStorage.setItem('maestro_role', 'admin');
@@ -116,9 +118,8 @@ def establish_qualification_session(page: Page) -> None:
           sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
           localStorage.removeItem('maestro_token');
           localStorage.removeItem('maestro_role');
-        }
-        """,
-        token,
+        }})();
+        """
     )
 
 
