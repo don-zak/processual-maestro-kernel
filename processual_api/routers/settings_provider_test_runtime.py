@@ -4,7 +4,7 @@ import os
 import time
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.routing import APIRoute
 
 from processual_api.auth.security import get_current_user
@@ -139,8 +139,13 @@ async def test_provider_connection_runtime(
 )
 async def test_legacy_llm_provider_runtime(
     body: LLMProviderConfig,
+    response: Response,
     current_user: dict = Depends(get_current_user),
 ) -> TestConnectionResult:
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = (
+        '</settings/provider-connection/test>; rel="successor-version"'
+    )
     return await run_provider_connection_test(body, current_user)
 
 
