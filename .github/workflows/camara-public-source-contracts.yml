@@ -8,9 +8,11 @@ on:
       - processual_api/integrations/trusted_endpoint_source_acquisition.py
       - processual_api/routers/__init__.py
       - processual_api/routers/settings_camara_qod_qualification_status.py
+      - processual_api/static/js/admin_integration_center_18.js
       - tests/test_camara_public_source_qualification.py
       - tests/test_camara_qod_semantic_mapping.py
       - tests/test_camara_qod_qualification_status_route.py
+      - tests/test_stage18_integration_center_ui_r1.py
       - tests/test_trusted_endpoint_source_acquisition.py
       - tests/test_trusted_endpoint_source_bundle.py
       - .github/workflows/camara-qod-public-source-qualification.yml
@@ -51,6 +53,7 @@ jobs:
             tests/test_camara_public_source_qualification.py \
             tests/test_camara_qod_semantic_mapping.py \
             tests/test_camara_qod_qualification_status_route.py \
+            tests/test_stage18_integration_center_ui_r1.py \
             tests/test_trusted_endpoint_source_acquisition.py \
             tests/test_trusted_endpoint_source_bundle.py
 
@@ -60,6 +63,7 @@ jobs:
             tests/test_camara_public_source_qualification.py \
             tests/test_camara_qod_semantic_mapping.py \
             tests/test_camara_qod_qualification_status_route.py \
+            tests/test_stage18_integration_center_ui_r1.py \
             tests/test_trusted_endpoint_source_acquisition.py \
             tests/test_trusted_endpoint_source_bundle.py
 
@@ -73,6 +77,7 @@ jobs:
             echo "camara_qod_semantic_mapping_tests=true"
             echo "camara_qod_semantic_drift_tests=true"
             echo "camara_qod_safe_status_route_tests=true"
+            echo "camara_qod_route_backed_ui_tests=true"
             echo "camara_qod_network_assurance_reuse=false"
             echo "camara_qod_runtime_task_registered=false"
             echo "manual_live_workflow_contract_present=true"
