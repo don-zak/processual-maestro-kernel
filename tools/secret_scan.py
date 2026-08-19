@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import argparse
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -65,11 +62,16 @@ _TEST_FIXTURE_LINE_MARKERS = (
 _CREDENTIAL_NAME = r"(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)"
 
 
-@dataclass(frozen=True, slots=True)
 class SecretFinding:
-    path: str
-    line: int
-    rule: str
+    __slots__ = ("path", "line", "rule")
+
+    def __init__(self, *, path: str, line: int, rule: str) -> None:
+        self.path = path
+        self.line = line
+        self.rule = rule
+
+    def __repr__(self) -> str:
+        return f"SecretFinding(path={self.path!r}, line={self.line!r}, rule={self.rule!r})"
 
 
 _PRIVATE_KEY_RULE = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
