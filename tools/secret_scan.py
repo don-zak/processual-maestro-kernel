@@ -13,7 +13,9 @@ _TEXT_SUFFIXES = {
     ".env",
     ".ini",
     ".json",
+    ".key",
     ".md",
+    ".pem",
     ".py",
     ".toml",
     ".txt",
@@ -60,7 +62,7 @@ class SecretFinding:
 _PRIVATE_KEY_RULE = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 _CREDENTIAL_ASSIGNMENT_RULE = re.compile(
     r"(?i)\b(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)\b"
-    r"\s*(?:=|:)\s*[\"']([^\"']{12,})[\"']"
+    r"\s*(?:=|:)\s*(?:[\"']([^\"']{12,})[\"']|([^\s#,'\"]{12,}))"
 )
 _HIGH_CONFIDENCE_TOKEN_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b")),
@@ -91,8 +93,10 @@ def scan_text(text: str, *, path: str = "<memory>") -> list[SecretFinding]:
             findings.append(SecretFinding(path=path, line=line_number, rule="private_key_material"))
 
         assignment = _CREDENTIAL_ASSIGNMENT_RULE.search(line)
-        if assignment and not _is_placeholder(assignment.group(1)):
-            findings.append(SecretFinding(path=path, line=line_number, rule="credential_assignment"))
+        if assignment:
+            value = assignment.group(1) or assignment.group(2)
+            if value and not _is_placeholder(value):
+                findings.append(SecretFinding(path=path, line=line_number, rule="credential_assignment"))
 
         for rule_name, pattern in _HIGH_CONFIDENCE_TOKEN_RULES:
             match = pattern.search(line)
