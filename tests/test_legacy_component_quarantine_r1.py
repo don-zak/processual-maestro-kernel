@@ -5,6 +5,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSUAL_API = ROOT / "processual_api"
+QUARANTINED_CONSOLE_ASSETS = (
+    "processual_api/static/js/adapters/governor.js",
+    "processual_api/static/js/adapters/cgt.js",
+    "processual_api/static/js/pages/governor.js",
+    "processual_api/static/js/pages/cgt.js",
+)
 
 
 def test_production_code_does_not_import_compatibility_subscription_catalog() -> None:
@@ -39,15 +45,16 @@ def test_production_code_does_not_depend_on_deprecated_provider_alias_route() ->
 
 
 def test_quarantined_console_assets_remain_present_only_for_review() -> None:
-    paths = (
-        "processual_api/static/js/adapters/governor.js",
-        "processual_api/static/js/adapters/cgt.js",
-        "processual_api/static/js/pages/governor.js",
-        "processual_api/static/js/pages/cgt.js",
-    )
-
-    for relative in paths:
+    for relative in QUARANTINED_CONSOLE_ASSETS:
         assert (ROOT / relative).is_file(), relative
+
+
+def test_public_runtime_image_explicitly_removes_quarantined_console_assets() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+    for relative in QUARANTINED_CONSOLE_ASSETS:
+        assert f"rm -f \\\n    {relative}" in dockerfile
+        assert f"test ! -e {relative}" in dockerfile
 
 
 def test_quarantine_register_does_not_misclassify_active_legacy_router_as_dead() -> None:
