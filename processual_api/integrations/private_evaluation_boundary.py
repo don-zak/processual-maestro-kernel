@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
 import re
+from dataclasses import dataclass, fields
 from typing import Protocol, runtime_checkable
-
 
 _BOUNDARY_CONTRACT_VERSION = "private-evaluation-boundary/v1"
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:@/\-]+$")
@@ -22,11 +21,11 @@ class PrivateEvaluationBoundaryError(RuntimeError):
     """Base error for the public/private evaluation trust boundary."""
 
 
-class PrivateEvaluationUnavailable(PrivateEvaluationBoundaryError):
+class PrivateEvaluationUnavailableError(PrivateEvaluationBoundaryError):
     """Raised when the private provider cannot safely complete evaluation."""
 
 
-class PrivateEvaluationContractViolation(PrivateEvaluationBoundaryError):
+class PrivateEvaluationContractViolationError(PrivateEvaluationBoundaryError):
     """Raised when a provider returns data outside the sanitized contract."""
 
 
@@ -71,12 +70,12 @@ def boundary_contract_version() -> str:
 
 def _validate_token(name: str, value: object) -> str:
     if not isinstance(value, str):
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     candidate = value.strip()
     if not candidate or candidate != value:
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     if len(candidate) > _MAX_TOKEN_LENGTH or _SAFE_TOKEN.fullmatch(candidate) is None:
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     return candidate
 
 
@@ -84,7 +83,7 @@ def validate_private_evaluation_request(request: PrivateEvaluationRequest) -> Pr
     """Validate that the public-to-private envelope contains bounded opaque references only."""
 
     if not isinstance(request, PrivateEvaluationRequest):
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     return PrivateEvaluationRequest(
         formation_ref=_validate_token("formation_ref", request.formation_ref),
         evidence_ref=_validate_token("evidence_ref", request.evidence_ref),
@@ -97,9 +96,9 @@ def validate_sanitized_private_decision(decision: SanitizedPrivateDecision) -> S
     """Fail closed unless the private result is exactly the approved bounded shape."""
 
     if not isinstance(decision, SanitizedPrivateDecision):
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     if tuple(field.name for field in fields(decision)) != _ALLOWED_RESULT_FIELDS:
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     return SanitizedPrivateDecision(
         existence_rank=_validate_token("existence_rank", decision.existence_rank),
         dominant_constraint=_validate_token("dominant_constraint", decision.dominant_constraint),
@@ -130,7 +129,7 @@ def evaluate_through_private_boundary(
         provider_failed = True
 
     if provider_failed:
-        raise PrivateEvaluationUnavailable("private_evaluation_unavailable")
+        raise PrivateEvaluationUnavailableError("private_evaluation_unavailable")
     if decision is None:
-        raise PrivateEvaluationContractViolation("private_evaluation_contract_violation")
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
     return validate_sanitized_private_decision(decision)
