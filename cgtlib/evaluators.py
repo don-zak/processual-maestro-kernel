@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from cgtlib.private import compute as _compute
-from cgtlib.types import (
-    AftermathState,
-    CGTParameters,
-    LockState,
-    PhaseState,
-    StructuralTransitionReport,
+from cgtlib._fallback import (
+    evaluate_aftermath as _evaluate_aftermath,
+    evaluate_compatibility as _evaluate_compatibility,
+    evaluate_continuation as _evaluate_continuation,
+    evaluate_locking as _evaluate_locking,
+    evaluate_structural_transition as _evaluate_structural_transition,
 )
+from cgtlib.types import AftermathState, CGTParameters, LockState, PhaseState, StructuralTransitionReport
 
 
 def evaluate_structural_transition(
@@ -25,7 +25,7 @@ def evaluate_structural_transition(
     target_features: dict[str, float],
     params: CGTParameters,
 ) -> StructuralTransitionReport:
-    return _compute.evaluate_structural_transition(
+    return _evaluate_structural_transition(
         source_phase=source_phase,
         target_phase=target_phase,
         gate_openness=gate_openness,
@@ -43,19 +43,25 @@ def evaluate_structural_transition(
 
 
 def evaluate_continuation(
-    gate_openness: float, carrying_capacity: float, fatigue: float, local_safety: float, lam: float
+    gate_openness: float,
+    carrying_capacity: float,
+    fatigue: float,
+    local_safety: float,
+    lam: float,
 ) -> tuple[float, float]:
-    return _compute.evaluate_continuation(gate_openness, carrying_capacity, fatigue, local_safety, lam)
+    return _evaluate_continuation(gate_openness, carrying_capacity, fatigue, local_safety, lam)
 
 
 def evaluate_locking(self_potential: float, transition_gate: float, params: CGTParameters) -> LockState:
-    return _compute.evaluate_lock_state(self_potential, transition_gate, params.lock_threshold, params.lock_gate_max)
+    return _evaluate_locking(self_potential, transition_gate, params)
 
 
 def evaluate_compatibility(
-    source_features: dict[str, float], target_features: dict[str, float], weights: dict[str, float] | None = None
+    source_features: dict[str, float],
+    target_features: dict[str, float],
+    weights: dict[str, float] | None = None,
 ) -> float:
-    return _compute.compute_compatibility(source_features, target_features, weights)
+    return _evaluate_compatibility(source_features, target_features, weights)
 
 
 def evaluate_aftermath(
@@ -65,6 +71,10 @@ def evaluate_aftermath(
     target_self_potential: float,
     flourishing_factor: float,
 ) -> AftermathState:
-    return _compute.evaluate_aftermath(
-        target_harmony, collapse_pressure, shock, target_self_potential, flourishing_factor
+    return _evaluate_aftermath(
+        target_harmony,
+        collapse_pressure,
+        shock,
+        target_self_potential,
+        flourishing_factor,
     )
