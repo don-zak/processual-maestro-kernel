@@ -10,13 +10,13 @@ from processual_api.integrations.private_evaluation_boundary import (
     PrivateEvaluationRequest,
     SanitizedPrivateDecision,
 )
-from processual_api.integrations.private_evaluation_runtime import bind_private_evaluation_provider
-from processual_api.routers import cgt_governor_router
-from processual_api.routers.private_evaluation import (
+from processual_api.integrations.private_evaluation_http import (
     PrivateEvaluationEnvelope,
     PrivateEvaluationResponse,
     evaluate_private_request,
+    router as private_evaluation_router,
 )
+from processual_api.integrations.private_evaluation_runtime import bind_private_evaluation_provider
 
 
 class _Provider:
@@ -91,8 +91,8 @@ def test_private_evaluation_route_rejects_invalid_reference_without_echo() -> No
     assert invalid.formation_ref not in str(exc_info.value.detail)
 
 
-def test_private_evaluation_route_source_has_no_raw_math_or_private_imports() -> None:
-    source = Path("processual_api/routers/private_evaluation.py").read_text("utf-8")
+def test_private_evaluation_http_source_has_no_raw_math_private_imports_or_auth_persistence() -> None:
+    source = Path("processual_api/integrations/private_evaluation_http.py").read_text("utf-8")
     forbidden = (
         "cgtlib.private",
         "processual_api.private_integrations",
@@ -106,16 +106,20 @@ def test_private_evaluation_route_source_has_no_raw_math_or_private_imports() ->
         "equation",
         "analyze_cgt",
         "govern_answer",
+        "require_quota",
+        "sqlalchemy",
     )
     assert all(token not in source for token in forbidden)
 
 
-def test_private_evaluation_route_keeps_evaluation_quota_guard() -> None:
-    source = Path("processual_api/routers/private_evaluation.py").read_text("utf-8")
-    assert '@router.post("/cgt/govern/evaluate"' in source
-    assert 'Depends(require_quota("evaluation"))' in source
-
-
-def test_private_evaluation_route_is_registered_on_governor_router() -> None:
-    paths = {getattr(route, "path", "") for route in cgt_governor_router.routes}
+def test_private_evaluation_http_router_exposes_canonical_path() -> None:
+    paths = {getattr(route, "path", "") for route in private_evaluation_router.routes}
     assert "/cgt/govern/evaluate" in paths
+
+
+def test_application_composition_registers_route_with_evaluation_quota() -> None:
+    source = Path("processual_api/routers/__init__.py").read_text("utf-8")
+    assert "from ..integrations.private_evaluation_http import router as private_evaluation_router" in source
+    assert "cgt_governor_router.include_router(" in source
+    assert "private_evaluation_router," in source
+    assert 'dependencies=[Depends(require_quota("evaluation"))]' in source
