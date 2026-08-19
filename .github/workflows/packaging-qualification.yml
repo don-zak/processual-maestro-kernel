@@ -6,6 +6,8 @@ on:
       - "agent/**"
       - "release/**"
     paths:
+      - "Dockerfile"
+      - ".dockerignore"
       - "pyproject.toml"
       - "cgtlib/**"
       - "processual_api/cgt_governor/**"
@@ -19,12 +21,16 @@ on:
       - "tests/test_cgtlib_public_protected_math_boundary.py"
       - "tests/test_cgtlib_reference_data*.py"
       - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_public_docker_trust_boundary_r1.py"
       - "tests/test_public_private_source_boundary.py"
       - "tests/test_release_*.py"
+      - ".github/workflows/docker.yml"
       - ".github/workflows/release.yml"
       - ".github/workflows/packaging-qualification.yml"
   pull_request:
     paths:
+      - "Dockerfile"
+      - ".dockerignore"
       - "pyproject.toml"
       - "cgtlib/**"
       - "processual_api/cgt_governor/**"
@@ -38,8 +44,10 @@ on:
       - "tests/test_cgtlib_public_protected_math_boundary.py"
       - "tests/test_cgtlib_reference_data*.py"
       - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_public_docker_trust_boundary_r1.py"
       - "tests/test_public_private_source_boundary.py"
       - "tests/test_release_*.py"
+      - ".github/workflows/docker.yml"
       - ".github/workflows/release.yml"
       - ".github/workflows/packaging-qualification.yml"
   workflow_dispatch:
@@ -73,6 +81,7 @@ jobs:
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
             tests/test_private_evaluation_boundary.py \
+            tests/test_public_docker_trust_boundary_r1.py \
             tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
             tests/test_release_evidence_inventory.py \
@@ -95,6 +104,7 @@ jobs:
             tests/test_cgtlib_reference_data_packaging.py \
             tests/test_cgtlib_reference_data_package_config.py \
             tests/test_private_evaluation_boundary.py \
+            tests/test_public_docker_trust_boundary_r1.py \
             tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
             tests/test_release_evidence_inventory.py \
