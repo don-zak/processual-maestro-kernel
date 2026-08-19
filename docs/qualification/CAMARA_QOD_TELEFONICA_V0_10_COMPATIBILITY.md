@@ -31,10 +31,11 @@ Observed successful external sandbox/mock calls:
 - CIBA authorization: HTTP `200`
 - token exchange: HTTP `200`
 - create session: HTTP `201`
+- extend session: HTTP `200`
 - get session: HTTP `200`
 - delete session: HTTP `204`
 
-Provider surface used by that execution:
+Provider surface used by those executions:
 
 - provider: Telefonica Open Gateway
 - API version: `v0.10`
@@ -52,7 +53,7 @@ public evidence.
 | createSession | `POST /sessions` | `POST /sessions` | yes | semantic shape matches |
 | getSession | `GET /sessions/{sessionId}` | `GET /sessions/{sessionId}` | yes | semantic shape matches |
 | deleteSession | `DELETE /sessions/{sessionId}` | `DELETE /sessions/{sessionId}` | yes | semantic shape matches |
-| extendQosSessionDuration | `POST /sessions/{sessionId}/extend` | `POST /sessions/{sessionId}/extend` | not yet retained | semantic shape matches, execution pending |
+| extendQosSessionDuration | `POST /sessions/{sessionId}/extend` | `POST /sessions/{sessionId}/extend` | yes | semantic shape matches |
 | retrieveSessionsByDevice | `POST /retrieve-sessions` | not present in exercised Telefonica v0.10 session surface | no | incompatible/unproven for exact contract |
 
 The shared operation paths are evidence of partial interoperability only. The
@@ -66,30 +67,23 @@ The project may truthfully project:
 
 - `authenticated_sandbox_reachability_proven=true`
 - `external_mock_sandbox_proven=true`
-- proven external operations: `createSession`, `getSession`, `deleteSession`
+- `external_mock_extend_proven=true`
+- proven external operations: `createSession`, `getSession`, `deleteSession`, `extendQosSessionDuration`
 
 The project must continue to project:
 
 - `operator_network_qos_proven=false`
-- `provider_sandbox_proven=false` for the governed CAMARA v1.1.0 contract
+- `provider_sandbox_proven=false` for the governed CAMARA QoD v1.1.0 contract
 - `runtime_connector_approved=false`
 - `production_allowed=false`
 
-## Extend closure
-
-`tools/telefonica_qod_ciba_extend_probe.ps1` performs a separate CIBA-authenticated
-create → extend → get → delete lifecycle. A successful run may add
-`extendQosSessionDuration` to the external mock interoperability evidence, but it
-still cannot remove the version-mismatch or operator-network blockers.
-
 ## Remaining blockers
 
-1. Execute and retain the Telefonica v0.10 extend proof.
-2. Resolve or explicitly waive the absence of `retrieveSessionsByDevice` on the
+1. Resolve or explicitly waive the absence of `retrieveSessionsByDevice` on the
    exercised provider surface; a waiver would require governance review and
    cannot be inferred from this evidence.
-3. Obtain operator-network rather than mock-only QoS proof if provider sandbox
+2. Obtain operator-network rather than mock-only QoS proof if provider sandbox
    qualification for the governed contract is required.
-4. Approve and implement a runtime connector only after the exact provider
+3. Approve and implement a runtime connector only after the exact provider
    compatibility contract is separately reviewed.
-5. Production remains a separate authorization gate.
+4. Production remains a separate authorization gate.
