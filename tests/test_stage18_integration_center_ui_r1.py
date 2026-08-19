@@ -20,6 +20,7 @@ def test_stage18_admin_integration_center_is_wired_to_existing_safe_routes():
     assert "/settings/admin/integration-readiness-tracking/cases" in center
     assert "/settings/admin/operator-pilot-handoff" in center
     assert "/settings/admin/operator-pilot-handoff/progress" in center
+    assert "/settings/admin/integration-center/camara-qod-qualification" in center
     assert "Production" in center
     assert "NO-GO" in center
     assert "No raw secrets" in center
@@ -113,20 +114,47 @@ def test_integration_center_platforms_distinguish_contract_from_live_proof():
     assert "Blocked" in center
 
 
+def test_integration_center_camara_status_is_route_backed_and_fail_closed():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert 'camaraQod: "/settings/admin/integration-center/camara-qod-qualification"' in center
+    assert "camaraQod: null" in center
+    assert "getJson(API.camaraQod)" in center
+    assert 'state.camaraQod = results[4].status === "fulfilled" ? results[4].value : null' in center
+    assert 'payload.status === "reviewed_qualification_contract"' in center
+    assert "payload.server_trusted_source_enabled === true" in center
+    assert 'payload.semantic_mapping_state === "proposal_only"' in center
+    assert "callableOperations.length === 5" in center
+    assert "payload.live_source_acquisition_proven === true" in center
+    assert "payload.provider_sandbox_proven === true" in center
+    assert "Qualification status route unavailable. Conservative fallback" in center
+    assert "trusted-source enablement, live acquisition, provider sandbox and runtime authority unproven" in center
+
+
 def test_integration_center_camara_candidate_is_pinned_without_overclaiming():
     center = _text("processual_api/static/js/admin_integration_center_18.js")
 
     assert "Quality on Demand · r3.2 candidate" in center
-    assert "QoD v1.1.0" in center
+    assert "QoD v${version}" in center
     assert "9cb179f" in center
     assert "code/API_definitions/quality-on-demand.yaml" in center
     assert "Spec candidate pinned" in center
-    assert "default runtime trusted-source catalog remains empty" in center
-    assert "Live source acquisition\", \"Not proven\"" in center
-    assert "Live operator sandbox\", \"Blocked\"" in center
-    assert "Production approval\", \"Blocked\"" in center
+    assert 'const sourceStatus = sourceEnabled ? "Policy enabled" : "Pending"' in center
+    assert 'const semanticStatus = semanticReviewed ? "Reviewed proposal" : "Pending"' in center
+    assert 'const liveStatus = liveProven ? "Proven" : "Not proven"' in center
+    assert 'const sandboxStatus = providerSandboxProven ? "Proven" : "Blocked"' in center
+    assert "runtime task registration remains disabled" in center
     assert "CAMARAConnectorQualified=True" not in center
     assert "Production allowed" not in center
+
+
+def test_integration_center_qod_mapping_priority_reflects_governance_not_missing_mapping():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "Review/register QoD task contracts" in center
+    assert "pending governance" in center
+    assert "five-operation semantic proposal and drift gate are reviewed" in center
+    assert "Map CAMARA QoD operations" not in center
 
 
 def test_integration_center_status_semantics_do_not_treat_not_proven_as_warning():
@@ -165,6 +193,7 @@ def test_integration_center_has_accessible_navigation_and_status_semantics():
     assert 'aria-label="Integration readiness metrics"' in center
     assert 'aria-label="Readiness legend"' in center
     assert 'type="button"' in center
+    assert "Loading integration readiness, cases, CAMARA qualification and pilot evidence" in center
 
 
 def test_integration_center_tabs_support_standard_keyboard_navigation():
