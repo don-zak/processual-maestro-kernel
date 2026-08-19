@@ -12,6 +12,7 @@ on:
       - "processual_api/integrations/private_evaluation_boundary.py"
       - "processual_api/routers/cgt_governor.py"
       - "tools/release_evidence_inventory.py"
+      - "tools/secret_scan.py"
       - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
       - "tests/test_cgt_governor_private_boundary_r1.py"
       - "tests/test_cgtlib_public_fallback_import_boundary.py"
@@ -30,6 +31,7 @@ on:
       - "processual_api/integrations/private_evaluation_boundary.py"
       - "processual_api/routers/cgt_governor.py"
       - "tools/release_evidence_inventory.py"
+      - "tools/secret_scan.py"
       - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
       - "tests/test_cgt_governor_private_boundary_r1.py"
       - "tests/test_cgtlib_public_fallback_import_boundary.py"
@@ -73,7 +75,8 @@ jobs:
             tests/test_private_evaluation_boundary.py \
             tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
-            tests/test_release_evidence_inventory.py
+            tests/test_release_evidence_inventory.py \
+            tests/test_release_secret_scan.py
 
       - name: Ruff packaging and trust-boundary scope
         run: |
@@ -83,6 +86,7 @@ jobs:
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
+            tools/secret_scan.py \
             tests/test_cgt_governor_legacy_boundary_debt_r1.py \
             tests/test_cgt_governor_private_boundary_r1.py \
             tests/test_cgtlib_public_fallback_import_boundary.py \
@@ -93,6 +97,7 @@ jobs:
             tests/test_public_private_source_boundary.py \
             tests/test_release_packaging_reference_data_gate.py \
             tests/test_release_evidence_inventory.py \
+            tests/test_release_secret_scan.py \
             --output-format=github
 
       - name: Flake8 critical errors
@@ -106,8 +111,12 @@ jobs:
             processual_api/cgt_governor/simulation/engine.py \
             processual_api/integrations/private_evaluation_boundary.py \
             tools/release_evidence_inventory.py \
+            tools/secret_scan.py \
             --ignore-missing-imports \
             --follow-imports=skip
+
+      - name: High-confidence secret scan
+        run: python tools/secret_scan.py .
 
       - name: Dependency vulnerability audit
         run: pip-audit
