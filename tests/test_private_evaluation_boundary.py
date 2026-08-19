@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 
 from processual_api.integrations.private_evaluation_boundary import (
-    PrivateEvaluationContractViolation,
+    PrivateEvaluationContractViolationError,
     PrivateEvaluationRequest,
-    PrivateEvaluationUnavailable,
+    PrivateEvaluationUnavailableError,
     SanitizedPrivateDecision,
     boundary_contract_version,
     evaluate_through_private_boundary,
@@ -59,7 +59,7 @@ def test_request_is_reference_only_and_rejects_unbounded_content() -> None:
     )
     assert validate_private_evaluation_request(request) == request
 
-    with pytest.raises(PrivateEvaluationContractViolation):
+    with pytest.raises(PrivateEvaluationContractViolationError):
         validate_private_evaluation_request(
             PrivateEvaluationRequest(
                 formation_ref="equation=x+y weight=0.91",
@@ -98,7 +98,7 @@ def test_provider_failure_does_not_leak_private_exception_text() -> None:
         evaluated_at="2026-08-19T12:00:00Z",
     )
 
-    with pytest.raises(PrivateEvaluationUnavailable) as exc_info:
+    with pytest.raises(PrivateEvaluationUnavailableError) as exc_info:
         evaluate_through_private_boundary(_LeakingProvider(), request)
 
     rendered = str(exc_info.value)
