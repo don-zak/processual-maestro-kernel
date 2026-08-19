@@ -1,6 +1,18 @@
 name: Packaging Qualification
 
 on:
+  push:
+    branches:
+      - "agent/**"
+      - "release/**"
+    paths:
+      - "pyproject.toml"
+      - "cgtlib/**"
+      - "tools/release_evidence_inventory.py"
+      - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_release_*.py"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/packaging-qualification.yml"
   pull_request:
     paths:
       - "pyproject.toml"
