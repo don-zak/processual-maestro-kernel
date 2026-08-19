@@ -1,144 +1,92 @@
-"""CGT Governor — Orchestrator
+"""Public CGT governance orchestration over sanitized private decisions.
 
-The main `govern_answer()` function that:
-1. Computes maturity, premature risk, and mature speed
-2. Computes the full CGT fate vector
-3. Computes the variable reinforcement reward
-4. Classifies the existence rank
-5. Decides the governance policy
-6. Builds a repair prompt if applicable
-
-Returns a `GovernedAnswer` dataclass with all results.
+This module intentionally performs no proprietary mathematical evaluation.
+The private execution environment owns all protected scoring, ranking math,
+thresholds, weights, calibration, and intermediate state. Public governance
+may only consume the bounded decision contract exposed by the trust boundary.
 """
 
 from __future__ import annotations
 
-from .classifier import classify_rank, decide_policy, policy_info
-from .evaluator import compute_fate_vector, maturity_score
+from dataclasses import dataclass
+
+from processual_api.integrations.private_evaluation_boundary import (
+    PrivateEvaluationUnavailableError,
+    SanitizedPrivateDecision,
+)
+
+from .classifier import decide_policy, policy_info
 from .repair import (
     build_distortion_repair_prompt,
     build_hybrid_repair_prompt,
     build_transient_deepen_prompt,
 )
-from .reward import cgt_reward, mature_speed_value, premature_speed_risk
-from .types import GovernedAnswer
+from .types import ExistenceRank
 
 
-def govern_answer(
-    answer: str,
-    *,
-    compatibility: float,
-    coherence: float,
-    structural_support: float,
-    usefulness: float,
-    complexity: float,
-    fatigue: float,
-    shock: float,
-    lift: float,
-    novelty: float,
-    no_answer: float,
-    hallucination: float,
-    constraint_failure: float,
-    speed: float = 0.5,
-    language: str = "en",
-) -> GovernedAnswer:
-    """Govern an LLM answer through the full CGT pipeline.
+@dataclass(frozen=True, slots=True)
+class SanitizedGovernedAnswer:
+    """Public governance result with no private mathematical intermediates."""
 
-    All numeric parameters must be in [0, 1] range.
+    rank: ExistenceRank
+    policy: str
+    policy_label: str
+    policy_description: str
+    dominant_constraint: str
+    next_gate: str
+    confidence_band: str
+    explanation_code: str
+    policy_version: str
+    repair_prompt: str | None = None
 
-    Args:
-        answer: The LLM-generated text to evaluate.
-        compatibility: How well the answer matches the query intent.
-        coherence: Internal consistency and clarity.
-        structural_support: Whether the answer has clear structure.
-        usefulness: Practical value to the user.
-        complexity: Structural complexity pressure.
-        fatigue: System wear coefficient.
-        shock: External shock magnitude.
-        lift: Answer's corrigibility / capacity for improvement.
-        novelty: New understanding or path opened.
-        no_answer: Degree to which the answer fails to address the query.
-        hallucination: Degree of hallucinated or fabricated content.
-        constraint_failure: Degree of constraint / safety boundary violation.
-        speed: How quickly the answer was produced.
-        language: "en" for English repair prompts, "ar" for Arabic.
 
-    Returns:
-        GovernedAnswer with fate vector, rank, reward, policy, and repair prompt.
-    """
-    # 1. Maturity
-    distortion_estimate = complexity * (1.0 - coherence)
-    maturity = maturity_score(
-        compatibility=compatibility,
-        coherence=coherence,
-        structural_support=structural_support,
-        usefulness=usefulness,
-        distortion=distortion_estimate,
-        overload=complexity,
-    )
-
-    # 2. Speed components
-    premature = premature_speed_risk(
-        speed=speed,
-        maturity=maturity,
-        compatibility=compatibility,
-        coherence=coherence,
-    )
-
-    mature_spd = mature_speed_value(
-        speed=speed,
-        maturity=maturity,
-        compatibility=compatibility,
-        coherence=coherence,
-    )
-
-    # 3. Fate vector
-    fate = compute_fate_vector(
-        compatibility=compatibility,
-        coherence=coherence,
-        structural_support=structural_support,
-        usefulness=usefulness,
-        complexity=complexity,
-        fatigue=fatigue,
-        shock=shock,
-        lift=lift,
-        novelty=novelty,
-        no_answer=no_answer,
-        hallucination=hallucination,
-        constraint_failure=constraint_failure,
-    )
-
-    # 4. Reward
-    reward = cgt_reward(
-        fate=fate,
-        lift=lift,
-        mature_speed=mature_spd,
-        premature_risk=premature,
-    )
-
-    # 5. Classification
-    rank = classify_rank(fate)
-
-    # 6. Policy
-    policy = decide_policy(rank)
-    pinfo = policy_info(policy)
-
-    # 7. Repair prompt
-    repair_prompt = None
+def _repair_prompt_for_policy(answer: str, policy: str, language: str) -> str | None:
     if policy == "repair_scaffold":
-        repair_prompt = build_hybrid_repair_prompt(answer, language=language)
-    elif policy == "restructure":
-        repair_prompt = build_distortion_repair_prompt(answer, language=language)
-    elif policy == "deepen_or_clarify":
-        repair_prompt = build_transient_deepen_prompt(answer, language=language)
+        return build_hybrid_repair_prompt(answer, language=language)
+    if policy == "restructure":
+        return build_distortion_repair_prompt(answer, language=language)
+    if policy == "deepen_or_clarify":
+        return build_transient_deepen_prompt(answer, language=language)
+    return None
 
-    return GovernedAnswer(
-        answer=answer,
-        fate=fate,
+
+def govern_sanitized_decision(
+    answer: str,
+    decision: SanitizedPrivateDecision,
+    *,
+    language: str = "en",
+) -> SanitizedGovernedAnswer:
+    """Apply public policy and repair orchestration to a sanitized private decision."""
+
+    try:
+        rank = ExistenceRank(decision.existence_rank.removeprefix("rank:" ).lower())
+    except ValueError as exc:
+        raise ValueError("unsupported_sanitized_existence_rank") from exc
+
+    policy = decide_policy(rank)
+    info = policy_info(policy)
+    return SanitizedGovernedAnswer(
         rank=rank,
-        reward=round(reward, 4),
         policy=policy,
-        policy_label=pinfo.get("label", policy),
-        policy_description=pinfo.get("description", ""),
-        repair_prompt=repair_prompt,
+        policy_label=info.get("label", policy),
+        policy_description=info.get("description", ""),
+        dominant_constraint=decision.dominant_constraint,
+        next_gate=decision.next_gate,
+        confidence_band=decision.confidence_band,
+        explanation_code=decision.explanation_code,
+        policy_version=decision.policy_version,
+        repair_prompt=_repair_prompt_for_policy(answer, policy, language),
     )
+
+
+def govern_answer(*args: object, **kwargs: object) -> SanitizedGovernedAnswer:
+    """Legacy entrypoint retained fail-closed for callers not using the boundary.
+
+    The previous implementation performed protected mathematical evaluation in
+    the public runtime. That behavior is intentionally disabled. Callers must
+    obtain a ``SanitizedPrivateDecision`` through the controlled private
+    evaluation boundary and then call ``govern_sanitized_decision``.
+    """
+
+    del args, kwargs
+    raise PrivateEvaluationUnavailableError("private_evaluation_unavailable")
