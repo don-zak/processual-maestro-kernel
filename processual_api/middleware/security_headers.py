@@ -1,3 +1,5 @@
+import re
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
@@ -34,6 +36,10 @@ _LEGACY_CONSOLE_QUARANTINE_STYLE = (
     b'[data-page="cgt"],[data-page="governor"],'
     b'#page-cgt,#page-governor{display:none!important}'
     b'</style>'
+)
+_LEGACY_CONSOLE_PAGE_REGIONS = (
+    (b"<!-- ===== PAGE: CGT Evaluator ===== -->", b"<!-- ===== PAGE: Workflows ===== -->"),
+    (b"<!-- ===== PAGE: Governor ===== -->", b"<!-- ===== PAGE: Gateway ===== -->"),
 )
 _CONTENT_SECURITY_POLICY = "; ".join(
     (
@@ -128,6 +134,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         body = await self._response_body(response)
         for script_tag in _LEGACY_CONSOLE_SCRIPT_TAGS:
             body = body.replace(script_tag, b"")
+        body = re.sub(
+            rb'<button class="nav-btn[^>]*data-page="(?:cgt|governor)"[^>]*>.*?</button>\s*',
+            b"",
+            body,
+            flags=re.DOTALL,
+        )
+        for start_marker, end_marker in _LEGACY_CONSOLE_PAGE_REGIONS:
+            start = body.find(start_marker)
+            end = body.find(end_marker)
+            if start != -1 and end != -1 and start < end:
+                body = body[:start] + body[end:]
         if _LEGACY_CONSOLE_QUARANTINE_STYLE not in body:
             if b"</head>" in body:
                 body = body.replace(
