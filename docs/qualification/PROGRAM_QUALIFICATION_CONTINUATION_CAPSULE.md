@@ -38,6 +38,15 @@ No later workspace may infer a `true` value from green CI alone. Each authority 
 7. Grace usage is separately bounded by authoritative delinquency state and a degraded-grace cap.
 8. A public plan must never advertise a quota that is not bound to the authoritative fulfillment catalog.
 9. Commercial quota, runtime capacity guards, and external execution fan-out are distinct controls and must not be represented as interchangeable.
+10. A direct-plan browser journey must preserve both `plan_id` and a validated `billing_period` from the offer page through registration. If a plan registration link is incomplete or carries an unsupported billing period, the browser must fail closed before submission and the backend remains authoritative.
+
+## Public UI / browser truth invariants
+
+- Public UI must not display `Production Ready`, `production`, or an equivalent production-authority claim while `ProductionAuthorityGranted=false`.
+- Delivered splash and console HTML are rewritten at the response boundary to qualification wording until production authority is independently granted.
+- Public browser responses carry `X-Content-Type-Options`, `X-Frame-Options`, HSTS, `Referrer-Policy`, and a restrictive baseline `Permissions-Policy`.
+- Static source text, browser-delivered text, and backend authority are separate review surfaces; rendered HTTP behavior is the release-relevant truth.
+- Current browser hardening does not yet constitute a complete CSP or supply-chain policy. External asset policy, CSP design, browser automation, accessibility, and viewport support remain open qualification work.
 
 ## Supervisor/admin invariants
 
@@ -67,7 +76,9 @@ The following are non-real-environment controls and must be re-proven on the exa
 - public Docker build and fail-closed trust-boundary smoke;
 - public container CycloneDX and SPDX SBOM generation from the built image;
 - public container SBOM scan preventing private-module path leakage;
-- ephemeral PR image identity evidence without publishing an image or inventing a release digest.
+- ephemeral PR image identity evidence without publishing an image or inventing a release digest;
+- public offer-to-registration plan/billing-period linkage regression;
+- delivered public UI authority-truth and baseline browser-security regression.
 
 The dependency-license inventory is evidence of package metadata only. It is not a legal license-compatibility opinion.
 
@@ -78,6 +89,7 @@ The dependency-license inventory is evidence of package metadata only. It is not
 - Private image qualification and private image SBOM remain private-trust-domain work.
 - Final configuration/deployment/operator/admin/customer/migration/incident documentation reconciliation and obsolete terminology cleanup remain open.
 - General Packaging cannot close while the opaque-reference topology and legacy public/private boundary migration remain unresolved.
+- Browser qualification remains incomplete until automated rendered-page journeys, accessibility, viewport/support policy, network/error-state behavior, and CSP/external-asset policy are reviewed and evidenced.
 
 ## Opaque-reference topology status
 
@@ -90,14 +102,15 @@ The dependency-license inventory is evidence of package metadata only. It is not
 ## Current blocking sequence
 
 1. Re-prove all current public CI gates on the exact current public head after any modification.
-2. Select and review a real opaque-reference issuance/registry/private-resolution topology; do not invent one from hashes or public raw data.
-3. Migrate remaining legacy raw-score/vector browser/router/report surfaces only after real reference issuance/resolution exists.
-4. Complete remaining General Packaging blockers: product license decision, immutable release-candidate image digest, private image qualification/SBOM, and final documentation reconciliation.
-5. Provision real staging with separately controlled secrets, database/cache/network/runtime resources.
-6. Execute migration backup, migration/backfill/idempotency replay, restore rehearsal, and record real evidence references.
-7. Execute complete commercial E2E including checkout/provider webhook/order/subscription/runtime/quota/usage and renewal/failure/grace/suspension/cancellation/refund paths.
-8. Execute real staging browser, security, load/concurrency, observability, rollback, provider, and operator proofs.
-9. Promote one immutable digest to release candidate, then controlled pilot, then GA only after acceptance criteria pass.
+2. Continue public browser remediation: rendered journey tests, accessibility, supported viewport contract, error/degraded-state UX, and external-asset/CSP review.
+3. Select and review a real opaque-reference issuance/registry/private-resolution topology; do not invent one from hashes or public raw data.
+4. Migrate remaining legacy raw-score/vector browser/router/report surfaces only after real reference issuance/resolution exists.
+5. Complete remaining General Packaging blockers: product license decision, immutable release-candidate image digest, private image qualification/SBOM, and final documentation reconciliation.
+6. Provision real staging with separately controlled secrets, database/cache/network/runtime resources.
+7. Execute migration backup, migration/backfill/idempotency replay, restore rehearsal, and record real evidence references.
+8. Execute complete commercial E2E including checkout/provider webhook/order/subscription/runtime/quota/usage and renewal/failure/grace/suspension/cancellation/refund paths.
+9. Execute real staging browser, security, load/concurrency, observability, rollback, provider, and operator proofs.
+10. Promote one immutable digest to release candidate, then controlled pilot, then GA only after acceptance criteria pass.
 
 ## Transition protocol
 
