@@ -57,6 +57,19 @@ def test_public_entry_surfaces_do_not_deliver_ungranted_production_authority() -
     assert "v2.0.0 — qualification" in console.text
 
 
+def test_legacy_raw_math_console_surfaces_are_quarantined_from_delivery() -> None:
+    response = client.get("/console/")
+
+    assert response.status_code == 200
+    assert 'src="js/adapters/governor.js"' not in response.text
+    assert 'src="js/adapters/cgt.js"' not in response.text
+    assert 'src="js/pages/governor.js"' not in response.text
+    assert 'src="js/pages/cgt.js"' not in response.text
+    assert 'id="legacy-console-quarantine"' in response.text
+    assert '[data-page="cgt"],[data-page="governor"]' in response.text
+    assert '#page-cgt,#page-governor{display:none!important}' in response.text
+
+
 def test_admin_rendered_response_keeps_no_store_and_dom_contract() -> None:
     response = client.get("/admin")
 
