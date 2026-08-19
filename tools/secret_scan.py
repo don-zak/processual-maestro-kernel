@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 import argparse
 import re
 from dataclasses import dataclass
@@ -103,14 +101,16 @@ def _is_explicit_test_fixture_line(line: str) -> bool:
     return any(marker in lowered for marker in _TEST_FIXTURE_LINE_MARKERS)
 
 
-def _candidate_files(root: Path) -> Iterable[Path]:
+def _candidate_files(root: Path) -> list[Path]:
+    candidates: list[Path] = []
     for path in root.rglob("*"):
         if not path.is_file():
             continue
         if any(part in _SKIP_PARTS for part in path.parts):
             continue
         if path.name.startswith(".env") or path.suffix.lower() in _TEXT_SUFFIXES:
-            yield path
+            candidates.append(path)
+    return candidates
 
 
 def scan_text(text: str, *, path: str = "<memory>") -> list[SecretFinding]:
