@@ -1,0 +1,3 @@
+# Qualification-only browser automation dependency.
+# Playwright binds each package release to matching browser binaries installed by its CLI.
+playwright==1.61.0
