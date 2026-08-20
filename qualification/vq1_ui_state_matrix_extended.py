@@ -22,6 +22,10 @@ def open_admin_marketplace(page: Page) -> None:
         "() => window.PMK_ADMIN_NAV && typeof window.PMK_ADMIN_NAV.setActivePage === 'function'",
         timeout=4000,
     )
+    page.wait_for_function(
+        "() => window.PMK_ADMIN_MARKETPLACE && typeof window.PMK_ADMIN_MARKETPLACE.activateSection === 'function'",
+        timeout=4000,
+    )
 
 
 def admin_marketplace_permission_denied(page: Page, browser_version: str, counter: int):
@@ -42,7 +46,14 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
         authority = page.locator('#admin-marketplace-authority-state[data-state="denied"]')
         state.wait_for(state="attached", timeout=4000)
         authority.wait_for(state="attached", timeout=4000)
-        page.evaluate("() => window.PMK_ADMIN_NAV.setActivePage('admin-marketplace')")
+        page.evaluate(
+            """
+            () => {
+              window.PMK_ADMIN_NAV.setActivePage('admin-marketplace');
+              window.PMK_ADMIN_MARKETPLACE.activateSection('payment-destinations');
+            }
+            """
+        )
         page.locator("#page-admin-marketplace.active").wait_for(state="visible", timeout=4000)
         state.wait_for(state="visible", timeout=4000)
         authority.wait_for(state="visible", timeout=4000)
@@ -51,10 +62,10 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
             page,
             browser_version,
             "/admin",
-            "admin-marketplace",
+            "admin-marketplace:payment-destinations",
             "permission denied",
             counter,
-            "Controlled HTTP 403 interception proves the delivered Admin Marketplace permission-denied renderer only; the real Admin navigation API reopens the denied page after the renderer hides its navigation entry. No platform authority is granted or mutated.",
+            "Controlled HTTP 403 interception proves the delivered Admin Marketplace permission-denied renderer only; the real Admin navigation and Marketplace section APIs expose the denied payment-destinations panel after authority denial. No platform authority is granted or mutated.",
         )
     finally:
         page.unroute(pattern)
