@@ -147,6 +147,12 @@ def validate_rtl(page: Page, route: str, section: str) -> None:
     page.screenshot(path=str(shot), full_page=False)
 
 
+def collapsed_screenshot_path(route: str, section: str) -> Path:
+    route_slug = "console" if route == "/console/" else "admin"
+    section_slug = section.replace("/", "-").replace("_", "-")
+    return OUTPUT_DIR / "screenshots" / f"VQ1-VALIDATED-{route_slug}-{section_slug}-LONG-CARD-COLLAPSED-NARROW-EN.png"
+
+
 def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
     surface_selector = open_surface(page, route, section)
     page.wait_for_timeout(2100)
@@ -162,18 +168,23 @@ def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
     first = cards.first
     button = first.locator(':scope > .pmk-long-card-tools > .pmk-long-card-toggle')
     button.click()
-    page.wait_for_timeout(80)
+    page.wait_for_timeout(100)
     collapsed = first.get_attribute('data-pmk-collapsed')
     expanded = button.get_attribute('aria-expanded')
     if collapsed != 'true' or expanded != 'false':
         raise RuntimeError(f"collapse control failed for {route} {section}: collapsed={collapsed} aria-expanded={expanded}")
-    button.click()
+    shot = collapsed_screenshot_path(route, section)
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    first.scroll_into_view_if_needed()
     page.wait_for_timeout(80)
+    page.screenshot(path=str(shot), full_page=False)
+    button.click()
+    page.wait_for_timeout(100)
     collapsed = first.get_attribute('data-pmk-collapsed')
     expanded = button.get_attribute('aria-expanded')
     if collapsed != 'false' or expanded != 'true':
         raise RuntimeError(f"expand control failed for {route} {section}: collapsed={collapsed} aria-expanded={expanded}")
-    print(f"validated {count} collapsible long card(s) for {route} {section}")
+    print(f"validated {count} collapsible long card(s) for {route} {section}; collapsed screenshot={shot}")
 
 
 def main() -> None:
@@ -184,6 +195,16 @@ def main() -> None:
         page = browser.new_page(locale="en")
         try:
             establish_qualification_session(page)
+            page.add_init_script(
+                """
+                (() => {
+                  try {
+                    localStorage.setItem('tour_completed', 'true');
+                    localStorage.setItem('tour_lang', 'en');
+                  } catch (_) {}
+                })();
+                """
+            )
             for route, section in (("/console/", "settings"), ("/admin", "api-keys")):
                 validate_scroll(page, route, section)
                 validate_focus(page, route, section)
