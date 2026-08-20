@@ -153,6 +153,44 @@ def collapsed_screenshot_path(route: str, section: str) -> Path:
     return OUTPUT_DIR / "screenshots" / f"VQ1-VALIDATED-{route_slug}-{section_slug}-LONG-CARD-COLLAPSED-NARROW-EN.png"
 
 
+def validate_specific_card_collapse(page: Page, card, screenshot_name: str, label: str) -> None:
+    button = card.locator(':scope > .pmk-long-card-tools > .pmk-long-card-toggle')
+    if button.count() != 1:
+        raise RuntimeError(f"{label} is marked collapsible but missing its direct collapse control")
+
+    before_height = card.evaluate("el => el.getBoundingClientRect().height")
+    button.click()
+    page.wait_for_timeout(100)
+    after_height = card.evaluate("el => el.getBoundingClientRect().height")
+    if card.get_attribute('data-pmk-collapsed') != 'true' or button.get_attribute('aria-expanded') != 'false':
+        raise RuntimeError(f"{label} did not enter collapsed state")
+
+    minimum_shrink = max(64.0, before_height * 0.20)
+    if before_height - after_height < minimum_shrink:
+        raise RuntimeError(
+            f"{label} collapse did not materially reduce height: "
+            f"before={before_height:.1f} after={after_height:.1f} required_shrink={minimum_shrink:.1f}"
+        )
+
+    shot = OUTPUT_DIR / "screenshots" / screenshot_name
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    card.scroll_into_view_if_needed()
+    page.wait_for_timeout(80)
+    page.screenshot(path=str(shot), full_page=False)
+
+    button.click()
+    page.wait_for_timeout(100)
+    restored_height = card.evaluate("el => el.getBoundingClientRect().height")
+    if card.get_attribute('data-pmk-collapsed') != 'false' or button.get_attribute('aria-expanded') != 'true':
+        raise RuntimeError(f"{label} did not restore expanded state")
+    if restored_height < after_height + minimum_shrink * 0.75:
+        raise RuntimeError(
+            f"{label} did not restore height after expand: "
+            f"before={before_height:.1f} collapsed={after_height:.1f} restored={restored_height:.1f}"
+        )
+    print(f"validated specific long card {label}; screenshot={shot}")
+
+
 def validate_known_long_cards(page: Page, route: str, section: str, surface_selector: str) -> None:
     if route == "/console/" and section == "settings":
         billing_hero = page.locator(f"{surface_selector} #settings-billing-statements-root .mbs-hero:visible")
@@ -170,6 +208,13 @@ def validate_known_long_cards(page: Page, route: str, section: str, surface_sele
             if readiness_height >= 420 and readiness.first.get_attribute("data-pmk-long-card") != "true":
                 raise RuntimeError(
                     f"long Admin Home readiness card is not collapsible: scrollHeight={readiness_height}"
+                )
+            if readiness_height >= 420:
+                validate_specific_card_collapse(
+                    page,
+                    readiness.first,
+                    "VQ1-VALIDATED-admin-home-readiness-LONG-CARD-COLLAPSED-NARROW-EN.png",
+                    "Admin Home Integration Readiness Tracking Summary",
                 )
 
 
