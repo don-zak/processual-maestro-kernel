@@ -13,7 +13,7 @@ EVIDENCE_CSV = OUTPUT_DIR / "evidence.csv"
 SETTINGS_PAYLOAD = {
     "general": {"language": "en", "refresh_interval": 30, "timezone": "UTC"},
     "subscription": {
-        "plan": "qualification_plan",
+        "plan": "enterprise_integration_starter",
         "status": "active",
         "stage": "active",
         "renews_at": "2026-09-20T00:00:00Z",
@@ -25,45 +25,57 @@ SETTINGS_PAYLOAD = {
 BILLING_STATEMENTS_PAYLOAD = {"statements": []}
 API_KEY_INTEGRATION_PAYLOAD = {
     "enabled": False,
-    "plan_id": "qualification_plan",
+    "plan_id": "enterprise_integration_starter",
     "operational_profiles": [],
     "production_allowed": False,
     "runtime_connector_approved": False,
 }
+AUTH_ME_PAYLOAD = {
+    "sub": "admin",
+    "role": "admin",
+    "client_id": "admin",
+    "organization_name": "Qualification Enterprise",
+}
+INTEGRATION_CASES_PAYLOAD = {"cases": []}
+CLIENT_REQUESTS_PAYLOAD = {"latest_requests": []}
 
 
-def install_clean_settings_routes(page: Page) -> None:
+def fulfill_json(route, payload: object) -> None:
+    route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps(payload),
+    )
+
+
+def install_clean_console_routes(page: Page) -> None:
     page.route(
         "**/settings",
-        lambda route: route.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps(SETTINGS_PAYLOAD),
-        ),
+        lambda route: fulfill_json(route, SETTINGS_PAYLOAD),
     )
     page.route(
         "**/settings/subscription",
-        lambda route: route.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps(SETTINGS_PAYLOAD["subscription"]),
-        ),
+        lambda route: fulfill_json(route, SETTINGS_PAYLOAD["subscription"]),
     )
     page.route(
         "**/billing/statements",
-        lambda route: route.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps(BILLING_STATEMENTS_PAYLOAD),
-        ),
+        lambda route: fulfill_json(route, BILLING_STATEMENTS_PAYLOAD),
     )
     page.route(
         "**/settings/api-key-integration",
-        lambda route: route.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps(API_KEY_INTEGRATION_PAYLOAD),
-        ),
+        lambda route: fulfill_json(route, API_KEY_INTEGRATION_PAYLOAD),
+    )
+    page.route(
+        "**/auth/me",
+        lambda route: fulfill_json(route, AUTH_ME_PAYLOAD),
+    )
+    page.route(
+        "**/settings/client/integration-cases",
+        lambda route: fulfill_json(route, INTEGRATION_CASES_PAYLOAD),
+    )
+    page.route(
+        "**/settings/client-requests",
+        lambda route: fulfill_json(route, CLIENT_REQUESTS_PAYLOAD),
     )
 
 
@@ -73,39 +85,67 @@ def default_rows() -> list[dict[str, str]]:
             row
             for row in csv.DictReader(handle)
             if row["route"] == "/console/"
-            and row["section"] == "settings"
+            and row["section"] in {"settings", "institution"}
             and row["state"] == "default/loaded"
         ]
-    if not rows:
-        raise RuntimeError("missing Settings default/loaded evidence rows")
+    sections = {row["section"] for row in rows}
+    missing = {"settings", "institution"} - sections
+    if missing:
+        raise RuntimeError(
+            "missing clean Console default/loaded evidence rows for: "
+            + ", ".join(sorted(missing))
+        )
     return rows
 
 
-def assert_clean_default_state(page: Page, width: int, height: int) -> None:
-    for message in (
+def assert_clean_default_state(
+    page: Page,
+    *,
+    section: str,
+    width: int,
+    height: int,
+) -> None:
+    messages = (
         "Failed to load client settings",
         "Subscription access is temporarily unavailable",
-    ):
+        "Subscription status unavailable",
+        "Operational case data is unavailable until subscription verification recovers",
+        "Case registry is unavailable until subscription verification recovers",
+    )
+    for message in messages:
         error = page.get_by_text(message, exact=False)
         if error.count() and error.first.is_visible():
             raise RuntimeError(
-                f"Settings default evidence contains unrelated dependency error at {width}x{height}: {message}"
+                f"{section} default evidence contains unrelated dependency error "
+                f"at {width}x{height}: {message}"
             )
 
     tour = page.get_by_text("Choose Tour Language", exact=True)
     if tour.count() and tour.first.is_visible():
         raise RuntimeError(
-            f"Settings default evidence is obstructed by guided-tour language modal at {width}x{height}"
+            f"{section} default evidence is obstructed by guided-tour language modal "
+            f"at {width}x{height}"
         )
 
 
-def open_settings(page: Page, width: int, height: int) -> None:
+def open_console_section(
+    page: Page,
+    *,
+    section: str,
+    width: int,
+    height: int,
+) -> None:
     page.set_viewport_size({"width": width, "height": height})
     page.goto(f"{BASE_URL}/console/", wait_until="domcontentloaded")
     page.wait_for_timeout(250)
-    page.locator('.nav-btn[data-page="settings"]').click()
-    page.wait_for_timeout(350)
-    assert_clean_default_state(page, width, height)
+    page.locator(f'.nav-btn[data-page="{section}"]').click()
+    page.wait_for_timeout(400)
+    assert_clean_default_state(
+        page,
+        section=section,
+        width=width,
+        height=height,
+    )
 
 
 def main() -> None:
@@ -113,6 +153,7 @@ def main() -> None:
         raise RuntimeError(f"VQ evidence CSV not found: {EVIDENCE_CSV}")
 
     rows = default_rows()
+    refreshed: dict[str, int] = {"settings": 0, "institution": 0}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(locale="en")
@@ -128,22 +169,35 @@ def main() -> None:
                 })();
                 """
             )
-            install_clean_settings_routes(page)
+            install_clean_console_routes(page)
             for row in rows:
+                section = row["section"]
                 width = int(row["viewport_width"])
                 height = int(row["viewport_height"])
-                open_settings(page, width, height)
+                open_console_section(
+                    page,
+                    section=section,
+                    width=width,
+                    height=height,
+                )
                 shot = Path(row["screenshot_path"])
                 shot.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(shot), full_page=True)
+                refreshed[section] += 1
                 print(
-                    "refreshed clean Settings default evidence: "
+                    f"refreshed clean {section} default evidence: "
                     f"{row['viewport']} {width}x{height} -> {shot}"
                 )
         finally:
             browser.close()
 
-    print(f"refreshed {len(rows)} Settings default/loaded evidence row(s)")
+    print(
+        "refreshed clean Console default/loaded evidence: "
+        + ", ".join(
+            f"{section}={count}"
+            for section, count in sorted(refreshed.items())
+        )
+    )
 
 
 if __name__ == "__main__":
