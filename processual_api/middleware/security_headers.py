@@ -11,6 +11,9 @@ _ADMIN_DOM_CONTRACT_SCRIPT = (
 _VQ1_NARROW_HARDENING_STYLESHEET = (
     b'<link rel="stylesheet" href="/console/css/vq1_narrow_hardening.css?v=vq1narrow01">'
 )
+_RUNTIME_VIEWPORT_HARDENING_STYLESHEET = (
+    b'<link rel="stylesheet" href="/console/css/runtime_viewport_hardening.css?v=runtimeviewport01">'
+)
 _VQ1_SETTINGS_OWNERSHIP_SCRIPT = (
     b'<script src="/console/js/vq1_settings_ownership.js?v=vq1ownership01"></script>'
 )
@@ -85,12 +88,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response = await self._pin_public_assets(response)
             response = await self._quarantine_legacy_console_surfaces(response)
             response = await self._inject_vq1_narrow_hardening(response)
+            response = await self._inject_runtime_viewport_hardening(response)
             response = await self._inject_vq1_settings_ownership(response)
             response = await self._inject_long_card_collapse(response)
 
         if path in {"/admin", "/admin/"}:
             response = await self._inject_admin_dom_contract(response)
             response = await self._inject_vq1_narrow_hardening(response)
+            response = await self._inject_runtime_viewport_hardening(response)
             response = await self._inject_long_card_collapse(response)
 
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -183,6 +188,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 body = _VQ1_NARROW_HARDENING_STYLESHEET + body
+        return self._rebuilt_response(response, body)
+
+    async def _inject_runtime_viewport_hardening(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+
+        body = await self._response_body(response)
+        if _RUNTIME_VIEWPORT_HARDENING_STYLESHEET not in body:
+            if b"</head>" in body:
+                body = body.replace(
+                    b"</head>",
+                    _RUNTIME_VIEWPORT_HARDENING_STYLESHEET + b"</head>",
+                    1,
+                )
+            else:
+                body = _RUNTIME_VIEWPORT_HARDENING_STYLESHEET + body
         return self._rebuilt_response(response, body)
 
     async def _inject_vq1_settings_ownership(self, response: Response) -> Response:
