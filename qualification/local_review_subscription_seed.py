@@ -64,8 +64,20 @@ async def seed() -> None:
                         "local_review_only": "true",
                         "production_authority": "false",
                     },
+                    created_at=now,
+                    updated_at=now,
                 )
                 session.add(plan)
+                await session.flush()
+            else:
+                plan.display_name = "Enterprise Integration Starter - Local Review"
+                plan.entitlement_profile_ref = PLAN_CODE
+                plan.quota_profile_ref = PLAN_CODE
+                plan.metadata_json = {
+                    "local_review_only": "true",
+                    "production_authority": "false",
+                }
+                plan.updated_at = now
                 await session.flush()
 
             subscription = await session.scalar(
@@ -85,6 +97,8 @@ async def seed() -> None:
                     status="active",
                     starts_at=now,
                     ends_at=None,
+                    created_at=now,
+                    updated_at=now,
                 )
                 session.add(subscription)
                 await session.flush()
@@ -93,6 +107,7 @@ async def seed() -> None:
                 subscription.status = "active"
                 subscription.starts_at = subscription.starts_at or now
                 subscription.ends_at = None
+                subscription.updated_at = now
                 await session.flush()
 
             runtime = await session.scalar(
@@ -113,6 +128,8 @@ async def seed() -> None:
                     grace_until=None,
                     suspended_at=None,
                     terminated_at=None,
+                    created_at=now,
+                    updated_at=now,
                 )
                 session.add(runtime)
             else:
@@ -124,6 +141,7 @@ async def seed() -> None:
                 runtime.grace_until = None
                 runtime.suspended_at = None
                 runtime.terminated_at = None
+                runtime.updated_at = now
 
             await session.commit()
             print(
