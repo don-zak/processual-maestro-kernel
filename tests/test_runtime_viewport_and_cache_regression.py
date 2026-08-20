@@ -35,3 +35,12 @@ def test_console_html_and_assets_are_no_store_and_badge_is_rewritten_server_side
     assert "_RUNTIME_VIEWPORT_HARDENING_STYLESHEET" in source
     assert "_inject_runtime_viewport_hardening" in source
     assert "runtime_viewport_hardening.css" in source
+
+
+def test_legacy_console_quarantine_keeps_both_page_region_boundaries():
+    source = read("processual_api/middleware/security_headers.py")
+    assert "_LEGACY_CONSOLE_PAGE_REGIONS" in source
+    assert "<!-- ===== PAGE: CGT Evaluator ===== -->" in source
+    assert "<!-- ===== PAGE: Workflows ===== -->" in source
+    assert "<!-- ===== PAGE: Governor ===== -->" in source
+    assert "<!-- ===== PAGE: Gateway ===== -->" in source
