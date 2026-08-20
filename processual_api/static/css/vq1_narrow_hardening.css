@@ -16,6 +16,13 @@
     overflow-x: hidden;
   }
 
+  .admin-page.active {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+
   #topbar {
     height: auto;
     min-height: 56px;
