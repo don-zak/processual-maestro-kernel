@@ -74,6 +74,10 @@ def test_settings_default_evidence_refresh_covers_every_recorded_viewport_before
     assert "Failed to load client settings" in refresher
     assert "BILLING_STATEMENTS_PAYLOAD" in refresher
     assert '"**/billing/statements"' in refresher
+    assert "API_KEY_INTEGRATION_PAYLOAD" in refresher
+    assert '"**/settings/api-key-integration"' in refresher
+    assert '"enabled": False' in refresher
+    assert '"runtime_connector_approved": False' in refresher
     assert "Subscription access is temporarily unavailable" in refresher
     assert "Choose Tour Language" in refresher
     assert "tour_completed" in refresher
