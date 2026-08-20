@@ -45,6 +45,7 @@ Write-Host "Database:   $($context.DatabasePath)"
 Write-Host "Console:    $consoleUrl"
 Write-Host "Admin:      $adminUrl"
 Write-Host "Login:      admin / admin (development-only fallback)"
+Write-Host "Access log: disabled for a quieter browser/action audit; runtime errors remain visible"
 Write-Host ""
 Write-Host "This launcher grants no staging or production authority."
 Write-Host "Stop the server with Ctrl+C."
@@ -53,7 +54,7 @@ if ($OpenBrowser) {
     Start-Process $consoleUrl
 }
 
-& python -m uvicorn processual_api.main:app --host 127.0.0.1 --port $Port
+& python -m uvicorn processual_api.main:app --host 127.0.0.1 --port $Port --no-access-log
 if ($LASTEXITCODE -ne 0) {
     throw "Uvicorn exited with code $LASTEXITCODE"
 }
