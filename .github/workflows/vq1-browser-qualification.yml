@@ -74,6 +74,9 @@ jobs:
       - name: Refresh all clean Settings default evidence
         run: python qualification/vq1_settings_default_evidence_refresh.py
 
+      - name: Validate executable Settings tab switching
+        run: python qualification/vq1_settings_tab_action_validator.py
+
       - name: Validate all delivered button actions
         run: python qualification/vq1_button_action_validator.py
 
