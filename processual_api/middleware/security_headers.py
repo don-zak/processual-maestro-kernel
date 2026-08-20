@@ -50,6 +50,16 @@ _LEGACY_CONSOLE_QUARANTINE_STYLE = (
     b'#page-cgt,#page-governor{display:none!important}'
     b'</style>'
 )
+_LEGACY_CONSOLE_PAGE_REGIONS = (
+    (
+        b"<!-- ===== PAGE: CGT Evaluator ===== -->",
+        b"<!-- ===== PAGE: Workflows ===== -->",
+    ),
+    (
+        b"<!-- ===== PAGE: Governor ===== -->",
+        b"<!-- ===== PAGE: Gateway ===== -->",
+    ),
+)
 _CONTENT_SECURITY_POLICY = "; ".join(
     (
         "default-src 'self'",
