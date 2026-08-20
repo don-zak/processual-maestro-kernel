@@ -25,6 +25,16 @@
     });
   }
 
+  function containOwnedPilotSurfaces() {
+    const pilotPage = document.getElementById('page-operator-pilot-handoff');
+    const operatorPackage = document.getElementById('admin-integration-readiness-operator-package-host');
+    if (!pilotPage || !operatorPackage || pilotPage.contains(operatorPackage)) return;
+
+    const pilotRoot = pilotPage.querySelector('#operator-pilot-handoff-root');
+    const owner = pilotRoot?.parentElement || pilotPage.firstElementChild || pilotPage;
+    owner.appendChild(operatorPackage);
+  }
+
   function pruneLegacyPlaceholders() {
     const phrases = [
       'Checking admin session',
@@ -65,6 +75,7 @@
   function clean() {
     installStyle();
     markRuntimeGrids();
+    containOwnedPilotSurfaces();
     pruneLegacyPlaceholders();
     normalizeActivePage();
   }
@@ -72,6 +83,7 @@
   window.PMK_ADMIN_LAYOUT = {
     clean,
     markRuntimeGrids,
+    containOwnedPilotSurfaces,
     pruneLegacyPlaceholders,
   };
 
