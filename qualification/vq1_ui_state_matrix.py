@@ -6,7 +6,7 @@ from dataclasses import asdict
 from importlib.metadata import version as package_version
 from pathlib import Path
 
-from playwright.sync_api import Page, Route, sync_playwright
+from playwright.sync_api import Locator, Page, Route, sync_playwright
 
 from vq1_browser_harness import (
     BASE_URL,
@@ -41,6 +41,11 @@ def append_row(row: EvidenceRow) -> None:
     with EVIDENCE_CSV.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writerow(asdict(row))
+
+
+def reveal(locator: Locator) -> None:
+    locator.evaluate("el => el.scrollIntoView({block: 'center', inline: 'nearest'})")
+    locator.page.wait_for_timeout(100)
 
 
 def capture(
@@ -94,9 +99,11 @@ def billing_loading(page: Page, browser_version: str, counter: int) -> EvidenceR
     page.route(pattern, hold)
     try:
         open_settings(page)
-        page.locator("#settings-billing-statements-root .mbs-empty").filter(
+        state = page.locator("#settings-billing-statements-root .mbs-empty").filter(
             has_text="Loading billing statements"
-        ).wait_for(state="visible", timeout=4000)
+        )
+        state.wait_for(state="visible", timeout=4000)
+        reveal(state)
         row = capture(
             page,
             browser_version,
@@ -128,9 +135,9 @@ def billing_empty(page: Page, browser_version: str, counter: int) -> EvidenceRow
     )
     try:
         open_settings(page)
-        page.get_by_text("No billing statements have been issued yet.", exact=False).wait_for(
-            state="visible", timeout=4000
-        )
+        state = page.get_by_text("No billing statements have been issued yet.", exact=False)
+        state.wait_for(state="visible", timeout=4000)
+        reveal(state)
         return capture(
             page,
             browser_version,
@@ -156,9 +163,9 @@ def billing_unavailable(page: Page, browser_version: str, counter: int) -> Evide
     )
     try:
         open_settings(page)
-        page.locator("#settings-billing-statements-root .mbs-error").wait_for(
-            state="visible", timeout=4000
-        )
+        state = page.locator("#settings-billing-statements-root .mbs-error")
+        state.wait_for(state="visible", timeout=4000)
+        reveal(state)
         return capture(
             page,
             browser_version,
@@ -201,9 +208,11 @@ def register_validation_error(page: Page, browser_version: str, counter: int) ->
     try:
         open_register(page)
         page.locator("#registration-submit").click()
-        page.locator('#registration-status[data-state="error"]').filter(
+        state = page.locator('#registration-status[data-state="error"]').filter(
             has_text="Review the highlighted registration fields"
-        ).wait_for(state="visible", timeout=3000)
+        )
+        state.wait_for(state="visible", timeout=3000)
+        reveal(state)
         return capture(
             page,
             browser_version,
@@ -232,9 +241,11 @@ def register_unavailable(page: Page, browser_version: str, counter: int) -> Evid
         open_register(page)
         fill_valid_registration(page)
         page.locator("#registration-submit").click()
-        page.locator('#registration-status[data-state="error"]').filter(
+        state = page.locator('#registration-status[data-state="error"]').filter(
             has_text="Registration service is temporarily unavailable"
-        ).wait_for(state="visible", timeout=3000)
+        )
+        state.wait_for(state="visible", timeout=3000)
+        reveal(state)
         return capture(
             page,
             browser_version,
@@ -264,9 +275,11 @@ def register_success(page: Page, browser_version: str, counter: int) -> Evidence
         open_register(page)
         fill_valid_registration(page)
         page.locator("#registration-submit").click()
-        page.locator('#registration-status[data-state="success"]').filter(
+        state = page.locator('#registration-status[data-state="success"]').filter(
             has_text="Registration request accepted"
-        ).wait_for(state="visible", timeout=3000)
+        )
+        state.wait_for(state="visible", timeout=3000)
+        reveal(state)
         return capture(
             page,
             browser_version,
