@@ -2,6 +2,7 @@
   const STYLE_ID = 'pmk-long-card-collapse-style';
   const TOOLS_CLASS = 'pmk-long-card-tools';
   const BUTTON_CLASS = 'pmk-long-card-toggle';
+  const SEMANTIC_DESCENDANT_SELECTOR = '[class*="card"],[class*="panel"],[class*="hero"],[class*="tile"],#admin-integration-readiness-tracking-summary-card';
   const CANDIDATE_SELECTOR = '#content [class*="card"],#content [class*="panel"],#content [class*="hero"],#content [class*="tile"],.admin-page [class*="card"],.admin-page [class*="panel"],.admin-page [class*="hero"],.admin-page [class*="tile"],.admin-card,.settings-card,#admin-integration-readiness-tracking-summary-card';
   const CARD_HINT = /(\b|[-_])(card|panel|hero|tile)(\b|[-_])/i;
   const KNOWN_CARD_IDS = new Set(['admin-integration-readiness-tracking-summary-card']);
@@ -85,8 +86,8 @@
   function hasDominantSemanticChild(card) {
     const threshold = longThreshold();
     const ownHeight = Math.max(1, card.getBoundingClientRect().height);
-    return Array.from(card.querySelectorAll(CANDIDATE_SELECTOR)).some((child) => {
-      if (child === card || !(child instanceof HTMLElement) || !visible(child) || !isSemanticCard(child)) return false;
+    return Array.from(card.querySelectorAll(SEMANTIC_DESCENDANT_SELECTOR)).some((child) => {
+      if (!(child instanceof HTMLElement) || !visible(child) || !isSemanticCard(child)) return false;
       const childHeight = child.getBoundingClientRect().height;
       return child.scrollHeight >= threshold && childHeight >= ownHeight * 0.72;
     });
