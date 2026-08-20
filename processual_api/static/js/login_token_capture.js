@@ -105,6 +105,30 @@
     if (error) error.style.display = 'none';
   }
 
+  function installPasswordVisibilityControl() {
+    const password = document.getElementById('login-password');
+    if (!password || document.getElementById('login-password-visibility')) return;
+    const group = password.closest('.inp-group');
+    if (!group) return;
+    group.style.position = 'relative';
+    password.style.paddingInlineEnd = '72px';
+    const button = document.createElement('button');
+    button.id = 'login-password-visibility';
+    button.type = 'button';
+    button.textContent = message('Show', 'إظهار');
+    button.setAttribute('aria-label', message('Show password', 'إظهار كلمة المرور'));
+    button.setAttribute('aria-pressed', 'false');
+    button.style.cssText = 'position:absolute;inset-inline-end:8px;bottom:7px;border:1px solid var(--rim);border-radius:6px;background:rgba(17,22,32,.92);color:var(--soft);font:10px var(--font-data);padding:5px 8px;cursor:pointer';
+    button.addEventListener('click', () => {
+      const visible = password.type === 'text';
+      password.type = visible ? 'password' : 'text';
+      button.textContent = visible ? message('Show', 'إظهار') : message('Hide', 'إخفاء');
+      button.setAttribute('aria-label', visible ? message('Show password', 'إظهار كلمة المرور') : message('Hide password', 'إخفاء كلمة المرور'));
+      button.setAttribute('aria-pressed', visible ? 'false' : 'true');
+    });
+    group.appendChild(button);
+  }
+
   function syncMfaChallengeLanguage() {
     const label = document.getElementById('identity-mfa-label');
     const hint = document.getElementById('identity-mfa-hint');
@@ -232,6 +256,7 @@
 
   function installIdentityMfaLogin() {
     buildMfaChallenge();
+    installPasswordVisibilityControl();
     const loginButton = document.getElementById('login-btn');
     const password = document.getElementById('login-password');
     const userTab = document.getElementById('tab-user');
@@ -246,7 +271,7 @@
     if (isUserMode() && username) username.placeholder = 'email@example.com';
   }
 
-  window.PMK_LOGIN_TOKEN_CAPTURE = { persistAuthPayload, normalizeToken, installFetchCapture, installIdentityMfaLogin };
+  window.PMK_LOGIN_TOKEN_CAPTURE = { persistAuthPayload, normalizeToken, installFetchCapture, installIdentityMfaLogin, installPasswordVisibilityControl };
   installFetchCapture();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installIdentityMfaLogin, { once: true });
   else installIdentityMfaLogin();
