@@ -47,6 +47,12 @@ REQUIRED_CONSOLE_SEED = {
 
 QUARANTINED_CONSOLE_SURFACES = {"cgt", "governor"}
 
+CONTROLLED_BROWSER_STATES = [
+    "long-content/overflow",
+    "focus/keyboard-visible",
+    "localization/RTL",
+]
+
 
 @dataclass
 class EvidenceRow:
@@ -304,6 +310,100 @@ def capture_admin_section(
     return rows
 
 
+def capture_controlled_state(
+    page: Page,
+    browser_version: str,
+    route: str,
+    section: str,
+    state: str,
+    viewport_name: str,
+    width: int,
+    height: int,
+    counter: int,
+) -> EvidenceRow:
+    page.set_viewport_size({"width": width, "height": height})
+    page.goto(f"{BASE_URL}{route}", wait_until="domcontentloaded")
+    page.wait_for_timeout(200)
+
+    if route == "/console/":
+        page.locator(f'.nav-btn[data-page="{section}"]').click()
+        page.wait_for_timeout(150)
+        scroll_selector = "#content"
+    else:
+        page.locator(f'.nav-btn[data-admin-page="{section}"]').click()
+        page.wait_for_timeout(150)
+        scroll_selector = ".admin-page.active"
+
+    locale = LOCALE
+    result = "PASS"
+    notes = "Controlled browser-state capture; human visual review still required."
+
+    if state == "long-content/overflow":
+        page.locator(scroll_selector).evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        page.wait_for_timeout(100)
+        notes = "Delivered long content scrolled to the bottom of its real UI scroll container."
+    elif state == "focus/keyboard-visible":
+        page.locator("body").click(position={"x": 1, "y": 1})
+        focused = False
+        for _ in range(24):
+            page.keyboard.press("Tab")
+            focused = bool(
+                page.evaluate(
+                    """
+                    () => {
+                      const el = document.activeElement;
+                      if (!el || el === document.body) return false;
+                      const activePage = document.querySelector('.admin-page.active, .page.active');
+                      return !activePage || activePage.contains(el) || el.closest('#sidebar, #nav, #nav-wrap');
+                    }
+                    """
+                )
+            )
+            if focused:
+                break
+        if not focused:
+            raise RuntimeError(f"could not establish keyboard-visible focus for {route} {section}")
+        notes = "Keyboard Tab established visible focus on a delivered interactive control."
+    elif state == "localization/RTL":
+        page.evaluate(
+            """
+            () => {
+              document.documentElement.setAttribute('dir', 'rtl');
+              document.documentElement.setAttribute('lang', 'ar');
+              document.body.setAttribute('dir', 'rtl');
+            }
+            """
+        )
+        locale = "ar-rtl-controlled"
+        result = "PARTIAL"
+        notes = "Controlled RTL directionality capture only; translated/localized copy is not proven by this evidence."
+    else:
+        raise RuntimeError(f"unsupported controlled browser state: {state}")
+
+    eid = evidence_id(route, section, state, viewport_name, locale, counter)
+    shot = OUTPUT_DIR / "screenshots" / f"{eid}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(shot), full_page=False)
+    return EvidenceRow(
+        source_sha=SOURCE_SHA,
+        browser_engine="chromium",
+        browser_version=browser_version,
+        capture_tool_version=package_version("playwright"),
+        route=route,
+        section=section,
+        state=state,
+        viewport=viewport_name,
+        viewport_width=width,
+        viewport_height=height,
+        locale=locale,
+        evidence_id=eid,
+        screenshot_path=str(shot),
+        result=result,
+        defect_id="",
+        notes=notes,
+    )
+
+
 def write_outputs(rows: list[EvidenceRow], inventory: dict[str, object], browser_version: str) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     fields = list(EvidenceRow.__dataclass_fields__)
@@ -322,7 +422,8 @@ def write_outputs(rows: list[EvidenceRow], inventory: dict[str, object], browser
         "capture_tool": "playwright",
         "capture_tool_version": package_version("playwright"),
         "viewports": VIEWPORTS,
-        "status": "AUTOMATED_DEFAULT_STATE_CAPTURE_COMPLETE_HUMAN_REVIEW_REQUIRED",
+        "controlled_browser_states": CONTROLLED_BROWSER_STATES,
+        "status": "AUTOMATED_DEFAULT_AND_BROWSER_STATE_CAPTURE_COMPLETE_HUMAN_REVIEW_REQUIRED",
         "authority": {
             "RealStagingQualified": False,
             "ProductionAuthorityGranted": False,
@@ -344,6 +445,12 @@ def run(browser: Browser) -> None:
         "console_sections": console_sections,
         "admin_sections": admin_sections,
         "quarantined_console_surfaces": sorted(QUARANTINED_CONSOLE_SURFACES),
+        "controlled_browser_states": CONTROLLED_BROWSER_STATES,
+        "controlled_browser_state_scope": {
+            "viewport": "narrow",
+            "targets": ["/console/:settings", "/admin:api-keys"],
+            "rtl_translation_proven": False,
+        },
     }
 
     rows: list[EvidenceRow] = []
@@ -364,6 +471,37 @@ def run(browser: Browser) -> None:
             )
             rows.extend(captured)
             counter += len(captured)
+
+    width, height = VIEWPORTS["narrow"]
+    for state in CONTROLLED_BROWSER_STATES:
+        rows.append(
+            capture_controlled_state(
+                page,
+                browser_version,
+                "/console/",
+                "settings",
+                state,
+                "narrow",
+                width,
+                height,
+                counter,
+            )
+        )
+        counter += 1
+        rows.append(
+            capture_controlled_state(
+                page,
+                browser_version,
+                "/admin",
+                "api-keys",
+                state,
+                "narrow",
+                width,
+                height,
+                counter,
+            )
+        )
+        counter += 1
 
     write_outputs(rows, inventory, browser_version)
 
