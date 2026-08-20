@@ -121,23 +121,36 @@ def test_vq_validator_rejects_cross_page_owned_surfaces_and_settings_noise():
     assert 'evidence_path("/console/", "settings", "localization/RTL")' in source
 
 
-def test_settings_default_evidence_refresh_covers_every_recorded_viewport_before_upload():
+def test_settings_and_enterprise_default_evidence_refresh_before_upload():
     refresher = read("qualification/vq1_settings_default_evidence_refresh.py")
     workflow = read(".github/workflows/vq1-browser-qualification.yml")
     assert "def default_rows()" in refresher
     assert 'row["state"] == "default/loaded"' in refresher
+    assert 'row["section"] in {"settings", "institution"}' in refresher
     assert 'for row in rows:' in refresher
+    assert 'section = row["section"]' in refresher
     assert 'width = int(row["viewport_width"])' in refresher
     assert 'height = int(row["viewport_height"])' in refresher
     assert 'page.screenshot(path=str(shot), full_page=True)' in refresher
     assert "Failed to load client settings" in refresher
+    assert "Subscription access is temporarily unavailable" in refresher
+    assert "Subscription status unavailable" in refresher
+    assert "Operational case data is unavailable until subscription verification recovers" in refresher
+    assert "Case registry is unavailable until subscription verification recovers" in refresher
     assert "BILLING_STATEMENTS_PAYLOAD" in refresher
     assert '"**/billing/statements"' in refresher
     assert "API_KEY_INTEGRATION_PAYLOAD" in refresher
     assert '"**/settings/api-key-integration"' in refresher
+    assert "AUTH_ME_PAYLOAD" in refresher
+    assert '"**/auth/me"' in refresher
+    assert "INTEGRATION_CASES_PAYLOAD" in refresher
+    assert '"**/settings/client/integration-cases"' in refresher
+    assert "CLIENT_REQUESTS_PAYLOAD" in refresher
+    assert '"**/settings/client-requests"' in refresher
     assert '"enabled": False' in refresher
+    assert '"production_allowed": False' in refresher
     assert '"runtime_connector_approved": False' in refresher
-    assert "Subscription access is temporarily unavailable" in refresher
+    assert '"plan": "enterprise_integration_starter"' in refresher
     assert "Choose Tour Language" in refresher
     assert "tour_completed" in refresher
     assert "tour_lang" in refresher
