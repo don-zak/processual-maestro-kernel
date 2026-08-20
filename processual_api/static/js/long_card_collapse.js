@@ -2,10 +2,8 @@
   const STYLE_ID = 'pmk-long-card-collapse-style';
   const TOOLS_CLASS = 'pmk-long-card-tools';
   const BUTTON_CLASS = 'pmk-long-card-toggle';
-  const CANDIDATE_SELECTOR = '#content div,#content section,#content article,.admin-page div,.admin-page section,.admin-page article,.admin-card,.settings-card,#admin-integration-readiness-tracking-summary-card';
-  const WRAPPER_HINT = /(\b|[-_])(page|layout|root|host|shell|wrapper|container|content|nav|tabs|panels)(\b|[-_])/i;
+  const CANDIDATE_SELECTOR = '#content [class*="card"],#content [class*="panel"],#content [class*="hero"],#content [class*="tile"],.admin-page [class*="card"],.admin-page [class*="panel"],.admin-page [class*="hero"],.admin-page [class*="tile"],.admin-card,.settings-card,#admin-integration-readiness-tracking-summary-card';
   const CARD_HINT = /(\b|[-_])(card|panel|hero|tile)(\b|[-_])/i;
-  const SUBCOMPONENT_HINT = /(\b|[-_])(summary|grid|plans|risks|metric|metrics|table|list|row|detail|body|stats|progress|checkpoint)(\b|[-_])/i;
   const KNOWN_CARD_IDS = new Set(['admin-integration-readiness-tracking-summary-card']);
   const observedForResize = new WeakSet();
 
@@ -78,54 +76,30 @@
     return Boolean(card.id) && KNOWN_CARD_IDS.has(card.id);
   }
 
-  function isExplicitCard(card, identity = classAndId(card)) {
-    return isKnownCard(card) || CARD_HINT.test(identity);
-  }
-
-  function isStructuralSubcomponent(card, identity = classAndId(card)) {
-    return SUBCOMPONENT_HINT.test(identity) && !isExplicitCard(card, identity);
-  }
-
-  function likelySurfaceCandidate(card) {
+  function isSemanticCard(card) {
     if (!(card instanceof HTMLElement)) return false;
-    if (card.matches('#content,#main,.page,.admin-page,.sl18-panel')) return false;
-    const identity = classAndId(card);
-    if (isStructuralSubcomponent(card, identity)) return false;
-    if (isExplicitCard(card, identity)) return true;
-    if (card.matches('section,article')) return true;
-    if (card.children.length < 2) return false;
-    const style = getComputedStyle(card);
-    const radius = Number.parseFloat(style.borderTopLeftRadius || '0') || 0;
-    const border = Number.parseFloat(style.borderTopWidth || '0') || 0;
-    return radius >= 6 || border > 0;
+    if (isKnownCard(card)) return true;
+    return CARD_HINT.test(classAndId(card));
+  }
+
+  function hasDominantSemanticChild(card) {
+    const threshold = longThreshold();
+    const ownHeight = Math.max(1, card.getBoundingClientRect().height);
+    return Array.from(card.querySelectorAll(CANDIDATE_SELECTOR)).some((child) => {
+      if (child === card || !(child instanceof HTMLElement) || !visible(child) || !isSemanticCard(child)) return false;
+      const childHeight = child.getBoundingClientRect().height;
+      return child.scrollHeight >= threshold && childHeight >= ownHeight * 0.72;
+    });
   }
 
   function visuallyCardLike(card) {
     if (!(card instanceof HTMLElement)) return false;
-    if (!visible(card)) return false;
-    const threshold = longThreshold();
-    if (card.scrollHeight < threshold) return false;
+    if (!visible(card) || !isSemanticCard(card)) return false;
+    if (card.scrollHeight < longThreshold()) return false;
     if (card.children.length < 2) return false;
     if (card.matches('#content,#main,.page,.admin-page,.sl18-panel')) return false;
-
-    const identity = classAndId(card);
-    if (isStructuralSubcomponent(card, identity)) return false;
-    if (WRAPPER_HINT.test(identity) && !isExplicitCard(card, identity)) return false;
-
-    const style = getComputedStyle(card);
-    const radius = Number.parseFloat(style.borderTopLeftRadius || '0') || 0;
-    const border = Number.parseFloat(style.borderTopWidth || '0') || 0;
-    const hasVisualSurface = radius >= 6 || border > 0 || isExplicitCard(card, identity);
-    if (!hasVisualSurface) return false;
-
-    const directLongSurfaces = Array.from(card.children).filter((child) => {
-      if (!(child instanceof HTMLElement) || !visible(child)) return false;
-      const childIdentity = classAndId(child);
-      if (!isExplicitCard(child, childIdentity)) return false;
-      return child.scrollHeight >= threshold && child.clientHeight >= card.clientHeight * 0.75;
-    });
-    if (directLongSurfaces.length === 1 && !isExplicitCard(card, identity)) return false;
-
+    if (card.closest('[data-pmk-long-card="true"]')) return false;
+    if (hasDominantSemanticChild(card)) return false;
     return true;
   }
 
@@ -153,11 +127,8 @@
     if (previousHidden === null) return;
     const previousDisplay = child.getAttribute('data-pmk-collapse-prev-display') || '';
     const previousPriority = child.getAttribute('data-pmk-collapse-prev-display-priority') || '';
-
     child.style.removeProperty('display');
-    if (previousDisplay) {
-      child.style.setProperty('display', previousDisplay, previousPriority);
-    }
+    if (previousDisplay) child.style.setProperty('display', previousDisplay, previousPriority);
     child.hidden = previousHidden === 'true';
     child.removeAttribute('data-pmk-collapse-prev-hidden');
     child.removeAttribute('data-pmk-collapse-prev-display');
@@ -168,13 +139,11 @@
     const tools = card.querySelector(`:scope > .${TOOLS_CLASS}`);
     const button = tools?.querySelector(`.${BUTTON_CLASS}`);
     const header = directHeader(card);
-
     card.dataset.pmkCollapsed = collapsed ? 'true' : 'false';
     if (button) {
       button.textContent = collapsed ? 'Expand' : 'Collapse';
       button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     }
-
     Array.from(card.children).forEach((child) => {
       if (child === tools || child === header) return;
       if (collapsed) hideChild(child);
@@ -184,17 +153,13 @@
 
   function enhance(card) {
     if (!(card instanceof HTMLElement)) return;
-    if (card.dataset.pmkLongCard === 'true') return;
-    if (!visuallyCardLike(card)) return;
-
+    if (card.dataset.pmkLongCard === 'true' || !visuallyCardLike(card)) return;
     ensureStyle();
     card.dataset.pmkLongCard = 'true';
     card.dataset.pmkCollapsed = 'false';
-
     const tools = document.createElement('div');
     tools.className = TOOLS_CLASS;
     tools.setAttribute('data-pmk-long-card-tools', 'true');
-
     const button = document.createElement('button');
     button.type = 'button';
     button.className = BUTTON_CLASS;
@@ -206,19 +171,16 @@
       setCollapsed(card, next);
       button.setAttribute('aria-label', next ? 'Expand long card' : 'Collapse long card');
     });
-
     tools.appendChild(button);
     card.insertBefore(tools, card.firstChild);
   }
 
   const resizeObserver = typeof ResizeObserver === 'function'
-    ? new ResizeObserver((entries) => {
-        entries.forEach((entry) => enhance(entry.target));
-      })
+    ? new ResizeObserver((entries) => entries.forEach((entry) => enhance(entry.target)))
     : null;
 
   function observeCandidate(card) {
-    if (!resizeObserver || observedForResize.has(card) || !likelySurfaceCandidate(card)) return;
+    if (!resizeObserver || observedForResize.has(card) || !isSemanticCard(card)) return;
     observedForResize.add(card);
     resizeObserver.observe(card);
   }
@@ -251,7 +213,6 @@
     window.setTimeout(scan, 250);
     window.setTimeout(scan, 900);
     window.setTimeout(scan, 1800);
-
     const observer = new MutationObserver(scheduleScan);
     observer.observe(document.body, {
       childList: true,
@@ -260,15 +221,12 @@
       attributes: true,
       attributeFilter: ['class', 'style', 'hidden'],
     });
-
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target) return;
-      if (target.closest('.nav-btn[data-page],.nav-btn[data-admin-page],[data-am-section],.sl18-tab')) {
+      if (target?.closest('.nav-btn[data-page],.nav-btn[data-admin-page],[data-am-section],.sl18-tab')) {
         scheduleVisibilityScans();
       }
     }, true);
-
     window.addEventListener('hashchange', scheduleVisibilityScans);
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) scheduleVisibilityScans();
