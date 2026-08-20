@@ -78,7 +78,7 @@ jobs:
         run: python qualification/vq1_settings_tab_action_validator.py
 
       - name: Validate all delivered button actions
-        run: python qualification/vq1_button_action_validator.py
+        run: python qualification/vq1_button_action_validator_v2.py
 
       - name: Show capture summary
         if: always()
