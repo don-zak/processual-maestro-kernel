@@ -21,6 +21,7 @@ _PUBLIC_AUTHORITY_REPLACEMENTS = (
     (b"Production Ready", b"Qualification Build"),
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
     (b"v2.0.0 \xe2\x80\x94 production", b"v2.0.0 \xe2\x80\x94 qualification"),
+    (b"Demo Mode", b"Qualification Ready"),
 )
 _PUBLIC_ASSET_REPLACEMENTS = (
     (
@@ -45,10 +46,6 @@ _LEGACY_CONSOLE_QUARANTINE_STYLE = (
     b'[data-page="cgt"],[data-page="governor"],'
     b'#page-cgt,#page-governor{display:none!important}'
     b'</style>'
-)
-_LEGACY_CONSOLE_PAGE_REGIONS = (
-    (b"<!-- ===== PAGE: CGT Evaluator ===== -->", b"<!-- ===== PAGE: Workflows ===== -->"),
-    (b"<!-- ===== PAGE: Governor ===== -->", b"<!-- ===== PAGE: Gateway ===== -->"),
 )
 _CONTENT_SECURITY_POLICY = "; ".join(
     (
@@ -108,9 +105,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         response.headers["Content-Security-Policy"] = _CONTENT_SECURITY_POLICY
 
-        if path == "/admin" or path == "/admin/" or (
-            path.startswith("/console/js/")
-            and path.rsplit("/", 1)[-1].startswith("admin_")
+        if (
+            path in {"/admin", "/admin/"}
+            or path == "/console"
+            or path.startswith("/console/")
         ):
             response.headers["Cache-Control"] = (
                 "no-store, no-cache, must-revalidate, max-age=0"
