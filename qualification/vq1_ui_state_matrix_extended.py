@@ -49,6 +49,7 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
         page.evaluate(
             """
             () => {
+              window.PMK_ADMIN_LAYOUT?.clean?.();
               window.PMK_ADMIN_NAV.setActivePage('admin-marketplace');
               window.PMK_ADMIN_MARKETPLACE.activateSection('payment-destinations');
             }
@@ -65,7 +66,7 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
             "admin-marketplace:payment-destinations",
             "permission denied",
             counter,
-            "Controlled HTTP 403 interception proves the delivered Admin Marketplace permission-denied renderer only; the real Admin navigation and Marketplace section APIs expose the denied payment-destinations panel after authority denial. No platform authority is granted or mutated.",
+            "Controlled HTTP 403 interception proves the delivered Admin Marketplace permission-denied renderer only; the real Admin layout, navigation, and Marketplace section APIs expose the denied payment-destinations panel after authority denial. No platform authority is granted or mutated.",
         )
     finally:
         page.unroute(pattern)
@@ -89,7 +90,8 @@ def subscription_state(
     renews_at: str | None,
     suspended_at: str | None,
 ):
-    pattern = "**/settings/subscription"
+    subscription_pattern = "**/settings/subscription"
+    settings_pattern = "**/settings"
     payload = {
         "plan": "qualification_plan",
         "status": status,
@@ -99,8 +101,24 @@ def subscription_state(
         "seats": 1,
         "max_seats": 1,
     }
+    settings_payload = {
+        "general": {
+            "language": "en",
+            "refresh_interval": 30,
+            "timezone": "UTC",
+        },
+        "subscription": payload,
+    }
     page.route(
-        pattern,
+        settings_pattern,
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(settings_payload),
+        ),
+    )
+    page.route(
+        subscription_pattern,
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
@@ -119,10 +137,11 @@ def subscription_state(
             "settings-subscription",
             state_name,
             counter,
-            "Controlled /settings/subscription response exercises the delivered Settings subscription renderer using the public backend response contract; this is UI qualification only, not billing-provider or staging evidence.",
+            "Controlled /settings and /settings/subscription responses exercise the delivered Settings subscription renderer using the public response contract while isolating unrelated dependencies; this is UI qualification only, not billing-provider or staging evidence.",
         )
     finally:
-        page.unroute(pattern)
+        page.unroute(subscription_pattern)
+        page.unroute(settings_pattern)
 
 
 def update_metadata() -> None:
