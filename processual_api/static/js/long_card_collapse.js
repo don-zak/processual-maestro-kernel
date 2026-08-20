@@ -17,49 +17,14 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      .pmk-long-card-tools {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 0.4rem;
-        margin: 0 0 0.55rem;
-      }
-      .pmk-long-card-toggle {
-        min-height: 30px;
-        padding: 0.28rem 0.65rem;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.42);
-        background: rgba(15, 23, 42, 0.72);
-        color: #eaf2ff;
-        font: inherit;
-        font-size: 0.78rem;
-        font-weight: 700;
-        line-height: 1.1;
-        cursor: pointer;
-      }
-      .pmk-long-card-toggle:hover {
-        border-color: rgba(191, 219, 254, 0.72);
-        background: rgba(30, 41, 59, 0.9);
-      }
-      .pmk-long-card-toggle:focus-visible {
-        outline: 2px solid currentColor;
-        outline-offset: 2px;
-      }
-      [data-pmk-long-card="true"][data-pmk-collapsed="true"] {
-        overflow: hidden !important;
-      }
-      @media (max-width: 600px) {
-        .pmk-long-card-tools {
-          position: sticky;
-          top: 0;
-          z-index: 3;
-          padding-top: 0.1rem;
-          background: inherit;
-        }
-        .pmk-long-card-toggle {
-          min-height: 34px;
-          padding-inline: 0.75rem;
-        }
+      .pmk-long-card-tools { display:flex; justify-content:flex-end; align-items:center; gap:.4rem; margin:0 0 .55rem; }
+      .pmk-long-card-toggle { min-height:30px; padding:.28rem .65rem; border-radius:999px; border:1px solid rgba(148,163,184,.42); background:rgba(15,23,42,.72); color:#eaf2ff; font:inherit; font-size:.78rem; font-weight:700; line-height:1.1; cursor:pointer; }
+      .pmk-long-card-toggle:hover { border-color:rgba(191,219,254,.72); background:rgba(30,41,59,.9); }
+      .pmk-long-card-toggle:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
+      [data-pmk-long-card="true"][data-pmk-collapsed="true"] { overflow:hidden!important; }
+      @media (max-width:600px) {
+        .pmk-long-card-tools { position:sticky; top:0; z-index:3; padding-top:.1rem; background:inherit; }
+        .pmk-long-card-toggle { min-height:34px; padding-inline:.75rem; }
       }
     `;
     document.head.appendChild(style);
@@ -83,6 +48,10 @@
     return CARD_HINT.test(classAndId(card));
   }
 
+  function isStructuralHostPanel(card) {
+    return card.matches('.admin-panel') && Boolean(card.querySelector(SEMANTIC_DESCENDANT_SELECTOR));
+  }
+
   function hasDominantSemanticChild(card) {
     const threshold = longThreshold();
     const ownHeight = Math.max(1, card.getBoundingClientRect().height);
@@ -96,6 +65,7 @@
   function visuallyCardLike(card) {
     if (!(card instanceof HTMLElement)) return false;
     if (!visible(card) || !isSemanticCard(card)) return false;
+    if (isStructuralHostPanel(card)) return false;
     if (card.scrollHeight < longThreshold()) return false;
     if (card.children.length < 2) return false;
     if (card.matches('#content,#main,.page,.admin-page,.sl18-panel')) return false;
@@ -105,9 +75,7 @@
   }
 
   function directHeader(card) {
-    return Array.from(card.children).find((child) =>
-      child.matches('h1,h2,h3,h4,.sec-hdr,.admin-card-header,.settings-card-header,.mbs-head,[data-card-header]')
-    ) || null;
+    return Array.from(card.children).find((child) => child.matches('h1,h2,h3,h4,.sec-hdr,.admin-card-header,.settings-card-header,.mbs-head,[data-card-header]')) || null;
   }
 
   function rememberPresentation(child) {
@@ -176,9 +144,7 @@
     card.insertBefore(tools, card.firstChild);
   }
 
-  const resizeObserver = typeof ResizeObserver === 'function'
-    ? new ResizeObserver((entries) => entries.forEach((entry) => enhance(entry.target)))
-    : null;
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => entries.forEach((entry) => enhance(entry.target))) : null;
 
   function observeCandidate(card) {
     if (!resizeObserver || observedForResize.has(card) || !isSemanticCard(card)) return;
@@ -215,22 +181,12 @@
     window.setTimeout(scan, 900);
     window.setTimeout(scan, 1800);
     const observer = new MutationObserver(scheduleScan);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['class', 'style', 'hidden'],
-    });
+    observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','style','hidden'] });
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest('.nav-btn[data-page],.nav-btn[data-admin-page],[data-am-section],.sl18-tab')) {
-        scheduleVisibilityScans();
-      }
+      if (target?.closest('.nav-btn[data-page],.nav-btn[data-admin-page],[data-am-section],.sl18-tab')) scheduleVisibilityScans();
     }, true);
     window.addEventListener('hashchange', scheduleVisibilityScans);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) scheduleVisibilityScans();
-    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleVisibilityScans(); });
   });
 })();
