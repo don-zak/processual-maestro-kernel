@@ -6,6 +6,7 @@
   const CANDIDATE_SELECTOR = '#content [class*="card"],#content [class*="panel"],#content [class*="hero"],#content [class*="tile"],.admin-page [class*="card"],.admin-page [class*="panel"],.admin-page [class*="hero"],.admin-page [class*="tile"],.admin-card,.settings-card,#admin-integration-readiness-tracking-summary-card';
   const CARD_HINT = /(\b|[-_])(card|panel|hero|tile)(\b|[-_])/i;
   const KNOWN_CARD_IDS = new Set(['admin-integration-readiness-tracking-summary-card']);
+  const STRUCTURAL_HOST_IDS = new Set(['admin-integration-readiness-tracking-summary-host']);
   const observedForResize = new WeakSet();
 
   function longThreshold() {
@@ -49,6 +50,7 @@
   }
 
   function isStructuralHostPanel(card) {
+    if (Boolean(card.id) && STRUCTURAL_HOST_IDS.has(card.id)) return true;
     return card.matches('.admin-panel') && Boolean(card.querySelector(SEMANTIC_DESCENDANT_SELECTOR));
   }
 
@@ -147,7 +149,7 @@
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => entries.forEach((entry) => enhance(entry.target))) : null;
 
   function observeCandidate(card) {
-    if (!resizeObserver || observedForResize.has(card) || !isSemanticCard(card)) return;
+    if (!resizeObserver || observedForResize.has(card) || !isSemanticCard(card) || isStructuralHostPanel(card)) return;
     observedForResize.add(card);
     resizeObserver.observe(card);
   }

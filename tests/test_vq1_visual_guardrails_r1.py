@@ -42,6 +42,16 @@ def test_admin_layout_normalizes_to_single_navigation_authority():
     assert "normalizeActivePage" in source
 
 
+def test_long_card_enhancer_treats_readiness_host_as_structural():
+    source = read("processual_api/static/js/long_card_collapse.js")
+    assert "STRUCTURAL_HOST_IDS" in source
+    assert "admin-integration-readiness-tracking-summary-host" in source
+    assert "STRUCTURAL_HOST_IDS.has(card.id)" in source
+    assert "isStructuralHostPanel(card)" in source
+    assert "!isSemanticCard(card) || isStructuralHostPanel(card)" in source
+    assert "admin-integration-readiness-tracking-summary-card" in source
+
+
 def test_vq_validator_rejects_cross_page_owned_surfaces_and_settings_noise():
     source = read("qualification/vq1_browser_state_validator.py")
     assert "validate_admin_surface_ownership" in source
