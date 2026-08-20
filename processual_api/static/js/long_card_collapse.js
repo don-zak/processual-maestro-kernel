@@ -3,15 +3,9 @@
   const TOOLS_CLASS = 'pmk-long-card-tools';
   const BUTTON_CLASS = 'pmk-long-card-toggle';
   const LONG_THRESHOLD_PX = 520;
-  const SELECTOR = [
-    '#content .card',
-    '#content .settings-card',
-    '#content .pmk-admin-card',
-    '.admin-page .card',
-    '.admin-page .admin-card',
-    '.admin-page .pmk-admin-card',
-    '.admin-page .admin-subscription-analytics-card',
-  ].join(',');
+  const CANDIDATE_SELECTOR = '#content div,#content section,#content article,.admin-page div,.admin-page section,.admin-page article';
+  const WRAPPER_HINT = /(\b|[-_])(page|grid|layout|root|host|shell|wrapper|container|content|nav|tabs|panels)(\b|[-_])/i;
+  const CARD_HINT = /(\b|[-_])(card|panel|hero|summary|tile|block)(\b|[-_])/i;
 
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -70,9 +64,40 @@
     return Boolean(card.offsetParent) && card.getClientRects().length > 0;
   }
 
+  function classAndId(card) {
+    return `${card.id || ''} ${typeof card.className === 'string' ? card.className : ''}`.trim();
+  }
+
+  function visuallyCardLike(card) {
+    if (!(card instanceof HTMLElement)) return false;
+    if (!visible(card)) return false;
+    if (card.scrollHeight < LONG_THRESHOLD_PX) return false;
+    if (card.children.length < 2) return false;
+    if (card.matches('#content,#main,.page,.admin-page,.sl18-panel')) return false;
+
+    const identity = classAndId(card);
+    if (WRAPPER_HINT.test(identity) && !CARD_HINT.test(identity)) return false;
+
+    const style = getComputedStyle(card);
+    const radius = Number.parseFloat(style.borderTopLeftRadius || '0') || 0;
+    const border = Number.parseFloat(style.borderTopWidth || '0') || 0;
+    const hasVisualSurface = radius >= 6 || border > 0 || CARD_HINT.test(identity);
+    if (!hasVisualSurface) return false;
+
+    const directLongSurfaces = Array.from(card.children).filter((child) => {
+      if (!(child instanceof HTMLElement) || !visible(child)) return false;
+      const childIdentity = classAndId(child);
+      if (!CARD_HINT.test(childIdentity)) return false;
+      return child.scrollHeight >= LONG_THRESHOLD_PX && child.clientHeight >= card.clientHeight * 0.75;
+    });
+    if (directLongSurfaces.length === 1 && !CARD_HINT.test(identity)) return false;
+
+    return true;
+  }
+
   function directHeader(card) {
     return Array.from(card.children).find((child) =>
-      child.matches('h1,h2,h3,h4,.sec-hdr,.admin-card-header,.settings-card-header,[data-card-header]')
+      child.matches('h1,h2,h3,h4,.sec-hdr,.admin-card-header,.settings-card-header,.mbs-head,[data-card-header]')
     ) || null;
   }
 
@@ -107,8 +132,7 @@
   function enhance(card) {
     if (!(card instanceof HTMLElement)) return;
     if (card.dataset.pmkLongCard === 'true') return;
-    if (!visible(card)) return;
-    if (card.scrollHeight < LONG_THRESHOLD_PX) return;
+    if (!visuallyCardLike(card)) return;
 
     ensureStyle();
     card.dataset.pmkLongCard = 'true';
@@ -135,7 +159,7 @@
   }
 
   function scan(root = document) {
-    root.querySelectorAll?.(SELECTOR).forEach(enhance);
+    root.querySelectorAll?.(CANDIDATE_SELECTOR).forEach(enhance);
   }
 
   let scheduled = false;
@@ -152,6 +176,7 @@
     scan();
     window.setTimeout(scan, 250);
     window.setTimeout(scan, 900);
+    window.setTimeout(scan, 1800);
     const observer = new MutationObserver(scheduleScan);
     observer.observe(document.body, { childList: true, subtree: true });
   });
