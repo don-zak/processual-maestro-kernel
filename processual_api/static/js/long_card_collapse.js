@@ -224,12 +224,38 @@
     });
   }
 
+  function scheduleVisibilityScans() {
+    scheduleScan();
+    window.setTimeout(scheduleScan, 100);
+    window.setTimeout(scheduleScan, 300);
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     scan();
     window.setTimeout(scan, 250);
     window.setTimeout(scan, 900);
     window.setTimeout(scan, 1800);
+
     const observer = new MutationObserver(scheduleScan);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden'],
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      if (target.closest('.nav-btn[data-page],.nav-btn[data-admin-page],[data-am-section],.sl18-tab')) {
+        scheduleVisibilityScans();
+      }
+    }, true);
+
+    window.addEventListener('hashchange', scheduleVisibilityScans);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleVisibilityScans();
+    });
   });
 })();
