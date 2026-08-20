@@ -20,6 +20,21 @@ _VQ1_SETTINGS_OWNERSHIP_SCRIPT = (
 _LONG_CARD_COLLAPSE_SCRIPT = (
     b'<script src="/console/js/long_card_collapse.js?v=longcards09"></script>'
 )
+_LOGIN_PASSWORD_INPUT = (
+    b'<input id="login-password" class="inp" type="password" '
+    b'placeholder="********" autocomplete="current-password">'
+)
+_LOGIN_PASSWORD_FIRST_PAINT = _LOGIN_PASSWORD_INPUT + (
+    b'<button id="login-password-visibility" type="button" '
+    b'aria-label="Show password" aria-pressed="false" '
+    b'style="position:absolute;inset-inline-end:8px;bottom:7px;border:1px solid var(--rim);'
+    b'border-radius:6px;background:rgba(17,22,32,.92);color:var(--soft);'
+    b'font:10px var(--font-data);padding:5px 8px;cursor:pointer" '
+    b'onclick="const p=document.getElementById(\'login-password\');const show=p.type===\'password\';'
+    b'p.type=show?\'text\':\'password\';this.textContent=show?\'Hide\':\'Show\';'
+    b'this.setAttribute(\'aria-label\',show?\'Hide password\':\'Show password\');'
+    b'this.setAttribute(\'aria-pressed\',show?\'true\':\'false\')">Show</button>'
+)
 _PUBLIC_AUTHORITY_REPLACEMENTS = (
     (b"Production Ready", b"Qualification Build"),
     ("جاهز للإنتاج".encode(), "نسخة تأهيل".encode()),
@@ -94,6 +109,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if path in {"/", "/console", "/console/", "/console/index.html"}:
             response = await self._rewrite_public_authority_claims(response)
 
+        if path == "/login":
+            response = await self._stabilize_login_first_paint(response)
+
         if path in {"/console", "/console/", "/console/index.html"}:
             response = await self._pin_public_assets(response)
             response = await self._quarantine_legacy_console_surfaces(response)
@@ -121,7 +139,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = _CONTENT_SECURITY_POLICY
 
         if (
-            path in {"/admin", "/admin/"}
+            path == "/login"
+            or path in {"/admin", "/admin/"}
             or path == "/console"
             or path.startswith("/console/")
         ):
@@ -130,6 +149,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
+
+        if path == "/login":
+            response.headers["Clear-Site-Data"] = '"cache"'
 
         return response
 
@@ -141,6 +163,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         body = await self._response_body(response)
         for source, replacement in _PUBLIC_AUTHORITY_REPLACEMENTS:
             body = body.replace(source, replacement)
+        return self._rebuilt_response(response, body)
+
+    async def _stabilize_login_first_paint(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+
+        body = await self._response_body(response)
+        if b'id="login-password-visibility"' not in body:
+            body = body.replace(
+                _LOGIN_PASSWORD_INPUT,
+                _LOGIN_PASSWORD_FIRST_PAINT,
+                1,
+            )
         return self._rebuilt_response(response, body)
 
     async def _pin_public_assets(self, response: Response) -> Response:
