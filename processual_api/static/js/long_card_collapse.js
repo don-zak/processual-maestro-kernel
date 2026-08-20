@@ -2,10 +2,13 @@
   const STYLE_ID = 'pmk-long-card-collapse-style';
   const TOOLS_CLASS = 'pmk-long-card-tools';
   const BUTTON_CLASS = 'pmk-long-card-toggle';
-  const LONG_THRESHOLD_PX = 520;
   const CANDIDATE_SELECTOR = '#content div,#content section,#content article,.admin-page div,.admin-page section,.admin-page article';
   const WRAPPER_HINT = /(\b|[-_])(page|grid|layout|root|host|shell|wrapper|container|content|nav|tabs|panels)(\b|[-_])/i;
   const CARD_HINT = /(\b|[-_])(card|panel|hero|summary|tile|block)(\b|[-_])/i;
+
+  function longThreshold() {
+    return window.innerWidth <= 600 ? 420 : 520;
+  }
 
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -71,7 +74,8 @@
   function visuallyCardLike(card) {
     if (!(card instanceof HTMLElement)) return false;
     if (!visible(card)) return false;
-    if (card.scrollHeight < LONG_THRESHOLD_PX) return false;
+    const threshold = longThreshold();
+    if (card.scrollHeight < threshold) return false;
     if (card.children.length < 2) return false;
     if (card.matches('#content,#main,.page,.admin-page,.sl18-panel')) return false;
 
@@ -88,7 +92,7 @@
       if (!(child instanceof HTMLElement) || !visible(child)) return false;
       const childIdentity = classAndId(child);
       if (!CARD_HINT.test(childIdentity)) return false;
-      return child.scrollHeight >= LONG_THRESHOLD_PX && child.clientHeight >= card.clientHeight * 0.75;
+      return child.scrollHeight >= threshold && child.clientHeight >= card.clientHeight * 0.75;
     });
     if (directLongSurfaces.length === 1 && !CARD_HINT.test(identity)) return false;
 
@@ -99,6 +103,35 @@
     return Array.from(card.children).find((child) =>
       child.matches('h1,h2,h3,h4,.sec-hdr,.admin-card-header,.settings-card-header,.mbs-head,[data-card-header]')
     ) || null;
+  }
+
+  function rememberPresentation(child) {
+    if (child.hasAttribute('data-pmk-collapse-prev-hidden')) return;
+    child.setAttribute('data-pmk-collapse-prev-hidden', child.hidden ? 'true' : 'false');
+    child.setAttribute('data-pmk-collapse-prev-display', child.style.getPropertyValue('display'));
+    child.setAttribute('data-pmk-collapse-prev-display-priority', child.style.getPropertyPriority('display'));
+  }
+
+  function hideChild(child) {
+    rememberPresentation(child);
+    child.hidden = true;
+    child.style.setProperty('display', 'none', 'important');
+  }
+
+  function restoreChild(child) {
+    const previousHidden = child.getAttribute('data-pmk-collapse-prev-hidden');
+    if (previousHidden === null) return;
+    const previousDisplay = child.getAttribute('data-pmk-collapse-prev-display') || '';
+    const previousPriority = child.getAttribute('data-pmk-collapse-prev-display-priority') || '';
+
+    child.style.removeProperty('display');
+    if (previousDisplay) {
+      child.style.setProperty('display', previousDisplay, previousPriority);
+    }
+    child.hidden = previousHidden === 'true';
+    child.removeAttribute('data-pmk-collapse-prev-hidden');
+    child.removeAttribute('data-pmk-collapse-prev-display');
+    child.removeAttribute('data-pmk-collapse-prev-display-priority');
   }
 
   function setCollapsed(card, collapsed) {
@@ -114,18 +147,8 @@
 
     Array.from(card.children).forEach((child) => {
       if (child === tools || child === header) return;
-      if (collapsed) {
-        if (!child.hasAttribute('data-pmk-collapse-prev-hidden')) {
-          child.setAttribute('data-pmk-collapse-prev-hidden', child.hidden ? 'true' : 'false');
-        }
-        child.hidden = true;
-      } else {
-        const previous = child.getAttribute('data-pmk-collapse-prev-hidden');
-        if (previous !== null) {
-          child.hidden = previous === 'true';
-          child.removeAttribute('data-pmk-collapse-prev-hidden');
-        }
-      }
+      if (collapsed) hideChild(child);
+      else restoreChild(child);
     });
   }
 
