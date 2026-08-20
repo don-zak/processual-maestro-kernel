@@ -5,6 +5,7 @@
   const CANDIDATE_SELECTOR = '#content div,#content section,#content article,.admin-page div,.admin-page section,.admin-page article';
   const WRAPPER_HINT = /(\b|[-_])(page|grid|layout|root|host|shell|wrapper|container|content|nav|tabs|panels)(\b|[-_])/i;
   const CARD_HINT = /(\b|[-_])(card|panel|hero|summary|tile|block)(\b|[-_])/i;
+  const observedForResize = new WeakSet();
 
   function longThreshold() {
     return window.innerWidth <= 600 ? 420 : 520;
@@ -69,6 +70,19 @@
 
   function classAndId(card) {
     return `${card.id || ''} ${typeof card.className === 'string' ? card.className : ''}`.trim();
+  }
+
+  function likelySurfaceCandidate(card) {
+    if (!(card instanceof HTMLElement)) return false;
+    if (card.matches('#content,#main,.page,.admin-page,.sl18-panel')) return false;
+    const identity = classAndId(card);
+    if (CARD_HINT.test(identity)) return true;
+    if (card.matches('section,article')) return true;
+    if (card.children.length < 2) return false;
+    const style = getComputedStyle(card);
+    const radius = Number.parseFloat(style.borderTopLeftRadius || '0') || 0;
+    const border = Number.parseFloat(style.borderTopWidth || '0') || 0;
+    return radius >= 6 || border > 0;
   }
 
   function visuallyCardLike(card) {
@@ -181,8 +195,23 @@
     card.insertBefore(tools, card.firstChild);
   }
 
+  const resizeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver((entries) => {
+        entries.forEach((entry) => enhance(entry.target));
+      })
+    : null;
+
+  function observeCandidate(card) {
+    if (!resizeObserver || observedForResize.has(card) || !likelySurfaceCandidate(card)) return;
+    observedForResize.add(card);
+    resizeObserver.observe(card);
+  }
+
   function scan(root = document) {
-    root.querySelectorAll?.(CANDIDATE_SELECTOR).forEach(enhance);
+    root.querySelectorAll?.(CANDIDATE_SELECTOR).forEach((card) => {
+      observeCandidate(card);
+      enhance(card);
+    });
   }
 
   let scheduled = false;
@@ -201,6 +230,6 @@
     window.setTimeout(scan, 900);
     window.setTimeout(scan, 1800);
     const observer = new MutationObserver(scheduleScan);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   });
 })();
