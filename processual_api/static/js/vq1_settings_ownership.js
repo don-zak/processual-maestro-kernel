@@ -7,6 +7,7 @@
     'set-api-key-integration-card',
     'set-integration-readiness-card',
     'set-client-integration-guide-card',
+    'settings-integration-claim-keys-host',
   ];
 
   let reconciling = false;
