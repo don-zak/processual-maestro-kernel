@@ -32,32 +32,64 @@ def open_surface(page: Page, route: str, section: str) -> str:
 
 
 def validate_scroll(page: Page, route: str, section: str) -> None:
-    open_surface(page, route, section)
-    scroll_selector = "#content" if route == "/console/" else ".admin-page.active"
-    metrics = page.locator(scroll_selector).evaluate(
+    surface_selector = open_surface(page, route, section)
+    metrics = page.evaluate(
         """
-        el => {
-          const before = el.scrollTop;
-          const maximum = Math.max(0, el.scrollHeight - el.clientHeight);
-          el.scrollTop = maximum;
+        selector => {
+          const surface = document.querySelector(selector);
+          if (!surface) return null;
+          const candidates = [];
+          let node = surface;
+          while (node && node !== document.documentElement) {
+            if (node instanceof HTMLElement) {
+              const style = getComputedStyle(node);
+              const maximum = Math.max(0, node.scrollHeight - node.clientHeight);
+              const scrollable = maximum > 0 && /(auto|scroll|overlay)/.test(style.overflowY);
+              candidates.push({ node, maximum, overflowY: style.overflowY, scrollable });
+            }
+            node = node.parentElement;
+          }
+          const body = document.scrollingElement || document.documentElement;
+          if (body) {
+            candidates.push({
+              node: body,
+              maximum: Math.max(0, body.scrollHeight - body.clientHeight),
+              overflowY: getComputedStyle(document.documentElement).overflowY,
+              scrollable: Math.max(0, body.scrollHeight - body.clientHeight) > 0,
+            });
+          }
+          const chosen = candidates.find(item => item.scrollable) || candidates.find(item => item.maximum > 0);
+          if (!chosen) return { found: false, candidates: candidates.map(item => ({ maximum: item.maximum, overflowY: item.overflowY })) };
+          const before = chosen.node.scrollTop;
+          chosen.node.scrollTop = chosen.maximum;
           return {
+            found: true,
             before,
-            after: el.scrollTop,
-            clientHeight: el.clientHeight,
-            scrollHeight: el.scrollHeight,
-            maximum,
+            after: chosen.node.scrollTop,
+            clientHeight: chosen.node.clientHeight,
+            scrollHeight: chosen.node.scrollHeight,
+            maximum: chosen.maximum,
+            overflowY: chosen.overflowY,
+            tag: chosen.node.tagName,
+            id: chosen.node.id || '',
+            className: String(chosen.node.className || ''),
           };
         }
-        """
+        """,
+        surface_selector,
     )
-    page.wait_for_timeout(100)
-    if metrics["maximum"] < 16 or metrics["after"] < 8:
+    page.wait_for_timeout(120)
+    if not metrics or not metrics.get("found") or metrics["maximum"] < 16 or metrics["after"] < 8:
         raise RuntimeError(
             f"controlled overflow did not produce real scroll for {route} {section}: {metrics}"
         )
     shot = evidence_path(route, section, "long-content/overflow")
     shot.parent.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(shot), full_page=False)
+    print(
+        f"validated scroll inside {route} {section}: "
+        f"{metrics['tag']}#{metrics['id']}.{metrics['className']} after={metrics['after']} max={metrics['maximum']}"
+    )
 
 
 def validate_focus(page: Page, route: str, section: str) -> None:
