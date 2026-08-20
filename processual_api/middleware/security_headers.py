@@ -15,7 +15,7 @@ _VQ1_SETTINGS_OWNERSHIP_SCRIPT = (
     b'<script src="/console/js/vq1_settings_ownership.js?v=vq1ownership01"></script>'
 )
 _LONG_CARD_COLLAPSE_SCRIPT = (
-    b'<script src="/console/js/long_card_collapse.js?v=longcards02"></script>'
+    b'<script src="/console/js/long_card_collapse.js?v=longcards03"></script>'
 )
 _PUBLIC_AUTHORITY_REPLACEMENTS = (
     (b"Production Ready", b"Qualification Build"),
