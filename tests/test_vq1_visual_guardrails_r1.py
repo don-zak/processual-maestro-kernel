@@ -68,8 +68,8 @@ def test_settings_default_evidence_refresh_covers_every_recorded_viewport_before
     assert "def default_rows()" in refresher
     assert 'row["state"] == "default/loaded"' in refresher
     assert 'for row in rows:' in refresher
-    assert 'width = int(row["width"])' in refresher
-    assert 'height = int(row["height"])' in refresher
+    assert 'width = int(row["viewport_width"])' in refresher
+    assert 'height = int(row["viewport_height"])' in refresher
     assert 'page.screenshot(path=str(shot), full_page=True)' in refresher
     assert "Failed to load client settings" in refresher
     refresh_step = "python qualification/vq1_settings_default_evidence_refresh.py"
