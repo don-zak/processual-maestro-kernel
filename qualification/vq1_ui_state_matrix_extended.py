@@ -18,6 +18,11 @@ EXTENDED_UI_STATES = [
 def open_admin_marketplace(page: Page) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(f"{BASE_URL}/admin#admin-marketplace", wait_until="domcontentloaded")
+    page.wait_for_function(
+        "() => window.PMK_ADMIN_NAV && typeof window.PMK_ADMIN_NAV.setActivePage === 'function'",
+        timeout=4000,
+    )
+    page.evaluate("() => window.PMK_ADMIN_NAV.setActivePage('admin-marketplace')")
     page.locator("#page-admin-marketplace.active").wait_for(state="visible", timeout=4000)
 
 
