@@ -45,10 +45,16 @@ def test_admin_layout_normalizes_to_single_navigation_authority():
 def test_live_admin_home_forces_document_flow_and_no_horizontal_page_overflow():
     source = read("processual_api/static/js/admin_home_layout.js")
     assert "#page-admin-home .card{box-sizing:border-box;max-width:100%!important}" in source
-    assert "position:static!important" in source
-    assert "transform:none!important" in source
+    assert "#page-admin-home > section.page{display:flex!important;flex-direction:column!important" in source
+    assert "#page-admin-home > section.page > *{position:static!important" in source
+    assert "#page-admin-home .grid-2-eq{display:grid!important" in source
+    assert "height:auto!important" in source
     assert "overflow-x:hidden!important" in source
     assert "#admin-program-supervision-readiness,#admin-supervisor-overview-counters" in source
+    assert "const section = home.querySelector(':scope > section.page')" in source
+    assert "section.appendChild(surface)" in source
+    assert "#admin-home-runtime-surface{display:grid!important" in source
+    assert "position:static!important" in source
 
 
 def test_admin_market_navigation_stays_visible_but_authority_remains_backend_controlled():
