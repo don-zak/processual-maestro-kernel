@@ -22,8 +22,6 @@ def open_admin_marketplace(page: Page) -> None:
         "() => window.PMK_ADMIN_NAV && typeof window.PMK_ADMIN_NAV.setActivePage === 'function'",
         timeout=4000,
     )
-    page.evaluate("() => window.PMK_ADMIN_NAV.setActivePage('admin-marketplace')")
-    page.locator("#page-admin-marketplace.active").wait_for(state="visible", timeout=4000)
 
 
 def admin_marketplace_permission_denied(page: Page, browser_version: str, counter: int):
@@ -41,8 +39,12 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
         state = page.locator('#am-payment-destination-list[data-state="error"]').filter(
             has_text="An active platform administrator authority is required"
         )
-        state.wait_for(state="visible", timeout=4000)
         authority = page.locator('#admin-marketplace-authority-state[data-state="denied"]')
+        state.wait_for(state="attached", timeout=4000)
+        authority.wait_for(state="attached", timeout=4000)
+        page.evaluate("() => window.PMK_ADMIN_NAV.setActivePage('admin-marketplace')")
+        page.locator("#page-admin-marketplace.active").wait_for(state="visible", timeout=4000)
+        state.wait_for(state="visible", timeout=4000)
         authority.wait_for(state="visible", timeout=4000)
         reveal(state)
         return capture(
@@ -52,7 +54,7 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
             "admin-marketplace",
             "permission denied",
             counter,
-            "Controlled HTTP 403 interception proves the delivered Admin Marketplace permission-denied renderer only; it does not grant or mutate platform administrator authority.",
+            "Controlled HTTP 403 interception proves the delivered Admin Marketplace permission-denied renderer only; the real Admin navigation API reopens the denied page after the renderer hides its navigation entry. No platform authority is granted or mutated.",
         )
     finally:
         page.unroute(pattern)
