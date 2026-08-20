@@ -45,7 +45,8 @@
   .sl18-enterprise-summary,
   .admin-subscription-analytics-summary,
   .admin-subscription-analytics-grid,
-  .admin-subscription-analytics-plans {
+  .admin-subscription-analytics-plans,
+  .admin-page .admin-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
@@ -73,7 +74,8 @@
     #set-enterprise-integration-eligibility-card,
     #set-api-key-integration-card,
     #set-integration-readiness-card,
-    #set-client-integration-guide-card
+    #set-client-integration-guide-card,
+    #settings-integration-claim-keys-host
   ) {
     position: relative !important;
     inset: auto !important;
@@ -104,6 +106,14 @@
 
   .admin-page [style*="grid-template-columns"] {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .admin-page input,
+  .admin-page select,
+  .admin-page textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .admin-page table {
