@@ -2,7 +2,7 @@
   const STYLE_ID = 'pmk-long-card-collapse-style';
   const TOOLS_CLASS = 'pmk-long-card-tools';
   const BUTTON_CLASS = 'pmk-long-card-toggle';
-  const CANDIDATE_SELECTOR = '#content div,#content section,#content article,.admin-page div,.admin-page section,.admin-page article';
+  const CANDIDATE_SELECTOR = '#content div,#content section,#content article,.admin-page div,.admin-page section,.admin-page article,.admin-card,.settings-card,#admin-integration-readiness-tracking-summary-card';
   const WRAPPER_HINT = /(\b|[-_])(page|grid|layout|root|host|shell|wrapper|container|content|nav|tabs|panels)(\b|[-_])/i;
   const CARD_HINT = /(\b|[-_])(card|panel|hero|summary|tile|block)(\b|[-_])/i;
   const observedForResize = new WeakSet();
