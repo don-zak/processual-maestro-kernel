@@ -63,6 +63,13 @@ def test_live_admin_home_uses_one_canonical_surface_and_document_flow():
     assert "MutationObserver" in source
 
 
+def test_admin_narrow_sidebar_hides_long_brand_text():
+    source = read("processual_api/static/js/admin_home_layout.js")
+    assert "@media (max-width:600px)" in source
+    assert "#brand>div:last-child{display:none!important}" in source
+    assert "#brand-mark{margin:0 auto!important}" in source
+
+
 def test_admin_market_navigation_stays_visible_but_authority_remains_backend_controlled():
     layout = read("processual_api/static/js/admin_home_layout.js")
     marketplace = read("processual_api/static/js/admin_marketplace.js")
