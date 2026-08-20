@@ -42,6 +42,46 @@ def test_admin_layout_normalizes_to_single_navigation_authority():
     assert "normalizeActivePage" in source
 
 
+def test_live_admin_home_forces_document_flow_and_no_horizontal_page_overflow():
+    source = read("processual_api/static/js/admin_home_layout.js")
+    assert "#page-admin-home .card{box-sizing:border-box;max-width:100%!important}" in source
+    assert "position:static!important" in source
+    assert "transform:none!important" in source
+    assert "overflow-x:hidden!important" in source
+    assert "#admin-program-supervision-readiness,#admin-supervisor-overview-counters" in source
+
+
+def test_admin_market_navigation_stays_visible_but_authority_remains_backend_controlled():
+    layout = read("processual_api/static/js/admin_home_layout.js")
+    marketplace = read("processual_api/static/js/admin_marketplace.js")
+    assert "ensureMarketplaceNavigationVisible" in layout
+    assert "visible-fail-closed" in layout
+    assert "backend platform-administrator authority is required" in layout
+    assert "response.status === 403 || response.status === 401" in marketplace
+    assert "Platform authority required" in marketplace
+    assert "Sign-in required" in marketplace
+
+
+def test_login_restores_accessible_password_visibility_control():
+    source = read("processual_api/static/js/login_token_capture.js")
+    assert "installPasswordVisibilityControl" in source
+    assert "login-password-visibility" in source
+    assert "aria-pressed" in source
+    assert "Show password" in source
+    assert "Hide password" in source
+    assert "password.type = visible ? 'password' : 'text'" in source
+
+
+def test_console_badge_reports_qualification_readiness_without_production_authority():
+    i18n = read("processual_api/static/js/i18n.js")
+    app = read("processual_api/static/js/app.js")
+    assert "Qualification Ready" in i18n
+    assert "جاهز للتأهيل" in i18n
+    assert "syncQualificationBadge" in app
+    assert "controlled-review-ready" in app
+    assert "no production authority is granted" in app
+
+
 def test_long_card_enhancer_treats_readiness_host_as_structural():
     source = read("processual_api/static/js/long_card_collapse.js")
     assert "STRUCTURAL_HOST_IDS" in source
