@@ -22,6 +22,7 @@ SETTINGS_PAYLOAD = {
         "max_seats": 1,
     },
 }
+BILLING_STATEMENTS_PAYLOAD = {"statements": []}
 
 
 def install_clean_settings_routes(page: Page) -> None:
@@ -41,6 +42,14 @@ def install_clean_settings_routes(page: Page) -> None:
             body=json.dumps(SETTINGS_PAYLOAD["subscription"]),
         ),
     )
+    page.route(
+        "**/billing/statements",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(BILLING_STATEMENTS_PAYLOAD),
+        ),
+    )
 
 
 def default_rows() -> list[dict[str, str]]:
@@ -57,17 +66,31 @@ def default_rows() -> list[dict[str, str]]:
     return rows
 
 
+def assert_clean_default_state(page: Page, width: int, height: int) -> None:
+    for message in (
+        "Failed to load client settings",
+        "Subscription access is temporarily unavailable",
+    ):
+        error = page.get_by_text(message, exact=False)
+        if error.count() and error.first.is_visible():
+            raise RuntimeError(
+                f"Settings default evidence contains unrelated dependency error at {width}x{height}: {message}"
+            )
+
+    tour = page.get_by_text("Choose Tour Language", exact=True)
+    if tour.count() and tour.first.is_visible():
+        raise RuntimeError(
+            f"Settings default evidence is obstructed by guided-tour language modal at {width}x{height}"
+        )
+
+
 def open_settings(page: Page, width: int, height: int) -> None:
     page.set_viewport_size({"width": width, "height": height})
     page.goto(f"{BASE_URL}/console/", wait_until="domcontentloaded")
     page.wait_for_timeout(250)
     page.locator('.nav-btn[data-page="settings"]').click()
-    page.wait_for_timeout(250)
-    error = page.get_by_text("Failed to load client settings", exact=False)
-    if error.count() and error.first.is_visible():
-        raise RuntimeError(
-            f"Settings default evidence still contains dependency error at {width}x{height}"
-        )
+    page.wait_for_timeout(350)
+    assert_clean_default_state(page, width, height)
 
 
 def main() -> None:
@@ -80,6 +103,16 @@ def main() -> None:
         page = browser.new_page(locale="en")
         try:
             establish_qualification_session(page)
+            page.add_init_script(
+                """
+                (() => {
+                  try {
+                    localStorage.setItem('tour_completed', 'true');
+                    localStorage.setItem('tour_lang', 'en');
+                  } catch (_) {}
+                })();
+                """
+            )
             install_clean_settings_routes(page)
             for row in rows:
                 width = int(row["viewport_width"])
