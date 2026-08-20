@@ -62,6 +62,9 @@ jobs:
       - name: Capture VQ-1 route and section evidence
         run: python qualification/vq1_browser_harness.py
 
+      - name: Validate controlled browser states
+        run: python qualification/vq1_browser_state_validator.py
+
       - name: Show capture summary
         if: always()
         run: |
