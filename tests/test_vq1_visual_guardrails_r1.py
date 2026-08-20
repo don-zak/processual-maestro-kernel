@@ -25,7 +25,7 @@ def test_admin_layout_uses_general_owned_surface_map():
     source = read("processual_api/static/js/admin_layout_cleanup.js")
     assert "OWNED_ADMIN_SURFACES" in source
     assert "containOwnedAdminSurfaces" in source
-    assert "data-admin-owner-page" not in source  # dataset camelCase is used instead
+    assert "data-admin-owner-page" not in source
     assert "surface.dataset.adminOwnerPage = ownerPageId" in source
     assert "'admin-integration-readiness-tracking-summary-host': 'page-admin-home'" in source
     assert "'admin-integration-readiness-case-management-host': 'page-admin-clients'" in source
@@ -42,19 +42,25 @@ def test_admin_layout_normalizes_to_single_navigation_authority():
     assert "normalizeActivePage" in source
 
 
-def test_live_admin_home_forces_document_flow_and_no_horizontal_page_overflow():
+def test_live_admin_home_uses_one_canonical_surface_and_document_flow():
     source = read("processual_api/static/js/admin_home_layout.js")
-    assert "#page-admin-home .card{box-sizing:border-box;max-width:100%!important}" in source
-    assert "#page-admin-home > section.page{display:flex!important;flex-direction:column!important" in source
-    assert "#page-admin-home > section.page > *{position:static!important" in source
-    assert "#page-admin-home .grid-2-eq{display:grid!important" in source
-    assert "height:auto!important" in source
+    assert "CANONICAL_CARD_IDS" in source
+    for card_id in (
+        "admin-program-supervision-readiness",
+        "admin-supervisor-overview-counters",
+        "admin-integration-readiness-tracking-summary-host",
+        "admin-runtime-home-summary",
+        "admin-runtime-auth-state",
+    ):
+        assert card_id in source
+    assert "admin-home-canonical-surface" in source
+    assert "canonicalizeHomeCards" in source
+    assert "surface.appendChild(node)" in source
+    assert "contain:layout paint" in source
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in source
+    assert "#admin-program-supervision-readiness,#admin-supervisor-overview-counters,#admin-integration-readiness-tracking-summary-host{grid-column:1/-1!important}" in source
     assert "overflow-x:hidden!important" in source
-    assert "#admin-program-supervision-readiness,#admin-supervisor-overview-counters" in source
-    assert "const section = home.querySelector(':scope > section.page')" in source
-    assert "section.appendChild(surface)" in source
-    assert "#admin-home-runtime-surface{display:grid!important" in source
-    assert "position:static!important" in source
+    assert "MutationObserver" in source
 
 
 def test_admin_market_navigation_stays_visible_but_authority_remains_backend_controlled():
