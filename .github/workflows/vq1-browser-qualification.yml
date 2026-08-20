@@ -74,11 +74,15 @@ jobs:
       - name: Refresh all clean Settings default evidence
         run: python qualification/vq1_settings_default_evidence_refresh.py
 
+      - name: Validate all delivered button actions
+        run: python qualification/vq1_button_action_validator.py
+
       - name: Show capture summary
         if: always()
         run: |
           test -f artifacts/vq1/metadata.json && cat artifacts/vq1/metadata.json || true
           test -f artifacts/vq1/inventory.json && cat artifacts/vq1/inventory.json || true
+          test -f artifacts/vq1/button_action_report.json && cat artifacts/vq1/button_action_report.json || true
           test -f /tmp/vq1-uvicorn.log && tail -n 100 /tmp/vq1-uvicorn.log || true
 
       - name: Upload VQ-1 evidence
