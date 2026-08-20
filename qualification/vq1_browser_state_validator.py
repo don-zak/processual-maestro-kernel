@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
@@ -9,6 +10,26 @@ from vq1_browser_harness import BASE_URL, OUTPUT_DIR, establish_qualification_se
 
 EVIDENCE_CSV = OUTPUT_DIR / "evidence.csv"
 
+SETTINGS_PAYLOAD = {
+    "general": {"language": "en", "refresh_interval": 30, "timezone": "UTC"},
+    "subscription": {
+        "plan": "qualification_plan",
+        "status": "active",
+        "stage": "active",
+        "renews_at": "2026-09-20T00:00:00Z",
+        "suspended_at": None,
+        "seats": 1,
+        "max_seats": 1,
+    },
+}
+
+OWNED_ADMIN_SURFACES = {
+    "admin-integration-readiness-tracking-summary-host": "page-admin-home",
+    "admin-integration-readiness-case-management-host": "page-admin-clients",
+    "admin-integration-claim-keys-host": "page-admin-clients",
+    "admin-integration-readiness-operator-package-host": "page-operator-pilot-handoff",
+}
+
 
 def evidence_path(route: str, section: str, state: str) -> Path:
     with EVIDENCE_CSV.open(newline="", encoding="utf-8") as handle:
@@ -16,6 +37,30 @@ def evidence_path(route: str, section: str, state: str) -> Path:
             if row["route"] == route and row["section"] == section and row["state"] == state:
                 return Path(row["screenshot_path"])
     raise RuntimeError(f"missing controlled evidence row for {route} {section} {state}")
+
+
+def install_clean_settings_routes(page: Page) -> None:
+    settings_body = json.dumps(SETTINGS_PAYLOAD)
+    subscription_body = json.dumps(SETTINGS_PAYLOAD["subscription"])
+    page.route(
+        "**/settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=settings_body),
+    )
+    page.route(
+        "**/settings/subscription",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=subscription_body),
+    )
+
+
+def remove_clean_settings_routes(page: Page) -> None:
+    page.unroute("**/settings/subscription")
+    page.unroute("**/settings")
+
+
+def assert_no_settings_dependency_error(page: Page) -> None:
+    error = page.get_by_text("Failed to load client settings", exact=False)
+    if error.count() and error.first.is_visible():
+        raise RuntimeError("Settings qualification evidence contains an unrelated client-settings load error")
 
 
 def open_surface(page: Page, route: str, section: str) -> str:
@@ -29,6 +74,81 @@ def open_surface(page: Page, route: str, section: str) -> str:
     page.locator(f'.nav-btn[data-admin-page="{section}"]').click()
     page.wait_for_timeout(150)
     return f"#page-admin-{section}"
+
+
+def validate_admin_surface_ownership(page: Page) -> None:
+    page.goto(f"{BASE_URL}/admin", wait_until="domcontentloaded")
+    page.wait_for_timeout(300)
+    for nav in page.locator('.nav-btn[data-admin-page]:visible').all():
+        section = nav.get_attribute("data-admin-page") or ""
+        if not section:
+            continue
+        nav.click()
+        page.wait_for_timeout(120)
+        page.evaluate("window.PMK_ADMIN_LAYOUT?.clean?.()")
+        violations = page.evaluate(
+            """
+            owned => {
+              const active = document.querySelector('.admin-page.active');
+              if (!active) return [{reason: 'missing active admin page'}];
+              const problems = [];
+              for (const [surfaceId, ownerPageId] of Object.entries(owned)) {
+                const surface = document.getElementById(surfaceId);
+                const owner = document.getElementById(ownerPageId);
+                if (!surface || !owner) continue;
+                if (!owner.contains(surface)) {
+                  problems.push({surfaceId, ownerPageId, reason: 'not contained by declared owner'});
+                  continue;
+                }
+                const style = getComputedStyle(surface);
+                const visible = style.display !== 'none' && style.visibility !== 'hidden' && surface.getClientRects().length > 0;
+                if (visible && !active.contains(surface)) {
+                  problems.push({
+                    surfaceId,
+                    ownerPageId,
+                    activePageId: active.id || '',
+                    reason: 'visible owned surface outside active admin page',
+                  });
+                }
+              }
+              return problems;
+            }
+            """,
+            OWNED_ADMIN_SURFACES,
+        )
+        if violations:
+            raise RuntimeError(f"Admin ownership violation after opening {section}: {violations}")
+    print("validated Admin dynamic-surface ownership across delivered navigation")
+
+
+def refresh_clean_settings_evidence(page: Page) -> None:
+    install_clean_settings_routes(page)
+    try:
+        surface_selector = open_surface(page, "/console/", "settings")
+        assert_no_settings_dependency_error(page)
+        default_shot = evidence_path("/console/", "settings", "default/loaded")
+        default_shot.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(default_shot), full_page=True)
+
+        page.evaluate(
+            """
+            () => {
+              document.documentElement.setAttribute('dir', 'rtl');
+              document.documentElement.setAttribute('lang', 'ar');
+              document.body.setAttribute('dir', 'rtl');
+            }
+            """
+        )
+        direction = page.locator(surface_selector).evaluate("el => getComputedStyle(el).direction")
+        if direction != "rtl":
+            raise RuntimeError(f"controlled RTL direction did not apply to /console/ settings: {direction}")
+        assert_no_settings_dependency_error(page)
+        rtl_shot = evidence_path("/console/", "settings", "localization/RTL")
+        rtl_shot.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(rtl_shot), full_page=False)
+    finally:
+        remove_clean_settings_routes(page)
+    print("refreshed clean Settings default and RTL evidence")
 
 
 def validate_scroll(page: Page, route: str, section: str) -> None:
@@ -297,10 +417,13 @@ def main() -> None:
                 })();
                 """
             )
+            validate_admin_surface_ownership(page)
+            refresh_clean_settings_evidence(page)
             for route, section in (("/console/", "settings"), ("/admin", "api-keys")):
                 validate_scroll(page, route, section)
                 validate_focus(page, route, section)
-                validate_rtl(page, route, section)
+                if not (route == "/console/" and section == "settings"):
+                    validate_rtl(page, route, section)
             for route, section in (("/console/", "settings"), ("/admin", "home"), ("/admin", "api-keys")):
                 validate_collapsible_cards(page, route, section)
         finally:

@@ -1,5 +1,11 @@
-
 (function () {
+  const OWNED_ADMIN_SURFACES = {
+    'admin-integration-readiness-tracking-summary-host': 'page-admin-home',
+    'admin-integration-readiness-case-management-host': 'page-admin-clients',
+    'admin-integration-claim-keys-host': 'page-admin-clients',
+    'admin-integration-readiness-operator-package-host': 'page-operator-pilot-handoff',
+  };
+
   function installStyle() {
     if (document.getElementById('admin-layout-cleanup-style')) return;
 
@@ -25,14 +31,29 @@
     });
   }
 
-  function containOwnedPilotSurfaces() {
-    const pilotPage = document.getElementById('page-operator-pilot-handoff');
-    const operatorPackage = document.getElementById('admin-integration-readiness-operator-package-host');
-    if (!pilotPage || !operatorPackage || pilotPage.contains(operatorPackage)) return;
+  function resolveOwnerContainer(ownerPage, surfaceId) {
+    if (surfaceId === 'admin-integration-readiness-operator-package-host') {
+      const pilotRoot = ownerPage.querySelector('#operator-pilot-handoff-root');
+      return pilotRoot?.parentElement || ownerPage.firstElementChild || ownerPage;
+    }
+    return ownerPage.firstElementChild || ownerPage;
+  }
 
-    const pilotRoot = pilotPage.querySelector('#operator-pilot-handoff-root');
-    const owner = pilotRoot?.parentElement || pilotPage.firstElementChild || pilotPage;
-    owner.appendChild(operatorPackage);
+  function containOwnedAdminSurfaces() {
+    Object.entries(OWNED_ADMIN_SURFACES).forEach(([surfaceId, ownerPageId]) => {
+      const surface = document.getElementById(surfaceId);
+      const ownerPage = document.getElementById(ownerPageId);
+      if (!surface || !ownerPage) return;
+
+      surface.dataset.adminOwnerPage = ownerPageId;
+      if (ownerPage.contains(surface)) return;
+
+      resolveOwnerContainer(ownerPage, surfaceId).appendChild(surface);
+    });
+  }
+
+  function containOwnedPilotSurfaces() {
+    containOwnedAdminSurfaces();
   }
 
   function pruneLegacyPlaceholders() {
@@ -75,7 +96,7 @@
   function clean() {
     installStyle();
     markRuntimeGrids();
-    containOwnedPilotSurfaces();
+    containOwnedAdminSurfaces();
     pruneLegacyPlaceholders();
     normalizeActivePage();
   }
@@ -83,8 +104,10 @@
   window.PMK_ADMIN_LAYOUT = {
     clean,
     markRuntimeGrids,
+    containOwnedAdminSurfaces,
     containOwnedPilotSurfaces,
     pruneLegacyPlaceholders,
+    ownedAdminSurfaces: { ...OWNED_ADMIN_SURFACES },
   };
 
   if (document.readyState === 'loading') {

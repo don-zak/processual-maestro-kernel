@@ -14,6 +14,17 @@ EXTENDED_UI_STATES = [
     "billing restriction/terminated",
 ]
 
+REQUIRED_FALSE_AUTHORITY_FLAGS = (
+    "RepositoryReconciliationComplete",
+    "GeneralPackagingComplete",
+    "PrivateRuntimeAuthorityGranted",
+    "runtime_connector_approved",
+    "provider_sandbox_proven",
+    "operator_network_qos_proven",
+    "RealStagingQualified",
+    "ProductionAuthorityGranted",
+)
+
 
 def open_admin_marketplace(page: Page) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
@@ -58,6 +69,14 @@ def admin_marketplace_permission_denied(page: Page, browser_version: str, counte
         page.locator("#page-admin-marketplace.active").wait_for(state="visible", timeout=4000)
         state.wait_for(state="visible", timeout=4000)
         authority.wait_for(state="visible", timeout=4000)
+        leaked = page.locator(
+            '#admin-integration-readiness-tracking-summary-host:visible, '
+            '#admin-integration-readiness-case-management-host:visible, '
+            '#admin-integration-claim-keys-host:visible, '
+            '#admin-integration-readiness-operator-package-host:visible'
+        )
+        if leaked.count():
+            raise RuntimeError("Admin Marketplace permission-denied evidence contains cross-page owned surfaces")
         reveal(state)
         return capture(
             page,
@@ -144,6 +163,16 @@ def subscription_state(
         page.unroute(settings_pattern)
 
 
+def enforce_authority_metadata(metadata: dict[str, object]) -> None:
+    authority = dict(metadata.get("authority", {}))
+    unexpected_true = [name for name, value in authority.items() if name in REQUIRED_FALSE_AUTHORITY_FLAGS and value is True]
+    if unexpected_true:
+        raise RuntimeError(f"VQ authority metadata attempted to promote forbidden flags: {unexpected_true}")
+    for flag in REQUIRED_FALSE_AUTHORITY_FLAGS:
+        authority[flag] = False
+    metadata["authority"] = authority
+
+
 def update_metadata() -> None:
     metadata_path = OUTPUT_DIR / "metadata.json"
     inventory_path = OUTPUT_DIR / "inventory.json"
@@ -155,6 +184,7 @@ def update_metadata() -> None:
             states.append(state)
     metadata["controlled_ui_states"] = states
     metadata["status"] = "AUTOMATED_DEFAULT_AND_CONTROLLED_UI_STATE_CAPTURE_COMPLETE_HUMAN_REVIEW_REQUIRED"
+    enforce_authority_metadata(metadata)
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
 
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
