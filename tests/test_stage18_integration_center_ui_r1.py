@@ -39,6 +39,23 @@ def test_enterprise_workspace_is_bootstrapped_without_internal_stage_labels():
     assert "Production blocked" in workspace
 
 
+def test_enterprise_workspace_dedupes_subscription_outage_and_fails_closed_without_fake_data():
+    workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
+
+    assert "SUBSCRIPTION_UNAVAILABLE_DETAIL" in workspace
+    assert "dedupedLoadError" in workspace
+    assert "new Set" in workspace
+    assert "Enterprise workspace data remains fail-closed until subscription verification recovers." in workspace
+    assert "Subscription status unavailable" in workspace
+    assert "Operational case data is unavailable until subscription verification recovers." in workspace
+    assert "Case registry is unavailable until subscription verification recovers." in workspace
+    assert "!state.availability.subscription || !state.availability.cases" in workspace
+    assert "<strong>—</strong>" in workspace
+    assert "state.subscription?.plan_id || 'unknown'" in workspace
+    assert "state.subscription?.plan_id || 'starter'" not in workspace
+    assert 'role="alert"' in workspace
+
+
 def test_stage18_workspace_styles_are_loaded_and_responsive():
     app = _text("processual_api/static/js/app.js")
     nav = _text("processual_api/static/js/admin_nav.js")
