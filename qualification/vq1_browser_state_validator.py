@@ -153,10 +153,7 @@ def collapsed_screenshot_path(route: str, section: str) -> Path:
     return OUTPUT_DIR / "screenshots" / f"VQ1-VALIDATED-{route_slug}-{section_slug}-LONG-CARD-COLLAPSED-NARROW-EN.png"
 
 
-def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
-    surface_selector = open_surface(page, route, section)
-    page.wait_for_timeout(2100)
-
+def validate_known_long_cards(page: Page, route: str, section: str, surface_selector: str) -> None:
     if route == "/console/" and section == "settings":
         billing_hero = page.locator(f"{surface_selector} #settings-billing-statements-root .mbs-hero:visible")
         if billing_hero.count():
@@ -165,6 +162,21 @@ def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
                 raise RuntimeError(
                     f"long Settings billing hero is not collapsible: scrollHeight={hero_height}"
                 )
+
+    if route == "/admin" and section == "home":
+        readiness = page.locator("#admin-integration-readiness-tracking-summary-card:visible")
+        if readiness.count():
+            readiness_height = readiness.first.evaluate("el => el.scrollHeight")
+            if readiness_height >= 420 and readiness.first.get_attribute("data-pmk-long-card") != "true":
+                raise RuntimeError(
+                    f"long Admin Home readiness card is not collapsible: scrollHeight={readiness_height}"
+                )
+
+
+def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
+    surface_selector = open_surface(page, route, section)
+    page.wait_for_timeout(2400)
+    validate_known_long_cards(page, route, section, surface_selector)
 
     cards = page.locator(f'{surface_selector} [data-pmk-long-card="true"]:visible')
     count = cards.count()
