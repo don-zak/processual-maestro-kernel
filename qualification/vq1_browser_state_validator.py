@@ -147,6 +147,35 @@ def validate_rtl(page: Page, route: str, section: str) -> None:
     page.screenshot(path=str(shot), full_page=False)
 
 
+def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
+    surface_selector = open_surface(page, route, section)
+    page.wait_for_timeout(2100)
+    cards = page.locator(f'{surface_selector} [data-pmk-long-card="true"]:visible')
+    count = cards.count()
+    if count < 1:
+        raise RuntimeError(f"no collapsible long card detected for {route} {section}")
+    for index in range(min(count, 12)):
+        card = cards.nth(index)
+        button = card.locator(':scope > .pmk-long-card-tools > .pmk-long-card-toggle')
+        if button.count() != 1:
+            raise RuntimeError(f"long card missing direct collapse control for {route} {section} index={index}")
+    first = cards.first
+    button = first.locator(':scope > .pmk-long-card-tools > .pmk-long-card-toggle')
+    button.click()
+    page.wait_for_timeout(80)
+    collapsed = first.get_attribute('data-pmk-collapsed')
+    expanded = button.get_attribute('aria-expanded')
+    if collapsed != 'true' or expanded != 'false':
+        raise RuntimeError(f"collapse control failed for {route} {section}: collapsed={collapsed} aria-expanded={expanded}")
+    button.click()
+    page.wait_for_timeout(80)
+    collapsed = first.get_attribute('data-pmk-collapsed')
+    expanded = button.get_attribute('aria-expanded')
+    if collapsed != 'false' or expanded != 'true':
+        raise RuntimeError(f"expand control failed for {route} {section}: collapsed={collapsed} aria-expanded={expanded}")
+    print(f"validated {count} collapsible long card(s) for {route} {section}")
+
+
 def main() -> None:
     if not EVIDENCE_CSV.exists():
         raise RuntimeError(f"VQ evidence CSV not found: {EVIDENCE_CSV}")
@@ -159,6 +188,8 @@ def main() -> None:
                 validate_scroll(page, route, section)
                 validate_focus(page, route, section)
                 validate_rtl(page, route, section)
+            for route, section in (("/console/", "settings"), ("/admin", "home"), ("/admin", "api-keys")):
+                validate_collapsible_cards(page, route, section)
         finally:
             browser.close()
 
