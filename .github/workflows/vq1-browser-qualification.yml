@@ -65,6 +65,9 @@ jobs:
       - name: Capture controlled UI state matrix
         run: python qualification/vq1_ui_state_matrix.py
 
+      - name: Capture extended controlled UI states
+        run: python qualification/vq1_ui_state_matrix_extended.py
+
       - name: Validate controlled browser states
         run: python qualification/vq1_browser_state_validator.py
 
