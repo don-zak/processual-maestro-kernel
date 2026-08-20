@@ -33,6 +33,15 @@ def test_admin_layout_uses_general_owned_surface_map():
     assert "'admin-integration-readiness-operator-package-host': 'page-operator-pilot-handoff'" in source
 
 
+def test_admin_layout_normalizes_to_single_navigation_authority():
+    source = read("processual_api/static/js/admin_layout_cleanup.js")
+    assert "document.body?.dataset?.adminActivePage" in source
+    assert "navApi?.pageIds" in source
+    assert "page.classList.toggle('active', isActive)" in source
+    assert "page.style.display = isActive ? 'block' : 'none'" in source
+    assert "normalizeActivePage" in source
+
+
 def test_vq_validator_rejects_cross_page_owned_surfaces_and_settings_noise():
     source = read("qualification/vq1_browser_state_validator.py")
     assert "validate_admin_surface_ownership" in source

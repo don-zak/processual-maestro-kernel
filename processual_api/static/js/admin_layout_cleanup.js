@@ -84,12 +84,15 @@
   }
 
   function normalizeActivePage() {
+    const navApi = window.PMK_ADMIN_NAV;
+    const activeKey = document.body?.dataset?.adminActivePage || '';
+    const expectedId = activeKey && navApi?.pageIds ? navApi.pageIds[activeKey] : '';
+    const expectedPage = expectedId ? document.getElementById(expectedId) : null;
+
     document.querySelectorAll('.admin-page').forEach((page) => {
-      if (!page.classList.contains('active')) {
-        page.style.display = 'none';
-      } else {
-        page.style.display = 'block';
-      }
+      const isActive = expectedPage ? page === expectedPage : page.classList.contains('active');
+      page.classList.toggle('active', isActive);
+      page.style.display = isActive ? 'block' : 'none';
     });
   }
 
@@ -107,6 +110,7 @@
     containOwnedAdminSurfaces,
     containOwnedPilotSurfaces,
     pruneLegacyPlaceholders,
+    normalizeActivePage,
     ownedAdminSurfaces: { ...OWNED_ADMIN_SURFACES },
   };
 
