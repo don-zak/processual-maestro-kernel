@@ -82,8 +82,8 @@ def main() -> None:
             establish_qualification_session(page)
             install_clean_settings_routes(page)
             for row in rows:
-                width = int(row["width"])
-                height = int(row["height"])
+                width = int(row["viewport_width"])
+                height = int(row["viewport_height"])
                 open_settings(page, width, height)
                 shot = Path(row["screenshot_path"])
                 shot.parent.mkdir(parents=True, exist_ok=True)
