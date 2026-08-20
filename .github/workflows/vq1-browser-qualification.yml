@@ -71,6 +71,9 @@ jobs:
       - name: Validate controlled browser states
         run: python qualification/vq1_browser_state_validator.py
 
+      - name: Refresh all clean Settings default evidence
+        run: python qualification/vq1_settings_default_evidence_refresh.py
+
       - name: Show capture summary
         if: always()
         run: |
