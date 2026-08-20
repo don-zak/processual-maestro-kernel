@@ -1,60 +1,59 @@
 param(
     [int]$Port = 8000,
-    [string]$DatabaseFile = ".pmk-local-review.sqlite3"
+    [string]$DatabaseFile = ".pmk-local-review.sqlite3",
+    [switch]$ResetDatabase,
+    [switch]$OpenBrowser
 )
 
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $RepoRoot
-
-$dbPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $DatabaseFile))
-$dbDirectory = [System.IO.Path]::GetDirectoryName($dbPath)
-if ($dbDirectory) {
-    [System.IO.Directory]::CreateDirectory($dbDirectory) | Out-Null
+$envScript = Join-Path $PSScriptRoot "local_review_env.ps1"
+$bootstrapScript = Join-Path $PSScriptRoot "bootstrap_local_review.ps1"
+if (-not (Test-Path $envScript)) {
+    throw "Missing local review environment script: $envScript"
 }
-$dbUrlPath = $dbPath.Replace("\", "/")
-
-$env:ENVIRONMENT = "development"
-$env:APP_ENV = "development"
-$env:DATABASE_URL = "sqlite+aiosqlite:///$dbUrlPath"
-$env:REDIS_URL = ""
-$env:RATE_LIMIT_ENABLED = "false"
-$env:AUDIT_ENABLED = "false"
-$env:CAPACITY_GUARD_ENABLED = "false"
-$env:PMK_LOCAL_REVIEW_CUSTOMER_REF = "admin"
-
-# Use the development-only admin/admin fallback so the JWT subject and the
-# seeded subscription customer reference remain intentionally aligned.
-$env:MAESTRO_ADMIN_EMAIL = $null
-$env:MAESTRO_ADMIN_PASSWORD = $null
-
-if (-not $env:JWT_SECRET) {
-    $env:JWT_SECRET = ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
-}
-if (-not $env:API_KEYS) {
-    $env:API_KEYS = "dev-public-test-key"
+if (-not (Test-Path $bootstrapScript)) {
+    throw "Missing local review bootstrap script: $bootstrapScript"
 }
 
-Write-Host "Local review database: $dbPath"
-Write-Host "Applying Alembic migrations..."
-python -m alembic upgrade head
+. $envScript
+$context = Set-PmkLocalReviewEnvironment -DatabaseFile $DatabaseFile
+
+$bootstrapArgs = @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", $bootstrapScript,
+    "-DatabaseFile", $DatabaseFile
+)
+if ($ResetDatabase) {
+    $bootstrapArgs += "-ResetDatabase"
+}
+
+Write-Host "Preparing Processual Maestro local review runtime..."
+& powershell @bootstrapArgs
 if ($LASTEXITCODE -ne 0) {
-    throw "Alembic migration failed with exit code $LASTEXITCODE"
+    throw "Local review bootstrap failed with exit code $LASTEXITCODE"
 }
 
-Write-Host "Seeding local-review subscription state..."
-python qualification/local_review_subscription_seed.py
-if ($LASTEXITCODE -ne 0) {
-    throw "Local review subscription seed failed with exit code $LASTEXITCODE"
-}
+$consoleUrl = "http://127.0.0.1:$Port/console/"
+$adminUrl = "http://127.0.0.1:$Port/admin"
 
 Write-Host ""
 Write-Host "Starting Processual Maestro local review runtime"
-Write-Host "Console: http://127.0.0.1:$Port/console/"
-Write-Host "Admin:   http://127.0.0.1:$Port/admin"
-Write-Host "Login:   admin / admin (development-only fallback)"
+Write-Host "Repository: $($context.RepoRoot)"
+Write-Host "Database:   $($context.DatabasePath)"
+Write-Host "Console:    $consoleUrl"
+Write-Host "Admin:      $adminUrl"
+Write-Host "Login:      admin / admin (development-only fallback)"
 Write-Host ""
 Write-Host "This launcher grants no staging or production authority."
+Write-Host "Stop the server with Ctrl+C."
 
-python -m uvicorn processual_api.main:app --host 127.0.0.1 --port $Port
+if ($OpenBrowser) {
+    Start-Process $consoleUrl
+}
+
+& python -m uvicorn processual_api.main:app --host 127.0.0.1 --port $Port
+if ($LASTEXITCODE -ne 0) {
+    throw "Uvicorn exited with code $LASTEXITCODE"
+}
