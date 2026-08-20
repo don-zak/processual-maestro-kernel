@@ -20,7 +20,7 @@ def test_login_first_response_contains_password_visibility_control() -> None:
     middleware = _text("processual_api/middleware/security_headers.py")
 
     assert "_LOGIN_PASSWORD_FIRST_PAINT" in middleware
-    assert 'id=\\"login-password-visibility\\"' in middleware
+    assert 'id="login-password-visibility"' in middleware
     assert "_stabilize_login_first_paint" in middleware
     assert 'if path == "/login"' in middleware
     assert 'response.headers["Clear-Site-Data"] = \'"cache"\'' in middleware
