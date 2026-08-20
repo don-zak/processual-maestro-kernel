@@ -5,13 +5,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
 
-from qualification.vq1_browser_harness import (
-    BASE_URL,
-    OUTPUT_DIR,
-    VQ1_PASSWORD,
-    VQ1_USERNAME,
-    establish_qualification_session,
-)
+from vq1_browser_harness import BASE_URL, OUTPUT_DIR, establish_qualification_session
 
 EVIDENCE_CSV = OUTPUT_DIR / "evidence.csv"
 
