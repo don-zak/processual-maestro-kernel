@@ -23,6 +23,13 @@ SETTINGS_PAYLOAD = {
     },
 }
 BILLING_STATEMENTS_PAYLOAD = {"statements": []}
+API_KEY_INTEGRATION_PAYLOAD = {
+    "enabled": False,
+    "plan_id": "qualification_plan",
+    "operational_profiles": [],
+    "production_allowed": False,
+    "runtime_connector_approved": False,
+}
 
 
 def install_clean_settings_routes(page: Page) -> None:
@@ -48,6 +55,14 @@ def install_clean_settings_routes(page: Page) -> None:
             status=200,
             content_type="application/json",
             body=json.dumps(BILLING_STATEMENTS_PAYLOAD),
+        ),
+    )
+    page.route(
+        "**/settings/api-key-integration",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(API_KEY_INTEGRATION_PAYLOAD),
         ),
     )
 
