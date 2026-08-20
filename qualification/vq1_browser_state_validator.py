@@ -156,35 +156,70 @@ def collapsed_screenshot_path(route: str, section: str) -> Path:
 def validate_collapsible_cards(page: Page, route: str, section: str) -> None:
     surface_selector = open_surface(page, route, section)
     page.wait_for_timeout(2100)
+
+    if route == "/console/" and section == "settings":
+        billing_hero = page.locator(f"{surface_selector} #settings-billing-statements-root .mbs-hero:visible")
+        if billing_hero.count():
+            hero_height = billing_hero.first.evaluate("el => el.scrollHeight")
+            if hero_height >= 420 and billing_hero.first.get_attribute("data-pmk-long-card") != "true":
+                raise RuntimeError(
+                    f"long Settings billing hero is not collapsible: scrollHeight={hero_height}"
+                )
+
     cards = page.locator(f'{surface_selector} [data-pmk-long-card="true"]:visible')
     count = cards.count()
     if count < 1:
         raise RuntimeError(f"no collapsible long card detected for {route} {section}")
-    for index in range(min(count, 12)):
+
+    tested = min(count, 12)
+    for index in range(tested):
         card = cards.nth(index)
         button = card.locator(':scope > .pmk-long-card-tools > .pmk-long-card-toggle')
         if button.count() != 1:
             raise RuntimeError(f"long card missing direct collapse control for {route} {section} index={index}")
-    first = cards.first
-    button = first.locator(':scope > .pmk-long-card-tools > .pmk-long-card-toggle')
-    button.click()
-    page.wait_for_timeout(100)
-    collapsed = first.get_attribute('data-pmk-collapsed')
-    expanded = button.get_attribute('aria-expanded')
-    if collapsed != 'true' or expanded != 'false':
-        raise RuntimeError(f"collapse control failed for {route} {section}: collapsed={collapsed} aria-expanded={expanded}")
-    shot = collapsed_screenshot_path(route, section)
-    shot.parent.mkdir(parents=True, exist_ok=True)
-    first.scroll_into_view_if_needed()
-    page.wait_for_timeout(80)
-    page.screenshot(path=str(shot), full_page=False)
-    button.click()
-    page.wait_for_timeout(100)
-    collapsed = first.get_attribute('data-pmk-collapsed')
-    expanded = button.get_attribute('aria-expanded')
-    if collapsed != 'false' or expanded != 'true':
-        raise RuntimeError(f"expand control failed for {route} {section}: collapsed={collapsed} aria-expanded={expanded}")
-    print(f"validated {count} collapsible long card(s) for {route} {section}; collapsed screenshot={shot}")
+
+        before_height = card.evaluate("el => el.getBoundingClientRect().height")
+        button.click()
+        page.wait_for_timeout(100)
+        after_height = card.evaluate("el => el.getBoundingClientRect().height")
+        collapsed = card.get_attribute('data-pmk-collapsed')
+        expanded = button.get_attribute('aria-expanded')
+        if collapsed != 'true' or expanded != 'false':
+            raise RuntimeError(
+                f"collapse control state failed for {route} {section} index={index}: "
+                f"collapsed={collapsed} aria-expanded={expanded}"
+            )
+        minimum_shrink = max(64.0, before_height * 0.20)
+        if before_height - after_height < minimum_shrink:
+            raise RuntimeError(
+                f"collapse did not materially reduce card height for {route} {section} index={index}: "
+                f"before={before_height:.1f} after={after_height:.1f} required_shrink={minimum_shrink:.1f}"
+            )
+
+        if index == 0:
+            shot = collapsed_screenshot_path(route, section)
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            card.scroll_into_view_if_needed()
+            page.wait_for_timeout(80)
+            page.screenshot(path=str(shot), full_page=False)
+
+        button.click()
+        page.wait_for_timeout(100)
+        restored_height = card.evaluate("el => el.getBoundingClientRect().height")
+        collapsed = card.get_attribute('data-pmk-collapsed')
+        expanded = button.get_attribute('aria-expanded')
+        if collapsed != 'false' or expanded != 'true':
+            raise RuntimeError(
+                f"expand control state failed for {route} {section} index={index}: "
+                f"collapsed={collapsed} aria-expanded={expanded}"
+            )
+        if restored_height < after_height + minimum_shrink * 0.75:
+            raise RuntimeError(
+                f"expand did not restore long-card height for {route} {section} index={index}: "
+                f"before={before_height:.1f} collapsed={after_height:.1f} restored={restored_height:.1f}"
+            )
+
+    print(f"validated {tested}/{count} collapsible long card(s) for {route} {section}")
 
 
 def main() -> None:
