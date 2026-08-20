@@ -104,6 +104,12 @@
     overflow-wrap: anywhere;
   }
 
+  #page-admin-api-keys #admin-api-key-lifecycle-card {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
   .admin-page [style*="grid-template-columns"] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
