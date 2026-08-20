@@ -72,6 +72,12 @@ def test_settings_default_evidence_refresh_covers_every_recorded_viewport_before
     assert 'height = int(row["viewport_height"])' in refresher
     assert 'page.screenshot(path=str(shot), full_page=True)' in refresher
     assert "Failed to load client settings" in refresher
+    assert "BILLING_STATEMENTS_PAYLOAD" in refresher
+    assert '"**/billing/statements"' in refresher
+    assert "Subscription access is temporarily unavailable" in refresher
+    assert "Choose Tour Language" in refresher
+    assert "tour_completed" in refresher
+    assert "tour_lang" in refresher
     refresh_step = "python qualification/vq1_settings_default_evidence_refresh.py"
     upload_step = "uses: actions/upload-artifact@v4"
     assert refresh_step in workflow
