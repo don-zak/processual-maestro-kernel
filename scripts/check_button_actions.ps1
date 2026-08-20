@@ -13,6 +13,7 @@ if (-not (Test-Path $envScript)) {
 
 $context = Set-PmkLocalReviewEnvironment
 $baseUrl = "http://127.0.0.1:$Port"
+$reportPath = Join-Path $OutputDir "button_action_report.json"
 
 Write-Host "Checking local runtime before button audit..."
 try {
@@ -39,16 +40,48 @@ $env:VQ1_PASSWORD = "admin"
 Write-Host ""
 Write-Host "Running exhaustive Console/Admin button action audit..."
 Write-Host "Base URL: $baseUrl"
-Write-Host "Report:   $OutputDir\button_action_report.json"
+Write-Host "Report:   $reportPath"
 Write-Host "Mutating requests are dispatched then neutralized by the qualification harness."
 Write-Host ""
 
-& python qualification/vq1_button_action_validator.py
-if ($LASTEXITCODE -ne 0) {
-    throw "Button action audit failed with exit code $LASTEXITCODE. Review $OutputDir\button_action_report.json"
+Remove-Item $reportPath -ErrorAction SilentlyContinue
+& python qualification/vq1_button_action_validator_v2.py
+$exitCode = $LASTEXITCODE
+
+if (Test-Path $reportPath) {
+    Write-Host ""
+    Write-Host "=== SAVED BUTTON ACTION REPORT ==="
+    try {
+        $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+        Write-Host ("ALL:         {0}" -f $report.totals.all)
+        Write-Host ("PASS:        {0}" -f $report.totals.pass)
+        Write-Host ("CONDITIONAL: {0}" -f $report.totals.conditional)
+        Write-Host ("FAIL:        {0}" -f $report.totals.fail)
+        if ($report.fatal_error) {
+            Write-Host ("FATAL:       {0}" -f $report.fatal_error)
+        }
+        $failures = @($report.results | Where-Object { $_.status -eq "FAIL" })
+        if ($failures.Count -gt 0) {
+            Write-Host ""
+            Write-Host "Failures:"
+            foreach ($failure in $failures | Select-Object -First 40) {
+                Write-Host ("- {0}/{1} :: {2} :: {3}" -f $failure.surface, $failure.section, $failure.label, $failure.notes)
+            }
+        }
+    } catch {
+        Write-Host "Report exists but could not be summarized as JSON."
+        Get-Content $reportPath
+    }
+} else {
+    Write-Host ""
+    Write-Host "No button_action_report.json was produced."
+}
+
+if ($exitCode -ne 0) {
+    throw "Button action audit failed with exit code $exitCode. Review $reportPath"
 }
 
 Write-Host ""
 Write-Host "Button action audit PASSED."
-Write-Host "Report: $OutputDir\button_action_report.json"
+Write-Host "Report: $reportPath"
 Write-Host "This proves delivered UI wiring in the local review environment only; it grants no staging or production authority."
