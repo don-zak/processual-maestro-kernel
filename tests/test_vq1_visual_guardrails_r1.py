@@ -62,6 +62,22 @@ def test_vq_validator_rejects_cross_page_owned_surfaces_and_settings_noise():
     assert 'evidence_path("/console/", "settings", "localization/RTL")' in source
 
 
+def test_settings_default_evidence_refresh_covers_every_recorded_viewport_before_upload():
+    refresher = read("qualification/vq1_settings_default_evidence_refresh.py")
+    workflow = read(".github/workflows/vq1-browser-qualification.yml")
+    assert "def default_rows()" in refresher
+    assert 'row["state"] == "default/loaded"' in refresher
+    assert 'for row in rows:' in refresher
+    assert 'width = int(row["width"])' in refresher
+    assert 'height = int(row["height"])' in refresher
+    assert 'page.screenshot(path=str(shot), full_page=True)' in refresher
+    assert "Failed to load client settings" in refresher
+    refresh_step = "python qualification/vq1_settings_default_evidence_refresh.py"
+    upload_step = "uses: actions/upload-artifact@v4"
+    assert refresh_step in workflow
+    assert workflow.index(refresh_step) < workflow.index(upload_step)
+
+
 def test_vq_authority_metadata_contract_covers_all_forbidden_promotions():
     flags = assigned_literal(
         "qualification/vq1_ui_state_matrix_extended.py",
