@@ -10,6 +10,7 @@ SEMANTIC_REPLACEMENT = ROOT / "scripts" / "analyze_legacy_function_semantic_repl
 REPORTING_ONLY = ROOT / "scripts" / "analyze_legacy_reporting_only_retirement.ps1"
 OUTPUT_CONSUMERS = ROOT / "scripts" / "analyze_legacy_report_output_consumers.ps1"
 V8_SUPERSESSION = ROOT / "scripts" / "analyze_v8_fixed_supersession.ps1"
+EVIDENCE_RETENTION = ROOT / "scripts" / "classify_local_evidence_retention.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -275,6 +276,22 @@ def test_retired_local_operator_tools_are_quarantined_from_git() -> None:
     assert "/Retire-Safe-CGT17Branches*.ps1" in gitignore
     assert "/crm_eval_sandbox.py" in gitignore
     assert "/verify_local_password.py" in gitignore
+
+
+def test_local_evidence_retention_classification_is_non_destructive_and_explicit() -> None:
+    source = EVIDENCE_RETENTION.read_text(encoding="utf-8")
+
+    assert "REGENERABLE_COVERAGE_EVIDENCE" in source
+    assert "ACTIVE_LOCAL_QUALIFICATION_EVIDENCE" in source
+    assert "HISTORICAL_RETIREMENT_EVIDENCE" in source
+    assert "HISTORICAL_REVIEW_DECISION" in source
+    assert "PATCH_PROVENANCE_EVIDENCE" in source
+    assert "HANDOFF_EVIDENCE" in source
+    assert "BACKUP_SNAPSHOT" in source
+    assert "CANONICAL_LOCAL_OPERATOR_TOOL" in source
+    assert "deletion_authorized = $false" in source
+    assert "local evidence retention classification only; no deletion authority" in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
