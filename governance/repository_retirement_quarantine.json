@@ -46,6 +46,13 @@
       "deprecated_surface": "/settings/llm-provider/test",
       "successor_surface": "/settings/provider-connection/test",
       "release_condition": "Do not delete the file while the successor runtime is implemented here. Retire only the deprecated endpoint after consumer absence is proven."
+    },
+    {
+      "path": "processual_api/services/plan_store.py",
+      "classification": "ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE",
+      "primary_authority": true,
+      "deletion_allowed": false,
+      "release_condition": "Delete only after legacy API-key plan consumers and aliases have been migrated and authoritative quota resolution is proven without this bridge."
     }
   ],
   "retired_public_symbols": [
