@@ -62,6 +62,14 @@ try {
             $reason = 'Local virtual environment is reproducible from dependency declarations and should stay outside repository authority.'
             $regenerable = $true
             $deletion_candidate = $true
+        } elseif ($normalized -eq 'data/') {
+            $category = 'ACTIVE_RUNTIME_DATA_HOLD'
+            $retention = 'PRESERVE'
+            $reason = 'Root data directory contains active integration readiness and admin audit stores referenced by tracked runtime code.'
+        } elseif ($normalized -eq 'processual_api/data/') {
+            $category = 'ACTIVE_RUNTIME_DATA_HOLD'
+            $retention = 'PRESERVE'
+            $reason = 'Processual API data directory is an active local runtime store consumed by tracked analytics/settings/usage code.'
         } elseif ($normalized -match '^\.pmk-local-review(?:/|\.sqlite3$)' -or $normalized -match '^\.pmk-validation/') {
             $category = 'ACTIVE_LOCAL_QUALIFICATION_EVIDENCE'
             $retention = 'PRESERVE'
