@@ -127,6 +127,18 @@
     }
   }
 
+  async function loadAccountRecoveryEscalations() {
+    try {
+      await loadScriptOnce(
+        '/console/js/admin_account_recovery_escalations.js?v=account-recovery-escalation-r1',
+        'adminAccountRecoveryEscalations',
+      );
+      window.PMK_ADMIN_ACCOUNT_RECOVERY_ESCALATIONS?.initialize?.();
+    } catch (error) {
+      console.error('Unable to load account recovery escalation queue.', error);
+    }
+  }
+
   function bindAdminActions() {
     const clientButton = document.getElementById('admin-client-console-btn');
     const logoutButton = document.getElementById('admin-logout-btn');
@@ -148,6 +160,7 @@
     loadAdminMarketplaceCatalog();
     loadEnterpriseFailureReview();
     loadExternalEvaluationAccess();
+    loadAccountRecoveryEscalations();
   }
 
   window.PMK_ADMIN_ACTIONS = {
@@ -156,6 +169,7 @@
     loadAdminMarketplaceCatalog,
     loadEnterpriseFailureReview,
     loadExternalEvaluationAccess,
+    loadAccountRecoveryEscalations,
     logout,
     openClientConsole,
   };
