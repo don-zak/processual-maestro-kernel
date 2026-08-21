@@ -5,9 +5,7 @@
 
   function authHeaders(extra = {}) {
     const auth = window.PMK_ADMIN_AUTH;
-    if (auth && typeof auth.headers === 'function') {
-      return { ...auth.headers(), ...extra };
-    }
+    if (auth && typeof auth.headers === 'function') return { ...auth.headers(), ...extra };
     const token =
       localStorage.getItem('access_token') ||
       localStorage.getItem('auth_token') ||
@@ -39,13 +37,13 @@
       <div class="admin-card-header">
         <div>
           <h3>Account Recovery Requests</h3>
-          <p>Supervisor review queue for people who cannot use their verified recovery channel.</p>
+          <p>Platform-admin review queue for customers who cannot use their verified recovery channel.</p>
         </div>
         <button id="admin-account-recovery-refresh" class="btn ghost sm" type="button">Refresh</button>
       </div>
       <div class="admin-card-body">
-        <p class="admin-help-text">Review only. These controls never reset a password, reveal an MFA secret, bypass MFA, create a session, or grant account authority. After identity evidence is reviewed, the user must return to the normal recovery and MFA flow.</p>
-        <div id="${LIST_ID}" data-state="idle">Open this card after a recent platform-admin MFA step-up to load pending requests.</div>
+        <p class="admin-help-text">Recent platform-admin MFA step-up is required. Approval changes only the governed recovery channel and sends verification to the safe contact. It never resets a password, reveals an MFA secret, bypasses MFA, creates a session, or grants account authority.</p>
+        <div id="${LIST_ID}" data-state="idle">Load pending requests after completing platform-admin MFA step-up.</div>
       </div>`;
     page.appendChild(card);
     document.getElementById('admin-account-recovery-refresh')?.addEventListener('click', refresh);
@@ -60,9 +58,7 @@
       ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.detail || `HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
     return data;
   }
 
@@ -80,36 +76,45 @@
       <article class="admin-card" data-recovery-escalation-id="${escapeHtml(item.id)}" style="margin-top:.75rem">
         <div class="admin-card-body">
           <div><strong>Claimed account:</strong> ${escapeHtml(item.claimed_login)}</div>
-          <div><strong>Safe contact:</strong> ${escapeHtml(item.contact_email)}</div>
+          <div><strong>Proposed recovery contact:</strong> ${escapeHtml(item.contact_email)}</div>
           <div><strong>Organization:</strong> ${escapeHtml(item.organization_ref || 'Not supplied')}</div>
           <div><strong>Reason:</strong> ${escapeHtml(item.reason)}</div>
           <div><strong>Created:</strong> ${escapeHtml(item.created_at)}</div>
+          <p class="admin-help-text" style="margin-top:.6rem">Approve only after identity evidence has been reviewed through the established support procedure. Approval sends a verification message to the proposed recovery contact. The customer must verify it, restart Lost Access, change the password, and complete MFA.</p>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem">
-            <button class="btn ghost sm" type="button" data-recovery-decision="reviewed" data-request-id="${escapeHtml(item.id)}">Identity/recovery channel reviewed</button>
-            <button class="btn ghost sm" type="button" data-recovery-decision="reject" data-request-id="${escapeHtml(item.id)}">Reject: insufficient evidence</button>
+            <button class="btn ghost sm" type="button" data-recovery-action="approve-channel" data-request-id="${escapeHtml(item.id)}">Approve recovery channel &amp; send verification</button>
+            <button class="btn ghost sm" type="button" data-recovery-action="reject" data-request-id="${escapeHtml(item.id)}">Reject: insufficient evidence</button>
           </div>
         </div>
       </article>`).join('');
-    host.querySelectorAll('[data-recovery-decision]').forEach((button) => {
+    host.querySelectorAll('[data-recovery-action]').forEach((button) => {
       button.addEventListener('click', () => decide(button));
     });
   }
 
   async function decide(button) {
     const requestId = button.dataset.requestId;
-    const action = button.dataset.recoveryDecision;
+    const action = button.dataset.recoveryAction;
     if (!requestId || !action) return;
     button.disabled = true;
     try {
-      const result = await api(
-        'POST',
-        `/auth/account-recovery/escalations/${encodeURIComponent(requestId)}/decision`,
-        action === 'reviewed'
-          ? { state: 'resolved', resolution: 'recovery_channel_reviewed' }
-          : { state: 'rejected', resolution: 'identity_evidence_insufficient' },
-      );
-      if (result.authority_granted !== false || result.password_reset_performed !== false || result.mfa_bypassed !== false) {
+      const result = action === 'approve-channel'
+        ? await api('POST', `/auth/account-recovery/escalations/${encodeURIComponent(requestId)}/approve-recovery-channel`)
+        : await api(
+            'POST',
+            `/auth/account-recovery/escalations/${encodeURIComponent(requestId)}/decision`,
+            { state: 'rejected', resolution: 'identity_evidence_insufficient' },
+          );
+      if (
+        result.authority_granted !== false ||
+        result.password_reset_performed !== false ||
+        result.mfa_bypassed !== false ||
+        result.session_created === true
+      ) {
         throw new Error('Recovery escalation returned an unsafe authority result.');
+      }
+      if (action === 'approve-channel' && result.next_action !== 'verify_recovery_email_then_restart_recovery') {
+        throw new Error('Recovery channel approval returned an invalid next action.');
       }
       await refresh();
     } catch (error) {
