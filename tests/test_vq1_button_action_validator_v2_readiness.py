@@ -32,3 +32,13 @@ def test_settings_button_audit_waits_for_identity_before_index_fallback():
     )
     index_pos = source.index('buttons.nth(index)', resolver_pos)
     assert stable_wait_pos < label_wait_pos < index_pos
+
+
+def test_settings_button_audit_resets_both_tab_storage_authorities():
+    source = read("qualification/vq1_button_action_validator_v2.py")
+    reset_pos = source.index("def _reset_console_section_state(page, section: str) -> None:")
+    navigate_pos = source.index("def navigate_console(page, section: str) -> str:")
+    reset_block = source[reset_pos:navigate_pos]
+    assert 'localStorage.setItem(key, value)' in reset_block
+    assert 'sessionStorage.setItem(key, value)' in reset_block
+    assert 'SETTINGS_DEFAULT_TAB = "operations"' in source
