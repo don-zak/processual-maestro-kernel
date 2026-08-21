@@ -7,6 +7,7 @@ AUDIT = ROOT / "scripts" / "audit_repository_retirement.ps1"
 SUPERSESSION = ROOT / "scripts" / "analyze_local_tooling_supersession.ps1"
 RETIREMENT_EVIDENCE = ROOT / "scripts" / "extract_local_tooling_retirement_evidence.ps1"
 SEMANTIC_REPLACEMENT = ROOT / "scripts" / "analyze_legacy_function_semantic_replacement.ps1"
+REPORTING_ONLY = ROOT / "scripts" / "analyze_legacy_reporting_only_retirement.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -216,6 +217,22 @@ def test_legacy_function_semantic_replacement_analysis_is_ast_based_and_non_dest
     assert "semantic_replacement_proven" in source
     assert "deletion_authorized = $false" in source
     assert "local AST semantic comparison only; no deletion authority" in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
+
+
+def test_reporting_only_retirement_analysis_is_ast_based_and_non_destructive() -> None:
+    source = REPORTING_ONLY.read_text(encoding="utf-8")
+
+    assert "System.Management.Automation.Language.Parser" in source
+    assert "FunctionDefinitionAst" in source
+    assert "ReturnStatementAst" in source
+    assert "mutatingCommands" in source
+    assert "reporting_only_candidate" in source
+    assert "any_result_captured" in source
+    assert "retirement_safe_if_parent_script_unreferenced" in source
+    assert "all_missing_functions_reporting_only" in source
+    assert "deletion_authorized = $false" in source
+    assert "local reporting-only role analysis; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
