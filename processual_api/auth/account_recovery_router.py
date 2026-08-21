@@ -14,6 +14,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
+from processual_api.auth.account_recovery_escalation_router import (
+    router as account_recovery_escalation_router,
+)
 from processual_api.auth.account_recovery_http_contracts import (
     AccountRecoveryCompletedResponseContract,
     AccountRecoveryCompleteRequestContract,
@@ -199,8 +202,6 @@ async def start_account_recovery(
         try:
             await runtime.service.start(login=payload.login)
         except ValueError:
-            # Malformed and unknown principals remain
-            # externally indistinguishable.
             pass
         except Exception:
             logger.exception(
@@ -428,6 +429,9 @@ async def complete_account_recovery(
             "Pragma": "no-cache",
         },
     )
+
+
+router.include_router(account_recovery_escalation_router)
 
 
 __all__ = [
