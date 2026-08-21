@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,6 +10,14 @@
       font-family: Inter, system-ui, sans-serif;
       background: #07111f;
       color: #eef5ff;
+      --surface: #0a192b;
+      --surface-2: #0b1b2d;
+      --line: #29425e;
+      --line-strong: #3b5876;
+      --accent: #54a8ff;
+      --muted: #aec0d4;
+      --ok: #4ca276;
+      --error: #d96a70;
     }
 
     * { box-sizing: border-box; }
@@ -28,14 +36,33 @@
     main {
       width: min(100%, 720px);
       padding: clamp(24px, 5vw, 48px);
-      border: 1px solid #29425e;
+      border: 1px solid var(--line);
       border-radius: 24px;
       background: rgba(10, 25, 43, .94);
       box-shadow: 0 24px 80px rgba(0, 0, 0, .38);
     }
 
-    h1 { margin-top: 0; font-size: clamp(2rem, 5vw, 3rem); }
-    p { color: #aec0d4; line-height: 1.6; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; }
+    p { color: var(--muted); line-height: 1.6; }
+    .brand { margin: 0 0 14px; color: #83c0ff; }
+    .lede { margin: 22px 0 0; }
+
+    .plan-context {
+      display: grid;
+      gap: 10px;
+      margin: 24px 0;
+      padding: 16px 18px;
+      border: 1px solid #365b7f;
+      border-radius: 14px;
+      background: rgba(11, 31, 52, .86);
+    }
+
+    .plan-context[hidden] { display: none !important; }
+    .plan-context-kicker { margin: 0; color: #83c0ff; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .plan-context-title { margin: 0; color: #fff; font-size: 1.15rem; font-weight: 800; }
+    .plan-context-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); font-size: .92rem; }
+    .plan-context-meta strong { color: #eef5ff; }
+    .plan-context-note { margin: 0; font-size: .86rem; }
 
     fieldset {
       margin: 24px 0;
@@ -45,17 +72,27 @@
       gap: 12px;
     }
 
+    legend { margin-bottom: 10px; font-weight: 700; }
+
     .mode-options {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 12px 20px;
     }
 
     .mode-options label,
     .terms {
-      display: flex;
+      display: inline-flex;
       gap: 9px;
       align-items: center;
+    }
+
+    .mode-options input,
+    .terms input {
+      width: auto;
+      flex: 0 0 auto;
+      margin: 0;
+      accent-color: var(--accent);
     }
 
     .field {
@@ -64,12 +101,15 @@
       margin-bottom: 16px;
     }
 
+    .field label { font-weight: 650; }
+
     input {
       width: 100%;
+      min-height: 46px;
       padding: 12px 14px;
-      border: 1px solid #3b5876;
+      border: 1px solid var(--line-strong);
       border-radius: 10px;
-      background: #0b1b2d;
+      background: var(--surface-2);
       color: #fff;
       font: inherit;
     }
@@ -81,13 +121,44 @@
       outline-offset: 3px;
     }
 
-    button {
+    .password-shell { position: relative; width: 100%; }
+    .password-shell input { padding-right: 78px; }
+    .password-toggle {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: auto;
+      min-width: 58px;
+      margin: 0;
+      padding: 7px 9px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: #10253c;
+      color: #d8e8fa;
+      font-size: .78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .terms {
+      width: 100%;
+      justify-content: flex-start;
+      margin: 8px 0 0;
+      padding: 12px 14px;
+      border: 1px solid rgba(59, 88, 118, .55);
+      border-radius: 10px;
+      background: rgba(11, 27, 45, .55);
+      line-height: 1.35;
+    }
+
+    button[type="submit"] {
       width: 100%;
       margin-top: 22px;
       padding: 13px 18px;
       border: 0;
       border-radius: 11px;
-      background: #54a8ff;
+      background: var(--accent);
       color: #04101d;
       font: inherit;
       font-weight: 750;
@@ -95,31 +166,24 @@
     }
 
     button:disabled { cursor: wait; opacity: .65; }
-
     [hidden] { display: none !important; }
 
     .status {
       min-height: 48px;
       margin-top: 20px;
       padding: 12px 14px;
+      border: 1px solid transparent;
       border-radius: 10px;
       background: #0d2238;
     }
 
-    .status[data-state="error"] {
-      border: 1px solid #d96a70;
-      color: #ffd7da;
-    }
-
-    .status[data-state="success"] {
-      border: 1px solid #4ca276;
-      color: #ccffe1;
-    }
+    .status[data-state="error"] { border-color: var(--error); color: #ffd7da; }
+    .status[data-state="success"] { border-color: var(--ok); color: #ccffe1; }
 
     nav {
       display: flex;
       flex-wrap: wrap;
-      gap: 16px;
+      gap: 12px 18px;
       margin-top: 24px;
     }
 
@@ -131,17 +195,39 @@
       border-left: 3px solid #6a91b8;
       background: #0b1929;
       font-size: .92rem;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 14px; place-items: start center; }
+      main { padding: 24px; border-radius: 20px; }
+      .mode-options { gap: 10px 16px; }
+      .terms { align-items: flex-start; }
+      .terms input { margin-top: 3px; }
+      nav { display: grid; gap: 10px; }
     }
   </style>
 </head>
 <body>
   <main>
-    <p>Processual Maestro</p>
+    <p class="brand">Processual Maestro</p>
     <h1>Create your account</h1>
-    <p>
+    <p class="lede">
       Registration creates an identity request. It does not activate a paid
       subscription, entitlement, quota, or checkout.
     </p>
+
+    <section id="registration-plan-context" class="plan-context" aria-live="polite" hidden>
+      <p class="plan-context-kicker">Selected offer</p>
+      <h2 id="registration-plan-name" class="plan-context-title">Selected plan</h2>
+      <div class="plan-context-meta">
+        <span>Billing: <strong id="registration-plan-billing">—</strong></span>
+        <span id="registration-plan-price-wrap">Price: <strong id="registration-plan-price">—</strong></span>
+      </div>
+      <p id="registration-plan-note" class="plan-context-note">
+        Your selection will be carried into the registration request and revalidated by the backend.
+      </p>
+    </section>
 
     <form id="registration-form" novalidate>
       <fieldset id="registration-mode-fieldset">
@@ -160,88 +246,39 @@
 
       <div class="field">
         <label for="registration-full-name">Full name</label>
-        <input
-          id="registration-full-name"
-          name="full_name"
-          type="text"
-          autocomplete="name"
-          minlength="1"
-          maxlength="160"
-          required
-        >
+        <input id="registration-full-name" name="full_name" type="text" autocomplete="name" minlength="1" maxlength="160" required>
       </div>
 
       <div class="field" id="organization-name-field" hidden>
         <label for="registration-organization-name">Organization name</label>
-        <input
-          id="registration-organization-name"
-          name="organization_name"
-          type="text"
-          autocomplete="organization"
-          minlength="2"
-          maxlength="200"
-        >
+        <input id="registration-organization-name" name="organization_name" type="text" autocomplete="organization" minlength="2" maxlength="200">
       </div>
 
       <div class="field">
         <label for="registration-email">Email address</label>
-        <input
-          id="registration-email"
-          name="email"
-          type="email"
-          autocomplete="email"
-          minlength="3"
-          maxlength="320"
-          required
-        >
+        <input id="registration-email" name="email" type="email" autocomplete="email" minlength="3" maxlength="320" required>
       </div>
 
       <div class="field">
         <label for="registration-password">Password</label>
-        <input
-          id="registration-password"
-          name="password"
-          type="password"
-          autocomplete="new-password"
-          minlength="12"
-          maxlength="1024"
-          aria-describedby="password-requirements"
-          required
-        >
-        <small id="password-requirements">
-          Use at least <span id="password-minimum">12</span> characters.
-        </small>
+        <div class="password-shell">
+          <input id="registration-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" aria-describedby="password-requirements" required>
+          <button id="registration-password-visibility" class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+        </div>
+        <small id="password-requirements">Use at least <span id="password-minimum">12</span> characters.</small>
       </div>
 
       <label class="terms">
-        <input
-          id="registration-terms"
-          name="accepted_terms"
-          type="checkbox"
-          required
-        >
-        I accept the currently published terms.
+        <input id="registration-terms" name="accepted_terms" type="checkbox" required>
+        <span>I accept the currently published terms.</span>
       </label>
 
-      <input
-        id="accepted-terms-version"
-        name="accepted_terms_version"
-        type="hidden"
-        value="current"
-      >
+      <input id="accepted-terms-version" name="accepted_terms_version" type="hidden" value="current">
 
-      <button id="registration-submit" type="submit">
-        Submit registration
-      </button>
+      <button id="registration-submit" type="submit">Submit registration</button>
     </form>
 
-    <div
-      id="registration-status"
-      class="status"
-      data-state="idle"
-      role="status"
-      aria-live="polite"
-    >
+    <div id="registration-status" class="status" data-state="idle" role="status" aria-live="polite">
       Complete the form to begin.
     </div>
 

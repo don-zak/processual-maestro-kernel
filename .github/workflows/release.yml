@@ -115,14 +115,106 @@ jobs:
       - name: Ruff check
         run: ruff check . --output-format=github
 
+      - name: Lint (flake8)
+        run: flake8 . --count --select=E9,F63,F7,F82 --statistics
+
+      - name: Type check (mypy)
+        run: |
+          mypy \
+            processual_api/auth/security.py \
+            processual_api/middleware/subscription.py \
+            processual_api/services/operator_pilot_handoff_intake_preview.py \
+            processual_api/cgt_governor/data/storage.py \
+            --ignore-missing-imports \
+            --follow-imports=skip
+
       - name: Bandit security scan
         run: bandit -r cgtlib processual_kernel processual_api
+
+      - name: High-confidence secret scan
+        run: python tools/secret_scan.py .
+
+      - name: Dependency vulnerability audit
+        run: pip-audit
 
       - name: Build package
         run: python -m build
 
+      - name: Verify packaged reference data and private exclusion
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          wheels = sorted(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = archive.namelist()
+              assert "cgtlib/data/reference_scenarios.json" in names
+              assert not any(name.startswith("cgtlib/private/") for name in names)
+              assert not any(
+                  name.startswith("processual_api/private_integrations/")
+                  for name in names
+              )
+          PY
+
+      - name: Smoke test installed wheel resources and public boundary
+        shell: bash
+        run: |
+          python -m venv /tmp/pmk-wheel-smoke
+          /tmp/pmk-wheel-smoke/bin/python -m pip install --upgrade pip
+          /tmp/pmk-wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/pmk-wheel-smoke/bin/python - <<'PY'
+          import importlib.util
+
+          import cgtlib
+          from cgtlib.reference_data import (
+              list_reference_dataset_ids,
+              load_reference_scenario_record,
+          )
+          from processual_api.cgt_governor.governor import govern_answer
+          from processual_api.integrations.private_evaluation_boundary import (
+              PrivateEvaluationUnavailableError,
+              boundary_contract_version,
+          )
+
+          assert cgtlib._HAS_PRIVATE is False
+          assert list_reference_dataset_ids() == (
+              "balanced_transition_band",
+              "stress_recovery_band",
+              "boundary_lock_band",
+          )
+          record = load_reference_scenario_record("boundary_lock_band")
+          assert record.scenario_pack.transitions
+          assert boundary_contract_version() == "private-evaluation-boundary/v1"
+          assert importlib.util.find_spec("cgtlib.private") is None
+          assert importlib.util.find_spec("processual_api.private_integrations") is None
+          try:
+              govern_answer(answer="release-wheel-probe")
+          except PrivateEvaluationUnavailableError as exc:
+              assert str(exc) == "private_evaluation_unavailable"
+          else:
+              raise AssertionError("release wheel must fail closed without private decision")
+          PY
+
       - name: Check package metadata
         run: python -m twine check dist/*
+
+      - name: Generate release evidence inventory
+        run: python tools/release_evidence_inventory.py --dist-dir dist --output release-evidence/release-inventory.json
+
+      - name: Generate CycloneDX dependency SBOM
+        shell: bash
+        run: pip-audit --format cyclonedx-json > release-evidence/python-environment.cdx.json
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: release-evidence/*
+          if-no-files-found: error
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

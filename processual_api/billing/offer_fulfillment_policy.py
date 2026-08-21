@@ -67,16 +67,19 @@ ENTERPRISE_REVIEW_POLICY: dict[str, Any] = {
 }
 
 # Historical identifiers remain compatibility-only. They must not define new
-# commercial offers or pricing authority.
+# public commercial offers or pricing authority. The current public Enterprise
+# stages are Integration Trial and requirements-based Deployment; both are
+# supervisor-reviewed and never self-service checkout offers.
 PAID_TRIAL_OFFER_IDS = {"starter_trial"}
 
 ENTERPRISE_PLAN_IDS = {
     "enterprise_integration_starter",
+    "enterprise_deployment",
+    # Historical compatibility-only identifiers during legacy retirement.
     "enterprise_pilot",
     "enterprise_core",
     "enterprise_scale",
     "enterprise_strategic",
-    # Compatibility-only aliases during legacy retirement.
     "enterprise",
     "enterprise_integration",
 }
@@ -84,6 +87,8 @@ ENTERPRISE_PLAN_IDS = {
 ENTERPRISE_OFFER_IDS = {
     "enterprise_contact",
     "enterprise_integration_trial",
+    "enterprise_integration_trial_contact",
+    "enterprise_deployment_contact",
     "enterprise_integration_starter_monthly",
     "enterprise_integration_starter_yearly",
 }

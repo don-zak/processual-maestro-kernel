@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from fastapi import Response
 from fastapi.routing import APIRoute
 
 from processual_api.routers import client_provider_alias_18
@@ -54,14 +55,18 @@ def test_client_provider_connection_alias_preserves_authenticated_identity(
         "client_id": "client-a",
         "role": "client",
     }
+    response = Response()
 
     result = asyncio.run(
         client_provider_alias_18.get_client_provider_connection_alias(
+            response,
             current_user,
         )
     )
 
     assert captured["current_user"] is current_user
+    assert response.headers["deprecation"] == "true"
+    assert response.headers["x-maestro-replacement"] == "/settings/provider-connection"
     assert result == {
         "configured": False,
         "status": "not_configured",

@@ -37,6 +37,60 @@ function replaceList(element, values) {
   }));
 }
 
+function assessmentPriceLabel(plan) {
+  if (plan.commercial_model === "requirements_based_evaluation") {
+    return "Evaluation pricing is defined after scope assessment";
+  }
+  if (plan.commercial_model === "requirements_based_contract") {
+    return "Deployment pricing is defined from the approved customer requirements";
+  }
+  return "Pricing defined during assessment";
+}
+
+function assessmentQuotaLabel(plan) {
+  if (plan.commercial_model === "requirements_based_evaluation") {
+    return "Evaluation quota agreed from the approved one-month scope";
+  }
+  if (plan.commercial_model === "requirements_based_contract") {
+    return "Capacity defined by the approved deployment specification";
+  }
+  return "Capacity defined during assessment";
+}
+
+function renderEnterpriseTerms(plan) {
+  const addOnsTitle = byId("offer-add-ons-title");
+  const addOnsTerms = byId("offer-add-ons-terms");
+  const criteriaSummary = byId("offer-criteria-summary");
+  const criteriaWarning = byId("offer-criteria-warning");
+
+  if (plan.commercial_model === "requirements_based_evaluation") {
+    addOnsTitle.textContent = "Evaluation capacity";
+    addOnsTerms.textContent =
+      "Evaluation capacity is agreed during assessment and is not sold as a public add-on package.";
+    criteriaSummary.textContent = "Evaluation success criteria";
+    criteriaWarning.textContent =
+      "Completing the evaluation confirms the assessed integration outcome only. It does not automatically activate payment, subscription, quota, or production entitlements.";
+    return;
+  }
+
+  if (plan.commercial_model === "requirements_based_contract") {
+    addOnsTitle.textContent = "Contracted capacity";
+    addOnsTerms.textContent =
+      "Additional capacity, scaling, support, and operating terms are defined inside the approved enterprise proposal rather than through public add-on packages.";
+    criteriaSummary.textContent = "Deployment acceptance criteria";
+    criteriaWarning.textContent =
+      "Deployment proceeds only under the approved enterprise scope, acceptance conditions, commercial terms, and operational authorization. No public trial or self-service entitlement is implied.";
+    return;
+  }
+
+  addOnsTitle.textContent = "Additional quota packages";
+  addOnsTerms.textContent =
+    "Add-ons are purchased separately when needed. They are not recurring by default, are not part of the annual commitment, and receive no annual discount.";
+  criteriaSummary.textContent = "Trial success criteria";
+  criteriaWarning.textContent =
+    "Completing a trial confirms eligibility only. It does not automatically activate payment, subscription, quota, or production entitlements.";
+}
+
 function render(plan) {
   byId("offer-title").textContent = plan.display_name;
   byId("offer-audience").textContent = plan.audience;
@@ -44,7 +98,7 @@ function render(plan) {
 
   byId("offer-quota").textContent = plan.included_quota_units !== null && plan.included_quota_units !== undefined
     ? `${new Intl.NumberFormat("en-US").format(plan.included_quota_units)} units / month`
-    : "Capacity defined during assessment";
+    : assessmentQuotaLabel(plan);
 
   const monthly = money(plan.monthly_price_usd);
   const annual = money(plan.annual_price_usd);
@@ -54,7 +108,7 @@ function render(plan) {
 
   byId("offer-monthly-price").textContent = monthly
     ? `${monthly} / month`
-    : "Pricing defined during assessment";
+    : assessmentPriceLabel(plan);
 
   const annualPrice = byId("offer-annual-price");
   const annualSavings = byId("offer-savings");
@@ -67,7 +121,7 @@ function render(plan) {
   } else {
     annualPrice.textContent = `${annual} / year`;
     annualSavings.textContent = annualDiscount
-      ? `Save ${annualDiscount}% on the base annual plan.`
+      ? `Save ${annualDiscount}% on the eligible base annual plan.`
       : "Annual billing uses the published base plan price.";
   }
 
@@ -98,36 +152,48 @@ function render(plan) {
   });
   byId("offer-add-ons").replaceChildren(...addOnCards);
   if (addOnCards.length === 0) {
-    byId("offer-add-ons").textContent = "No public quota package is available for this assessment-only plan.";
+    byId("offer-add-ons").textContent = plan.commercial_model === "requirements_based_contract"
+      ? "No public capacity package is attached to Enterprise Deployment."
+      : plan.commercial_model === "requirements_based_evaluation"
+        ? "No public quota package is attached to Enterprise Integration Trial."
+        : "No public quota package is available for this assessment-only plan.";
   }
+
+  renderEnterpriseTerms(plan);
 
   const duration = plan.trial?.duration_days;
   const terminationPolicy = plan.trial?.termination_policy;
   byId("offer-trial-duration").textContent =
     terminationPolicy === "30_days_or_agreed_quota_exhausted"
-      ? "Trial duration: one month or until the agreed quota is exhausted, whichever occurs first."
-      : duration
-        ? `Trial duration: ${duration} days`
-        : "Trial duration and evaluation quota are agreed during assessment.";
+      ? "Evaluation period: up to one month or until the agreed evaluation quota is exhausted, whichever occurs first."
+      : plan.commercial_model === "requirements_based_contract"
+        ? "No generic trial is attached to deployment. Scope and rollout terms are agreed in the enterprise proposal."
+        : duration
+          ? `Trial duration: ${duration} days`
+          : "Trial duration and evaluation quota are agreed during assessment.";
   replaceList(byId("offer-trial-criteria"), plan.trial?.success_criteria);
 
   const actions = byId("offer-actions");
   if (plan.requires_assessment || !plan.registration_available) {
     const assessment = document.createElement("a");
     assessment.className = "primary-action";
-    assessment.textContent = "Request plan assessment";
+    assessment.textContent = plan.commercial_model === "requirements_based_contract"
+      ? "Request enterprise deployment proposal"
+      : plan.commercial_model === "requirements_based_evaluation"
+        ? "Request enterprise integration trial"
+        : "Request plan assessment";
     assessment.href = `/apply?plan_id=${encodeURIComponent(plan.plan_id)}&journey=assessment`;
     actions.replaceChildren(assessment);
   } else {
-    const monthly = document.createElement("a");
-    monthly.className = "primary-action";
-    monthly.textContent = `Start monthly subscription - ${money(plan.monthly_price_usd)} / month`;
-    monthly.href = `${plan.registration_path}?plan_id=${encodeURIComponent(plan.plan_id)}&billing_period=monthly`;
-    const annual = document.createElement("a");
-    annual.className = "secondary-action";
-    annual.textContent = `Start annual subscription - ${money(plan.annual_price_usd)} / year`;
-    annual.href = `${plan.registration_path}?plan_id=${encodeURIComponent(plan.plan_id)}&billing_period=annual`;
-    actions.replaceChildren(monthly, annual);
+    const monthlyAction = document.createElement("a");
+    monthlyAction.className = "primary-action";
+    monthlyAction.textContent = `Start monthly subscription - ${money(plan.monthly_price_usd)} / month`;
+    monthlyAction.href = `${plan.registration_path}?plan_id=${encodeURIComponent(plan.plan_id)}&billing_period=monthly`;
+    const annualAction = document.createElement("a");
+    annualAction.className = "secondary-action";
+    annualAction.textContent = `Start annual subscription - ${money(plan.annual_price_usd)} / year`;
+    annualAction.href = `${plan.registration_path}?plan_id=${encodeURIComponent(plan.plan_id)}&billing_period=annual`;
+    actions.replaceChildren(monthlyAction, annualAction);
   }
 
   byId("offer-status").hidden = true;
@@ -149,7 +215,7 @@ async function loadOffer() {
     const plan = payload.plans.find((item) => item.plan_id === planId);
     if (!plan) {
       byId("offer-title").textContent = "Plan unavailable";
-      byId("offer-status").textContent = "This plan could not be found.";
+      byId("offer-status").textContent = "This plan is not available in the current public commercial catalog.";
       return;
     }
 

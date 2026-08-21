@@ -1,0 +1,295 @@
+name: Sandbox Integration Qualification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - pyproject.toml
+      - processual_api/auth/security.py
+      - processual_api/integrations/**
+      - processual_api/routers/client_api_keys_18.py
+      - processual_api/routers/settings_admin_evaluation_grants.py
+      - processual_api/routers/settings_endpoint_discovery_qualification_runtime.py
+      - processual_api/services/api_key_store.py
+      - processual_api/services/evaluation_grant_*.py
+      - processual_api/services/legacy_api_key_mode.py
+      - processual_api/services/sandbox_api_key_*.py
+      - processual_api/static/css/admin_integration_center_18.css
+      - processual_api/static/js/admin_integration_center_18.js
+      - alembic/versions/**
+      - tests/test_admin_evaluation_grant_durable_routes.py
+      - tests/test_auth_durable_evaluation_api_key_boundary.py
+      - tests/test_auth_durable_evaluation_quota_boundary.py
+      - tests/test_auth_durable_sandbox_api_key_boundary.py
+      - tests/test_auth_durable_sandbox_quota_boundary.py
+      - tests/test_auth_fallback_production_boundary.py
+      - tests/test_client_sandbox_api_keys_18.py
+      - tests/test_endpoint_binding_provenance.py
+      - tests/test_endpoint_discovery_quality.py
+      - tests/test_endpoint_path_composition_security.py
+      - tests/test_endpoint_source_attestation.py
+      - tests/test_enterprise_endpoint_bindings.py
+      - tests/test_evaluation_api_key_postgres_authority.py
+      - tests/test_evaluation_grant_mode.py
+      - tests/test_evaluation_grant_postgres_lifecycle.py
+      - tests/test_evaluation_usage_postgres_concurrency.py
+      - tests/test_legacy_api_key_mode.py
+      - tests/test_legacy_api_key_production_cutover.py
+      - tests/test_postgres_migration_compatibility_contract.py
+      - tests/test_sandbox_api_key_mode.py
+      - tests/test_sandbox_api_key_postgres_lifecycle.py
+      - tests/test_sandbox_api_key_usage_postgres_concurrency.py
+      - tests/test_settings_endpoint_discovery_qualification_runtime.py
+      - tests/test_settings_sandbox_qualification_01.py
+      - tests/test_sandbox_api_key_authority_postgres_contract.py
+      - tests/test_stage18_integration_center_ui_r1.py
+      - tests/test_trusted_endpoint_source_acquisition.py
+      - tests/test_trusted_endpoint_source_bundle.py
+      - tests/test_trusted_endpoint_source_runtime_bundle.py
+      - .github/workflows/sandbox-integration-qualification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox-integration-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: maestro_qualification
+          POSTGRES_DB: maestro_qualification
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U maestro -d maestro_qualification"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://maestro:maestro_qualification@127.0.0.1:5432/maestro_qualification
+      REDIS_URL: redis://127.0.0.1:6379/14
+      APP_ENV: test
+      ENVIRONMENT: test
+      PYTHONPATH: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,security,database,cache]'
+
+      - name: Verify PostgreSQL and Redis services
+        run: |
+          python - <<'PY'
+          import asyncio
+          import asyncpg
+          import redis.asyncio as redis
+
+          async def main():
+              conn = await asyncpg.connect("postgresql://maestro:maestro_qualification@127.0.0.1:5432/maestro_qualification")
+              try:
+                  assert await conn.fetchval("SELECT 1") == 1
+              finally:
+                  await conn.close()
+              client = redis.from_url("redis://127.0.0.1:6379/14")
+              try:
+                  assert await client.ping() is True
+              finally:
+                  await client.aclose()
+
+          asyncio.run(main())
+          PY
+
+      - name: Upgrade isolated PostgreSQL to Alembic head
+        run: alembic upgrade head
+
+      - name: Verify sandbox and evaluation authority migrations
+        run: |
+          python - <<'PY'
+          import asyncio
+          import asyncpg
+
+          async def main():
+              conn = await asyncpg.connect("postgresql://maestro:maestro_qualification@127.0.0.1:5432/maestro_qualification")
+              try:
+                  revision = await conn.fetchval("SELECT version_num FROM alembic_version")
+                  assert revision == "20260818_0056", revision
+                  tables = (
+                      "sandbox_api_key_authority",
+                      "evaluation_grant_authority",
+                      "evaluation_api_key_authority",
+                      "evaluation_usage_ledger",
+                  )
+                  for table in tables:
+                      exists = await conn.fetchval(
+                          "SELECT to_regclass($1) IS NOT NULL",
+                          f"public.{table}",
+                      )
+                      assert exists is True, table
+              finally:
+                  await conn.close()
+
+          asyncio.run(main())
+          PY
+
+      - name: Ruff focused qualification slice
+        run: |
+          ruff check \
+            processual_api/auth/security.py \
+            processual_api/integrations/endpoint_binding_provenance.py \
+            processual_api/integrations/endpoint_discovery_quality.py \
+            processual_api/integrations/endpoint_source_attestation.py \
+            processual_api/integrations/enterprise_endpoint_bindings.py \
+            processual_api/integrations/enterprise_endpoint_request_mapping.py \
+            processual_api/integrations/enterprise_sandbox_execution.py \
+            processual_api/integrations/trusted_endpoint_source_acquisition.py \
+            processual_api/routers/client_api_keys_18.py \
+            processual_api/routers/settings_admin_evaluation_grants.py \
+            processual_api/routers/settings_endpoint_discovery_qualification_runtime.py \
+            processual_api/services/api_key_store.py \
+            processual_api/services/evaluation_grant_authority.py \
+            processual_api/services/evaluation_grant_mode.py \
+            processual_api/services/evaluation_grant_persistence.py \
+            processual_api/services/evaluation_grant_provisioning.py \
+            processual_api/services/evaluation_grant_usage.py \
+            processual_api/services/legacy_api_key_mode.py \
+            processual_api/services/sandbox_api_key_authority.py \
+            processual_api/services/sandbox_api_key_mode.py \
+            processual_api/services/sandbox_api_key_persistence.py \
+            processual_api/services/sandbox_api_key_provisioning.py \
+            processual_api/services/sandbox_api_key_usage.py \
+            tests/test_admin_evaluation_grant_durable_routes.py \
+            tests/test_auth_durable_evaluation_api_key_boundary.py \
+            tests/test_auth_durable_evaluation_quota_boundary.py \
+            tests/test_auth_durable_sandbox_api_key_boundary.py \
+            tests/test_auth_durable_sandbox_quota_boundary.py \
+            tests/test_auth_fallback_production_boundary.py \
+            tests/test_client_sandbox_api_keys_18.py \
+            tests/test_endpoint_binding_provenance.py \
+            tests/test_endpoint_discovery_quality.py \
+            tests/test_endpoint_path_composition_security.py \
+            tests/test_endpoint_source_attestation.py \
+            tests/test_enterprise_endpoint_bindings.py \
+            tests/test_evaluation_api_key_postgres_authority.py \
+            tests/test_evaluation_grant_mode.py \
+            tests/test_evaluation_grant_postgres_lifecycle.py \
+            tests/test_evaluation_usage_postgres_concurrency.py \
+            tests/test_legacy_api_key_mode.py \
+            tests/test_legacy_api_key_production_cutover.py \
+            tests/test_postgres_migration_compatibility_contract.py \
+            tests/test_sandbox_api_key_mode.py \
+            tests/test_sandbox_api_key_postgres_lifecycle.py \
+            tests/test_sandbox_api_key_usage_postgres_concurrency.py \
+            tests/test_settings_endpoint_discovery_qualification_runtime.py \
+            tests/test_settings_sandbox_qualification_01.py \
+            tests/test_sandbox_api_key_authority_postgres_contract.py \
+            tests/test_stage18_integration_center_ui_r1.py \
+            tests/test_trusted_endpoint_source_acquisition.py \
+            tests/test_trusted_endpoint_source_bundle.py \
+            tests/test_trusted_endpoint_source_runtime_bundle.py
+
+      - name: Run focused qualification contracts
+        run: |
+          pytest -q \
+            tests/test_admin_evaluation_grant_durable_routes.py \
+            tests/test_auth_durable_evaluation_api_key_boundary.py \
+            tests/test_auth_durable_evaluation_quota_boundary.py \
+            tests/test_auth_durable_sandbox_api_key_boundary.py \
+            tests/test_auth_durable_sandbox_quota_boundary.py \
+            tests/test_auth_fallback_production_boundary.py \
+            tests/test_client_sandbox_api_keys_18.py \
+            tests/test_endpoint_binding_provenance.py \
+            tests/test_endpoint_discovery_quality.py \
+            tests/test_endpoint_path_composition_security.py \
+            tests/test_endpoint_source_attestation.py \
+            tests/test_enterprise_endpoint_bindings.py \
+            tests/test_evaluation_api_key_postgres_authority.py \
+            tests/test_evaluation_grant_mode.py \
+            tests/test_evaluation_grant_postgres_lifecycle.py \
+            tests/test_evaluation_usage_postgres_concurrency.py \
+            tests/test_legacy_api_key_mode.py \
+            tests/test_legacy_api_key_production_cutover.py \
+            tests/test_postgres_migration_compatibility_contract.py \
+            tests/test_sandbox_api_key_mode.py \
+            tests/test_sandbox_api_key_postgres_lifecycle.py \
+            tests/test_sandbox_api_key_usage_postgres_concurrency.py \
+            tests/test_settings_endpoint_discovery_qualification_runtime.py \
+            tests/test_settings_sandbox_qualification_01.py \
+            tests/test_sandbox_api_key_authority_postgres_contract.py \
+            tests/test_stage18_integration_center_ui_r1.py \
+            tests/test_trusted_endpoint_source_acquisition.py \
+            tests/test_trusted_endpoint_source_bundle.py \
+            tests/test_trusted_endpoint_source_runtime_bundle.py
+
+      - name: Record qualification environment
+        if: always()
+        run: |
+          mkdir -p qualification-evidence
+          {
+            echo "workflow=Sandbox Integration Qualification"
+            echo "postgres=17"
+            echo "redis=7"
+            echo "alembic_expected_head=20260818_0056"
+            echo "clean_alembic_chain_tested=true"
+            echo "postgres_json_migration_contract=true"
+            echo "durable_sandbox_auth_fail_closed_tests=true"
+            echo "durable_sandbox_key_provisioning_route_tests=true"
+            echo "durable_sandbox_key_lifecycle_postgres=true"
+            echo "durable_sandbox_usage_ledger_tests=true"
+            echo "durable_sandbox_quota_concurrency_postgres=true"
+            echo "production_durable_mode_enforced=true"
+            echo "endpoint_path_composition_tests=true"
+            echo "endpoint_provenance_tamper_tests=true"
+            echo "endpoint_discovery_runtime_tests=true"
+            echo "endpoint_source_identity_attestation_tests=true"
+            echo "trusted_source_acquisition_contract_tests=true"
+            echo "trusted_source_streaming_limit_tests=true"
+            echo "trusted_source_qualification_route_tests=true"
+            echo "trusted_source_revision_allowlist_tests=true"
+            echo "trusted_source_relative_ref_bundle_tests=true"
+            echo "trusted_source_bundle_resource_limit_tests=true"
+            echo "trusted_source_bundle_route_tests=true"
+            echo "camara_qod_r32_candidate_pin_tests=true"
+            echo "integration_center_evidence_ladder_tests=true"
+            echo "integration_center_keyboard_accessibility_tests=true"
+            echo "trusted_source_live_fetch=false"
+            echo "evaluation_authority_schema_present=true"
+            echo "evaluation_authority_lifecycle_postgres=true"
+            echo "evaluation_authority_production_mode_enforced=true"
+            echo "evaluation_authority_route_tests=true"
+            echo "evaluation_authority_auth_service_tests=true"
+            echo "evaluation_authority_runtime_wired=true"
+            echo "evaluation_authority_concurrency_proven=true"
+            echo "legacy_dynamic_api_key_production_cutover=true"
+            echo "integration_center_ui_contract_tests=true"
+            echo "production_credentials=false"
+            echo "external_provider_credentials=false"
+            echo "external_network_proof=false"
+          } > qualification-evidence/environment.txt
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-integration-qualification
+          path: qualification-evidence/

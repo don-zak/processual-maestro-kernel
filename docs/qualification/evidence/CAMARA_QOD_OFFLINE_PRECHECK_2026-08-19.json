@@ -1,0 +1,47 @@
+{
+  "schema_version": "camara-qod-offline-precheck-public-evidence-r1",
+  "recorded_at": "2026-08-19T06:58:00+01:00",
+  "evidence_scope": "user-executed local offline contract precheck",
+  "execution_context": {
+    "repository": "don-zak/processual-maestro-kernel",
+    "branch": "agent/settings-sandbox-qualification-r1",
+    "execution_commit": "ac5a291e063eb4b9e75c19623ec38c9f15edc534",
+    "tool": "tools/camara_qod_offline_precheck.ps1",
+    "request_plan_path": "camara-request-plan.json",
+    "evidence_output_path_local": "camara-operator-evidence/camara-qod-offline-precheck-summary.json"
+  },
+  "approved_contract": {
+    "governance_version": "camara-qod-governance-r1@70d57dd3d8c9632c7e45260646c71049cbbc1cee",
+    "source_revision": "9cb179fd3b63f43d564c76689295cd681e723548"
+  },
+  "observed_result": {
+    "offline_precheck_passed": true,
+    "validated_operation_count": 1,
+    "validated_operations": [
+      "getSession"
+    ]
+  },
+  "explicit_non_claims": {
+    "dns_checked": false,
+    "tls_checked": false,
+    "credentials_resolved": false,
+    "provider_network_proof": false,
+    "provider_sandbox_proven": false,
+    "runtime_connector_approved": false,
+    "request_execution_allowed": false,
+    "production_allowed": false
+  },
+  "sanitization": {
+    "raw_endpoint_included": false,
+    "raw_token_included": false,
+    "raw_credentials_included": false,
+    "raw_request_body_included": false,
+    "raw_response_body_included": false
+  },
+  "notes": [
+    "This record captures only the successful offline contract precheck output observed in the active work session.",
+    "No operator sandbox endpoint was available, so no provider DNS, TLS, authentication, network, or request/response proof is claimed.",
+    "The locally generated request_plan_sha256 was not supplied in the conversation and is intentionally not fabricated in this public record.",
+    "This evidence does not authorize runtime connector execution, staging, or production."
+  ]
+}

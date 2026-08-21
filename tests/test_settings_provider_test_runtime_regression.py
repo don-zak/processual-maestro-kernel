@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+
+from fastapi import Response
 from fastapi.routing import APIRoute
 
 from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_provider_test_runtime
+from processual_api.schemas.settings import LLMProviderConfig, TestConnectionResult
 
 
 def _post_route(path: str) -> APIRoute:
@@ -30,6 +34,35 @@ def test_legacy_provider_test_route_is_deprecated_compatibility_wrapper() -> Non
 
     assert route.endpoint is settings_provider_test_runtime.test_legacy_llm_provider_runtime
     assert route.deprecated is True
+
+
+def test_legacy_provider_test_route_emits_successor_metadata(monkeypatch) -> None:
+    async def fake_test(
+        config: LLMProviderConfig,
+        current_user: dict,
+    ) -> TestConnectionResult:
+        return TestConnectionResult(success=True, latency_ms=1.0)
+
+    monkeypatch.setattr(
+        settings_provider_test_runtime,
+        "run_provider_connection_test",
+        fake_test,
+    )
+    response = Response()
+
+    result = asyncio.run(
+        settings_provider_test_runtime.test_legacy_llm_provider_runtime(
+            LLMProviderConfig(provider="opencode", api_key="", model="test"),
+            response,
+            {"sub": "client-a"},
+        )
+    )
+
+    assert result.success is True
+    assert response.headers["Deprecation"] == "true"
+    assert response.headers["Link"] == (
+        '</settings/provider-connection/test>; rel="successor-version"'
+    )
 
 
 def test_provider_test_routes_share_one_runtime_helper() -> None:

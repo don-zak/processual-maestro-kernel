@@ -23,6 +23,14 @@ from processual_api.auth.security import (
 from processual_api.integrations.api_key_operational_profiles import (
     get_api_key_operational_profile,
 )
+from processual_api.services.sandbox_api_key_provisioning import (
+    SandboxApiKeyProvisioningError,
+    durable_sandbox_api_key_provisioning_enabled,
+    issue_durable_sandbox_api_key,
+    list_durable_sandbox_api_keys,
+    revoke_durable_sandbox_api_key,
+    rotate_durable_sandbox_api_key,
+)
 
 from . import settings as settings_module
 
@@ -187,12 +195,41 @@ def _issue(
     return entry, raw_key
 
 
+def _durable_error(exc: SandboxApiKeyProvisioningError) -> HTTPException:
+    reason = str(exc)
+    if reason == "maximum_active_sandbox_keys_reached":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Maximum active self-service sandbox keys reached. Revoke or rotate an existing key.",
+        )
+    if reason == "sandbox_key_not_found":
+        return HTTPException(status_code=404, detail="Client sandbox API key not found.")
+    if reason == "exactly_one_authoritative_active_subscription_required":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Authoritative active subscription is required before sandbox API-key provisioning.",
+        )
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Sandbox API-key provisioning authority unavailable.",
+    )
+
+
 @settings_module.router.get("/client/api-keys", response_model=dict)
 async def list_client_sandbox_api_keys(current_user: dict = Depends(get_current_user)):
     user_id, client_id = _identity(current_user)
     raw = settings_module._load_raw(user_id)
     plan_id = _eligible_plan(user_id, client_id, raw, current_user)
-    keys = [_safe_key(key) for key in _active_self_service_keys(raw, client_id)]
+    if durable_sandbox_api_key_provisioning_enabled():
+        try:
+            keys = await list_durable_sandbox_api_keys(
+                client_ref=client_id,
+                plan_code=plan_id,
+            )
+        except SandboxApiKeyProvisioningError as exc:
+            raise _durable_error(exc) from exc
+    else:
+        keys = [_safe_key(key) for key in _active_self_service_keys(raw, client_id)]
     return {
         "status": "ready",
         "plan_id": plan_id,
@@ -215,22 +252,39 @@ async def create_client_sandbox_api_key(
     raw = settings_module._load_raw(user_id)
     plan_id = _eligible_plan(user_id, client_id, raw, current_user)
     profile = _safe_profile(body.profile_id)
-    entry, raw_key = _issue(
-        raw,
-        client_id=client_id,
-        user_id=user_id,
-        plan_id=plan_id,
-        profile=profile,
-        label=body.label,
-        purpose=body.purpose,
-        expires_in_days=body.expires_in_days,
-    )
-    settings_module._save_raw(user_id, raw)
+    if durable_sandbox_api_key_provisioning_enabled():
+        try:
+            key, raw_key = await issue_durable_sandbox_api_key(
+                client_ref=client_id,
+                owner_user_ref=user_id,
+                plan_code=plan_id,
+                profile_id=str(profile.get("profile_id") or ""),
+                scopes=list(profile.get("allowed_scopes") or []),
+                label=body.label,
+                purpose=body.purpose,
+                expires_in_days=body.expires_in_days,
+                issued_by_actor_ref=user_id,
+            )
+        except SandboxApiKeyProvisioningError as exc:
+            raise _durable_error(exc) from exc
+    else:
+        entry, raw_key = _issue(
+            raw,
+            client_id=client_id,
+            user_id=user_id,
+            plan_id=plan_id,
+            profile=profile,
+            label=body.label,
+            purpose=body.purpose,
+            expires_in_days=body.expires_in_days,
+        )
+        settings_module._save_raw(user_id, raw)
+        key = _safe_key(entry)
     return {
         "status": "created",
         "api_key": raw_key,
         "visible_once": True,
-        "key": _safe_key(entry),
+        "key": key,
         "production_allowed": False,
         "runtime_connector_approved": False,
     }
@@ -245,30 +299,51 @@ async def rotate_client_sandbox_api_key(
     user_id, client_id = _identity(current_user)
     raw = settings_module._load_raw(user_id)
     plan_id = _eligible_plan(user_id, client_id, raw, current_user)
-    target = next((key for key in _active_self_service_keys(raw, client_id) if key.get("id") == key_id), None)
-    if target is None:
-        raise HTTPException(status_code=404, detail="Client sandbox API key not found.")
-    profile = _safe_profile(str(target.get("operational_profile_id") or ""))
-    target["status"] = "revoked"
-    target["revoked_at"] = datetime.now(UTC).isoformat()
-    entry, raw_key = _issue(
-        raw,
-        client_id=client_id,
-        user_id=user_id,
-        plan_id=plan_id,
-        profile=profile,
-        label=str(target.get("label") or "Institution sandbox"),
-        purpose=str(target.get("purpose") or "Approved sandbox integration"),
-        expires_in_days=body.expires_in_days,
-    )
-    entry["rotated_from_key_id"] = key_id
-    settings_module._save_raw(user_id, raw)
+    if durable_sandbox_api_key_provisioning_enabled():
+        try:
+            key, raw_key = await rotate_durable_sandbox_api_key(
+                key_id=key_id,
+                client_ref=client_id,
+                owner_user_ref=user_id,
+                plan_code=plan_id,
+                expires_in_days=body.expires_in_days,
+                issued_by_actor_ref=user_id,
+            )
+        except SandboxApiKeyProvisioningError as exc:
+            raise _durable_error(exc) from exc
+    else:
+        target = next(
+            (
+                key
+                for key in _active_self_service_keys(raw, client_id)
+                if key.get("id") == key_id
+            ),
+            None,
+        )
+        if target is None:
+            raise HTTPException(status_code=404, detail="Client sandbox API key not found.")
+        profile = _safe_profile(str(target.get("operational_profile_id") or ""))
+        target["status"] = "revoked"
+        target["revoked_at"] = datetime.now(UTC).isoformat()
+        entry, raw_key = _issue(
+            raw,
+            client_id=client_id,
+            user_id=user_id,
+            plan_id=plan_id,
+            profile=profile,
+            label=str(target.get("label") or "Institution sandbox"),
+            purpose=str(target.get("purpose") or "Approved sandbox integration"),
+            expires_in_days=body.expires_in_days,
+        )
+        entry["rotated_from_key_id"] = key_id
+        settings_module._save_raw(user_id, raw)
+        key = _safe_key(entry)
     return {
         "status": "rotated",
         "api_key": raw_key,
         "visible_once": True,
         "revoked_key_id": key_id,
-        "key": _safe_key(entry),
+        "key": key,
         "production_allowed": False,
         "runtime_connector_approved": False,
     }
@@ -281,13 +356,30 @@ async def revoke_client_sandbox_api_key(
 ):
     user_id, client_id = _identity(current_user)
     raw = settings_module._load_raw(user_id)
-    _eligible_plan(user_id, client_id, raw, current_user)
-    target = next((key for key in _active_self_service_keys(raw, client_id) if key.get("id") == key_id), None)
-    if target is None:
-        raise HTTPException(status_code=404, detail="Client sandbox API key not found.")
-    target["status"] = "revoked"
-    target["revoked_at"] = datetime.now(UTC).isoformat()
-    settings_module._save_raw(user_id, raw)
+    plan_id = _eligible_plan(user_id, client_id, raw, current_user)
+    if durable_sandbox_api_key_provisioning_enabled():
+        try:
+            await revoke_durable_sandbox_api_key(
+                key_id=key_id,
+                client_ref=client_id,
+                plan_code=plan_id,
+            )
+        except SandboxApiKeyProvisioningError as exc:
+            raise _durable_error(exc) from exc
+    else:
+        target = next(
+            (
+                key
+                for key in _active_self_service_keys(raw, client_id)
+                if key.get("id") == key_id
+            ),
+            None,
+        )
+        if target is None:
+            raise HTTPException(status_code=404, detail="Client sandbox API key not found.")
+        target["status"] = "revoked"
+        target["revoked_at"] = datetime.now(UTC).isoformat()
+        settings_module._save_raw(user_id, raw)
     return {
         "status": "revoked",
         "key_id": key_id,

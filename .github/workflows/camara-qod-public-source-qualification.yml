@@ -1,0 +1,56 @@
+name: CAMARA QoD Public Source Qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-public-standard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      APP_ENV: test
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install public-source qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[api]'
+
+      - name: Acquire exact reviewed CAMARA QoD public source
+        run: |
+          mkdir -p qualification-evidence
+          python -m processual_api.integrations.camara_public_source_qualification \
+            | tee qualification-evidence/camara-qod-public-source.json
+
+      - name: Record authority boundaries
+        if: always()
+        run: |
+          {
+            echo "workflow=CAMARA QoD Public Source Qualification"
+            echo "public_standards_source_only=true"
+            echo "trusted_source_live_fetch=true"
+            echo "production_credentials=false"
+            echo "external_provider_credentials=false"
+            echo "provider_sandbox_proven=false"
+            echo "external_provider_network_proof=false"
+            echo "runtime_connector_approved=false"
+            echo "production_allowed=false"
+          } > qualification-evidence/authority-boundary.txt
+
+      - name: Upload public-source qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: camara-qod-public-source-qualification
+          path: qualification-evidence/

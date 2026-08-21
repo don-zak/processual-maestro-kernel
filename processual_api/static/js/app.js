@@ -64,6 +64,16 @@ const APP = (() => {
     if (td) td.textContent = n.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
+  function syncQualificationBadge() {
+    const badge = document.getElementById('demo-badge');
+    if (!badge) return;
+    badge.textContent = I18N.t('demo_mode');
+    badge.dataset.qualificationState = 'controlled-review-ready';
+    badge.title = I18N.lang() === 'ar'
+      ? 'جاهز للمراجعة والتأهيل المحلي فقط؛ لا يمنح صلاحية تشغيل إنتاجية.'
+      : 'Ready for controlled local qualification review only; no production authority is granted.';
+  }
+
   function navigateTo(pg) {
     const btn = document.querySelector('.nav-btn[data-page="' + pg + '"]');
     if (!btn) return;
@@ -136,6 +146,7 @@ const APP = (() => {
       I18N.toggle();
       btn.textContent = I18N.lang() === 'ar' ? 'EN' : 'AR';
       document.body.dir = I18N.lang() === 'ar' ? 'rtl' : 'ltr';
+      syncQualificationBadge();
       showToast('Language: ' + I18N.lang().toUpperCase(), 'info');
     });
   }
@@ -165,7 +176,7 @@ const APP = (() => {
 
   function init() {
     if (!hasDescentGateSession()) { window.location.replace('/'); return; }
-    AUTH.init(); tickClock(); setInterval(tickClock, 1000); initNav(); initKeyboard(); initRtlToggle();
+    AUTH.init(); tickClock(); setInterval(tickClock, 1000); initNav(); initKeyboard(); initRtlToggle(); syncQualificationBadge();
     const lt = document.getElementById('lang-toggle');
     if (lt) lt.textContent = I18N.lang() === 'ar' ? 'EN' : 'AR';
     if (!AUTH.isLoggedIn()) { window.location.replace('/login'); return; }

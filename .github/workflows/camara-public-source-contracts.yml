@@ -1,0 +1,122 @@
+name: CAMARA Public Source Contracts
+
+on:
+  pull_request:
+    paths:
+      - processual_api/integrations/camara_public_source_qualification.py
+      - processual_api/integrations/camara_qod_semantic_mapping.py
+      - processual_api/integrations/endpoint_discovery_quality.py
+      - processual_api/integrations/trusted_endpoint_source_acquisition.py
+      - processual_api/routers/__init__.py
+      - processual_api/routers/settings_camara_qod_qualification_status.py
+      - processual_api/static/js/admin_integration_center_18.js
+      - tests/test_camara_public_source_qualification.py
+      - tests/test_camara_qod_semantic_mapping.py
+      - tests/test_camara_qod_qualification_status_route.py
+      - tests/test_endpoint_discovery_quality.py
+      - tests/test_stage18_integration_center_ui_r1.py
+      - tests/test_trusted_endpoint_source_acquisition.py
+      - tests/test_trusted_endpoint_source_bundle.py
+      - .github/workflows/camara-qod-public-source-qualification.yml
+      - .github/workflows/camara-public-source-contracts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      APP_ENV: test
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install contract-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,security,database,cache]'
+
+      - name: Ruff public-source qualification slice
+        id: ruff_contracts
+        run: |
+          ruff check \
+            processual_api/integrations/camara_public_source_qualification.py \
+            processual_api/integrations/camara_qod_semantic_mapping.py \
+            processual_api/integrations/endpoint_discovery_quality.py \
+            processual_api/integrations/trusted_endpoint_source_acquisition.py \
+            processual_api/routers/settings_camara_qod_qualification_status.py \
+            tests/test_camara_public_source_qualification.py \
+            tests/test_camara_qod_semantic_mapping.py \
+            tests/test_camara_qod_qualification_status_route.py \
+            tests/test_endpoint_discovery_quality.py \
+            tests/test_stage18_integration_center_ui_r1.py \
+            tests/test_trusted_endpoint_source_acquisition.py \
+            tests/test_trusted_endpoint_source_bundle.py
+
+      - name: Run public-source qualification contracts
+        id: public_source_contract_tests
+        run: |
+          pytest -q \
+            tests/test_camara_public_source_qualification.py \
+            tests/test_camara_qod_semantic_mapping.py \
+            tests/test_camara_qod_qualification_status_route.py \
+            tests/test_endpoint_discovery_quality.py \
+            tests/test_stage18_integration_center_ui_r1.py \
+            tests/test_trusted_endpoint_source_acquisition.py \
+            tests/test_trusted_endpoint_source_bundle.py
+
+      - name: Record contract boundary
+        if: always()
+        env:
+          RUFF_OUTCOME: ${{ steps.ruff_contracts.outcome }}
+          CONTRACT_TEST_OUTCOME: ${{ steps.public_source_contract_tests.outcome }}
+        run: |
+          mkdir -p qualification-evidence
+          if [ "$RUFF_OUTCOME" = "success" ]; then
+            ruff_passed=true
+          else
+            ruff_passed=false
+          fi
+          if [ "$CONTRACT_TEST_OUTCOME" = "success" ]; then
+            contract_tests_passed=true
+          else
+            contract_tests_passed=false
+          fi
+          {
+            echo "workflow=CAMARA Public Source Contracts"
+            echo "ruff_contracts_outcome=$RUFF_OUTCOME"
+            echo "public_source_contract_tests_outcome=$CONTRACT_TEST_OUTCOME"
+            echo "ruff_contracts_passed=$ruff_passed"
+            echo "camara_public_source_runner_tests=$contract_tests_passed"
+            echo "camara_qod_semantic_mapping_tests=$contract_tests_passed"
+            echo "camara_qod_semantic_drift_tests=$contract_tests_passed"
+            echo "camara_qod_discovery_quality_tests=$contract_tests_passed"
+            echo "camara_qod_safe_status_route_tests=$contract_tests_passed"
+            echo "camara_qod_route_backed_ui_tests=$contract_tests_passed"
+            echo "trusted_source_bundle_limit_tests=$contract_tests_passed"
+            echo "camara_qod_network_assurance_reuse=false"
+            echo "camara_qod_runtime_task_registered=false"
+            echo "manual_live_workflow_contract_present=true"
+            echo "trusted_source_live_fetch=false"
+            echo "production_credentials=false"
+            echo "external_provider_credentials=false"
+            echo "external_provider_network_proof=false"
+            echo "runtime_connector_approved=false"
+            echo "production_allowed=false"
+          } > qualification-evidence/environment.txt
+
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: camara-public-source-contracts
+          path: qualification-evidence/
