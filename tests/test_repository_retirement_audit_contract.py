@@ -9,6 +9,7 @@ RETIREMENT_EVIDENCE = ROOT / "scripts" / "extract_local_tooling_retirement_evide
 SEMANTIC_REPLACEMENT = ROOT / "scripts" / "analyze_legacy_function_semantic_replacement.ps1"
 REPORTING_ONLY = ROOT / "scripts" / "analyze_legacy_reporting_only_retirement.ps1"
 OUTPUT_CONSUMERS = ROOT / "scripts" / "analyze_legacy_report_output_consumers.ps1"
+V8_SUPERSESSION = ROOT / "scripts" / "analyze_v8_fixed_supersession.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -250,6 +251,20 @@ def test_legacy_report_output_consumer_analysis_is_ast_based_and_non_destructive
     assert "referenceExclusions" in source
     assert "deletion_authorized = $false" in source
     assert "local legacy report output consumer analysis only; no deletion authority" in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
+
+
+def test_v8_fixed_supersession_analysis_is_non_destructive_and_explicit() -> None:
+    source = V8_SUPERSESSION.read_text(encoding="utf-8")
+
+    assert "System.Management.Automation.Language.Parser" in source
+    assert "broken_is_syntax_invalid" in source
+    assert "fixed_is_syntax_valid" in source
+    assert "missing_functions_in_fixed" in source
+    assert "missing_commands_in_fixed" in source
+    assert "direct_fixed_successor_evidence_complete" in source
+    assert "deletion_authorized = $false" in source
+    assert "local v8-to-v8-fixed supersession evidence only; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
