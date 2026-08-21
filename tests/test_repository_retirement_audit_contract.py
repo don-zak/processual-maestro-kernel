@@ -129,6 +129,26 @@ def test_structural_supersession_analysis_is_non_destructive_and_explicit() -> N
     assert "Remove-Item" not in source
 
 
+def test_behavioral_supersession_analysis_tracks_operational_primitives() -> None:
+    source = SUPERSESSION.read_text(encoding="utf-8")
+
+    assert "Get-BehavioralSignature" in source
+    assert "git_commands" in source
+    assert "gh_commands" in source
+    assert "pytest_commands" in source
+    assert "file_writes" in source
+    assert "file_deletes" in source
+    assert "network_calls" in source
+    assert "process_calls" in source
+    assert "latest_contains_all_candidate_behavioral_signals" in source
+    assert "missing_git_commands_in_latest" in source
+    assert "missing_gh_commands_in_latest" in source
+    assert "missing_file_write_primitives_in_latest" in source
+    assert "missing_file_delete_primitives_in_latest" in source
+    assert "local structural and behavioral comparison only; no deletion authority" in source
+    assert "Remove-Item" not in source
+
+
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
     source = AUDIT.read_text(encoding="utf-8")
 
