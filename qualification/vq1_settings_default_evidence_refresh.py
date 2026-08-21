@@ -206,6 +206,19 @@ def open_admin_home(
     reset_ui_scroll(page)
 
 
+def install_tour_suppression(page: Page) -> None:
+    page.add_init_script(
+        """
+        (() => {
+          try {
+            localStorage.setItem('tour_completed', 'true');
+            localStorage.setItem('tour_lang', 'en');
+          } catch (_) {}
+        })();
+        """
+    )
+
+
 def main() -> None:
     if not EVIDENCE_CSV.exists():
         raise RuntimeError(f"VQ evidence CSV not found: {EVIDENCE_CSV}")
@@ -214,27 +227,23 @@ def main() -> None:
     refreshed: dict[str, int] = {"settings": 0, "institution": 0, "admin-home": 0}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page(locale="en")
+        console_page = browser.new_page(locale="en")
+        admin_page = browser.new_page(locale="en")
         try:
-            establish_qualification_session(page)
-            page.add_init_script(
-                """
-                (() => {
-                  try {
-                    localStorage.setItem('tour_completed', 'true');
-                    localStorage.setItem('tour_lang', 'en');
-                  } catch (_) {}
-                })();
-                """
-            )
-            install_clean_console_routes(page)
+            establish_qualification_session(console_page)
+            establish_qualification_session(admin_page)
+            install_tour_suppression(console_page)
+            install_tour_suppression(admin_page)
+            install_clean_console_routes(console_page)
+
             for row in rows:
                 width = int(row["viewport_width"])
                 height = int(row["viewport_height"])
                 if row["route"] == "/console/":
                     section = row["section"]
+                    capture_page = console_page
                     open_console_section(
-                        page,
+                        capture_page,
                         section=section,
                         width=width,
                         height=height,
@@ -242,13 +251,14 @@ def main() -> None:
                     refreshed[section] += 1
                     label = section
                 else:
-                    open_admin_home(page, width=width, height=height)
+                    capture_page = admin_page
+                    open_admin_home(capture_page, width=width, height=height)
                     refreshed["admin-home"] += 1
                     label = "admin-home"
 
                 shot = Path(row["screenshot_path"])
                 shot.parent.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(shot), full_page=True)
+                capture_page.screenshot(path=str(shot), full_page=True)
                 print(
                     f"refreshed clean {label} default evidence: "
                     f"{row['viewport']} {width}x{height} -> {shot}"
