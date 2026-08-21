@@ -241,7 +241,6 @@ async def approve_recovery_channel(
                 SELECT id, claimed_login, contact_email, state
                   FROM auth_account_recovery_escalations
                  WHERE id = :id
-                 FOR UPDATE
             """),
             {"id": str(request_id)},
         )
