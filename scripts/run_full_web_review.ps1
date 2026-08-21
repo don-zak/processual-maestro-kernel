@@ -49,12 +49,38 @@ function Stop-StaleLocalReviewServers {
     return @($stopped)
 }
 
+function Test-TcpPortInUse([int]$CandidatePort) {
+    try {
+        $listener = Get-NetTCPConnection -LocalPort $CandidatePort -State Listen -ErrorAction Stop | Select-Object -First 1
+        return $null -ne $listener
+    } catch {
+        return $false
+    }
+}
+
+function Resolve-ReviewPort([int]$RequestedPort) {
+    if ($RequestedPort -lt 1 -or $RequestedPort -gt 65535) { throw "Invalid review port: $RequestedPort" }
+    if (-not (Test-TcpPortInUse $RequestedPort)) { return $RequestedPort }
+
+    Write-Host "Requested port $RequestedPort is already in use; selecting an isolated local-review port." -ForegroundColor Yellow
+    $upper = [Math]::Min(65535, $RequestedPort + 99)
+    for ($candidate = $RequestedPort + 1; $candidate -le $upper; $candidate++) {
+        if (-not (Test-TcpPortInUse $candidate)) {
+            Write-Host "Using free review port $candidate instead of $RequestedPort."
+            return $candidate
+        }
+    }
+    throw "No free local-review port was found between $($RequestedPort + 1) and $upper."
+}
+
 if ($ResetDatabase) {
     $releasedPids = @(Stop-StaleLocalReviewServers)
     if ($releasedPids.Count -gt 0) {
         Write-Host "Released $($releasedPids.Count) stale local-review server process(es)."
     }
 }
+
+$Port = Resolve-ReviewPort $Port
 
 $bootstrapArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $bootstrapScript, "-DatabaseFile", $DatabaseFile)
 if ($ResetDatabase) { $bootstrapArgs += "-ResetDatabase" }
@@ -87,6 +113,24 @@ try {
         } catch { Start-Sleep -Milliseconds 750 }
     }
     if (-not $ready) { throw "Local review server did not become ready within $ReadyTimeoutSeconds seconds." }
+
+    $openApiUrl = "$base/openapi.json"
+    try {
+        $openApi = Invoke-RestMethod -Uri $openApiUrl -Method Get -TimeoutSec 10
+    } catch {
+        throw "The process answering on $base does not expose the expected Maestro OpenAPI document."
+    }
+    $declaredPaths = @($openApi.paths.PSObject.Properties.Name)
+    $requiredIdentityPaths = @(
+        "/billing/public-plan-journey",
+        "/auth/account-recovery/start",
+        "/auth/mfa/status"
+    )
+    $missingIdentityPaths = @($requiredIdentityPaths | Where-Object { $_ -notin $declaredPaths })
+    if ($missingIdentityPaths.Count -gt 0) {
+        throw "Server identity check failed on $base. Missing expected Maestro endpoint(s): $($missingIdentityPaths -join ', ')."
+    }
+    Write-Host "Verified Maestro server identity from OpenAPI on $base."
 
     $publicPages = [System.Collections.Generic.List[object]]::new()
     $publicPages.Add([pscustomobject]@{ Name = "Public entry / splash"; Path = "/" })
@@ -149,6 +193,8 @@ try {
         generated_at = (Get-Date).ToString("o")
         source_head = $head
         base_url = $base
+        requested_port = $PSBoundParameters.Port
+        resolved_port = $Port
         server_pid = $server.Id
         mode = "local_public_web_acceptance"
         browser_policy = "normal public entry; no authentication/session bypass"
@@ -161,10 +207,13 @@ try {
     Write-Host "All declared review pages returned HTTP 200."
     Write-Host "Evidence report: $reportPath"
     Write-Host "Server PID:      $($server.Id)"
+    Write-Host "Review URL:      $base"
     Write-Host ""
     Write-Host "Browser review policy:"
     Write-Host "- The first page is the public root URL, exactly as a normal visitor enters the site."
     Write-Host "- No token, session state, role, or authentication state is injected by this script."
+    Write-Host "- The server identity is verified from OpenAPI before catalog or browser review begins."
+    Write-Host "- A busy requested port is never trusted; the script selects a free local-review port automatically."
     Write-Host "- Assessment request pages are discovered only for assessment-only offers."
     Write-Host "- Registration MFA review is layout-only; real enrollment remains after email verification and authenticated sign-in."
     Write-Host "- Account recovery completion shell is opened without tokens; real recovery material must never be copied into evidence."
