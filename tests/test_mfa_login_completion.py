@@ -24,10 +24,14 @@ def test_user_login_requires_mfa_completion_before_session_persistence() -> None
 
     assert "if (payload?.mfa_required === true) return false" in source
     assert "fetch('/auth/login'" in source
+    assert "fetch('/auth/mfa/status'" in source
     assert "fetch('/auth/mfa/verify'" in source
+    assert "fetch('/auth/mfa/totp/enroll'" in source
+    assert "fetch('/auth/mfa/totp/confirm'" in source
     assert "fetch('/auth/session/refresh'" in source
-    assert "'X-CSRF-Token': pendingCsrfToken" in source
-    assert "if (refreshedData.mfa_required === true)" in source
+    assert "'X-CSRF-Token':pendingCsrfToken" in source
+    assert "data.mfa_required === true" in source
+    assert "async function refreshAfterMfa()" in source
     assert "persistUserSession(token)" in source
 
     assert "fetch('/auth/token'" in login_html
