@@ -57,6 +57,40 @@ function assessmentQuotaLabel(plan) {
   return "Capacity defined during assessment";
 }
 
+function renderEnterpriseTerms(plan) {
+  const addOnsTitle = byId("offer-add-ons-title");
+  const addOnsTerms = byId("offer-add-ons-terms");
+  const criteriaSummary = byId("offer-criteria-summary");
+  const criteriaWarning = byId("offer-criteria-warning");
+
+  if (plan.commercial_model === "requirements_based_evaluation") {
+    addOnsTitle.textContent = "Evaluation capacity";
+    addOnsTerms.textContent =
+      "Evaluation capacity is agreed during assessment and is not sold as a public add-on package.";
+    criteriaSummary.textContent = "Evaluation success criteria";
+    criteriaWarning.textContent =
+      "Completing the evaluation confirms the assessed integration outcome only. It does not automatically activate payment, subscription, quota, or production entitlements.";
+    return;
+  }
+
+  if (plan.commercial_model === "requirements_based_contract") {
+    addOnsTitle.textContent = "Contracted capacity";
+    addOnsTerms.textContent =
+      "Additional capacity, scaling, support, and operating terms are defined inside the approved enterprise proposal rather than through public add-on packages.";
+    criteriaSummary.textContent = "Deployment acceptance criteria";
+    criteriaWarning.textContent =
+      "Deployment proceeds only under the approved enterprise scope, acceptance conditions, commercial terms, and operational authorization. No public trial or self-service entitlement is implied.";
+    return;
+  }
+
+  addOnsTitle.textContent = "Additional quota packages";
+  addOnsTerms.textContent =
+    "Add-ons are purchased separately when needed. They are not recurring by default, are not part of the annual commitment, and receive no annual discount.";
+  criteriaSummary.textContent = "Trial success criteria";
+  criteriaWarning.textContent =
+    "Completing a trial confirms eligibility only. It does not automatically activate payment, subscription, quota, or production entitlements.";
+}
+
 function render(plan) {
   byId("offer-title").textContent = plan.display_name;
   byId("offer-audience").textContent = plan.audience;
@@ -119,9 +153,13 @@ function render(plan) {
   byId("offer-add-ons").replaceChildren(...addOnCards);
   if (addOnCards.length === 0) {
     byId("offer-add-ons").textContent = plan.commercial_model === "requirements_based_contract"
-      ? "Additional capacity is defined inside the approved enterprise proposal rather than as a public package."
-      : "No public quota package is available for this assessment-only plan.";
+      ? "No public capacity package is attached to Enterprise Deployment."
+      : plan.commercial_model === "requirements_based_evaluation"
+        ? "No public quota package is attached to Enterprise Integration Trial."
+        : "No public quota package is available for this assessment-only plan.";
   }
+
+  renderEnterpriseTerms(plan);
 
   const duration = plan.trial?.duration_days;
   const terminationPolicy = plan.trial?.termination_policy;
