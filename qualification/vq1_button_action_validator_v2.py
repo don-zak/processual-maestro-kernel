@@ -7,12 +7,32 @@ import vq1_button_action_validator as base
 from vq1_browser_harness import establish_qualification_session
 
 
+SETTINGS_TAB_STORAGE_KEY = "maestro_settings_tab"
+SETTINGS_DEFAULT_TAB = "operations"
+
+
 def _ensure_session(page) -> None:
     establish_qualification_session(page)
 
 
+def _reset_console_section_state(page, section: str) -> None:
+    if section != "settings":
+        return
+    page.evaluate(
+        """
+        ({ key, value }) => {
+          try {
+            localStorage.setItem(key, value);
+          } catch (_) {}
+        }
+        """,
+        {"key": SETTINGS_TAB_STORAGE_KEY, "value": SETTINGS_DEFAULT_TAB},
+    )
+
+
 def navigate_console(page, section: str) -> str:
     _ensure_session(page)
+    _reset_console_section_state(page, section)
     page.goto(f"{base.BASE_URL}/console/", wait_until="domcontentloaded")
     selector = f'.nav-btn[data-page="{section}"]'
     button = page.locator(selector)
