@@ -238,12 +238,12 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
             "Downgrade blocked: invitation governance audit records exist",
             "context.is_offline_mode()",
         ),
-        "20260818_0055_durable_sandbox_api_key_authority.py": (
-            "Downgrade blocked: durable sandbox API key authority rows exist",
+        "20260818_0055_sandbox_api_key_authority.py": (
+            "Downgrade blocked: sandbox API-key authority rows exist",
             "context.is_offline_mode()",
         ),
         "20260818_0056_evaluation_grant_authority.py": (
-            "Downgrade blocked: durable evaluation authority rows exist",
+            "Downgrade blocked: durable evaluation authority rows exist in",
             "context.is_offline_mode()",
         ),
         "20260821_0057_account_recovery_escalations.py": (
