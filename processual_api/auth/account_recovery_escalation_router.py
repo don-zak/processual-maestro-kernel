@@ -68,7 +68,7 @@ class AccountRecoveryEscalationDecisionResult(_StrictModel):
     mfa_bypassed: bool = False
 
 
-router = APIRouter(prefix="/auth/account-recovery", tags=["identity-account-recovery-escalation"])
+router = APIRouter(tags=["identity-account-recovery-escalation"])
 platform_admin_step_up_dependency = require_platform_admin_step_up()
 
 
