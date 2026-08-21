@@ -35,6 +35,14 @@ def test_repository_retirement_audit_outputs_are_quarantined_from_git() -> None:
     assert ".pmk-repo-audit/" in gitignore
 
 
+def test_cgtlib_reference_data_is_not_hidden_by_generic_data_ignore() -> None:
+    gitignore = GITIGNORE.read_text(encoding="utf-8")
+
+    assert "data/" in gitignore
+    assert "!cgtlib/data/" in gitignore
+    assert "!cgtlib/data/**" in gitignore
+
+
 def test_safe_cleanup_is_limited_to_ignored_untracked_generated_residue() -> None:
     source = AUDIT.read_text(encoding="utf-8")
 
@@ -42,6 +50,16 @@ def test_safe_cleanup_is_limited_to_ignored_untracked_generated_residue() -> Non
     assert "SAFE_LOCAL_RESIDUE" in source
     assert "Remove-Item -LiteralPath $item.path -Recurse -Force" in source
     assert "No tracked file is deleted automatically" in source
+
+
+def test_audit_infrastructure_is_excluded_from_retirement_candidates() -> None:
+    source = AUDIT.read_text(encoding="utf-8")
+
+    assert "auditInfrastructurePatterns" in source
+    assert "^scripts/audit_repository_retirement\\.ps1$" in source
+    assert "^governance/repository_retirement_quarantine\\.json$" in source
+    assert "if (Test-AuditInfrastructurePath $path) { continue }" in source
+    assert "audit_infrastructure_excluded_from_candidates = $true" in source
 
 
 def test_markdown_summary_lines_do_not_escape_their_closing_quotes() -> None:
