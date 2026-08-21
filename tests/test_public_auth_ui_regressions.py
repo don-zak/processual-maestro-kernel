@@ -59,7 +59,8 @@ def test_general_product_surfaces_are_english_only_but_tutorial_keeps_arabic() -
 
     assert "function lockConsoleToEnglish()" in console_i18n
     assert "I18N.setLang('en')" in console_i18n
-    assert "toggle.hidden = true" in console_i18n
+    assert "toggle.remove()" in console_i18n
+    assert "toggle.hidden = true" not in console_i18n
 
     assert 'id="lang-ar"' not in splash
     assert 'data-lang="ar"' not in splash
