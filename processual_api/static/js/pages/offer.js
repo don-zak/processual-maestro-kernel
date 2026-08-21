@@ -182,7 +182,7 @@ function render(plan) {
       : plan.commercial_model === "requirements_based_evaluation"
         ? "Request enterprise integration trial"
         : "Request plan assessment";
-    assessment.href = `/apply?plan_id=${encodeURIComponent(plan.plan_id)}&journey=assessment`;
+    assessment.href = `/console/apply.html?plan_id=${encodeURIComponent(plan.plan_id)}&journey=assessment`;
     actions.replaceChildren(assessment);
   } else {
     const monthlyAction = document.createElement("a");
