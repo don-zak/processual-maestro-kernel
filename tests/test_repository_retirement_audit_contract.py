@@ -282,9 +282,13 @@ def test_local_evidence_retention_classification_is_non_destructive_and_explicit
     source = EVIDENCE_RETENTION.read_text(encoding="utf-8")
 
     assert "REGENERABLE_COVERAGE_EVIDENCE" in source
+    assert "REGENERABLE_TOOL_CACHE" in source
+    assert "REGENERABLE_LOCAL_ENVIRONMENT" in source
     assert "ACTIVE_LOCAL_QUALIFICATION_EVIDENCE" in source
     assert "HISTORICAL_RETIREMENT_EVIDENCE" in source
     assert "HISTORICAL_REVIEW_DECISION" in source
+    assert "TEST_RUN_EVIDENCE" in source
+    assert "LOCAL_QUALIFICATION_RESULT_SET" in source
     assert "PATCH_PROVENANCE_EVIDENCE" in source
     assert "HANDOFF_EVIDENCE" in source
     assert "BACKUP_SNAPSHOT" in source
@@ -292,6 +296,25 @@ def test_local_evidence_retention_classification_is_non_destructive_and_explicit
     assert "deletion_authorized = $false" in source
     assert "local evidence retention classification only; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
+
+
+def test_local_evidence_retention_marks_caches_regenerable_not_evidence() -> None:
+    source = EVIDENCE_RETENTION.read_text(encoding="utf-8")
+
+    assert "^\\.mypy_cache/" in source
+    assert "^\\.pytest_cache/" in source
+    assert "^\\.ruff_cache/" in source
+    assert "__pycache__" in source
+    assert "SAFE_TO_REGENERATE" in source
+    assert "$deletion_candidate = $true" in source
+
+
+def test_local_evidence_retention_recognizes_historical_retirement_audits() -> None:
+    source = EVIDENCE_RETENTION.read_text(encoding="utf-8")
+
+    assert "^cgt17_branch_retirement_audit_\\d+\\.json$" in source
+    assert "HISTORICAL_RETIREMENT_EVIDENCE" in source
+    assert "ARCHIVE_CANDIDATE" in source
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
