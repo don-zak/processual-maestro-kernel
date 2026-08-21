@@ -82,6 +82,20 @@ def test_local_tooling_is_inventoried_but_never_auto_deleted() -> None:
     assert "local_tooling_requires_manual_review = $true" in source
 
 
+def test_local_tooling_families_are_summarized_without_authorizing_deletion() -> None:
+    source = AUDIT.read_text(encoding="utf-8")
+
+    assert "Get-LocalToolingMetadata" in source
+    assert "Invoke-PMKRepoAudit" in source
+    assert "Retire-Safe-CGT17Branches" in source
+    assert "local_tooling_families" in source
+    assert "latest_numeric_version_by_name" in source
+    assert "fixed_variant_paths" in source
+    assert "deletion_authorized = $false" in source
+    assert "tooling_version_order_is_not_deletion_authority = $true" in source
+    assert "Tool version ordering is inventory evidence only" in source
+
+
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
     source = AUDIT.read_text(encoding="utf-8")
 
