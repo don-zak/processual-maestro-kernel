@@ -8,6 +8,7 @@ from vq1_browser_harness import establish_qualification_session
 
 SETTINGS_TAB_STORAGE_KEY = "maestro_settings_tab"
 SETTINGS_DEFAULT_TAB = "operations"
+BUTTON_RESOLUTION_TIMEOUT_MS = 5000
 
 
 def _ensure_session(page) -> None:
@@ -87,11 +88,19 @@ def _resolve_button_after_reload(page, scope: str, item: dict[str, object]):
 
     if button_id:
         stable = page.locator(f"#{button_id}")
-        if stable.count() and stable.is_visible():
+        try:
+            stable.wait_for(state="visible", timeout=BUTTON_RESOLUTION_TIMEOUT_MS)
+        except Exception:
+            pass
+        else:
             return stable, "stable-id"
 
     by_label = page.locator(scope).get_by_role("button", name=label, exact=True)
-    if by_label.count():
+    try:
+        by_label.first.wait_for(state="visible", timeout=BUTTON_RESOLUTION_TIMEOUT_MS)
+    except Exception:
+        pass
+    else:
         for candidate_index in range(by_label.count()):
             candidate = by_label.nth(candidate_index)
             if candidate.is_visible():
