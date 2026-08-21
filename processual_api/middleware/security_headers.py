@@ -2,7 +2,7 @@ import re
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse, Response
+from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 
 _ADMIN_DOM_CONTRACT_SCRIPT = (
@@ -75,6 +75,15 @@ _LEGACY_CONSOLE_PAGE_REGIONS = (
         b"<!-- ===== PAGE: Gateway ===== -->",
     ),
 )
+_MFA_PENDING_ALLOWED_PATHS = {
+    "/auth/mfa/status",
+    "/auth/mfa/totp/enroll",
+    "/auth/mfa/totp/confirm",
+    "/auth/mfa/verify",
+    "/auth/mfa/recovery-codes/regenerate",
+    "/auth/session/refresh",
+    "/auth/logout",
+}
 _CONTENT_SECURITY_POLICY = "; ".join(
     (
         "default-src 'self'",
@@ -96,7 +105,39 @@ _CONTENT_SECURITY_POLICY = "; ".join(
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def _mfa_pending_denial(self, request: Request) -> Response | None:
+        authorization = request.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            return None
+        raw_token = authorization[len("Bearer "):].strip()
+        if not raw_token:
+            return None
+        try:
+            from processual_api.auth.security import verify_access_token
+
+            payload = verify_access_token(raw_token)
+        except Exception:
+            return None
+        if payload.get("session_type") != "identity_user":
+            return None
+        scopes = {str(scope) for scope in payload.get("scopes", [])}
+        if "auth:mfa" not in scopes:
+            return None
+        if request.url.path in _MFA_PENDING_ALLOWED_PATHS:
+            return None
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": "MFA enrollment or verification must be completed before normal account access."
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def dispatch(self, request: Request, call_next):
+        mfa_denial = await self._mfa_pending_denial(request)
+        if mfa_denial is not None:
+            return mfa_denial
+
         path = request.url.path
         if path in _LEGACY_CONSOLE_ASSET_PATHS:
             response: Response = PlainTextResponse(
