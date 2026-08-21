@@ -2,15 +2,14 @@
 <html lang="en" dir="ltr">
 <head>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJQcm9jZXNzdWFsIE1hZXN0cm8iPgogIDxyZWN0IHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgcng9IjE2IiBmaWxsPSIjMGYxNzJhIi8+CiAgPHBhdGggZD0iTTE3IDQzVjIxaDEyYzUuMyAwIDguOCAzLjIgOC44IDhzLTMuNSA4LTguOCA4aC01djZoLTd6bTctMTJoNC40YzEuOSAwIDMuMS0uOCAzLjEtMnMtMS4yLTItMy4xLTJIMjR2NHoiIGZpbGw9IiNmNTllMGIiLz4KICA8cGF0aCBkPSJNMzggNDNWMjFoN2w1IDguNyA1LTguN2g3djIyaC03VjMyLjhsLTMuNSA2aC0zbC0zLjUtNlY0M2gtN3oiIGZpbGw9IiM5M2M1ZmQiLz4KPC9zdmc+Cg=="/>
-
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Maestro Kernel - Sign In</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none!important}
 :root{--void:#080b0f;--surface-0:#111620;--surface-1:#161d2a;--amber:#f5a623;--amber-dim:#c47f10;--amber-glow:rgba(245,166,35,0.2);--text:#c8d8f0;--bright:#e8f0fc;--muted:#3d5070;--ghost:#5a7299;--soft:#8aa3c8;--ok:#22d3a0;--error:#f87171;--rim:#2a3650;--font-display:'Syne',sans-serif;--font-mono:'Space Mono',monospace;--font-data:'DM Mono',monospace}
 body{background:var(--void);color:var(--text);font-family:var(--font-display);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased}
 #bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
@@ -75,102 +74,46 @@ h1{font-size:13px;font-weight:600;text-align:center;margin-bottom:18px;color:var
 <div class="login-wrap">
   <div class="card">
 <a href="/" class="back-link"><span class="arrow">&larr;</span> <span>Back to splash</span></a>
-
     <div class="logo-area">
       <div class="logo-icon"><svg viewBox="0 0 32 32" fill="none"><polygon class="hex-outer" points="16,2 28,9 28,23 16,30 4,23 4,9"/><polygon class="hex-inner" points="16,8 22,11.5 22,20.5 16,24 10,20.5 10,11.5"/><circle class="hex-dot" cx="16" cy="16" r="2.5" fill="#f5a623"/></svg></div>
       <div class="logo-text"><div class="m">MAESTRO</div><div class="s">PROCESSUAL KERNEL</div></div>
     </div>
-
     <div class="tab-row">
       <button id="tab-admin" class="tab-btn active">Admin</button>
       <button id="tab-user" class="tab-btn">User</button>
     </div>
-
     <div id="login-fields">
-      <div class="inp-group">
-        <label class="inp-label">Username</label>
-        <input id="login-username" class="inp" placeholder="admin" autocomplete="username">
-      </div>
-      <div class="inp-group">
-        <label class="inp-label">Password</label>
-        <div class="password-shell" id="login-password-shell">
-          <input id="login-password" class="inp" type="password" placeholder="********" autocomplete="current-password">
-          <button id="login-password-visibility" class="password-visibility" type="button" aria-label="Show password" aria-pressed="false">Show</button>
-        </div>
-      </div>
+      <div class="inp-group"><label class="inp-label">Username</label><input id="login-username" class="inp" placeholder="admin" autocomplete="username"></div>
+      <div class="inp-group"><label class="inp-label">Password</label><div class="password-shell" id="login-password-shell"><input id="login-password" class="inp" type="password" placeholder="********" autocomplete="current-password"><button id="login-password-visibility" class="password-visibility" type="button" aria-label="Show password" aria-pressed="false">Show</button></div></div>
     </div>
-
     <button id="login-btn" class="btn primary"><span>Sign In</span></button>
     <div id="login-error" class="error-msg"></div>
-<div class="login-secondary-actions" id="login-commercial-actions" aria-label="Access options">
-  <a href="/plans" class="login-secondary-action" id="login-offers-registration-button" aria-label="View plans and registration"><span class="login-secondary-action-label">Offers &amp; Registration</span></a>
-  <button type="button" class="login-secondary-action" id="login-lost-access-button" data-login-panel-target="lost-access-panel" aria-expanded="false"><span class="login-secondary-action-label">Lost Access?</span></button>
-</div>
-
-<div class="login-gateway-panel" id="commercial-offers-panel" hidden>
-  <p class="login-gateway-panel-title">Commercial offers are being prepared.</p>
-  <p class="login-gateway-panel-copy">View <a href="/plans">plans</a> or request <a href="/apply" aria-label="Request access">access</a> for onboarding. Checkout is not enabled from this login gateway yet.</p>
-</div>
-
-<div class="login-gateway-panel" id="lost-access-panel" hidden>
-  <p class="login-gateway-panel-title">Need help getting back in?</p>
-  <p class="login-gateway-panel-copy">Contact your administrator or support contact. If an account exists, the admin team can help recover access.</p>
-</div>
+    <div class="login-secondary-actions" id="login-commercial-actions" aria-label="Access options">
+      <a href="/plans" class="login-secondary-action" id="login-offers-registration-button" aria-label="View plans and registration"><span class="login-secondary-action-label">Offers &amp; Registration</span></a>
+      <button type="button" class="login-secondary-action" id="login-lost-access-button" data-login-panel-target="lost-access-panel" aria-expanded="false"><span class="login-secondary-action-label">Lost Access?</span></button>
+    </div>
+    <div class="login-gateway-panel" id="commercial-offers-panel" hidden><p class="login-gateway-panel-title">Commercial offers are being prepared.</p><p class="login-gateway-panel-copy">View <a href="/plans">plans</a> or request <a href="/apply" aria-label="Request access">access</a> for onboarding. Checkout is not enabled from this login gateway yet.</p></div>
+    <div class="login-gateway-panel" id="lost-access-panel" hidden><p class="login-gateway-panel-title">Need help getting back in?</p><p class="login-gateway-panel-copy">Contact your administrator or support contact. If an account exists, the admin team can help recover access.</p></div>
   </div>
   <div class="footer">v2.0.0 &nbsp;&middot;&nbsp; B2B &middot; Invite-only</div>
 </div>
-
 <script>
-const canvas=document.getElementById('bg-canvas');
-const ctx=canvas.getContext('2d');
-let W,H,particles=[];
-function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}
-resize();addEventListener('resize',resize);
-const COUNT=50;
-const COLORS=['rgba(245,166,35,','rgba(232,240,252,'];
+const canvas=document.getElementById('bg-canvas');const ctx=canvas.getContext('2d');let W,H,particles=[];
+function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}resize();addEventListener('resize',resize);
+const COUNT=50;const COLORS=['rgba(245,166,35,','rgba(232,240,252,'];
 class Particle{constructor(){this.reset()}reset(){this.x=Math.random()*W;this.y=Math.random()*H;this.vx=(Math.random()-.5)*.2;this.vy=(Math.random()-.5)*.2;this.r=Math.random()*1.5+.3;this.color=COLORS[Math.floor(Math.random()*COLORS.length)];this.alpha=Math.random()*.25+.03}update(){this.x+=this.vx;this.y+=this.vy;if(this.x< -10||this.x>W+10||this.y< -10||this.y>H+10)this.reset()}draw(){ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fillStyle=this.color+this.alpha+')';ctx.fill()}}
 for(let i=0;i<COUNT;i++)particles.push(new Particle());
-function animate(){ctx.clearRect(0,0,W,H);for(const p of particles){p.update();p.draw()}for(let i=0;i<particles.length;i++){for(let j=i+1;j<particles.length;j++){const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<100){ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);ctx.strokeStyle='rgba(245,166,35,'+(.03*(1-dist/100))+')';ctx.lineWidth=.5;ctx.stroke()}}}requestAnimationFrame(animate)}
-animate();
-
-const DESCENT_GATE_KEY='maestro_descent_gate_seen';
-const ENTRY_MODE_KEY='maestro_entry_mode';
-if(sessionStorage.getItem(DESCENT_GATE_KEY)!=='1'){window.location.replace('/')}
-function setEntryMode(mode){sessionStorage.setItem(ENTRY_MODE_KEY,mode)}
-function requestedEntryMode(){const mode=new URLSearchParams(window.location.search).get('mode');return mode==='user'?'user':'admin'}
-let currentRole=requestedEntryMode();
+function animate(){ctx.clearRect(0,0,W,H);for(const p of particles){p.update();p.draw()}for(let i=0;i<particles.length;i++){for(let j=i+1;j<particles.length;j++){const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<100){ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);ctx.strokeStyle='rgba(245,166,35,'+(.03*(1-dist/100))+')';ctx.lineWidth=.5;ctx.stroke()}}}requestAnimationFrame(animate)}animate();
+const DESCENT_GATE_KEY='maestro_descent_gate_seen';const ENTRY_MODE_KEY='maestro_entry_mode';if(sessionStorage.getItem(DESCENT_GATE_KEY)!=='1'){window.location.replace('/')}
+function setEntryMode(mode){sessionStorage.setItem(ENTRY_MODE_KEY,mode)}function requestedEntryMode(){const mode=new URLSearchParams(window.location.search).get('mode');return mode==='user'?'user':'admin'}let currentRole=requestedEntryMode();
 function activateRole(role){currentRole=role==='user'?'user':'admin';setEntryMode(currentRole);document.getElementById('tab-admin').classList.toggle('active',currentRole==='admin');document.getElementById('tab-user').classList.toggle('active',currentRole==='user');document.getElementById('login-username').value='';document.getElementById('login-username').placeholder=currentRole==='admin'?'admin':'username';document.getElementById('login-password').value='';document.getElementById('login-error').style.display='none'}
-activateRole(currentRole);
-document.getElementById('tab-admin').addEventListener('click',()=>activateRole('admin'));
-document.getElementById('tab-user').addEventListener('click',()=>activateRole('user'));
-
-const passwordInput=document.getElementById('login-password');
-const passwordVisibility=document.getElementById('login-password-visibility');
-passwordVisibility.addEventListener('click',()=>{const visible=passwordInput.type==='text';passwordInput.type=visible?'password':'text';passwordVisibility.textContent=visible?'Show':'Hide';passwordVisibility.setAttribute('aria-label',visible?'Show password':'Hide password');passwordVisibility.setAttribute('aria-pressed',visible?'false':'true');passwordInput.focus({preventScroll:true})});
-
-async function doLogin(){
-  const user=document.getElementById('login-username').value;
-  const pass=passwordInput.value;
-  const errEl=document.getElementById('login-error');
-  const btn=document.getElementById('login-btn');
-  if(!user||!pass){errEl.textContent='Enter credentials';errEl.style.display='block';return}
-  errEl.style.display='none';btn.disabled=true;btn.innerHTML='<span class=spinner></span> Signing in...';
-  try{
-    const res=await fetch('/auth/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass,role:currentRole})});
-    if(!res.ok){const d=await res.json();throw new Error(d.detail||'Invalid credentials')}
-    const data=await res.json();
-    sessionStorage.setItem('maestro_token',data.access_token);sessionStorage.setItem('maestro_role',currentRole);sessionStorage.setItem('maestro_ui_session_started_at',new Date().toISOString());localStorage.removeItem('maestro_token');localStorage.removeItem('maestro_role');window.location.href=currentRole==='admin'?'/admin':'/console';
-  }catch(e){errEl.textContent=e.message||'Login failed';errEl.style.display='block';btn.disabled=false;btn.innerHTML='Sign In'}
-}
-document.getElementById('login-btn').addEventListener('click',doLogin);
-passwordInput.addEventListener('keydown',(e)=>{if(e.key==='Enter')doLogin()});
+activateRole(currentRole);document.getElementById('tab-admin').addEventListener('click',()=>activateRole('admin'));document.getElementById('tab-user').addEventListener('click',()=>activateRole('user'));
+const passwordInput=document.getElementById('login-password');const passwordVisibility=document.getElementById('login-password-visibility');passwordVisibility.addEventListener('click',()=>{const visible=passwordInput.type==='text';passwordInput.type=visible?'password':'text';passwordVisibility.textContent=visible?'Show':'Hide';passwordVisibility.setAttribute('aria-label',visible?'Show password':'Hide password');passwordVisibility.setAttribute('aria-pressed',visible?'false':'true');passwordInput.focus({preventScroll:true})});
+async function doLogin(){const user=document.getElementById('login-username').value;const pass=passwordInput.value;const errEl=document.getElementById('login-error');const btn=document.getElementById('login-btn');if(!user||!pass){errEl.textContent='Enter credentials';errEl.style.display='block';return}errEl.style.display='none';btn.disabled=true;btn.innerHTML='<span class=spinner></span> Signing in...';try{const res=await fetch('/auth/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass,role:currentRole})});if(!res.ok){const d=await res.json();throw new Error(d.detail||'Invalid credentials')}const data=await res.json();sessionStorage.setItem('maestro_token',data.access_token);sessionStorage.setItem('maestro_role',currentRole);sessionStorage.setItem('maestro_ui_session_started_at',new Date().toISOString());localStorage.removeItem('maestro_token');localStorage.removeItem('maestro_role');window.location.href=currentRole==='admin'?'/admin':'/console'}catch(e){errEl.textContent=e.message||'Login failed';errEl.style.display='block';btn.disabled=false;btn.innerHTML='Sign In'}}
+document.getElementById('login-btn').addEventListener('click',doLogin);passwordInput.addEventListener('keydown',(e)=>{if(e.key==='Enter')doLogin()});
 </script>
 <script>
-(function(){
-  const gatewayButtons=document.querySelectorAll('[data-login-panel-target]');
-  function closeGatewayPanels(exceptPanel){gatewayButtons.forEach((button)=>{const panel=document.getElementById(button.dataset.loginPanelTarget);if(!panel)return;if(panel!==exceptPanel){panel.hidden=true;button.setAttribute('aria-expanded','false')}})}
-  gatewayButtons.forEach((button)=>{button.addEventListener('click',()=>{const panel=document.getElementById(button.dataset.loginPanelTarget);if(!panel)return;const willOpen=panel.hidden;closeGatewayPanels(panel);panel.hidden=!willOpen;button.setAttribute('aria-expanded',String(willOpen))})});
-})();
+(function(){const gatewayButtons=document.querySelectorAll('[data-login-panel-target]');function closeGatewayPanels(exceptPanel){gatewayButtons.forEach((button)=>{const panel=document.getElementById(button.dataset.loginPanelTarget);if(!panel)return;if(panel!==exceptPanel){panel.hidden=true;button.setAttribute('aria-expanded','false')}})}gatewayButtons.forEach((button)=>{button.addEventListener('click',()=>{const panel=document.getElementById(button.dataset.loginPanelTarget);if(!panel)return;const willOpen=panel.hidden;closeGatewayPanels(panel);panel.hidden=!willOpen;button.setAttribute('aria-expanded',String(willOpen))})})})();
 </script>
 </body>
 </html>
