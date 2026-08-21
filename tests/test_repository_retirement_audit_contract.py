@@ -147,7 +147,7 @@ def test_behavioral_supersession_analysis_tracks_operational_primitives() -> Non
     assert "missing_gh_commands_in_latest" in source
     assert "missing_file_write_primitives_in_latest" in source
     assert "missing_file_delete_primitives_in_latest" in source
-    assert "local structural, behavioral, reference, and call-site comparison only; no deletion authority" in source
+    assert "local structural, behavioral, operational-reference, and call-site comparison only; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
@@ -166,6 +166,19 @@ def test_tooling_retirement_requires_reference_and_call_site_evidence() -> None:
     assert "deletion_authorized = $false" in source
 
 
+def test_retirement_reference_evidence_excludes_audit_self_references() -> None:
+    source = SUPERSESSION.read_text(encoding="utf-8")
+
+    assert "referenceExclusions" in source
+    assert ":!scripts/audit_repository_retirement.ps1" in source
+    assert ":!scripts/analyze_local_tooling_supersession.ps1" in source
+    assert ":!scripts/extract_local_tooling_retirement_evidence.ps1" in source
+    assert ":!tests/**" in source
+    assert ":!docs/**" in source
+    assert ":!qualification/**" in source
+    assert "operational-reference" in source
+
+
 def test_focused_retirement_evidence_extractor_is_non_destructive_and_targeted() -> None:
     source = RETIREMENT_EVIDENCE.read_text(encoding="utf-8")
 
@@ -178,6 +191,16 @@ def test_focused_retirement_evidence_extractor_is_non_destructive_and_targeted()
     assert "tracked_reference_samples" in source
     assert "focused local evidence extraction only; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
+
+
+def test_focused_retirement_evidence_extracts_function_bodies_by_brace_depth() -> None:
+    source = RETIREMENT_EVIDENCE.read_text(encoding="utf-8")
+
+    assert "$depth = 0" in source
+    assert "$seenOpeningBrace = $false" in source
+    assert "if ($ch -eq '{')" in source
+    assert "elseif ($ch -eq '}')" in source
+    assert "if ($seenOpeningBrace -and $depth -eq 0) { break }" in source
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
