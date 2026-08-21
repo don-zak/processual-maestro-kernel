@@ -13,6 +13,7 @@ EXTENDED_UI_STATES = [
     "billing restriction/suspended",
     "billing restriction/terminated",
     "mfa challenge",
+    "selected commercial offer",
 ]
 
 REQUIRED_FALSE_AUTHORITY_FLAGS = (
@@ -231,6 +232,75 @@ def login_mfa_challenge(page: Page, browser_version: str, counter: int):
         page.unroute(pattern)
 
 
+def registration_selected_offer(page: Page, browser_version: str, counter: int):
+    catalog_pattern = "**/billing/public-plan-journey"
+    config_pattern = "**/auth/registration/config"
+    catalog = {
+        "plans": [
+            {
+                "plan_id": "starter",
+                "display_name": "Starter",
+                "monthly_price_usd": 49,
+                "annual_price_usd": 490,
+            }
+        ]
+    }
+    page.route(
+        catalog_pattern,
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(catalog),
+        ),
+    )
+    page.route(
+        config_pattern,
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "password_min_length": 12,
+                    "password_max_length": 1024,
+                    "registration_modes": ["individual", "organization"],
+                }
+            ),
+        ),
+    )
+    try:
+        page.set_viewport_size({"width": 390, "height": 844})
+        route = "/register?plan_id=starter&billing_period=monthly"
+        page.goto(f"{BASE_URL}{route}", wait_until="domcontentloaded")
+        context = page.locator("#registration-plan-context")
+        context.wait_for(state="visible", timeout=4000)
+        page.locator("#registration-plan-name").filter(has_text="Starter").wait_for(
+            state="visible", timeout=4000
+        )
+        page.locator("#registration-plan-billing").filter(has_text="Monthly").wait_for(
+            state="visible", timeout=4000
+        )
+        page.locator("#registration-plan-price").filter(has_text="$49 / month").wait_for(
+            state="visible", timeout=4000
+        )
+        note = page.locator("#registration-plan-note").filter(
+            has_text="Registration alone does not activate payment, entitlement, quota, or checkout"
+        )
+        note.wait_for(state="visible", timeout=4000)
+        reveal(context)
+        return capture(
+            page,
+            browser_version,
+            route,
+            "registration-selected-offer",
+            "selected commercial offer",
+            counter,
+            "Controlled public-plan catalog response proves that the selected Starter monthly offer is visibly carried into the registration card with its billing period and price. The backend remains authoritative and this capture creates no subscription, entitlement, quota, payment, or checkout.",
+        )
+    finally:
+        page.unroute(catalog_pattern)
+        page.unroute(config_pattern)
+
+
 def enforce_authority_metadata(metadata: dict[str, object]) -> None:
     authority = dict(metadata.get("authority", {}))
     unexpected_true = [name for name, value in authority.items() if name in REQUIRED_FALSE_AUTHORITY_FLAGS and value is True]
@@ -264,6 +334,7 @@ def update_metadata() -> None:
         "billing restriction/terminated",
     ]
     controlled["login"] = ["mfa challenge"]
+    controlled["commercial_registration"] = ["selected commercial offer"]
     controlled["interception_only"] = True
     controlled["backend_or_staging_proof"] = False
     inventory["controlled_ui_states"] = controlled
@@ -321,13 +392,14 @@ def main() -> None:
                     suspended_at="2026-08-20T00:00:00Z",
                 ),
                 login_mfa_challenge(page, browser_version, counter + 4),
+                registration_selected_offer(page, browser_version, counter + 5),
             ]
             for row in rows:
                 append_row(row)
         finally:
             browser.close()
     update_metadata()
-    print("captured 5 extended controlled UI state(s)")
+    print("captured 6 extended controlled UI state(s)")
 
 
 if __name__ == "__main__":
