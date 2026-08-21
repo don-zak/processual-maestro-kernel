@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "scripts" / "audit_repository_retirement.ps1"
 SUPERSESSION = ROOT / "scripts" / "analyze_local_tooling_supersession.ps1"
+RETIREMENT_EVIDENCE = ROOT / "scripts" / "extract_local_tooling_retirement_evidence.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -163,6 +164,20 @@ def test_tooling_retirement_requires_reference_and_call_site_evidence() -> None:
     assert "missing_functions_are_uncalled_in_candidate" in source
     assert "retirement_evidence_complete" in source
     assert "deletion_authorized = $false" in source
+
+
+def test_focused_retirement_evidence_extractor_is_non_destructive_and_targeted() -> None:
+    source = RETIREMENT_EVIDENCE.read_text(encoding="utf-8")
+
+    assert "Get-FunctionEvidence" in source
+    assert "missing_function_implementations" in source
+    assert "missing_function_implementation_groups" in source
+    assert "body_sha256" in source
+    assert "body_preview" in source
+    assert "retire_safe_fixed_reference" in source
+    assert "tracked_reference_samples" in source
+    assert "focused local evidence extraction only; no deletion authority" in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
