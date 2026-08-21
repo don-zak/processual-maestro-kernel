@@ -26,8 +26,19 @@ try {
         $args += "--"
         $args += $PatchPath
 
-        $output = & git @args 2>&1
-        $exitCode = $LASTEXITCODE
+        # git apply --check returning non-zero is expected analysis data. Windows
+        # PowerShell can surface native stderr as NativeCommandError when the
+        # script-wide ErrorActionPreference is Stop, so temporarily downgrade
+        # only this native probe and restore the original preference immediately.
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $output = & git @args 2>&1
+            $exitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+
         return [pscustomobject]@{
             success = ($exitCode -eq 0)
             exit_code = $exitCode
