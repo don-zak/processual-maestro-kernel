@@ -104,6 +104,26 @@
     }
   }
 
+  function installViewportSafeLoginLayout() {
+    if (document.getElementById('pmk-login-viewport-safety')) return;
+    const style = document.createElement('style');
+    style.id = 'pmk-login-viewport-safety';
+    style.textContent = `
+      html,body{min-height:100%;}
+      body{overflow-x:hidden!important;overflow-y:auto!important;}
+      .login-wrap{margin:auto;}
+      @media (max-height:900px){
+        body{align-items:flex-start!important;}
+        .login-wrap{margin:0 auto;padding-top:24px;padding-bottom:32px;}
+      }
+      @media (max-width:520px){
+        .login-wrap{padding-left:14px;padding-right:14px;}
+        .card{padding-left:20px;padding-right:20px;}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function showError(text) {
     const error = document.getElementById('login-error');
     if (!error) return;
@@ -283,6 +303,7 @@
 
   function installIdentityMfaLogin() {
     lockLoginToEnglish();
+    installViewportSafeLoginLayout();
     buildMfaChallenge();
     installPasswordVisibilityControl();
     const loginButton = document.getElementById('login-btn');
@@ -297,7 +318,7 @@
     if (isUserMode() && username) username.placeholder = 'email@example.com';
   }
 
-  window.PMK_LOGIN_TOKEN_CAPTURE = { persistAuthPayload, normalizeToken, installFetchCapture, installIdentityMfaLogin, installPasswordVisibilityControl };
+  window.PMK_LOGIN_TOKEN_CAPTURE = { persistAuthPayload, normalizeToken, installFetchCapture, installIdentityMfaLogin, installPasswordVisibilityControl, installViewportSafeLoginLayout };
   installFetchCapture();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installIdentityMfaLogin, { once: true });
   else installIdentityMfaLogin();
