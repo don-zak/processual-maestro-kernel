@@ -107,6 +107,24 @@ try {
         }
     }
 
+    function Get-LocalFileFingerprint([string]$Path) {
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            return [pscustomobject]@{
+                sha256 = $null
+                size_bytes = $null
+                line_count = $null
+            }
+        }
+        $item = Get-Item -LiteralPath $Path
+        $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $lineCount = @(Get-Content -LiteralPath $Path -ErrorAction Stop).Count
+        return [pscustomobject]@{
+            sha256 = $hash
+            size_bytes = [int64]$item.Length
+            line_count = [int]$lineCount
+        }
+    }
+
     function Get-ReferenceEvidence([string]$Path) {
         $base = [System.IO.Path]::GetFileName($Path)
         $pathRefs = @()
@@ -188,6 +206,7 @@ try {
         $isTooling = Test-LocalToolingPath $path
         $isProtected = Test-ProtectedPath $path
         $tooling = if ($isTooling) { Get-LocalToolingMetadata $path } else { $null }
+        $fingerprint = if ($isTooling) { Get-LocalFileFingerprint $path } else { $null }
 
         $eligible = $isGeneratedResidue -and -not $isEvidence -and -not $isTooling -and -not $isProtected
         $classification = if ($isEvidence) {
@@ -211,6 +230,9 @@ try {
             tooling_family = if ($tooling) { $tooling.family } else { $null }
             tooling_version = if ($tooling) { $tooling.version } else { $null }
             tooling_variant = if ($tooling) { $tooling.variant } else { $null }
+            sha256 = if ($fingerprint) { $fingerprint.sha256 } else { $null }
+            size_bytes = if ($fingerprint) { $fingerprint.size_bytes } else { $null }
+            line_count = if ($fingerprint) { $fingerprint.line_count } else { $null }
             deletion_eligible = $eligible
         })
     }
@@ -223,15 +245,25 @@ try {
         if ($versioned.Count -gt 0) {
             $latestVersion = ($versioned | Measure-Object -Property tooling_version -Maximum).Maximum
         }
+        $duplicateGroups = [System.Collections.Generic.List[object]]::new()
+        foreach ($hashGroup in ($group.Group | Where-Object { $_.sha256 } | Group-Object sha256)) {
+            if ($hashGroup.Count -lt 2) { continue }
+            $duplicateGroups.Add([pscustomobject]@{
+                sha256 = $hashGroup.Name
+                count = $hashGroup.Count
+                paths = @($hashGroup.Group | Sort-Object path | Select-Object -ExpandProperty path)
+            })
+        }
         $toolingFamilySummary.Add([pscustomobject]@{
             family = $group.Name
             artifact_count = $group.Count
             latest_numeric_version_by_name = $latestVersion
             latest_numeric_paths = @($group.Group | Where-Object { $null -ne $latestVersion -and $_.tooling_version -eq $latestVersion } | Select-Object -ExpandProperty path)
             fixed_variant_paths = @($group.Group | Where-Object { $_.tooling_variant -like 'fixed*' } | Select-Object -ExpandProperty path)
+            exact_duplicate_groups = @($duplicateGroups)
             paths = @($group.Group | Sort-Object tooling_version,path | Select-Object -ExpandProperty path)
             deletion_authorized = $false
-            rationale = 'Name/version ordering is inventory evidence only. Compare file contents, behavior, and references before deciding which local tools are superseded.'
+            rationale = 'Exact duplicate hashes are strong local equivalence evidence, but deletion still requires choosing a canonical retained copy. Version ordering alone is not deletion authority.'
         })
     }
 
@@ -270,7 +302,9 @@ try {
             all_local_untracked_and_ignored_artifacts_are_inventoried = $true
             local_qualification_evidence_preserved = $true
             local_tooling_requires_manual_review = $true
+            local_tooling_content_fingerprinted = $true
             tooling_version_order_is_not_deletion_authority = $true
+            exact_duplicate_hash_requires_canonical_retained_copy = $true
             audit_infrastructure_excluded_from_candidates = $true
         }
     }
@@ -300,7 +334,7 @@ try {
     $lines.Add('## Local tooling families')
     foreach ($family in $toolingFamilySummary) {
         $latest = if ($null -eq $family.latest_numeric_version_by_name) { 'n/a' } else { $family.latest_numeric_version_by_name }
-        $lines.Add("- $($family.family): $($family.artifact_count) artifacts; latest numeric version by name = $latest; deletion authorized = false")
+        $lines.Add("- $($family.family): $($family.artifact_count) artifacts; latest numeric version by name = $latest; exact duplicate groups = $(@($family.exact_duplicate_groups).Count); deletion authorized = false")
     }
     $lines.Add('')
     $lines.Add('## Safety rules')
@@ -308,6 +342,8 @@ try {
     $lines.Add('- Alembic migrations, tests, docs, qualification evidence, workflows, and package initializers are protected by default.')
     $lines.Add('- Local qualification evidence, backups, review decisions, coverage evidence, and patch evidence are preserved from automatic cleanup.')
     $lines.Add('- Local audit/tooling scripts require manual review and are never auto-deleted.')
+    $lines.Add('- Local tooling is fingerprinted by SHA-256, byte size, and line count to support supersession review.')
+    $lines.Add('- Exact duplicate hashes are equivalence evidence but still require a canonical retained copy before deletion.')
     $lines.Add('- Tool version ordering is inventory evidence only and never grants deletion authority.')
     $lines.Add('- Audit/quarantine infrastructure is excluded from retirement candidacy.')
     $lines.Add('- Compatibility shims remain until consumer absence is proven.')
