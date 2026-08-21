@@ -25,3 +25,14 @@ def test_default_evidence_refresh_recaptures_stable_admin_home():
     admin_pos = source.index("def open_admin_home(")
     reset_pos = source.index("reset_ui_scroll(page)", admin_pos)
     assert reset_pos > admin_pos
+
+
+def test_default_evidence_refresh_isolates_console_mocks_from_admin_capture():
+    source = read("qualification/vq1_settings_default_evidence_refresh.py")
+    assert 'console_page = browser.new_page(locale="en")' in source
+    assert 'admin_page = browser.new_page(locale="en")' in source
+    assert "establish_qualification_session(console_page)" in source
+    assert "establish_qualification_session(admin_page)" in source
+    assert "install_clean_console_routes(console_page)" in source
+    assert "install_clean_console_routes(admin_page)" not in source
+    assert "capture_page = admin_page" in source
