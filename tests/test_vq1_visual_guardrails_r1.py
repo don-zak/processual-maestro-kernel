@@ -111,6 +111,19 @@ def test_long_card_enhancer_treats_readiness_host_as_structural():
     assert "admin-integration-readiness-tracking-summary-card" in source
 
 
+def test_vq_button_action_validator_resets_settings_tab_before_reload():
+    source = read("qualification/vq1_button_action_validator_v2.py")
+    assert 'SETTINGS_TAB_STORAGE_KEY = "maestro_settings_tab"' in source
+    assert 'SETTINGS_DEFAULT_TAB = "operations"' in source
+    assert "def _reset_console_section_state(page, section: str) -> None:" in source
+    assert 'if section != "settings":' in source
+    assert "localStorage.setItem(key, value)" in source
+    navigate_pos = source.index("def navigate_console(page, section: str) -> str:")
+    reset_pos = source.index("_reset_console_section_state(page, section)", navigate_pos)
+    goto_pos = source.index('page.goto(f"{base.BASE_URL}/console/"', navigate_pos)
+    assert reset_pos < goto_pos
+
+
 def test_vq_validator_rejects_cross_page_owned_surfaces_and_settings_noise():
     source = read("qualification/vq1_browser_state_validator.py")
     assert "validate_admin_surface_ownership" in source
