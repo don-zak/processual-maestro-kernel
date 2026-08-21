@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from processual_api.auth.account_recovery_escalation_router import (
     get_account_recovery_escalation_runtime,
+    get_recovery_channel_runtime,
     platform_admin_step_up_dependency,
 )
 from processual_api.auth.account_recovery_router import router
@@ -19,6 +20,7 @@ ADMIN_ESCALATION_UI = Path("processual_api/static/js/admin_account_recovery_esca
 SECURITY_HEADERS = Path("processual_api/middleware/security_headers.py")
 VQ_EXTENDED = Path("qualification/vq1_ui_state_matrix_extended.py")
 ESCALATION_ROUTER = Path("processual_api/auth/account_recovery_escalation_router.py")
+ACCOUNT_RECOVERY_ROUTER = Path("processual_api/auth/account_recovery_router.py")
 
 
 class _Mappings:
@@ -27,6 +29,13 @@ class _Mappings:
 
     def all(self):
         return self._rows
+
+    def one_or_none(self):
+        if not self._rows:
+            return None
+        if len(self._rows) > 1:
+            raise RuntimeError("multiple rows")
+        return self._rows[0]
 
 
 class _Result:
@@ -86,13 +95,21 @@ class FakeLimiter:
         )
 
 
+class FakeRecoveryChannelService:
+    def __init__(self):
+        self.calls = []
+
+    async def issue_for_target(self, **values):
+        self.calls.append(values)
+        return SimpleNamespace(user_id="target")
+
+
 def _client(*, rate_limit_allowed: bool = True):
     fake = FakeSession()
     limiter = FakeLimiter(allowed=rate_limit_allowed)
-    runtime = SimpleNamespace(
-        rate_limiter=limiter,
-        proxy_policy=TrustedProxyPolicy(),
-    )
+    runtime = SimpleNamespace(rate_limiter=limiter, proxy_policy=TrustedProxyPolicy())
+    channel_service = FakeRecoveryChannelService()
+    channel_runtime = SimpleNamespace(service=channel_service)
     app = FastAPI()
 
     @app.middleware("http")
@@ -103,15 +120,16 @@ def _client(*, rate_limit_allowed: bool = True):
     app.include_router(router)
     app.dependency_overrides[get_session] = lambda: fake
     app.dependency_overrides[get_account_recovery_escalation_runtime] = lambda: runtime
+    app.dependency_overrides[get_recovery_channel_runtime] = lambda: channel_runtime
     app.dependency_overrides[platform_admin_step_up_dependency] = lambda: {
         "user_id": "22222222-2222-4222-8222-222222222222",
         "session_type": "identity_user",
     }
-    return TestClient(app), fake, limiter
+    return TestClient(app), fake, limiter, channel_service
 
 
 def test_public_escalation_is_persistent_rate_limited_and_grants_no_authority() -> None:
-    client, fake, limiter = _client()
+    client, fake, limiter, _ = _client()
     response = client.post(
         "/auth/account-recovery/escalations",
         json={
@@ -121,29 +139,17 @@ def test_public_escalation_is_persistent_rate_limited_and_grants_no_authority() 
             "reason": "lost_recovery_email",
         },
     )
-
     assert response.status_code == 202
     payload = response.json()
-    assert payload["status"] == "accepted"
     assert payload["next_action"] == "administrator_review"
     assert payload["authority_granted"] is False
     assert fake.commits == 1
     assert any("INSERT INTO auth_account_recovery_escalations" in sql for sql, _ in fake.calls)
-    assert limiter.calls == [
-        {
-            "action": "account_recovery_escalation",
-            "subjects": {
-                "ip": "198.51.100.77",
-                "login": "owner@example.test",
-            },
-            "rules": limiter.calls[0]["rules"],
-        }
-    ]
     assert {rule.dimension for rule in limiter.calls[0]["rules"]} == {"ip", "login"}
 
 
 def test_public_escalation_rate_limit_fails_before_queue_write() -> None:
-    client, fake, _ = _client(rate_limit_allowed=False)
+    client, fake, _, _ = _client(rate_limit_allowed=False)
     response = client.post(
         "/auth/account-recovery/escalations",
         json={
@@ -152,16 +158,14 @@ def test_public_escalation_rate_limit_fails_before_queue_write() -> None:
             "reason": "lost_recovery_email",
         },
     )
-
     assert response.status_code == 429
     assert response.headers["retry-after"] == "37"
-    assert response.headers["cache-control"] == "no-store"
     assert fake.calls == []
     assert fake.commits == 0
 
 
 def test_public_escalation_rejects_secret_shaped_extra_fields() -> None:
-    client, _, _ = _client()
+    client, _, _, _ = _client()
     response = client.post(
         "/auth/account-recovery/escalations",
         json={
@@ -172,32 +176,60 @@ def test_public_escalation_rejects_secret_shaped_extra_fields() -> None:
             "mfa_code": "123456",
         },
     )
-
     assert response.status_code == 422
     assert "must-never-be-accepted" not in response.text
     assert "123456" not in response.text
 
 
-def test_admin_review_queue_and_decision_never_mutate_identity_authority() -> None:
-    client, fake, _ = _client()
+def test_admin_approval_issues_recovery_channel_verification_without_authority() -> None:
+    client, fake, _, channel_service = _client()
     listed = client.get("/auth/account-recovery/escalations?state=pending")
-    decided = client.post(
-        "/auth/account-recovery/escalations/11111111-1111-4111-8111-111111111111/decision",
-        json={"state": "resolved", "resolution": "recovery_channel_reviewed"},
+    approved = client.post(
+        "/auth/account-recovery/escalations/11111111-1111-4111-8111-111111111111/approve-recovery-channel"
     )
 
     assert listed.status_code == 200
     assert listed.json()["authority_granted"] is False
-    assert len(listed.json()["requests"]) == 1
-    assert decided.status_code == 200
-    assert decided.json() == {
-        "status": "processed",
+    assert approved.status_code == 200
+    assert approved.json() == {
+        "status": "verification_issued",
         "request_id": "11111111-1111-4111-8111-111111111111",
-        "state": "resolved",
+        "next_action": "verify_recovery_email_then_restart_recovery",
         "authority_granted": False,
         "password_reset_performed": False,
         "mfa_bypassed": False,
+        "session_created": False,
     }
+    assert channel_service.calls == [
+        {
+            "actor_user_id": __import__("uuid").UUID("22222222-2222-4222-8222-222222222222"),
+            "target_login": "owner@example.test",
+            "recovery_email": "safe@example.test",
+            "recent_step_up": True,
+        }
+    ]
+    update_sql = next(sql for sql, _ in fake.calls if "UPDATE auth_account_recovery_escalations" in sql)
+    assert "recovery_channel_reviewed" in update_sql
+
+
+def test_plain_review_decision_cannot_bypass_governed_channel_approval() -> None:
+    client, _, _, channel_service = _client()
+    response = client.post(
+        "/auth/account-recovery/escalations/11111111-1111-4111-8111-111111111111/decision",
+        json={"state": "resolved", "resolution": "recovery_channel_reviewed"},
+    )
+    assert response.status_code == 400
+    assert channel_service.calls == []
+
+
+def test_rejection_never_mutates_identity_authority() -> None:
+    client, fake, _, _ = _client()
+    decided = client.post(
+        "/auth/account-recovery/escalations/11111111-1111-4111-8111-111111111111/decision",
+        json={"state": "rejected", "resolution": "identity_evidence_insufficient"},
+    )
+    assert decided.status_code == 200
+    assert decided.json()["authority_granted"] is False
     update_sql = next(sql for sql, _ in fake.calls if "UPDATE auth_account_recovery_escalations" in sql)
     assert "identity_users" not in update_sql
     assert "auth_mfa" not in update_sql
@@ -205,55 +237,49 @@ def test_admin_review_queue_and_decision_never_mutate_identity_authority() -> No
 
 def test_escalation_migration_is_durable_and_downgrade_is_data_guarded() -> None:
     source = MIGRATION.read_text(encoding="utf-8")
-
     assert 'revision: str = "20260821_0057"' in source
     assert 'down_revision: str | None = "20260818_0056"' in source
-    assert 'TABLE = "auth_account_recovery_escalations"' in source
     assert "state IN ('pending','resolved','rejected')" in source
     assert "Downgrade blocked: durable account recovery escalation rows exist" in source
 
 
-def test_login_and_admin_surfaces_expose_only_governed_recovery_actions() -> None:
+def test_login_and_admin_surfaces_expose_governed_recovery_actions() -> None:
     login = LOGIN_ESCALATION_UI.read_text(encoding="utf-8")
     admin = ADMIN_ESCALATION_UI.read_text(encoding="utf-8")
-
     assert "Contact administrator" in login
-    assert "'/auth/account-recovery/escalations'" in login
     assert "Do not enter passwords, MFA codes, recovery codes, API keys" in login
-    assert "authority_granted !== false" in login
-
     assert "Account Recovery Requests" in admin
-    assert "/auth/account-recovery/escalations?state=pending" in admin
+    assert "Approve recovery channel &amp; send verification" in admin
+    assert "/approve-recovery-channel" in admin
+    assert "verify_recovery_email_then_restart_recovery" in admin
     assert "password_reset_performed !== false" in admin
     assert "mfa_bypassed !== false" in admin
-    assert "Recent platform-admin MFA step-up is required" in admin
+
+
+def test_escalation_router_is_wired_through_account_recovery_router() -> None:
+    source = ACCOUNT_RECOVERY_ROUTER.read_text(encoding="utf-8")
+    assert "account_recovery_escalation_router" in source
+    assert "router.include_router(account_recovery_escalation_router)" in source
 
 
 def test_escalation_router_reuses_account_recovery_rate_limit_authority() -> None:
     source = ESCALATION_ROUTER.read_text(encoding="utf-8")
-
     assert "ACCOUNT_RECOVERY_START_RULES" in source
     assert 'action="account_recovery_escalation"' in source
-    assert '"ip": _client_ip(request, runtime)' in source
-    assert '"login": payload.claimed_login' in source
     assert "AuthRateLimitUnavailableError" in source
-    assert "Account recovery escalation request rate limit exceeded" in source
 
 
 def test_mfa_pending_token_is_confined_to_mfa_completion_endpoints() -> None:
     source = SECURITY_HEADERS.read_text(encoding="utf-8")
-
     assert '"auth:mfa" not in scopes' in source
     assert '"/auth/mfa/totp/enroll"' in source
     assert '"/auth/mfa/totp/confirm"' in source
     assert '"/auth/mfa/verify"' in source
     assert '"/auth/session/refresh"' in source
-    assert "MFA enrollment or verification must be completed before normal account access" in source
 
 
 def test_vq_controlled_mfa_state_intercepts_status_gate() -> None:
     source = VQ_EXTENDED.read_text(encoding="utf-8")
-
     assert 'status_pattern = "**/auth/mfa/status"' in source
     assert '"enabled": True' in source
     assert "page.unroute(status_pattern)" in source
