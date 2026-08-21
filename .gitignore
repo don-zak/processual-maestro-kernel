@@ -31,3 +31,10 @@ processual_api/cgt_governor/data/__pycache__/
 processual_api/cgt_governor/data/**/*.pyc
 build/
 .pmk-repo-audit/
+
+# Local one-off audit/evaluation/operator tooling. These files are intentionally
+# kept outside repository authority and must not be accidentally reintroduced.
+/Invoke-PMKRepoAudit-v*.ps1
+/Retire-Safe-CGT17Branches*.ps1
+/crm_eval_sandbox.py
+/verify_local_password.py
