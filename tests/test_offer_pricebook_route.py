@@ -71,6 +71,10 @@ def test_offer_pricebook_route_exposes_fixed_and_requirements_based_offers() -> 
         assert offer["usage_overage_unit_price_cents"] is None
         assert offer["monthly_unit_allowance"] is None
         assert offer["custom_quote_required"] is True
+        assert offer["fulfillment_mode"] == "enterprise_review"
+        assert offer["requires_supervisor_review"] is True
+        assert offer["payment_required"] is False
+        assert offer["checkout_mode"] == "contact_sales"
         assert offer["checkout_enabled"] is False
 
 
