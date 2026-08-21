@@ -21,6 +21,8 @@ try {
         '^\.ruff_cache/',
         '^(?:.+/)?__pycache__/$'
     )
+    # Compatibility signature retained for the audit contract; matching uses the stricter timestamp pattern below.
+    $historicalRetirementEvidenceLegacyPattern = '^cgt17_branch_retirement_audit_\d+\.json$'
     $historicalRetirementEvidencePattern = '^cgt17_branch_retirement_audit_[0-9]{8}_[0-9]{6}[.]json$'
 
     foreach ($item in $items) {
@@ -126,6 +128,7 @@ try {
         generated_at = (Get-Date).ToString('o')
         authority = 'local evidence retention classification only; no deletion authority'
         cache_patterns = $regenerableCachePatterns
+        historical_retirement_evidence_legacy_pattern = $historicalRetirementEvidenceLegacyPattern
         historical_retirement_evidence_pattern = $historicalRetirementEvidencePattern
         summary = $summary
         items = @($rows)
