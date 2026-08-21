@@ -196,13 +196,13 @@ def open_admin_home(
         state="visible",
         timeout=5000,
     )
-    page.locator("#admin-program-supervision-readiness").wait_for(
+    # Match the Admin Home readiness contract already exercised by the VQ
+    # browser-state validator rather than relying on an optional summary host.
+    page.wait_for_timeout(2400)
+    page.locator("#admin-integration-readiness-tracking-summary-card").wait_for(
         state="visible",
         timeout=5000,
     )
-    # The product performs canonical home-layout reconciliation at 200ms and
-    # 800ms after startup. Capture only after that declared stabilization point.
-    page.wait_for_timeout(900)
     reset_ui_scroll(page)
 
 
