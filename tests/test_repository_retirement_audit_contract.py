@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "scripts" / "audit_repository_retirement.ps1"
+SUPERSESSION = ROOT / "scripts" / "analyze_local_tooling_supersession.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -109,6 +110,23 @@ def test_local_tooling_is_fingerprinted_and_exact_duplicates_are_grouped() -> No
     assert "local_tooling_content_fingerprinted = $true" in source
     assert "exact_duplicate_hash_requires_canonical_retained_copy = $true" in source
     assert "Exact duplicate hashes are equivalence evidence" in source
+
+
+def test_structural_supersession_analysis_is_non_destructive_and_explicit() -> None:
+    source = SUPERSESSION.read_text(encoding="utf-8")
+
+    assert "normalized_sha256" in source
+    assert "function_count" in source
+    assert "functions =" in source
+    assert "parameter_count" in source
+    assert "parameters =" in source
+    assert "latest_contains_all_candidate_functions" in source
+    assert "latest_contains_all_candidate_parameters" in source
+    assert "missing_functions_in_latest" in source
+    assert "missing_parameters_in_latest" in source
+    assert "normalized_duplicate_groups" in source
+    assert "deletion_authorized = $false" in source
+    assert "Remove-Item" not in source
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
