@@ -42,3 +42,12 @@ def test_safe_cleanup_is_limited_to_ignored_untracked_generated_residue() -> Non
     assert "SAFE_LOCAL_RESIDUE" in source
     assert "Remove-Item -LiteralPath $item.path -Recurse -Force" in source
     assert "No tracked file is deleted automatically" in source
+
+
+def test_markdown_summary_lines_do_not_escape_their_closing_quotes() -> None:
+    source = AUDIT.read_text(encoding="utf-8")
+
+    assert '$lines.Add("- Branch: $branch")' in source
+    assert '$lines.Add("- HEAD: $head")' in source
+    assert '$lines.Add("- Branch: `$branch`")' not in source
+    assert '$lines.Add("- HEAD: `$head`")' not in source
