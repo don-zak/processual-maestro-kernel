@@ -1,6 +1,7 @@
 from pathlib import Path
 
 
+LOGIN_HTML = Path("processual_api/static/login.html")
 LOGIN_TOKEN_CAPTURE = Path("processual_api/static/js/login_token_capture.js")
 REGISTER_HTML = Path("processual_api/static/register.html")
 REGISTER_JS = Path("processual_api/static/js/pages/register.js")
@@ -10,16 +11,18 @@ OFFER_JS = Path("processual_api/static/js/pages/offer.js")
 SPLASH_HTML = Path("processual_api/static/splash.html")
 
 
-def test_login_password_visibility_is_anchored_inside_input_shell() -> None:
-    source = LOGIN_TOKEN_CAPTURE.read_text(encoding="utf-8")
+def test_login_password_visibility_is_static_and_anchored_inside_input_shell() -> None:
+    html = LOGIN_HTML.read_text(encoding="utf-8")
 
-    assert "login-password-shell" in source
-    assert "shell.appendChild(password)" in source
-    assert "shell.appendChild(button)" in source
-    assert "top:50%" in source
-    assert "translateY(-50%)" in source
-    assert "bottom:7px" not in source
-    assert "password.style.paddingInlineEnd = '76px'" in source
+    assert 'id="login-password-shell"' in html
+    assert 'id="login-password-visibility"' in html
+    assert 'class="password-visibility"' in html
+    assert ".password-shell{position:relative;display:block;width:100%}" in html
+    assert ".password-shell .inp{display:block;padding-inline-end:72px}" in html
+    assert "top:50%" in html
+    assert "translateY(-50%)" in html
+    assert "bottom:7px" not in html
+    assert "passwordVisibility.addEventListener('click'" in html
 
 
 def test_mfa_challenge_replaces_primary_login_controls_without_card_pressure() -> None:
@@ -36,14 +39,18 @@ def test_mfa_challenge_replaces_primary_login_controls_without_card_pressure() -
 
 
 def test_general_product_surfaces_are_english_only_but_tutorial_keeps_arabic() -> None:
-    login = LOGIN_TOKEN_CAPTURE.read_text(encoding="utf-8")
+    login_html = LOGIN_HTML.read_text(encoding="utf-8")
+    login_runtime = LOGIN_TOKEN_CAPTURE.read_text(encoding="utf-8")
     console_i18n = CONSOLE_I18N.read_text(encoding="utf-8")
     splash = SPLASH_HTML.read_text(encoding="utf-8")
     tour = TOUR_ENGINE.read_text(encoding="utf-8")
 
-    assert "function lockLoginToEnglish()" in login
-    assert "bar.hidden = true" in login
-    assert "document.documentElement.dir = 'ltr'" in login
+    assert 'id="lang-ar"' not in login_html
+    assert 'data-lang="ar"' not in login_html
+    assert "setLanguage('ar')" not in login_html
+    assert 'lang="en" dir="ltr"' in login_html
+    assert "function lockLoginToEnglish()" in login_runtime
+    assert "document.documentElement.dir = 'ltr'" in login_runtime
 
     assert "function lockConsoleToEnglish()" in console_i18n
     assert "I18N.setLang('en')" in console_i18n
