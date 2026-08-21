@@ -1,0 +1,27 @@
+from pathlib import Path
+
+
+def read(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
+def test_default_evidence_refresh_resets_real_ui_scroll_containers():
+    source = read("qualification/vq1_settings_default_evidence_refresh.py")
+    assert "def reset_ui_scroll(page: Page) -> None:" in source
+    assert "window.scrollTo(0, 0)" in source
+    assert "'#content'" in source
+    assert "'#main'" in source
+    assert "element.scrollTop = 0" in source
+    assert "element.scrollLeft = 0" in source
+
+
+def test_default_evidence_refresh_recaptures_stable_admin_home():
+    source = read("qualification/vq1_settings_default_evidence_refresh.py")
+    assert 'row["route"] == "/admin" and row["section"] == "home"' in source
+    assert "def open_admin_home(" in source
+    assert 'page.locator("#admin-home-canonical-surface").wait_for(' in source
+    assert 'page.locator("#admin-program-supervision-readiness").wait_for(' in source
+    assert "page.wait_for_timeout(900)" in source
+    admin_pos = source.index("def open_admin_home(")
+    reset_pos = source.index("reset_ui_scroll(page)", admin_pos)
+    assert reset_pos > admin_pos
