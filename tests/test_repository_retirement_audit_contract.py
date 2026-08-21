@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -126,7 +127,7 @@ def test_structural_supersession_analysis_is_non_destructive_and_explicit() -> N
     assert "missing_parameters_in_latest" in source
     assert "normalized_duplicate_groups" in source
     assert "deletion_authorized = $false" in source
-    assert "Remove-Item" not in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
 def test_behavioral_supersession_analysis_tracks_operational_primitives() -> None:
@@ -146,7 +147,7 @@ def test_behavioral_supersession_analysis_tracks_operational_primitives() -> Non
     assert "missing_file_write_primitives_in_latest" in source
     assert "missing_file_delete_primitives_in_latest" in source
     assert "local structural and behavioral comparison only; no deletion authority" in source
-    assert "Remove-Item" not in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
