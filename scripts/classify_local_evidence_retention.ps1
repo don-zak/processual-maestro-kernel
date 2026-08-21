@@ -32,6 +32,18 @@ try {
             $retention = 'REGENERABLE'
             $reason = 'Coverage runtime output can be reproduced from tests; keep only while it is needed as local qualification evidence.'
             $regenerable = $true
+        } elseif ($normalized -match '^(?:\.mypy_cache/|\.pytest_cache/|\.ruff_cache/|(?:.+/)?__pycache__/)$') {
+            $category = 'REGENERABLE_TOOL_CACHE'
+            $retention = 'SAFE_TO_REGENERATE'
+            $reason = 'Tool/runtime cache is generated state and can be recreated from source and tooling.'
+            $regenerable = $true
+            $deletion_candidate = $true
+        } elseif ($normalized -match '^\.venv/$') {
+            $category = 'REGENERABLE_LOCAL_ENVIRONMENT'
+            $retention = 'SAFE_TO_REGENERATE'
+            $reason = 'Local virtual environment is reproducible from dependency declarations and should stay outside repository authority.'
+            $regenerable = $true
+            $deletion_candidate = $true
         } elseif ($normalized -match '^\.pmk-local-review(?:/|\.sqlite3$)' -or $normalized -match '^\.pmk-validation/') {
             $category = 'ACTIVE_LOCAL_QUALIFICATION_EVIDENCE'
             $retention = 'PRESERVE'
@@ -46,6 +58,15 @@ try {
             $retention = 'ARCHIVE_CANDIDATE'
             $reason = 'Versioned review decisions are historical evidence; consolidate newest/final state before retiring earlier copies.'
             $archive_candidate = $true
+        } elseif ($normalized -match '^pytest-.*\.log$') {
+            $category = 'TEST_RUN_EVIDENCE'
+            $retention = 'ARCHIVE_CANDIDATE'
+            $reason = 'Test execution logs are evidence, not runtime state; archive after qualification closeout rather than deleting blindly.'
+            $archive_candidate = $true
+        } elseif ($normalized -match '^local-qualification-results/') {
+            $category = 'LOCAL_QUALIFICATION_RESULT_SET'
+            $retention = 'PRESERVE'
+            $reason = 'Named qualification result set may contain acceptance evidence and requires content review before archival.'
         } elseif ($normalized -match '^wave.*\.patch$') {
             $category = 'PATCH_PROVENANCE_EVIDENCE'
             $retention = 'VERIFY_APPLIED_THEN_RETIRE'
