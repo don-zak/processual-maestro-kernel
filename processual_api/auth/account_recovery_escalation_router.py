@@ -3,13 +3,33 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.auth.security import require_platform_admin_step_up
 from processual_api.db.session import get_session
+
+
+class SensitiveRecoveryEscalationAPIRoute(APIRoute):
+    def get_route_handler(self):
+        route_handler = super().get_route_handler()
+
+        async def sanitized_route_handler(request: Request):
+            try:
+                return await route_handler(request)
+            except RequestValidationError:
+                return JSONResponse(
+                    status_code=422,
+                    content={"detail": "Invalid account recovery escalation request."},
+                    headers={"Cache-Control": "no-store"},
+                )
+
+        return sanitized_route_handler
 
 
 class _StrictModel(BaseModel):
@@ -68,7 +88,10 @@ class AccountRecoveryEscalationDecisionResult(_StrictModel):
     mfa_bypassed: bool = False
 
 
-router = APIRouter(tags=["identity-account-recovery-escalation"])
+router = APIRouter(
+    tags=["identity-account-recovery-escalation"],
+    route_class=SensitiveRecoveryEscalationAPIRoute,
+)
 platform_admin_step_up_dependency = require_platform_admin_step_up()
 
 
@@ -193,5 +216,6 @@ __all__ = [
     "AccountRecoveryEscalationCreate",
     "AccountRecoveryEscalationDecision",
     "AccountRecoveryEscalationDecisionResult",
+    "platform_admin_step_up_dependency",
     "router",
 ]
