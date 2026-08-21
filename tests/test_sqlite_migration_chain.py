@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 
 
-HEAD_REVISION = "20260818_0054"
-PREVIOUS_REVISION = "20260818_0053"
+HEAD_REVISION = "20260821_0057"
+PREVIOUS_REVISION = "20260818_0056"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 
 
@@ -71,6 +71,33 @@ def _assert_governance_schema(database_path: Path) -> None:
     assert subject[3] == 0
 
 
+def _assert_account_recovery_escalation_schema(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        columns = connection.execute(
+            "PRAGMA table_info(auth_account_recovery_escalations)"
+        ).fetchall()
+        indexes = connection.execute(
+            "PRAGMA index_list(auth_account_recovery_escalations)"
+        ).fetchall()
+
+    names = {row[1] for row in columns}
+    assert {
+        "id",
+        "claimed_login",
+        "contact_email",
+        "organization_ref",
+        "reason",
+        "state",
+        "reviewed_by_user_id",
+        "resolution",
+        "created_at",
+        "reviewed_at",
+    }.issubset(names)
+    index_names = {row[1] for row in indexes}
+    assert "ix_auth_account_recovery_escalations_state_created" in index_names
+    assert "ix_auth_account_recovery_escalations_claimed_login" in index_names
+
+
 def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     database_path = tmp_path / "migration-chain.db"
@@ -80,6 +107,7 @@ def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
     _assert_current_head(repo_root, database_url)
     _assert_partial_default_index(database_path)
     _assert_governance_schema(database_path)
+    _assert_account_recovery_escalation_schema(database_path)
 
     _run_alembic(repo_root, database_url, "downgrade", "-1")
     downgraded = _run_alembic(repo_root, database_url, "current")
@@ -89,3 +117,4 @@ def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
     _assert_current_head(repo_root, database_url)
     _assert_partial_default_index(database_path)
     _assert_governance_schema(database_path)
+    _assert_account_recovery_escalation_schema(database_path)
