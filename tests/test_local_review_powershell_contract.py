@@ -49,3 +49,49 @@ def test_setup_installs_only_required_local_review_extras():
     source = read("scripts/setup_local_review.ps1")
     assert 'pip install -e ".[api,security,database]"' in source
     assert 'run_local_review.ps1 -ResetDatabase -OpenBrowser' in source
+
+
+def test_full_web_review_starts_from_public_root_without_authentication_bypass():
+    source = read("scripts/run_full_web_review.ps1")
+    assert '[switch]$ResetDatabase' in source
+    assert '[switch]$NoBrowser' in source
+    assert '[switch]$IncludeAuthenticatedSurfaces' in source
+    assert 'Start-Process' in source
+    assert 'processual_api.main:app' in source
+    assert '127.0.0.1' in source
+    assert 'Public entry / splash' in source
+    assert 'Path = "/"' in source
+    assert '/billing/public-plan-journey' in source
+    assert '/offer/$encodedPlan' in source
+    assert 'normal public entry; no authentication/session bypass' in source
+    assert 'sessionStorage' not in source
+    assert 'maestro_token' not in source
+    assert 'ProductionAuthorityGranted=true' not in source
+    assert 'RealStagingQualified=true' not in source
+
+
+def test_full_web_review_inventory_covers_public_journey_and_optional_protected_surfaces():
+    source = read("scripts/run_full_web_review.ps1")
+    for path in (
+        'Path = "/plans"',
+        'Path = "/pricing"',
+        'Path = "/apply"',
+        'Path = "/register"',
+        'Path = "/verify"',
+        'Path = "/login"',
+    ):
+        assert path in source
+    assert '/console/' in source
+    assert '/admin' in source
+    assert 'IncludeAuthenticatedSurfaces' in source
+    assert 'HTTP page failure(s)' in source
+    assert 'full-web-review-$stamp.json' in source
+    assert 'Stop-Process -Id' in source
+
+
+def test_full_web_review_reports_local_only_authority_truth():
+    source = read("scripts/run_full_web_review.ps1")
+    assert 'mode = "local_public_web_acceptance"' in source
+    assert 'real_staging_qualified = $false' in source
+    assert 'production_authority_granted = $false' in source
+    assert 'This is local public-web acceptance only; it grants no Real Staging or production authority.' in source
