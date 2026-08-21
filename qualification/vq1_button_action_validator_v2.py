@@ -9,6 +9,11 @@ from vq1_browser_harness import establish_qualification_session
 
 SETTINGS_TAB_STORAGE_KEY = "maestro_settings_tab"
 SETTINGS_DEFAULT_TAB = "operations"
+SETTINGS_DYNAMIC_BUTTON_IDS = (
+    "set-provider-secret-test",
+    "set-provider-secret-save",
+    "set-provider-secret-clear",
+)
 
 
 def _ensure_session(page) -> None:
@@ -30,6 +35,17 @@ def _reset_console_section_state(page, section: str) -> None:
     )
 
 
+def _wait_for_settings_action_surface(page, section: str) -> None:
+    if section != "settings":
+        return
+    for button_id in SETTINGS_DYNAMIC_BUTTON_IDS:
+        page.locator(f"#{button_id}").wait_for(state="visible", timeout=5000)
+    page.get_by_role("button", name="Collapse", exact=True).first.wait_for(
+        state="visible",
+        timeout=5000,
+    )
+
+
 def navigate_console(page, section: str) -> str:
     _ensure_session(page)
     _reset_console_section_state(page, section)
@@ -47,9 +63,10 @@ def navigate_console(page, section: str) -> str:
     target = page.locator(f"#page-{section}")
     try:
         target.wait_for(state="visible", timeout=5000)
+        _wait_for_settings_action_surface(page, section)
     except Exception as exc:
         raise RuntimeError(
-            f"Console section {section!r} did not become visible after click; "
+            f"Console section {section!r} did not become qualification-ready after click; "
             f"current_url={page.url}"
         ) from exc
     return f"#page-{section}:visible"
