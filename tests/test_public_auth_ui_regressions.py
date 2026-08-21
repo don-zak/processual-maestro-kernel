@@ -26,10 +26,15 @@ def test_login_password_visibility_is_static_and_anchored_inside_input_shell() -
 
 
 def test_mfa_challenge_replaces_primary_login_controls_without_card_pressure() -> None:
+    html = LOGIN_HTML.read_text(encoding="utf-8")
     source = LOGIN_TOKEN_CAPTURE.read_text(encoding="utf-8")
 
+    assert "[hidden]{display:none!important}" in html
     assert "function setMfaLayout(active)" in source
     assert "card.dataset.mfaActive" in source
+    assert "fields.hidden = active" in source
+    assert "loginButton.hidden = active" in source
+    assert "tabs.hidden = active" in source
     assert "commercialActions.hidden = active" in source
     assert "commercialPanel.hidden = true" in source
     assert "lostAccessPanel.hidden = true" in source
