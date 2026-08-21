@@ -63,6 +63,7 @@ def test_full_web_review_starts_from_public_root_without_authentication_bypass()
     assert 'Path = "/"' in source
     assert '/billing/public-plan-journey' in source
     assert '/offer/$encodedPlan' in source
+    assert '/console/apply.html?plan_id=$encodedPlan&journey=assessment' in source
     assert 'normal public entry; no authentication/session bypass' in source
     assert 'sessionStorage' not in source
     assert 'maestro_token' not in source
@@ -75,12 +76,13 @@ def test_full_web_review_inventory_covers_public_journey_and_optional_protected_
     for path in (
         'Path = "/plans"',
         'Path = "/pricing"',
-        'Path = "/apply"',
         'Path = "/register"',
-        'Path = "/verify"',
+        'Path = "/verify-email"',
         'Path = "/login"',
     ):
         assert path in source
+    assert 'Path = "/apply"' not in source
+    assert 'Path = "/verify"' not in source
     assert '/console/' in source
     assert '/admin' in source
     assert 'IncludeAuthenticatedSurfaces' in source
@@ -92,6 +94,6 @@ def test_full_web_review_inventory_covers_public_journey_and_optional_protected_
 def test_full_web_review_reports_local_only_authority_truth():
     source = read("scripts/run_full_web_review.ps1")
     assert 'mode = "local_public_web_acceptance"' in source
-    assert 'real_staging_qualified = $false' in source
-    assert 'production_authority_granted = $false' in source
+    assert 'real_staging_qualified=$false' in source
+    assert 'production_authority_granted=$false' in source
     assert 'This is local public-web acceptance only; it grants no Real Staging or production authority.' in source
