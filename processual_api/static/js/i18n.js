@@ -49,8 +49,8 @@ const I18N = (() => {
       stable:       'Stable',
       hybrid:       'Hybrid',
       transient:    'Transient',
-      extinct:      'Extinct',
-      distorted:    'Distorted',
+      extinct:     'Extinct',
+      distorted:   'Distorted',
       pass:         'PASS',
       repair:       'REPAIR',
       block:        'BLOCK',
@@ -133,4 +133,24 @@ const I18N = (() => {
   function toggle() { setLang(_lang === 'en' ? 'ar' : 'en'); }
 
   return { t, lang, setLang, toggle };
+})();
+
+(function lockConsoleToEnglish() {
+  function apply() {
+    I18N.setLang('en');
+    document.documentElement.lang = 'en';
+    document.documentElement.dir = 'ltr';
+    if (document.body) document.body.dir = 'ltr';
+    const toggle = document.getElementById('lang-toggle');
+    if (toggle) {
+      toggle.hidden = true;
+      toggle.setAttribute('aria-hidden', 'true');
+      toggle.tabIndex = -1;
+    }
+  }
+
+  apply();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply, { once: true });
+  }
 })();
