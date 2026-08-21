@@ -8,6 +8,9 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response
 _ADMIN_DOM_CONTRACT_SCRIPT = (
     b'<script src="/console/js/admin_external_evaluation_dom_contract.js?v=admindomcontract01"></script>'
 )
+_LOGIN_RECOVERY_ESCALATION_SCRIPT = (
+    b'<script src="/console/js/login_recovery_escalation.js?v=recovery-escalation-r1"></script>'
+)
 _VQ1_NARROW_HARDENING_STYLESHEET = (
     b'<link rel="stylesheet" href="/console/css/vq1_narrow_hardening.css?v=vq1narrow01">'
 )
@@ -152,6 +155,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         if path == "/login":
             response = await self._stabilize_login_first_paint(response)
+            response = await self._inject_login_recovery_escalation(response)
 
         if path in {"/console", "/console/", "/console/index.html"}:
             response = await self._pin_public_assets(response)
@@ -218,6 +222,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 _LOGIN_PASSWORD_FIRST_PAINT,
                 1,
             )
+        return self._rebuilt_response(response, body)
+
+    async def _inject_login_recovery_escalation(self, response: Response) -> Response:
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type.lower():
+            return response
+        body = await self._response_body(response)
+        if _LOGIN_RECOVERY_ESCALATION_SCRIPT not in body:
+            if b"</body>" in body:
+                body = body.replace(
+                    b"</body>", _LOGIN_RECOVERY_ESCALATION_SCRIPT + b"</body>", 1
+                )
+            else:
+                body += _LOGIN_RECOVERY_ESCALATION_SCRIPT
         return self._rebuilt_response(response, body)
 
     async def _pin_public_assets(self, response: Response) -> Response:
