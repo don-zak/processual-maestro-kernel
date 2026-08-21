@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "purpose": "Prevent retired or compatibility-only repository surfaces from silently regaining primary authority while preserving history and required compatibility until deletion is proven safe.",
+  "authority": {
+    "repository_reconciliation_complete": false,
+    "real_staging_qualified": false,
+    "production_authority_granted": false
+  },
+  "protected_path_prefixes": [
+    "alembic/versions/",
+    "tests/",
+    "docs/",
+    "qualification/",
+    ".github/workflows/"
+  ],
+  "local_generated_residue_patterns": [
+    "__pycache__/",
+    ".pytest_cache/",
+    ".hypothesis/",
+    "build/",
+    "dist/",
+    "tmp/",
+    "*.pyc",
+    "*.pyo",
+    "*.log",
+    "*.bak",
+    "*.bak_*",
+    "*.zip",
+    ".pmk-repo-audit/"
+  ],
+  "tracked_surfaces": [
+    {
+      "path": "processual_api/routers/client_provider_alias_18.py",
+      "classification": "COMPATIBILITY_HOLD",
+      "primary_authority": false,
+      "deletion_allowed": false,
+      "deprecated_surface": "/settings/client/provider-connection",
+      "successor_surface": "/settings/provider-connection",
+      "release_condition": "Delete only after external consumer absence is proven and the compatibility regression/workflow is intentionally retired."
+    },
+    {
+      "path": "processual_api/routers/settings_provider_test_runtime.py",
+      "classification": "ACTIVE_RUNTIME_WITH_DEPRECATED_COMPATIBILITY",
+      "primary_authority": true,
+      "deletion_allowed": false,
+      "deprecated_surface": "/settings/llm-provider/test",
+      "successor_surface": "/settings/provider-connection/test",
+      "release_condition": "Do not delete the file while the successor runtime is implemented here. Retire only the deprecated endpoint after consumer absence is proven."
+    }
+  ],
+  "retired_public_symbols": [
+    {
+      "symbols": [
+        "enterprise_pilot",
+        "enterprise_core",
+        "enterprise_scale",
+        "enterprise_strategic"
+      ],
+      "classification": "HISTORICAL_COMPATIBILITY_ONLY",
+      "public_reintroduction_forbidden": true,
+      "deletion_allowed": false,
+      "release_condition": "Historical/internal compatibility references may be removed only after data migration and consumer-absence evidence. They must not reappear as public plans or public commercial CTAs."
+    }
+  ]
+}
