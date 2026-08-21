@@ -30,35 +30,52 @@ try {
     )
     $localEvidencePatterns = @(
         '^\.pmk-validation/',
-        '^pytest-.*\.log$'
+        '^\.pmk-local-review(?:/|\.sqlite3$)',
+        '^\.coverage$',
+        '^coverage\.xml$',
+        '^pytest-.*\.log$',
+        '^pmk-review-decisions-v\d+\.json$',
+        '^cgt17_branch_retirement_audit_\d+\.json$',
+        '^PMK_Transition_Handoff_Report_.*\.docx$',
+        '^wave.*\.patch$',
+        '^maestro-update-backup/'
+    )
+    $localToolingPatterns = @(
+        '^Invoke-PMKRepoAudit-.*\.ps1$',
+        '^Retire-Safe-CGT17Branches.*\.ps1$',
+        '^crm_eval_sandbox\.py$',
+        '^verify_local_password\.py$'
     )
     $auditInfrastructurePatterns = @(
         '^scripts/audit_repository_retirement\.ps1$',
-        '^governance/repository_retirement_quarantine\.json$'
+        '^governance/repository_retirement_quarantine\.json$',
+        '^\.pmk-repo-audit/'
     )
     $nameCandidatePattern = '(?i)(^|[._/-])(legacy|deprecated|retired|obsolete|archive|archived|backup|bak|old|unused|quarantine|generated|copy|temp|tmp)([._/-]|$)'
-    $generatedResiduePattern = '(?i)(^|/)(__pycache__|\.pytest_cache|\.hypothesis|build|dist|tmp|temp)(/|$)|\.(pyc|pyo|log|bak|tmp|zip)$|\.bak_'
+    $generatedResiduePattern = '(?i)(^|/)(__pycache__|\.pytest_cache|\.hypothesis|build|dist|tmp|temp)(/|$)|(^|/)[^/]+\.egg-info(/|$)|\.(pyc|pyo|log|bak|tmp|zip)$|\.bak_'
     $contentMarkers = @('deprecated', 'retired', 'obsolete', 'compatibility only', 'legacy compatibility', 'quarantine')
 
-    function Test-ProtectedPath([string]$Path) {
-        foreach ($pattern in $protectedPatterns) {
+    function Test-PathAgainstPatterns([string]$Path, [string[]]$Patterns) {
+        foreach ($pattern in $Patterns) {
             if ($Path -match $pattern) { return $true }
         }
         return $false
+    }
+
+    function Test-ProtectedPath([string]$Path) {
+        return Test-PathAgainstPatterns $Path $protectedPatterns
     }
 
     function Test-LocalEvidencePath([string]$Path) {
-        foreach ($pattern in $localEvidencePatterns) {
-            if ($Path -match $pattern) { return $true }
-        }
-        return $false
+        return Test-PathAgainstPatterns $Path $localEvidencePatterns
+    }
+
+    function Test-LocalToolingPath([string]$Path) {
+        return Test-PathAgainstPatterns $Path $localToolingPatterns
     }
 
     function Test-AuditInfrastructurePath([string]$Path) {
-        foreach ($pattern in $auditInfrastructurePatterns) {
-            if ($Path -match $pattern) { return $true }
-        }
-        return $false
+        return Test-PathAgainstPatterns $Path $auditInfrastructurePatterns
     }
 
     function Get-ReferenceEvidence([string]$Path) {
@@ -128,37 +145,46 @@ try {
         })
     }
 
-    $localResidues = [System.Collections.Generic.List[object]]::new()
+    $localArtifacts = [System.Collections.Generic.List[object]]::new()
     foreach ($line in $statusLines) {
         if ($line.Length -lt 4) { continue }
         $code = $line.Substring(0, 2)
         $path = $line.Substring(3)
         if ($code -ne '!!' -and $code -ne '??') { continue }
+        if (Test-AuditInfrastructurePath $path) { continue }
+
         $isIgnored = $code -eq '!!'
         $isGeneratedResidue = $path -match $generatedResiduePattern
-        if (-not $isGeneratedResidue) { continue }
-
         $isEvidence = Test-LocalEvidencePath $path
-        $eligible = $isIgnored -and -not (Test-ProtectedPath $path) -and -not $isEvidence
+        $isTooling = Test-LocalToolingPath $path
+        $isProtected = Test-ProtectedPath $path
+
+        $eligible = $isGeneratedResidue -and -not $isEvidence -and -not $isTooling -and -not $isProtected
         $classification = if ($isEvidence) {
             'LOCAL_EVIDENCE_HOLD'
+        } elseif ($isTooling) {
+            'LOCAL_TOOLING_REVIEW'
+        } elseif ($isProtected) {
+            'LOCAL_REVIEW'
         } elseif ($eligible) {
             'SAFE_LOCAL_RESIDUE'
         } else {
             'LOCAL_REVIEW'
         }
-        $localResidues.Add([pscustomobject]@{
+
+        $localArtifacts.Add([pscustomobject]@{
             path = $path
             tracked = $false
             ignored = $isIgnored
             classification = $classification
+            generated_residue = $isGeneratedResidue
             deletion_eligible = $eligible
         })
     }
 
     $deleted = [System.Collections.Generic.List[string]]::new()
     if ($ApplySafeLocalCleanup) {
-        foreach ($item in $localResidues) {
+        foreach ($item in $localArtifacts) {
             if (-not $item.deletion_eligible) { continue }
             if (-not (Test-Path -LiteralPath $item.path)) { continue }
             Remove-Item -LiteralPath $item.path -Recurse -Force
@@ -180,14 +206,16 @@ try {
         authority = 'local repository audit only; no staging/production authority'
         tracked_file_count = $tracked.Count
         tracked_candidates = @($records)
-        local_residue_candidates = @($localResidues)
+        local_residue_candidates = @($localArtifacts)
         deleted_safe_local_residue = @($deleted)
         policy = [ordered]@{
             tracked_auto_delete = $false
             migrations_tests_docs_qualification_protected = $true
             compatibility_shims_require_consumer_proof = $true
-            generated_untracked_ignored_residue_may_be_cleaned = $true
+            generated_untracked_or_ignored_residue_may_be_cleaned = $true
+            all_local_untracked_and_ignored_artifacts_are_inventoried = $true
             local_qualification_evidence_preserved = $true
+            local_tooling_requires_manual_review = $true
             audit_infrastructure_excluded_from_candidates = $true
         }
     }
@@ -201,28 +229,34 @@ try {
     $lines.Add("- HEAD: $head")
     $lines.Add("- Tracked files: $($tracked.Count)")
     $lines.Add("- Tracked candidates: $($records.Count)")
-    $lines.Add("- Local residue candidates: $($localResidues.Count)")
+    $lines.Add("- Local artifacts: $($localArtifacts.Count)")
     $lines.Add("- Safe local residues deleted this run: $($deleted.Count)")
     $lines.Add('')
-    $lines.Add('## Classification totals')
+    $lines.Add('## Tracked classification totals')
     foreach ($group in ($records | Group-Object classification | Sort-Object Name)) {
+        $lines.Add("- $($group.Name): $($group.Count)")
+    }
+    $lines.Add('')
+    $lines.Add('## Local classification totals')
+    foreach ($group in ($localArtifacts | Group-Object classification | Sort-Object Name)) {
         $lines.Add("- $($group.Name): $($group.Count)")
     }
     $lines.Add('')
     $lines.Add('## Safety rules')
     $lines.Add('- No tracked file is deleted automatically.')
     $lines.Add('- Alembic migrations, tests, docs, qualification evidence, workflows, and package initializers are protected by default.')
-    $lines.Add('- Local qualification evidence under .pmk-validation and pytest-*.log is preserved from automatic cleanup.')
+    $lines.Add('- Local qualification evidence, backups, review decisions, coverage evidence, and patch evidence are preserved from automatic cleanup.')
+    $lines.Add('- Local audit/tooling scripts require manual review and are never auto-deleted.')
     $lines.Add('- Audit/quarantine infrastructure is excluded from retirement candidacy.')
     $lines.Add('- Compatibility shims remain until consumer absence is proven.')
-    $lines.Add('- Only untracked + ignored generated residue that is not protected evidence can be removed with -ApplySafeLocalCleanup.')
+    $lines.Add('- Only recognized generated residue outside protected/evidence/tooling paths can be removed with -ApplySafeLocalCleanup.')
     $lines | Set-Content -LiteralPath $mdPath -Encoding UTF8
 
     Write-Host "Repository retirement audit completed."
     Write-Host "HEAD: $head"
     Write-Host "Tracked files: $($tracked.Count)"
     Write-Host "Tracked candidates: $($records.Count)"
-    Write-Host "Local residue candidates: $($localResidues.Count)"
+    Write-Host "Local artifacts: $($localArtifacts.Count)"
     Write-Host "Safe local residues deleted: $($deleted.Count)"
     Write-Host "JSON: $jsonPath"
     Write-Host "CSV:  $csvPath"
