@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "scripts" / "audit_repository_retirement.ps1"
 SUPERSESSION = ROOT / "scripts" / "analyze_local_tooling_supersession.ps1"
 RETIREMENT_EVIDENCE = ROOT / "scripts" / "extract_local_tooling_retirement_evidence.ps1"
+SEMANTIC_REPLACEMENT = ROOT / "scripts" / "analyze_legacy_function_semantic_replacement.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -201,6 +202,21 @@ def test_focused_retirement_evidence_extracts_function_bodies_by_brace_depth() -
     assert "if ($ch -eq '{')" in source
     assert "elseif ($ch -eq '}')" in source
     assert "if ($seenOpeningBrace -and $depth -eq 0) { break }" in source
+
+
+def test_legacy_function_semantic_replacement_analysis_is_ast_based_and_non_destructive() -> None:
+    source = SEMANTIC_REPLACEMENT.read_text(encoding="utf-8")
+
+    assert "System.Management.Automation.Language.Parser" in source
+    assert "FunctionDefinitionAst" in source
+    assert "CommandAst" in source
+    assert "StringConstantExpressionAst" in source
+    assert "missing_commands_in_canonical" in source
+    assert "missing_literals_in_canonical" in source
+    assert "semantic_replacement_proven" in source
+    assert "deletion_authorized = $false" in source
+    assert "local AST semantic comparison only; no deletion authority" in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
