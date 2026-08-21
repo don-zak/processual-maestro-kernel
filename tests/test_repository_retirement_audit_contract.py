@@ -96,6 +96,21 @@ def test_local_tooling_families_are_summarized_without_authorizing_deletion() ->
     assert "Tool version ordering is inventory evidence only" in source
 
 
+def test_local_tooling_is_fingerprinted_and_exact_duplicates_are_grouped() -> None:
+    source = AUDIT.read_text(encoding="utf-8")
+
+    assert "Get-LocalFileFingerprint" in source
+    assert "Get-FileHash -LiteralPath $Path -Algorithm SHA256" in source
+    assert "sha256 =" in source
+    assert "size_bytes =" in source
+    assert "line_count =" in source
+    assert "exact_duplicate_groups" in source
+    assert "Group-Object sha256" in source
+    assert "local_tooling_content_fingerprinted = $true" in source
+    assert "exact_duplicate_hash_requires_canonical_retained_copy = $true" in source
+    assert "Exact duplicate hashes are equivalence evidence" in source
+
+
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
     source = AUDIT.read_text(encoding="utf-8")
 
