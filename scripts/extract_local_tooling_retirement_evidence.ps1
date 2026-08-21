@@ -15,10 +15,16 @@ try {
 
     function Get-FunctionEvidence([string]$Path, [string]$FunctionName) {
         if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
-        $text = Get-Content -LiteralPath $Path -Raw
-        $pattern = "(?ims)^\\s*function\\s+$([regex]::Escape($FunctionName))\\b.*?(?=^\\s*function\\s+[A-Za-z0-9_-]+\\b|\\z)"
-        $match = [regex]::Match($text, $pattern)
-        if (-not $match.Success) {
+        $lines = @(Get-Content -LiteralPath $Path)
+        $escaped = [regex]::Escape($FunctionName)
+        $start = $null
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^\s*function\s+$escaped\b") {
+                $start = $i
+                break
+            }
+        }
+        if ($null -eq $start) {
             return [pscustomobject]@{
                 path = $Path
                 function = $FunctionName
@@ -28,7 +34,25 @@ try {
                 body_preview = @()
             }
         }
-        $body = $match.Value.TrimEnd()
+
+        $captured = [System.Collections.Generic.List[string]]::new()
+        $depth = 0
+        $seenOpeningBrace = $false
+        for ($i = $start; $i -lt $lines.Count; $i++) {
+            $line = [string]$lines[$i]
+            $captured.Add($line)
+            foreach ($ch in $line.ToCharArray()) {
+                if ($ch -eq '{') {
+                    $depth++
+                    $seenOpeningBrace = $true
+                } elseif ($ch -eq '}') {
+                    $depth--
+                }
+            }
+            if ($seenOpeningBrace -and $depth -eq 0) { break }
+        }
+
+        $body = [string]::Join("`n", @($captured))
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
         $sha = [System.Security.Cryptography.SHA256]::Create()
         try {
@@ -36,14 +60,13 @@ try {
         } finally {
             $sha.Dispose()
         }
-        $bodyLines = @($body -split "`r?`n")
         return [pscustomobject]@{
             path = $Path
             function = $FunctionName
             found = $true
             body_sha256 = $hash
-            body_line_count = $bodyLines.Count
-            body_preview = @($bodyLines | Select-Object -First 40)
+            body_line_count = $captured.Count
+            body_preview = @($captured | Select-Object -First 40)
         }
     }
 
