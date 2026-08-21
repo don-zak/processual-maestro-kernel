@@ -28,6 +28,10 @@ try {
         '^\.github/workflows/',
         '(^|/)__init__\.py$'
     )
+    $localEvidencePatterns = @(
+        '^\.pmk-validation/',
+        '^pytest-.*\.log$'
+    )
     $auditInfrastructurePatterns = @(
         '^scripts/audit_repository_retirement\.ps1$',
         '^governance/repository_retirement_quarantine\.json$'
@@ -38,6 +42,13 @@ try {
 
     function Test-ProtectedPath([string]$Path) {
         foreach ($pattern in $protectedPatterns) {
+            if ($Path -match $pattern) { return $true }
+        }
+        return $false
+    }
+
+    function Test-LocalEvidencePath([string]$Path) {
+        foreach ($pattern in $localEvidencePatterns) {
             if ($Path -match $pattern) { return $true }
         }
         return $false
@@ -127,12 +138,20 @@ try {
         $isGeneratedResidue = $path -match $generatedResiduePattern
         if (-not $isGeneratedResidue) { continue }
 
-        $eligible = $isIgnored -and -not (Test-ProtectedPath $path)
+        $isEvidence = Test-LocalEvidencePath $path
+        $eligible = $isIgnored -and -not (Test-ProtectedPath $path) -and -not $isEvidence
+        $classification = if ($isEvidence) {
+            'LOCAL_EVIDENCE_HOLD'
+        } elseif ($eligible) {
+            'SAFE_LOCAL_RESIDUE'
+        } else {
+            'LOCAL_REVIEW'
+        }
         $localResidues.Add([pscustomobject]@{
             path = $path
             tracked = $false
             ignored = $isIgnored
-            classification = if ($eligible) { 'SAFE_LOCAL_RESIDUE' } else { 'LOCAL_REVIEW' }
+            classification = $classification
             deletion_eligible = $eligible
         })
     }
@@ -168,6 +187,7 @@ try {
             migrations_tests_docs_qualification_protected = $true
             compatibility_shims_require_consumer_proof = $true
             generated_untracked_ignored_residue_may_be_cleaned = $true
+            local_qualification_evidence_preserved = $true
             audit_infrastructure_excluded_from_candidates = $true
         }
     }
@@ -192,9 +212,10 @@ try {
     $lines.Add('## Safety rules')
     $lines.Add('- No tracked file is deleted automatically.')
     $lines.Add('- Alembic migrations, tests, docs, qualification evidence, workflows, and package initializers are protected by default.')
+    $lines.Add('- Local qualification evidence under .pmk-validation and pytest-*.log is preserved from automatic cleanup.')
     $lines.Add('- Audit/quarantine infrastructure is excluded from retirement candidacy.')
     $lines.Add('- Compatibility shims remain until consumer absence is proven.')
-    $lines.Add('- Only untracked + ignored generated residue can be removed with -ApplySafeLocalCleanup.')
+    $lines.Add('- Only untracked + ignored generated residue that is not protected evidence can be removed with -ApplySafeLocalCleanup.')
     $lines | Set-Content -LiteralPath $mdPath -Encoding UTF8
 
     Write-Host "Repository retirement audit completed."
