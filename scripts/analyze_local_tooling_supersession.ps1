@@ -11,6 +11,15 @@ try {
         Select-Object -First 1
     if (-not $audit) { throw "No repository retirement audit JSON found in $AuditDirectory." }
 
+    $referenceExclusions = @(
+        ':!scripts/audit_repository_retirement.ps1',
+        ':!scripts/analyze_local_tooling_supersession.ps1',
+        ':!scripts/extract_local_tooling_retirement_evidence.ps1',
+        ':!tests/**',
+        ':!docs/**',
+        ':!qualification/**'
+    )
+
     function Get-BehavioralSignature([string]$Text) {
         $patterns = [ordered]@{
             git_commands = '(?im)^\s*(?:&\s*)?git\s+([^\r\n]+)'
@@ -42,7 +51,8 @@ try {
         if ([string]::IsNullOrWhiteSpace($base)) {
             return [pscustomobject]@{ count = 0; samples = @() }
         }
-        $hits = @(git grep -n -F -- "$base" 2>$null)
+        $args = @('grep', '-n', '-F', '--', $base) + $referenceExclusions
+        $hits = @(& git @args 2>$null)
         if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
             throw "git grep failed while checking references for $Path"
         }
@@ -225,7 +235,7 @@ try {
             normalized_duplicate_groups = @($normalizedDuplicateGroups)
             latest_superset_checks = @($supersetRows)
             deletion_authorized = $false
-            rationale = 'Structural, behavioral, reference, and call-site evidence support retirement decisions but never delete files. A human must still choose the canonical retained copy and execute any local removal explicitly.'
+            rationale = 'Structural, behavioral, operational-reference, and call-site evidence support retirement decisions but never delete files. Audit/test/docs/qualification self-references are excluded from operational reference evidence.'
         })
     }
 
@@ -234,7 +244,8 @@ try {
     [ordered]@{
         source_audit = $audit.FullName
         generated_at = (Get-Date).ToString('o')
-        authority = 'local structural, behavioral, reference, and call-site comparison only; no deletion authority'
+        authority = 'local structural, behavioral, operational-reference, and call-site comparison only; no deletion authority'
+        reference_exclusions = $referenceExclusions
         tooling = @($records)
         families = @($families)
     } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $outputPath -Encoding UTF8
