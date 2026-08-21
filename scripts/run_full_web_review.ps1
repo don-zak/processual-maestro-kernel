@@ -19,6 +19,43 @@ if (-not (Test-Path $bootstrapScript)) { throw "Missing local review bootstrap s
 . $envScript
 $context = Set-PmkLocalReviewEnvironment -DatabaseFile $DatabaseFile
 
+function Stop-StaleLocalReviewServers {
+    $stopped = [System.Collections.Generic.List[int]]::new()
+    try {
+        $processes = Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $_.Name -match '^python(\.exe)?$' -and
+            $_.CommandLine -match 'uvicorn' -and
+            $_.CommandLine -match 'processual_api\.main:app' -and
+            $_.CommandLine -match '--no-access-log'
+        }
+    } catch {
+        Write-Host "Unable to enumerate prior local-review processes; continuing without automatic cleanup." -ForegroundColor Yellow
+        return @()
+    }
+
+    foreach ($process in @($processes)) {
+        $pidValue = [int]$process.ProcessId
+        if ($pidValue -eq $PID) { continue }
+        Write-Host "Stopping stale local-review server PID $pidValue before database reset..."
+        try {
+            Stop-Process -Id $pidValue -Force -ErrorAction Stop
+            $stopped.Add($pidValue)
+        } catch {
+            throw "Unable to stop stale local-review server PID $pidValue. Stop it manually and retry."
+        }
+    }
+
+    if ($stopped.Count -gt 0) { Start-Sleep -Milliseconds 800 }
+    return @($stopped)
+}
+
+if ($ResetDatabase) {
+    $releasedPids = @(Stop-StaleLocalReviewServers)
+    if ($releasedPids.Count -gt 0) {
+        Write-Host "Released $($releasedPids.Count) stale local-review server process(es)."
+    }
+}
+
 $bootstrapArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $bootstrapScript, "-DatabaseFile", $DatabaseFile)
 if ($ResetDatabase) { $bootstrapArgs += "-ResetDatabase" }
 
@@ -148,8 +185,10 @@ try {
     Write-Host "5. Compare normal registration with the review_mfa=1 tab; the MFA preview must stay inside the card without overlap or horizontal overflow."
     Write-Host "6. Follow registration and email verification flows; real MFA enrollment remains after verified sign-in."
     Write-Host "7. Sign in normally and review Console/Admin; in Admin API Keys confirm External Evaluation Access is available in Category."
-    Write-Host "8. Review a real MFA challenge only with your own local credentials; never copy MFA or recovery secrets into evidence."
-    Write-Host "9. Record every defect against source HEAD $head before any Real Staging decision."
+    Write-Host "8. Confirm the Console exposes no AR language control; Tutorial remains the only Arabic-capable surface."
+    Write-Host "9. Expand Lost Access on short/narrow login viewports and confirm the full card remains reachable by vertical scrolling."
+    Write-Host "10. Review a real MFA challenge only with your own local credentials; never copy MFA or recovery secrets into evidence."
+    Write-Host "11. Record every defect against source HEAD $head before any Real Staging decision."
     Write-Host ""
     Write-Host "The server remains running after this script exits."
     Write-Host "Stop it when finished with: Stop-Process -Id $($server.Id)"
