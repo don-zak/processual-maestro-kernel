@@ -270,7 +270,7 @@ class MfaService:
             auth_session = await repository.session_for_update(user_id=user_id, session_id=session_id)
             self._assert_recent_step_up(auth_session, now=now)
             if await repository.is_required_by_role(user_id):
-                raise MfaConflictError("MFA is required for this identity role.")
+                raise MfaConflictError("MFA is required for this identity.")
             factor = await repository.active_factor_for_update(user_id)
             if factor is None:
                 raise MfaConflictError("No active MFA factor exists.")
