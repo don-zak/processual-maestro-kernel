@@ -11,6 +11,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from processual_api.auth.account_recovery_runtime import (
+    AccountRecoveryRuntime,
+    AccountRecoveryRuntimeUnavailableError,
+    build_account_recovery_runtime,
+)
+from processual_api.auth.rate_limit import (
+    ACCOUNT_RECOVERY_START_RULES,
+    AuthRateLimitUnavailableError,
+    resolve_client_ip,
+)
 from processual_api.auth.security import require_platform_admin_step_up
 from processual_api.db.session import get_session
 
@@ -95,15 +105,62 @@ router = APIRouter(
 platform_admin_step_up_dependency = require_platform_admin_step_up()
 
 
+async def get_account_recovery_escalation_runtime() -> AccountRecoveryRuntime:
+    try:
+        return await build_account_recovery_runtime()
+    except AccountRecoveryRuntimeUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Account recovery escalation service temporarily unavailable.",
+        ) from exc
+
+
+def _client_ip(request: Request, runtime: AccountRecoveryRuntime) -> str:
+    peer_ip = request.client.host if request.client else ""
+    return resolve_client_ip(
+        peer_ip=peer_ip,
+        forwarded_for=request.headers.get("X-Forwarded-For"),
+        policy=runtime.proxy_policy,
+    )
+
+
 @router.post(
     "/escalations",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=AccountRecoveryEscalationAccepted,
 )
 async def create_account_recovery_escalation(
+    request: Request,
     payload: AccountRecoveryEscalationCreate,
     session: AsyncSession = Depends(get_session),
-) -> AccountRecoveryEscalationAccepted:
+    runtime: AccountRecoveryRuntime = Depends(get_account_recovery_escalation_runtime),
+) -> AccountRecoveryEscalationAccepted | JSONResponse:
+    try:
+        decision = await runtime.rate_limiter.consume(
+            action="account_recovery_escalation",
+            subjects={
+                "ip": _client_ip(request, runtime),
+                "login": payload.claimed_login,
+            },
+            rules=ACCOUNT_RECOVERY_START_RULES,
+        )
+    except (AuthRateLimitUnavailableError, ValueError):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Account recovery escalation service temporarily unavailable."},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    if not decision.allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Account recovery escalation request rate limit exceeded."},
+            headers={
+                "Cache-Control": "no-store",
+                "Retry-After": str(max(1, decision.retry_after_seconds)),
+            },
+        )
+
     request_id = uuid.uuid4()
     await session.execute(
         text(
@@ -216,6 +273,7 @@ __all__ = [
     "AccountRecoveryEscalationCreate",
     "AccountRecoveryEscalationDecision",
     "AccountRecoveryEscalationDecisionResult",
+    "get_account_recovery_escalation_runtime",
     "platform_admin_step_up_dependency",
     "router",
 ]
