@@ -9,6 +9,13 @@
   const organizationInput = document.getElementById("registration-organization-name");
   const passwordInput = document.getElementById("registration-password");
   const passwordMinimum = document.getElementById("password-minimum");
+  const passwordVisibility = document.getElementById("registration-password-visibility");
+  const planContext = document.getElementById("registration-plan-context");
+  const planName = document.getElementById("registration-plan-name");
+  const planBilling = document.getElementById("registration-plan-billing");
+  const planPrice = document.getElementById("registration-plan-price");
+  const planPriceWrap = document.getElementById("registration-plan-price-wrap");
+  const planNote = document.getElementById("registration-plan-note");
 
   if (!form || !status || !submit) {
     return;
@@ -34,6 +41,17 @@
     return period === "monthly" || period === "annual" ? period : null;
   }
 
+  function money(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return null;
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: amount % 1 ? 2 : 0,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  }
+
   function setStatus(message, state) {
     status.textContent = message;
     status.dataset.state = state;
@@ -46,6 +64,79 @@
 
     if (!organization) {
       organizationInput.value = "";
+    }
+  }
+
+  function installPasswordVisibility() {
+    if (!passwordInput || !passwordVisibility) return;
+    passwordVisibility.addEventListener("click", () => {
+      const visible = passwordInput.type === "text";
+      passwordInput.type = visible ? "password" : "text";
+      passwordVisibility.textContent = visible ? "Show" : "Hide";
+      passwordVisibility.setAttribute(
+        "aria-label",
+        visible ? "Show password" : "Hide password",
+      );
+      passwordVisibility.setAttribute("aria-pressed", visible ? "false" : "true");
+      passwordInput.focus({ preventScroll: true });
+    });
+  }
+
+  async function loadSelectedOfferContext() {
+    const planId = selectedPlanId();
+    if (!planId || !planContext) return;
+
+    planContext.hidden = false;
+    if (planName) planName.textContent = planId;
+
+    const billing = selectedBillingPeriod();
+    if (planBilling) {
+      planBilling.textContent = billing
+        ? billing.charAt(0).toUpperCase() + billing.slice(1)
+        : "Selection required";
+    }
+
+    if (!billing) {
+      if (planPriceWrap) planPriceWrap.hidden = true;
+      if (planNote) {
+        planNote.textContent =
+          "This offer link is incomplete. Return to Plans and select monthly or annual billing before submitting.";
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch("/billing/public-plan-journey", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("catalog_unavailable");
+
+      const payload = await response.json();
+      const plans = Array.isArray(payload.plans) ? payload.plans : [];
+      const plan = plans.find((item) => item.plan_id === planId);
+      if (!plan) throw new Error("plan_unavailable");
+
+      if (planName) planName.textContent = plan.display_name || plan.plan_id;
+      const rawPrice = billing === "annual"
+        ? plan.annual_price_usd
+        : plan.monthly_price_usd;
+      const formattedPrice = money(rawPrice);
+
+      if (planPriceWrap) planPriceWrap.hidden = !formattedPrice;
+      if (planPrice && formattedPrice) {
+        planPrice.textContent = `${formattedPrice} / ${billing === "annual" ? "year" : "month"}`;
+      }
+      if (planNote) {
+        planNote.textContent =
+          "This selection will be carried into the registration request and revalidated by the backend. Registration alone does not activate payment, entitlement, quota, or checkout.";
+      }
+    } catch (_error) {
+      if (planPriceWrap) planPriceWrap.hidden = true;
+      if (planNote) {
+        planNote.textContent =
+          "Selected offer details are temporarily unavailable. The registration request remains bound to the selected plan and billing period and will be revalidated by the backend.";
+      }
     }
   }
 
@@ -205,5 +296,7 @@
 
   modeFieldset.addEventListener("change", syncMode);
   form.addEventListener("submit", submitRegistration);
+  installPasswordVisibility();
+  loadSelectedOfferContext();
   loadRegistrationConfig();
 })();
