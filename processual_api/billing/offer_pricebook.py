@@ -293,7 +293,9 @@ def _public_enterprise_deployment_offer() -> dict[str, Any]:
         "requires_supervisor_review": True,
         "requires_preparation": True,
         "requires_scoping": True,
+        "registration_required": True,
         "payment_required": False,
+        "fulfillment_mode": "enterprise_review",
         "activation_policy": "manual_after_enterprise_review",
         "checkout_mode": "contact_sales",
     }
