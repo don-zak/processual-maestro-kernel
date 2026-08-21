@@ -11,6 +11,32 @@ try {
         Select-Object -First 1
     if (-not $audit) { throw "No repository retirement audit JSON found in $AuditDirectory." }
 
+    function Get-BehavioralSignature([string]$Text) {
+        $patterns = [ordered]@{
+            git_commands = '(?im)^\s*(?:&\s*)?git\s+([^\r\n]+)'
+            gh_commands = '(?im)^\s*(?:&\s*)?gh\s+([^\r\n]+)'
+            pytest_commands = '(?im)^\s*(?:&\s*)?(?:python\s+-m\s+pytest|pytest)\b([^\r\n]*)'
+            file_writes = '(?i)\b(Set-Content|Add-Content|Out-File|Export-Csv|ConvertTo-Json|Copy-Item|Move-Item|New-Item)\b'
+            file_deletes = '(?i)\b(Remove-Item|del|erase|rmdir)\b'
+            network_calls = '(?i)\b(Invoke-WebRequest|Invoke-RestMethod|curl|wget)\b'
+            process_calls = '(?i)\b(Start-Process|docker|docker-compose|docker\s+compose)\b'
+        }
+        $result = [ordered]@{}
+        foreach ($entry in $patterns.GetEnumerator()) {
+            $values = @()
+            foreach ($match in [regex]::Matches($Text, $entry.Value)) {
+                $value = if ($match.Groups.Count -gt 1 -and $match.Groups[1].Success) {
+                    $match.Groups[1].Value.Trim()
+                } else {
+                    $match.Groups[0].Value.Trim()
+                }
+                if (-not [string]::IsNullOrWhiteSpace($value)) { $values += $value }
+            }
+            $result[$entry.Key] = @($values | Sort-Object -Unique)
+        }
+        return [pscustomobject]$result
+    }
+
     $report = Get-Content -LiteralPath $audit.FullName -Raw | ConvertFrom-Json
     $tooling = @($report.local_residue_candidates | Where-Object classification -eq 'LOCAL_TOOLING_REVIEW')
     $records = [System.Collections.Generic.List[object]]::new()
@@ -44,6 +70,7 @@ try {
             $sha.Dispose()
         }
 
+        $behavior = Get-BehavioralSignature $text
         $records.Add([pscustomobject]@{
             path = $path
             tooling_family = $item.tooling_family
@@ -58,6 +85,13 @@ try {
             functions = $functionNames
             parameter_count = $parameterNames.Count
             parameters = $parameterNames
+            git_commands = $behavior.git_commands
+            gh_commands = $behavior.gh_commands
+            pytest_commands = $behavior.pytest_commands
+            file_writes = $behavior.file_writes
+            file_deletes = $behavior.file_deletes
+            network_calls = $behavior.network_calls
+            process_calls = $behavior.process_calls
         })
     }
 
@@ -75,13 +109,30 @@ try {
             foreach ($candidate in ($group.Group | Where-Object path -ne $latest.path | Sort-Object tooling_version,path)) {
                 $missingFunctions = @($candidate.functions | Where-Object { $_ -notin $latest.functions })
                 $missingParameters = @($candidate.parameters | Where-Object { $_ -notin $latest.parameters })
+                $missingGit = @($candidate.git_commands | Where-Object { $_ -notin $latest.git_commands })
+                $missingGh = @($candidate.gh_commands | Where-Object { $_ -notin $latest.gh_commands })
+                $missingPytest = @($candidate.pytest_commands | Where-Object { $_ -notin $latest.pytest_commands })
+                $missingWrites = @($candidate.file_writes | Where-Object { $_ -notin $latest.file_writes })
+                $missingDeletes = @($candidate.file_deletes | Where-Object { $_ -notin $latest.file_deletes })
+                $missingNetwork = @($candidate.network_calls | Where-Object { $_ -notin $latest.network_calls })
+                $missingProcess = @($candidate.process_calls | Where-Object { $_ -notin $latest.process_calls })
+                $behaviorMissingCount = @($missingGit + $missingGh + $missingPytest + $missingWrites + $missingDeletes + $missingNetwork + $missingProcess).Count
+
                 $supersetRows.Add([pscustomobject]@{
                     candidate_path = $candidate.path
                     latest_path = $latest.path
                     latest_contains_all_candidate_functions = $missingFunctions.Count -eq 0
                     latest_contains_all_candidate_parameters = $missingParameters.Count -eq 0
+                    latest_contains_all_candidate_behavioral_signals = $behaviorMissingCount -eq 0
                     missing_functions_in_latest = $missingFunctions
                     missing_parameters_in_latest = $missingParameters
+                    missing_git_commands_in_latest = $missingGit
+                    missing_gh_commands_in_latest = $missingGh
+                    missing_pytest_commands_in_latest = $missingPytest
+                    missing_file_write_primitives_in_latest = $missingWrites
+                    missing_file_delete_primitives_in_latest = $missingDeletes
+                    missing_network_primitives_in_latest = $missingNetwork
+                    missing_process_primitives_in_latest = $missingProcess
                     deletion_authorized = $false
                 })
             }
@@ -103,7 +154,7 @@ try {
             normalized_duplicate_groups = @($normalizedDuplicateGroups)
             latest_superset_checks = @($supersetRows)
             deletion_authorized = $false
-            rationale = 'Structural containment is supporting evidence only. Review behavior, side effects, command invocation, and historical use before deleting local tools.'
+            rationale = 'Structural and behavioral containment are supporting evidence only. Review missing functions, command semantics, side effects, and historical use before deleting local tools.'
         })
     }
 
@@ -112,12 +163,12 @@ try {
     [ordered]@{
         source_audit = $audit.FullName
         generated_at = (Get-Date).ToString('o')
-        authority = 'local structural comparison only; no deletion authority'
+        authority = 'local structural and behavioral comparison only; no deletion authority'
         tooling = @($records)
         families = @($families)
     } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $outputPath -Encoding UTF8
 
-    Write-Host "Local tooling structural analysis completed."
+    Write-Host "Local tooling structural/behavioral analysis completed."
     Write-Host "Tooling files: $($records.Count)"
     Write-Host "Families: $($families.Count)"
     Write-Host "JSON: $outputPath"
