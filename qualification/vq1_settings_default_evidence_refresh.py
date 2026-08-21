@@ -84,18 +84,51 @@ def default_rows() -> list[dict[str, str]]:
         rows = [
             row
             for row in csv.DictReader(handle)
-            if row["route"] == "/console/"
-            and row["section"] in {"settings", "institution"}
-            and row["state"] == "default/loaded"
+            if row["state"] == "default/loaded"
+            and (
+                (
+                    row["route"] == "/console/"
+                    and row["section"] in {"settings", "institution"}
+                )
+                or (row["route"] == "/admin" and row["section"] == "home")
+            )
         ]
-    sections = {row["section"] for row in rows}
-    missing = {"settings", "institution"} - sections
-    if missing:
+
+    console_sections = {
+        row["section"] for row in rows if row["route"] == "/console/"
+    }
+    missing_console = {"settings", "institution"} - console_sections
+    if missing_console:
         raise RuntimeError(
             "missing clean Console default/loaded evidence rows for: "
-            + ", ".join(sorted(missing))
+            + ", ".join(sorted(missing_console))
         )
+
+    if not any(
+        row["route"] == "/admin" and row["section"] == "home"
+        for row in rows
+    ):
+        raise RuntimeError("missing clean Admin Home default/loaded evidence rows")
+
     return rows
+
+
+def reset_ui_scroll(page: Page) -> None:
+    page.evaluate(
+        """
+        () => {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+          ['#content', '#main', '.page.active', '.admin-page.active'].forEach((selector) => {
+            document.querySelectorAll(selector).forEach((element) => {
+              element.scrollTop = 0;
+              element.scrollLeft = 0;
+            });
+          });
+        }
+        """
+    )
 
 
 def assert_clean_default_state(
@@ -140,6 +173,7 @@ def open_console_section(
     page.wait_for_timeout(250)
     page.locator(f'.nav-btn[data-page="{section}"]').click()
     page.wait_for_timeout(400)
+    reset_ui_scroll(page)
     assert_clean_default_state(
         page,
         section=section,
@@ -148,12 +182,36 @@ def open_console_section(
     )
 
 
+def open_admin_home(
+    page: Page,
+    *,
+    width: int,
+    height: int,
+) -> None:
+    page.set_viewport_size({"width": width, "height": height})
+    page.goto(f"{BASE_URL}/admin", wait_until="domcontentloaded")
+    page.wait_for_timeout(250)
+    page.locator('.nav-btn[data-admin-page="home"]').click()
+    page.locator("#admin-home-canonical-surface").wait_for(
+        state="visible",
+        timeout=5000,
+    )
+    page.locator("#admin-program-supervision-readiness").wait_for(
+        state="visible",
+        timeout=5000,
+    )
+    # The product performs canonical home-layout reconciliation at 200ms and
+    # 800ms after startup. Capture only after that declared stabilization point.
+    page.wait_for_timeout(900)
+    reset_ui_scroll(page)
+
+
 def main() -> None:
     if not EVIDENCE_CSV.exists():
         raise RuntimeError(f"VQ evidence CSV not found: {EVIDENCE_CSV}")
 
     rows = default_rows()
-    refreshed: dict[str, int] = {"settings": 0, "institution": 0}
+    refreshed: dict[str, int] = {"settings": 0, "institution": 0, "admin-home": 0}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(locale="en")
@@ -171,28 +229,35 @@ def main() -> None:
             )
             install_clean_console_routes(page)
             for row in rows:
-                section = row["section"]
                 width = int(row["viewport_width"])
                 height = int(row["viewport_height"])
-                open_console_section(
-                    page,
-                    section=section,
-                    width=width,
-                    height=height,
-                )
+                if row["route"] == "/console/":
+                    section = row["section"]
+                    open_console_section(
+                        page,
+                        section=section,
+                        width=width,
+                        height=height,
+                    )
+                    refreshed[section] += 1
+                    label = section
+                else:
+                    open_admin_home(page, width=width, height=height)
+                    refreshed["admin-home"] += 1
+                    label = "admin-home"
+
                 shot = Path(row["screenshot_path"])
                 shot.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(shot), full_page=True)
-                refreshed[section] += 1
                 print(
-                    f"refreshed clean {section} default evidence: "
+                    f"refreshed clean {label} default evidence: "
                     f"{row['viewport']} {width}x{height} -> {shot}"
                 )
         finally:
             browser.close()
 
     print(
-        "refreshed clean Console default/loaded evidence: "
+        "refreshed clean default/loaded evidence: "
         + ", ".join(
             f"{section}={count}"
             for section, count in sorted(refreshed.items())
