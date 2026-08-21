@@ -146,8 +146,23 @@ def test_behavioral_supersession_analysis_tracks_operational_primitives() -> Non
     assert "missing_gh_commands_in_latest" in source
     assert "missing_file_write_primitives_in_latest" in source
     assert "missing_file_delete_primitives_in_latest" in source
-    assert "local structural and behavioral comparison only; no deletion authority" in source
+    assert "local structural, behavioral, reference, and call-site comparison only; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
+
+
+def test_tooling_retirement_requires_reference_and_call_site_evidence() -> None:
+    source = SUPERSESSION.read_text(encoding="utf-8")
+
+    assert "Get-TrackedReferenceEvidence" in source
+    assert "Get-LocalToolingReferenceEvidence" in source
+    assert "Get-FunctionCallEvidence" in source
+    assert "tracked_reference_count" in source
+    assert "local_tooling_reference_count" in source
+    assert "reference_free_in_repository_and_local_tooling" in source
+    assert "missing_function_call_evidence" in source
+    assert "missing_functions_are_uncalled_in_candidate" in source
+    assert "retirement_evidence_complete" in source
+    assert "deletion_authorized = $false" in source
 
 
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
