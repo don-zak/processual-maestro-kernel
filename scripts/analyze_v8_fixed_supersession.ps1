@@ -18,9 +18,15 @@ try {
         $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$tokens, [ref]$errors)
         $functions = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) |
-            ForEach-Object { $_.Name } | Sort-Object -Unique)
+            ForEach-Object { $_.Name } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+            Sort-Object -Unique)
         $commands = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) |
-            ForEach-Object { $_.GetCommandName() } | Where-Object { $_ } | Sort-Object -Unique)
+            ForEach-Object { $_.GetCommandName() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Sort-Object -Unique)
         return [pscustomobject]@{
             path = $Path
             text = $text
@@ -55,6 +61,17 @@ try {
     $missingFunctionsInFixed = @($broken.functions | Where-Object { $_ -notin $fixed.functions })
     $missingCommandsInFixed = @($broken.commands | Where-Object { $_ -notin $fixed.commands })
 
+    $literalNewlineBrokenLines = @($onlyBroken | Where-Object { $_ -match '`n' })
+    $literalNewlineRepairEvidence = $false
+    if ($literalNewlineBrokenLines.Count -eq 1) {
+        $repairedFragments = @($literalNewlineBrokenLines[0] -split [regex]::Escape('`n') |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($repairedFragments.Count -gt 0) {
+            $literalNewlineRepairEvidence = @($repairedFragments | Where-Object { $_ -notin $onlyFixed }).Count -eq 0
+        }
+    }
+
     $result = [ordered]@{
         generated_at = (Get-Date).ToString('o')
         authority = 'local v8-to-v8-fixed supersession evidence only; no deletion authority'
@@ -70,6 +87,8 @@ try {
         missing_commands_in_fixed = $missingCommandsInFixed
         normalized_lines_only_in_broken = $onlyBroken
         normalized_lines_only_in_fixed = $onlyFixed
+        literal_backtick_n_broken_lines = $literalNewlineBrokenLines
+        literal_backtick_n_repair_matches_fixed_lines = $literalNewlineRepairEvidence
         fixed_contains_all_parseable_broken_functions = $missingFunctionsInFixed.Count -eq 0
         fixed_contains_all_parseable_broken_commands = $missingCommandsInFixed.Count -eq 0
         broken_is_syntax_invalid = -not $broken.parse_ok
@@ -78,7 +97,8 @@ try {
             (-not $broken.parse_ok) -and
             $fixed.parse_ok -and
             $missingFunctionsInFixed.Count -eq 0 -and
-            $missingCommandsInFixed.Count -eq 0
+            $missingCommandsInFixed.Count -eq 0 -and
+            $literalNewlineRepairEvidence
         )
         deletion_authorized = $false
     }
@@ -92,6 +112,7 @@ try {
     Write-Host "Fixed parse ok: $($fixed.parse_ok)"
     Write-Host "Missing functions in fixed: $($missingFunctionsInFixed.Count)"
     Write-Host "Missing commands in fixed: $($missingCommandsInFixed.Count)"
+    Write-Host "Literal backtick-n repair matches fixed lines: $literalNewlineRepairEvidence"
     Write-Host "Direct fixed successor evidence complete: $($result.direct_fixed_successor_evidence_complete)"
     Write-Host "JSON: $outputPath"
 } finally {
