@@ -38,6 +38,21 @@ def test_full_review_reset_releases_only_its_stale_uvicorn_servers() -> None:
     assert "Released $($releasedPids.Count) stale local-review server process(es)." in source
 
 
+def test_full_review_isolates_busy_ports_and_verifies_maestro_server_identity() -> None:
+    source = FULL_REVIEW.read_text(encoding="utf-8")
+
+    assert "function Test-TcpPortInUse" in source
+    assert "function Resolve-ReviewPort" in source
+    assert "$Port = Resolve-ReviewPort $Port" in source
+    assert "Requested port $RequestedPort is already in use" in source
+    assert '"$base/openapi.json"' in source
+    assert '"/billing/public-plan-journey"' in source
+    assert '"/auth/account-recovery/start"' in source
+    assert '"/auth/mfa/status"' in source
+    assert "Server identity check failed" in source
+    assert "Verified Maestro server identity from OpenAPI" in source
+
+
 def test_review_checklist_covers_console_language_and_lost_access_overflow() -> None:
     source = FULL_REVIEW.read_text(encoding="utf-8")
 
