@@ -78,6 +78,35 @@ try {
         return Test-PathAgainstPatterns $Path $auditInfrastructurePatterns
     }
 
+    function Get-LocalToolingMetadata([string]$Path) {
+        if ($Path -match '^Invoke-PMKRepoAudit-v(?<version>\d+)(?<variant>-fixed)?\.ps1$') {
+            return [pscustomobject]@{
+                family = 'Invoke-PMKRepoAudit'
+                version = [int]$Matches.version
+                variant = if ($Matches.variant) { 'fixed' } else { 'standard' }
+            }
+        }
+        if ($Path -match '^Retire-Safe-CGT17Branches-v(?<version>\d+)\.ps1$') {
+            return [pscustomobject]@{
+                family = 'Retire-Safe-CGT17Branches'
+                version = [int]$Matches.version
+                variant = 'standard'
+            }
+        }
+        if ($Path -eq 'Retire-Safe-CGT17Branches-fixed.ps1') {
+            return [pscustomobject]@{
+                family = 'Retire-Safe-CGT17Branches'
+                version = $null
+                variant = 'fixed-unversioned'
+            }
+        }
+        return [pscustomobject]@{
+            family = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+            version = $null
+            variant = 'standalone'
+        }
+    }
+
     function Get-ReferenceEvidence([string]$Path) {
         $base = [System.IO.Path]::GetFileName($Path)
         $pathRefs = @()
@@ -158,6 +187,7 @@ try {
         $isEvidence = Test-LocalEvidencePath $path
         $isTooling = Test-LocalToolingPath $path
         $isProtected = Test-ProtectedPath $path
+        $tooling = if ($isTooling) { Get-LocalToolingMetadata $path } else { $null }
 
         $eligible = $isGeneratedResidue -and -not $isEvidence -and -not $isTooling -and -not $isProtected
         $classification = if ($isEvidence) {
@@ -178,7 +208,30 @@ try {
             ignored = $isIgnored
             classification = $classification
             generated_residue = $isGeneratedResidue
+            tooling_family = if ($tooling) { $tooling.family } else { $null }
+            tooling_version = if ($tooling) { $tooling.version } else { $null }
+            tooling_variant = if ($tooling) { $tooling.variant } else { $null }
             deletion_eligible = $eligible
+        })
+    }
+
+    $toolingFamilySummary = [System.Collections.Generic.List[object]]::new()
+    $toolingItems = @($localArtifacts | Where-Object classification -eq 'LOCAL_TOOLING_REVIEW')
+    foreach ($group in ($toolingItems | Group-Object tooling_family | Sort-Object Name)) {
+        $versioned = @($group.Group | Where-Object { $null -ne $_.tooling_version })
+        $latestVersion = $null
+        if ($versioned.Count -gt 0) {
+            $latestVersion = ($versioned | Measure-Object -Property tooling_version -Maximum).Maximum
+        }
+        $toolingFamilySummary.Add([pscustomobject]@{
+            family = $group.Name
+            artifact_count = $group.Count
+            latest_numeric_version_by_name = $latestVersion
+            latest_numeric_paths = @($group.Group | Where-Object { $null -ne $latestVersion -and $_.tooling_version -eq $latestVersion } | Select-Object -ExpandProperty path)
+            fixed_variant_paths = @($group.Group | Where-Object { $_.tooling_variant -like 'fixed*' } | Select-Object -ExpandProperty path)
+            paths = @($group.Group | Sort-Object tooling_version,path | Select-Object -ExpandProperty path)
+            deletion_authorized = $false
+            rationale = 'Name/version ordering is inventory evidence only. Compare file contents, behavior, and references before deciding which local tools are superseded.'
         })
     }
 
@@ -207,6 +260,7 @@ try {
         tracked_file_count = $tracked.Count
         tracked_candidates = @($records)
         local_residue_candidates = @($localArtifacts)
+        local_tooling_families = @($toolingFamilySummary)
         deleted_safe_local_residue = @($deleted)
         policy = [ordered]@{
             tracked_auto_delete = $false
@@ -216,6 +270,7 @@ try {
             all_local_untracked_and_ignored_artifacts_are_inventoried = $true
             local_qualification_evidence_preserved = $true
             local_tooling_requires_manual_review = $true
+            tooling_version_order_is_not_deletion_authority = $true
             audit_infrastructure_excluded_from_candidates = $true
         }
     }
@@ -242,11 +297,18 @@ try {
         $lines.Add("- $($group.Name): $($group.Count)")
     }
     $lines.Add('')
+    $lines.Add('## Local tooling families')
+    foreach ($family in $toolingFamilySummary) {
+        $latest = if ($null -eq $family.latest_numeric_version_by_name) { 'n/a' } else { $family.latest_numeric_version_by_name }
+        $lines.Add("- $($family.family): $($family.artifact_count) artifacts; latest numeric version by name = $latest; deletion authorized = false")
+    }
+    $lines.Add('')
     $lines.Add('## Safety rules')
     $lines.Add('- No tracked file is deleted automatically.')
     $lines.Add('- Alembic migrations, tests, docs, qualification evidence, workflows, and package initializers are protected by default.')
     $lines.Add('- Local qualification evidence, backups, review decisions, coverage evidence, and patch evidence are preserved from automatic cleanup.')
     $lines.Add('- Local audit/tooling scripts require manual review and are never auto-deleted.')
+    $lines.Add('- Tool version ordering is inventory evidence only and never grants deletion authority.')
     $lines.Add('- Audit/quarantine infrastructure is excluded from retirement candidacy.')
     $lines.Add('- Compatibility shims remain until consumer absence is proven.')
     $lines.Add('- Only recognized generated residue outside protected/evidence/tooling paths can be removed with -ApplySafeLocalCleanup.')
@@ -257,6 +319,7 @@ try {
     Write-Host "Tracked files: $($tracked.Count)"
     Write-Host "Tracked candidates: $($records.Count)"
     Write-Host "Local artifacts: $($localArtifacts.Count)"
+    Write-Host "Local tooling families: $($toolingFamilySummary.Count)"
     Write-Host "Safe local residues deleted: $($deleted.Count)"
     Write-Host "JSON: $jsonPath"
     Write-Host "CSV:  $csvPath"
