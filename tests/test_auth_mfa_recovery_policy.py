@@ -86,8 +86,9 @@ def test_completed_account_recovery_makes_mfa_required_without_privileged_role()
     assert asyncio.run(repository.is_required_by_role(user_id)) is True
     assert len(session.statements) == 2
     assert "identity_memberships" in session.statements[0].lower()
-    assert "auth_account_recovery_requests" in session.statements[1].lower()
-    assert "completed" in session.statements[1].lower()
+    recovery_sql = session.statements[1].lower()
+    assert "auth_account_recovery_requests" in recovery_sql
+    assert "auth_account_recovery_requests.state" in recovery_sql
 
 
 def test_mfa_disable_is_rejected_when_recovery_policy_requires_mfa() -> None:
