@@ -12,6 +12,7 @@ EXTENDED_UI_STATES = [
     "billing restriction/grace",
     "billing restriction/suspended",
     "billing restriction/terminated",
+    "mfa challenge",
 ]
 
 REQUIRED_FALSE_AUTHORITY_FLAGS = (
@@ -163,6 +164,73 @@ def subscription_state(
         page.unroute(settings_pattern)
 
 
+def login_mfa_challenge(page: Page, browser_version: str, counter: int):
+    pattern = "**/auth/login"
+    page.route(
+        pattern,
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "mfa_required": True,
+                    "access_token": "qualification-mfa-token-0123456789-0123456789-0123456789",
+                    "csrf_token": "qualification-csrf-token",
+                }
+            ),
+        ),
+    )
+    try:
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.goto(f"{BASE_URL}/login?mode=user", wait_until="domcontentloaded")
+        page.locator("#tab-user").click()
+        page.locator("#login-username").fill("qualification@example.invalid")
+        page.locator("#login-password").fill("qualification-pass-2026")
+        page.locator("#login-btn").click()
+
+        challenge = page.locator("#identity-mfa-challenge")
+        challenge.wait_for(state="visible", timeout=4000)
+        page.locator("#identity-mfa-code").wait_for(state="visible", timeout=4000)
+
+        if page.locator("#login-fields:visible").count():
+            raise RuntimeError("MFA challenge left primary login fields visible")
+        if page.locator("#login-btn:visible").count():
+            raise RuntimeError("MFA challenge left the primary login button visible")
+        if page.locator(".tab-row:visible").count():
+            raise RuntimeError("MFA challenge left role tabs visible")
+        if page.locator("#login-commercial-actions:visible").count():
+            raise RuntimeError("MFA challenge left commercial access actions visible")
+
+        layout = page.locator(".card").evaluate(
+            """
+            (card) => ({
+              top: card.getBoundingClientRect().top,
+              bottom: card.getBoundingClientRect().bottom,
+              height: card.getBoundingClientRect().height,
+              viewport: window.innerHeight,
+              scrollHeight: card.scrollHeight
+            })
+            """
+        )
+        if layout["top"] < 0 or layout["bottom"] > layout["viewport"]:
+            raise RuntimeError(f"MFA challenge card escapes viewport: {layout}")
+        if layout["scrollHeight"] > layout["height"] + 2:
+            raise RuntimeError(f"MFA challenge card internally overflows: {layout}")
+
+        reveal(challenge)
+        return capture(
+            page,
+            browser_version,
+            "/login?mode=user",
+            "mfa-challenge",
+            "mfa challenge",
+            counter,
+            "Controlled /auth/login interception returns the documented MFA-required response so the delivered MFA challenge layout can be reviewed without using a real MFA secret. Primary login fields, role tabs, and commercial access actions must be replaced rather than compressed into the card.",
+        )
+    finally:
+        page.unroute(pattern)
+
+
 def enforce_authority_metadata(metadata: dict[str, object]) -> None:
     authority = dict(metadata.get("authority", {}))
     unexpected_true = [name for name, value in authority.items() if name in REQUIRED_FALSE_AUTHORITY_FLAGS and value is True]
@@ -195,6 +263,7 @@ def update_metadata() -> None:
         "billing restriction/suspended",
         "billing restriction/terminated",
     ]
+    controlled["login"] = ["mfa challenge"]
     controlled["interception_only"] = True
     controlled["backend_or_staging_proof"] = False
     inventory["controlled_ui_states"] = controlled
@@ -251,13 +320,14 @@ def main() -> None:
                     renews_at=None,
                     suspended_at="2026-08-20T00:00:00Z",
                 ),
+                login_mfa_challenge(page, browser_version, counter + 4),
             ]
             for row in rows:
                 append_row(row)
         finally:
             browser.close()
     update_metadata()
-    print("captured 4 extended controlled UI state(s)")
+    print("captured 5 extended controlled UI state(s)")
 
 
 if __name__ == "__main__":
