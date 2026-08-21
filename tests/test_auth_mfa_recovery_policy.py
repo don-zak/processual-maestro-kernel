@@ -102,7 +102,7 @@ def test_mfa_disable_is_rejected_when_recovery_policy_requires_mfa() -> None:
         clock=lambda: now,
     )
 
-    with pytest.raises(MfaConflictError, match="required for this identity role"):
+    with pytest.raises(MfaConflictError, match="MFA is required for this identity"):
         asyncio.run(
             service.disable(
                 user_id=user_id,
