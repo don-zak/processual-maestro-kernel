@@ -15,6 +15,13 @@ try {
     $items = @($report.local_residue_candidates)
     $rows = [System.Collections.Generic.List[object]]::new()
 
+    $regenerableCachePatterns = @(
+        '^\.mypy_cache/',
+        '^\.pytest_cache/',
+        '^\.ruff_cache/',
+        '^(?:.+/)?__pycache__/$'
+    )
+
     foreach ($item in $items) {
         $path = [string]$item.path
         if ([string]::IsNullOrWhiteSpace($path)) { continue }
@@ -27,12 +34,20 @@ try {
         $archive_candidate = $false
         $deletion_candidate = $false
 
+        $isRegenerableCache = $false
+        foreach ($pattern in $regenerableCachePatterns) {
+            if ($normalized -match $pattern) {
+                $isRegenerableCache = $true
+                break
+            }
+        }
+
         if ($normalized -match '^\.coverage$' -or $normalized -match '^coverage\.xml$') {
             $category = 'REGENERABLE_COVERAGE_EVIDENCE'
             $retention = 'REGENERABLE'
             $reason = 'Coverage runtime output can be reproduced from tests; keep only while it is needed as local qualification evidence.'
             $regenerable = $true
-        } elseif ($normalized -match '^(?:\.mypy_cache/|\.pytest_cache/|\.ruff_cache/|(?:.+/)?__pycache__/)$') {
+        } elseif ($isRegenerableCache) {
             $category = 'REGENERABLE_TOOL_CACHE'
             $retention = 'SAFE_TO_REGENERATE'
             $reason = 'Tool/runtime cache is generated state and can be recreated from source and tooling.'
@@ -109,6 +124,7 @@ try {
         source_audit = $audit.FullName
         generated_at = (Get-Date).ToString('o')
         authority = 'local evidence retention classification only; no deletion authority'
+        cache_patterns = $regenerableCachePatterns
         summary = $summary
         items = @($rows)
     } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $outputPath -Encoding UTF8
