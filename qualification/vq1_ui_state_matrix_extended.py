@@ -166,9 +166,10 @@ def subscription_state(
 
 
 def login_mfa_challenge(page: Page, browser_version: str, counter: int):
-    pattern = "**/auth/login"
+    login_pattern = "**/auth/login"
+    status_pattern = "**/auth/mfa/status"
     page.route(
-        pattern,
+        login_pattern,
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
@@ -177,6 +178,21 @@ def login_mfa_challenge(page: Page, browser_version: str, counter: int):
                     "mfa_required": True,
                     "access_token": "qualification-mfa-token-0123456789-0123456789-0123456789",
                     "csrf_token": "qualification-csrf-token",
+                }
+            ),
+        ),
+    )
+    page.route(
+        status_pattern,
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "enabled": True,
+                    "pending_enrollment": False,
+                    "recovery_codes_remaining": 8,
+                    "step_up_satisfied": False,
                 }
             ),
         ),
@@ -226,10 +242,11 @@ def login_mfa_challenge(page: Page, browser_version: str, counter: int):
             "mfa-challenge",
             "mfa challenge",
             counter,
-            "Controlled /auth/login interception returns the documented MFA-required response so the delivered MFA challenge layout can be reviewed without using a real MFA secret. Primary login fields, role tabs, and commercial access actions must be replaced rather than compressed into the card.",
+            "Controlled /auth/login and /auth/mfa/status interceptions exercise the delivered MFA-required path with an existing factor, without using a real MFA secret. Primary login fields, role tabs, and commercial access actions must be replaced rather than compressed into the card. This is UI proof only.",
         )
     finally:
-        page.unroute(pattern)
+        page.unroute(status_pattern)
+        page.unroute(login_pattern)
 
 
 def registration_selected_offer(page: Page, browser_version: str, counter: int):
