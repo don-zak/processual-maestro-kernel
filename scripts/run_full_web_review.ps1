@@ -50,11 +50,7 @@ $serverArgs = @(
 )
 
 Write-Host "Starting the web server on $base ..."
-$server = Start-Process \
-    -FilePath "python" \
-    -ArgumentList $serverArgs \
-    -WorkingDirectory $repoRoot \
-    -PassThru
+$server = Start-Process -FilePath "python" -ArgumentList $serverArgs -WorkingDirectory $repoRoot -PassThru
 
 function Stop-ReviewServer {
     if ($null -ne $server -and -not $server.HasExited) {
@@ -187,7 +183,7 @@ try {
     Write-Host ""
     Write-Host "Browser review policy:"
     Write-Host "- The first page is the public root URL, exactly as a normal visitor enters the site."
-    Write-Host "- No token, sessionStorage value, role, or authentication state is injected by this script."
+    Write-Host "- No token, session state, role, or authentication state is injected by this script."
     Write-Host "- Enterprise and self-service offer pages are discovered from the live public plan journey."
     Write-Host "- Console/Admin are only added when -IncludeAuthenticatedSurfaces is supplied and still require normal sign-in."
     Write-Host "- This is local public-web acceptance only; it grants no Real Staging or production authority."
