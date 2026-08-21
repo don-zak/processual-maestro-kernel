@@ -42,3 +42,22 @@ def test_settings_button_audit_resets_both_tab_storage_authorities():
     assert 'localStorage.setItem(key, value)' in reset_block
     assert 'sessionStorage.setItem(key, value)' in reset_block
     assert 'SETTINGS_DEFAULT_TAB = "operations"' in source
+
+
+def test_long_card_collapse_controls_have_stable_reload_identity():
+    source = read("processual_api/static/js/long_card_collapse.js")
+    assert "function stableCardKey(card)" in source
+    assert "function stableToggleId(card)" in source
+    card_key_pos = source.index("card.dataset.pmkLongCardKey = stableCardKey(card);")
+    button_id_pos = source.index("button.id = stableToggleId(card);")
+    append_pos = source.index("tools.appendChild(button);")
+    assert card_key_pos < button_id_pos < append_pos
+    assert "return ordinal ? `${base}-${ordinal + 1}` : base;" in source
+    assert "button.setAttribute('aria-label', 'Collapse long card');" in source
+
+    validator = read("qualification/vq1_button_action_validator_v2.py")
+    resolver_pos = validator.index("def _resolve_button_after_reload")
+    id_pos = validator.index('page.locator(f"#{button_id}")', resolver_pos)
+    label_pos = validator.index('get_by_role("button", name=label, exact=True)', resolver_pos)
+    index_pos = validator.index('buttons.nth(index)', resolver_pos)
+    assert id_pos < label_pos < index_pos
