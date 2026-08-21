@@ -82,6 +82,118 @@
     });
   }
 
+  function installMfaReviewState() {
+    if (queryValue("review_mfa") !== "1") return;
+    if (document.getElementById("registration-mfa-review")) return;
+
+    const style = document.createElement("style");
+    style.id = "registration-mfa-review-style";
+    style.textContent = `
+      #registration-mfa-review {
+        min-width: 0;
+        width: 100%;
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+        padding: 18px;
+        border: 1px solid #365b7f;
+        border-radius: 14px;
+        background: rgba(11, 31, 52, .86);
+        overflow-wrap: anywhere;
+      }
+      #registration-mfa-review .mfa-review-grid {
+        min-width: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+      }
+      #registration-mfa-review .mfa-review-step {
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid rgba(59, 88, 118, .55);
+        border-radius: 10px;
+        background: #0b1929;
+      }
+      #registration-mfa-review .mfa-review-step strong,
+      #registration-mfa-review .mfa-review-step span {
+        display: block;
+      }
+      #registration-mfa-review .mfa-review-step span {
+        margin-top: 5px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      #registration-mfa-review .mfa-review-code {
+        width: 100%;
+        min-height: 46px;
+        margin-top: 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: var(--surface-2);
+        color: var(--muted);
+        padding: 12px 14px;
+        font: inherit;
+      }
+      #registration-mfa-review .mfa-review-action {
+        width: 100%;
+        min-height: 44px;
+        margin-top: 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: #10253c;
+        color: #d8e8fa;
+        font: inherit;
+        font-weight: 750;
+        opacity: .7;
+      }
+      #registration-mfa-review .mfa-review-truth {
+        margin: 0;
+        padding: 12px 14px;
+        border-left: 3px solid #83c0ff;
+        background: #0b1929;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      @media (max-width: 520px) {
+        #registration-mfa-review { padding: 14px; }
+        #registration-mfa-review .mfa-review-grid { grid-template-columns: minmax(0, 1fr); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    const review = document.createElement("section");
+    review.id = "registration-mfa-review";
+    review.dataset.reviewOnly = "true";
+    review.setAttribute("aria-labelledby", "registration-mfa-review-title");
+    review.innerHTML = `
+      <div>
+        <p class="plan-context-kicker">Review-only layout state</p>
+        <h2 id="registration-mfa-review-title" class="plan-context-title">MFA enrollment preview</h2>
+        <p class="plan-context-note">
+          This preview exists only to verify the post-registration MFA layout. It does not enroll a factor, expose a secret, create a QR code, or call an MFA endpoint.
+        </p>
+      </div>
+      <div class="mfa-review-grid">
+        <div class="mfa-review-step">
+          <strong>1. Authenticator app</strong>
+          <span>Real TOTP enrollment becomes available only after email verification and an authenticated sign-in session.</span>
+        </div>
+        <div class="mfa-review-step">
+          <strong>2. Confirm authenticator code</strong>
+          <span>The real confirmation step verifies a TOTP code before MFA becomes active.</span>
+          <input class="mfa-review-code" type="text" inputmode="numeric" placeholder="000000" aria-label="MFA code layout preview" disabled>
+          <button class="mfa-review-action" type="button" disabled>Confirm MFA</button>
+        </div>
+      </div>
+      <p class="mfa-review-truth">
+        Security sequence: register → verify email → sign in → enroll TOTP → confirm TOTP. This review state proves layout only; backend MFA authority remains unchanged.
+      </p>
+    `;
+
+    status.insertAdjacentElement("afterend", review);
+    document.documentElement.dataset.registrationMfaReview = "true";
+  }
+
   async function loadSelectedOfferContext() {
     const planId = selectedPlanId();
     if (!planId || !planContext) return;
@@ -297,6 +409,7 @@
   modeFieldset.addEventListener("change", syncMode);
   form.addEventListener("submit", submitRegistration);
   installPasswordVisibility();
+  installMfaReviewState();
   loadSelectedOfferContext();
   loadRegistrationConfig();
 })();
