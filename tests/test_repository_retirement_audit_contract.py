@@ -46,10 +46,20 @@ def test_cgtlib_reference_data_is_not_hidden_by_generic_data_ignore() -> None:
 def test_safe_cleanup_is_limited_to_ignored_untracked_generated_residue() -> None:
     source = AUDIT.read_text(encoding="utf-8")
 
-    assert "$eligible = $isIgnored -and -not (Test-ProtectedPath $path)" in source
+    assert "$eligible = $isIgnored -and -not (Test-ProtectedPath $path) -and -not $isEvidence" in source
     assert "SAFE_LOCAL_RESIDUE" in source
     assert "Remove-Item -LiteralPath $item.path -Recurse -Force" in source
     assert "No tracked file is deleted automatically" in source
+
+
+def test_local_qualification_evidence_is_never_auto_deleted() -> None:
+    source = AUDIT.read_text(encoding="utf-8")
+
+    assert "localEvidencePatterns" in source
+    assert "^\\.pmk-validation/" in source
+    assert "^pytest-.*\\.log$" in source
+    assert "LOCAL_EVIDENCE_HOLD" in source
+    assert "local_qualification_evidence_preserved = $true" in source
 
 
 def test_audit_infrastructure_is_excluded_from_retirement_candidates() -> None:
