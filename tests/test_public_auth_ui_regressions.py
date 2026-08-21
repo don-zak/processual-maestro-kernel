@@ -7,6 +7,7 @@ REGISTER_JS = Path("processual_api/static/js/pages/register.js")
 CONSOLE_I18N = Path("processual_api/static/js/i18n.js")
 TOUR_ENGINE = Path("processual_api/static/js/tour/tour-engine.js")
 OFFER_JS = Path("processual_api/static/js/pages/offer.js")
+SPLASH_HTML = Path("processual_api/static/splash.html")
 
 
 def test_login_password_visibility_is_anchored_inside_input_shell() -> None:
@@ -34,9 +35,10 @@ def test_mfa_challenge_replaces_primary_login_controls_without_card_pressure() -
     assert "focus({ preventScroll: true })" in source
 
 
-def test_general_console_and_login_are_english_only_but_tutorial_keeps_arabic() -> None:
+def test_general_product_surfaces_are_english_only_but_tutorial_keeps_arabic() -> None:
     login = LOGIN_TOKEN_CAPTURE.read_text(encoding="utf-8")
     console_i18n = CONSOLE_I18N.read_text(encoding="utf-8")
+    splash = SPLASH_HTML.read_text(encoding="utf-8")
     tour = TOUR_ENGINE.read_text(encoding="utf-8")
 
     assert "function lockLoginToEnglish()" in login
@@ -46,6 +48,11 @@ def test_general_console_and_login_are_english_only_but_tutorial_keeps_arabic() 
     assert "function lockConsoleToEnglish()" in console_i18n
     assert "I18N.setLang('en')" in console_i18n
     assert "toggle.hidden = true" in console_i18n
+
+    assert 'id="lang-ar"' not in splash
+    assert 'data-lang="ar"' not in splash
+    assert "setLanguage('ar')" not in splash
+    assert 'lang="en" dir="ltr"' in splash
 
     assert 'data-lang="ar"' in tour
     assert "TOUR_STEPS[_lang] || TOUR_STEPS.en" in tour
