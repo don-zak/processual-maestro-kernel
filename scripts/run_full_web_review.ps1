@@ -95,6 +95,7 @@ try {
     $publicPages.Add([pscustomobject]@{ Name = "Registration"; Path = "/register" })
     $publicPages.Add([pscustomobject]@{ Name = "Registration MFA layout review"; Path = "/register?review_mfa=1" })
     $publicPages.Add([pscustomobject]@{ Name = "Email verification"; Path = "/verify-email" })
+    $publicPages.Add([pscustomobject]@{ Name = "Account recovery completion shell"; Path = "/console/recover-account.html" })
     $publicPages.Add([pscustomobject]@{ Name = "Sign in"; Path = "/login" })
 
     $catalogUrl = "$base/billing/public-plan-journey"
@@ -166,6 +167,7 @@ try {
     Write-Host "- No token, session state, role, or authentication state is injected by this script."
     Write-Host "- Assessment request pages are discovered only for assessment-only offers."
     Write-Host "- Registration MFA review is layout-only; real enrollment remains after email verification and authenticated sign-in."
+    Write-Host "- Account recovery completion shell is opened without tokens; real recovery material must never be copied into evidence."
     Write-Host "- Console/Admin are only added when -IncludeAuthenticatedSurfaces is supplied and still require normal sign-in."
     Write-Host "- This is local public-web acceptance only; it grants no Real Staging or production authority."
 
@@ -184,11 +186,13 @@ try {
     Write-Host "4. For every assessment-only offer, open its assessment request page and verify selected-plan context and form behavior."
     Write-Host "5. Compare normal registration with the review_mfa=1 tab; the MFA preview must stay inside the card without overlap or horizontal overflow."
     Write-Host "6. Follow registration and email verification flows; real MFA enrollment remains after verified sign-in."
-    Write-Host "7. Sign in normally and review Console/Admin; in Admin API Keys confirm External Evaluation Access is available in Category."
-    Write-Host "8. Confirm the Console exposes no AR language control; Tutorial remains the only Arabic-capable surface."
-    Write-Host "9. Expand Lost Access on short/narrow login viewports and confirm the full card remains reachable by vertical scrolling."
-    Write-Host "10. Review a real MFA challenge only with your own local credentials; never copy MFA or recovery secrets into evidence."
-    Write-Host "11. Record every defect against source HEAD $head before any Real Staging decision."
+    Write-Host "7. Expand Lost Access: verify generic self-service recovery and the Contact administrator escalation form; never enter real secrets during layout review."
+    Write-Host "8. Sign in normally and review Console/Admin; in Admin API Keys confirm External Evaluation Access and Account Recovery Requests are visible."
+    Write-Host "9. Account Recovery Requests must require recent platform-admin MFA and must never expose password reset, MFA bypass, session creation, or authority grant controls."
+    Write-Host "10. Confirm the Console exposes no AR language control; Tutorial remains the only Arabic-capable surface."
+    Write-Host "11. Expand Lost Access on short/narrow login viewports and confirm the full card remains reachable by vertical scrolling."
+    Write-Host "12. Review a real MFA challenge only with your own local credentials; after a recovered account, confirm missing MFA routes to enrollment before Console access."
+    Write-Host "13. Record every defect against source HEAD $head before any Real Staging decision."
     Write-Host ""
     Write-Host "The server remains running after this script exits."
     Write-Host "Stop it when finished with: Stop-Process -Id $($server.Id)"
