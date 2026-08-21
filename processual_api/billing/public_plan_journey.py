@@ -24,13 +24,24 @@ PUBLIC_PLAN_ORDER: Final[tuple[str, ...]] = (
     "starter",
     "business",
     "enterprise_integration_starter",
-    "enterprise_pilot",
-    "enterprise_core",
-    "enterprise_scale",
-    "enterprise_strategic",
+    "enterprise_deployment",
 )
 
-PUBLIC_PRICE_CEILING_PLAN: Final[str] = "enterprise_pilot"
+# The last public plan with a fixed catalog price. Enterprise offers after this
+# boundary are requirements-based and must never leak internal draft prices.
+PUBLIC_PRICE_CEILING_PLAN: Final[str] = "business"
+
+# Historical enterprise tiers may remain in internal persistence/analytics until
+# a separately proven data migration retires them. They are never public journey
+# identities and direct public access must fail closed.
+RETIRED_PUBLIC_ENTERPRISE_PLAN_IDS: Final[frozenset[str]] = frozenset(
+    {
+        "enterprise_pilot",
+        "enterprise_core",
+        "enterprise_scale",
+        "enterprise_strategic",
+    }
+)
 
 LEGACY_DIRECT_PLAN_ALIASES: Final[dict[str, str]] = {
     "academic": "academic_individual",
@@ -42,10 +53,7 @@ PLAN_SOURCE_IDS: Final[dict[str, str | None]] = {
     "starter": "starter",
     "business": "business",
     "enterprise_integration_starter": "enterprise_integration_starter",
-    "enterprise_pilot": "enterprise_pilot",
-    "enterprise_core": "enterprise_core",
-    "enterprise_scale": "enterprise_scale",
-    "enterprise_strategic": "enterprise_strategic",
+    "enterprise_deployment": None,
 }
 
 PLAN_DEFINITIONS: Final[dict[str, dict[str, Any]]] = {
@@ -137,77 +145,55 @@ PLAN_DEFINITIONS: Final[dict[str, dict[str, Any]]] = {
     },
     "enterprise_integration_starter": {
         "display_name": "Enterprise Integration Trial",
-        "audience": "Organizations evaluating a governed enterprise integration",
+        "audience": "Organizations validating a governed enterprise integration before contracting deployment",
         "description": (
-            "A contract-scoped enterprise integration trial tailored to the customer's "
-            "requirements and acceptance specification."
+            "A one-month, contract-scoped integration evaluation defined by the customer's "
+            "requirements, agreed quota, and acceptance specification."
         ),
         "account_type": "organization",
         "requires_assessment": True,
         "features": [
-            "Customer-specific integration scope",
-            "Agreed acceptance specification and success criteria",
-            "Governed sandbox evaluation",
-            "BYOK, security, and operational readiness review",
+            "One-month governed integration evaluation",
+            "Quota defined from the approved evaluation scope",
+            "Customer requirements and acceptance specification",
+            "BYOK, security, governance, and operational readiness review",
         ],
         "trial": {
             "duration_days": 30,
             "termination_policy": "30_days_or_agreed_quota_exhausted",
             "success_criteria": [
                 "Approve the integration scope and customer requirements.",
-                "Agree the trial quota and acceptance specification.",
+                "Agree the evaluation quota and acceptance specification.",
                 "Run the approved integration scenarios.",
                 "Complete security, governance, and operational readiness review.",
             ],
         },
+        "commercial_model": "requirements_based_evaluation",
     },
-    "enterprise_pilot": {
-        "display_name": "Enterprise Pilot",
-        "audience": "Organizations running a supervised enterprise pilot",
-        "description": "A supervised pilot for validating enterprise operations before deployment.",
+    "enterprise_deployment": {
+        "display_name": "Enterprise Deployment",
+        "audience": "Organizations ready to contract a production-oriented Maestro deployment",
+        "description": (
+            "A requirements-based enterprise deployment proposal. Capacity, integration, "
+            "support, SLA, security, and commercial terms are defined from the approved customer specification."
+        ),
         "account_type": "organization",
-        "requires_assessment": False,
+        "requires_assessment": True,
         "features": [
-            "Supervised enterprise pilot",
-            "Governance and security review",
-            "Acceptance criteria and stabilization planning",
-            "Unlimited members within the included quota",
+            "Contract-defined capacity and operating scope",
+            "Customer-defined integration and deployment requirements",
+            "Enterprise governance, security, and operational controls",
+            "Support, SLA, rollout, and acceptance terms defined in the proposal",
         ],
         "trial": {
-            "duration_days": 30,
+            "duration_days": None,
             "success_criteria": [
-                "Complete security, integration, and BYOK review.",
-                "Execute the agreed pilot workload.",
-                "Meet reliability, governance, and acceptance criteria.",
+                "Approve the customer requirements and deployment specification.",
+                "Agree capacity, integration, support, SLA, and acceptance terms.",
+                "Complete commercial, security, and operational approval before activation.",
             ],
         },
-    },
-    "enterprise_core": {
-        "display_name": "Enterprise Core",
-        "audience": "Approved enterprise deployments",
-        "description": "A tailored enterprise deployment requiring commercial and operating assessment.",
-        "account_type": "organization",
-        "requires_assessment": True,
-        "features": ["Tailored capacity", "Enterprise governance", "Deployment assessment", "BYOK"],
-        "trial": {"duration_days": None, "success_criteria": ["Agree deployment and acceptance criteria."]},
-    },
-    "enterprise_scale": {
-        "display_name": "Enterprise Scale",
-        "audience": "Larger enterprise rollouts",
-        "description": "A scaled deployment requiring capacity, governance, and support review.",
-        "account_type": "organization",
-        "requires_assessment": True,
-        "features": ["Scaled capacity", "Advanced governance", "Operational review", "BYOK"],
-        "trial": {"duration_days": None, "success_criteria": ["Agree scale, reliability, and governance criteria."]},
-    },
-    "enterprise_strategic": {
-        "display_name": "Enterprise Strategic",
-        "audience": "Strategic deployments with custom operating requirements",
-        "description": "A strategic deployment with custom capacity, integration, and support terms.",
-        "account_type": "organization",
-        "requires_assessment": True,
-        "features": ["Strategic capacity", "Custom operating model", "Integration review", "BYOK"],
-        "trial": {"duration_days": None, "success_criteria": ["Agree strategic operating and acceptance criteria."]},
+        "commercial_model": "requirements_based_contract",
     },
 }
 
@@ -249,21 +235,33 @@ def _included_quota(plan_id: str) -> int | None:
 
 
 def _assessment_public_metadata(plan_id: str) -> dict[str, object]:
-    if plan_id != "academic_institution":
-        return {}
+    if plan_id == "academic_institution":
+        fulfillment = assessment_plan_fulfillment_payload(plan_id)
+        return {
+            "assessment_required": True,
+            "entitlement_source_plan_code": fulfillment["entitlement_source_plan_code"],
+            "entitlement_baseline_codes": list(fulfillment["entitlement_codes"]),
+            "quota_source": "assessment",
+            "quota_determined_after_assessment": True,
+            "price_sources": ["assessment", "contract"],
+            "price_determined_after_assessment": True,
+            "activation_mode": "assessment",
+            "activation_controlled": True,
+        }
 
-    fulfillment = assessment_plan_fulfillment_payload(plan_id)
-    return {
-        "assessment_required": True,
-        "entitlement_source_plan_code": fulfillment["entitlement_source_plan_code"],
-        "entitlement_baseline_codes": list(fulfillment["entitlement_codes"]),
-        "quota_source": "assessment",
-        "quota_determined_after_assessment": True,
-        "price_sources": ["assessment", "contract"],
-        "price_determined_after_assessment": True,
-        "activation_mode": "assessment",
-        "activation_controlled": True,
-    }
+    if plan_id in {"enterprise_integration_starter", "enterprise_deployment"}:
+        return {
+            "assessment_required": True,
+            "quota_source": "approved_customer_scope",
+            "quota_determined_after_assessment": True,
+            "price_sources": ["assessment", "customer_specification", "contract"],
+            "price_determined_after_assessment": True,
+            "activation_mode": "enterprise_review",
+            "activation_controlled": True,
+            "fixed_public_price": False,
+        }
+
+    return {}
 
 
 def resolve_direct_registration_plan(plan_id: str | None) -> str | None:
@@ -276,9 +274,10 @@ def resolve_direct_registration_plan(plan_id: str | None) -> str | None:
 
     normalized = LEGACY_DIRECT_PLAN_ALIASES.get(normalized, normalized)
 
+    if normalized in RETIRED_PUBLIC_ENTERPRISE_PLAN_IDS:
+        raise ValueError("Plan is retired from the public commercial journey.")
     if normalized not in PUBLIC_PLAN_ORDER:
         raise ValueError("Plan is not available for direct registration.")
-
     if PLAN_DEFINITIONS[normalized]["requires_assessment"]:
         raise ValueError("Plan requires a commercial assessment.")
 
@@ -286,7 +285,7 @@ def resolve_direct_registration_plan(plan_id: str | None) -> str | None:
 
 
 def _quota_add_ons(plan_id: str) -> list[dict[str, Any]]:
-    if plan_id == "enterprise_integration_starter":
+    if plan_id in {"enterprise_integration_starter", "enterprise_deployment"}:
         return []
 
     source_id = _source_plan_id(plan_id)
@@ -360,7 +359,7 @@ def public_plan_journey_catalog() -> dict[str, Any]:
                 "provider_cost_included": False,
                 "summary": (
                     "Connect and pay your selected providers directly. Maestro covers "
-                    "governance, orchestration, monitoring, and the included Maestro quota."
+                    "governance, orchestration, monitoring, and the included or agreed Maestro quota."
                 ),
                 "excluded_costs": [
                     "AI model and API provider charges",
@@ -376,16 +375,17 @@ def public_plan_journey_catalog() -> dict[str, Any]:
                 "status": "awaiting_approved_public_package_prices",
             },
             "trial": definition["trial"],
+            "commercial_model": definition.get("commercial_model", "catalog_subscription"),
         }
         plan_payload.update(_assessment_public_metadata(plan_id))
         plans.append(plan_payload)
 
     return {
-        "version": "2026-08-commercial-plan-pages-v1",
+        "version": "2026-08-commercial-plan-pages-v2",
         "currency": "USD",
         "billing_periods": ["monthly", "annual"],
         "annual_discount_percent": int(ANNUAL_DISCOUNT_PERCENT),
-        "annual_discount_scope": "base_plan_only",
+        "annual_discount_scope": "eligible_public_base_plans_only",
         "provider_cost_included": False,
         "checkout_enabled": False,
         "public_price_ceiling_plan": PUBLIC_PRICE_CEILING_PLAN,
@@ -397,6 +397,7 @@ __all__ = [
     "ANNUAL_DISCOUNT_PERCENT",
     "PUBLIC_PLAN_ORDER",
     "PUBLIC_PRICE_CEILING_PLAN",
+    "RETIRED_PUBLIC_ENTERPRISE_PLAN_IDS",
     "public_plan_journey_catalog",
     "resolve_direct_registration_plan",
 ]
