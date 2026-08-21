@@ -5,16 +5,14 @@ def read(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-def test_settings_button_audit_waits_for_dynamic_action_surface_after_reload():
+def test_settings_button_audit_resolves_identity_before_index_after_reload():
     source = read("qualification/vq1_button_action_validator_v2.py")
-    assert "SETTINGS_DYNAMIC_BUTTON_IDS" in source
-    assert '"set-provider-secret-test"' in source
-    assert '"set-provider-secret-save"' in source
-    assert '"set-provider-secret-clear"' in source
-    assert "def _wait_for_settings_action_surface(page, section: str) -> None:" in source
-    assert 'page.get_by_role("button", name="Collapse", exact=True)' in source
-    navigate_pos = source.index("def navigate_console(page, section: str) -> str:")
-    target_wait_pos = source.index('target.wait_for(state="visible", timeout=5000)', navigate_pos)
-    readiness_pos = source.index("_wait_for_settings_action_surface(page, section)", navigate_pos)
-    return_pos = source.index('return f"#page-{section}:visible"', navigate_pos)
-    assert target_wait_pos < readiness_pos < return_pos
+    assert "def _resolve_button_after_reload(page, scope: str, item: dict[str, object]):" in source
+    resolver_pos = source.index("def _resolve_button_after_reload")
+    id_pos = source.index('page.locator(f"#{button_id}")', resolver_pos)
+    label_pos = source.index('get_by_role("button", name=label, exact=True)', resolver_pos)
+    index_pos = source.index('buttons.nth(index)', resolver_pos)
+    assert id_pos < label_pos < index_pos
+    assert '_accessible_label(candidate) == label' in source
+    assert '"button identity no longer visible after deterministic reload"' in source
+    assert "base.exercise_section_buttons = exercise_section_buttons" in source
