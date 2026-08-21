@@ -108,7 +108,7 @@ const I18N = (() => {
       hybrid:       'هجين',
       transient:    'عابر',
       extinct:      'منقرض',
-      distorted:    'مشوّه',
+      distorted:   'مشوّه',
       pass:         'نجاح',
       repair:       'إصلاح',
       block:        'حظر',
@@ -143,9 +143,9 @@ const I18N = (() => {
     if (document.body) document.body.dir = 'ltr';
     const toggle = document.getElementById('lang-toggle');
     if (toggle) {
-      toggle.hidden = true;
       toggle.setAttribute('aria-hidden', 'true');
       toggle.tabIndex = -1;
+      toggle.remove();
     }
   }
 
