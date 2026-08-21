@@ -21,6 +21,7 @@ try {
         '^\.ruff_cache/',
         '^(?:.+/)?__pycache__/$'
     )
+    $historicalRetirementEvidencePattern = '^cgt17_branch_retirement_audit_[0-9]{8}_[0-9]{6}[.]json$'
 
     foreach ($item in $items) {
         $path = [string]$item.path
@@ -63,7 +64,7 @@ try {
             $category = 'ACTIVE_LOCAL_QUALIFICATION_EVIDENCE'
             $retention = 'PRESERVE'
             $reason = 'Current local review/validation state may be needed to reproduce or audit qualification results.'
-        } elseif ($normalized -match '^cgt17_branch_retirement_audit_\d+\.json$') {
+        } elseif ($normalized -match $historicalRetirementEvidencePattern) {
             $category = 'HISTORICAL_RETIREMENT_EVIDENCE'
             $retention = 'ARCHIVE_CANDIDATE'
             $reason = 'Timestamped branch-retirement evidence is historical and should be consolidated before deletion.'
@@ -125,6 +126,7 @@ try {
         generated_at = (Get-Date).ToString('o')
         authority = 'local evidence retention classification only; no deletion authority'
         cache_patterns = $regenerableCachePatterns
+        historical_retirement_evidence_pattern = $historicalRetirementEvidencePattern
         summary = $summary
         items = @($rows)
     } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $outputPath -Encoding UTF8
