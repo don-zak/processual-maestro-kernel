@@ -52,7 +52,9 @@ def test_general_product_surfaces_are_english_only_but_tutorial_keeps_arabic() -
     assert 'id="lang-ar"' not in splash
     assert 'data-lang="ar"' not in splash
     assert "setLanguage('ar')" not in splash
+    assert "نسخة تأهيل" not in splash
     assert 'lang="en" dir="ltr"' in splash
+    assert "Qualification Build" in splash
 
     assert 'data-lang="ar"' in tour
     assert "TOUR_STEPS[_lang] || TOUR_STEPS.en" in tour
