@@ -37,8 +37,55 @@ try {
         return [pscustomobject]$result
     }
 
+    function Get-TrackedReferenceEvidence([string]$Path) {
+        $base = [System.IO.Path]::GetFileName($Path)
+        if ([string]::IsNullOrWhiteSpace($base)) {
+            return [pscustomobject]@{ count = 0; samples = @() }
+        }
+        $hits = @(git grep -n -F -- "$base" 2>$null)
+        if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
+            throw "git grep failed while checking references for $Path"
+        }
+        return [pscustomobject]@{
+            count = $hits.Count
+            samples = @($hits | Select-Object -First 10)
+        }
+    }
+
+    function Get-LocalToolingReferenceEvidence([string]$Path, [string[]]$ToolingPaths) {
+        $base = [System.IO.Path]::GetFileName($Path)
+        $hits = [System.Collections.Generic.List[string]]::new()
+        foreach ($other in $ToolingPaths) {
+            if ($other -eq $Path) { continue }
+            if (-not (Test-Path -LiteralPath $other -PathType Leaf)) { continue }
+            $otherText = Get-Content -LiteralPath $other -Raw
+            if ($otherText.Contains($base)) {
+                $hits.Add($other)
+            }
+        }
+        return [pscustomobject]@{
+            count = $hits.Count
+            paths = @($hits)
+        }
+    }
+
+    function Get-FunctionCallEvidence([string]$Text, [string[]]$FunctionNames) {
+        $withoutDefinitions = [regex]::Replace($Text, '(?im)^\s*function\s+[A-Za-z0-9_-]+[^\r\n]*', '')
+        $rows = [System.Collections.Generic.List[object]]::new()
+        foreach ($name in $FunctionNames) {
+            $escaped = [regex]::Escape($name)
+            $count = [regex]::Matches($withoutDefinitions, "(?<![A-Za-z0-9_-])$escaped(?![A-Za-z0-9_-])", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase).Count
+            $rows.Add([pscustomobject]@{
+                function = $name
+                call_count_outside_definition = $count
+            })
+        }
+        return @($rows)
+    }
+
     $report = Get-Content -LiteralPath $audit.FullName -Raw | ConvertFrom-Json
     $tooling = @($report.local_residue_candidates | Where-Object classification -eq 'LOCAL_TOOLING_REVIEW')
+    $toolingPaths = @($tooling | Select-Object -ExpandProperty path)
     $records = [System.Collections.Generic.List[object]]::new()
 
     foreach ($item in $tooling) {
@@ -71,6 +118,9 @@ try {
         }
 
         $behavior = Get-BehavioralSignature $text
+        $trackedRefs = Get-TrackedReferenceEvidence $path
+        $localRefs = Get-LocalToolingReferenceEvidence $path $toolingPaths
+        $functionCalls = Get-FunctionCallEvidence $text $functionNames
         $records.Add([pscustomobject]@{
             path = $path
             tooling_family = $item.tooling_family
@@ -83,8 +133,14 @@ try {
             nonempty_line_count = $nonEmpty.Count
             function_count = $functionNames.Count
             functions = $functionNames
+            function_calls = $functionCalls
             parameter_count = $parameterNames.Count
             parameters = $parameterNames
+            tracked_reference_count = $trackedRefs.count
+            tracked_reference_samples = $trackedRefs.samples
+            local_tooling_reference_count = $localRefs.count
+            local_tooling_reference_paths = $localRefs.paths
+            reference_free_in_repository_and_local_tooling = ($trackedRefs.count -eq 0 -and $localRefs.count -eq 0)
             git_commands = $behavior.git_commands
             gh_commands = $behavior.gh_commands
             pytest_commands = $behavior.pytest_commands
@@ -117,6 +173,8 @@ try {
                 $missingNetwork = @($candidate.network_calls | Where-Object { $_ -notin $latest.network_calls })
                 $missingProcess = @($candidate.process_calls | Where-Object { $_ -notin $latest.process_calls })
                 $behaviorMissingCount = @($missingGit + $missingGh + $missingPytest + $missingWrites + $missingDeletes + $missingNetwork + $missingProcess).Count
+                $missingFunctionCalls = @($candidate.function_calls | Where-Object { $_.function -in $missingFunctions })
+                $allMissingFunctionsUncalled = @($missingFunctionCalls | Where-Object { $_.call_count_outside_definition -gt 0 }).Count -eq 0
 
                 $supersetRows.Add([pscustomobject]@{
                     candidate_path = $candidate.path
@@ -124,7 +182,14 @@ try {
                     latest_contains_all_candidate_functions = $missingFunctions.Count -eq 0
                     latest_contains_all_candidate_parameters = $missingParameters.Count -eq 0
                     latest_contains_all_candidate_behavioral_signals = $behaviorMissingCount -eq 0
+                    candidate_reference_free_in_repository_and_local_tooling = $candidate.reference_free_in_repository_and_local_tooling
+                    candidate_tracked_reference_count = $candidate.tracked_reference_count
+                    candidate_tracked_reference_samples = $candidate.tracked_reference_samples
+                    candidate_local_tooling_reference_count = $candidate.local_tooling_reference_count
+                    candidate_local_tooling_reference_paths = $candidate.local_tooling_reference_paths
                     missing_functions_in_latest = $missingFunctions
+                    missing_function_call_evidence = $missingFunctionCalls
+                    missing_functions_are_uncalled_in_candidate = $allMissingFunctionsUncalled
                     missing_parameters_in_latest = $missingParameters
                     missing_git_commands_in_latest = $missingGit
                     missing_gh_commands_in_latest = $missingGh
@@ -133,6 +198,12 @@ try {
                     missing_file_delete_primitives_in_latest = $missingDeletes
                     missing_network_primitives_in_latest = $missingNetwork
                     missing_process_primitives_in_latest = $missingProcess
+                    retirement_evidence_complete = (
+                        $candidate.reference_free_in_repository_and_local_tooling -and
+                        $missingParameters.Count -eq 0 -and
+                        $behaviorMissingCount -eq 0 -and
+                        ($missingFunctions.Count -eq 0 -or $allMissingFunctionsUncalled)
+                    )
                     deletion_authorized = $false
                 })
             }
@@ -154,7 +225,7 @@ try {
             normalized_duplicate_groups = @($normalizedDuplicateGroups)
             latest_superset_checks = @($supersetRows)
             deletion_authorized = $false
-            rationale = 'Structural and behavioral containment are supporting evidence only. Review missing functions, command semantics, side effects, and historical use before deleting local tools.'
+            rationale = 'Structural, behavioral, reference, and call-site evidence support retirement decisions but never delete files. A human must still choose the canonical retained copy and execute any local removal explicitly.'
         })
     }
 
@@ -163,12 +234,12 @@ try {
     [ordered]@{
         source_audit = $audit.FullName
         generated_at = (Get-Date).ToString('o')
-        authority = 'local structural and behavioral comparison only; no deletion authority'
+        authority = 'local structural, behavioral, reference, and call-site comparison only; no deletion authority'
         tooling = @($records)
         families = @($families)
     } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $outputPath -Encoding UTF8
 
-    Write-Host "Local tooling structural/behavioral analysis completed."
+    Write-Host "Local tooling structural/behavioral/reference analysis completed."
     Write-Host "Tooling files: $($records.Count)"
     Write-Host "Families: $($families.Count)"
     Write-Host "JSON: $outputPath"
