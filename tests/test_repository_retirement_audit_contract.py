@@ -8,6 +8,7 @@ SUPERSESSION = ROOT / "scripts" / "analyze_local_tooling_supersession.ps1"
 RETIREMENT_EVIDENCE = ROOT / "scripts" / "extract_local_tooling_retirement_evidence.ps1"
 SEMANTIC_REPLACEMENT = ROOT / "scripts" / "analyze_legacy_function_semantic_replacement.ps1"
 REPORTING_ONLY = ROOT / "scripts" / "analyze_legacy_reporting_only_retirement.ps1"
+OUTPUT_CONSUMERS = ROOT / "scripts" / "analyze_legacy_report_output_consumers.ps1"
 GITIGNORE = ROOT / ".gitignore"
 
 
@@ -233,6 +234,22 @@ def test_reporting_only_retirement_analysis_is_ast_based_and_non_destructive() -
     assert "all_missing_functions_reporting_only" in source
     assert "deletion_authorized = $false" in source
     assert "local reporting-only role analysis; no deletion authority" in source
+    assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
+
+
+def test_legacy_report_output_consumer_analysis_is_ast_based_and_non_destructive() -> None:
+    source = OUTPUT_CONSUMERS.read_text(encoding="utf-8")
+
+    assert "System.Management.Automation.Language.Parser" in source
+    assert "FunctionDefinitionAst" in source
+    assert "Set-Content" in source
+    assert "candidate_output_names" in source
+    assert "tracked_consumer_count" in source
+    assert "output_unconsumed_by_tracked_runtime" in source
+    assert "retirement_output_consumer_evidence_complete" in source
+    assert "referenceExclusions" in source
+    assert "deletion_authorized = $false" in source
+    assert "local legacy report output consumer analysis only; no deletion authority" in source
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
