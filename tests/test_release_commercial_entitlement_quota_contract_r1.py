@@ -15,7 +15,10 @@ from processual_api.billing.plan_capability_matrix import (
     plan_can_execute,
 )
 from processual_api.billing.plan_fulfillment_catalog import PLAN_FULFILLMENT_SPECS
-from processual_api.billing.public_plan_journey import public_plan_journey_catalog
+from processual_api.billing.public_plan_journey import (
+    RETIRED_PUBLIC_ENTERPRISE_PLAN_IDS,
+    public_plan_journey_catalog,
+)
 from processual_api.release_gate import _REQUIRED_VALUES
 
 
@@ -45,7 +48,6 @@ def test_public_plan_journey_never_claims_unbound_assessment_quota() -> None:
         "academic_individual": "academic",
         "starter": "starter",
         "business": "business",
-        "enterprise_pilot": "enterprise_pilot",
     }
     for public_plan_id, fulfillment_plan_id in direct_mapping.items():
         plan = plans[public_plan_id]
@@ -55,11 +57,28 @@ def test_public_plan_journey_never_claims_unbound_assessment_quota() -> None:
             fulfillment_plan_id
         ].monthly_unit_allowance
 
+    assert set(plans).isdisjoint(RETIRED_PUBLIC_ENTERPRISE_PLAN_IDS)
+
     for plan in plans.values():
         if plan["requires_assessment"]:
             assert plan["registration_available"] is False
             assert plan["registration_path"] is None
             assert plan["included_quota_units"] is None
+
+    trial = plans["enterprise_integration_starter"]
+    assert trial["commercial_model"] == "requirements_based_evaluation"
+    assert trial["quota_source"] == "approved_customer_scope"
+    assert trial["fixed_public_price"] is False
+    assert trial["trial"]["duration_days"] == 30
+    assert trial["trial"]["termination_policy"] == (
+        "30_days_or_agreed_quota_exhausted"
+    )
+
+    deployment = plans["enterprise_deployment"]
+    assert deployment["commercial_model"] == "requirements_based_contract"
+    assert deployment["quota_source"] == "approved_customer_scope"
+    assert deployment["fixed_public_price"] is False
+    assert deployment["trial"]["duration_days"] is None
 
 
 def test_execution_rights_and_unit_costs_share_one_authority() -> None:
@@ -72,6 +91,8 @@ def test_execution_rights_and_unit_costs_share_one_authority() -> None:
 
     assert plan_can_execute("starter", "maestro_execution") is True
     assert plan_can_execute("starter", "enterprise_governance") is False
+    # Historical entitlement capabilities remain internally readable until a
+    # separately proven data migration retires persisted legacy plan references.
     assert plan_can_execute("enterprise_pilot", "enterprise_governance") is True
 
     advanced = TOOL_CAPABILITIES["advanced_integration"]
