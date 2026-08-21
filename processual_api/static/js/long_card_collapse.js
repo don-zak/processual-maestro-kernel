@@ -80,6 +80,33 @@
     return Array.from(card.children).find((child) => child.matches('h1,h2,h3,h4,.sec-hdr,.admin-card-header,.settings-card-header,.mbs-head,[data-card-header]')) || null;
   }
 
+  function slugToken(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 72);
+  }
+
+  function stableCardKey(card) {
+    if (card.id) return `id-${slugToken(card.id)}`;
+    const owner = card.closest('.page[id],.admin-page[id]');
+    const header = directHeader(card) || card.querySelector('h1,h2,h3,h4,[data-card-header]');
+    const ownerKey = slugToken(owner?.id || 'surface');
+    const headingKey = slugToken(header?.textContent || card.getAttribute('aria-label') || 'long-card');
+    const classKey = slugToken(typeof card.className === 'string' ? card.className : 'card');
+    return `${ownerKey}-${headingKey || 'long-card'}-${classKey || 'card'}`;
+  }
+
+  function stableToggleId(card) {
+    const base = `pmk-long-card-toggle-${stableCardKey(card)}`;
+    const matches = Array.from(document.querySelectorAll('[data-pmk-long-card="true"]'))
+      .filter((candidate) => stableCardKey(candidate) === stableCardKey(card));
+    const ordinal = Math.max(0, matches.indexOf(card));
+    return ordinal ? `${base}-${ordinal + 1}` : base;
+  }
+
   function rememberPresentation(child) {
     if (child.hasAttribute('data-pmk-collapse-prev-hidden')) return;
     child.setAttribute('data-pmk-collapse-prev-hidden', child.hidden ? 'true' : 'false');
@@ -128,11 +155,13 @@
     ensureStyle();
     card.dataset.pmkLongCard = 'true';
     card.dataset.pmkCollapsed = 'false';
+    card.dataset.pmkLongCardKey = stableCardKey(card);
     const tools = document.createElement('div');
     tools.className = TOOLS_CLASS;
     tools.setAttribute('data-pmk-long-card-tools', 'true');
     const button = document.createElement('button');
     button.type = 'button';
+    button.id = stableToggleId(card);
     button.className = BUTTON_CLASS;
     button.textContent = 'Collapse';
     button.setAttribute('aria-expanded', 'true');
