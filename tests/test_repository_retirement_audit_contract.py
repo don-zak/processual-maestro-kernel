@@ -268,6 +268,15 @@ def test_v8_fixed_supersession_analysis_is_non_destructive_and_explicit() -> Non
     assert re.search(r"(?im)^\s*Remove-Item\b", source) is None
 
 
+def test_retired_local_operator_tools_are_quarantined_from_git() -> None:
+    gitignore = GITIGNORE.read_text(encoding="utf-8")
+
+    assert "/Invoke-PMKRepoAudit-v*.ps1" in gitignore
+    assert "/Retire-Safe-CGT17Branches*.ps1" in gitignore
+    assert "/crm_eval_sandbox.py" in gitignore
+    assert "/verify_local_password.py" in gitignore
+
+
 def test_all_untracked_and_ignored_artifacts_are_inventoried() -> None:
     source = AUDIT.read_text(encoding="utf-8")
 
