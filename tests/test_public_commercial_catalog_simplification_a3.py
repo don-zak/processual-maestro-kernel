@@ -11,6 +11,7 @@ from processual_api.main import app
 ROOT = Path(__file__).resolve().parents[1]
 PLANS_HTML = ROOT / "processual_api" / "static" / "plans.html"
 PLANS_JS = ROOT / "processual_api" / "static" / "js" / "pages" / "plans.js"
+OFFER_HTML = ROOT / "processual_api" / "static" / "offer.html"
 OFFER_JS = ROOT / "processual_api" / "static" / "js" / "pages" / "offer.js"
 
 RETIRED_IDS = {
@@ -129,6 +130,7 @@ def test_public_offer_and_plan_scripts_use_current_enterprise_language_only() ->
         [
             PLANS_HTML.read_text(encoding="utf-8"),
             PLANS_JS.read_text(encoding="utf-8"),
+            OFFER_HTML.read_text(encoding="utf-8"),
             OFFER_JS.read_text(encoding="utf-8"),
         ]
     )
@@ -137,3 +139,19 @@ def test_public_offer_and_plan_scripts_use_current_enterprise_language_only() ->
         assert label not in source
     assert "requirements-based" in source
     assert "one-month" in source.lower() or "one month" in source.lower()
+
+
+def test_enterprise_offer_copy_separates_trial_from_deployment_and_public_add_ons() -> None:
+    html = OFFER_HTML.read_text(encoding="utf-8")
+    source = OFFER_JS.read_text(encoding="utf-8")
+
+    assert "Trial success criteria" not in html
+    assert "commercial acceptance criteria" in html.lower()
+
+    assert 'criteriaSummary.textContent = "Evaluation success criteria"' in source
+    assert 'criteriaSummary.textContent = "Deployment acceptance criteria"' in source
+    assert "Evaluation capacity is agreed during assessment and is not sold as a public add-on package." in source
+    assert "Additional capacity, scaling, support, and operating terms are defined inside the approved enterprise proposal" in source
+    assert "No public quota package is attached to Enterprise Integration Trial." in source
+    assert "No public capacity package is attached to Enterprise Deployment." in source
+    assert "No public trial or self-service entitlement is implied." in source
