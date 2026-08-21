@@ -34,8 +34,10 @@ def test_user_login_requires_mfa_completion_before_session_persistence() -> None
     assert "async function refreshAfterMfa()" in source
     assert "persistUserSession(token)" in source
 
-    assert "fetch('/auth/token'" in login_html
-    assert "role: currentRole" in login_html
+    assert 'id="tab-admin"' in login_html
+    assert 'id="tab-user"' in login_html
+    assert "/console/js/login_token_capture.js" in login_html
+    assert "role: currentRole" not in login_html
 
 
 def test_identity_session_authority_is_mfa_aware() -> None:
