@@ -28,6 +28,10 @@ try {
         '^\.github/workflows/',
         '(^|/)__init__\.py$'
     )
+    $auditInfrastructurePatterns = @(
+        '^scripts/audit_repository_retirement\.ps1$',
+        '^governance/repository_retirement_quarantine\.json$'
+    )
     $nameCandidatePattern = '(?i)(^|[._/-])(legacy|deprecated|retired|obsolete|archive|archived|backup|bak|old|unused|quarantine|generated|copy|temp|tmp)([._/-]|$)'
     $generatedResiduePattern = '(?i)(^|/)(__pycache__|\.pytest_cache|\.hypothesis|build|dist|tmp|temp)(/|$)|\.(pyc|pyo|log|bak|tmp|zip)$|\.bak_'
     $contentMarkers = @('deprecated', 'retired', 'obsolete', 'compatibility only', 'legacy compatibility', 'quarantine')
@@ -39,9 +43,15 @@ try {
         return $false
     }
 
+    function Test-AuditInfrastructurePath([string]$Path) {
+        foreach ($pattern in $auditInfrastructurePatterns) {
+            if ($Path -match $pattern) { return $true }
+        }
+        return $false
+    }
+
     function Get-ReferenceEvidence([string]$Path) {
         $base = [System.IO.Path]::GetFileName($Path)
-        $stem = [System.IO.Path]::GetFileNameWithoutExtension($Path)
         $pathRefs = @()
         $nameRefs = @()
         if ($base) {
@@ -59,6 +69,8 @@ try {
     $records = [System.Collections.Generic.List[object]]::new()
 
     foreach ($path in $tracked) {
+        if (Test-AuditInfrastructurePath $path) { continue }
+
         $protected = Test-ProtectedPath $path
         $ignoredByPolicy = $false
         git check-ignore --no-index --quiet -- "$path" 2>$null
@@ -156,6 +168,7 @@ try {
             migrations_tests_docs_qualification_protected = $true
             compatibility_shims_require_consumer_proof = $true
             generated_untracked_ignored_residue_may_be_cleaned = $true
+            audit_infrastructure_excluded_from_candidates = $true
         }
     }
     $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
@@ -179,6 +192,7 @@ try {
     $lines.Add('## Safety rules')
     $lines.Add('- No tracked file is deleted automatically.')
     $lines.Add('- Alembic migrations, tests, docs, qualification evidence, workflows, and package initializers are protected by default.')
+    $lines.Add('- Audit/quarantine infrastructure is excluded from retirement candidacy.')
     $lines.Add('- Compatibility shims remain until consumer absence is proven.')
     $lines.Add('- Only untracked + ignored generated residue can be removed with -ApplySafeLocalCleanup.')
     $lines | Set-Content -LiteralPath $mdPath -Encoding UTF8
