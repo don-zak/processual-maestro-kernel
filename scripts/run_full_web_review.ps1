@@ -56,6 +56,7 @@ try {
     $publicPages.Add([pscustomobject]@{ Name = "Plans"; Path = "/plans" })
     $publicPages.Add([pscustomobject]@{ Name = "Pricing"; Path = "/pricing" })
     $publicPages.Add([pscustomobject]@{ Name = "Registration"; Path = "/register" })
+    $publicPages.Add([pscustomobject]@{ Name = "Registration MFA layout review"; Path = "/register?review_mfa=1" })
     $publicPages.Add([pscustomobject]@{ Name = "Email verification"; Path = "/verify-email" })
     $publicPages.Add([pscustomobject]@{ Name = "Sign in"; Path = "/login" })
 
@@ -127,6 +128,7 @@ try {
     Write-Host "- The first page is the public root URL, exactly as a normal visitor enters the site."
     Write-Host "- No token, session state, role, or authentication state is injected by this script."
     Write-Host "- Assessment request pages are discovered only for assessment-only offers."
+    Write-Host "- Registration MFA review is layout-only; real enrollment remains after email verification and authenticated sign-in."
     Write-Host "- Console/Admin are only added when -IncludeAuthenticatedSurfaces is supplied and still require normal sign-in."
     Write-Host "- This is local public-web acceptance only; it grants no Real Staging or production authority."
 
@@ -143,10 +145,11 @@ try {
     Write-Host "2. Inspect every plan card, price, discount, quota statement, CTA, BYOK statement, and responsive layout."
     Write-Host "3. Open every generated offer tab and verify its plan-specific price/capacity/assessment language."
     Write-Host "4. For every assessment-only offer, open its assessment request page and verify selected-plan context and form behavior."
-    Write-Host "5. Follow registration and email verification flows and verify validation, terms, and truth language."
-    Write-Host "6. Sign in normally and review Console/Admin only after the public journey is complete."
-    Write-Host "7. Review MFA visually during a real challenge and confirm no card compression or hidden-control regression."
-    Write-Host "8. Record every defect against source HEAD $head before any Real Staging decision."
+    Write-Host "5. Compare normal registration with the review_mfa=1 tab; the MFA preview must stay inside the card without overlap or horizontal overflow."
+    Write-Host "6. Follow registration and email verification flows; real MFA enrollment remains after verified sign-in."
+    Write-Host "7. Sign in normally and review Console/Admin; in Admin API Keys confirm External Evaluation Access is available in Category."
+    Write-Host "8. Review a real MFA challenge only with your own local credentials; never copy MFA or recovery secrets into evidence."
+    Write-Host "9. Record every defect against source HEAD $head before any Real Staging decision."
     Write-Host ""
     Write-Host "The server remains running after this script exits."
     Write-Host "Stop it when finished with: Stop-Process -Id $($server.Id)"
