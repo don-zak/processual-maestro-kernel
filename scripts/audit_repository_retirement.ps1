@@ -1,0 +1,197 @@
+param(
+    [string]$OutputDirectory = ".pmk-repo-audit",
+    [switch]$ApplySafeLocalCleanup
+)
+
+$ErrorActionPreference = "Stop"
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Push-Location $repoRoot
+try {
+    $head = (git rev-parse HEAD).Trim()
+    $branch = (git branch --show-current).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
+        throw "Unable to resolve repository HEAD."
+    }
+
+    $tracked = @(git ls-files)
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed." }
+
+    $statusLines = @(git status --porcelain=v1 --ignored)
+    if ($LASTEXITCODE -ne 0) { throw "git status failed." }
+
+    $protectedPatterns = @(
+        '^alembic/versions/',
+        '^tests/',
+        '^docs/',
+        '^qualification/',
+        '^\.github/workflows/',
+        '(^|/)__init__\.py$'
+    )
+    $nameCandidatePattern = '(?i)(^|[._/-])(legacy|deprecated|retired|obsolete|archive|archived|backup|bak|old|unused|quarantine|generated|copy|temp|tmp)([._/-]|$)'
+    $generatedResiduePattern = '(?i)(^|/)(__pycache__|\.pytest_cache|\.hypothesis|build|dist|tmp|temp)(/|$)|\.(pyc|pyo|log|bak|tmp|zip)$|\.bak_'
+    $contentMarkers = @('deprecated', 'retired', 'obsolete', 'compatibility only', 'legacy compatibility', 'quarantine')
+
+    function Test-ProtectedPath([string]$Path) {
+        foreach ($pattern in $protectedPatterns) {
+            if ($Path -match $pattern) { return $true }
+        }
+        return $false
+    }
+
+    function Get-ReferenceEvidence([string]$Path) {
+        $base = [System.IO.Path]::GetFileName($Path)
+        $stem = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+        $pathRefs = @()
+        $nameRefs = @()
+        if ($base) {
+            $nameRefs = @(git grep -n -F -- "$base" -- ':!docs/**' ':!tests/**' 2>$null)
+        }
+        $pathRefs = @(git grep -n -F -- "$Path" 2>$null)
+        [pscustomobject]@{
+            path_reference_count = @($pathRefs).Count
+            basename_reference_count = @($nameRefs).Count
+            sample_path_references = @($pathRefs | Select-Object -First 5)
+            sample_basename_references = @($nameRefs | Select-Object -First 5)
+        }
+    }
+
+    $records = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($path in $tracked) {
+        $protected = Test-ProtectedPath $path
+        $ignoredByPolicy = $false
+        git check-ignore --no-index --quiet -- "$path" 2>$null
+        if ($LASTEXITCODE -eq 0) { $ignoredByPolicy = $true }
+
+        $nameCandidate = $path -match $nameCandidatePattern
+        $contentHits = @()
+        if (-not $protected -and (Test-Path -LiteralPath $path) -and (Get-Item -LiteralPath $path).Length -lt 1048576) {
+            try {
+                $text = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+                foreach ($marker in $contentMarkers) {
+                    if ($text -match [regex]::Escape($marker)) { $contentHits += $marker }
+                }
+            } catch {}
+        }
+
+        if (-not ($ignoredByPolicy -or $nameCandidate -or $contentHits.Count -gt 0)) { continue }
+
+        $refs = Get-ReferenceEvidence $path
+        $classification = if ($protected) {
+            'PROTECTED_HISTORY_OR_TEST'
+        } elseif ($ignoredByPolicy) {
+            'TRACKED_BUT_IGNORED_REVIEW'
+        } elseif ($contentHits -contains 'compatibility only' -or $contentHits -contains 'legacy compatibility') {
+            'COMPATIBILITY_HOLD'
+        } else {
+            'RETIREMENT_REVIEW'
+        }
+
+        $records.Add([pscustomobject]@{
+            path = $path
+            tracked = $true
+            ignored_by_policy = $ignoredByPolicy
+            protected = $protected
+            classification = $classification
+            name_candidate = $nameCandidate
+            content_markers = @($contentHits)
+            path_reference_count = $refs.path_reference_count
+            basename_reference_count = $refs.basename_reference_count
+            sample_path_references = $refs.sample_path_references
+            sample_basename_references = $refs.sample_basename_references
+            deletion_eligible = $false
+            rationale = 'Tracked files are never auto-deleted by this audit. Review runtime references, compatibility, migrations, tests, and historical evidence first.'
+        })
+    }
+
+    $localResidues = [System.Collections.Generic.List[object]]::new()
+    foreach ($line in $statusLines) {
+        if ($line.Length -lt 4) { continue }
+        $code = $line.Substring(0, 2)
+        $path = $line.Substring(3)
+        if ($code -ne '!!' -and $code -ne '??') { continue }
+        $isIgnored = $code -eq '!!'
+        $isGeneratedResidue = $path -match $generatedResiduePattern
+        if (-not $isGeneratedResidue) { continue }
+
+        $eligible = $isIgnored -and -not (Test-ProtectedPath $path)
+        $localResidues.Add([pscustomobject]@{
+            path = $path
+            tracked = $false
+            ignored = $isIgnored
+            classification = if ($eligible) { 'SAFE_LOCAL_RESIDUE' } else { 'LOCAL_REVIEW' }
+            deletion_eligible = $eligible
+        })
+    }
+
+    $deleted = [System.Collections.Generic.List[string]]::new()
+    if ($ApplySafeLocalCleanup) {
+        foreach ($item in $localResidues) {
+            if (-not $item.deletion_eligible) { continue }
+            if (-not (Test-Path -LiteralPath $item.path)) { continue }
+            Remove-Item -LiteralPath $item.path -Recurse -Force
+            $deleted.Add($item.path)
+        }
+    }
+
+    $output = Join-Path $repoRoot $OutputDirectory
+    New-Item -ItemType Directory -Path $output -Force | Out-Null
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $jsonPath = Join-Path $output "repository-retirement-audit-$stamp.json"
+    $csvPath = Join-Path $output "repository-retirement-candidates-$stamp.csv"
+    $mdPath = Join-Path $output "repository-retirement-summary-$stamp.md"
+
+    $report = [ordered]@{
+        generated_at = (Get-Date).ToString('o')
+        branch = $branch
+        source_head = $head
+        authority = 'local repository audit only; no staging/production authority'
+        tracked_file_count = $tracked.Count
+        tracked_candidates = @($records)
+        local_residue_candidates = @($localResidues)
+        deleted_safe_local_residue = @($deleted)
+        policy = [ordered]@{
+            tracked_auto_delete = $false
+            migrations_tests_docs_qualification_protected = $true
+            compatibility_shims_require_consumer_proof = $true
+            generated_untracked_ignored_residue_may_be_cleaned = $true
+        }
+    }
+    $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    @($records) | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add('# Repository Retirement / Quarantine Audit')
+    $lines.Add('')
+    $lines.Add("- Branch: `$branch`")
+    $lines.Add("- HEAD: `$head`")
+    $lines.Add("- Tracked files: $($tracked.Count)")
+    $lines.Add("- Tracked candidates: $($records.Count)")
+    $lines.Add("- Local residue candidates: $($localResidues.Count)")
+    $lines.Add("- Safe local residues deleted this run: $($deleted.Count)")
+    $lines.Add('')
+    $lines.Add('## Classification totals')
+    foreach ($group in ($records | Group-Object classification | Sort-Object Name)) {
+        $lines.Add("- $($group.Name): $($group.Count)")
+    }
+    $lines.Add('')
+    $lines.Add('## Safety rules')
+    $lines.Add('- No tracked file is deleted automatically.')
+    $lines.Add('- Alembic migrations, tests, docs, qualification evidence, workflows, and package initializers are protected by default.')
+    $lines.Add('- Compatibility shims remain until consumer absence is proven.')
+    $lines.Add('- Only untracked + ignored generated residue can be removed with -ApplySafeLocalCleanup.')
+    $lines | Set-Content -LiteralPath $mdPath -Encoding UTF8
+
+    Write-Host "Repository retirement audit completed."
+    Write-Host "HEAD: $head"
+    Write-Host "Tracked files: $($tracked.Count)"
+    Write-Host "Tracked candidates: $($records.Count)"
+    Write-Host "Local residue candidates: $($localResidues.Count)"
+    Write-Host "Safe local residues deleted: $($deleted.Count)"
+    Write-Host "JSON: $jsonPath"
+    Write-Host "CSV:  $csvPath"
+    Write-Host "MD:   $mdPath"
+} finally {
+    Pop-Location
+}
