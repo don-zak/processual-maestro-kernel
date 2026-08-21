@@ -24,6 +24,9 @@ def _reset_console_section_state(page, section: str) -> None:
           try {
             localStorage.setItem(key, value);
           } catch (_) {}
+          try {
+            sessionStorage.setItem(key, value);
+          } catch (_) {}
         }
         """,
         {"key": SETTINGS_TAB_STORAGE_KEY, "value": SETTINGS_DEFAULT_TAB},
