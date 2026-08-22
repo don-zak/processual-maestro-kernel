@@ -77,6 +77,17 @@ def test_backup_classification_does_not_claim_historical_version_without_proof()
     assert "return 'OLD_TRACKED_VERSION'" not in text
 
 
+def test_windows_powershell_uses_relative_path_compatibility_fallback():
+    text = _script_text()
+
+    assert "function Get-CompatibleRelativePath" in text
+    assert "[System.IO.Path].GetMethod(" in text
+    assert "New-Object System.Uri" in text
+    assert ".MakeRelativeUri(" in text
+    assert "Get-CompatibleRelativePath -BasePath $rootPath -TargetPath $Path" in text
+    assert "Get-CompatibleRelativePath -BasePath $backupRoot -TargetPath $File.FullName" in text
+
+
 def test_every_artifact_starts_non_retirable_and_non_deletable():
     text = _script_text()
 
