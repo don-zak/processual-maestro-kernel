@@ -108,9 +108,6 @@ function Get-BackupClassification {
             return 'EXACT_CURRENT_COPY'
         }
 
-        # A differing current file does not prove that the backup blob is an
-        # OLD_TRACKED_VERSION. Historical blob proof is required before that
-        # stronger classification may be asserted.
         return 'DIVERGENT_UNTRACKED'
     }
 
@@ -120,12 +117,58 @@ function Get-BackupClassification {
     return 'UNIQUE_UNTRACKED'
 }
 
+function Test-JsonWithPython {
+    param([Parameter(Mandatory = $true)][System.IO.FileInfo]$File)
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($null -eq $python) {
+        return $null
+    }
+
+    $script = @'
+import json, sys
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8-sig") as fh:
+        value = json.load(fh)
+    if isinstance(value, list):
+        root = "ARRAY"
+        count = len(value)
+        keys = sorted({k for item in value if isinstance(item, dict) for k in item.keys()})
+        top = []
+    elif isinstance(value, dict):
+        root = "OBJECT"
+        count = None
+        keys = []
+        top = sorted(value.keys())
+    else:
+        root = "SCALAR"
+        count = None
+        keys = []
+        top = []
+    print(json.dumps({"ok": True, "root": root, "count": count, "item_keys": keys, "top_keys": top}))
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": str(exc)}))
+'@
+
+    $output = & $python.Source -c $script $File.FullName 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $output) {
+        return $null
+    }
+    try {
+        return ($output | Out-String | ConvertFrom-Json)
+    } catch {
+        return $null
+    }
+}
+
 function Get-JsonMetadata {
     param([Parameter(Mandatory = $true)][System.IO.FileInfo]$File)
 
     $metadata = [ordered]@{
         json_parse_status = $null
         json_parse_error = $null
+        json_validator = $null
         json_root_type = $null
         json_item_count = $null
         json_top_level_keys = @()
@@ -136,16 +179,18 @@ function Get-JsonMetadata {
         return $metadata
     }
 
-    try {
-        $raw = Get-Content -LiteralPath $File.FullName -Raw
-        if ([string]::IsNullOrWhiteSpace($raw)) {
-            $metadata.json_parse_status = 'EMPTY'
-            $metadata.json_parse_error = 'File is empty or whitespace-only.'
-            return $metadata
-        }
+    $raw = Get-Content -LiteralPath $File.FullName -Raw
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        $metadata.json_parse_status = 'EMPTY'
+        $metadata.json_parse_error = 'File is empty or whitespace-only.'
+        $metadata.json_validator = 'NONE'
+        return $metadata
+    }
 
+    try {
         $parsed = $raw | ConvertFrom-Json
         $metadata.json_parse_status = 'VALID'
+        $metadata.json_validator = 'POWERSHELL'
 
         $trimmed = $raw.TrimStart()
         if ($trimmed.StartsWith('[')) {
@@ -166,16 +211,27 @@ function Get-JsonMetadata {
         } elseif ($trimmed.StartsWith('{')) {
             $metadata.json_root_type = 'OBJECT'
             if ($null -ne $parsed) {
-                $metadata.json_top_level_keys = @(
-                    $parsed.PSObject.Properties.Name | Sort-Object -Unique
-                )
+                $metadata.json_top_level_keys = @($parsed.PSObject.Properties.Name | Sort-Object -Unique)
             }
         } else {
             $metadata.json_root_type = 'SCALAR'
         }
     } catch {
-        $metadata.json_parse_status = 'INVALID'
-        $metadata.json_parse_error = $_.Exception.Message
+        $powerShellError = $_.Exception.Message
+        $pythonResult = Test-JsonWithPython -File $File
+        if ($null -ne $pythonResult -and $pythonResult.ok) {
+            $metadata.json_parse_status = 'VALID_PYTHON_FALLBACK'
+            $metadata.json_parse_error = $powerShellError
+            $metadata.json_validator = 'PYTHON'
+            $metadata.json_root_type = $pythonResult.root
+            $metadata.json_item_count = $pythonResult.count
+            $metadata.json_item_keys = @($pythonResult.item_keys)
+            $metadata.json_top_level_keys = @($pythonResult.top_keys)
+        } else {
+            $metadata.json_parse_status = 'INVALID'
+            $metadata.json_parse_error = if ($null -ne $pythonResult -and $pythonResult.error) { $pythonResult.error } else { $powerShellError }
+            $metadata.json_validator = if ($null -ne $pythonResult) { 'PYTHON' } else { 'POWERSHELL_ONLY' }
+        }
     }
     return $metadata
 }
@@ -206,7 +262,6 @@ $recursiveRoots = @(
     'local-qualification-results',
     'maestro-update-backup'
 )
-
 foreach ($relativeRoot in $recursiveRoots) {
     $candidateRoot = Join-Path $rootPath $relativeRoot
     if (Test-Path -LiteralPath $candidateRoot -PathType Container) {
@@ -222,7 +277,6 @@ if (Test-Path -LiteralPath $localReviewDb -PathType Leaf) {
 
 $uniqueFiles = @($files | Sort-Object FullName -Unique)
 $records = [System.Collections.Generic.List[object]]::new()
-
 foreach ($file in $uniqueFiles) {
     $relativePath = Get-RelativePath -Path $file.FullName
     $sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -252,6 +306,7 @@ foreach ($file in $uniqueFiles) {
         deletion_authorized = $false
         json_parse_status = $jsonMetadata.json_parse_status
         json_parse_error = $jsonMetadata.json_parse_error
+        json_validator = $jsonMetadata.json_validator
         json_root_type = $jsonMetadata.json_root_type
         json_item_count = $jsonMetadata.json_item_count
         json_top_level_keys = @($jsonMetadata.json_top_level_keys)
@@ -264,32 +319,26 @@ $duplicateIndex = 0
 foreach ($group in ($records | Group-Object sha256 | Where-Object Count -gt 1)) {
     $duplicateIndex += 1
     $groupName = 'sha256-' + $duplicateIndex.ToString('D4')
-    foreach ($record in $group.Group) {
-        $record.duplicate_group = $groupName
-    }
+    foreach ($record in $group.Group) { $record.duplicate_group = $groupName }
 }
 
 $backupRecords = @($records | Where-Object { $_.category -eq 'BACKUP_SNAPSHOT' })
-$uniqueBackupCount = @($backupRecords | Where-Object { $_.backup_classification -eq 'UNIQUE_UNTRACKED' }).Count
-$divergentBackupCount = @($backupRecords | Where-Object { $_.backup_classification -eq 'DIVERGENT_UNTRACKED' }).Count
-$invalidJsonCount = @($records | Where-Object { $_.json_parse_status -eq 'INVALID' }).Count
-$emptyJsonCount = @($records | Where-Object { $_.json_parse_status -eq 'EMPTY' }).Count
-
 $summary = [pscustomobject][ordered]@{
     generated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
     observed_at_head = $head
     artifact_count = $records.Count
     duplicate_artifact_count = @($records | Where-Object { $_.duplicate_group }).Count
-    invalid_json_count = $invalidJsonCount
-    empty_json_count = $emptyJsonCount
-    unique_backup_content = $uniqueBackupCount
-    divergent_backup_content = $divergentBackupCount
+    invalid_json_count = @($records | Where-Object { $_.json_parse_status -eq 'INVALID' }).Count
+    empty_json_count = @($records | Where-Object { $_.json_parse_status -eq 'EMPTY' }).Count
+    python_fallback_json_count = @($records | Where-Object { $_.json_parse_status -eq 'VALID_PYTHON_FALLBACK' }).Count
+    unique_backup_content = @($backupRecords | Where-Object { $_.backup_classification -eq 'UNIQUE_UNTRACKED' }).Count
+    divergent_backup_content = @($backupRecords | Where-Object { $_.backup_classification -eq 'DIVERGENT_UNTRACKED' }).Count
     deletion_authorized_count = @($records | Where-Object { $_.deletion_authorized }).Count
     repository_reconciliation_complete = $false
 }
 
 $manifest = [pscustomobject][ordered]@{
-    schema_version = 3
+    schema_version = 4
     policy = [pscustomobject][ordered]@{
         mode = 'READ_ONLY_EVIDENCE_CONSOLIDATION'
         deletion_authorized = $false
@@ -306,7 +355,6 @@ $manifest = [pscustomobject][ordered]@{
 $jsonPath = Join-Path $outputPath ("evidence-consolidation-{0}.json" -f $Timestamp)
 $csvPath = Join-Path $outputPath ("evidence-consolidation-{0}.csv" -f $Timestamp)
 $markdownPath = Join-Path $outputPath ("evidence-consolidation-{0}.md" -f $Timestamp)
-
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $jsonPath -Encoding utf8
 $records | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding utf8
 
@@ -318,6 +366,7 @@ $markdown.Add("- Artifacts: $($summary.artifact_count)")
 $markdown.Add("- Exact-hash duplicate members: $($summary.duplicate_artifact_count)")
 $markdown.Add("- Invalid JSON files: $($summary.invalid_json_count)")
 $markdown.Add("- Empty JSON files: $($summary.empty_json_count)")
+$markdown.Add("- Python-fallback JSON files: $($summary.python_fallback_json_count)")
 $markdown.Add("- Unique backup content: $($summary.unique_backup_content)")
 $markdown.Add("- Divergent backup content: $($summary.divergent_backup_content)")
 $markdown.Add("- Deletion authorized: **false**")
