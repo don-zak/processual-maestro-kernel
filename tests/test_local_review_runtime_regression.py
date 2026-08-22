@@ -28,16 +28,24 @@ def test_local_review_seed_is_sqlite_only_and_production_forbidden():
 
 
 def test_powershell_local_review_launcher_orders_database_seed_before_server():
-    source = read("scripts/run_local_review.ps1")
+    launcher = read("scripts/run_local_review.ps1")
+    environment = read("scripts/local_review_env.ps1")
+    bootstrap = read("scripts/bootstrap_local_review.ps1")
+
     migration = "python -m alembic upgrade head"
     seed = "python qualification/local_review_subscription_seed.py"
     server = "python -m uvicorn processual_api.main:app"
-    assert 'sqlite+aiosqlite:///$dbUrlPath' in source
-    assert '$env:ENVIRONMENT = "development"' in source
-    assert '$env:PMK_LOCAL_REVIEW_CUSTOMER_REF = "admin"' in source
-    assert '$env:MAESTRO_ADMIN_EMAIL = $null' in source
-    assert '$env:MAESTRO_ADMIN_PASSWORD = $null' in source
-    assert migration in source
-    assert seed in source
-    assert server in source
-    assert source.index(migration) < source.index(seed) < source.index(server)
+
+    assert '$env:DATABASE_URL = "sqlite+aiosqlite:///$dbUrlPath"' in environment
+    assert '$env:ENVIRONMENT = "development"' in environment
+    assert '$env:PMK_LOCAL_REVIEW_CUSTOMER_REF = "admin"' in environment
+    assert "Remove-Item Env:MAESTRO_ADMIN_EMAIL" in environment
+    assert "Remove-Item Env:MAESTRO_ADMIN_PASSWORD" in environment
+
+    assert migration in bootstrap
+    assert seed in bootstrap
+    assert bootstrap.index(migration) < bootstrap.index(seed)
+
+    assert '"-File", $bootstrapScript' in launcher
+    assert server in launcher
+    assert launcher.index('& powershell @bootstrapArgs') < launcher.index(server)
