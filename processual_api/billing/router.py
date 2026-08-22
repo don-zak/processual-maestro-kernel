@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
 from processual_api.admin_marketplace.lemon_squeezy_secure_webhook_router import (
     install_secure_lemon_squeezy_webhook_route,
@@ -40,6 +40,18 @@ from processual_api.billing.customer_billing_statements import (
 )
 from processual_api.billing.direct_checkout_router import (
     router as direct_checkout_router,
+)
+from processual_api.billing.lemon_checkout_order_authority import (
+    LemonCheckoutOrderAuthorityError,
+)
+from processual_api.billing.lemon_checkout_runtime import (
+    build_lemon_checkout_order_authority,
+)
+from processual_api.billing.lemon_subscription_checkout import (
+    CreateSubscriptionCheckoutCommand,
+    LemonSubscriptionCheckoutError,
+    create_lemon_subscription_checkout_factory,
+    lemon_subscription_http_checkout_creator_factory,
 )
 from processual_api.billing.offer_pricebook import public_offer_pricebook
 from processual_api.billing.plan_capability_router import (
@@ -97,6 +109,20 @@ def _billing_user_id(current_user: dict) -> str:
         or current_user.get("sub")
         or ""
     ).strip()
+
+
+def _checkout_session_id(current_user: dict) -> str:
+    value = str(
+        current_user.get("session_id")
+        or current_user.get("sid")
+        or ""
+    ).strip()
+    if not value:
+        raise HTTPException(
+            status_code=403,
+            detail="Billing access denied.",
+        )
+    return value
 
 
 def _require_billing_admin(current_user: dict) -> None:
@@ -302,7 +328,25 @@ def _pdf_response(statement: dict[str, Any]) -> Response:
 async def create_checkout(
     body: dict,
     current_user: dict = Depends(get_current_user),
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+    ),
+    correlation_id: str | None = Header(
+        default=None,
+        alias="X-Correlation-ID",
+    ),
 ) -> dict[str, object]:
+    normalized_idempotency_key = str(idempotency_key or "").strip()
+    if not 16 <= len(normalized_idempotency_key) <= 128:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid Idempotency-Key header is required.",
+        )
+    normalized_correlation_id = str(correlation_id or "").strip()
+    if not normalized_correlation_id:
+        normalized_correlation_id = f"checkout_{uuid.uuid4().hex}"
+
     try:
         checkout_request = require_canonical_checkout_request(body)
     except CanonicalCheckoutGateError as exc:
@@ -310,6 +354,15 @@ async def create_checkout(
             status_code=400,
             detail="Invalid checkout request.",
         ) from exc
+
+    customer_ref = _identity_customer_ref(current_user)
+    actor_user_id = _billing_user_id(current_user)
+    actor_session_id = _checkout_session_id(current_user)
+    if not actor_user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Billing access denied.",
+        )
 
     try:
         session_factory = get_session_factory()
@@ -333,74 +386,105 @@ async def create_checkout(
         ) from exc
 
     variant_id = resolution.provider_variant_id
-    if not variant_id.isdigit():
-        raise HTTPException(
-            status_code=503,
-            detail="Billing service is temporarily unavailable.",
-        )
-
     api_key = _required_environment("LEMONSQUEEZY_API_KEY")
     store_id = _required_environment("LEMONSQUEEZY_STORE_ID")
     success_url = _required_environment(
         "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL"
     )
-    cancel_url = _required_environment(
-        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL"
-    )
-    if not store_id.isdigit():
+    if (
+        not variant_id.isdigit()
+        or int(variant_id) <= 0
+        or not store_id.isdigit()
+        or int(store_id) <= 0
+    ):
         raise HTTPException(
             status_code=503,
             detail="Billing service is temporarily unavailable.",
         )
 
-    customer_ref = _identity_customer_ref(current_user)
+    try:
+        order_authority = build_lemon_checkout_order_authority()
+        order = await order_authority.prepare(
+            actor_user_id=actor_user_id,
+            actor_session_id=actor_session_id,
+            customer_ref=customer_ref,
+            offer_id=resolution.offer_id,
+            offer_ref=resolution.offer_ref,
+            plan_id=resolution.plan_id,
+            billing_period=resolution.billing_period,
+            currency=resolution.currency,
+            amount=resolution.amount,
+            display_name=resolution.display_name,
+            correlation_id=normalized_correlation_id,
+            idempotency_key=normalized_idempotency_key,
+        )
+    except LemonCheckoutOrderAuthorityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"reason_code": exc.reason_code},
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing order authority is temporarily unavailable.",
+        ) from exc
 
     try:
-        import httpx
-
-        attributes: dict[str, Any] = {
-            "store_id": int(store_id),
-            "variant_id": int(variant_id),
-            "success_url": success_url,
-            "cancel_url": cancel_url,
-            "custom_data": {
-                "customer_ref": customer_ref,
-                "offer_ref": resolution.offer_ref,
-            },
-        }
-        if checkout_request.email:
-            attributes["customer_email"] = checkout_request.email
-        payload = {
-            "data": {
-                "type": "checkouts",
-                "attributes": attributes,
-            }
-        }
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                "https://api.lemonsqueezy.com/v1/checkouts",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Accept": "application/json",
-                    "Content-Type": "application/vnd.api+json",
-                },
+        async with session_factory() as session:
+            final_resolution = await resolve_canonical_checkout_in_session(
+                session=session,
+                offer_ref=resolution.offer_ref,
             )
+        if final_resolution != resolution:
+            raise CanonicalCheckoutGateError(
+                "canonical_offer_changed_before_provider_call"
+            )
+    except CanonicalCheckoutGateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Checkout offer changed before payment provider creation.",
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="Billing service is temporarily unavailable.",
         ) from exc
 
-    if response.status_code not in {200, 201}:
-        raise HTTPException(
-            status_code=502,
-            detail="Payment provider request failed.",
+    try:
+        create_provider_checkout = create_lemon_subscription_checkout_factory(
+            session_factory=session_factory,
+            checkout_creator=lemon_subscription_http_checkout_creator_factory(
+                api_key=api_key,
+            ),
         )
-    data = response.json().get("data", {})
+        provider_checkout = await create_provider_checkout(
+            CreateSubscriptionCheckoutCommand(
+                order_id=order.order_id,
+                customer_ref=customer_ref,
+                offer_ref=resolution.offer_ref,
+                provider_variant_id=resolution.provider_variant_id,
+                store_id=store_id,
+                success_url=success_url,
+                email=checkout_request.email,
+            )
+        )
+    except LemonSubscriptionCheckoutError as exc:
+        message = str(exc)
+        status_code = 503 if "provider" in message else 409
+        raise HTTPException(
+            status_code=status_code,
+            detail=message,
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing service is temporarily unavailable.",
+        ) from exc
+
     return {
-        "url": data.get("attributes", {}).get("url", ""),
-        "checkout_id": data.get("id", ""),
+        "url": provider_checkout.url,
+        "checkout_id": provider_checkout.checkout_id,
+        "order_ref": provider_checkout.order_ref,
     }
 
 
