@@ -30,7 +30,7 @@ function Test-KnownLocalEvidencePath {
         '^coverage\.xml$',
         '^pytest-.*\.(log|txt)$',
         '^pmk-review-decisions-v\d+\.json$',
-        '^cgt17_branch_retirement_audit_\d+\.json$',
+        '^cgt17_branch_retirement_audit_\d{8}_\d{6}\.json$',
         '^PMK_Transition_Handoff_Report_.*\.docx$',
         '^wave.*\.patch$',
         '^maestro-update-backup(?:/|$)',
@@ -132,7 +132,7 @@ $allZero = (
 )
 
 $result = [pscustomobject][ordered]@{
-    schema_version = 1
+    schema_version = 2
     mode = 'READ_ONLY_FINAL_REPOSITORY_RECONCILIATION_GATE'
     observed_at_head = $head
     archive_receipt_path = if ($archiveReceiptVerified) { $ArchiveReceiptPath } else { $null }
