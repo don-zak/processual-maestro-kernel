@@ -1,6 +1,8 @@
 name: Launch Closeout Gate
 
 on:
+  push:
+    branches: ["agent/post-vq-local-web-acceptance"]
   pull_request:
     branches: [main]
   workflow_dispatch:
