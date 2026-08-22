@@ -52,6 +52,11 @@ def record_subscription_quota_usage_factory(
                     existing,
                     canonical_metric_code=canonical_metric_code,
                 )
+                # Finish the read/lock transaction explicitly before returning the
+                # replay object. The UoW otherwise rolls back on context exit and
+                # SQLAlchemy expires the locked ORM instance, leaving callers with
+                # a detached object whose attributes can no longer be read.
+                await uow.commit()
                 return existing
 
             subscription = await uow.subscriptions.get_by_id(
