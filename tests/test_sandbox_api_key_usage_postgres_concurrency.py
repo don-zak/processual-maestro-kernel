@@ -12,11 +12,17 @@ from processual_api.admin_marketplace.models import (
     AdminMarketPlan,
     AdminMarketSubscription,
 )
-from processual_api.admin_marketplace.subscription_runtime import SubscriptionRuntimeError
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    AdminMarketSubscriptionQuotaCycle,
+)
+from processual_api.admin_marketplace.subscription_quota_usage import (
+    SubscriptionQuotaUsageError,
+)
+from processual_api.admin_marketplace.subscription_quota_usage_persistence import (
+    AdminMarketSubscriptionQuotaCycleUsage,
+)
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
-    AdminMarketSubscriptionQuotaAccount,
     AdminMarketSubscriptionRuntime,
-    AdminMarketSubscriptionUsageLedger,
 )
 from processual_api.db.session import close_db, get_session_factory, init_db
 from processual_api.services.sandbox_api_key_usage import record_sandbox_api_key_usage
@@ -34,7 +40,7 @@ async def test_parallel_sandbox_usage_cannot_overshoot_quota() -> None:
     plan_id = uuid.uuid4()
     subscription_id = uuid.uuid4()
     runtime_id = uuid.uuid4()
-    quota_id = uuid.uuid4()
+    cycle_id = uuid.uuid4()
     suffix = uuid.uuid4().hex
     customer_ref = f"qualification-customer-{suffix}"
     plan_code = f"qualification-plan-{suffix}"
@@ -81,15 +87,22 @@ async def test_parallel_sandbox_usage_cannot_overshoot_quota() -> None:
                 )
             )
             session.add(
-                AdminMarketSubscriptionQuotaAccount(
-                    id=quota_id,
+                AdminMarketSubscriptionQuotaCycle(
+                    id=cycle_id,
                     subscription_id=subscription_id,
+                    source_cycle_id=None,
                     customer_ref=customer_ref,
+                    plan_code=plan_code,
+                    plan_catalog_version="sandbox-concurrency-qualification-v1",
+                    entitlement_codes=["maestro_execution"],
                     quota_profile_ref="qualification_quota",
                     metric_code=metric_code,
                     period_start=now - timedelta(minutes=1),
                     period_end=now + timedelta(hours=1),
-                    limit_units=5,
+                    base_limit_units=5,
+                    rollover_units=0,
+                    top_up_units=0,
+                    rollover_status="available",
                     used_units=0,
                     version=0,
                 )
@@ -124,66 +137,69 @@ async def test_parallel_sandbox_usage_cannot_overshoot_quota() -> None:
                     idempotency_key=f"qualification-{suffix}-{index}",
                 )
                 return ("accepted", str(row.id))
-            except SubscriptionRuntimeError as exc:
+            except SubscriptionQuotaUsageError as exc:
                 return ("rejected", str(exc))
 
-        try:
-            results = await asyncio.gather(*(_consume(index) for index in range(10)))
-            accepted = [value for status, value in results if status == "accepted"]
-            rejected = [value for status, value in results if status == "rejected"]
+        results = await asyncio.gather(*(_consume(index) for index in range(10)))
+        accepted = [value for status, value in results if status == "accepted"]
+        rejected = [value for status, value in results if status == "rejected"]
 
-            assert len(accepted) == 5
-            assert len(rejected) == 5
-            assert all("quota limit exceeded" in value.lower() for value in rejected)
+        assert len(accepted) == 5
+        assert len(rejected) == 5
+        assert all("balance is insufficient" in value.lower() for value in rejected)
 
-            async with session_factory() as session:
-                quota = await session.get(AdminMarketSubscriptionQuotaAccount, quota_id)
-                assert quota is not None
-                assert quota.used_units == 5
-                assert quota.version == 5
+        async with session_factory() as session:
+            cycle = await session.get(AdminMarketSubscriptionQuotaCycle, cycle_id)
+            assert cycle is not None
+            assert cycle.used_units == 5
+            assert cycle.version == 5
 
-                ledger_count = await session.scalar(
-                    select(func.count(AdminMarketSubscriptionUsageLedger.id)).where(
-                        AdminMarketSubscriptionUsageLedger.subscription_id
-                        == subscription_id
+            ledger_count = await session.scalar(
+                select(func.count(AdminMarketSubscriptionQuotaCycleUsage.id)).where(
+                    AdminMarketSubscriptionQuotaCycleUsage.subscription_id
+                    == subscription_id
+                )
+            )
+            ledger_units = await session.scalar(
+                select(
+                    func.coalesce(
+                        func.sum(AdminMarketSubscriptionQuotaCycleUsage.units),
+                        0,
                     )
+                ).where(
+                    AdminMarketSubscriptionQuotaCycleUsage.subscription_id
+                    == subscription_id
                 )
-                ledger_units = await session.scalar(
-                    select(func.coalesce(func.sum(AdminMarketSubscriptionUsageLedger.units), 0)).where(
-                        AdminMarketSubscriptionUsageLedger.subscription_id
-                        == subscription_id
-                    )
-                )
-                assert ledger_count == 5
-                assert ledger_units == 5
-        finally:
-            async with session_factory() as session:
-                await session.execute(
-                    delete(AdminMarketSubscriptionUsageLedger).where(
-                        AdminMarketSubscriptionUsageLedger.subscription_id
-                        == subscription_id
-                    )
-                )
-                await session.execute(
-                    delete(AdminMarketSubscriptionQuotaAccount).where(
-                        AdminMarketSubscriptionQuotaAccount.subscription_id
-                        == subscription_id
-                    )
-                )
-                await session.execute(
-                    delete(AdminMarketSubscriptionRuntime).where(
-                        AdminMarketSubscriptionRuntime.subscription_id
-                        == subscription_id
-                    )
-                )
-                await session.execute(
-                    delete(AdminMarketSubscription).where(
-                        AdminMarketSubscription.id == subscription_id
-                    )
-                )
-                await session.execute(
-                    delete(AdminMarketPlan).where(AdminMarketPlan.id == plan_id)
-                )
-                await session.commit()
+            )
+            assert ledger_count == 5
+            assert ledger_units == 5
     finally:
+        async with session_factory() as session:
+            await session.execute(
+                delete(AdminMarketSubscriptionQuotaCycleUsage).where(
+                    AdminMarketSubscriptionQuotaCycleUsage.subscription_id
+                    == subscription_id
+                )
+            )
+            await session.execute(
+                delete(AdminMarketSubscriptionQuotaCycle).where(
+                    AdminMarketSubscriptionQuotaCycle.subscription_id
+                    == subscription_id
+                )
+            )
+            await session.execute(
+                delete(AdminMarketSubscriptionRuntime).where(
+                    AdminMarketSubscriptionRuntime.subscription_id
+                    == subscription_id
+                )
+            )
+            await session.execute(
+                delete(AdminMarketSubscription).where(
+                    AdminMarketSubscription.id == subscription_id
+                )
+            )
+            await session.execute(
+                delete(AdminMarketPlan).where(AdminMarketPlan.id == plan_id)
+            )
+            await session.commit()
         await close_db()
