@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260822_0058"
+HEAD_REVISION = "20260822_0059"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -115,6 +115,8 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260821_0057:20260818_0056"),
         ("upgrade", "20260821_0057:20260822_0058"),
         ("downgrade", "20260822_0058:20260821_0057"),
+        ("upgrade", "20260822_0058:20260822_0059"),
+        ("downgrade", "20260822_0059:20260822_0058"),
     )
 
     for command, revision_range in ranges:
