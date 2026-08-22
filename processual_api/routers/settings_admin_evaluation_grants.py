@@ -18,6 +18,16 @@ from processual_api.integrations.integration_task_catalog import (
     get_integration_task,
     task_catalog_payload,
 )
+from processual_api.services.evaluation_grant_mode import (
+    durable_evaluation_authority_enabled,
+)
+from processual_api.services.evaluation_grant_provisioning import (
+    EvaluationGrantProvisioningError,
+    create_durable_evaluation_grant,
+    issue_durable_evaluation_key,
+    list_durable_evaluation_grants,
+    revoke_durable_evaluation_grant,
+)
 from processual_api.services.evaluation_grants import (
     EVALUATION_GRANTS_STORAGE_KEY,
     evaluation_grants,
@@ -203,6 +213,18 @@ def _linked_key_count(raw: dict, grant_id: str) -> int:
     )
 
 
+def _durable_error(exc: EvaluationGrantProvisioningError) -> HTTPException:
+    reason = str(exc)
+    if reason == "evaluation_grant_not_found":
+        return HTTPException(status_code=404, detail="Evaluation grant not found.")
+    if reason in {
+        "evaluation_grant_inactive",
+        "maximum_active_evaluation_keys_reached",
+    }:
+        return HTTPException(status_code=409, detail=reason)
+    return HTTPException(status_code=503, detail="Durable evaluation authority unavailable.")
+
+
 @settings_module.router.get(
     "/admin/evaluation-grants/task-catalog",
     response_model=dict,
@@ -217,6 +239,7 @@ async def evaluation_task_catalog(
         "selection_authority": "integration_task_catalog",
         "subscription_required": False,
         "evaluation_key_binding_supported": True,
+        "durable_authority_enabled": durable_evaluation_authority_enabled(),
     }
 
 
@@ -231,13 +254,33 @@ async def create_evaluation_grant(
 ):
     _require_evaluation_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_user_id)
-    grants = evaluation_grants(raw)
-    now = datetime.now(UTC)
     actor, role = _actor(current_user)
     scopes = _safe_scopes(body.allowed_scopes)
     task_ids, task_scope_ids = _task_selection(body.allowed_task_ids)
 
+    if durable_evaluation_authority_enabled():
+        try:
+            grant = await create_durable_evaluation_grant(
+                owner_user_ref=owner_user_id,
+                client_ref=body.client_id.strip(),
+                user_ref=str(body.user_id or body.client_id).strip(),
+                issued_to=body.issued_to.strip(),
+                purpose=body.purpose.strip(),
+                allowed_task_ids=task_ids,
+                task_scope_ids=task_scope_ids,
+                allowed_scopes=scopes,
+                max_requests=int(body.max_requests),
+                expires_in_days=int(body.expires_in_days),
+                approved_by_actor_ref=actor,
+                approved_by_role=role,
+            )
+        except EvaluationGrantProvisioningError as exc:
+            raise _durable_error(exc) from exc
+        return {"status": "created", "grant": grant}
+
+    raw = settings_module._load_raw(owner_user_id)
+    grants = evaluation_grants(raw)
+    now = datetime.now(UTC)
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
         "status": "active",
@@ -250,9 +293,7 @@ async def create_evaluation_grant(
         "allowed_scopes": scopes,
         "max_requests": int(body.max_requests),
         "created_at": now.isoformat(),
-        "expires_at": (
-            now + timedelta(days=body.expires_in_days)
-        ).isoformat(),
+        "expires_at": (now + timedelta(days=body.expires_in_days)).isoformat(),
         "approved_by": actor,
         "approved_by_role": role,
         "revoked_at": None,
@@ -279,6 +320,20 @@ async def list_evaluation_grants(
 ):
     _require_evaluation_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
+
+    if durable_evaluation_authority_enabled():
+        try:
+            items = await list_durable_evaluation_grants(owner_user_ref=owner_user_id)
+        except EvaluationGrantProvisioningError as exc:
+            raise _durable_error(exc) from exc
+        return {
+            "status": "ready",
+            "grants": items,
+            "grant_count": len(items),
+            "subscription_required": False,
+            "authority_source": "evaluation_grant_authority",
+        }
+
     raw = settings_module._load_raw(owner_user_id)
     grants = evaluation_grants(raw)
     changed = False
@@ -316,6 +371,27 @@ async def issue_evaluation_key(
 ):
     _require_evaluation_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
+
+    if durable_evaluation_authority_enabled():
+        try:
+            key, raw_key = await issue_durable_evaluation_key(
+                grant_ref=grant_id,
+                owner_user_ref=owner_user_id,
+                label=body.label.strip(),
+            )
+        except EvaluationGrantProvisioningError as exc:
+            raise _durable_error(exc) from exc
+        return {
+            "status": "created",
+            "api_key": raw_key,
+            "visible_once": True,
+            "key": key,
+            "onboarding_usage": {
+                "header": "X-API-Key",
+                "example_endpoint": "/adapters/status",
+            },
+        }
+
     raw = settings_module._load_raw(owner_user_id)
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:
@@ -366,9 +442,7 @@ async def issue_evaluation_key(
         "label": body.label.strip(),
         "purpose": str(grant.get("purpose") or ""),
         "issued_to": str(grant.get("issued_to") or client_id),
-        "created_by_admin_role": str(
-            current_user.get("role") or "admin"
-        ),
+        "created_by_admin_role": str(current_user.get("role") or "admin"),
         "evaluation_grant_id": grant_id,
         "entitlement_source": "admin_evaluation_grant",
         "subscription_required": False,
@@ -435,6 +509,16 @@ async def revoke_evaluation_grant(
 ):
     _require_evaluation_admin(current_user)
     owner_user_id = _owner_user_id(current_user)
+
+    if durable_evaluation_authority_enabled():
+        try:
+            return await revoke_durable_evaluation_grant(
+                grant_ref=grant_id,
+                owner_user_ref=owner_user_id,
+            )
+        except EvaluationGrantProvisioningError as exc:
+            raise _durable_error(exc) from exc
+
     raw = settings_module._load_raw(owner_user_id)
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:

@@ -15,6 +15,16 @@ from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBea
 
 from ..admin_audit_log import append_admin_audit_event
 from ..services.api_key_store import verify_dynamic_api_key
+from ..services.evaluation_grant_authority import (
+    DurableEvaluationApiKeyDenied,
+    verify_durable_evaluation_api_key,
+)
+from ..services.evaluation_grant_mode import durable_evaluation_authority_enabled
+from ..services.sandbox_api_key_authority import (
+    DurableSandboxApiKeyDenied,
+    verify_durable_sandbox_api_key,
+)
+from ..services.sandbox_api_key_mode import durable_sandbox_api_keys_enabled
 from ..settings import settings
 from ..supervisor_session_keys import validate_supervisor_session_key
 
@@ -24,6 +34,7 @@ try:
 except ImportError:
     jwt: Any = None  # type: ignore[no-redef]
     PyJWTError: type[Exception] = Exception  # type: ignore[no-redef]
+
 
 class _PBKDF2CompatBcrypt:
     """Tiny bcrypt-compatible fallback for minimal local/test environments.
@@ -175,6 +186,59 @@ def _apply_supervisor_session_header(
     return _merge_supervisor_session_user(user, session)
 
 
+def _durable_sandbox_api_key_authority_enabled() -> bool:
+    return durable_sandbox_api_keys_enabled()
+
+
+def _durable_evaluation_api_key_authority_enabled() -> bool:
+    return durable_evaluation_authority_enabled()
+
+
+async def _verify_api_key_authority(api_key: str) -> dict[str, Any] | None:
+    if _durable_sandbox_api_key_authority_enabled():
+        try:
+            durable_user = await verify_durable_sandbox_api_key(api_key)
+        except DurableSandboxApiKeyDenied as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Sandbox API key authority unavailable",
+            ) from exc
+        if durable_user is not None:
+            return durable_user
+
+    if _durable_evaluation_api_key_authority_enabled():
+        try:
+            evaluation_user = await verify_durable_evaluation_api_key(api_key)
+        except DurableEvaluationApiKeyDenied as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Evaluation API key authority unavailable",
+            ) from exc
+        if evaluation_user is not None:
+            return evaluation_user
+
+    legacy_user = verify_dynamic_api_key(api_key)
+    if (
+        legacy_user is not None
+        and _durable_evaluation_api_key_authority_enabled()
+        and legacy_user.get("entitlement_source") == "admin_evaluation_grant"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+    return legacy_user
+
 
 def _get_jwt_secret() -> str:
     return settings.jwt_secret
@@ -217,8 +281,6 @@ def create_access_token(
     if organization_id is not None:
         payload["organization_id"] = organization_id
     return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
-
-
 
 
 def verify_access_token(token: str) -> dict:
@@ -427,7 +489,7 @@ async def get_current_user(
         return user
 
     if api_key:
-        dynamic_user = verify_dynamic_api_key(api_key)
+        dynamic_user = await _verify_api_key_authority(api_key)
         if dynamic_user:
             request.state.current_user = dynamic_user
             return dynamic_user
@@ -439,7 +501,6 @@ async def get_current_user(
             and runtime_env not in {"production", "prod"}
             and not settings.is_production
         )
-
 
         if allow_env_fallback:
             for stored_key in settings.api_keys:
@@ -464,6 +525,7 @@ async def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
+
 
 def require_scope(required_scope: str):
     async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
@@ -527,6 +589,7 @@ def require_recent_mfa(max_age_seconds: int = 300):
         return current_user
 
     return _recent_mfa_dependency
+
 
 def require_platform_admin_step_up(
     max_age_seconds: int | None = None,
@@ -626,6 +689,17 @@ def require_quota(quota_scope: str = "evaluation"):
         request: Request,
         current_user: dict = Depends(get_current_user),
     ) -> dict:
+        from processual_api.admin_marketplace.subscription_runtime import (
+            SubscriptionRuntimeError,
+        )
+        from processual_api.services.evaluation_grant_usage import (
+            EvaluationUsageError,
+            record_evaluation_api_key_usage,
+        )
+        from processual_api.services.sandbox_api_key_usage import (
+            record_sandbox_api_key_usage,
+        )
+
         from ..billing.usage_pricing import pricing_decision
         from ..services.quota_store import consume_quota
 
@@ -639,6 +713,157 @@ def require_quota(quota_scope: str = "evaluation"):
         )
         request.state.pricing_decision = pricing
         request.state.pricing_units_charged = pricing.units_charged
+
+        if current_user.get("session_type") == "evaluation_api_key":
+            if pricing.units_charged <= 0:
+                request.state.current_user = current_user
+                return current_user
+
+            seed = (
+                request.headers.get("Idempotency-Key")
+                or request.headers.get("X-Request-ID")
+                or str(uuid.uuid4())
+            )
+            material = "|".join(
+                (
+                    str(current_user.get("api_key_id") or ""),
+                    seed,
+                    request.method.upper(),
+                    pricing.endpoint,
+                )
+            )
+            durable_idempotency_key = (
+                "evaluation-api-key:"
+                + hashlib.sha256(material.encode("utf-8")).hexdigest()
+            )
+            try:
+                usage = await record_evaluation_api_key_usage(
+                    current_user=current_user,
+                    units=pricing.units_charged,
+                    idempotency_key=durable_idempotency_key,
+                )
+            except EvaluationUsageError as exc:
+                if str(exc) == "evaluation_quota_limit_exceeded":
+                    rejected_user = dict(current_user)
+                    rejected_user["quota_rejected"] = True
+                    rejected_user["quota"] = {
+                        "scope": pricing.billing_scope,
+                        "requested": pricing.units_charged,
+                        "rejected": True,
+                        "source": "evaluation_usage_ledger",
+                    }
+                    request.state.current_user = rejected_user
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail={
+                            "error": "quota_exceeded",
+                            "quota_scope": pricing.billing_scope,
+                            "quota_requested": pricing.units_charged,
+                            "quota_source": "evaluation_usage_ledger",
+                        },
+                    ) from exc
+                if str(exc) in {
+                    "evaluation_grant_inactive",
+                    "evaluation_key_inactive",
+                    "evaluation_usage_subject_mismatch",
+                    "evaluation_task_not_allowed",
+                }:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Evaluation usage denied.",
+                    ) from exc
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Evaluation usage authority unavailable.",
+                ) from exc
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Evaluation usage authority unavailable.",
+                ) from exc
+
+            checked_user = dict(current_user)
+            checked_user["quota"] = {
+                "scope": pricing.billing_scope,
+                "charged": pricing.units_charged,
+                "usage_id": str(usage.id),
+                "source": "evaluation_usage_ledger",
+                "rejected": False,
+            }
+            request.state.current_user = checked_user
+            return checked_user
+
+        if current_user.get("session_type") == "sandbox_api_key":
+            if pricing.units_charged <= 0:
+                request.state.current_user = current_user
+                return current_user
+
+            seed = (
+                request.headers.get("Idempotency-Key")
+                or request.headers.get("X-Request-ID")
+                or str(uuid.uuid4())
+            )
+            material = "|".join(
+                (
+                    str(current_user.get("api_key_id") or ""),
+                    seed,
+                    request.method.upper(),
+                    pricing.endpoint,
+                )
+            )
+            durable_idempotency_key = (
+                "sandbox-api-key:"
+                + hashlib.sha256(material.encode("utf-8")).hexdigest()
+            )
+            try:
+                usage = await record_sandbox_api_key_usage(
+                    current_user=current_user,
+                    method=request.method,
+                    endpoint=pricing.endpoint,
+                    metric_code=pricing.billing_scope,
+                    units=pricing.units_charged,
+                    idempotency_key=durable_idempotency_key,
+                )
+            except SubscriptionRuntimeError as exc:
+                if "quota limit exceeded" in str(exc).lower():
+                    rejected_user = dict(current_user)
+                    rejected_user["quota_rejected"] = True
+                    rejected_user["quota"] = {
+                        "scope": pricing.billing_scope,
+                        "requested": pricing.units_charged,
+                        "rejected": True,
+                        "source": "subscription_usage_ledger",
+                    }
+                    request.state.current_user = rejected_user
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail={
+                            "error": "quota_exceeded",
+                            "quota_scope": pricing.billing_scope,
+                            "quota_requested": pricing.units_charged,
+                            "quota_source": "subscription_usage_ledger",
+                        },
+                    ) from exc
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Subscription usage denied.",
+                ) from exc
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Subscription usage authority unavailable.",
+                ) from exc
+
+            checked_user = dict(current_user)
+            checked_user["quota"] = {
+                "scope": pricing.billing_scope,
+                "charged": pricing.units_charged,
+                "usage_id": str(usage.id),
+                "source": "subscription_usage_ledger",
+                "rejected": False,
+            }
+            request.state.current_user = checked_user
+            return checked_user
 
         try:
             checked_user = consume_quota(

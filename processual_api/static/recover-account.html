@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Recover Maestro account</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#07111f;color:#eef5ff;--surface:#0a192b;--line:#29425e;--accent:#f5a623;--muted:#aec0d4;--ok:#34d399;--error:#fca5a5}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at top left,#153b66 0,transparent 38%),#07111f}
+    main{width:min(100%,620px);padding:clamp(24px,5vw,44px);border:1px solid var(--line);border-radius:24px;background:rgba(10,25,43,.96);box-shadow:0 24px 80px rgba(0,0,0,.38)}
+    h1{margin:.2rem 0;font-size:clamp(1.8rem,5vw,2.7rem)}p{color:var(--muted);line-height:1.6}.eyebrow{color:#83c0ff;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:.78rem}
+    .field{display:grid;gap:.45rem;margin:1rem 0}.field label{font-weight:700}.field input{width:100%;min-height:48px;padding:12px 14px;border:1px solid #3b5876;border-radius:11px;background:#0b1b2d;color:#fff;font:inherit}
+    .field input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #73b7ff;outline-offset:3px}
+    button,.action{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:48px;padding:12px 16px;border:0;border-radius:11px;background:var(--accent);color:#07111f;font:inherit;font-weight:800;cursor:pointer;text-decoration:none}
+    button:disabled{opacity:.6;cursor:wait}.status{margin:1.1rem 0;padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:#0d2238;line-height:1.5}.status[data-state="error"]{border-color:#7f1d1d;color:var(--error)}.status[data-state="success"]{border-color:#065f46;color:#bbf7d0}
+    .security{margin-top:1.2rem;padding:14px;border-left:3px solid var(--accent);background:#0b1929;color:var(--muted);font-size:.92rem;line-height:1.55}.back{display:inline-block;margin-top:1rem;color:#83c0ff}.password-shell{position:relative}.password-shell input{padding-right:76px}.toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:auto;min-height:34px;padding:6px 10px;border:1px solid #3b5876;background:#10253c;color:#d8e8fa;font-size:.8rem}
+    [hidden]{display:none!important}@media(max-width:520px){body{padding:14px;place-items:start center}main{padding:24px;border-radius:18px}}
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Secure account recovery</p>
+  <h1>Restore account access</h1>
+  <p id="recovery-intro">Verifying your recovery link. No session or account authority is created during recovery.</p>
+
+  <div id="recovery-status" class="status" role="status" aria-live="polite">Checking recovery link…</div>
+
+  <form id="recovery-complete-form" hidden novalidate>
+    <div class="field">
+      <label for="recovery-new-password">New password</label>
+      <div class="password-shell">
+        <input id="recovery-new-password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+        <button class="toggle" id="recovery-password-toggle" type="button">Show</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="recovery-confirm-password">Confirm new password</label>
+      <input id="recovery-confirm-password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+    </div>
+    <button id="recovery-complete-button" type="submit">Complete secure recovery</button>
+  </form>
+
+  <section id="recovery-completed" hidden>
+    <p class="status" data-state="success">Password changed and previous account authority revoked. Sign in again to complete required MFA enrollment or verification before normal access resumes.</p>
+    <a class="action" href="/login?mode=user&recovered=1">Continue to secure sign in</a>
+  </section>
+
+  <aside class="security">
+    Recovery invalidates previous sessions, refresh tokens, action tokens, supervisor session keys, API keys, MFA factors, and old recovery codes. Recovery never creates a new authenticated session or grants production authority.
+  </aside>
+  <a class="back" href="/login?mode=user">Back to sign in</a>
+</main>
+<script>
+(() => {
+  const status = document.getElementById('recovery-status');
+  const form = document.getElementById('recovery-complete-form');
+  const completeButton = document.getElementById('recovery-complete-button');
+  const completed = document.getElementById('recovery-completed');
+  const password = document.getElementById('recovery-new-password');
+  const confirmPassword = document.getElementById('recovery-confirm-password');
+  const toggle = document.getElementById('recovery-password-toggle');
+  let requestId = '';
+  let completionToken = '';
+
+  function setStatus(message, state = '') {
+    status.textContent = message;
+    status.dataset.state = state;
+  }
+
+  toggle.addEventListener('click', () => {
+    const visible = password.type === 'text';
+    password.type = visible ? 'password' : 'text';
+    toggle.textContent = visible ? 'Show' : 'Hide';
+    password.focus({preventScroll:true});
+  });
+
+  async function verifyRecoveryLink() {
+    const params = new URLSearchParams(location.search);
+    const rawRequestId = String(params.get('request_id') || '').trim();
+    const rawToken = String(params.get('token') || '').trim();
+    history.replaceState(null, '', '/console/recover-account.html');
+    if (!rawRequestId || !rawToken) {
+      setStatus('This recovery link is incomplete or unavailable. Start a new recovery request from Sign In.', 'error');
+      return;
+    }
+    try {
+      const response = await fetch('/auth/account-recovery/verify', {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({request_id:rawRequestId, token:rawToken}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.completion_token || !result.request_id) throw new Error('Recovery verification is unavailable.');
+      requestId = String(result.request_id);
+      completionToken = String(result.completion_token);
+      setStatus('Recovery link verified. Set a new password to continue.', 'success');
+      form.hidden = false;
+      password.focus({preventScroll:true});
+    } catch (_error) {
+      setStatus('Recovery verification is unavailable. The link may be invalid, expired, or already used. Start a new recovery request.', 'error');
+    }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (password.value !== confirmPassword.value) {
+      setStatus('Password confirmation does not match.', 'error');
+      return;
+    }
+    if (!requestId || !completionToken) {
+      setStatus('Recovery completion authority is unavailable. Start a new recovery request.', 'error');
+      return;
+    }
+    completeButton.disabled = true;
+    completeButton.textContent = 'Completing recovery…';
+    try {
+      const response = await fetch('/auth/account-recovery/complete', {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({request_id:requestId, completion_token:completionToken, new_password:password.value, confirm_password:confirmPassword.value}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status !== 'completed' || result.authority_granted !== false || result.mfa_reenrollment_required !== true) throw new Error('Recovery completion is unavailable.');
+      requestId = '';
+      completionToken = '';
+      form.reset();
+      form.hidden = true;
+      status.hidden = true;
+      completed.hidden = false;
+    } catch (_error) {
+      setStatus('Recovery completion is unavailable. Start a new recovery request if this link has expired.', 'error');
+    } finally {
+      completeButton.disabled = false;
+      completeButton.textContent = 'Complete secure recovery';
+    }
+  });
+
+  verifyRecoveryLink();
+})();
+</script>
+</body>
+</html>

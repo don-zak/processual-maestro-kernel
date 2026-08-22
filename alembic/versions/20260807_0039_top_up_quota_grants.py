@@ -59,6 +59,24 @@ def _offline_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _online_json_fragments(dialect_name: str) -> tuple[str, str]:
+    """Return dialect-safe JSON assignment and empty-value predicate.
+
+    Production PostgreSQL keeps native JSON casts and operators. The local-review
+    SQLite path stores the serialized JSON text directly and uses a portable TEXT
+    cast for comparisons. This changes no entitlement values or authority.
+    """
+    if dialect_name == "sqlite":
+        return (
+            ":entitlements",
+            "CAST(entitlement_codes AS TEXT) IN ('[]', 'null')",
+        )
+    return (
+        "CAST(:entitlements AS json)",
+        "entitlement_codes::text IN ('[]', 'null')",
+    )
+
+
 def upgrade() -> None:
     with op.batch_alter_table(CYCLE_TABLE) as batch:
         batch.add_column(
@@ -85,31 +103,32 @@ def upgrade() -> None:
                 sa.text(
                     f"""
                     UPDATE {CYCLE_TABLE}
-                    SET entitlement_codes = '{_offline_literal(entitlements_json)}',
+                    SET entitlement_codes = '{_offline_literal(entitlements_json)}'::json,
                         plan_catalog_version = '{_offline_literal(CATALOG_VERSION)}'
                     WHERE plan_code = '{_offline_literal(plan_code)}'
                       AND (
                           entitlement_codes IS NULL
-                          OR entitlement_codes = '[]'
-                          OR entitlement_codes = 'null'
+                          OR entitlement_codes::text IN ('[]', 'null')
                       )
                     """
                 )
             )
     else:
         connection = op.get_bind()
+        json_assignment, empty_json_predicate = _online_json_fragments(
+            connection.dialect.name
+        )
         for plan_code, entitlements_json in _ENTITLEMENTS_BY_PLAN.items():
             connection.execute(
                 sa.text(
                     f"""
                     UPDATE {CYCLE_TABLE}
-                    SET entitlement_codes = :entitlements,
+                    SET entitlement_codes = {json_assignment},
                         plan_catalog_version = :version
                     WHERE plan_code = :plan_code
                       AND (
                           entitlement_codes IS NULL
-                          OR entitlement_codes = '[]'
-                          OR entitlement_codes = 'null'
+                          OR {empty_json_predicate}
                       )
                     """
                 ),
@@ -126,8 +145,7 @@ def upgrade() -> None:
                 SELECT plan_code
                 FROM {CYCLE_TABLE}
                 WHERE entitlement_codes IS NULL
-                   OR entitlement_codes = '[]'
-                   OR entitlement_codes = 'null'
+                   OR {empty_json_predicate}
                 LIMIT 1
                 """
             )

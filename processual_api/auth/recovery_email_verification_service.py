@@ -6,9 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from processual_api.auth.delivery_crypto import (
-    DeliveryPayloadCipher,
-)
+from processual_api.auth.delivery_crypto import DeliveryPayloadCipher
 from processual_api.auth.token_material import TokenDigester
 
 RECOVERY_EMAIL_VERIFICATION_TTL = timedelta(hours=1)
@@ -19,49 +17,21 @@ class RecoveryEmailVerificationDeniedError(RuntimeError):
 
 
 class RecoveryEmailVerificationRepository(Protocol):
-    async def platform_admin_user(
-        self,
-        *,
-        user_id: uuid.UUID,
-    ): ...
-
-    async def pending_recovery_email_for_update(
-        self,
-        *,
-        user_id: uuid.UUID,
-    ): ...
-
-    async def verification_principals_for_update(
-        self,
-        *,
-        token_hash: str,
-    ): ...
-
-    async def invalidate_active_tokens(
-        self,
-        *,
-        user_id: uuid.UUID,
-        invalidated_at: datetime,
-    ) -> int: ...
-
-    def add_verification(
-        self,
-        **values,
-    ): ...
+    async def platform_admin_user(self, *, user_id: uuid.UUID): ...
+    async def active_user_by_login_for_update(self, *, login_normalized: str): ...
+    async def recovery_email_by_address_for_update(self, *, email_normalized: str): ...
+    async def recovery_email_for_update(self, *, user_id: uuid.UUID): ...
+    def add_pending_recovery_email(self, **values): ...
+    async def pending_recovery_email_for_update(self, *, user_id: uuid.UUID): ...
+    async def verification_principals_for_update(self, *, token_hash: str): ...
+    async def invalidate_active_tokens(self, *, user_id: uuid.UUID, invalidated_at: datetime) -> int: ...
+    def add_verification(self, **values): ...
 
 
 class RecoveryEmailVerificationUnitOfWork(Protocol):
     repository: RecoveryEmailVerificationRepository
-
     async def __aenter__(self): ...
-
-    async def __aexit__(
-        self,
-        exc_type,
-        exc,
-        traceback,
-    ): ...
-
+    async def __aexit__(self, exc_type, exc, traceback): ...
     async def commit(self) -> None: ...
 
 
@@ -85,22 +55,14 @@ class RecoveryEmailVerificationService:
     def __init__(
         self,
         *,
-        unit_of_work_factory: Callable[
-            [],
-            RecoveryEmailVerificationUnitOfWork,
-        ],
+        unit_of_work_factory: Callable[[], RecoveryEmailVerificationUnitOfWork],
         token_digester: TokenDigester,
         delivery_cipher: DeliveryPayloadCipher,
         clock: Callable[[], datetime] | None = None,
-        token_ttl: timedelta = (
-            RECOVERY_EMAIL_VERIFICATION_TTL
-        ),
+        token_ttl: timedelta = RECOVERY_EMAIL_VERIFICATION_TTL,
     ) -> None:
         if token_ttl <= timedelta(0):
-            raise ValueError(
-                "Recovery-email verification TTL must be positive."
-            )
-
+            raise ValueError("Recovery-email verification TTL must be positive.")
         self._unit_of_work_factory = unit_of_work_factory
         self._token_digester = token_digester
         self._delivery_cipher = delivery_cipher
@@ -109,14 +71,30 @@ class RecoveryEmailVerificationService:
 
     def _now(self) -> datetime:
         now = self._clock()
-
         if now.tzinfo is None:
-            raise ValueError(
-                "Recovery-email verification clock "
-                "must be timezone-aware."
-            )
-
+            raise ValueError("Recovery-email verification clock must be timezone-aware.")
         return now
+
+    @staticmethod
+    def _normalize_email(value: str) -> str:
+        normalized = value.strip().casefold()
+        if len(normalized) < 3 or len(normalized) > 320 or "@" not in normalized:
+            raise RecoveryEmailVerificationDeniedError("Recovery-email replacement is unavailable.")
+        return normalized
+
+    def _verification_material(self, *, user_id: uuid.UUID, now: datetime):
+        expires_at = now + self._token_ttl
+        action_token_id = uuid.uuid4()
+        outbox_id = uuid.uuid4()
+        verification = self._token_digester.generate_token(purpose="verify_recovery_email")
+        encrypted = self._delivery_cipher.encrypt(
+            verification.raw,
+            outbox_id=str(outbox_id),
+            user_id=str(user_id),
+            action_token_id=str(action_token_id),
+            purpose="verify_recovery_email",
+        )
+        return action_token_id, outbox_id, verification, encrypted, expires_at
 
     async def issue(
         self,
@@ -125,58 +103,24 @@ class RecoveryEmailVerificationService:
         recent_step_up: bool,
     ) -> RecoveryEmailVerificationIssueReceipt:
         if not recent_step_up:
-            raise RecoveryEmailVerificationDeniedError(
-                "Recent MFA step-up is required."
-            )
-
+            raise RecoveryEmailVerificationDeniedError("Recent MFA step-up is required.")
         now = self._now()
-        expires_at = now + self._token_ttl
-        action_token_id = uuid.uuid4()
-        outbox_id = uuid.uuid4()
-
-        verification = self._token_digester.generate_token(
-            purpose="verify_recovery_email"
-        )
-
         async with self._unit_of_work_factory() as unit:
             repository = unit.repository
-
-            actor = await repository.platform_admin_user(
-                user_id=actor_user_id
-            )
-
+            actor = await repository.platform_admin_user(user_id=actor_user_id)
             if actor is None:
-                raise RecoveryEmailVerificationDeniedError(
-                    "Active platform administrator authority "
-                    "is required."
-                )
-
-            recovery_email = (
-                await repository.pending_recovery_email_for_update(
-                    user_id=actor_user_id
-                )
-            )
-
+                raise RecoveryEmailVerificationDeniedError("Active platform administrator authority is required.")
+            recovery_email = await repository.pending_recovery_email_for_update(user_id=actor_user_id)
             if recovery_email is None:
-                raise RecoveryEmailVerificationDeniedError(
-                    "Pending recovery email is unavailable."
-                )
-
-            invalidated_count = (
-                await repository.invalidate_active_tokens(
-                    user_id=actor_user_id,
-                    invalidated_at=now,
-                )
+                raise RecoveryEmailVerificationDeniedError("Pending recovery email is unavailable.")
+            invalidated_count = await repository.invalidate_active_tokens(
+                user_id=actor_user_id,
+                invalidated_at=now,
             )
-
-            encrypted = self._delivery_cipher.encrypt(
-                verification.raw,
-                outbox_id=str(outbox_id),
-                user_id=str(actor_user_id),
-                action_token_id=str(action_token_id),
-                purpose="verify_recovery_email",
+            action_token_id, outbox_id, verification, encrypted, expires_at = self._verification_material(
+                user_id=actor_user_id,
+                now=now,
             )
-
             repository.add_verification(
                 token_id=action_token_id,
                 outbox_id=outbox_id,
@@ -187,9 +131,7 @@ class RecoveryEmailVerificationService:
                 payload_key_version=encrypted.key_version,
                 available_at=now,
             )
-
             await unit.commit()
-
         return RecoveryEmailVerificationIssueReceipt(
             user_id=actor_user_id,
             action_token_id=action_token_id,
@@ -198,61 +140,105 @@ class RecoveryEmailVerificationService:
             invalidated_token_count=invalidated_count,
         )
 
-    async def verify(
+    async def issue_for_target(
         self,
         *,
-        raw_token: str,
-    ) -> RecoveryEmailVerificationReceipt:
+        actor_user_id: uuid.UUID,
+        target_login: str,
+        recovery_email: str,
+        recent_step_up: bool,
+    ) -> RecoveryEmailVerificationIssueReceipt:
+        if not recent_step_up:
+            raise RecoveryEmailVerificationDeniedError("Recent MFA step-up is required.")
+        login_normalized = self._normalize_email(target_login)
+        recovery_normalized = self._normalize_email(recovery_email)
         now = self._now()
 
-        try:
-            token_hash = self._token_digester.digest(
-                raw_token,
-                purpose="verify_recovery_email",
+        async with self._unit_of_work_factory() as unit:
+            repository = unit.repository
+            actor = await repository.platform_admin_user(user_id=actor_user_id)
+            if actor is None:
+                raise RecoveryEmailVerificationDeniedError("Active platform administrator authority is required.")
+
+            target = await repository.active_user_by_login_for_update(login_normalized=login_normalized)
+            if target is None:
+                raise RecoveryEmailVerificationDeniedError("Recovery-email replacement is unavailable.")
+
+            collision = await repository.recovery_email_by_address_for_update(email_normalized=recovery_normalized)
+            if collision is not None and collision.user_id != target.id:
+                raise RecoveryEmailVerificationDeniedError("Recovery-email replacement is unavailable.")
+
+            current = await repository.recovery_email_for_update(user_id=target.id)
+            if current is None:
+                current = repository.add_pending_recovery_email(
+                    address_id=uuid.uuid4(),
+                    user_id=target.id,
+                    email_normalized=recovery_normalized,
+                    created_at=now,
+                )
+            else:
+                current.email_normalized = recovery_normalized
+                current.status = "pending"
+                current.verified_at = None
+                current.revoked_at = None
+                current.updated_at = now
+
+            invalidated_count = await repository.invalidate_active_tokens(
+                user_id=target.id,
+                invalidated_at=now,
             )
+            action_token_id, outbox_id, verification, encrypted, expires_at = self._verification_material(
+                user_id=target.id,
+                now=now,
+            )
+            repository.add_verification(
+                token_id=action_token_id,
+                outbox_id=outbox_id,
+                user_id=target.id,
+                token_hash=verification.digest,
+                expires_at=expires_at,
+                payload_ciphertext=encrypted.ciphertext,
+                payload_key_version=encrypted.key_version,
+                available_at=now,
+            )
+            await unit.commit()
+
+        return RecoveryEmailVerificationIssueReceipt(
+            user_id=target.id,
+            action_token_id=action_token_id,
+            outbox_id=outbox_id,
+            expires_at=expires_at,
+            invalidated_token_count=invalidated_count,
+        )
+
+    async def verify(self, *, raw_token: str) -> RecoveryEmailVerificationReceipt:
+        now = self._now()
+        try:
+            token_hash = self._token_digester.digest(raw_token, purpose="verify_recovery_email")
         except ValueError as exc:
-            raise RecoveryEmailVerificationDeniedError(
-                "Recovery-email verification is unavailable."
-            ) from exc
+            raise RecoveryEmailVerificationDeniedError("Recovery-email verification is unavailable.") from exc
 
         async with self._unit_of_work_factory() as unit:
-            principals = (
-                await unit.repository
-                .verification_principals_for_update(
-                    token_hash=token_hash
-                )
-            )
-
+            principals = await unit.repository.verification_principals_for_update(token_hash=token_hash)
             if principals is None:
-                raise RecoveryEmailVerificationDeniedError(
-                    "Recovery-email verification is unavailable."
-                )
-
+                raise RecoveryEmailVerificationDeniedError("Recovery-email verification is unavailable.")
             action_token, recovery_email = principals
-
             if (
                 action_token.consumed_at is not None
                 or action_token.expires_at <= now
                 or recovery_email.status != "pending"
                 or recovery_email.revoked_at is not None
             ):
-                raise RecoveryEmailVerificationDeniedError(
-                    "Recovery-email verification is unavailable."
-                )
-
+                raise RecoveryEmailVerificationDeniedError("Recovery-email verification is unavailable.")
             action_token.consumed_at = now
             recovery_email.status = "verified"
             recovery_email.verified_at = now
             recovery_email.revoked_at = None
             recovery_email.updated_at = now
-
             await unit.commit()
-
             return RecoveryEmailVerificationReceipt(
                 user_id=recovery_email.user_id,
-                email_normalized=(
-                    recovery_email.email_normalized
-                ),
+                email_normalized=recovery_email.email_normalized,
                 status="verified",
             )
 
@@ -263,28 +249,16 @@ class RecoveryEmailVerificationService:
         recent_step_up: bool,
     ) -> int:
         if not recent_step_up:
-            raise RecoveryEmailVerificationDeniedError(
-                "Recent MFA step-up is required."
-            )
-
+            raise RecoveryEmailVerificationDeniedError("Recent MFA step-up is required.")
         now = self._now()
-
         async with self._unit_of_work_factory() as unit:
-            actor = await unit.repository.platform_admin_user(
-                user_id=actor_user_id
-            )
-
+            actor = await unit.repository.platform_admin_user(user_id=actor_user_id)
             if actor is None:
-                raise RecoveryEmailVerificationDeniedError(
-                    "Active platform administrator authority "
-                    "is required."
-                )
-
+                raise RecoveryEmailVerificationDeniedError("Active platform administrator authority is required.")
             count = await unit.repository.invalidate_active_tokens(
                 user_id=actor_user_id,
                 invalidated_at=now,
             )
-
             await unit.commit()
             return count
 

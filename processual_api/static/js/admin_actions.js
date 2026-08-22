@@ -70,6 +70,75 @@
     }
   }
 
+  function loadScriptOnce(src, datasetKey) {
+    return new Promise((resolve, reject) => {
+      const selector = `script[data-${datasetKey.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}]`;
+      const existing = document.querySelector(selector);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') resolve(existing);
+        else {
+          existing.addEventListener('load', () => resolve(existing), { once: true });
+          existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        }
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = src;
+      script.defer = true;
+      script.dataset[datasetKey] = 'true';
+      script.addEventListener('load', () => {
+        script.dataset.loaded = 'true';
+        resolve(script);
+      }, { once: true });
+      script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      document.body.appendChild(script);
+    });
+  }
+
+  async function loadExternalEvaluationAccess() {
+    if (document.body.dataset.adminExternalEvaluationAssets === 'loaded') return;
+    if (document.body.dataset.adminExternalEvaluationAssets === 'loading') return;
+    document.body.dataset.adminExternalEvaluationAssets = 'loading';
+
+    try {
+      await loadScriptOnce(
+        '/console/js/admin_api_key_provisioning_workspace.js?v=admin-eval-wire-r1',
+        'adminApiKeyProvisioningWorkspace',
+      );
+      await loadScriptOnce(
+        '/console/js/admin_external_evaluation_dom_contract.js?v=admin-eval-wire-r1',
+        'adminExternalEvaluationDomContract',
+      );
+      await loadScriptOnce(
+        '/console/js/admin_evaluation_grants.js?v=admin-eval-wire-r1',
+        'adminEvaluationGrants',
+      );
+      await loadScriptOnce(
+        '/console/js/admin_api_key_evaluation_lifecycle.js?v=admin-eval-wire-r1',
+        'adminApiKeyEvaluationLifecycle',
+      );
+      document.body.dataset.adminExternalEvaluationAssets = 'loaded';
+      window.PMK_ADMIN_EXTERNAL_EVALUATION_DOM_CONTRACT?.reconcile?.();
+      window.PMK_ADMIN_API_KEY_EVALUATION_LIFECYCLE?.initialize?.();
+    } catch (error) {
+      document.body.dataset.adminExternalEvaluationAssets = 'load-failed';
+      console.error('Unable to load External Evaluation Access assets.', error);
+    }
+  }
+
+  async function loadAccountRecoveryEscalations() {
+    try {
+      await loadScriptOnce(
+        '/console/js/admin_account_recovery_escalations.js?v=account-recovery-escalation-r1',
+        'adminAccountRecoveryEscalations',
+      );
+      window.PMK_ADMIN_ACCOUNT_RECOVERY_ESCALATIONS?.initialize?.();
+    } catch (error) {
+      console.error('Unable to load account recovery escalation queue.', error);
+    }
+  }
+
   function bindAdminActions() {
     const clientButton = document.getElementById('admin-client-console-btn');
     const logoutButton = document.getElementById('admin-logout-btn');
@@ -90,6 +159,8 @@
 
     loadAdminMarketplaceCatalog();
     loadEnterpriseFailureReview();
+    loadExternalEvaluationAccess();
+    loadAccountRecoveryEscalations();
   }
 
   window.PMK_ADMIN_ACTIONS = {
@@ -97,6 +168,8 @@
     clearAuthState,
     loadAdminMarketplaceCatalog,
     loadEnterpriseFailureReview,
+    loadExternalEvaluationAccess,
+    loadAccountRecoveryEscalations,
     logout,
     openClientConsole,
   };

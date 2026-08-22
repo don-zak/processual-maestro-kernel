@@ -79,7 +79,7 @@ class BindingRepository:
         return self.subscription_owner
 
 
-def _fixtures():
+def _fixtures(*, resource_type: str = "subscriptions"):
     order_id = uuid.uuid4()
     offer_id = uuid.uuid4()
     subscription_id = uuid.uuid4()
@@ -129,6 +129,7 @@ def _fixtures():
         offer_ref="starter_monthly",
         provider_customer_id="501",
         provider_subscription_id="9001",
+        resource_type=resource_type,
         test_mode=False,
     )
     bindings = BindingRepository(binding, customer_owner)
@@ -143,7 +144,7 @@ def _fixtures():
 
 @pytest.mark.asyncio
 async def test_loader_builds_context_from_locked_authoritative_records() -> None:
-    uow, inbox, _ = _fixtures()
+    uow, inbox, _ = _fixtures(resource_type="orders")
     loader = lemon_squeezy_reconciliation_context_loader_factory(
         production_mode=True
     )
@@ -162,6 +163,23 @@ async def test_loader_builds_context_from_locked_authoritative_records() -> None
     assert all(call[1] is True for call in uow.offers.calls)
     assert all(call[1] is True for call in uow.subscriptions.calls)
     assert all(call[2] is True for call in uow.lemon_squeezy_bindings.calls)
+
+
+@pytest.mark.asyncio
+async def test_loader_does_not_require_absent_money_fields_for_subscription_events() -> None:
+    uow, inbox, _ = _fixtures(resource_type="subscriptions")
+    loader = lemon_squeezy_reconciliation_context_loader_factory(
+        production_mode=True
+    )
+
+    context = await loader(uow, inbox)
+
+    assert context.expected_provider_customer_id == "501"
+    assert context.expected_provider_order_id == "801"
+    assert context.expected_provider_subscription_id == "9001"
+    assert context.expected_variant_id == "301"
+    assert context.expected_currency is None
+    assert context.expected_total_amount is None
 
 
 @pytest.mark.asyncio

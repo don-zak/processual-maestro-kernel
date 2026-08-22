@@ -53,7 +53,7 @@ def test_request_id_and_security_headers_are_added():
     assert response.headers["x-request-id"] == "rid-test-09a"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
-    assert response.headers["x-xss-protection"] == "1; mode=block"
+    assert response.headers["x-xss-protection"] == "0"
     assert response.headers["strict-transport-security"] == ("max-age=31536000; includeSubDomains")
 
 

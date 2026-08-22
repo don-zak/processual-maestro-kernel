@@ -56,9 +56,7 @@ from processual_api.admin_marketplace.subscription_quota_usage_persistence impor
     SqlAlchemySubscriptionQuotaCycleUsageRepository,
 )
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
-    SqlAlchemySubscriptionQuotaRepository,
     SqlAlchemySubscriptionRuntimeRepository,
-    SqlAlchemySubscriptionUsageRepository,
 )
 from processual_api.admin_marketplace.subscription_runtime_transition_persistence import (
     SqlAlchemySubscriptionRuntimeTransitionRepository,
@@ -120,17 +118,21 @@ class SqlAlchemyAdminMarketplaceUnitOfWork:
         )
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
         self.subscription_delinquency = SqlAlchemySubscriptionDelinquencyRepository(session)
-        self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
         self.subscription_quota_cycles = SqlAlchemySubscriptionQuotaCycleRepository(session)
-        self.subscription_quota_cycle_usage = SqlAlchemySubscriptionQuotaCycleUsageRepository(session)
-        self.subscription_usage = SqlAlchemySubscriptionUsageRepository(session)
-        self.subscription_runtime_transitions = SqlAlchemySubscriptionRuntimeTransitionRepository(session)
+        self.subscription_quota_cycle_usage = (
+            SqlAlchemySubscriptionQuotaCycleUsageRepository(session)
+        )
+        self.subscription_runtime_transitions = (
+            SqlAlchemySubscriptionRuntimeTransitionRepository(session)
+        )
         self.top_up_orders = SqlAlchemyCommercialTopUpOrderRepository(session)
         self.top_up_payments = SqlAlchemyCommercialTopUpPaymentRepository(session)
         self.top_up_grants = SqlAlchemyCommercialTopUpGrantRepository(session)
         self.top_up_audit = SqlAlchemyCommercialTopUpAuditRepository(session)
         self.subscription_top_up_grants = SqlAlchemySubscriptionTopUpGrantRepository(session)
-        self.subscription_top_up_reversals = SqlAlchemySubscriptionTopUpReversalRepository(session)
+        self.subscription_top_up_reversals = (
+            SqlAlchemySubscriptionTopUpReversalRepository(session)
+        )
         return self
 
     async def commit(self) -> None:

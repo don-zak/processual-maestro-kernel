@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="maestro-plan-catalog-endpoint" content="/billing/public-plan-journey">
   <title>Maestro plan details</title>
-  <meta name="description" content="Review plan price, quota, BYOK policy, add-ons, and trial success criteria.">
+  <meta name="description" content="Review plan price, quota, BYOK policy, add-ons, and commercial acceptance criteria.">
   <link rel="stylesheet" href="/console/css/public-journey.css">
 </head>
 <body>
@@ -49,24 +49,21 @@
         </article>
       </section>
 
-      <section class="detail-card detail-card--wide">
-        <p class="section-kicker">Additional quota packages</p>
+      <section class="detail-card detail-card--wide" id="offer-add-ons-section">
+        <p class="section-kicker" id="offer-add-ons-title">Additional quota packages</p>
         <div id="offer-add-ons"></div>
-        <p class="muted">
+        <p class="muted" id="offer-add-ons-terms">
           Add-ons are purchased separately when needed. They are not recurring by default,
           are not part of the annual commitment, and receive no annual discount.
         </p>
       </section>
 
-      <details class="trial-card">
-        <summary>Trial success criteria</summary>
+      <details class="trial-card" id="offer-criteria-card">
+        <summary id="offer-criteria-summary">Commercial acceptance criteria</summary>
         <div class="trial-content">
           <p id="offer-trial-duration" class="muted"></p>
           <ul id="offer-trial-criteria" class="feature-list"></ul>
-          <p class="commercial-warning">
-            Completing a trial confirms eligibility only. It does not automatically activate
-            payment, subscription, quota, or production entitlements.
-          </p>
+          <p class="commercial-warning" id="offer-criteria-warning"></p>
         </div>
       </details>
     </div>

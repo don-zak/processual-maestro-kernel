@@ -7,6 +7,7 @@ from collections import Counter
 _REQUIRED_ROUTES = {
     ("GET", "/health/live"),
     ("GET", "/health/ready"),
+    ("POST", "/billing/checkout"),
     ("POST", "/billing/webhook"),
     ("POST", "/admin-marketplace/subscriptions/usage"),
 }
@@ -57,6 +58,13 @@ def evaluate_staging_routes(app) -> tuple[str, ...]:
     from processual_api.admin_marketplace.subscription_usage_router import (
         record_subscription_usage_endpoint,
     )
+    from processual_api.billing.router import create_checkout
+
+    checkout_source = inspect.getsource(create_checkout)
+    if "resolve_canonical_checkout_in_session" not in checkout_source:
+        raise RuntimeError("staging smoke: canonical checkout resolution is not installed")
+    if "LEMONSQUEEZY_API_KEY" not in checkout_source:
+        raise RuntimeError("staging smoke: Lemon checkout provider client is not installed")
 
     webhook_source = inspect.getsource(secure_lemon_squeezy_webhook)
     if "ingest_lemon_squeezy_webhook_request_factory" not in webhook_source:
@@ -65,8 +73,12 @@ def evaluate_staging_routes(app) -> tuple[str, ...]:
         raise RuntimeError("staging smoke: legacy webhook side effects are installed")
 
     usage_source = inspect.getsource(record_subscription_usage_endpoint)
-    if "record_subscription_usage_factory" not in usage_source:
-        raise RuntimeError("staging smoke: atomic usage service is not installed")
+    if "record_subscription_quota_usage_factory" not in usage_source:
+        raise RuntimeError("staging smoke: authoritative quota-cycle usage service is not installed")
+    if "record_subscription_usage_factory" in usage_source:
+        raise RuntimeError("staging smoke: legacy quota-account usage service is installed")
+    if "quota_cycle_id=None" not in usage_source:
+        raise RuntimeError("staging smoke: quota cycle selection is not server authoritative")
     if "customer_ref" in getattr(record_subscription_usage_endpoint, "__annotations__", {}):
         raise RuntimeError("staging smoke: usage endpoint accepts external customer binding")
 
@@ -82,7 +94,9 @@ def evaluate_staging_routes(app) -> tuple[str, ...]:
 def main() -> int:
     try:
         from processual_api.main import app
+        from processual_api.release_gate import evaluate_release_environment
 
+        evaluate_release_environment()
         routes = evaluate_staging_routes(app)
     except Exception as exc:
         print(f"staging smoke failed: {exc}", file=sys.stderr)

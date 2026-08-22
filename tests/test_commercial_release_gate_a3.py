@@ -36,14 +36,13 @@ def _valid_environment() -> dict[str, str]:
             '{"v1":"payment-material"}'
         ),
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION": "v1",
+        "LEMONSQUEEZY_API_KEY": "lemon-api-key-" + "k" * 32,
         "LEMONSQUEEZY_STORE_ID": "12345",
         "LEMONSQUEEZY_WEBHOOK_SECRET": "w" * 48,
-        "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL": (
-            "https://app.maestro.invalid/console"
-        ),
-        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL": (
-            "https://app.maestro.invalid/pricing"
-        ),
+        "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL": "https://app.maestro.invalid/console",
+        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL": "https://app.maestro.invalid/pricing",
+        "MIGRATION_BACKUP_REFERENCE": "backup-20260818T070000Z",
+        "MIGRATION_RESTORE_REHEARSAL_REFERENCE": "restore-20260818T073000Z",
         "CORS_ORIGINS": "https://app.maestro.invalid",
         "API_DEBUG": "false",
         "AUDIT_ENABLED": "true",
@@ -54,8 +53,8 @@ def _valid_environment() -> dict[str, str]:
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
-    assert staging.expected_alembic_head == "20260809_0046"
-    assert EXPECTED_ALEMBIC_HEAD == "20260809_0046"
+    assert staging.expected_alembic_head == "20260822_0060"
+    assert EXPECTED_ALEMBIC_HEAD == "20260822_0060"
     assert set(staging.checks) == {
         "required_values",
         "secret_strength",
@@ -63,6 +62,7 @@ def test_valid_staging_and_production_environment_passes() -> None:
         "public_urls",
         "datastores",
         "runtime_controls",
+        "migration_rehearsal_evidence",
     }
 
     production = _valid_environment()
@@ -75,6 +75,7 @@ def test_valid_staging_and_production_environment_passes() -> None:
     (
         ("ENVIRONMENT", "development"),
         ("JWT_SECRET", "short"),
+        ("LEMONSQUEEZY_API_KEY", "replace_with_lemon_api_key"),
         ("LEMONSQUEEZY_WEBHOOK_SECRET", "short"),
         ("LEMONSQUEEZY_STORE_ID", "0"),
         ("CORS_ORIGINS", "*"),
@@ -89,6 +90,7 @@ def test_valid_staging_and_production_environment_passes() -> None:
             "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
             "https://your-frontend.example.com/console",
         ),
+        ("MIGRATION_BACKUP_REFERENCE", "replace_with_backup_reference"),
     ),
 )
 def test_unsafe_release_environment_fails_closed(name: str, value: str) -> None:
@@ -98,28 +100,54 @@ def test_unsafe_release_environment_fails_closed(name: str, value: str) -> None:
         evaluate_release_environment(environment)
 
 
-def test_missing_required_value_fails_without_echoing_secret() -> None:
+@pytest.mark.parametrize(
+    "name",
+    (
+        "LEMONSQUEEZY_API_KEY",
+        "LEMONSQUEEZY_WEBHOOK_SECRET",
+        "MIGRATION_BACKUP_REFERENCE",
+        "MIGRATION_RESTORE_REHEARSAL_REFERENCE",
+    ),
+)
+def test_missing_release_evidence_fails_without_echoing_secret(name: str) -> None:
     environment = _valid_environment()
-    environment.pop("LEMONSQUEEZY_WEBHOOK_SECRET")
+    environment.pop(name)
     with pytest.raises(RuntimeError) as captured:
         evaluate_release_environment(environment)
-    assert "LEMONSQUEEZY_WEBHOOK_SECRET" in str(captured.value)
+    assert name in str(captured.value)
+    assert "lemon-api-key-" not in str(captured.value)
     assert "w" * 20 not in str(captured.value)
 
 
-def test_release_workflow_requires_gates_before_publish() -> None:
+def test_backup_and_restore_rehearsal_references_must_be_distinct() -> None:
+    environment = _valid_environment()
+    environment["MIGRATION_RESTORE_REHEARSAL_REFERENCE"] = environment[
+        "MIGRATION_BACKUP_REFERENCE"
+    ]
+    with pytest.raises(RuntimeError, match="must differ"):
+        evaluate_release_environment(environment)
+
+
+def test_release_workflow_requires_migration_rehearsal_before_publish() -> None:
     workflow_path = (
-        Path(__file__).resolve().parents[1]
-        / ".github"
-        / "workflows"
-        / "release.yml"
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
     )
     workflow = workflow_path.read_text(encoding="utf-8")
     required = (
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
-        "Verify migration head",
-        "20260809_0046",
+        "MIGRATION_BACKUP_REFERENCE: ${{ secrets.MIGRATION_BACKUP_REFERENCE }}",
+        "MIGRATION_RESTORE_REHEARSAL_REFERENCE: ${{ secrets.MIGRATION_RESTORE_REHEARSAL_REFERENCE }}",
+        "20260822_0060 (head)",
+        "Verify declared migration head",
+        "Apply guarded staging schema migrations",
+        "python -m alembic upgrade head",
+        "Backfill missing subscription runtime",
+        "python -m processual_api.admin_marketplace.subscription_runtime_backfill",
+        "Verify subscription runtime backfill replay is empty",
+        "subscription-runtime-backfill scanned=0 created=0",
+        "Verify staging database migration head",
+        "python -m alembic current",
         "Commercial staging smoke gate",
         "python -m processual_api.staging_smoke",
         "Run commercial regression gate",
@@ -132,6 +160,15 @@ def test_release_workflow_requires_gates_before_publish() -> None:
     for marker in required:
         assert marker in workflow
 
-    gate_position = workflow.index("release-gate:")
-    publish_position = workflow.index("publish:")
-    assert gate_position < publish_position
+    order = (
+        "Commercial release environment gate",
+        "Verify declared migration head",
+        "Apply guarded staging schema migrations",
+        "Backfill missing subscription runtime",
+        "Verify subscription runtime backfill replay is empty",
+        "Verify staging database migration head",
+        "Commercial staging smoke gate",
+    )
+    positions = [workflow.index(marker) for marker in order]
+    assert positions == sorted(positions)
+    assert workflow.index("release-gate:") < workflow.index("publish:")

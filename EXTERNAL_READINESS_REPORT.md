@@ -1,143 +1,72 @@
-# External Readiness Report — Processual Maestro Kernel v2.0.0
+# External Readiness Report — Qualification Snapshot
 
-**Date**: 2026-05-31
-**Version**: 2.0.0
-**Build Profile**: Public (no proprietary CGT engine)
+> **QUALIFICATION SNAPSHOT — NOT PRODUCTION AUTHORITY**
+>
+> The original 31 May 2026 report contained stale and internally inconsistent readiness claims. This reconciled version preserves the historical intent while preventing those claims from being used as current release authority.
 
----
+**Original date:** 2026-05-31  
+**Version label at original snapshot:** 2.0.0  
+**Current interpretation:** public qualification evidence only
 
-## Summary
+## Current qualification position
 
-The Processual Maestro Kernel v2.0.0 is a **clean local governance reference** with the following profile:
+The public repository is under governed qualification. Current readiness must be established from exact-head CI plus the active qualification artifacts, not from historical endpoint counts, historical test totals, or historical CGT deployment descriptions.
 
-| Metric | Value |
-|--------|-------|
-| Total endpoints | 45 |
-| Auth-protected endpoints | 45 (100%) |
-| Tests passing | 952 / 957 (99.48%) — 0 failures |
-| Code coverage | 95.11% |
-| Security secrets validated | 8 / 8 (100%) |
-| Docker build (public) | Passes |
-| Pre-release checks | Automated via `scripts/release_check.py` |
+The following remain explicitly ungranted unless separately proven:
 
----
+- `GeneralPackagingComplete=false`
+- `PrivateRuntimeAuthorityGranted=false`
+- `runtime_connector_approved=false`
+- `provider_sandbox_proven=false`
+- `operator_network_qos_proven=false`
+- `RealStagingQualified=false`
+- `ProductionAuthorityGranted=false`
 
-## Authentication Coverage
+## Public/private mathematical boundary
 
-| Router | Protected | Notes |
-|--------|-----------|-------|
-| `/auth/*` | Yes | JWT login + token validation |
-| `/reports/*` | Yes | Added in v2.0.0 |
-| `/workflows/*` | Yes | Added in v2.0.0 |
-| `/billing/*` | Yes | Previously protected |
-| `/cgt/*` | Yes | Previously protected |
-| `/health/*` | No | Liveness/readiness probes (no credentials needed) |
-| `/metrics` | No | Prometheus scrape endpoint |
+The current public architecture does **not** require shipping proprietary `cgtlib/private` implementation into the public build. Public protected operations are fail-closed when the private evaluation runtime is unavailable.
 
----
+Public evaluation requests are bounded to opaque references plus evaluation time. Private-to-public decisions are restricted to the approved sanitized six-field contract:
 
-## Dependency Status (Public Build)
+- `existence_rank`
+- `dominant_constraint`
+- `next_gate`
+- `confidence_band`
+- `explanation_code`
+- `policy_version`
 
-| Dependency | Available | Notes |
-|-----------|-----------|-------|
-| PostgreSQL | Configurable | Required, validated at startup |
-| Redis | Configurable | Required, validated at startup |
-| CGT Engine | **Stub only** | Returns `503` for CGT math endpoints |
-| LLM Adapters | Configurable | OpenAI/Anthropic/Gemini/DeepSeek (API key required) |
-| Prometheus Metrics | Yes | `/metrics` endpoint active |
+Concrete opaque-reference issuance/resolution topology and private runtime connectivity remain subject to separate architecture approval and qualification.
 
----
+## Authentication and endpoint coverage
 
-## Security Hardening
+Historical claims that all 45 endpoints were authenticated are withdrawn as current authority. Health/metrics and other intentionally public surfaces require route-by-route classification rather than one aggregate percentage.
 
-- [x] All secrets validated at startup (empty/weak = reject)
-- [x] CORS wildcard rejected in production
-- [x] JWT authentication on all data endpoints
-- [x] Stack traces disabled in production
-- [x] Docs disabled in production
-- [x] Docker read-only filesystem
-- [x] Docker no-new-privileges
-- [x] Logging with rotation
-- [x] Version-pinned Docker images
+Before release closure, each user-visible and externally callable endpoint must be mapped to its applicable auth, subscription policy, capability, quota/meter, runtime-capacity, trust-boundary, audit/observability, and failure-mode controls.
 
----
+## Test evidence
 
-## Known Limitations
+The original report simultaneously stated zero failures and ten pre-existing failures. Those statements were contradictory and are therefore superseded.
 
-1. **CGT math unavailable in public build** — migrating from stubs to full engine requires the proprietary `cgtlib/private/` package
-2. **10 pre-existing test failures** — all related to billing monkeypatch compatibility and workflow integration — do not affect API correctness
-3. **Cache + data artifacts regenerate on test runs** — run `scripts/release_check.py` after final test run before packaging release
+Current test status must be taken only from exact-head workflow evidence. Historical test counts and historical coverage percentages are retained only in repository history; they are not current qualification metrics.
 
----
+## Visual qualification
 
-## Deployment Checklist
+Rendered HTTP/security contracts are already exercised as **VQ-0**. A separate **Visual Qualification Gate V1 (VQ-1)** is required immediately after release-truth reconciliation and before Real Staging.
 
-- [ ] `.env` configured with strong secrets (use `.env.production.example`)
-- [ ] `JWT_SECRET` is a random string ≥ 32 characters
-- [ ] `CORS_ORIGINS` lists explicit frontend domains
-- [ ] `API_DEBUG=false`
-- [ ] Database migrations applied
-- [ ] Redis password matches `REDIS_URL`
-- [ ] Health checks configured in orchestrator
-- [ ] Docker image tagged with version (`processual-maestro:2.0.0`)
-- [ ] `scripts/release_check.py --skip-docker` passes
-- [ ] Secrets excluded from version control (`git check-ignore .env`)
+VQ-1 must present the running program for systematic visual review across every user-visible page and active section, relevant application states, and declared desktop/narrow viewport coverage. Completion requires zero unreviewed user-visible pages/active sections plus an exact-head screenshot/evidence matrix and closure of all Blocker/High visual defects.
 
----
+## Packaging and release truth
 
-## Endpoints Reference
+Public packaging/Docker qualification must prove private-path exclusion, source/runtime quarantine controls, SBOM evidence, and exact-head success. External distribution remains blocked until the product-distribution license is explicitly resolved and synchronized across root license artifact, package metadata, and documentation.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health/live` | No | Liveness probe |
-| GET | `/health/ready` | No | Readiness probe |
-| GET | `/metrics` | No | Prometheus metrics |
-| POST | `/auth/login` | No | Obtain JWT token |
-| POST | `/auth/refresh` | Yes | Refresh JWT token |
-| GET | `/cgt/status` | Yes | CGT engine status |
-| POST | `/cgt/evaluate/scenario-pack` | Yes | Evaluate scenario pack |
-| POST | `/cgt/evaluate/phase-state` | Yes | Evaluate phase state |
-| POST | `/cgt/evaluate/transition` | Yes | Evaluate transition |
-| POST | `/cgt/evaluate/robustness` | Yes | Evaluate robustness |
-| POST | `/cgt/evaluate/stress` | Yes | Evaluate stress regime |
-| POST | `/cgt/evaluate/landscape` | Yes | Evaluate landscape |
-| POST | `/cgt/evaluate/structural-transition` | Yes | Evaluate structural transition |
-| POST | `/cgt/evaluate/transition-channel` | Yes | Evaluate transition channel |
-| POST | `/cgt/evaluate/archetype` | Yes | Evaluate transition archetype |
-| POST | `/cgt/evaluate/batch` | Yes | Evaluate batch |
-| POST | `/cgt/evaluate/fate-vector` | Yes | Evaluate fate vector |
-| POST | `/cgt/evaluate/existence` | Yes | Evaluate existence |
-| POST | `/cgt/evaluate/continuation` | Yes | Evaluate continuation |
-| POST | `/cgt/evaluate/aftermath` | Yes | Evaluate aftermath |
-| POST | `/cgt/evaluate/locking` | Yes | Evaluate locking |
-| POST | `/cgt/evaluate/benchmark` | Yes | Evaluate benchmark |
-| POST | `/cgt/evaluate/lock-state` | Yes | Evaluate lock state |
-| POST | `/cgt/evaluate/envelopes` | Yes | Evaluate comparative envelopes |
-| POST | `/cgt/evaluate/sensitivity` | Yes | Evaluate parameter sensitivity |
-| POST | `/cgt/evaluate/multi-axis` | Yes | Evaluate multi-axis robustness |
-| POST | `/cgt/evaluate/dynamic-lift` | Yes | Evaluate dynamic lift |
-| POST | `/cgt/evaluate/possibility` | Yes | Evaluate constrained possibility |
-| POST | `/cgt/evaluate/compatibility` | Yes | Evaluate compatibility |
-| POST | `/cgt/evaluate/regime-map` | Yes | Evaluate regime trajectory map |
-| GET | `/cgt/manifest` | Yes | CGTLib manifest |
-| GET | `/cgt/scenario-catalog` | Yes | List canonical scenarios |
-| GET | `/cgt/scenario-pack/{id}` | Yes | Get scenario pack details |
-| GET | `/cgt/robustness-profiles` | Yes | List robustness profiles |
-| GET | `/cgt/stress-regimes` | Yes | List stress regimes |
-| GET | `/cgt/archetypes` | Yes | List transition archetypes |
-| GET | `/cgt/reference-datasets` | Yes | List reference datasets |
-| GET | `/cgt/reference-record/{record_id}` | Yes | Get reference record |
-| POST | `/reports/fate` | Yes | Submit fate report |
-| POST | `/reports/generate-llm` | Yes | Generate LLM report |
-| POST | `/workflows/create` | Yes | Create workflow |
-| GET | `/workflows/{id}` | Yes | Get workflow |
-| POST | `/workflows/{id}/checkpoint` | Yes | Create workflow checkpoint |
-| GET | `/workflows/{id}/governance` | Yes | Get workflow governance |
-| POST | `/billing/charge` | Yes | Charge usage |
-| GET | `/billing/balance` | Yes | Get balance |
-| POST | `/billing/plan` | Yes | Update plan |
-| POST | `/billing/webhook` | Yes | Stripe webhook (also no-auth route) |
+An immutable image digest must be the eventual promotion authority; mutable tags such as `latest` are not sufficient.
 
----
+## Real Staging and production qualification
 
-*This report was generated automatically. For questions, contact the Processual Maestro Kernel team.*
+Real Staging remains a future governed gate. It requires real infrastructure, secret authority, database migration/backfill/backup/restore rehearsal, health/readiness, commercial E2E, load/concurrency, security, observability, rollback, domain/TLS, and provider/operator evidence as applicable.
+
+Mock/simulator/sandbox-local evidence must not be promoted into Real Staging, operator-network, or production claims.
+
+## Authority statement
+
+This report is a reconciled qualification document. It does **not** grant staging, release-candidate, pilot, GA, or production authority. Such authority requires later explicit evidence and decision gates.

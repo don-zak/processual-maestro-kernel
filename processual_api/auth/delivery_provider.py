@@ -10,6 +10,7 @@ ALLOWED_VERIFICATION_TEMPLATES = frozenset(
         "verify_email",
         "verify_recovery_email",
         "account_recovery_verification",
+        "admin_governance_invitation",
     }
 )
 

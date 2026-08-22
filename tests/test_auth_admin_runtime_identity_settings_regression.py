@@ -85,7 +85,5 @@ def test_admin_runtime_login_preserves_identity_and_settings_access(monkeypatch)
     )
 
     assert settings_response.status_code == 200
-    assert FakeJWT.decoded_tokens == [
-        "fake.admin.runtime.jwt",
-        "fake.admin.runtime.jwt",
-    ]
+    assert FakeJWT.decoded_tokens == ["fake.admin.runtime.jwt"] * 4
+    assert all(algorithms is not None for algorithms in FakeJWT.decoded_algorithms)

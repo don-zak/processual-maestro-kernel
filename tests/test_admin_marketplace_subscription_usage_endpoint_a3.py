@@ -11,8 +11,9 @@ from pydantic import ValidationError
 
 from processual_api.admin_marketplace import subscription_usage_router as transport
 from processual_api.admin_marketplace.router import router
-from processual_api.admin_marketplace.subscription_runtime import (
-    SubscriptionRuntimeError,
+from processual_api.admin_marketplace.subscription_quota_usage import (
+    SubscriptionQuotaUsageCommand,
+    SubscriptionQuotaUsageError,
 )
 
 
@@ -20,10 +21,10 @@ class _Recorder:
     def __init__(self, *, result=None, error: Exception | None = None) -> None:
         self.result = result
         self.error = error
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[SubscriptionQuotaUsageCommand] = []
 
-    async def __call__(self, **kwargs):
-        self.calls.append(kwargs)
+    async def __call__(self, command: SubscriptionQuotaUsageCommand):
+        self.calls.append(command)
         if self.error is not None:
             raise self.error
         return self.result
@@ -51,6 +52,8 @@ def test_usage_route_is_registered_once_and_requires_identity_dependency() -> No
     assert endpoint is transport.record_subscription_usage_endpoint
     source = inspect.getsource(endpoint)
     assert "get_identity_user" in source
+    assert "record_subscription_quota_usage_factory" in source
+    assert "quota_cycle_id=None" in source
     assert "customer_ref" not in transport.SubscriptionUsageRequest.model_fields
 
 
@@ -73,7 +76,7 @@ def test_usage_contract_forbids_extra_customer_binding_and_invalid_units() -> No
 
 
 @pytest.mark.asyncio
-async def test_endpoint_derives_customer_from_identity_and_passes_idempotency(monkeypatch) -> None:
+async def test_endpoint_derives_customer_and_builds_authoritative_quota_command(monkeypatch) -> None:
     customer_id = uuid.UUID("00000000-0000-0000-0000-000000000222")
     usage = SimpleNamespace(
         id=uuid.UUID("00000000-0000-0000-0000-000000000333"),
@@ -84,7 +87,7 @@ async def test_endpoint_derives_customer_from_identity_and_passes_idempotency(mo
     recorder = _Recorder(result=usage)
     monkeypatch.setattr(
         transport,
-        "record_subscription_usage_factory",
+        "record_subscription_quota_usage_factory",
         lambda **kwargs: recorder,
     )
 
@@ -96,9 +99,14 @@ async def test_endpoint_derives_customer_from_identity_and_passes_idempotency(mo
 
     assert response.usage_id == usage.id
     assert len(recorder.calls) == 1
-    call = recorder.calls[0]
-    assert call["customer_ref"] == str(customer_id)
-    assert call["idempotency_key"] == "usage-request-1"
+    command = recorder.calls[0]
+    assert command.subscription_id == _body().subscription_id
+    assert command.customer_ref == str(customer_id)
+    assert command.metric_code == "workflow_runs"
+    assert command.units == 3
+    assert command.quota_cycle_id is None
+    assert len(command.idempotency_key_hash) == 64
+    assert len(command.dimensions_digest) == 64
     assert "customer_ref" not in _body().model_dump()
 
 
@@ -111,7 +119,7 @@ async def test_invalid_identity_fails_before_service_factory(monkeypatch) -> Non
         opened = True
         return _Recorder()
 
-    monkeypatch.setattr(transport, "record_subscription_usage_factory", factory)
+    monkeypatch.setattr(transport, "record_subscription_quota_usage_factory", factory)
     with pytest.raises(HTTPException) as captured:
         await transport.record_subscription_usage_endpoint(
             _body(),
@@ -127,14 +135,14 @@ async def test_invalid_identity_fails_before_service_factory(monkeypatch) -> Non
 @pytest.mark.parametrize(
     ("error", "expected_status"),
     [
-        (SubscriptionRuntimeError("quota limit exceeded."), 409),
-        (SubscriptionRuntimeError("subscription customer binding mismatch."), 403),
+        (SubscriptionQuotaUsageError("quota balance is insufficient."), 409),
+        (SubscriptionQuotaUsageError("quota usage customer conflicts with subscription."), 403),
     ],
 )
 async def test_domain_errors_are_sanitized(monkeypatch, error, expected_status) -> None:
     monkeypatch.setattr(
         transport,
-        "record_subscription_usage_factory",
+        "record_subscription_quota_usage_factory",
         lambda **kwargs: _Recorder(error=error),
     )
     with pytest.raises(HTTPException) as captured:
@@ -156,7 +164,7 @@ async def test_domain_errors_are_sanitized(monkeypatch, error, expected_status) 
 async def test_unexpected_failures_are_sanitized_as_unavailable(monkeypatch) -> None:
     monkeypatch.setattr(
         transport,
-        "record_subscription_usage_factory",
+        "record_subscription_quota_usage_factory",
         lambda **kwargs: _Recorder(error=RuntimeError("database details")),
     )
     with pytest.raises(HTTPException) as captured:

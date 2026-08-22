@@ -18,7 +18,7 @@ The approved order is:
 1. Complete the remaining authentication program.
 2. Build the dedicated Admin Marketplace inside the platform administrator area.
 3. Implement direct sales inside Tunisia independently from Lemon Squeezy.
-4. Block Lemon Squeezy checkout for customers governed as Tunisian customers.
+4. Enforce the approved Tunisia sales-channel governance policy: eligible Tunisian customers may choose Lemon Squeezy when that channel is commercially, legally, operationally and securely available; Tunisian country status alone must not block Lemon Squeezy checkout.
 5. Define and enforce plans, entitlements, quotas and usage accounting.
 6. Determine and approve prices and commercial policies.
 7. Reconcile the public and private repositories.

@@ -20,6 +20,7 @@ def test_stage18_admin_integration_center_is_wired_to_existing_safe_routes():
     assert "/settings/admin/integration-readiness-tracking/cases" in center
     assert "/settings/admin/operator-pilot-handoff" in center
     assert "/settings/admin/operator-pilot-handoff/progress" in center
+    assert "/settings/admin/integration-center/camara-qod-qualification" in center
     assert "Production" in center
     assert "NO-GO" in center
     assert "No raw secrets" in center
@@ -36,6 +37,23 @@ def test_enterprise_workspace_is_bootstrapped_without_internal_stage_labels():
     assert "Enterprise workspace" in workspace
     assert "Stage 18 R3" not in workspace
     assert "Production blocked" in workspace
+
+
+def test_enterprise_workspace_dedupes_subscription_outage_and_fails_closed_without_fake_data():
+    workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
+
+    assert "SUBSCRIPTION_UNAVAILABLE_DETAIL" in workspace
+    assert "dedupedLoadError" in workspace
+    assert "new Set" in workspace
+    assert "Enterprise workspace data remains fail-closed until subscription verification recovers." in workspace
+    assert "Subscription status unavailable" in workspace
+    assert "Operational case data is unavailable until subscription verification recovers." in workspace
+    assert "Case registry is unavailable until subscription verification recovers." in workspace
+    assert "!state.availability.subscription || !state.availability.cases" in workspace
+    assert "<strong>—</strong>" in workspace
+    assert "state.subscription?.plan_id || 'unknown'" in workspace
+    assert "state.subscription?.plan_id || 'starter'" not in workspace
+    assert 'role="alert"' in workspace
 
 
 def test_stage18_workspace_styles_are_loaded_and_responsive():
@@ -55,7 +73,11 @@ def test_stage18_workspace_styles_are_loaded_and_responsive():
     assert "@media(max-width:620px)" in institution_css
     assert ".ic18-metrics" in integration_center_css
     assert ".ic18-rail" in integration_center_css
+    assert ".ic18-platform-grid" in integration_center_css
+    assert ".ic18-readiness-step" in integration_center_css
     assert "@media(max-width:640px)" in integration_center_css
+    assert "@media(prefers-reduced-motion:reduce)" in integration_center_css
+
 
 def test_enterprise_workspace_exposes_operational_tracks_and_tasks():
     workspace = _text("processual_api/static/js/pages/institution_workspace_18.js")
@@ -93,6 +115,174 @@ def test_enterprise_workspace_limits_supervisor_to_decision_gate():
     assert "raw_secret_visible=false" in workspace
 
 
+def test_integration_center_platforms_distinguish_contract_from_live_proof():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "Platform qualification, not logo compatibility" in center
+    assert "Architecture family" in center
+    assert "Reviewed release candidate" in center
+    assert "Server-enabled trusted source" in center
+    assert "Live source acquisition" in center
+    assert "Semantic task mapping" in center
+    assert "Governance approval" in center
+    assert "Runtime task registration" in center
+    assert "External Telefónica sandbox" in center
+    assert "Provider network" in center
+    assert "Runtime connector" in center
+    assert "Production approval" in center
+    assert "Provider API version" in center
+    assert "Live provider proof" in center
+    assert "Blocked" in center
+
+
+def test_integration_center_camara_status_is_route_backed_and_fail_closed():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert 'camaraQod: "/settings/admin/integration-center/camara-qod-qualification"' in center
+    assert "camaraQod: null" in center
+    assert "getJson(API.camaraQod)" in center
+    assert 'state.camaraQod = results[4].status === "fulfilled" ? results[4].value : null' in center
+    assert 'payload.status === "reviewed_qualification_contract"' in center
+    assert "payload.server_trusted_source_enabled === true" in center
+    assert 'payload.semantic_mapping_state === "proposal_only"' in center
+    assert "callableOperations.length === 5" in center
+    assert 'payload.governance_candidate_state === "review_required"' in center
+    assert "payload.governance_candidate_valid === true" in center
+    assert "payload.governance_approved === true" in center
+    assert 'payload.governance_decision === "approved_with_conditions"' in center
+    assert "governanceTasks.length === 5" in center
+    assert "governanceEntitlements.length === 2" in center
+    assert "governanceQuotas.length === 5" in center
+    assert "payload.runtime_task_registered === true" in center
+    assert "payload.runtime_default_deny === true" in center
+    assert "payload.live_source_acquisition_proven === true" in center
+    assert "external.external_mock_sandbox_proven === true" in center
+    assert "external.mock_documentation_divergence_observed === true" in center
+    assert "payload.provider_network_proof === true" in center
+    assert "payload.provider_sandbox_proven === true" in center
+    assert "payload.runtime_connector_approved === true" in center
+    assert "payload.production_allowed === true" in center
+    assert "Qualification status route unavailable. Conservative fallback" in center
+    assert "governance approval, provider sandbox and runtime authority unproven" in center
+
+
+def test_integration_center_camara_candidate_is_pinned_without_overclaiming():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "Quality on Demand · r3.2 candidate" in center
+    assert "QoD v${version}" in center
+    assert "9cb179f" in center
+    assert "code/API_definitions/quality-on-demand.yaml" in center
+    assert "Spec candidate pinned" in center
+    assert 'const sourceStatus = sourceEnabled ? "Policy enabled" : "Pending"' in center
+    assert 'const semanticStatus = semanticReviewed ? "Reviewed proposal" : "Pending"' in center
+    assert 'const governanceStatus = governanceApproved ? "Approved" : "Pending"' in center
+    assert 'const runtimeStatus = runtimeRegistered && runtimeDefaultDeny ? "Registered / default-deny" : "Not registered"' in center
+    assert 'const liveStatus = liveProven ? "Proven" : "Not proven"' in center
+    assert 'const externalStatus = externalMockProven ? (externalDivergence ? "Proven / divergence present" : "Proven") : "Not proven"' in center
+    assert 'const providerNetworkStatus = providerNetworkProven ? "Proven" : "Not proven"' in center
+    assert 'const connectorStatus = runtimeConnectorApproved ? "Approved" : "Not approved"' in center
+    assert 'const productionStatus = productionAllowed ? "Allowed" : "Blocked"' in center
+    assert "external mock evidence does not satisfy this gate" in center
+    assert "Runtime connector approval remains explicitly false" in center
+    assert "cannot implicitly grant production authority" in center
+    assert "CAMARAConnectorQualified=True" not in center
+
+
+def test_integration_center_qod_governance_and_runtime_are_authoritative_but_fail_closed():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "governanceApproved" in center
+    assert "Governance approval" in center
+    assert "approved with conditions" in center
+    assert "runtimeRegistered" in center
+    assert "runtimeDefaultDeny" in center
+    assert "Registered / default-deny" in center
+    assert "five approved runtime tasks are registered and remain fail-closed by default" in center
+    assert "provider network" in center
+    assert "not proven" in center
+    assert "runtime connector" in center
+    assert "not approved" in center
+    assert "production" in center
+    assert "blocked" in center
+
+
+def test_integration_center_qod_external_mock_is_separate_from_provider_authority():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "External Telefónica sandbox" in center
+    assert "externalMockProven" in center
+    assert "externalDivergence" in center
+    assert "Mock interoperability evidence is retained separately from provider authority" in center
+    assert "compatibility=${compatibilityState}" in center
+    assert "retrieveSessionsByDevice" in center
+    assert "missing-session divergence" in center
+    assert "providerSandboxProven" in center
+    assert "providerNetworkProven" in center
+
+
+def test_integration_center_qod_mapping_priority_reflects_current_governance():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "Reconcile CAMARA browser rendering" in center
+    assert "Review provider compatibility disposition" in center
+    assert "pending governance" in center
+    assert "Obtain operator-backed QoD proof" in center
+    assert "Map CAMARA QoD operations" not in center
+    assert "Review/register QoD task contracts" not in center
+
+
+def test_integration_center_status_semantics_do_not_treat_not_proven_as_warning():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "not proven" in center
+    assert "/reject|block|fail|expired|no-go|not qualified|disabled|not proven|not approved/" in center
+    assert "Ready / pinned" in center
+    assert "Blocked / not proven" in center
+
+
+def test_integration_center_exposes_real_transport_guardrails():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert "HTTPS-only destinations" in center
+    assert "Public-address DNS verification" in center
+    assert "Redirect following" in center
+    assert "Path-segment composition" in center
+    assert "percent-encoded as one route segment" in center
+    assert "JSON-only parsing with a 1 MiB response ceiling" in center
+
+
+def test_integration_center_has_accessible_navigation_and_status_semantics():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert 'role="tablist"' in center
+    assert 'role="tab"' in center
+    assert 'role="tabpanel"' in center
+    assert 'aria-controls="ic18-panel-${key}"' in center
+    assert 'aria-labelledby="ic18-tab-${state.active}"' in center
+    assert 'aria-selected="${state.active === key ? "true" : "false"}"' in center
+    assert 'tabindex="${state.active === key ? "0" : "-1"}"' in center
+    assert 'role="status"' in center
+    assert 'role="alert"' in center
+    assert 'aria-label="Environment authority"' in center
+    assert 'aria-label="Integration readiness metrics"' in center
+    assert 'aria-label="Readiness legend"' in center
+    assert 'type="button"' in center
+    assert "Loading integration readiness, cases, CAMARA qualification and pilot evidence" in center
+
+
+def test_integration_center_tabs_support_standard_keyboard_navigation():
+    center = _text("processual_api/static/js/admin_integration_center_18.js")
+
+    assert 'event.key === "ArrowRight"' in center
+    assert 'event.key === "ArrowLeft"' in center
+    assert 'event.key === "Home"' in center
+    assert 'event.key === "End"' in center
+    assert "event.preventDefault()" in center
+    assert "window.requestAnimationFrame" in center
+    assert "activeTab.focus()" in center
+
+
 def test_stage18_new_ui_does_not_embed_secret_material():
     combined = "\n".join(
         [
@@ -111,6 +301,4 @@ def test_stage18_new_ui_does_not_embed_secret_material():
     for marker in forbidden:
         assert marker not in combined
 
-    # Reject realistic embedded secret values while allowing ordinary UI
-    # identifiers such as task-status, task-list, and data-save-task.
     assert re.search(r"(?<![a-z0-9_-])sk-[a-z0-9_-]{16,}", combined) is None

@@ -11,9 +11,7 @@ from starlette.requests import Request
 
 import processual_api.auth.security as security_module
 import processual_api.db.session as db_session_module
-from processual_api.auth.session_repository import (
-    SqlAlchemySessionRepository,
-)
+from processual_api.auth.session_repository import SqlAlchemySessionRepository
 
 
 class ScalarSession:
@@ -97,7 +95,7 @@ def _identity_payload(user_id, session_id):
 
 def test_repository_requires_mfa_for_active_platform_admin() -> None:
     platform_authority_id = uuid.uuid4()
-    session = ScalarSession((None, None, platform_authority_id))
+    session = ScalarSession((None, None, platform_authority_id, None))
     repository = SqlAlchemySessionRepository(session)
 
     required = asyncio.run(
@@ -107,20 +105,34 @@ def test_repository_requires_mfa_for_active_platform_admin() -> None:
     )
 
     assert required is True
-    assert len(session.statements) == 3
+    assert len(session.statements) == 4
 
     sql = _compiled_sql(session.statements[2])
 
     assert "identity_platform_authorities.id" in sql
-    assert (
-        "identity_platform_authorities.authority = 'platform_admin'"
-        in sql
-    )
+    assert "identity_platform_authorities.authority = 'platform_admin'" in sql
     assert "identity_platform_authorities.status = 'active'" in sql
 
 
+def test_repository_requires_mfa_after_completed_account_recovery() -> None:
+    completed_recovery_id = uuid.uuid4()
+    session = ScalarSession((None, None, None, completed_recovery_id))
+    repository = SqlAlchemySessionRepository(session)
+
+    required = asyncio.run(
+        repository.requires_mfa(
+            uuid.UUID("12111111-1111-1111-1111-111111111111")
+        )
+    )
+
+    assert required is True
+    recovery_sql = _compiled_sql(session.statements[3])
+    assert "auth_account_recovery_requests.id" in recovery_sql
+    assert "auth_account_recovery_requests.state = 'completed'" in recovery_sql
+
+
 def test_repository_does_not_require_mfa_for_revoked_authority_only() -> None:
-    session = ScalarSession((None, None, None))
+    session = ScalarSession((None, None, None, None))
     repository = SqlAlchemySessionRepository(session)
 
     required = asyncio.run(
@@ -138,7 +150,7 @@ def test_repository_does_not_require_mfa_for_revoked_authority_only() -> None:
 
 
 def test_repository_existing_mfa_factor_still_requires_mfa() -> None:
-    session = ScalarSession((uuid.uuid4(), None, None))
+    session = ScalarSession((uuid.uuid4(), None, None, None))
     repository = SqlAlchemySessionRepository(session)
 
     required = asyncio.run(
@@ -151,7 +163,7 @@ def test_repository_existing_mfa_factor_still_requires_mfa() -> None:
 
 
 def test_repository_privileged_membership_still_requires_mfa() -> None:
-    session = ScalarSession((None, uuid.uuid4(), None))
+    session = ScalarSession((None, uuid.uuid4(), None, None))
     repository = SqlAlchemySessionRepository(session)
 
     required = asyncio.run(
@@ -163,9 +175,7 @@ def test_repository_privileged_membership_still_requires_mfa() -> None:
     assert required is True
 
 
-def test_active_platform_admin_is_mfa_limited_on_protected_request(
-    monkeypatch,
-) -> None:
+def test_active_platform_admin_is_mfa_limited_on_protected_request(monkeypatch) -> None:
     now = datetime.now(UTC)
     user_id = uuid.uuid4()
     session_id = uuid.uuid4()
@@ -182,7 +192,7 @@ def test_active_platform_admin_is_mfa_limited_on_protected_request(
 
     database_session = IdentityDatabaseSession(
         (auth_session, user),
-        scalar_values=(None, None, uuid.uuid4()),
+        scalar_values=(None, None, uuid.uuid4(), None),
     )
 
     monkeypatch.setattr(
@@ -214,9 +224,7 @@ def test_active_platform_admin_is_mfa_limited_on_protected_request(
     assert current_user["session_type"] == "identity_user"
 
 
-def test_satisfied_platform_admin_session_gets_only_evaluation_scope(
-    monkeypatch,
-) -> None:
+def test_satisfied_platform_admin_session_gets_only_evaluation_scope(monkeypatch) -> None:
     now = datetime.now(UTC)
     user_id = uuid.uuid4()
     session_id = uuid.uuid4()
@@ -233,7 +241,7 @@ def test_satisfied_platform_admin_session_gets_only_evaluation_scope(
 
     database_session = IdentityDatabaseSession(
         (auth_session, user),
-        scalar_values=(None, None, uuid.uuid4()),
+        scalar_values=(None, None, uuid.uuid4(), None),
     )
 
     monkeypatch.setattr(
@@ -265,9 +273,7 @@ def test_satisfied_platform_admin_session_gets_only_evaluation_scope(
     assert current_user["scopes"] != ["*"]
 
 
-def test_revoked_platform_authority_claim_cannot_force_or_grant_access(
-    monkeypatch,
-) -> None:
+def test_revoked_platform_authority_claim_cannot_force_or_grant_access(monkeypatch) -> None:
     now = datetime.now(UTC)
     user_id = uuid.uuid4()
     session_id = uuid.uuid4()
@@ -284,7 +290,7 @@ def test_revoked_platform_authority_claim_cannot_force_or_grant_access(
 
     database_session = IdentityDatabaseSession(
         (auth_session, user),
-        scalar_values=(None, None, None),
+        scalar_values=(None, None, None, None),
     )
 
     monkeypatch.setattr(

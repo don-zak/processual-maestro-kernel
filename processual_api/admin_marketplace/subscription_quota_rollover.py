@@ -33,6 +33,107 @@ class SubscriptionQuotaRolloverCommand:
     base_limit_units: int
 
 
+@dataclass(frozen=True, slots=True)
+class _RolloverAuthority:
+    plan_code: str
+    authority_version: str
+    entitlement_codes: tuple[str, ...]
+    quota_profile_ref: str
+    metric_code: str
+    base_limit_units: int
+    rollover_units: int
+
+
+async def _resolve_authority(*, uow: object, subscription: object, plan: object, source: object) -> _RolloverAuthority:
+    bindings = getattr(uow, "assessment_subscription_bindings", None)
+    profiles = getattr(uow, "assessment_quota_profiles", None)
+    binding = None
+    if bindings is not None:
+        binding = await bindings.get_by_subscription_id(
+            subscription.id,
+            for_update=True,
+        )
+
+    if binding is not None:
+        if profiles is None:
+            raise SubscriptionQuotaRolloverError(
+                "assessment quota authority repository is unavailable."
+            )
+        profile = await profiles.get_by_profile_ref(
+            binding.quota_profile_ref,
+            for_update=True,
+        )
+        if profile is None:
+            raise SubscriptionQuotaRolloverError(
+                "assessment quota profile was not found."
+            )
+        if (
+            binding.customer_ref != subscription.customer_ref
+            or binding.entitlement_plan_id != subscription.plan_id
+            or binding.entitlement_source_plan_code != plan.plan_code.strip().lower()
+            or profile.customer_ref != subscription.customer_ref
+            or profile.profile_ref != binding.quota_profile_ref
+            or normalize_maestro_metric_code(profile.metric_code) != QUOTA_METRIC_CODE
+            or profile.limit_units <= 0
+        ):
+            raise SubscriptionQuotaRolloverError(
+                "assessment quota authority conflicts with the subscription."
+            )
+        if (
+            source.plan_code != binding.entitlement_source_plan_code
+            or source.plan_catalog_version != profile.definition_version
+            or tuple(source.entitlement_codes) != tuple(profile.entitlement_codes_json)
+            or source.quota_profile_ref != profile.profile_ref
+            or normalize_maestro_metric_code(source.metric_code) != QUOTA_METRIC_CODE
+            or source.base_limit_units != profile.limit_units
+        ):
+            raise SubscriptionQuotaRolloverError(
+                "source quota cycle conflicts with the assessment authority."
+            )
+        # Assessment quotas are bespoke contractual grants. Do not silently grant
+        # carry-over until an assessment-specific rollover policy is approved.
+        return _RolloverAuthority(
+            plan_code=binding.entitlement_source_plan_code,
+            authority_version=profile.definition_version,
+            entitlement_codes=tuple(profile.entitlement_codes_json),
+            quota_profile_ref=profile.profile_ref,
+            metric_code=QUOTA_METRIC_CODE,
+            base_limit_units=profile.limit_units,
+            rollover_units=0,
+        )
+
+    try:
+        plan_spec = get_plan_fulfillment_spec(plan.plan_code)
+    except KeyError as exc:
+        raise SubscriptionQuotaRolloverError(
+            "subscription plan is not in the authoritative catalog."
+        ) from exc
+    if plan_spec.seat_based_consumption:
+        raise SubscriptionQuotaRolloverError(
+            "quota consumption cannot be seat based."
+        )
+    if (
+        source.subscription_id != subscription.id
+        or normalize_maestro_metric_code(source.metric_code) != QUOTA_METRIC_CODE
+        or source.customer_ref != subscription.customer_ref
+        or source.plan_code != plan_spec.plan_code
+        or source.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
+        or source.base_limit_units != plan_spec.monthly_unit_allowance
+    ):
+        raise SubscriptionQuotaRolloverError(
+            "source quota cycle conflicts with the authoritative subscription plan."
+        )
+    return _RolloverAuthority(
+        plan_code=plan_spec.plan_code,
+        authority_version=PLAN_FULFILLMENT_CATALOG_VERSION,
+        entitlement_codes=tuple(plan_spec.entitlement_codes),
+        quota_profile_ref=plan.quota_profile_ref,
+        metric_code=QUOTA_METRIC_CODE,
+        base_limit_units=plan_spec.monthly_unit_allowance,
+        rollover_units=source.rollover_eligible_units,
+    )
+
+
 def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], object]):
     async def rollover(
         command: SubscriptionQuotaRolloverCommand,
@@ -59,23 +160,10 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 raise SubscriptionQuotaRolloverError(
                     "subscription plan was not found."
                 )
-            try:
-                plan_spec = get_plan_fulfillment_spec(plan.plan_code)
-            except KeyError as exc:
-                raise SubscriptionQuotaRolloverError(
-                    "subscription plan is not in the authoritative catalog."
-                ) from exc
-            if plan_spec.seat_based_consumption:
-                raise SubscriptionQuotaRolloverError(
-                    "quota consumption cannot be seat based."
-                )
+
             if normalize_maestro_metric_code(command.metric_code) != QUOTA_METRIC_CODE:
                 raise SubscriptionQuotaRolloverError(
                     "quota metric conflicts with the authoritative plan."
-                )
-            if command.base_limit_units != plan_spec.monthly_unit_allowance:
-                raise SubscriptionQuotaRolloverError(
-                    "quota base limit conflicts with the authoritative plan."
                 )
 
             expected_period_end = next_anchored_month_boundary(
@@ -87,6 +175,26 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                     "quota period end conflicts with the activation-anchored monthly boundary."
                 )
 
+            source = await uow.subscription_quota_cycles.get_by_id(
+                command.source_cycle_id,
+                for_update=True,
+            )
+            if source is None:
+                raise SubscriptionQuotaRolloverError("source quota cycle was not found.")
+            if source.period_end != command.period_start:
+                raise SubscriptionQuotaRolloverError("quota periods are not contiguous.")
+
+            authority = await _resolve_authority(
+                uow=uow,
+                subscription=subscription,
+                plan=plan,
+                source=source,
+            )
+            if command.base_limit_units != authority.base_limit_units:
+                raise SubscriptionQuotaRolloverError(
+                    "quota base limit conflicts with the authoritative quota authority."
+                )
+
             existing = await uow.subscription_quota_cycles.get_by_source_cycle_id(
                 command.source_cycle_id,
                 for_update=True,
@@ -95,43 +203,25 @@ def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], ob
                 _assert_replay_matches(
                     command,
                     existing,
-                    plan_spec.plan_code,
+                    authority=authority,
                     expected_period_end=expected_period_end,
                 )
                 return existing
 
-            source = await uow.subscription_quota_cycles.get_by_id(
-                command.source_cycle_id,
-                for_update=True,
-            )
-            if source is None:
-                raise SubscriptionQuotaRolloverError("source quota cycle was not found.")
-            if (
-                source.subscription_id != command.subscription_id
-                or normalize_maestro_metric_code(source.metric_code) != QUOTA_METRIC_CODE
-                or source.customer_ref != subscription.customer_ref
-                or source.plan_code != plan_spec.plan_code
-                or source.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
-            ):
-                raise SubscriptionQuotaRolloverError(
-                    "source quota cycle conflicts with the authoritative subscription plan."
-                )
-            if source.period_end != command.period_start:
-                raise SubscriptionQuotaRolloverError("quota periods are not contiguous.")
-
             cycle = AdminMarketSubscriptionQuotaCycle(
+                id=uuid.uuid4(),
                 subscription_id=subscription.id,
                 source_cycle_id=source.id,
                 customer_ref=subscription.customer_ref,
-                plan_code=plan_spec.plan_code,
-                plan_catalog_version=PLAN_FULFILLMENT_CATALOG_VERSION,
-                entitlement_codes=list(plan_spec.entitlement_codes),
-                quota_profile_ref=plan.quota_profile_ref,
-                metric_code=QUOTA_METRIC_CODE,
+                plan_code=authority.plan_code,
+                plan_catalog_version=authority.authority_version,
+                entitlement_codes=list(authority.entitlement_codes),
+                quota_profile_ref=authority.quota_profile_ref,
+                metric_code=authority.metric_code,
                 period_start=command.period_start,
                 period_end=expected_period_end,
-                base_limit_units=plan_spec.monthly_unit_allowance,
-                rollover_units=source.rollover_eligible_units,
+                base_limit_units=authority.base_limit_units,
+                rollover_units=authority.rollover_units,
                 top_up_units=0,
                 rollover_status="available",
                 used_units=0,
@@ -157,19 +247,23 @@ def _validate(command: SubscriptionQuotaRolloverCommand) -> None:
 def _assert_replay_matches(
     command: SubscriptionQuotaRolloverCommand,
     existing: AdminMarketSubscriptionQuotaCycle,
-    plan_code: str,
     *,
+    authority: _RolloverAuthority,
     expected_period_end: datetime,
 ) -> None:
     if (
         existing.subscription_id != command.subscription_id
         or existing.source_cycle_id != command.source_cycle_id
-        or normalize_maestro_metric_code(existing.metric_code) != QUOTA_METRIC_CODE
-        or existing.plan_code != plan_code
-        or existing.plan_catalog_version != PLAN_FULFILLMENT_CATALOG_VERSION
+        or normalize_maestro_metric_code(existing.metric_code)
+        != authority.metric_code
+        or existing.plan_code != authority.plan_code
+        or existing.plan_catalog_version != authority.authority_version
+        or tuple(existing.entitlement_codes) != authority.entitlement_codes
+        or existing.quota_profile_ref != authority.quota_profile_ref
         or existing.period_start != command.period_start
         or existing.period_end != expected_period_end
-        or existing.base_limit_units != command.base_limit_units
+        or existing.base_limit_units != authority.base_limit_units
+        or existing.rollover_units != authority.rollover_units
         or existing.top_up_units != 0
     ):
         raise SubscriptionQuotaRolloverError(

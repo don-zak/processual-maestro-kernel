@@ -23,7 +23,7 @@ def test_public_plan_catalog_has_unique_complete_order() -> None:
     assert len(PLANS) == len(PUBLIC_PLAN_ORDER)
     assert CATALOG["billing_periods"] == ["monthly", "annual"]
     assert CATALOG["annual_discount_percent"] == int(ANNUAL_DISCOUNT_PERCENT)
-    assert CATALOG["annual_discount_scope"] == "base_plan_only"
+    assert CATALOG["annual_discount_scope"] == "eligible_public_base_plans_only"
     assert CATALOG["checkout_enabled"] is False
 
 

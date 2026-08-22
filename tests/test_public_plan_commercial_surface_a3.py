@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from processual_api.billing.commercial_catalog_contracts import build_catalog_plan_contracts
 from processual_api.billing.maestro_group1_selected_pricing import (
     DEFAULT_YEARLY_DISCOUNT_PERCENT,
 )
@@ -92,12 +93,15 @@ def test_assessment_plan_does_not_publish_zero_values() -> None:
     assert plan["quota_add_ons"] == []
 
 
-def test_included_quota_uses_commercial_catalog_values() -> None:
+def test_included_quota_uses_commercial_catalog_values_without_retired_enterprise_aliases() -> None:
     payload = public_plan_journey_catalog()
     by_id = {plan["plan_id"]: plan for plan in payload["plans"]}
+    contracts = {contract.plan_code: contract for contract in build_catalog_plan_contracts()}
 
-    assert by_id["academic_individual"]["included_quota_units"] == 5_000
-    assert by_id["enterprise_pilot"]["included_quota_units"] == 500_000
+    assert by_id["academic_individual"]["included_quota_units"] == contracts["academic"].included_maestro_units
+    assert by_id["starter"]["included_quota_units"] == contracts["starter"].included_maestro_units
+    assert by_id["business"]["included_quota_units"] == contracts["business"].included_maestro_units
+    assert "enterprise_pilot" not in by_id
 
 
 def test_enterprise_integration_is_contract_scoped_trial() -> None:

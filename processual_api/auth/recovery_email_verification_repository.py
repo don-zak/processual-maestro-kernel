@@ -43,6 +43,71 @@ class SqlAlchemyRecoveryEmailVerificationRepository:
             .with_for_update()
         )
 
+    async def active_user_by_login_for_update(
+        self,
+        *,
+        login_normalized: str,
+    ) -> IdentityUser | None:
+        return await self._session.scalar(
+            select(IdentityUser)
+            .where(
+                IdentityUser.email_normalized == login_normalized,
+                IdentityUser.status == "active",
+                IdentityUser.email_verified_at.is_not(None),
+            )
+            .with_for_update()
+        )
+
+    async def recovery_email_by_address_for_update(
+        self,
+        *,
+        email_normalized: str,
+    ) -> IdentityUserEmailAddress | None:
+        return await self._session.scalar(
+            select(IdentityUserEmailAddress)
+            .where(
+                IdentityUserEmailAddress.email_normalized == email_normalized,
+                IdentityUserEmailAddress.purpose == "recovery",
+            )
+            .with_for_update()
+        )
+
+    async def recovery_email_for_update(
+        self,
+        *,
+        user_id: uuid.UUID,
+    ) -> IdentityUserEmailAddress | None:
+        return await self._session.scalar(
+            select(IdentityUserEmailAddress)
+            .where(
+                IdentityUserEmailAddress.user_id == user_id,
+                IdentityUserEmailAddress.purpose == "recovery",
+            )
+            .with_for_update()
+        )
+
+    def add_pending_recovery_email(
+        self,
+        *,
+        address_id: uuid.UUID,
+        user_id: uuid.UUID,
+        email_normalized: str,
+        created_at: datetime,
+    ) -> IdentityUserEmailAddress:
+        address = IdentityUserEmailAddress(
+            id=address_id,
+            user_id=user_id,
+            email_normalized=email_normalized,
+            purpose="recovery",
+            status="pending",
+            verified_at=None,
+            revoked_at=None,
+            created_at=created_at,
+            updated_at=created_at,
+        )
+        self._session.add(address)
+        return address
+
     async def pending_recovery_email_for_update(
         self,
         *,

@@ -1,0 +1,148 @@
+@media (max-width: 600px) {
+  #main,
+  #content,
+  .page,
+  .page > div,
+  .admin-page,
+  .admin-page .page,
+  .sl18-panels,
+  .sl18-panel {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #content {
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  .admin-page.active {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+
+  #topbar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  #topbar > *,
+  #topbar .flex-gap {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #topbar .flex-gap,
+  .sec-hdr,
+  .admin-card-header {
+    flex-wrap: wrap;
+  }
+
+  .grid-2,
+  .grid-2-eq,
+  .grid-2-wide,
+  .grid-3,
+  .grid-4,
+  .settings-grid,
+  .sl18-enterprise-summary,
+  .admin-subscription-analytics-summary,
+  .admin-subscription-analytics-grid,
+  .admin-subscription-analytics-plans,
+  .admin-page .admin-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #page-settings *,
+  .admin-page * {
+    min-width: 0;
+  }
+
+  .sl18-tabs {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px;
+    max-width: 100%;
+    overflow: visible !important;
+  }
+
+  .sl18-tab {
+    flex: 1 1 120px;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  #page-settings .sl18-panel[data-sl18-panel="integration"] > :is(
+    #set-enterprise-console-card,
+    #set-enterprise-integration-eligibility-card,
+    #set-api-key-integration-card,
+    #set-integration-readiness-card,
+    #set-client-integration-guide-card,
+    #settings-integration-claim-keys-host
+  ) {
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    transform: none !important;
+    overflow: hidden !important;
+  }
+
+  #page-settings .sl18-panel[data-sl18-panel="integration"] .settings-grid,
+  #page-settings .sl18-panel[data-sl18-panel="integration"] .sl18-enterprise-stages,
+  #page-settings .sl18-panel[data-sl18-panel="integration"] [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .card,
+  .settings-card,
+  .admin-subscription-analytics-card,
+  .admin-page section,
+  .admin-page article {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  #page-admin-api-keys #admin-api-key-lifecycle-card {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .admin-page [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .admin-page input,
+  .admin-page select,
+  .admin-page textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .admin-page table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .admin-page pre,
+  .admin-page code,
+  #page-settings pre,
+  #page-settings code,
+  .mono-block {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}

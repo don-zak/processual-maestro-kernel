@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="maestro-plan-catalog-endpoint" content="/billing/public-plan-journey">
+  <title>Maestro assessment request</title>
+  <meta name="description" content="Submit a requirements-based Maestro plan assessment request.">
+  <link rel="stylesheet" href="/console/css/public-journey.css">
+  <style>
+    .apply-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:1.25rem;align-items:start}
+    .apply-card{border:1px solid rgba(148,163,184,.28);border-radius:18px;background:rgba(15,23,42,.78);padding:1.25rem}
+    .apply-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+    .apply-field{display:grid;gap:.4rem}
+    .apply-field--wide{grid-column:1/-1}
+    .apply-field label{font-weight:700;color:#eaf2ff}
+    .apply-field input,.apply-field textarea{width:100%;border:1px solid rgba(148,163,184,.35);border-radius:12px;background:#0b1220;color:#eaf2ff;padding:.8rem .9rem;font:inherit}
+    .apply-field textarea{min-height:9rem;resize:vertical}
+    .apply-field input:focus,.apply-field textarea:focus{outline:2px solid rgba(245,166,35,.7);outline-offset:2px}
+    .apply-plan-name{font-size:1.35rem;font-weight:800;margin:.25rem 0}
+    .apply-plan-meta{display:grid;gap:.55rem;margin-top:1rem}
+    .apply-status{margin-top:1rem}
+    .apply-status[data-state="success"]{color:#34d399}
+    .apply-status[data-state="error"]{color:#fca5a5}
+    .apply-truth{border-left:3px solid #f5a623;padding-left:.85rem;margin-top:1rem;color:#b8c7df}
+    @media(max-width:760px){.apply-grid{grid-template-columns:1fr}.apply-fields{grid-template-columns:1fr}.apply-field--wide{grid-column:auto}}
+  </style>
+</head>
+<body>
+  <main class="journey-shell">
+    <a class="back-link" href="/plans">&larr; Back to plans</a>
+
+    <header class="journey-header journey-header--wide">
+      <p class="eyebrow">Requirements-based assessment</p>
+      <h1>Request a Maestro assessment</h1>
+      <p class="lede">Describe your organization, integration scope, and expected operating requirements. No payment, quota, subscription, or production entitlement is created by submitting this request.</p>
+    </header>
+
+    <p id="apply-page-status" class="surface-status">Loading the selected offer...</p>
+
+    <div id="apply-content" class="apply-grid" hidden>
+      <aside class="apply-card" aria-labelledby="apply-selected-plan-heading">
+        <p class="section-kicker">Selected assessment path</p>
+        <h2 id="apply-selected-plan-heading" class="apply-plan-name"></h2>
+        <p id="apply-selected-plan-description" class="muted"></p>
+        <div class="apply-plan-meta">
+          <p><strong>Pricing:</strong> <span id="apply-selected-plan-pricing"></span></p>
+          <p><strong>Capacity:</strong> <span id="apply-selected-plan-capacity"></span></p>
+          <p><strong>Journey:</strong> Manual assessment and review</p>
+        </div>
+        <p class="apply-truth">The submitted information starts a review only. Commercial terms and any operating authority remain subject to the approved requirements and acceptance process.</p>
+      </aside>
+
+      <section class="apply-card">
+        <form id="apply-form" novalidate>
+          <div class="apply-fields">
+            <div class="apply-field">
+              <label for="apply-full-name">Full name</label>
+              <input id="apply-full-name" name="full_name" autocomplete="name" required>
+            </div>
+            <div class="apply-field">
+              <label for="apply-email">Work email</label>
+              <input id="apply-email" name="email" type="email" autocomplete="email" required>
+            </div>
+            <div class="apply-field">
+              <label for="apply-organization">Organization</label>
+              <input id="apply-organization" name="organization_name" autocomplete="organization">
+            </div>
+            <div class="apply-field">
+              <label for="apply-company-url">Organization website</label>
+              <input id="apply-company-url" name="company_url" type="url" autocomplete="url">
+            </div>
+            <div class="apply-field">
+              <label for="apply-phone">Phone</label>
+              <input id="apply-phone" name="phone" autocomplete="tel">
+            </div>
+            <div class="apply-field">
+              <label for="apply-linkedin">LinkedIn</label>
+              <input id="apply-linkedin" name="linkedin_url" type="url">
+            </div>
+            <div class="apply-field apply-field--wide">
+              <label for="apply-use-case">Requirements, integration scope, and intended use</label>
+              <textarea id="apply-use-case" name="use_case" minlength="10" required placeholder="Describe the systems to integrate, operating context, expected workloads, governance/security requirements, and acceptance objectives."></textarea>
+            </div>
+          </div>
+          <button id="apply-submit" class="primary-action" type="submit">Submit assessment request</button>
+          <p id="apply-submit-status" class="apply-status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    const byId = (id) => document.getElementById(id);
+    const params = new URLSearchParams(window.location.search);
+    const requestedPlanId = params.get("plan_id") || "";
+    const endpoint = document.querySelector('meta[name="maestro-plan-catalog-endpoint"]')?.content || "/billing/public-plan-journey";
+    let selectedPlan = null;
+
+    function assessmentPricing(plan) {
+      if (plan.commercial_model === "requirements_based_contract") return "Defined from the approved customer requirements";
+      if (plan.commercial_model === "requirements_based_evaluation") return "Defined after evaluation scope assessment";
+      return "Defined during assessment";
+    }
+
+    function assessmentCapacity(plan) {
+      if (plan.commercial_model === "requirements_based_contract") return "Defined by the approved deployment specification";
+      if (plan.commercial_model === "requirements_based_evaluation") return "Agreed from the approved one-month evaluation scope";
+      return "Defined during assessment";
+    }
+
+    async function loadSelectedPlan() {
+      try {
+        const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("catalog_unavailable");
+        const catalog = await response.json();
+        selectedPlan = (catalog.plans || []).find((plan) => plan.plan_id === requestedPlanId) || null;
+        if (!selectedPlan || !selectedPlan.requires_assessment || selectedPlan.registration_available) {
+          byId("apply-page-status").textContent = "This assessment path is not available for the selected public offer.";
+          return;
+        }
+        byId("apply-selected-plan-heading").textContent = selectedPlan.display_name;
+        byId("apply-selected-plan-description").textContent = selectedPlan.description || "";
+        byId("apply-selected-plan-pricing").textContent = assessmentPricing(selectedPlan);
+        byId("apply-selected-plan-capacity").textContent = assessmentCapacity(selectedPlan);
+        byId("apply-page-status").hidden = true;
+        byId("apply-content").hidden = false;
+      } catch {
+        byId("apply-page-status").textContent = "The assessment catalog is temporarily unavailable. Please try again later.";
+      }
+    }
+
+    byId("apply-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const status = byId("apply-submit-status");
+      const submit = byId("apply-submit");
+      status.textContent = "";
+      status.dataset.state = "";
+      if (!selectedPlan) {
+        status.textContent = "A valid assessment-only offer must be selected first.";
+        status.dataset.state = "error";
+        return;
+      }
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const payload = {
+        applicant_type: "organization",
+        organization_name: String(data.get("organization_name") || "").trim(),
+        full_name: String(data.get("full_name") || "").trim(),
+        email: String(data.get("email") || "").trim(),
+        linkedin_url: String(data.get("linkedin_url") || "").trim(),
+        company_url: String(data.get("company_url") || "").trim(),
+        phone: String(data.get("phone") || "").trim(),
+        use_case: String(data.get("use_case") || "").trim(),
+        preferred_plan: selectedPlan.plan_id,
+      };
+      submit.disabled = true;
+      submit.textContent = "Submitting...";
+      try {
+        const response = await fetch("/applications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || "Application submission failed");
+        status.textContent = `Assessment request ${result.id} submitted for review. No commercial or production authority has been granted.`;
+        status.dataset.state = "success";
+        form.reset();
+      } catch (error) {
+        status.textContent = error?.message || "Application submission failed. Please try again.";
+        status.dataset.state = "error";
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Submit assessment request";
+      }
+    });
+
+    loadSelectedPlan();
+  </script>
+</body>
+</html>

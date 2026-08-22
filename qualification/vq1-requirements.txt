@@ -1,0 +1,6 @@
+# Qualification-only browser automation dependencies.
+# Playwright binds each package release to matching browser binaries installed by its CLI.
+playwright==1.61.0
+# The controlled VQ-1 app imports Admin Marketplace persistence contracts at startup.
+# Keep this qualification-only instead of broadening the application runtime install set.
+sqlalchemy[asyncio]>=2.0

@@ -20,7 +20,7 @@ def test_auth_migration_chain_has_the_current_single_head() -> None:
         text=True,
         env=_alembic_environment(),
     )
-    assert result.stdout.strip() == "20260809_0046 (head)"
+    assert result.stdout.strip() == "20260822_0060 (head)"
     assert result.stdout.count("(head)") == 1
 
 
@@ -35,7 +35,10 @@ def test_delivery_outbox_offline_upgrade_and_downgrade_contracts() -> None:
     assert "create table auth_delivery_outbox" in upgrade
     assert "payload_ciphertext" in upgrade
     assert "raw_action_token" not in upgrade
-    assert "email_normalized" not in upgrade.split("create table auth_delivery_outbox", 1)[1]
+    assert "email_normalized" not in upgrade.split(
+        "create table auth_delivery_outbox",
+        1,
+    )[1]
 
     downgrade = subprocess.run(
         [
@@ -55,12 +58,16 @@ def test_delivery_outbox_offline_upgrade_and_downgrade_contracts() -> None:
 
 
 def test_delivery_outbox_revision_has_expected_parent() -> None:
-    source = Path("alembic/versions/20260722_0003_auth_delivery_outbox.py").read_text(encoding="utf-8")
+    source = Path(
+        "alembic/versions/20260722_0003_auth_delivery_outbox.py"
+    ).read_text(encoding="utf-8")
     assert 'revision: str = "20260722_0003"' in source
     assert 'down_revision: str | none = "20260722_0002"' in source.lower()
 
 
 def test_email_verification_revision_extends_delivery_outbox_head() -> None:
-    source = Path("alembic/versions/20260722_0004_auth_email_verification_lifecycle.py").read_text(encoding="utf-8")
+    source = Path(
+        "alembic/versions/20260722_0004_auth_email_verification_lifecycle.py"
+    ).read_text(encoding="utf-8")
     assert 'revision: str = "20260722_0004"' in source
     assert 'down_revision: str | none = "20260722_0003"' in source.lower()

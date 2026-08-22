@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -14,9 +15,10 @@ from processual_api.admin_marketplace.assessment_subscription_activation_service
     AssessmentSubscriptionActivationError,
     AssessmentSubscriptionActivationService,
 )
-from processual_api.admin_marketplace.subscription_runtime import SubscriptionRuntimeError
-from processual_api.admin_marketplace.subscription_usage_service import (
-    record_subscription_usage_factory,
+from processual_api.admin_marketplace.subscription_quota_usage import (
+    SubscriptionQuotaUsageCommand,
+    SubscriptionQuotaUsageError,
+    record_subscription_quota_usage_factory,
 )
 from processual_api.billing.assessment_activation_preparation import (
     ApprovedAssessmentOutcome,
@@ -161,7 +163,7 @@ class _RuntimeRepository:
         self.by_subscription[runtime.subscription_id] = runtime
 
 
-class _QuotaAccountRepository:
+class _QuotaCycleRepository:
     def __init__(self) -> None:
         self.added = []
 
@@ -184,17 +186,30 @@ class _QuotaAccountRepository:
             None,
         )
 
-    def add(self, account) -> None:
-        self.added.append(account)
+    async def get_by_id(self, cycle_id, *, for_update=False):
+        return next((item for item in self.added if item.id == cycle_id), None)
+
+    def add(self, cycle) -> None:
+        if cycle.id is None:
+            cycle.id = uuid.uuid4()
+        self.added.append(cycle)
 
 
-class _UsageRepository:
+class _QuotaCycleUsageRepository:
     def __init__(self) -> None:
         self.by_hash = {}
         self.added = []
 
     async def get_by_idempotency_hash(self, key_hash, *, for_update=False):
         return self.by_hash.get(key_hash)
+
+    async def sum_units_since(self, *, quota_cycle_id, occurred_at):
+        return sum(
+            item.units
+            for item in self.added
+            if item.quota_cycle_id == quota_cycle_id
+            and item.occurred_at >= occurred_at
+        )
 
     def add(self, usage) -> None:
         self.added.append(usage)
@@ -218,8 +233,9 @@ class _UnitOfWork:
         self.entitlement_activations = _ActivationRepository()
         self.assessment_subscription_bindings = _BindingRepository()
         self.subscription_runtime = _RuntimeRepository()
-        self.subscription_quotas = _QuotaAccountRepository()
-        self.subscription_usage = _UsageRepository()
+        self.subscription_quota_cycles = _QuotaCycleRepository()
+        self.subscription_quota_cycle_usage = _QuotaCycleUsageRepository()
+        self.subscription_delinquency = SimpleNamespace()
         self.commercial_audit = _AuditRepository()
         self.commit_count = 0
 
@@ -272,6 +288,10 @@ def _plan(*, plan_code: str = "academic"):
     )
 
 
+def _hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 @pytest.mark.asyncio
 async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota() -> None:
     plan = _plan()
@@ -317,11 +337,14 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
     assert terms.price_source == "contract"
     assert terms.source_reference == "institution-contract-2026-001"
     assert terms.amount_minor_units == 240_000
-    assert len(unit.subscription_quotas.added) == 1
-    quota_account = unit.subscription_quotas.added[0]
-    assert quota_account.metric_code == "maestro_units"
-    assert quota_account.limit_units == 125_000
-    assert quota_account.limit_units != 5_000
+    assert len(unit.subscription_quota_cycles.added) == 1
+    cycle = unit.subscription_quota_cycles.added[0]
+    assert cycle.metric_code == "maestro_units"
+    assert cycle.base_limit_units == 125_000
+    assert cycle.base_limit_units != 5_000
+    assert cycle.quota_profile_ref == binding.quota_profile_ref
+    assert cycle.plan_code == "academic"
+    assert cycle.plan_catalog_version == "2026-08-assessment-quota-profile-v1"
     assert len(unit.entitlement_activations.added) == 1
     assert unit.entitlement_activations.added[0].order_id is None
     assert unit.entitlement_activations.added[0].automatic_activation_allowed is False
@@ -330,7 +353,7 @@ async def test_assessment_activation_is_atomic_and_uses_exact_assessment_quota()
 
 
 @pytest.mark.asyncio
-async def test_assessment_subscription_runtime_enforces_exact_quota() -> None:
+async def test_assessment_subscription_runtime_enforces_exact_quota_via_authoritative_cycle() -> None:
     plan = _plan()
     unit = _UnitOfWork(plan)
     now = datetime(2026, 8, 9, 20, 0, tzinfo=UTC)
@@ -345,39 +368,45 @@ async def test_assessment_subscription_runtime_enforces_exact_quota() -> None:
         correlation_id="corr-assessment-runtime",
         idempotency_key="idem-assessment-runtime",
     )
-    record_usage = record_subscription_usage_factory(uow_factory=lambda: unit)
-
-    await record_usage(
-        subscription_id=activation.subscription_id,
-        customer_ref=activation.customer_ref,
-        metric_code="maestro_units",
-        units=125_000,
-        idempotency_key="usage-exact-limit",
-        dimensions={"source": "assessment-e2e"},
-        occurred_at=now,
+    record_usage = record_subscription_quota_usage_factory(
+        unit_of_work_factory=lambda: unit
     )
 
-    quota_account = unit.subscription_quotas.added[0]
-    assert quota_account.limit_units == 125_000
-    assert quota_account.used_units == 125_000
-
-    with pytest.raises(SubscriptionRuntimeError):
-        await record_usage(
+    await record_usage(
+        SubscriptionQuotaUsageCommand(
             subscription_id=activation.subscription_id,
             customer_ref=activation.customer_ref,
             metric_code="maestro_units",
-            units=1,
-            idempotency_key="usage-over-limit",
-            dimensions={"source": "assessment-e2e"},
+            units=125_000,
+            idempotency_key_hash=_hash("usage-exact-limit"),
+            dimensions_digest=_hash("assessment-e2e"),
             occurred_at=now,
         )
+    )
 
-    assert quota_account.used_units == 125_000
-    assert len(unit.subscription_usage.added) == 1
+    cycle = unit.subscription_quota_cycles.added[0]
+    assert cycle.base_limit_units == 125_000
+    assert cycle.used_units == 125_000
+
+    with pytest.raises(SubscriptionQuotaUsageError, match="insufficient"):
+        await record_usage(
+            SubscriptionQuotaUsageCommand(
+                subscription_id=activation.subscription_id,
+                customer_ref=activation.customer_ref,
+                metric_code="maestro_units",
+                units=1,
+                idempotency_key_hash=_hash("usage-over-limit"),
+                dimensions_digest=_hash("assessment-e2e-over"),
+                occurred_at=now,
+            )
+        )
+
+    assert cycle.used_units == 125_000
+    assert len(unit.subscription_quota_cycle_usage.added) == 1
 
 
 @pytest.mark.asyncio
-async def test_same_assessment_replays_without_second_subscription_or_commit() -> None:
+async def test_same_assessment_replays_without_second_subscription_cycle_or_commit() -> None:
     plan = _plan()
     unit = _UnitOfWork(plan)
     now = datetime(2026, 8, 9, 20, 0, tzinfo=UTC)
@@ -407,6 +436,7 @@ async def test_same_assessment_replays_without_second_subscription_or_commit() -
     assert replay.commercial_terms_ref == first.commercial_terms_ref
     assert len(unit.subscriptions.by_id) == 1
     assert len(unit.assessment_commercial_terms.records) == 1
+    assert len(unit.subscription_quota_cycles.added) == 1
     assert unit.commit_count == 1
 
 
@@ -431,6 +461,7 @@ async def test_assessment_activation_rejects_wrong_entitlement_source_plan() -> 
     assert unit.commit_count == 0
     assert unit.subscriptions.by_id == {}
     assert unit.subscription_runtime.by_subscription == {}
+    assert unit.subscription_quota_cycles.added == []
 
 
 @pytest.mark.asyncio
@@ -456,3 +487,4 @@ async def test_assessment_activation_rejects_non_authoritative_price_source() ->
 
     assert unit.commit_count == 0
     assert unit.subscriptions.by_id == {}
+    assert unit.subscription_quota_cycles.added == []

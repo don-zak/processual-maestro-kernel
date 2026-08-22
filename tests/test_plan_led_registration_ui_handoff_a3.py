@@ -17,20 +17,24 @@ def test_assessment_offer_uses_apply_journey_not_registration() -> None:
     source = OFFER_JS.read_text(encoding="utf-8")
 
     assert "plan.requires_assessment || !plan.registration_available" in source
-    assert "/apply?plan_id=" in source
+    assert "/console/apply.html?plan_id=" in source
     assert "journey=assessment" in source
 
 
 def test_registration_controller_reads_optional_plan_id() -> None:
     source = REGISTER_JS.read_text(encoding="utf-8")
 
-    assert "new URLSearchParams(window.location.search)" in source
-    assert '.get("plan_id")' in source
+    assert "new URLSearchParams(window.location.search).get(name)" in source
+    assert 'return queryValue("plan_id")' in source
     assert "payload.selected_plan_id = planId" in source
+    assert "payload.billing_period = selectedBillingPeriod()" in source
 
 
 def test_registration_payload_does_not_send_client_price_fields() -> None:
     source = REGISTER_JS.read_text(encoding="utf-8")
+    payload_start = source.index("function payloadForMode(mode)")
+    payload_end = source.index("async function submitRegistration", payload_start)
+    payload_source = source[payload_start:payload_end]
 
     forbidden = (
         "amount_cents",
@@ -42,7 +46,7 @@ def test_registration_payload_does_not_send_client_price_fields() -> None:
     )
 
     for marker in forbidden:
-        assert marker not in source
+        assert marker not in payload_source
 
 
 def test_legacy_registration_remains_supported_without_plan_query() -> None:

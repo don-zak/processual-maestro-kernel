@@ -1,0 +1,152 @@
+{
+  "contract_version": "A3-splash-reference-v1",
+  "minimum_score": 99,
+  "score_total": 100,
+  "reference_stage": {
+    "width": 1440,
+    "height": 1080,
+    "aspect_ratio": "4:3",
+    "fit_rule": "full-bleed-fluid-width",
+    "required_markers": [
+      "maestro-reference-stage",
+      "--stage-width:1440",
+      "--stage-height:1080",
+      "const fit_rule='full-bleed-fluid-width'",
+      "worldWidth=Math.max(1440,viewportWidth / scale)",
+      "stage.style.width=`${worldWidth}px`",
+      "stage.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`"
+    ]
+  },
+  "mandatory_core_contract": {
+    "preserve_dark_card": true,
+    "preserve_card_markers": [
+      "<div class=\"m\">MAESTRO<span>.</span></div>",
+      "<div class=\"s\">PROCESSUAL KERNEL</div>",
+      "API Server",
+      "Database",
+      "Cache",
+      "Kernel",
+      "All systems operational.",
+      "Enter Maestro",
+      "maestro_descent_gate_seen",
+      "maestro_descent_gate_seen_at",
+      "sessionStorage.setItem",
+      "window.location.href = '/login'"
+    ],
+    "preserve_color_markers": [
+      "background:rgba(22,29,42,.68)",
+      "--amber:#f5a623"
+    ],
+    "allowed_changes": [
+      "uniform scaling",
+      "outer halo",
+      "connector pins",
+      "wrapper positioning"
+    ]
+  },
+  "logical_layout": {
+    "core_bounds": {"x": 480, "y": 295, "w": 480, "h": 440, "tolerance_px": 36},
+    "execution_center": {"x": 720, "y": 850, "tolerance_px": 36},
+    "modules": {
+      "governance": {"side": "left", "x": 35, "y": 110, "w": 315, "h": 145},
+      "supervision": {"side": "left", "x": 35, "y": 335, "w": 315, "h": 140},
+      "calibration": {"side": "left", "x": 35, "y": 555, "w": 315, "h": 140},
+      "orchestration": {"side": "left", "x": 35, "y": 775, "w": 315, "h": 145},
+      "routing": {"side": "right", "x": 1090, "y": 110, "w": 315, "h": 145},
+      "policy": {"side": "right", "x": 1090, "y": 335, "w": 315, "h": 140},
+      "feedback": {"side": "right", "x": 1090, "y": 555, "w": 315, "h": 140},
+      "control": {"side": "right", "x": 1090, "y": 775, "w": 315, "h": 145}
+    }
+  },
+  "visual_hierarchy": {
+    "order": ["core", "circuitry", "icons", "titles", "body_text", "telemetry"],
+    "secondary_cards_are_nodes_not_dashboard_cards": true,
+    "module_container_scale_max_vs_current": 0.88,
+    "icon_scale_min_vs_module": 0.18
+  },
+  "pcb": {
+    "primary_paths_per_subsystem_min": 5,
+    "secondary_paths_per_subsystem_min": 8,
+    "tertiary_paths_per_subsystem_min": 6,
+    "total_visual_paths_per_subsystem_min": 19,
+    "connector_pad_required": true,
+    "vias_required": true,
+    "branching_required": true,
+    "top_vertical_bus_min": 10,
+    "bottom_vertical_bus_min": 10,
+    "ambient_layers_min": 3,
+    "required_markers": [
+      "connector-pad",
+      "via-node",
+      "primary-bus",
+      "secondary-bus",
+      "tertiary-bus",
+      "top-agent-node",
+      "function executionBay(c)",
+      "executionBay(c)"
+    ]
+  },
+  "motion": {
+    "pulse_count_per_active_route_min": 2,
+    "pulse_count_per_active_route_max": 4,
+    "trace_wake_required": true,
+    "node_bloom_required": true,
+    "destination_ack_required": true,
+    "semantic_directions": {
+      "governance": "outbound",
+      "policy": "outbound",
+      "routing": "outbound",
+      "supervision": "inbound",
+      "feedback": "inbound",
+      "calibration": "bidirectional",
+      "orchestration": "bidirectional",
+      "control": "roundtrip",
+      "execution": "downstream"
+    },
+    "required_markers": [
+      "trace-wake",
+      "node-bloom",
+      "destination-ack",
+      "signalDirection",
+      "bidirectional",
+      "roundtrip",
+      "downstream"
+    ]
+  },
+  "color_system": {
+    "background_layers": ["#030812", "#061224", "#0a1d34"],
+    "cyan_levels": ["rgba(44,135,205,.18)", "#36bfff", "#8bddff", "#e0f8ff"],
+    "amber_levels": ["#6b4818", "#e59a20", "#ffc65c", "#fff0bf"],
+    "teal_required": true,
+    "violet_required": true,
+    "local_glow_only": true
+  },
+  "telemetry": {
+    "top_agent_fleet_node": true,
+    "bottom_left_activity_bars": true,
+    "bottom_center_governance_trend": true,
+    "bottom_right_integrity_ring": true,
+    "opacity_max": 0.30
+  },
+  "typography": {
+    "titles_use_display_font": true,
+    "status_uses_mono": true,
+    "arabic_body_rtl": true,
+    "arabic_body_not_mono": true
+  },
+  "accessibility": {
+    "reduced_motion": true,
+    "keyboard_focus_routes": true,
+    "all_content_visible_in_desktop_stage": true
+  },
+  "scoring": {
+    "stage_geometry": 15,
+    "core_preservation": 20,
+    "module_geometry_and_hierarchy": 15,
+    "pcb_density_and_connectivity": 20,
+    "motion_semantics": 15,
+    "telemetry_and_depth": 5,
+    "color_and_typography": 5,
+    "accessibility_and_responsiveness": 5
+  }
+}

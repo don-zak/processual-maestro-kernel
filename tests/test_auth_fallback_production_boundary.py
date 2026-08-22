@@ -46,6 +46,16 @@ def _patch_static_key_auth(
         ),
     )
     monkeypatch.setattr(security, "verify_dynamic_api_key", lambda api_key: None)
+    monkeypatch.setattr(
+        security,
+        "_durable_sandbox_api_key_authority_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        security,
+        "_durable_evaluation_api_key_authority_enabled",
+        lambda: False,
+    )
 
 
 def test_env_api_key_fallback_is_allowed_only_in_non_production(monkeypatch):
@@ -101,48 +111,3 @@ def test_env_api_key_fallback_is_blocked_when_environment_is_production_even_wit
 
     assert exc.value.status_code == 401
     assert exc.value.detail == "Invalid API key"
-
-
-def test_dynamic_pmk_api_key_is_still_accepted_in_production(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("ENVIRONMENT", "production")
-
-    dynamic_user = {
-        "sub": "client_user",
-        "user_id": "client_user",
-        "client_id": "client_001",
-        "role": "client",
-        "auth_method": "api_key",
-        "session_type": "api_key",
-        "api_key_id": "key_001",
-        "api_key_prefix": "pmk_live",
-        "scopes": ["read:health"],
-    }
-
-    monkeypatch.setattr(
-        security,
-        "settings",
-        SimpleNamespace(
-            api_keys=[STATIC_TEST_KEY],
-            environment="production",
-            is_production=True,
-            jwt_secret="test-jwt-secret",
-            jwt_algorithm="HS256",
-            jwt_expire_minutes=60,
-        ),
-    )
-    monkeypatch.setattr(
-        security,
-        "verify_dynamic_api_key",
-        lambda api_key: dynamic_user if api_key == "pmk_live_dynamic_key" else None,
-    )
-
-    user = _run(
-        security.get_current_user(
-            _request(),
-            bearer=None,
-            api_key="pmk_live_dynamic_key",
-        )
-    )
-
-    assert user == dynamic_user

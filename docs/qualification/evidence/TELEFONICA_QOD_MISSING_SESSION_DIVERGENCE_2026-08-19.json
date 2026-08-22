@@ -1,0 +1,66 @@
+{
+  "schema_version": "telefonica-qod-missing-session-divergence-public-evidence-r1",
+  "recorded_date": "2026-08-19",
+  "provider": "telefonica_open_gateway",
+  "environment": "sandbox_mock_candidate",
+  "provider_api_version": "v0.10",
+  "authorization_flow": "CIBA",
+  "scope": "dpv:RequestedServiceProvision#qod",
+  "qod_base_uri": "https://sandbox.opengateway.telefonica.com/apigateway/qod/v0",
+  "probe_tool": "tools/telefonica_qod_missing_session_probe.ps1",
+  "probe_execution_commit": "abcf5388ae56571715287d7d473ef7c17af38041",
+  "operation": "getSession",
+  "request_path_template": "/qod/v0/sessions/{freshSyntheticSessionId}",
+  "synthetic_session_id_generated_fresh": true,
+  "synthetic_session_id_retained": false,
+  "session_created_by_probe": false,
+  "documented_missing_session_status": 404,
+  "observed_http_status": 200,
+  "documented_expectation_met": false,
+  "mock_documentation_divergence_observed": true,
+  "reproduces_prior_fixed_id_observation": true,
+  "negative_path_suite_context": {
+    "invalid_duration_http_status": 400,
+    "invalid_duration_passed": true,
+    "missing_session_http_status": 200,
+    "missing_session_passed": false,
+    "missing_authorization_http_status": 401,
+    "missing_authorization_passed": true,
+    "documented_conflict_http_status": 409,
+    "documented_conflict_passed": true
+  },
+  "credentials": {
+    "client_id_recorded": false,
+    "client_secret_recorded": false,
+    "access_token_recorded": false,
+    "auth_req_id_recorded": false,
+    "session_id_recorded": false,
+    "raw_response_body_recorded": false
+  },
+  "qualification_effect": {
+    "positive_lifecycle_interoperability_revoked": false,
+    "negative_path_conformance_complete": false,
+    "get_session_missing_resource_semantics_conformant": false,
+    "operator_network_qos_proven": false,
+    "governed_camara_v1_1_provider_sandbox_proven": false,
+    "provider_sandbox_proven": false,
+    "runtime_connector_approved": false,
+    "staging_allowed": false,
+    "production_allowed": false
+  },
+  "blocker_codes": [
+    "telefonica_missing_session_returns_200_instead_of_documented_404",
+    "telefonica_negative_path_conformance_incomplete",
+    "telefonica_api_version_differs_from_governed_camara_v1_1",
+    "retrieve_sessions_by_device_unproven",
+    "operator_network_qos_unproven",
+    "runtime_connector_unapproved"
+  ],
+  "notes": [
+    "A fresh random UUID was generated for the isolation probe and was never submitted to createSession.",
+    "The fresh-ID result reproduces the earlier HTTP 200 observation made with a fixed synthetic UUID, eliminating fixed-ID collision as the practical explanation.",
+    "Successful create/get/delete/extend mock interoperability remains valid evidence for those exercised positive paths only.",
+    "The observed missing-session behavior is retained as provider mock/documentation divergence and is not normalized into conformance.",
+    "No provider, runtime connector, staging, or production authority is granted."
+  ]
+}

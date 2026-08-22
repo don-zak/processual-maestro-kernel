@@ -76,21 +76,22 @@ def test_docker_compose_dependency_services_keep_passwords_healthchecks_and_netw
     assert_contains_all(text, required, "docker compose dependency hardening")
 
 
-def test_dockerfile_keeps_public_and_private_targets_with_non_root_runtime():
+def test_dockerfile_keeps_public_only_non_root_runtime_boundary():
     text = read(DOCKERFILE)
 
     required = [
-        "FROM python:3.14-slim AS base",
-        "FROM base AS private",
-        "FROM base AS public",
+        "FROM python:3.14-slim AS public",
         "adduser --system --uid 1001",
+        "test ! -d cgtlib/private",
+        "test ! -d processual_api/private_integrations",
         "USER app",
         "HEALTHCHECK --interval=30s",
         "CMD curl -f http://localhost:${PORT:-8000}/health/live || exit 1",
         'CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]',
     ]
 
-    assert_contains_all(text, required, "Dockerfile production runtime")
+    assert_contains_all(text, required, "Dockerfile public runtime")
+    assert " AS private" not in text
 
 
 def test_production_env_template_and_deployment_docs_stay_aligned_with_compose():

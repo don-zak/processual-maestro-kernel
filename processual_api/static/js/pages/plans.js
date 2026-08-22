@@ -4,11 +4,12 @@ const endpoint =
 
 const grid = document.querySelector("#plans-grid");
 const status = document.querySelector("#plans-status");
+const annualBillingNote = document.querySelector("#annual-billing-note");
 
 function money(value) {
-  if (value === null || value === undefined || value === "") return "Assessment";
+  if (value === null || value === undefined || value === "") return null;
   const amount = Number(value);
-  if (!Number.isFinite(amount)) return "Assessment";
+  if (!Number.isFinite(amount)) return null;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -18,11 +19,13 @@ function money(value) {
 }
 
 function quota(value) {
-  if (value === null || value === undefined || value === "") return "Quota defined during assessment";
+  if (value === null || value === undefined || value === "") {
+    return "Quota defined from the approved assessment scope";
+  }
   const amount = Number(value);
   return Number.isFinite(amount)
     ? `${new Intl.NumberFormat("en-US").format(amount)} Maestro units / month`
-    : "Quota defined during assessment";
+    : "Quota defined from the approved assessment scope";
 }
 
 function discountPercent(plan) {
@@ -30,11 +33,32 @@ function discountPercent(plan) {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
+function assessmentPriceLabel(plan) {
+  if (plan.commercial_model === "requirements_based_evaluation") {
+    return "Evaluation price defined after assessment";
+  }
+  if (plan.commercial_model === "requirements_based_contract") {
+    return "Commercial proposal based on approved requirements";
+  }
+  return "Pricing after assessment";
+}
+
+function assessmentTermsLabel(plan) {
+  if (plan.commercial_model === "requirements_based_evaluation") {
+    return "One-month evaluation · agreed quota · no public fixed price";
+  }
+  if (plan.commercial_model === "requirements_based_contract") {
+    return "Capacity, integration, support and SLA defined by contract";
+  }
+  return "Commercial terms defined after assessment";
+}
+
 function createPlanCard(plan) {
   const link = document.createElement("a");
   link.className = "plan-choice-card";
   link.href = `/offer/${encodeURIComponent(plan.plan_id)}`;
   link.dataset.planId = plan.plan_id;
+  link.dataset.commercialModel = plan.commercial_model || "catalog_subscription";
 
   const audience = document.createElement("span");
   audience.className = "plan-audience";
@@ -50,16 +74,18 @@ function createPlanCard(plan) {
 
   const price = document.createElement("div");
   price.className = "plan-price";
-  price.textContent = plan.monthly_price_usd
-    ? `${money(plan.monthly_price_usd)} / month`
-    : "Pricing after assessment";
+  const monthly = money(plan.monthly_price_usd);
+  price.textContent = monthly
+    ? `${monthly} / month`
+    : assessmentPriceLabel(plan);
 
   const annual = document.createElement("p");
   annual.className = "plan-annual";
+  const annualPrice = money(plan.annual_price_usd);
   const discount = discountPercent(plan);
-  annual.textContent = plan.annual_price_usd
-    ? `${money(plan.annual_price_usd)} / year${discount ? ` - save ${discount}%` : ""}`
-    : "Commercial terms defined after assessment";
+  annual.textContent = annualPrice
+    ? `${annualPrice} / year${discount ? ` - save ${discount}%` : ""}`
+    : assessmentTermsLabel(plan);
 
   const quotaText = document.createElement("p");
   quotaText.className = "plan-quota";
@@ -67,14 +93,27 @@ function createPlanCard(plan) {
 
   const members = document.createElement("p");
   members.className = "plan-members";
-  members.textContent = "Unlimited members within quota";
+  members.textContent = "Unlimited authorized members within quota";
 
   const action = document.createElement("span");
   action.className = "plan-card-action";
-  action.textContent = "View full plan details";
+  action.textContent = plan.requires_assessment
+    ? "Review assessment and commercial scope"
+    : "View full plan details";
 
   link.append(audience, name, description, price, annual, quotaText, members, action);
   return link;
+}
+
+function renderCatalogBillingNote(payload) {
+  if (!annualBillingNote) return;
+  const discount = Number(payload.annual_discount_percent);
+  const discountText = Number.isFinite(discount) && discount > 0
+    ? `Eligible annual base-plan billing saves ${discount}%.`
+    : "Annual base-plan savings follow the current commercial catalog.";
+  annualBillingNote.textContent =
+    `${discountText} On-demand quota add-ons are separate and never discounted. ` +
+    "Enterprise evaluation and deployment pricing is requirements-based and is not covered by the public annual discount.";
 }
 
 async function loadPlans() {
@@ -87,6 +126,7 @@ async function loadPlans() {
       throw new Error("catalog_empty");
     }
 
+    renderCatalogBillingNote(payload);
     grid.replaceChildren(...payload.plans.map(createPlanCard));
     grid.setAttribute("aria-busy", "false");
   } catch {

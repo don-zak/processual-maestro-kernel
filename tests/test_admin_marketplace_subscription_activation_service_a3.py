@@ -7,11 +7,18 @@ from types import SimpleNamespace
 
 import pytest
 
+from processual_api.admin_marketplace.commercial_plan_projection import (
+    build_commercial_plan_projections,
+    build_subscription_quota_profiles,
+)
 from processual_api.admin_marketplace.errors import (
     SubscriptionActivationNotReadyError,
 )
 from processual_api.admin_marketplace.subscription_activation_service import (
     SubscriptionActivationOrchestrator,
+)
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_CATALOG_VERSION,
 )
 
 NOW = datetime(2026, 8, 5, 16, 0, tzinfo=UTC)
@@ -22,6 +29,14 @@ SUBSCRIPTION_ID = uuid.UUID("40000000-0000-0000-0000-000000000001")
 ACTIVATION_ID = uuid.UUID("50000000-0000-0000-0000-000000000001")
 EVENT_ID = uuid.UUID("60000000-0000-0000-0000-000000000001")
 EVIDENCE_ID = uuid.UUID("70000000-0000-0000-0000-000000000001")
+STARTER_PLAN = next(
+    item for item in build_commercial_plan_projections() if item.plan_code == "starter"
+)
+STARTER_QUOTA = next(
+    item
+    for item in build_subscription_quota_profiles()
+    if item.profile_ref == STARTER_PLAN.quota_profile_ref
+)
 
 
 class SingleRepository:
@@ -84,6 +99,35 @@ class Activations(SingleRepository):
         )
 
 
+class SubscriptionRuntime(SingleRepository):
+    async def get_by_subscription_id(self, subscription_id, *, for_update=False):
+        return next(
+            (item for item in self.items if item.subscription_id == subscription_id),
+            None,
+        )
+
+
+class SubscriptionQuotaCycles(SingleRepository):
+    async def get_current(
+        self,
+        *,
+        subscription_id,
+        metric_code,
+        occurred_at,
+        for_update=False,
+    ):
+        return next(
+            (
+                item
+                for item in self.items
+                if item.subscription_id == subscription_id
+                and item.metric_code == metric_code
+                and item.period_start <= occurred_at < item.period_end
+            ),
+            None,
+        )
+
+
 class Audit:
     def __init__(self) -> None:
         self.items = []
@@ -124,6 +168,8 @@ class Unit:
         self.entitlement_activations = Activations()
         self.offers = SingleRepository(offer())
         self.plans = SingleRepository(plan())
+        self.subscription_runtime = SubscriptionRuntime()
+        self.subscription_quota_cycles = SubscriptionQuotaCycles()
         self.commercial_audit = Audit()
         self.notification_outbox = NotificationOutbox()
         self.commit_calls = 0
@@ -219,9 +265,9 @@ def offer(**changes):
 def plan():
     return SimpleNamespace(
         id=PLAN_ID,
-        plan_code="starter",
-        entitlement_profile_ref="starter_entitlements_v1",
-        quota_profile_ref="starter_quotas_v1",
+        plan_code=STARTER_PLAN.plan_code,
+        entitlement_profile_ref=STARTER_PLAN.entitlement_profile_ref,
+        quota_profile_ref=STARTER_PLAN.quota_profile_ref,
     )
 
 
@@ -258,6 +304,18 @@ def kwargs():
     }
 
 
+def _assert_authoritative_cycle(unit: Unit) -> None:
+    assert len(unit.subscription_quota_cycles.items) == 1
+    cycle = unit.subscription_quota_cycles.items[0]
+    metric = STARTER_QUOTA.metrics[0]
+    assert cycle.metric_code == metric.metric_code
+    assert cycle.base_limit_units == metric.limit_units
+    assert cycle.plan_code == STARTER_PLAN.plan_code
+    assert cycle.plan_catalog_version == PLAN_FULFILLMENT_CATALOG_VERSION
+    assert cycle.quota_profile_ref == STARTER_PLAN.quota_profile_ref
+    assert tuple(cycle.entitlement_codes) == STARTER_PLAN.entitlement_codes
+
+
 @pytest.mark.asyncio
 async def test_activation_creates_subscription_entitlement_and_audit_atomically() -> None:
     unit = Unit()
@@ -267,17 +325,19 @@ async def test_activation_creates_subscription_entitlement_and_audit_atomically(
     assert result.status == "activated"
     assert result.subscription_status == "active"
     assert result.order_status == "activated"
-    assert result.entitlement_profile_ref == "starter_entitlements_v1"
+    assert result.entitlement_profile_ref == STARTER_PLAN.entitlement_profile_ref
     assert unit.commit_calls == 1
     assert len(unit.subscriptions.items) == 1
     assert len(unit.entitlement_activations.items) == 1
+    assert len(unit.subscription_runtime.items) == 1
+    _assert_authoritative_cycle(unit)
     activation = unit.entitlement_activations.items[0]
     assert activation.automatic_activation_allowed is True
     assert activation.order_id == ORDER_ID
     audit = unit.commercial_audit.items[0]
     assert audit.action == "subscription_activation_decided"
     assert audit.platform_authority == "system"
-    assert audit.metadata_json["quota_profile_ref"] == "starter_quotas_v1"
+    assert audit.metadata_json["quota_profile_ref"] == STARTER_PLAN.quota_profile_ref
 
 
 @pytest.mark.asyncio
@@ -291,6 +351,8 @@ async def test_activation_replay_does_not_duplicate_or_commit() -> None:
     assert replay.reason_code == "subscription_already_activated"
     assert unit.commit_calls == 1
     assert len(unit.subscriptions.items) == 1
+    assert len(unit.subscription_runtime.items) == 1
+    _assert_authoritative_cycle(unit)
     assert len(unit.commercial_audit.items) == 1
 
 

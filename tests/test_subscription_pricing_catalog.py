@@ -11,7 +11,6 @@ from processual_api.billing.usage_pricing import (
     BILLING_POLICY,
     PRICING_VERSION,
     PROVIDER_COST_INCLUDED,
-    monthly_unit_allowance,
 )
 
 SECRET_MARKERS = (
@@ -21,6 +20,15 @@ SECRET_MARKERS = (
     "encrypted_key",
     "api_key",
 )
+
+RETIRED_PUBLIC_IDENTITIES = {
+    "enterprise",
+    "enterprise_pilot",
+    "enterprise_core",
+    "enterprise_scale",
+    "enterprise_strategic",
+    "enterprise_integration",
+}
 
 
 def test_subscription_catalog_metadata_is_draft_byok() -> None:
@@ -36,23 +44,14 @@ def test_subscription_catalog_metadata_is_draft_byok() -> None:
     assert payload["plans"]
 
 
-def test_commercial_subscription_plans_have_allowances_from_usage_pricing() -> None:
+def test_internal_compatibility_listing_no_longer_marks_legacy_enterprise_as_public() -> None:
     commercial_plans = list_subscription_plans(include_unlisted=False)
 
-    assert {plan["plan_id"] for plan in commercial_plans} == {
-        "starter",
-        "business",
-        "enterprise_integration_starter",
-        "enterprise",
-    }
-
-    for plan in commercial_plans:
-        assert plan["commercially_listed"] is True
-        assert plan["monthly_unit_allowance"] == monthly_unit_allowance(plan["plan_id"])
-        assert plan["monthly_unit_allowance"] > 0
+    assert {plan["plan_id"] for plan in commercial_plans} == {"starter", "business"}
+    assert all(plan["commercially_listed"] is True for plan in commercial_plans)
 
 
-def test_draft_catalog_does_not_publish_final_prices_or_checkout() -> None:
+def test_internal_compatibility_catalog_stays_non_activating() -> None:
     for plan in list_subscription_plans():
         assert plan["pricing_status"] == "draft"
         assert plan["price_label"] == "TBD"
@@ -63,7 +62,28 @@ def test_draft_catalog_does_not_publish_final_prices_or_checkout() -> None:
         assert plan["lemon_variant_key_yearly"] is None
 
 
-def test_get_subscription_plan_returns_known_plan_copy() -> None:
+def test_public_subscription_catalog_projects_only_current_six_plan_journey() -> None:
+    payload = public_subscription_catalog()
+    plan_ids = [plan["plan_id"] for plan in payload["plans"]]
+
+    assert plan_ids == [
+        "academic_individual",
+        "academic_institution",
+        "starter",
+        "business",
+        "enterprise_integration_starter",
+        "enterprise_deployment",
+    ]
+    assert set(plan_ids).isdisjoint(RETIRED_PUBLIC_IDENTITIES)
+
+    by_id = {plan["plan_id"]: plan for plan in payload["plans"]}
+    assert by_id["enterprise_integration_starter"]["monthly_unit_allowance"] is None
+    assert by_id["enterprise_deployment"]["monthly_unit_allowance"] is None
+    assert by_id["enterprise_integration_starter"]["price_label"] == "Evaluation quote after assessment"
+    assert by_id["enterprise_deployment"]["price_label"] == "Enterprise proposal after requirements review"
+
+
+def test_get_subscription_plan_returns_known_internal_compatibility_copy() -> None:
     starter = get_subscription_plan("starter")
 
     assert starter is not None

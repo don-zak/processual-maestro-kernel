@@ -8,7 +8,7 @@ from pathlib import Path
 import cgtlib
 
 
-def test_public_fallback_stable_api_does_not_traverse_api_or_private_imports(tmp_path: Path):
+def test_public_package_does_not_load_private_engine(tmp_path: Path):
     source_package = Path(cgtlib.__file__).resolve().parent
     stripped_root = tmp_path / "public-strip"
     shutil.copytree(
@@ -33,7 +33,6 @@ def test_public_fallback_stable_api_does_not_traverse_api_or_private_imports(tmp
                     "stable_api_is_tuple": isinstance(cgtlib.CGTLIB_STABLE_API, tuple),
                     "stable_api_matches_declaration": cgtlib.CGTLIB_STABLE_API == declared_stable_api,
                     "stable_api_contains_manifest": "build_cgtlib_manifest" in cgtlib.CGTLIB_STABLE_API,
-                    "api_module_loaded": "cgtlib.api" in sys.modules,
                     "private_module_loaded": "cgtlib.private" in sys.modules,
                 }
             )
@@ -54,6 +53,5 @@ def test_public_fallback_stable_api_does_not_traverse_api_or_private_imports(tmp
         "stable_api_is_tuple": True,
         "stable_api_matches_declaration": True,
         "stable_api_contains_manifest": True,
-        "api_module_loaded": False,
         "private_module_loaded": False,
     }

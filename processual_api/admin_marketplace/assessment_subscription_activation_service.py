@@ -32,10 +32,10 @@ from processual_api.admin_marketplace.models import (
     AdminMarketPlan,
     AdminMarketSubscription,
 )
-from processual_api.admin_marketplace.subscription_runtime_bootstrap import (
-    SubscriptionRuntimeBootstrapInput,
-    SubscriptionRuntimeBootstrapUnitOfWork,
-    bootstrap_subscription_runtime_in_unit,
+from processual_api.admin_marketplace.subscription_authoritative_quota_bootstrap import (
+    AuthoritativeQuotaBootstrapInput,
+    AuthoritativeQuotaBootstrapUnitOfWork,
+    bootstrap_authoritative_quota_in_unit,
 )
 from processual_api.billing.assessment_activation_preparation import (
     ApprovedAssessmentOutcome,
@@ -115,7 +115,7 @@ class _CommercialAuditRepository(Protocol):
 class AssessmentSubscriptionActivationUnitOfWork(
     AssessmentQuotaProfileUnitOfWork,
     AssessmentCommercialTermsUnitOfWork,
-    SubscriptionRuntimeBootstrapUnitOfWork,
+    AuthoritativeQuotaBootstrapUnitOfWork,
     Protocol,
 ):
     plans: _PlanRepository
@@ -428,16 +428,20 @@ class AssessmentSubscriptionActivationService:
             unit.subscriptions.add(subscription)
             unit.entitlement_activations.add(activation)
             unit.assessment_subscription_bindings.add(binding)
-            await bootstrap_subscription_runtime_in_unit(
-                source=SubscriptionRuntimeBootstrapInput(
+            await bootstrap_authoritative_quota_in_unit(
+                source=AuthoritativeQuotaBootstrapInput(
                     subscription_id=subscription.id,
                     customer_ref=customer_ref,
                     entitlement_profile_ref=entitlement_profile_ref,
                     quota_profile_ref=record.profile_ref,
                     subscription_status=subscription.status,
                     effective_at=now,
+                    plan_code=source_plan_code,
+                    authority_version=record.definition_version,
+                    entitlement_codes=tuple(record.entitlement_codes_json),
+                    metric_code=record.metric_code,
+                    base_limit_units=record.limit_units,
                 ),
-                quota_profile=quota.runtime_profile,
                 uow=unit,
             )
 

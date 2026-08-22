@@ -1,0 +1,149 @@
+.am-ops-dashboard {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--border, #d8dce3);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+}
+
+.am-ops-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.am-ops-heading h3,
+.am-ops-grid h4 {
+  margin: 0;
+}
+
+.am-ops-heading p,
+.am-ops-note,
+.am-ops-state {
+  margin: 6px 0 0;
+  opacity: .76;
+}
+
+.am-ops-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  font-size: 12px;
+}
+
+.am-ops-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.am-ops-kpis > div,
+.am-ops-grid > article {
+  padding: 14px;
+  border: 1px solid var(--border, #d8dce3);
+  border-radius: 12px;
+}
+
+.am-ops-kpis span,
+.am-ops-item > div span {
+  display: block;
+  font-size: 11px;
+  opacity: .7;
+}
+
+.am-ops-kpis strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.am-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.am-ops-wide {
+  grid-column: 1 / -1;
+}
+
+.am-ops-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.am-ops-item {
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.am-ops-item-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.am-ops-item-title > span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.am-ops-item > div:not(.am-ops-item-title) {
+  display: grid;
+  grid-template-columns: minmax(100px, .7fr) minmax(0, 1.3fr);
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.am-ops-item b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.am-ops-empty {
+  padding: 12px 0;
+  opacity: .7;
+}
+
+.am-ops-state {
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .am-ops-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .am-ops-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .am-ops-wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .am-ops-heading {
+    display: block;
+  }
+
+  .am-ops-heading button {
+    margin-top: 12px;
+  }
+
+  .am-ops-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .am-ops-item > div:not(.am-ops-item-title) {
+    grid-template-columns: 1fr;
+  }
+}

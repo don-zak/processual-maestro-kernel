@@ -1,0 +1,97 @@
+name: Repository Evidence Closeout
+
+on:
+  pull_request:
+    paths:
+      - "governance/repository_retirement_quarantine.json"
+      - "scripts/analyze_local_evidence_consolidation.ps1"
+      - "scripts/audit_repository_retirement.ps1"
+      - "scripts/classify_local_evidence_retention.ps1"
+      - "tests/test_local_evidence_consolidation_contract.py"
+      - "tests/test_repository_retirement_local_tooling_quarantine.py"
+      - "tests/test_repository_retirement_quarantine_policy.py"
+      - "tests/test_repository_retirement_audit_contract.py"
+      - ".github/workflows/repository-evidence-closeout.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-closeout-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install focused validation dependencies
+        run: python -m pip install pytest ruff
+
+      - name: Ruff focused evidence-closeout tests
+        run: |
+          ruff check \
+            tests/test_local_evidence_consolidation_contract.py \
+            tests/test_repository_retirement_local_tooling_quarantine.py \
+            tests/test_repository_retirement_quarantine_policy.py \
+            tests/test_repository_retirement_audit_contract.py
+
+      - name: Run focused repository-retirement contracts
+        run: |
+          pytest -q \
+            tests/test_local_evidence_consolidation_contract.py \
+            tests/test_repository_retirement_local_tooling_quarantine.py \
+            tests/test_repository_retirement_quarantine_policy.py \
+            tests/test_repository_retirement_audit_contract.py
+
+      - name: Execute evidence analyzer on clean runner
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "pmk-evidence-closeout"
+          ./scripts/analyze_local_evidence_consolidation.ps1 `
+            -Root $env:GITHUB_WORKSPACE `
+            -OutputDirectory $out `
+            -Timestamp "ci"
+
+          $manifestPath = Join-Path $out "evidence-consolidation-ci.json"
+          if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            throw "Evidence consolidation manifest was not created."
+          }
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.policy.mode -ne "READ_ONLY_EVIDENCE_CONSOLIDATION") {
+            throw "Unexpected evidence consolidation mode."
+          }
+          if ($manifest.policy.deletion_authorized -ne $false) {
+            throw "Evidence analyzer must not authorize deletion."
+          }
+          if ($manifest.summary.repository_reconciliation_complete -ne $false) {
+            throw "Clean-runner analysis must not grant repository reconciliation authority."
+          }
+          if ($manifest.summary.deletion_authorized_count -ne 0) {
+            throw "Evidence analyzer emitted deletion authority."
+          }
+
+      - name: Record authority boundary
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p qualification-evidence
+          {
+            echo "workflow=Repository Evidence Closeout"
+            echo "read_only_evidence_consolidation=true"
+            echo "evidence_deletion_authorized=false"
+            echo "repository_reconciliation_complete=false"
+            echo "real_staging_qualified=false"
+            echo "production_authority_granted=false"
+          } > qualification-evidence/repository-evidence-closeout.txt
+
+      - name: Upload closeout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-evidence-closeout-${{ github.sha }}
+          path: qualification-evidence/

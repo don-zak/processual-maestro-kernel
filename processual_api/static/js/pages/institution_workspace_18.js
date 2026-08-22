@@ -1,6 +1,7 @@
 PAGES.institution = (() => {
   'use strict';
 
+  const SUBSCRIPTION_UNAVAILABLE_DETAIL = 'Subscription access is temporarily unavailable.';
   const TRACKS = [
     {
       key: 'camara',
@@ -27,6 +28,12 @@ PAGES.institution = (() => {
     subscription: null,
     cases: [],
     legacyRequests: [],
+    availability: {
+      account: false,
+      subscription: false,
+      cases: false,
+      legacyRequests: false,
+    },
     loading: true,
     busy: '',
     message: '',
@@ -44,7 +51,22 @@ PAGES.institution = (() => {
   function trackDef(key) { return TRACKS.find((track) => track.key === key); }
   function caseForTrack(key) { return state.cases.find((item) => item.integration_track === key) || null; }
 
+  function resultErrorDetail(result) {
+    if (!result || result.status !== 'rejected') return '';
+    return String(result.reason?.detail || result.reason?.message || 'Unavailable').trim();
+  }
+
+  function dedupedLoadError(results) {
+    const unique = [...new Set(results.map(resultErrorDetail).filter(Boolean))];
+    if (!unique.length) return '';
+    if (unique.length === 1 && unique[0] === SUBSCRIPTION_UNAVAILABLE_DETAIL) {
+      return `${SUBSCRIPTION_UNAVAILABLE_DETAIL} Enterprise workspace data remains fail-closed until subscription verification recovers.`;
+    }
+    return unique.join(' · ');
+  }
+
   function legacyCount() {
+    if (!state.availability.legacyRequests) return 0;
     return state.legacyRequests.filter((request) => String(request.message_preview || '').includes('[STAGE18_INTEGRATION_CASE]')).length;
   }
 
@@ -58,12 +80,17 @@ PAGES.institution = (() => {
       CLIENT.get('/settings/client/integration-cases'),
       CLIENT.get('/settings/client-requests'),
     ]);
-    state.account = results[0].status === 'fulfilled' ? results[0].value : null;
-    state.subscription = results[1].status === 'fulfilled' ? results[1].value : null;
-    state.cases = results[2].status === 'fulfilled' ? arr(results[2].value?.cases) : [];
-    state.legacyRequests = results[3].status === 'fulfilled' ? arr(results[3].value?.latest_requests) : [];
-    state.error = results.filter((item) => item.status === 'rejected')
-      .map((item) => item.reason?.detail || item.reason?.message || 'Unavailable').join(' · ');
+    state.availability = {
+      account: results[0].status === 'fulfilled',
+      subscription: results[1].status === 'fulfilled',
+      cases: results[2].status === 'fulfilled',
+      legacyRequests: results[3].status === 'fulfilled',
+    };
+    state.account = state.availability.account ? results[0].value : null;
+    state.subscription = state.availability.subscription ? results[1].value : null;
+    state.cases = state.availability.cases ? arr(results[2].value?.cases) : [];
+    state.legacyRequests = state.availability.legacyRequests ? arr(results[3].value?.latest_requests) : [];
+    state.error = dedupedLoadError(results);
     state.loading = false;
     state.busy = '';
     render();
@@ -71,7 +98,7 @@ PAGES.institution = (() => {
 
   async function createTrackCase(trackKey) {
     const track = trackDef(trackKey);
-    if (!track || state.busy) return;
+    if (!track || state.busy || !state.availability.subscription || !state.availability.cases) return;
     state.busy = `create:${trackKey}`;
     state.message = `Creating ${track.title} workspace…`;
     state.error = '';
@@ -162,12 +189,19 @@ PAGES.institution = (() => {
   }
 
   function trackCard(track) {
+    if (!state.availability.cases) {
+      return `<section class="iw18-panel" data-integration-track="${track.key}">
+        <h2>${esc(track.title)}</h2><small>${esc(track.subtitle)}</small>
+        <div class="iw18-empty" style="margin-top:.85rem">Operational case data is unavailable until subscription verification recovers.</div>
+      </section>`;
+    }
+
     const item = caseForTrack(track.key);
     if (!item) {
       return `<section class="iw18-panel" data-integration-track="${track.key}">
         <h2>${esc(track.title)}</h2><small>${esc(track.subtitle)}</small>
         <div class="iw18-empty" style="margin-top:.85rem">No operational case yet. Create one to begin technical intake and automated validation.</div>
-        <div class="iw18-toolbar"><button class="iw18-button" data-create-track="${track.key}" ${state.busy ? 'disabled' : ''}>Create operational case</button></div>
+        <div class="iw18-toolbar"><button class="iw18-button" data-create-track="${track.key}" ${state.busy || !state.availability.subscription ? 'disabled' : ''}>Create operational case</button></div>
       </section>`;
     }
 
@@ -185,6 +219,7 @@ PAGES.institution = (() => {
   }
 
   function registry() {
+    if (!state.availability.cases) return '<div class="iw18-empty">Case registry is unavailable until subscription verification recovers.</div>';
     if (!state.cases.length) return '<div class="iw18-empty">No operational integration cases have been created.</div>';
     return `<div class="iw18-timeline">${state.cases.map((item, index) => `
       <div class="iw18-step"><b>${index + 1}</b><div><strong>${esc(item.case_type)}</strong>
@@ -193,6 +228,14 @@ PAGES.institution = (() => {
   }
 
   function summary() {
+    if (!state.availability.cases) {
+      return `<div class="iw18-summary-grid">
+        <div class="iw18-summary"><span>Operational cases</span><strong>—</strong></div>
+        <div class="iw18-summary"><span>Average progress</span><strong>—</strong></div>
+        <div class="iw18-summary"><span>Ready for decision</span><strong>—</strong></div>
+        <div class="iw18-summary"><span>Blocked</span><strong>—</strong></div>
+      </div>`;
+    }
     const total = state.cases.length;
     const ready = state.cases.filter((item) => item.status === 'ready_for_review').length;
     const blocked = state.cases.filter((item) => String(item.status).includes('blocked')).length;
@@ -205,6 +248,13 @@ PAGES.institution = (() => {
     </div>`;
   }
 
+  function subscriptionPill() {
+    if (!state.availability.subscription) return pill('Subscription status unavailable', 'bad');
+    const plan = String(state.subscription?.plan || state.subscription?.plan_id || 'unknown');
+    const eligible = /enterprise/.test(plan.toLowerCase());
+    return pill(eligible ? 'Enterprise eligible' : `Current plan: ${plan}`, eligible ? 'good' : 'warn');
+  }
+
   function render() {
     const root = document.getElementById('institution-workspace-root');
     if (!root) return;
@@ -212,19 +262,17 @@ PAGES.institution = (() => {
       root.innerHTML = '<div class="iw18-empty">Loading enterprise integration workspace…</div>';
       return;
     }
-    const plan = String(state.subscription?.plan || state.subscription?.plan_id || 'starter');
-    const eligible = /enterprise/.test(plan.toLowerCase());
     root.innerHTML = `<div class="iw18-shell">
       <section class="iw18-hero">
         <div class="iw18-eyebrow">Enterprise workspace</div>
         <h1>${esc(state.account?.organization_name || 'Enterprise integration operations')}</h1>
         <p>Complete technical intake, save client-safe references, and run automated validation before any supervisor decision. Routine preparation remains self-service.</p>
-        <div class="iw18-status">${pill(eligible ? 'Enterprise eligible' : `Current plan: ${plan}`, eligible ? 'good' : 'warn')}${pill('Operational task tracking', 'good')}${pill('No raw secrets', 'good')}${pill('Production blocked', 'warn')}</div>
+        <div class="iw18-status">${subscriptionPill()}${pill('Operational task tracking', 'good')}${pill('No raw secrets', 'good')}${pill('Production blocked', 'warn')}</div>
         ${summary()}
       </section>
 
       ${state.message ? `<div class="iw18-empty">${esc(state.message)}</div>` : ''}
-      ${state.error ? `<div class="iw18-empty" style="color:#fca5a5">${esc(state.error)}</div>` : ''}
+      ${state.error ? `<div class="iw18-empty" role="alert" style="color:#fca5a5">${esc(state.error)}</div>` : ''}
 
       <section class="iw18-panel">
         <h2>Execution tracks</h2>
