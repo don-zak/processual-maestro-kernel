@@ -1,10 +1,44 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "purpose": "Prevent retired or compatibility-only repository surfaces from silently regaining primary authority while preserving history and required compatibility until deletion is proven safe.",
   "authority": {
     "repository_reconciliation_complete": false,
     "real_staging_qualified": false,
     "production_authority_granted": false
+  },
+  "evidence_closeout": {
+    "deletion_authorized": false,
+    "review_decisions": {
+      "classification": "LATEST_IDENTITY_COMPLETE_WITH_HISTORICAL_PAYLOAD_CHANGES",
+      "latest_version": 8,
+      "latest_item_count": 57,
+      "all_historical_identity_count": 57,
+      "identities_missing_from_latest": 0,
+      "every_transition_identity_monotonic": true,
+      "every_transition_exact_monotonic": false,
+      "historical_versions_must_be_preserved": true,
+      "reason": "v8 contains every historical decision identity, but v1->v2 changed two existing payloads and v2->v3 changed one existing payload. From v3->v4 through v7->v8 the lineage is exact-monotonic additions only."
+    },
+    "cgt17_retirement_evidence": {
+      "classification": "THREE_EXACT_DUPLICATE_PAIRS",
+      "file_count": 6,
+      "distinct_sha256_count": 3,
+      "pairs": [
+        [
+          "cgt17_branch_retirement_audit_20260811_141201.json",
+          "cgt17_branch_retirement_audit_20260811_141433.json"
+        ],
+        [
+          "cgt17_branch_retirement_audit_20260811_142300.json",
+          "cgt17_branch_retirement_audit_20260811_142957.json"
+        ],
+        [
+          "cgt17_branch_retirement_audit_20260811_143802.json",
+          "cgt17_branch_retirement_audit_20260811_143853.json"
+        ]
+      ],
+      "historical_files_must_be_preserved": true
+    }
   },
   "protected_path_prefixes": [
     "alembic/versions/",
