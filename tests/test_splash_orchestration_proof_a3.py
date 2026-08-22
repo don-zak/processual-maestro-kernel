@@ -35,7 +35,7 @@ def test_orchestration_splash_proof_exists_and_preserves_real_card_markup():
     assert _card_markup(proof) == _card_markup(canonical)
 
 
-def test_living_orchestration_board_has_all_semantic_control_modules():
+def test_living_orchestration_board_has_reference_semantic_modules():
     source = _read(PROOF)
     required = [
         'id="living-board"',
@@ -49,22 +49,30 @@ def test_living_orchestration_board_has_all_semantic_control_modules():
         'data-module="feedback"',
         'data-module="control"',
         'id="execution-zone"',
+        'class="module left-module"',
+        'class="module right-module"',
+        'class="core-pins"',
+        'class="core-top-pins"',
+        'class="core-bottom-pins"',
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Missing living-board semantic modules: {missing}"
+    assert not missing, f"Missing reference-oriented living-board modules: {missing}"
 
 
-def test_living_orchestration_board_uses_svg_routes_not_legacy_particle_field():
+def test_living_orchestration_board_uses_dense_svg_circuitry_not_particle_field():
     source = _read(PROOF)
     required = [
         "rebuildSignals",
         "orthogonalPath",
+        "addAmbientTraces",
         "getTotalLength",
         "getPointAtLength",
-        "signal-path",
-        "signal-pulse",
+        "trace bus",
+        "trace micro",
+        "class:'pulse'",
         "routeRecords",
         "selectRoute",
+        "for(let i=-2;i<=2;i++)",
     ]
     forbidden = [
         "class Particle",
@@ -74,11 +82,11 @@ def test_living_orchestration_board_uses_svg_routes_not_legacy_particle_field():
     ]
     missing = [marker for marker in required if marker not in source]
     present_forbidden = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Missing SVG orchestration route markers: {missing}"
+    assert not missing, f"Missing dense SVG orchestration markers: {missing}"
     assert not present_forbidden, f"Legacy particle/canvas markers still present: {present_forbidden}"
 
 
-def test_living_orchestration_routes_are_anchored_to_card_and_modules():
+def test_living_orchestration_routes_are_anchored_to_live_card_and_modules():
     source = _read(PROOF)
     required = [
         "const cardRect=relativeRect(card)",
@@ -125,13 +133,13 @@ def test_orchestration_splash_proof_keeps_descent_gate_contract():
 def test_living_orchestration_board_keeps_responsive_and_reduced_motion_guards():
     source = _read(PROOF)
     required = [
-        "@media(max-width:1180px)",
-        "@media(max-width:880px)",
+        "@media(max-width:1240px)",
+        "@media(max-width:920px)",
         "@media(max-width:560px)",
         "@media(prefers-reduced-motion:reduce)",
         "reduceMotion.matches",
         "reduceMotion.addEventListener?.('change',rebuildSignals)",
-        ".signal-pulse{display:none}",
+        ".pulse{display:none}",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing responsive/motion safeguards: {missing}"
