@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "processual_api" / "static"
@@ -17,15 +16,15 @@ def test_admin_home_layout_moves_runtime_cards_to_surface():
     script = (STATIC_DIR / "js" / "admin_home_layout.js").read_text(encoding="utf-8")
 
     required = [
-        "admin-home-runtime-surface",
-        "moveHomeRuntimeCards",
+        "admin-home-canonical-surface",
+        "canonicalizeHomeCards",
         "admin-runtime-home-summary",
         "admin-runtime-auth-state",
-        "findOverviewAnchor",
+        "ensureSurface",
         "position:static!important",
-        "max-height:560px",
-        "overflow:auto",
+        "overflow:auto!important",
         "PMK_ADMIN_HOME_LAYOUT",
+        "PMK_ADMIN_HOME_CANONICAL_OBSERVER",
     ]
 
     for token in required:
