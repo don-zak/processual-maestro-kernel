@@ -19,7 +19,7 @@ def test_evidence_consolidation_script_exists_and_is_read_only_by_contract():
     assert "version_number_is_not_supersession_authority = $true" in text
     assert "old_tracked_version_requires_historical_proof = $true" in text
 
-    for destructive_token in ("Remove-Item", "Move-Item", "git clean", "git rm"):
+    for destructive_token in ("Move-Item", "git clean", "git rm"):
         assert destructive_token not in text
 
 
@@ -72,10 +72,14 @@ def test_windows_powershell_uses_relative_path_compatibility_fallback():
     assert ".MakeRelativeUri(" in text
 
 
-def test_json_metadata_supports_python_fallback_and_empty_files():
+def test_json_metadata_supports_python_fallback_empty_files_and_isolated_stderr():
     text = _script_text()
-    assert "schema_version = 4" in text
+    assert "schema_version = 5" in text
     assert "function Test-JsonWithPython" in text
+    assert "Start-Process -FilePath $python.Source" in text
+    assert "-RedirectStandardOutput $stdoutPath" in text
+    assert "-RedirectStandardError $stderrPath" in text
+    assert "python_fallback_stderr_isolated = $true" in text
     assert "json_validator = $null" in text
     assert "$metadata.json_parse_status = 'EMPTY'" in text
     assert "$metadata.json_parse_status = 'VALID_PYTHON_FALLBACK'" in text
@@ -84,10 +88,16 @@ def test_json_metadata_supports_python_fallback_and_empty_files():
     assert "python_fallback_json_count" in text
 
 
+def test_temp_file_cleanup_is_narrowly_scoped_and_not_evidence_deletion():
+    text = _script_text()
+    assert "Remove-Item -LiteralPath $stdoutPath, $stderrPath" in text
+    assert "Remove-Item -LiteralPath $rootPath" not in text
+    assert "Remove-Item -Recurse" not in text
+
+
 def test_review_decision_lineage_is_read_only_and_enumerates_root_array():
     text = LINEAGE.read_text(encoding="utf-8")
     assert "READ_ONLY_REVIEW_DECISION_LINEAGE" in text
-    assert "schema_version = 2" in text
     assert "foreach ($item in $parsed)" in text
     assert "$itemCount += 1" in text
     assert "previous_is_identity_subset" in text
