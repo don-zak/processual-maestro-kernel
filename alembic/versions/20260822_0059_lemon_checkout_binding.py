@@ -17,9 +17,18 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+_TABLE = "admin_market_lemon_checkout_bindings"
+_PK = "pk_am_lcb"
+_ORDER_FK = "fk_am_lcb_order"
+_ORDER_UQ = "uq_am_lcb_order"
+_PROVIDER_CHECKOUT_UQ = "uq_am_lcb_provider_checkout"
+_STATUS_CK = "ck_am_lcb_status"
+_READY_PROVIDER_CK = "ck_am_lcb_ready_provider"
+
+
 def upgrade() -> None:
     op.create_table(
-        "admin_market_lemon_checkout_bindings",
+        _TABLE,
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("order_id", sa.Uuid(), nullable=False),
         sa.Column("provider_variant_id", sa.String(128), nullable=False),
@@ -32,33 +41,33 @@ def upgrade() -> None:
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("id", name="pk_admin_market_lemon_checkout_bindings"),
+        sa.PrimaryKeyConstraint("id", name=op.f(_PK)),
         sa.ForeignKeyConstraint(
             ["order_id"],
             ["admin_market_orders.id"],
-            name="fk_admin_market_lemon_checkout_bindings_order_id_admin_market_orders",
+            name=op.f(_ORDER_FK),
             ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
             "order_id",
-            name="uq_admin_market_lemon_checkout_bindings_order_id",
+            name=op.f(_ORDER_UQ),
         ),
         sa.UniqueConstraint(
             "provider_checkout_id",
-            name="uq_admin_market_lemon_checkout_bindings_provider_checkout_id",
+            name=op.f(_PROVIDER_CHECKOUT_UQ),
         ),
         sa.CheckConstraint(
             "checkout_creation_status IN ('not_started','creating','ready','uncertain')",
-            name="checkout_creation_status_allowed",
+            name=op.f(_STATUS_CK),
         ),
         sa.CheckConstraint(
             "(checkout_creation_status = 'ready' AND provider_checkout_id IS NOT NULL) "
             "OR checkout_creation_status != 'ready'",
-            name="ready_checkout_has_provider_id",
+            name=op.f(_READY_PROVIDER_CK),
         ),
     )
 
-    with op.batch_alter_table("admin_market_lemon_checkout_bindings") as batch:
+    with op.batch_alter_table(_TABLE) as batch:
         batch.alter_column(
             "checkout_creation_status",
             existing_type=sa.String(24),
@@ -68,4 +77,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("admin_market_lemon_checkout_bindings")
+    op.drop_table(_TABLE)
