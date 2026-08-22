@@ -257,3 +257,349 @@ AdminReviewRequired=False
 - Support public and customer-specific offers.
 - Support effective dates and expiry.
 - Prevent retroactive silent changes to active subscriptions.
+
+## ADMIN-MARKET-R5 — Direct Tunisian order workflow
+
+- Create direct-sale order.
+- Record customer or institution identity.
+- Record payment method and payment reference.
+- Upload or reference evidence without exposing it publicly.
+- Require payment verification.
+- Require terms acceptance.
+- Require appropriate administrator approval.
+- Activate only after all gates pass.
+- Preserve a complete decision history.
+
+Potential local methods may include bank transfer, invoice, purchase order or
+another later-approved Tunisian payment integration. No method is considered
+production-approved until separately qualified.
+
+## ADMIN-MARKET-R6 — Trial management
+
+- Free or paid trial policy.
+- Trial duration.
+- Trial quotas.
+- Sandbox-only versus limited operational access.
+- Connector permissions.
+- Supervisor approval.
+- Extension, suspension, conversion and expiry.
+- No production authority by implication.
+
+## ADMIN-MARKET-R7 — Subscription lifecycle
+
+- Activation.
+- Renewal.
+- Upgrade.
+- Downgrade.
+- Suspension.
+- Cancellation.
+- Expiry.
+- Refund decision under the approved operational-outcome policy.
+- Immutable lifecycle history.
+
+## ADMIN-MARKET-R8 — Lemon Squeezy boundary
+
+- Server-side checkout authorization.
+- Server-side enforcement of documented channel-eligibility and restriction
+  decisions.
+- Variant mapping only for approved offers and eligible customers or
+  institutions.
+- Webhook authenticity and replay prevention.
+- Idempotent order reconciliation.
+- No activation from an unverified webhook.
+- Channel-eligibility and customer-selection revalidation before activation.
+- Safe handling of refunds, disputes and subscription changes.
+
+## ADMIN-MARKET-R9 — Administrator user interface
+
+Dedicated super-administrator-only page containing:
+
+- Offer management.
+- Customer and institution sales.
+- Pending payment verification.
+- Trials.
+- Active subscriptions.
+- Expiring subscriptions.
+- Suspended accounts.
+- Usage versus quotas.
+- Revenue and commercial summaries.
+- Audit trail.
+- Maestro Direct and Lemon Squeezy eligibility, selection and restriction
+  indicators.
+
+The page must follow the existing Maestro UI system, responsive behavior,
+accessibility rules and Arabic/English direction handling.
+
+## ADMIN-MARKET-R10 — Commercial security and closure
+
+- Exclusive super-administrator permission, delegated-supervisor denial and
+  step-up MFA tests.
+- Payment-evidence access controls.
+- Webhook security tests.
+- Channel-eligibility, customer-choice and restriction-bypass tests.
+- Concurrent activation tests.
+- Idempotency and replay tests.
+- Browser tests.
+- Full regression.
+- Final commercial evidence bundle.
+
+---
+
+# Phase C — Quotas and entitlements
+
+## QUOTAS-R1 — Entitlement catalog
+
+Candidate controlled dimensions:
+
+- users;
+- organizations;
+- agents;
+- concurrent agents;
+- tasks per day;
+- tasks per month;
+- compute or token budget;
+- storage;
+- API requests;
+- connectors;
+- sandbox hours;
+- production runs;
+- reports;
+- retention days;
+- support level;
+- active cases;
+- scheduled jobs;
+- external operations;
+- write operations;
+- restricted operations;
+- supervisor approvals;
+- qualification keys;
+- sandbox keys.
+
+## QUOTAS-R2 — Usage authority
+
+Every quota must define:
+
+- limit;
+- reset period;
+- current usage;
+- remaining usage;
+- reservation behavior;
+- release behavior;
+- overage policy;
+- notification thresholds;
+- hard denial versus administrator approval.
+
+## QUOTAS-R3 — Enforcement
+
+- API enforcement.
+- Background-task enforcement.
+- Agent concurrency enforcement.
+- Connector-operation enforcement.
+- Sandbox enforcement.
+- Subscription-state enforcement.
+- Atomic usage accounting.
+- Race and replay protection.
+
+## QUOTAS-R4 — Visibility and qualification
+
+- Customer usage pages.
+- Administrator usage pages.
+- Threshold warnings.
+- Usage export.
+- Reconciliation tests.
+- Load and concurrency tests.
+- Final quota evidence bundle.
+
+---
+
+# Phase D — Pricing
+
+## PRICING-R1 — Cost model
+
+Include:
+
+- hosting;
+- databases;
+- storage;
+- monitoring;
+- support;
+- onboarding;
+- connectors;
+- operational risk;
+- payment fees;
+- taxes where applicable;
+- margin;
+- BYOK policy;
+- excluded AI-provider costs.
+
+## PRICING-R2 — Offer families
+
+Current planned families:
+
+- Pilot Starter;
+- Pilot Pro;
+- Institution Trial;
+- Institution;
+- Enterprise;
+- Custom/Telecom.
+
+Enterprise and Custom/Telecom require:
+
+SupervisorReviewRequired=True
+PriceManuallyApproved=True
+ActivationAfterContract=True
+
+## PRICING-R3 — Approval and versioning
+
+- Approved currency.
+- Approved price.
+- Effective date.
+- Price version.
+- Tax treatment.
+- Discount authority.
+- Renewal behavior.
+- Customer-specific negotiated terms.
+- No silent modification of active contracts.
+
+## PRICING-R4 — Final commercial qualification
+
+- Price-to-quota consistency.
+- Tunisia/direct price display.
+- International Lemon Squeezy mapping.
+- Invoice and order consistency.
+- Refund-policy visibility.
+- Browser and API tests.
+- Commercial approval evidence.
+
+No production checkout may be enabled before PRICING-R4 closes.
+
+---
+
+# Phase E — Public/private repository reconciliation
+
+This phase occurs after AUTH, Admin Marketplace, quotas and pricing are
+functionally complete.
+
+Required work:
+
+- Compare shared trees.
+- Preserve private-only integrations.
+- Confirm public build excludes private modules and tests.
+- Port the latest approved public core into the private baseline.
+- Run public and private full suites.
+- Run public-exclusion tests.
+- Build public and private images.
+- Validate shared migrations.
+- Produce exact drift and compatibility evidence.
+
+---
+
+# Phase F — General packaging
+
+Required work:
+
+- Remove temporary and obsolete files.
+- Normalize product terminology.
+- Complete README and operator documentation.
+- Complete administrator documentation.
+- Complete customer documentation.
+- Provide safe configuration templates.
+- Finalize migrations.
+- Review feature flags.
+- Build packages and Docker images.
+- Generate SBOM.
+- Generate dependency and license inventory.
+- Run secret and vulnerability scans.
+- Assign release version.
+- Prepare changelog and release notes.
+- Prepare backup, restore, rollback and incident-response manuals.
+
+---
+
+# Phase G — Real staging qualification
+
+Synthetic CI rehearsal is not real staging qualification.
+
+Required work:
+
+- Real staging environment.
+- Immutable image digest.
+- Real secret authority.
+- Migration rehearsal.
+- Backup and restore.
+- Rollback.
+- Health and readiness.
+- Metrics and alerts.
+- External provider integration.
+- Browser end-to-end.
+- Load and endurance tests.
+- Security review.
+- Named human approvals.
+- Externally verifiable approval evidence.
+- Signed Go/No-Go decision.
+
+---
+
+# Phase H — Release candidate and launch
+
+## Release candidate
+
+- Freeze exact source heads.
+- Freeze exact image digests.
+- Freeze migrations.
+- Freeze pricing and quotas.
+- Freeze documentation.
+- Complete release evidence bundle.
+- No unresolved critical or high defects.
+- Formal Go/No-Go.
+
+## Controlled production pilot
+
+- Limited customers.
+- Limited quotas.
+- Enhanced monitoring.
+- Fast rollback authority.
+- Incident-response readiness.
+- Daily operational review.
+- Explicit expansion decision.
+
+## General availability
+
+General availability is allowed only after:
+
+- authentication closure;
+- Admin Marketplace closure;
+- quota closure;
+- pricing closure;
+- repository reconciliation;
+- packaging;
+- real staging;
+- release candidate approval;
+- successful controlled pilot.
+
+---
+
+# Mandatory transition-report rule
+
+Every transition report must include:
+
+1. Repository and workspace.
+2. Current branch and exact HEAD.
+3. Parent/base commit.
+4. Working-tree and staged-file state.
+5. Exact changed paths.
+6. Completed work.
+7. Tests and validation evidence.
+8. Known failures and unresolved risks.
+9. Current phase and precise next task.
+10. The full remaining roadmap from this file.
+11. Explicit statements for:
+    - PushPerformed;
+    - PullRequestOpened;
+    - MergePerformed;
+    - ProductionAuthorityGranted;
+    - RealStagingQualified.
+12. Commands and paths required to resume safely.
+
+No transition report may claim production readiness merely because a synthetic
+or ephemeral CI rehearsal passed.
