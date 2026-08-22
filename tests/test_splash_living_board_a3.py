@@ -14,8 +14,8 @@ def test_production_splash_uses_reference_living_board_not_legacy_starfield():
         'id="board"', 'id="trace-svg"', 'class="maestro-reference-stage"',
         "function drawAmbientBoard(", "function drawModuleFrames(", "function drawCoreBreakout(",
         "function drawUpperFabric(", "function drawExecutionFabric(", "function drawCrossFabric(c)",
-        "function rings(", "function rebuild()", "function animate(now)", "getTotalLength",
-        "getPointAtLength", "requestAnimationFrame",
+        "function drawBackplaneFabric(c)", "function rings(", "function rebuild()", "function animate(now)",
+        "getTotalLength", "getPointAtLength", "requestAnimationFrame",
     ]
     forbidden = ['id="bg-canvas"', "class Particle", "const COUNT = 80", "drawParticles()"]
     missing = [marker for marker in required if marker not in source]
@@ -70,8 +70,8 @@ def test_production_splash_routes_use_regional_fabric_and_not_long_bridge_genera
     required = [
         "function connectorPoint(node)", "node.querySelector('.connector-pad')", "fabricProfiles",
         "function localFanout(", "function regionalFabric(", "function drawCrossFabric(c)",
-        "function registerSignal(", "function animate(now)", "semanticT(", "requestAnimationFrame(animate)",
-        "addEventListener('resize'",
+        "function drawBackplaneFabric(c)", "function registerSignal(", "function animate(now)", "semanticT(",
+        "requestAnimationFrame(animate)", "addEventListener('resize'",
     ]
     forbidden = [
         "function pcb(", "for(let j=-9;j<=9;j++)", "function drawSideFabric(", "function focusRoute(key)",
@@ -87,15 +87,15 @@ def test_production_splash_uses_reference_pcb_density_and_topology():
     source = _source()
     required = [
         "function drawAmbientBoard(", "function drawCoreBreakout(", "function localFanout(",
-        "function regionalFabric(", "function drawCrossFabric(c)", "function drawGovernanceFabric()",
-        "function drawSupervisionFabric()", "function drawCalibrationFabric()",
+        "function regionalFabric(", "function drawCrossFabric(c)", "function drawBackplaneFabric(c)",
+        "function drawGovernanceFabric()", "function drawSupervisionFabric()", "function drawCalibrationFabric()",
         "function drawOrchestrationFabric()", "function drawRoutingFabric()", "function drawPolicyFabric()",
         "function drawFeedbackFabric()", "function drawControlFabric()", "function drawUpperFabric(",
-        "function drawExecutionFabric(", "for(let i=0;i<96;i++)", "for(let i=0;i<68;i++)",
-        "for(let i=0;i<34;i++)", "for(let i=0;i<38;i++)", "for(let i=0;i<30;i++)",
-        ".trace.dormant", ".trace.support", ".trace.active", ".trace.hot", "via-node", "connector-pad",
-        "node-bloom", "trace-wake", "p3=E('circle'", "g.append(p1,p2,p3)", "telemetry-strip",
-        "pin-side", "pin-top", "pin-bottom",
+        "function drawExecutionFabric(", "for(let i=0;i<132;i++)", "for(let i=0;i<92;i++)",
+        "for(let i=0;i<44;i++)", "for(let i=0;i<48;i++)", "for(let i=0;i<38;i++)",
+        "for(let i=0;i<32;i++", "for(let i=0;i<18;i++", ".trace.dormant", ".trace.support",
+        ".trace.active", ".trace.hot", "via-node", "connector-pad", "node-bloom", "trace-wake",
+        "p3=E('circle'", "g.append(p1,p2,p3)", "telemetry-strip", "pin-side", "pin-top", "pin-bottom",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Reference SVG PCB density/topology markers missing: {missing}"
