@@ -13,6 +13,7 @@ def test_production_splash_uses_reference_living_board_not_legacy_starfield():
     required = [
         'id="board"',
         'id="trace-svg"',
+        'class="maestro-reference-stage"',
         "function ambient(",
         "function rebuild()",
         "function animate(now)",
@@ -90,7 +91,9 @@ def test_production_splash_routes_are_live_geometry_bound_and_interactive():
     source = _source()
     required = [
         "const w=board.clientWidth,h=board.clientHeight,c=rr(core)",
-        "const n=rr(node),a=edge(c,n),b=edge(n,c)",
+        "const n=rr(node),a=edge(c,n),b=node.id==='execution'?edge(n,c):connectorPoint(node)",
+        "function connectorPoint(node)",
+        "node.querySelector('.connector-pad')",
         "function pcb(",
         "function focusRoute(key)",
         "classList.toggle('active'",
@@ -102,14 +105,14 @@ def test_production_splash_routes_are_live_geometry_bound_and_interactive():
         "addEventListener('resize'",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Reference routes are not fully geometry-bound/interactive: {missing}"
+    assert not missing, f"Reference routes are not fully connector-bound/interactive: {missing}"
 
 
 def test_production_splash_uses_dense_reference_pcb_buses():
     source = _source()
     required = [
         "for(let j=-6;j<=6;j++)",
-        "class:j===0?'trace main':Math.abs(j)<=3?'trace fine':'trace ghost'",
+        "klass=j===0?'trace primary-bus main':Math.abs(j)<=3?'trace secondary-bus fine':'trace tertiary-bus ghost'",
         "for(let i=0;i<24;i++)",
         "for(let i=0;i<18;i++)",
         "for(let i=0;i<16;i++)",
@@ -117,26 +120,38 @@ def test_production_splash_uses_dense_reference_pcb_buses():
         "[.24,.48,.72].forEach",
         "p3=E('circle'",
         "g.append(p1,p2,p3)",
+        "primary-bus",
+        "secondary-bus",
+        "tertiary-bus",
+        "via-node",
+        "connector-pad",
+        "top-agent-node",
+        "bottom-execution-bus",
+        "activity-bars",
+        "governance-trend",
+        "integrity-ring",
         "pin-side",
         "pin-top",
         "pin-bottom",
-        "agent-matrix",
-        "hud-left",
-        "hud-right",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Dense live PCB choreography markers missing: {missing}"
 
 
-def test_production_splash_keeps_responsive_and_reduced_motion_guards():
+def test_production_splash_keeps_reference_stage_scaling_and_reduced_motion_guards():
     source = _source()
     required = [
-        "@media(max-width:1250px)",
-        "@media(max-width:980px)",
+        "--stage-width:1440",
+        "--stage-height:1080",
+        "const fit_rule='contain'",
+        "function fitStage()",
+        "scale = Math.min(viewportWidth / 1440,viewportHeight / 1080)",
+        "stage.style.transform=`scale(${scale})`",
+        "addEventListener('resize',fitStage",
         "@media(prefers-reduced-motion:reduce)",
         "reduceMotion.matches",
         "reduceMotion.addEventListener?.('change',rebuild)",
         ".pulse{display:none}",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Missing responsive/reduced-motion protections: {missing}"
+    assert not missing, f"Missing 4:3 stage-scaling/reduced-motion protections: {missing}"
