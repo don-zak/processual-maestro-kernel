@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-v3",
+  "contract_version": "A3-splash-reference-v4",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
@@ -65,6 +65,7 @@
     "order": ["core", "circuitry", "icons", "titles", "body_text", "telemetry"],
     "secondary_cards_are_nodes_not_dashboard_cards": true,
     "regional_fabric_required": true,
+    "backplane_fabric_required": true,
     "long_bridge_routes_forbidden": true,
     "icon_scale_min_vs_module": 0.20
   },
@@ -79,6 +80,7 @@
     "regional_bus_required": true,
     "local_fanout_required": true,
     "cross_fabric_required": true,
+    "backplane_fabric_required": true,
     "top_vertical_bus_min": 10,
     "bottom_vertical_bus_min": 10,
     "ambient_layers_min": 3,
@@ -94,6 +96,7 @@
       "function localFanout(",
       "function regionalFabric(",
       "function drawCrossFabric(c)",
+      "function drawBackplaneFabric(c)",
       "function drawCoreBreakout(c)",
       "function drawAmbientBoard(c)",
       "function drawUpperFabric(c)",
