@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.admin_marketplace.authority import (
@@ -165,35 +164,38 @@ class AdminMarketplaceDashboardReadService:
                     )
                 ).all()
             )
-            selections = tuple(
+
+            latest_selection: dict[str, AdminMarketChannelSelection] = {}
+            for eligibility in eligibilities:
+                selection = await session.scalar(
+                    select(AdminMarketChannelSelection)
+                    .where(
+                        AdminMarketChannelSelection.customer_ref
+                        == eligibility.customer_ref
+                    )
+                    .order_by(
+                        AdminMarketChannelSelection.created_at.desc(),
+                        AdminMarketChannelSelection.id.desc(),
+                    )
+                    .limit(1)
+                )
+                if selection is not None:
+                    latest_selection[eligibility.customer_ref] = selection
+
+            verified_value_rows = tuple(
                 (
-                    await session.scalars(
-                        select(AdminMarketChannelSelection)
-                        .order_by(
-                            AdminMarketChannelSelection.created_at.desc(),
-                            AdminMarketChannelSelection.id.desc(),
+                    await session.execute(
+                        select(
+                            AdminMarketOrder.currency,
+                            func.count(AdminMarketOrder.id),
+                            func.coalesce(func.sum(AdminMarketOrder.total_amount), 0),
                         )
-                        .limit(bounded_limit * 2)
+                        .where(AdminMarketOrder.payment_status == "verified")
+                        .group_by(AdminMarketOrder.currency)
+                        .order_by(AdminMarketOrder.currency)
                     )
                 ).all()
             )
-            verified_orders = tuple(
-                (
-                    await session.scalars(
-                        select(AdminMarketOrder).where(
-                            AdminMarketOrder.payment_status == "verified"
-                        )
-                    )
-                ).all()
-            )
-
-        latest_selection: dict[str, AdminMarketChannelSelection] = {}
-        for selection in selections:
-            latest_selection.setdefault(selection.customer_ref, selection)
-
-        verified_totals: dict[str, list[Decimal]] = defaultdict(list)
-        for order in verified_orders:
-            verified_totals[order.currency].append(Decimal(order.total_amount))
 
         return AdminMarketplaceDashboardReadResult(
             trials=tuple(
@@ -244,11 +246,11 @@ class AdminMarketplaceDashboardReadService:
             ),
             verified_order_values=tuple(
                 DashboardVerifiedOrderValueReadResult(
-                    currency=currency,
-                    verified_order_count=len(values),
-                    verified_order_value=sum(values, Decimal("0.000")),
+                    currency=str(currency),
+                    verified_order_count=int(order_count),
+                    verified_order_value=Decimal(order_value),
                 )
-                for currency, values in sorted(verified_totals.items())
+                for currency, order_count, order_value in verified_value_rows
             ),
         )
 
