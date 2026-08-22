@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +20,13 @@ from processual_api.billing.canonical_checkout_gate import (
 
 @dataclass(frozen=True, slots=True)
 class CanonicalCheckoutResolution:
+    offer_id: uuid.UUID
     offer_ref: str
+    plan_id: uuid.UUID
+    display_name: str
+    billing_period: str
+    currency: str
+    amount: Decimal
     provider_variant_id: str
 
 
@@ -63,7 +71,13 @@ async def resolve_canonical_checkout_in_session(
         raise CanonicalCheckoutGateError("verified_provider_binding_required")
 
     return CanonicalCheckoutResolution(
+        offer_id=offer.id,
         offer_ref=offer.offer_code,
+        plan_id=offer.plan_id,
+        display_name=offer.display_name,
+        billing_period=offer.billing_period,
+        currency=offer.currency,
+        amount=Decimal(offer.amount),
         provider_variant_id=provider_variant_id,
     )
 
