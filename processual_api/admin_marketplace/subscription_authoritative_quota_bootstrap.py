@@ -62,7 +62,9 @@ def _aware(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _validate(source: AuthoritativeQuotaBootstrapInput) -> tuple[str, str, str, str, str, datetime]:
+def _validate(
+    source: AuthoritativeQuotaBootstrapInput,
+) -> tuple[str, str, str, str, str, datetime]:
     customer_ref = _ref(source.customer_ref, "customer reference")
     entitlement_profile_ref = _ref(
         source.entitlement_profile_ref,
@@ -138,7 +140,8 @@ async def bootstrap_authoritative_quota_in_unit(
             or existing_cycle.plan_catalog_version != authority_version
             or existing_cycle.quota_profile_ref != quota_profile_ref
             or existing_cycle.base_limit_units != source.base_limit_units
-            or tuple(existing_cycle.entitlement_codes) != tuple(source.entitlement_codes)
+            or tuple(existing_cycle.entitlement_codes)
+            != tuple(source.entitlement_codes)
         ):
             raise SubscriptionRuntimeError(
                 "quota cycle replay conflicts with the authoritative quota binding."
@@ -163,6 +166,7 @@ async def bootstrap_authoritative_quota_in_unit(
         uow.subscription_runtime.add(runtime)
 
     cycle = AdminMarketSubscriptionQuotaCycle(
+        id=uuid.uuid4(),
         subscription_id=source.subscription_id,
         source_cycle_id=None,
         customer_ref=customer_ref,
