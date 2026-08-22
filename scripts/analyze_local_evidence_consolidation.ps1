@@ -125,6 +125,7 @@ function Get-JsonMetadata {
 
     $metadata = [ordered]@{
         json_parse_status = $null
+        json_parse_error = $null
         json_root_type = $null
         json_item_count = $null
         json_top_level_keys = @()
@@ -137,6 +138,12 @@ function Get-JsonMetadata {
 
     try {
         $raw = Get-Content -LiteralPath $File.FullName -Raw
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            $metadata.json_parse_status = 'EMPTY'
+            $metadata.json_parse_error = 'File is empty or whitespace-only.'
+            return $metadata
+        }
+
         $parsed = $raw | ConvertFrom-Json
         $metadata.json_parse_status = 'VALID'
 
@@ -168,6 +175,7 @@ function Get-JsonMetadata {
         }
     } catch {
         $metadata.json_parse_status = 'INVALID'
+        $metadata.json_parse_error = $_.Exception.Message
     }
     return $metadata
 }
@@ -243,6 +251,7 @@ foreach ($file in $uniqueFiles) {
         retirement_candidate = $false
         deletion_authorized = $false
         json_parse_status = $jsonMetadata.json_parse_status
+        json_parse_error = $jsonMetadata.json_parse_error
         json_root_type = $jsonMetadata.json_root_type
         json_item_count = $jsonMetadata.json_item_count
         json_top_level_keys = @($jsonMetadata.json_top_level_keys)
@@ -264,6 +273,7 @@ $backupRecords = @($records | Where-Object { $_.category -eq 'BACKUP_SNAPSHOT' }
 $uniqueBackupCount = @($backupRecords | Where-Object { $_.backup_classification -eq 'UNIQUE_UNTRACKED' }).Count
 $divergentBackupCount = @($backupRecords | Where-Object { $_.backup_classification -eq 'DIVERGENT_UNTRACKED' }).Count
 $invalidJsonCount = @($records | Where-Object { $_.json_parse_status -eq 'INVALID' }).Count
+$emptyJsonCount = @($records | Where-Object { $_.json_parse_status -eq 'EMPTY' }).Count
 
 $summary = [pscustomobject][ordered]@{
     generated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
@@ -271,6 +281,7 @@ $summary = [pscustomobject][ordered]@{
     artifact_count = $records.Count
     duplicate_artifact_count = @($records | Where-Object { $_.duplicate_group }).Count
     invalid_json_count = $invalidJsonCount
+    empty_json_count = $emptyJsonCount
     unique_backup_content = $uniqueBackupCount
     divergent_backup_content = $divergentBackupCount
     deletion_authorized_count = @($records | Where-Object { $_.deletion_authorized }).Count
@@ -278,7 +289,7 @@ $summary = [pscustomobject][ordered]@{
 }
 
 $manifest = [pscustomobject][ordered]@{
-    schema_version = 2
+    schema_version = 3
     policy = [pscustomobject][ordered]@{
         mode = 'READ_ONLY_EVIDENCE_CONSOLIDATION'
         deletion_authorized = $false
@@ -306,6 +317,7 @@ $markdown.Add("- Observed at HEAD: ``$head``")
 $markdown.Add("- Artifacts: $($summary.artifact_count)")
 $markdown.Add("- Exact-hash duplicate members: $($summary.duplicate_artifact_count)")
 $markdown.Add("- Invalid JSON files: $($summary.invalid_json_count)")
+$markdown.Add("- Empty JSON files: $($summary.empty_json_count)")
 $markdown.Add("- Unique backup content: $($summary.unique_backup_content)")
 $markdown.Add("- Divergent backup content: $($summary.divergent_backup_content)")
 $markdown.Add("- Deletion authorized: **false**")
