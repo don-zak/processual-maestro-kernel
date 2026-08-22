@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "purpose": "Prevent retired or compatibility-only repository surfaces from silently regaining primary authority while preserving history and required compatibility until deletion is proven safe.",
   "authority": {
     "repository_reconciliation_complete": false,
@@ -38,6 +38,34 @@
         ]
       ],
       "historical_files_must_be_preserved": true
+    },
+    "coverage_json_evidence": {
+      "classification": "VALID_JSON_POWERSHELL_INCOMPATIBILITY_ONLY",
+      "validated_file_count": 4,
+      "validator": "python-json",
+      "root_type": "OBJECT",
+      "required_top_level_keys": [
+        "files",
+        "meta",
+        "totals"
+      ],
+      "files": [
+        ".pmk-validation/20260811_211659/coverage/coverage.json",
+        ".pmk-validation/20260811_213207/coverage/coverage.json",
+        ".pmk-validation/20260811_214454/coverage/coverage.json",
+        ".pmk-validation/wave1-coverage.json"
+      ],
+      "powershell_convertfrom_json_is_not_corruption_authority": true,
+      "preserve_until_final_qualification": true
+    },
+    "empty_tool_outputs": {
+      "classification": "EMPTY_HISTORICAL_OUTPUTS",
+      "files": [
+        ".pmk-validation/20260811_204530/artifacts/bandit.json",
+        ".pmk-validation/20260811_204530/artifacts/pip-audit.json"
+      ],
+      "corruption_asserted": false,
+      "preserve_until_final_qualification": true
     }
   },
   "protected_path_prefixes": [
