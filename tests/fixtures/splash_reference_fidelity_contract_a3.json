@@ -6,14 +6,15 @@
     "width": 1440,
     "height": 1080,
     "aspect_ratio": "4:3",
-    "fit_rule": "contain",
+    "fit_rule": "full-bleed-fluid-width",
     "required_markers": [
       "maestro-reference-stage",
       "--stage-width:1440",
       "--stage-height:1080",
-      "scale = Math.min",
-      "viewportWidth / 1440",
-      "viewportHeight / 1080"
+      "const fit_rule='full-bleed-fluid-width'",
+      "worldWidth=Math.max(1440,viewportWidth / scale)",
+      "stage.style.width=`${worldWidth}px`",
+      "stage.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`"
     ]
   },
   "mandatory_core_contract": {
