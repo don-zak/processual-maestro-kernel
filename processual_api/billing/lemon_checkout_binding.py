@@ -9,6 +9,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from processual_api.db.base import Base
 
 
+LEMON_CHECKOUT_ORDER_FK_NAME = "fk_am_lcb_order"
+
+
 class AdminMarketLemonCheckoutBinding(Base):
     __tablename__ = "admin_market_lemon_checkout_bindings"
     __table_args__ = (
@@ -33,7 +36,11 @@ class AdminMarketLemonCheckoutBinding(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     order_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("admin_market_orders.id", ondelete="RESTRICT"),
+        ForeignKey(
+            "admin_market_orders.id",
+            name=LEMON_CHECKOUT_ORDER_FK_NAME,
+            ondelete="RESTRICT",
+        ),
         nullable=False,
     )
     provider_variant_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -47,4 +54,7 @@ class AdminMarketLemonCheckoutBinding(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-__all__ = ["AdminMarketLemonCheckoutBinding"]
+__all__ = [
+    "AdminMarketLemonCheckoutBinding",
+    "LEMON_CHECKOUT_ORDER_FK_NAME",
+]
