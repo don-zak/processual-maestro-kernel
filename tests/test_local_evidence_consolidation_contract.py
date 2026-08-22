@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "analyze_local_evidence_consolidation.ps1"
+LINEAGE = ROOT / "scripts" / "analyze_review_decision_lineage.ps1"
 
 
 def _script_text() -> str:
@@ -88,21 +89,43 @@ def test_windows_powershell_uses_relative_path_compatibility_fallback():
     assert "Get-CompatibleRelativePath -BasePath $backupRoot -TargetPath $File.FullName" in text
 
 
-def test_json_metadata_distinguishes_arrays_from_objects_and_reports_item_shape():
+def test_json_metadata_distinguishes_arrays_objects_empty_and_invalid_json():
     text = _script_text()
 
-    assert "schema_version = 2" in text
+    assert "schema_version = 3" in text
+    assert "json_parse_error = $null" in text
     assert "json_root_type = $null" in text
     assert "json_item_count = $null" in text
     assert "json_item_keys = @()" in text
+    assert "$metadata.json_parse_status = 'EMPTY'" in text
+    assert "$metadata.json_parse_status = 'INVALID'" in text
     assert "$metadata.json_root_type = 'ARRAY'" in text
     assert "$metadata.json_root_type = 'OBJECT'" in text
     assert "$metadata.json_root_type = 'SCALAR'" in text
     assert "$metadata.json_item_count = $items.Count" in text
     assert "$metadata.json_item_keys = @($itemKeys | Sort-Object -Unique)" in text
-    assert "json_root_type = $jsonMetadata.json_root_type" in text
-    assert "json_item_count = $jsonMetadata.json_item_count" in text
-    assert "json_item_keys = @($jsonMetadata.json_item_keys)" in text
+    assert "$metadata.json_parse_error = $_.Exception.Message" in text
+    assert "empty_json_count" in text
+
+
+def test_review_decision_lineage_is_read_only_and_requires_exact_subset_proof():
+    text = LINEAGE.read_text(encoding="utf-8")
+
+    assert "READ_ONLY_REVIEW_DECISION_LINEAGE" in text
+    assert "deletion_authorized = $false" in text
+    assert "version_number_is_not_supersession_authority = $true" in text
+    assert "exact_subset_proof_required = $true" in text
+    assert "previous_is_identity_subset" in text
+    assert "previous_is_exact_subset" in text
+    assert "identities_missing_from_latest" in text
+
+    for destructive_token in (
+        "Remove-Item",
+        "Move-Item",
+        "git clean",
+        "git rm",
+    ):
+        assert destructive_token not in text
 
 
 def test_every_artifact_starts_non_retirable_and_non_deletable():
