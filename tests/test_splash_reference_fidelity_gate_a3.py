@@ -103,12 +103,13 @@ def test_splash_reference_fidelity_score_must_reach_99_percent():
         "color_and_typography": (
             contract["color_system"]["background_layers"] + contract["color_system"]["cyan_levels"]
             + contract["color_system"]["amber_levels"]
-            + ["direction:rtl","font-family:var(--display)","font-family:var(--mono)"],
+            + ["direction:rtl","var(--display)","var(--mono)"],
             scoring["color_and_typography"],
         ),
         "accessibility_and_responsiveness": ([
-            "@media(prefers-reduced-motion:reduce)","mouseenter","mouseleave","focus","blur",
-            "addEventListener('resize'","fit_rule","worldWidth=Math.max(1440,viewportWidth / scale)",
+            "@media(prefers-reduced-motion:reduce)","tabindex=\"0\"",
+            "requestAnimationFrame","addEventListener('resize'","fit_rule",
+            "worldWidth=Math.max(1440,viewportWidth / scale)",
         ], scoring["accessibility_and_responsiveness"]),
     }
     total = 0.0
@@ -131,10 +132,15 @@ def test_splash_motion_semantics_are_not_decorative_only():
     assert motion["trace_wake_required"] is True
     assert motion["node_bloom_required"] is True
     assert motion["destination_ack_required"] is True
+    assert motion["autonomous_motion_required"] is True
+    assert motion["pointer_route_interaction_required"] is False
     assert motion["pulse_count_per_active_route_min"] >= 2
     assert motion["pulse_count_per_active_route_max"] <= 4
     missing = _missing(source, motion["required_markers"])
     assert not missing, f"Motion is still decorative rather than semantically governed. Missing: {missing}"
+    forbidden = ["mouseenter", "mouseleave", "focusRoute(", "classList.toggle('dim'"]
+    present = [marker for marker in forbidden if marker in source]
+    assert not present, f"Autonomous landing motion regressed to pointer-driven routing: {present}"
 
 
 def test_splash_reference_requires_real_connector_topology_and_full_vertical_networks():
@@ -161,17 +167,22 @@ def test_splash_reference_telemetry_and_typography_are_part_of_acceptance():
     assert typography["status_uses_mono"] is True
     assert typography["arabic_body_rtl"] is True
     assert typography["arabic_body_not_mono"] is True
+    assert "font:8px var(--mono)" in source or "font:7px var(--mono)" in source
 
 
 def test_splash_reference_reduced_motion_must_remain_a_complete_static_board():
     source = _source()
     accessibility = _contract()["accessibility"]
     assert accessibility["reduced_motion"] is True
-    assert accessibility["keyboard_focus_routes"] is True
+    assert accessibility["keyboard_focusable_modules"] is True
+    assert accessibility["pointer_route_interaction_required"] is False
     assert accessibility["all_content_visible_in_desktop_stage"] is True
     required = [
-        "@media(prefers-reduced-motion:reduce)", ".pulse{display:none}", "focusRoute",
-        "addEventListener('focus'", "addEventListener('blur'",
+        "@media(prefers-reduced-motion:reduce)", ".pulse{display:none}",
+        'tabindex="0"', "requestAnimationFrame", "reduceMotion.addEventListener?.('change',rebuild)",
     ]
     missing = _missing(source, required)
     assert not missing, f"Reduced-motion/keyboard reference gate incomplete: {missing}"
+    forbidden = ["focusRoute", "addEventListener('focus'", "addEventListener('blur'", "mouseenter", "mouseleave"]
+    present = [marker for marker in forbidden if marker in source]
+    assert not present, f"Pointer/focus-driven route behavior must stay disabled: {present}"
