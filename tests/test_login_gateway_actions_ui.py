@@ -13,10 +13,10 @@ def test_login_gateway_commercial_and_recovery_actions_exist() -> None:
     assert 'id="login-commercial-actions"' in text
     assert 'id="login-offers-registration-button"' in text
     assert 'id="login-lost-access-button"' in text
-    assert 'data-en="Offers &amp; Registration"' in text
-    assert 'data-ar="العروض والتسجيل"' in text
-    assert 'data-en="Lost Access?"' in text
-    assert 'data-ar="فقدت بيانات الدخول؟"' in text
+    assert "Offers &amp; Registration" in text
+    assert "Lost Access?" in text
+    assert 'aria-label="View plans and registration"' in text
+    assert 'data-login-panel-target="lost-access-panel"' in text
 
 
 def test_login_gateway_actions_are_secondary_buttons_not_checkout_links() -> None:
@@ -67,10 +67,10 @@ def test_login_gateway_actions_are_below_sign_in_copy() -> None:
 
 
 def test_login_gateway_mobile_layout_can_stack_actions() -> None:
-    text = _login_text()
+    text = "".join(_login_text().split())
 
-    assert "@media (max-width: 520px)" in text
-    assert "grid-template-columns: 1fr" in text
+    assert "@media(max-width:520px)" in text
+    assert ".login-secondary-actions{grid-template-columns:1fr}" in text
 
 
 def test_login_gateway_does_not_expose_secret_markers() -> None:
