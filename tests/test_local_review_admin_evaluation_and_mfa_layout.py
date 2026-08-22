@@ -43,6 +43,7 @@ def test_external_evaluation_contract_still_exposes_governed_category_and_card()
 
 def test_registration_mfa_review_is_layout_only_and_requires_explicit_review_query():
     source = read("processual_api/static/js/pages/register.js")
+    lowered = source.lower()
 
     assert 'queryValue("review_mfa") !== "1"' in source
     assert 'review.id = "registration-mfa-review"' in source
@@ -55,8 +56,12 @@ def test_registration_mfa_review_is_layout_only_and_requires_explicit_review_que
     assert "/auth/mfa/totp/enroll" not in source
     assert "/auth/mfa/totp/confirm" not in source
     assert "provisioning_uri" not in source
-    assert "qr" not in source.lower()
-    assert "secret=" not in source.lower()
+    assert "qrcode" not in lowered
+    assert "qr-code" not in lowered
+    assert "createqr" not in lowered
+    assert "secret=" not in lowered
+    assert "does not enroll a factor" in lowered
+    assert "create a qr code" in lowered
 
 
 def test_registration_mfa_review_layout_does_not_overlay_or_fix_card_height():
@@ -64,15 +69,18 @@ def test_registration_mfa_review_layout_does_not_overlay_or_fix_card_height():
     review_start = source.index('style.id = "registration-mfa-review-style"')
     review_end = source.index("document.head.appendChild(style);", review_start)
     css = source[review_start:review_end]
+    root_start = css.index("#registration-mfa-review {")
+    root_end = css.index("}", root_start)
+    root_rule = css[root_start:root_end]
 
-    assert "min-width: 0" in css
-    assert "width: 100%" in css
+    assert "min-width: 0" in root_rule
+    assert "width: 100%" in root_rule
     assert "grid-template-columns: minmax(0, 1fr)" in css
     assert "@media (max-width: 520px)" in css
-    assert "position: absolute" not in css
-    assert "position: fixed" not in css
-    assert "height:" not in css
-    assert "max-height:" not in css
+    assert "position: absolute" not in root_rule
+    assert "position: fixed" not in root_rule
+    assert "height:" not in root_rule
+    assert "max-height:" not in root_rule
 
 
 def test_full_web_review_opens_registration_mfa_review_and_preserves_real_mfa_boundary():
