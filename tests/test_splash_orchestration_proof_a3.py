@@ -23,7 +23,8 @@ def _card_markup(source: str) -> str:
         else:
             depth -= 1
             if depth == 0:
-                return re.sub(r"\s+", " ", source[start : match.end()]).strip()
+                normalized = re.sub(r"\s+", " ", source[start : match.end()]).strip()
+                return re.sub(r">\s+<", "><", normalized)
         cursor = match.end()
     raise AssertionError(f"Unclosed canonical splash card near offset {cursor}")
 
