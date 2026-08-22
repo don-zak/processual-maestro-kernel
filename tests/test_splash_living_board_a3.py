@@ -11,27 +11,37 @@ def _source() -> str:
 def test_production_splash_uses_reference_living_board_not_legacy_starfield():
     source = _source()
     required = [
-        'id="board"', 'id="trace-svg"', 'class="maestro-reference-stage"',
-        "function ambient(", "function rebuild()", "function animate(now)",
-        "getTotalLength", "getPointAtLength", "requestAnimationFrame",
+        'id="board"',
+        'id="trace-svg"',
+        'class="maestro-reference-stage"',
+        "function microField(",
+        "function crown(",
+        "function executionBay(",
+        "function rings(",
+        "function rebuild()",
+        "function animate(now)",
+        "getTotalLength",
+        "getPointAtLength",
+        "requestAnimationFrame",
     ]
     forbidden = ['id="bg-canvas"', "class Particle", "const COUNT = 80", "drawParticles()"]
     missing = [marker for marker in required if marker not in source]
     legacy = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Missing reference living-board markers: {missing}"
+    assert not missing, f"Missing near-reference living-board markers: {missing}"
     assert not legacy, f"Legacy starfield markers remain in production splash: {legacy}"
 
 
 def test_production_splash_exposes_all_reference_modules_and_execution_node():
     source = _source()
     required = [
-        'id="governance"','id="supervision"','id="calibration"','id="orchestration"',
-        'id="routing"','id="policy"','id="feedback"','id="control"','id="execution"',
-        'data-key="governance"','data-key="supervision"','data-key="calibration"',
-        'data-key="orchestration"','data-key="routing"','data-key="policy"',
-        'data-key="feedback"','data-key="control"',
-        "GOVERNANCE","SUPERVISION","CALIBRATION","ORCHESTRATION","ROUTING",
-        "POLICY ENGINE","FEEDBACK LOOP","CONTROL GATES","EXECUTION",
+        'id="governance"', 'id="supervision"', 'id="calibration"', 'id="orchestration"',
+        'id="routing"', 'id="policy"', 'id="feedback"', 'id="control"', 'id="execution"',
+        'data-key="governance"', 'data-key="supervision"', 'data-key="calibration"',
+        'data-key="orchestration"', 'data-key="routing"', 'data-key="policy"',
+        'data-key="feedback"', 'data-key="control"',
+        "GOVERNANCE", "SUPERVISION", "CALIBRATION", "ORCHESTRATION", "ROUTING",
+        "POLICY ENGINE", "FEEDBACK LOOP", "CONTROL GATES", "EXECUTION",
+        "edge-rail",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing reference governance/control surface markers: {missing}"
@@ -40,10 +50,19 @@ def test_production_splash_exposes_all_reference_modules_and_execution_node():
 def test_production_splash_preserves_real_entry_card_and_descent_gate_contract():
     source = _source()
     required = [
-        '<div class="m">MAESTRO<span>.</span></div>', '<div class="s">PROCESSUAL KERNEL</div>',
-        "API Server", "Database", "Cache", "Kernel", "All systems operational.",
-        "Enter Maestro", "maestro_descent_gate_seen", "maestro_descent_gate_seen_at",
-        "sessionStorage.setItem", "window.location.href = '/login'",
+        '<div class="m">MAESTRO<span>.</span></div>',
+        '<div class="s">PROCESSUAL KERNEL</div>',
+        "API Server",
+        "Database",
+        "Cache",
+        "Kernel",
+        "All systems operational.",
+        "Enter Maestro",
+        "maestro_descent_gate_seen",
+        "maestro_descent_gate_seen_at",
+        "sessionStorage.setItem",
+        "window.location.href = '/login'",
+        "background:rgba(22,29,42,.68)",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Production entry-card contract changed unexpectedly: {missing}"
@@ -52,40 +71,88 @@ def test_production_splash_preserves_real_entry_card_and_descent_gate_contract()
 def test_production_splash_routes_are_live_geometry_bound_and_interactive():
     source = _source()
     required = [
-        "const w=worldWidth,h=1080,c=rr(core)",
         "const n=rr(node),a=edge(c,n),b=node.id==='execution'?edge(n,c):connectorPoint(node)",
-        "function connectorPoint(node)", "node.querySelector('.connector-pad')", "function pcb(",
-        "function focusRoute(key)", "classList.toggle('active'", "classList.toggle('dim'",
-        "mouseenter", "mouseleave", "focus", "blur", "addEventListener('resize'",
+        "function connectorPoint(node)",
+        "node.querySelector('.connector-pad')",
+        "function pcb(",
+        "function focusRoute(key)",
+        "classList.toggle('active'",
+        "classList.toggle('dim'",
+        "mouseenter",
+        "mouseleave",
+        "focus",
+        "blur",
+        "addEventListener('resize'",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Reference routes are not fully connector-bound/interactive: {missing}"
 
 
-def test_production_splash_uses_dense_reference_pcb_buses():
+def test_production_splash_uses_near_reference_pcb_density_and_topology():
     source = _source()
     required = [
-        "for(let j=-6;j<=6;j++)",
-        "klass=j===0?'trace primary-bus main':Math.abs(j)<=3?'trace secondary-bus fine':'trace tertiary-bus ghost'",
-        "for(let i=0;i<32;i++)", "for(let i=0;i<22;i++)", "for(let i=0;i<20;i++)",
-        "function addBranches(", "[.18,.34,.5,.66,.82].forEach", "p3=E('circle'", "g.append(p1,p2,p3)",
-        "primary-bus", "secondary-bus", "tertiary-bus", "via-node", "connector-pad",
-        "top-agent-node", "bottom-execution-bus", "activity-bars", "governance-trend",
-        "integrity-ring", "pin-side", "pin-top", "pin-bottom",
+        "for(let j=-9;j<=9;j++)",
+        "klass=j===0?'trace primary-bus main':Math.abs(j)<=4?'trace secondary-bus fine':'trace tertiary-bus ghost'",
+        "for(let i=0;i<52;i++)",
+        "for(let i=0;i<34;i++)",
+        "const count=30",
+        "const count=24",
+        "[.13,.26,.39,.52,.65,.78,.9].forEach",
+        "function microField(",
+        "function crown(",
+        "function executionBay(",
+        "function rings(",
+        "trace micro",
+        "primary-bus",
+        "secondary-bus",
+        "tertiary-bus",
+        "via-node",
+        "connector-pad",
+        "node-bloom",
+        "trace-wake",
+        "p3=E('circle'",
+        "g.append(p1,p2,p3)",
+        "activity-bars",
+        "governance-trend",
+        "integrity-ring",
+        "pin-side",
+        "pin-top",
+        "pin-bottom",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Dense live PCB choreography markers missing: {missing}"
+    assert not missing, f"Near-reference PCB density/topology markers missing: {missing}"
+
+
+def test_production_splash_cards_use_reference_like_double_frame_and_hex_sockets():
+    source = _source()
+    required = [
+        ".module::before,.module::after",
+        "clip-path:polygon(0 12%,5.5% 0,94.5% 0,100% 12%,100% 88%,94.5% 100%,5.5% 100%,0 88%)",
+        ".icon::before,.icon::after",
+        "width:88px;height:88px",
+        "width:420px;height:170px",
+        "width:620px;height:520px",
+        "edge-rail",
+    ]
+    missing = [marker for marker in required if marker not in source]
+    assert not missing, f"Reference-like card/socket geometry missing: {missing}"
 
 
 def test_production_splash_keeps_full_bleed_stage_and_reduced_motion_guards():
     source = _source()
     required = [
-        "--stage-width:1440", "--stage-height:1080", "const fit_rule='full-bleed-fluid-width'",
-        "function fitStage()", "worldWidth=Math.max(1440,viewportWidth / scale)",
+        "--stage-width:1440",
+        "--stage-height:1080",
+        "const fit_rule='full-bleed-fluid-width'",
+        "function fitStage()",
+        "worldWidth=Math.max(1440,viewportWidth / scale)",
         "stage.style.width=`${worldWidth}px`",
         "stage.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`",
-        "addEventListener('resize',fitStage", "@media(prefers-reduced-motion:reduce)",
-        "reduceMotion.matches", "reduceMotion.addEventListener?.('change',rebuild)", ".pulse{display:none}",
+        "addEventListener('resize',fitStage",
+        "@media(prefers-reduced-motion:reduce)",
+        "reduceMotion.matches",
+        "reduceMotion.addEventListener?.('change',rebuild)",
+        ".pulse{display:none}",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing full-bleed stage/reduced-motion protections: {missing}"
