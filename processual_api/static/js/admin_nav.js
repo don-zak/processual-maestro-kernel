@@ -374,3 +374,30 @@
     install();
   }
 })();
+
+(function bootstrapAdminMarketplaceDashboard() {
+  function install() {
+    if (!document.getElementById('page-admin-marketplace')) return;
+
+    if (!document.querySelector('link[data-admin-marketplace-dashboard-style]')) {
+      const style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = '/console/css/admin_marketplace_dashboard.css?v=a3-ops-1';
+      style.dataset.adminMarketplaceDashboardStyle = 'true';
+      document.head.appendChild(style);
+    }
+
+    if (!document.querySelector('script[data-admin-marketplace-dashboard-script]')) {
+      const script = document.createElement('script');
+      script.src = '/console/js/admin_marketplace_dashboard.js?v=a3-ops-1';
+      script.dataset.adminMarketplaceDashboardScript = 'true';
+      document.body.appendChild(script);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install);
+  } else {
+    install();
+  }
+})();
