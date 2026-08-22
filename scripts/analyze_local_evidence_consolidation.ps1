@@ -26,10 +26,38 @@ function Invoke-GitText {
     return (($output | Out-String).Trim())
 }
 
+function Get-CompatibleRelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$BasePath,
+        [Parameter(Mandatory = $true)][string]$TargetPath
+    )
+
+    $baseFullPath = [System.IO.Path]::GetFullPath($BasePath)
+    $targetFullPath = [System.IO.Path]::GetFullPath($TargetPath)
+
+    $getRelativePath = [System.IO.Path].GetMethod(
+        'GetRelativePath',
+        [type[]]@([string], [string])
+    )
+    if ($null -ne $getRelativePath) {
+        return [System.IO.Path]::GetRelativePath($baseFullPath, $targetFullPath)
+    }
+
+    $separator = [System.IO.Path]::DirectorySeparatorChar
+    if (-not $baseFullPath.EndsWith([string]$separator)) {
+        $baseFullPath += $separator
+    }
+
+    $baseUri = New-Object System.Uri($baseFullPath)
+    $targetUri = New-Object System.Uri($targetFullPath)
+    $relativeUri = $baseUri.MakeRelativeUri($targetUri)
+    return [System.Uri]::UnescapeDataString($relativeUri.ToString()) -replace '/', [string]$separator
+}
+
 function Get-RelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $relative = [System.IO.Path]::GetRelativePath($rootPath, $Path)
+    $relative = Get-CompatibleRelativePath -BasePath $rootPath -TargetPath $Path
     return ($relative -replace "\\", "/")
 }
 
@@ -71,7 +99,7 @@ function Get-BackupClassification {
     )
 
     $backupRoot = Join-Path $rootPath 'maestro-update-backup'
-    $backupRelative = [System.IO.Path]::GetRelativePath($backupRoot, $File.FullName)
+    $backupRelative = Get-CompatibleRelativePath -BasePath $backupRoot -TargetPath $File.FullName
     $currentPath = Join-Path $rootPath $backupRelative
 
     if (Test-Path -LiteralPath $currentPath -PathType Leaf) {
