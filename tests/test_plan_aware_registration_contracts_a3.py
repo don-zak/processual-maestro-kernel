@@ -34,7 +34,9 @@ def test_registration_contract_preserves_legacy_missing_plan():
 
 def test_registration_contract_rejects_client_supplied_price():
     with pytest.raises(ValidationError):
-        IndividualRegistrationRequestContract(**_payload(selected_plan_id="starter", monthly_price_usd="1.00"))
+        IndividualRegistrationRequestContract(
+            **_payload(selected_plan_id="starter", monthly_price_usd="1.00")
+        )
 
 
 @pytest.mark.parametrize(
@@ -43,7 +45,6 @@ def test_registration_contract_rejects_client_supplied_price():
         ("academic", "academic_individual"),
         ("starter", "starter"),
         ("business", "business"),
-        ("enterprise_pilot", "enterprise_pilot"),
         (" STARTER ", "starter"),
         (None, None),
         ("", None),
@@ -52,6 +53,7 @@ def test_registration_contract_rejects_client_supplied_price():
 )
 def test_direct_registration_plan_resolver_accepts_public_registration_plans(plan_id, expected):
     assert resolve_direct_registration_plan(plan_id) == expected
+
 
 def test_direct_registration_plan_resolver_rejects_commercial_assessment_plan():
     with pytest.raises(
@@ -62,7 +64,15 @@ def test_direct_registration_plan_resolver_rejects_commercial_assessment_plan():
 
 
 @pytest.mark.parametrize(
-    "plan_id", ["enterprise_core", "enterprise_scale", "enterprise_strategic", "unknown", "internal_admin"]
+    "plan_id",
+    [
+        "enterprise_pilot",
+        "enterprise_core",
+        "enterprise_scale",
+        "enterprise_strategic",
+        "unknown",
+        "internal_admin",
+    ],
 )
 def test_direct_registration_plan_resolver_fails_closed(plan_id):
     with pytest.raises(ValueError):
