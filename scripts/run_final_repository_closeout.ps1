@@ -42,6 +42,19 @@ function Test-KnownLocalEvidencePath {
     return $false
 }
 
+function Test-KnownLocalRuntimeHold {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $patterns = @(
+        '^\.venv(?:/|$)',
+        '^data(?:/|$)',
+        '^processual_api/data(?:/|$)'
+    )
+    foreach ($pattern in $patterns) {
+        if ($Path -match $pattern) { return $true }
+    }
+    return $false
+}
+
 function Test-KnownLocalToolingPath {
     param([Parameter(Mandatory = $true)][string]$Path)
     return ($Path -match '^Invoke-PMKRepoAudit-.*\.ps1$' -or
@@ -82,6 +95,7 @@ foreach ($canonical in @($quarantine.local_tooling_quarantine.canonical_local_on
 
 $safeResidue = [System.Collections.Generic.List[string]]::new()
 $unexplained = [System.Collections.Generic.List[string]]::new()
+$runtimeHolds = [System.Collections.Generic.List[string]]::new()
 $statusLines = @(Invoke-GitLines -Arguments @('status', '--porcelain=v1', '--ignored'))
 foreach ($line in $statusLines) {
     if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -lt 4) { continue }
@@ -90,6 +104,10 @@ foreach ($line in $statusLines) {
     $path = $line.Substring(3) -replace '\\','/'
 
     if (Test-KnownLocalEvidencePath -Path $path) { continue }
+    if (Test-KnownLocalRuntimeHold -Path $path) {
+        $runtimeHolds.Add($path)
+        continue
+    }
     if (Test-KnownLocalToolingPath -Path $path) { continue }
     if (Test-SafeGeneratedResidue -Path $path) {
         $safeResidue.Add($path)
@@ -132,7 +150,7 @@ $allZero = (
 )
 
 $result = [pscustomobject][ordered]@{
-    schema_version = 2
+    schema_version = 3
     mode = 'READ_ONLY_FINAL_REPOSITORY_RECONCILIATION_GATE'
     observed_at_head = $head
     archive_receipt_path = if ($archiveReceiptVerified) { $ArchiveReceiptPath } else { $null }
@@ -141,6 +159,7 @@ $result = [pscustomobject][ordered]@{
     details = [pscustomobject][ordered]@{
         safe_local_residue = @($safeResidue)
         unexplained_local_artifacts = @($unexplained)
+        known_local_runtime_holds = @($runtimeHolds)
         unprotected_retired_tools = @($unprotectedRetired)
     }
     repository_reconciliation_complete = $allZero
