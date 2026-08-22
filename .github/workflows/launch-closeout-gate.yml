@@ -77,6 +77,7 @@ jobs:
           PYTHONPATH=. python -m pytest -q \
             tests/integration/test_lemon_subscription_checkout_postgres.py \
             tests/integration/test_subscription_quota_usage_postgres.py \
+            tests/integration/test_legacy_quota_cycle_backfill_postgres.py \
             tests/integration/test_auth_account_recovery_r9c_postgres_redis.py \
             tests/integration/test_admin_marketplace_lemon_squeezy_ingestion_postgres.py \
             tests/integration/test_admin_marketplace_lemon_squeezy_reconciliation_postgres.py
