@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "authority": {
+    "repository_reconciliation_complete": false,
+    "deletion_authorized": false,
+    "real_staging_qualified": false,
+    "production_authority_granted": false
+  },
+  "phase_a": {
+    "a5_backup_reconciliation": {
+      "status": "CLOSED_WITH_EXTERNAL_HASH_VERIFIED_ARCHIVE",
+      "archive_set": "C:\\Users\\zaksam\\maestro-evidence-archive\\maestro-update-backup-20260822-054347",
+      "file_count": 11,
+      "verified_count": 11,
+      "all_files_verified": true,
+      "unique_backup_content_resolved": true,
+      "source_deleted": false,
+      "deletion_authorized": false,
+      "database_backup_sha256": "7c87a0684d69e241dcd26e6cfc753c1ccd0383fc08c204126d5c689b5dbcbc1a"
+    },
+    "a6_tracked_candidate_review": {
+      "status": "CLOSED_KEEP_HOLDS",
+      "review_required_count": 0,
+      "retirement_authorized_count": 0,
+      "candidates": [
+        {
+          "path": "processual_api/routers/client_provider_alias_18.py",
+          "decision": "KEEP_COMPATIBILITY_HOLD",
+          "reason": "Deprecated compatibility endpoint remains intentionally available for external clients and points to /settings/provider-connection.",
+          "deletion_authorized": false
+        },
+        {
+          "path": "processual_api/routers/settings_provider_test_runtime.py",
+          "decision": "KEEP_ACTIVE_RUNTIME_WITH_DEPRECATED_COMPATIBILITY",
+          "reason": "File implements the current /settings/provider-connection/test runtime and also retains the deprecated /settings/llm-provider/test compatibility route.",
+          "deletion_authorized": false
+        },
+        {
+          "path": "processual_api/services/plan_store.py",
+          "decision": "KEEP_ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE",
+          "reason": "Current commercial plan identifiers resolve through the authoritative fulfillment catalog while historical API-key plan policies and aliases remain supported.",
+          "deletion_authorized": false
+        }
+      ]
+    },
+    "next_phase": "A8_FINAL_REPOSITORY_RETIREMENT_AUDIT"
+  }
+}
