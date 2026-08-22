@@ -88,6 +88,23 @@ def test_windows_powershell_uses_relative_path_compatibility_fallback():
     assert "Get-CompatibleRelativePath -BasePath $backupRoot -TargetPath $File.FullName" in text
 
 
+def test_json_metadata_distinguishes_arrays_from_objects_and_reports_item_shape():
+    text = _script_text()
+
+    assert "schema_version = 2" in text
+    assert "json_root_type = $null" in text
+    assert "json_item_count = $null" in text
+    assert "json_item_keys = @()" in text
+    assert "$metadata.json_root_type = 'ARRAY'" in text
+    assert "$metadata.json_root_type = 'OBJECT'" in text
+    assert "$metadata.json_root_type = 'SCALAR'" in text
+    assert "$metadata.json_item_count = $items.Count" in text
+    assert "$metadata.json_item_keys = @($itemKeys | Sort-Object -Unique)" in text
+    assert "json_root_type = $jsonMetadata.json_root_type" in text
+    assert "json_item_count = $jsonMetadata.json_item_count" in text
+    assert "json_item_keys = @($jsonMetadata.json_item_keys)" in text
+
+
 def test_every_artifact_starts_non_retirable_and_non_deletable():
     text = _script_text()
 
