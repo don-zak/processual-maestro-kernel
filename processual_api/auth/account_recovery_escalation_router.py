@@ -123,14 +123,20 @@ async def get_account_recovery_escalation_runtime() -> AccountRecoveryRuntime:
     try:
         return await build_account_recovery_runtime()
     except AccountRecoveryRuntimeUnavailableError as exc:
-        raise HTTPException(status_code=503, detail="Account recovery escalation service temporarily unavailable.") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Account recovery escalation service temporarily unavailable.",
+        ) from exc
 
 
 async def get_recovery_channel_runtime() -> RecoveryEmailRuntime:
     try:
         return await build_recovery_email_runtime()
     except RecoveryEmailRuntimeUnavailableError as exc:
-        raise HTTPException(status_code=503, detail="Recovery channel replacement service temporarily unavailable.") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Recovery channel replacement service temporarily unavailable.",
+        ) from exc
 
 
 def _client_ip(request: Request, runtime: AccountRecoveryRuntime) -> str:
@@ -156,7 +162,11 @@ async def create_account_recovery_escalation(
             rules=ACCOUNT_RECOVERY_START_RULES,
         )
     except (AuthRateLimitUnavailableError, ValueError):
-        return JSONResponse(status_code=503, content={"detail": "Account recovery escalation service temporarily unavailable."}, headers={"Cache-Control": "no-store"})
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Account recovery escalation service temporarily unavailable."},
+            headers={"Cache-Control": "no-store"},
+        )
     if not decision.allowed:
         return JSONResponse(
             status_code=429,
