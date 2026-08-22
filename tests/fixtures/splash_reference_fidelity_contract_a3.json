@@ -1,27 +1,28 @@
 {
-  "contract_version": "A3-splash-reference-v2",
+  "contract_version": "A3-splash-reference-v3",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
-    "width": 1440,
-    "height": 1080,
-    "aspect_ratio": "4:3",
-    "fit_rule": "full-bleed-fluid-width",
+    "width": 1672,
+    "height": 941,
+    "aspect_ratio": "1672:941",
+    "fit_rule": "reference-contain-1672x941",
     "required_markers": [
       "maestro-reference-stage",
-      "--stage-width:1440",
-      "--stage-height:1080",
-      "const fit_rule='full-bleed-fluid-width'",
-      "worldWidth=Math.max(1440,viewportWidth/scale)",
-      "stage.style.width=`${worldWidth}px`",
-      "stage.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`"
+      "--stage-width:1672",
+      "--stage-height:941",
+      "const fit_rule='reference-contain-1672x941'",
+      "const scale=Math.min(viewportWidth/1672,viewportHeight/941)",
+      "worldWidth=1672",
+      "stage.style.transform=`translate(-50%,-50%) scale(${scale})`"
     ]
   },
   "mandatory_core_contract": {
     "preserve_dark_card": true,
     "preserve_card_markers": [
       "<div class=\"m\">MAESTRO<span>.</span></div>",
-      "<div class=\"s\">PROCESSUAL KERNEL</div>",
+      "Agent Governance, Calibration &amp;",
+      "Supervision Orchestration Platform",
       "API Server",
       "Database",
       "Cache",
@@ -38,6 +39,8 @@
       "--amber:#f5a623"
     ],
     "allowed_changes": [
+      "reference-faithful typography",
+      "reference-faithful explanatory copy",
       "uniform scaling",
       "outer halo",
       "connector pins",
@@ -45,24 +48,25 @@
     ]
   },
   "logical_layout": {
-    "core_bounds": {"x": 480, "y": 295, "w": 480, "h": 440, "tolerance_px": 36},
-    "execution_center": {"x": 720, "y": 850, "tolerance_px": 36},
+    "core_bounds": {"x": 622, "y": 260, "w": 390, "h": 384, "tolerance_px": 18},
+    "execution_center": {"x": 836, "y": 757, "tolerance_px": 24},
     "modules": {
-      "governance": {"side": "left", "x": 35, "y": 110, "w": 315, "h": 145},
-      "supervision": {"side": "left", "x": 35, "y": 335, "w": 315, "h": 145},
-      "calibration": {"side": "left", "x": 35, "y": 555, "w": 315, "h": 145},
-      "orchestration": {"side": "left", "x": 35, "y": 775, "w": 315, "h": 145},
-      "routing": {"side": "right", "x": 1090, "y": 110, "w": 315, "h": 145},
-      "policy": {"side": "right", "x": 1090, "y": 335, "w": 315, "h": 145},
-      "feedback": {"side": "right", "x": 1090, "y": 555, "w": 315, "h": 145},
-      "control": {"side": "right", "x": 1090, "y": 775, "w": 315, "h": 145}
+      "governance": {"side": "left", "x": 136, "y": 91, "w": 318, "h": 143},
+      "supervision": {"side": "left", "x": 136, "y": 268, "w": 318, "h": 143},
+      "calibration": {"side": "left", "x": 136, "y": 447, "w": 318, "h": 143},
+      "orchestration": {"side": "left", "x": 136, "y": 626, "w": 318, "h": 143},
+      "routing": {"side": "right", "x": 1218, "y": 91, "w": 318, "h": 143},
+      "policy": {"side": "right", "x": 1218, "y": 268, "w": 318, "h": 143},
+      "feedback": {"side": "right", "x": 1218, "y": 447, "w": 318, "h": 143},
+      "control": {"side": "right", "x": 1218, "y": 626, "w": 318, "h": 143}
     }
   },
   "visual_hierarchy": {
     "order": ["core", "circuitry", "icons", "titles", "body_text", "telemetry"],
     "secondary_cards_are_nodes_not_dashboard_cards": true,
-    "module_container_scale_max_vs_current": 0.88,
-    "icon_scale_min_vs_module": 0.18
+    "regional_fabric_required": true,
+    "long_bridge_routes_forbidden": true,
+    "icon_scale_min_vs_module": 0.20
   },
   "pcb": {
     "primary_paths_per_subsystem_min": 5,
@@ -72,6 +76,9 @@
     "connector_pad_required": true,
     "vias_required": true,
     "branching_required": true,
+    "regional_bus_required": true,
+    "local_fanout_required": true,
+    "cross_fabric_required": true,
     "top_vertical_bus_min": 10,
     "bottom_vertical_bus_min": 10,
     "ambient_layers_min": 3,
@@ -83,6 +90,10 @@
       ".trace.active",
       ".trace.hot",
       "top-agent-node",
+      "fabricProfiles",
+      "function localFanout(",
+      "function regionalFabric(",
+      "function drawCrossFabric(c)",
       "function drawCoreBreakout(c)",
       "function drawAmbientBoard(c)",
       "function drawUpperFabric(c)",
@@ -129,7 +140,7 @@
     ]
   },
   "color_system": {
-    "background_layers": ["#030812", "#061224", "#0a1d34"],
+    "background_layers": ["#020712", "#031426", "#082642"],
     "cyan_levels": ["rgba(44,135,205,.18)", "#36bfff", "#8bddff", "#e0f8ff"],
     "amber_levels": ["#6b4818", "#e59a20", "#ffc65c", "#fff0bf"],
     "teal_required": true,
@@ -138,16 +149,15 @@
   },
   "telemetry": {
     "top_agent_fleet_node": true,
-    "bottom_left_activity_bars": true,
-    "bottom_center_governance_trend": true,
-    "bottom_right_integrity_ring": true,
+    "bottom_strip_required": true,
     "opacity_max": 0.30
   },
   "typography": {
     "titles_use_display_font": true,
     "status_uses_mono": true,
     "arabic_body_rtl": true,
-    "arabic_body_not_mono": true
+    "arabic_body_not_mono": true,
+    "core_maestro_uses_serif": true
   },
   "accessibility": {
     "reduced_motion": true,
