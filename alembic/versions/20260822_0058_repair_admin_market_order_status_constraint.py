@@ -43,7 +43,7 @@ def _drop_status_constraints() -> None:
     with op.batch_alter_table(_TABLE) as batch_op:
         for name in (_CANONICAL_NAME, _LEGACY_DOUBLE_NAME):
             if name in existing:
-                batch_op.drop_constraint(name, type_="check")
+                batch_op.drop_constraint(op.f(name), type_="check")
 
 
 def upgrade() -> None:
@@ -56,9 +56,9 @@ def downgrade() -> None:
     existing = _check_names()
     with op.batch_alter_table(_TABLE) as batch_op:
         if _CANONICAL_NAME in existing:
-            batch_op.drop_constraint(_CANONICAL_NAME, type_="check")
+            batch_op.drop_constraint(op.f(_CANONICAL_NAME), type_="check")
         if _LEGACY_DOUBLE_NAME in existing:
-            batch_op.drop_constraint(_LEGACY_DOUBLE_NAME, type_="check")
+            batch_op.drop_constraint(op.f(_LEGACY_DOUBLE_NAME), type_="check")
 
     if not context.is_offline_mode():
         bind = op.get_bind()
@@ -75,4 +75,4 @@ def downgrade() -> None:
 
     with op.batch_alter_table(_TABLE) as batch_op:
         batch_op.create_check_constraint(op.f(_CANONICAL_NAME), _CURRENT_STATUS)
-        batch_op.create_check_constraint(_LEGACY_DOUBLE_NAME, _PREVIOUS_STATUS)
+        batch_op.create_check_constraint(op.f(_LEGACY_DOUBLE_NAME), _PREVIOUS_STATUS)
