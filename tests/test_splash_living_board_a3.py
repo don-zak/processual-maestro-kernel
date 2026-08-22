@@ -99,8 +99,8 @@ def test_production_splash_uses_authored_reference_pcb_density_and_topology():
         "function drawFeedbackFabric()", "function drawControlFabric()", "function drawUpperFabric(",
         "function drawExecutionFabric(", "for(let i=0;i<44;i++)", "for(let i=0;i<36;i++)",
         "for(let i=0;i<28;i++)", "for(let i=0;i<34;i++)", "for(let i=0;i<26;i++)",
-        "for(let i=0;i<14;i++)", "for(let i=0;i<8;i++)", "trace dormant", "trace support",
-        "trace active", "trace hot", "via-node", "connector-pad", "node-bloom", "trace-wake",
+        "for(let i=0;i<14;i++)", "for(let i=0;i<8;i++)", ".trace.dormant", ".trace.support",
+        ".trace.active", ".trace.hot", "via-node", "connector-pad", "node-bloom", "trace-wake",
         "p3=E('circle'", "g.append(p1,p2,p3)", "telemetry-strip", "pin-side", "pin-top", "pin-bottom",
     ]
     missing = [marker for marker in required if marker not in source]
