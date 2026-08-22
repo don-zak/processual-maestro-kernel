@@ -80,7 +80,7 @@ def test_production_splash_preserves_real_entry_card_and_descent_gate_contract()
         "maestro_descent_gate_seen",
         "maestro_descent_gate_seen_at",
         "sessionStorage.setItem",
-        "window.location.href='/login'",
+        "window.location.href = '/login'",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Production entry-card contract changed unexpectedly: {missing}"
