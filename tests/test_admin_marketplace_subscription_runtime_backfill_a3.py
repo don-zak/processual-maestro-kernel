@@ -14,6 +14,9 @@ from processual_api.admin_marketplace.models import (
     AdminMarketPlan,
     AdminMarketSubscription,
 )
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    AdminMarketSubscriptionQuotaCycle,
+)
 from processual_api.admin_marketplace.subscription_runtime import (
     SubscriptionRuntimeError,
 )
@@ -21,8 +24,11 @@ from processual_api.admin_marketplace.subscription_runtime_backfill import (
     backfill_active_subscription_runtime_in_session,
 )
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
-    AdminMarketSubscriptionQuotaAccount,
     AdminMarketSubscriptionRuntime,
+)
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_CATALOG_VERSION,
+    QUOTA_METRIC_CODE,
 )
 
 
@@ -33,7 +39,7 @@ async def _engine():
             AdminMarketPlan.__table__,
             AdminMarketSubscription.__table__,
             AdminMarketSubscriptionRuntime.__table__,
-            AdminMarketSubscriptionQuotaAccount.__table__,
+            AdminMarketSubscriptionQuotaCycle.__table__,
         ):
             await connection.run_sync(table.create)
     return engine
@@ -74,11 +80,12 @@ def _subscription(
 
 
 @pytest.mark.asyncio
-async def test_backfill_creates_runtime_and_quota_then_replays_empty() -> None:
+async def test_backfill_creates_runtime_and_quota_cycle_then_replays_empty() -> None:
     engine = await _engine()
     try:
         factory = async_sessionmaker(engine, expire_on_commit=False)
         plan = _canonical_plan()
+        projection = build_commercial_plan_projections()[0]
         subscription = _subscription(plan=plan)
         async with factory() as session:
             session.add_all([plan, subscription])
@@ -102,15 +109,19 @@ async def test_backfill_creates_runtime_and_quota_then_replays_empty() -> None:
             assert runtime.customer_ref == subscription.customer_ref
             assert runtime.entitlement_profile_ref == plan.entitlement_profile_ref
             assert runtime.quota_profile_ref == plan.quota_profile_ref
-            quota_count = await session.scalar(
-                select(func.count())
-                .select_from(AdminMarketSubscriptionQuotaAccount)
-                .where(
-                    AdminMarketSubscriptionQuotaAccount.subscription_id
+            cycle = await session.scalar(
+                select(AdminMarketSubscriptionQuotaCycle).where(
+                    AdminMarketSubscriptionQuotaCycle.subscription_id
                     == subscription.id
                 )
             )
-            assert quota_count == 1
+            assert cycle is not None
+            assert cycle.metric_code == QUOTA_METRIC_CODE
+            assert cycle.plan_code == projection.plan_code
+            assert cycle.plan_catalog_version == PLAN_FULFILLMENT_CATALOG_VERSION
+            assert tuple(cycle.entitlement_codes) == projection.entitlement_codes
+            assert cycle.base_limit_units == projection.monthly_unit_allowance
+            assert cycle.used_units == 0
 
             replay = await backfill_active_subscription_runtime_in_session(
                 session=session
@@ -187,13 +198,11 @@ async def test_backfill_rolls_back_batch_when_any_plan_is_not_canonical() -> Non
             runtime_count = await session.scalar(
                 select(func.count()).select_from(AdminMarketSubscriptionRuntime)
             )
-            quota_count = await session.scalar(
-                select(func.count()).select_from(
-                    AdminMarketSubscriptionQuotaAccount
-                )
+            cycle_count = await session.scalar(
+                select(func.count()).select_from(AdminMarketSubscriptionQuotaCycle)
             )
             assert runtime_count == 0
-            assert quota_count == 0
+            assert cycle_count == 0
     finally:
         await engine.dispose()
 
@@ -224,6 +233,10 @@ async def test_backfill_rejects_canonical_plan_with_drifted_runtime_binding() ->
             runtime_count = await session.scalar(
                 select(func.count()).select_from(AdminMarketSubscriptionRuntime)
             )
+            cycle_count = await session.scalar(
+                select(func.count()).select_from(AdminMarketSubscriptionQuotaCycle)
+            )
             assert runtime_count == 0
+            assert cycle_count == 0
     finally:
         await engine.dispose()
