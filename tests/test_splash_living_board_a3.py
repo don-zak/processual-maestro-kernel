@@ -1,30 +1,45 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SPLASH = ROOT / "processual_api" / "static" / "splash.html"
+STATIC = ROOT / "processual_api" / "static"
+SPLASH = STATIC / "splash.html"
+BOARD = STATIC / "splash_reference_board.svg"
 
 
 def _source() -> str:
     return SPLASH.read_text(encoding="utf-8")
 
 
-def test_production_splash_uses_reference_living_board_not_legacy_starfield():
+def _board() -> str:
+    return BOARD.read_text(encoding="utf-8")
+
+
+def test_production_splash_uses_authored_svg_dom_hybrid_board():
     source = _source()
     required = [
-        'id="board"', 'id="trace-svg"', 'class="maestro-reference-stage"',
-        "function drawAmbientBoard(", "function drawModuleFrames(", "function drawCoreBreakout(",
-        "function drawUpperFabric(", "function drawExecutionFabric(", "function drawCrossFabric(c)",
-        "function drawBackplaneFabric(c)", "function rings(", "function rebuild()", "function animate(now)",
-        "getTotalLength", "getPointAtLength", "requestAnimationFrame",
+        'id="pcb-reference"', 'src="./splash_reference_board.svg"', 'id="signal-svg"',
+        'class="maestro-reference-stage"', "authoredSignalMap", "function registerSignal(",
+        "function rebuildSignals()", "function animate(now)", "getTotalLength", "getPointAtLength",
+        "requestAnimationFrame",
     ]
-    forbidden = ['id="bg-canvas"', "class Particle", "const COUNT = 80", "drawParticles()"]
-    missing = [marker for marker in required if marker not in source]
-    legacy = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Missing SVG-first living-board markers: {missing}"
-    assert not legacy, f"Legacy starfield markers remain in production splash: {legacy}"
+    forbidden = ["function pcb(", "function drawSideFabric(", "function regionalFabric(", "class Particle"]
+    assert not [m for m in required if m not in source]
+    assert not [m for m in forbidden if m in source]
 
 
-def test_production_splash_is_a_full_landing_page_not_only_a_splash_card():
+def test_authored_reference_board_is_dense_and_layered():
+    board = _board()
+    required = [
+        'viewBox="0 0 1672 941"', 'id="grid"', 'id="glowC"', 'id="glowA"',
+        'stroke="#36bfff"', 'stroke="#e59a20"', 'stroke="#23d8c8"', 'stroke="#c16fff"',
+        '<ellipse cx="836" cy="452"', '<circle cx="456" cy="165"',
+    ]
+    assert not [m for m in required if m not in board]
+    assert board.count("<path") >= 70
+    assert board.count("<circle") >= 12
+
+
+def test_production_splash_is_full_landing_page():
     source = _source()
     required = [
         'class="site-header"', 'class="brand"', 'class="nav"', "PLATFORM⌄", "SOLUTIONS⌄",
@@ -33,26 +48,33 @@ def test_production_splash_is_a_full_landing_page_not_only_a_splash_card():
         "THROUGHPUT", "LATENCY (P95)", "QUEUE DEPTH", "SYSTEM HEALTH",
         'class="site-footer"', "Privacy Policy", "Terms of Service", "Security", "© 2026 MAESTRO",
     ]
-    missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Full landing-page shell is incomplete: {missing}"
+    assert not [m for m in required if m not in source]
 
 
-def test_production_splash_exposes_all_reference_modules_and_execution_node():
+def test_production_splash_exposes_all_reference_modules_and_execution():
     source = _source()
     required = [
         'id="governance"', 'id="supervision"', 'id="calibration"', 'id="orchestration"',
         'id="routing"', 'id="policy"', 'id="feedback"', 'id="control"', 'id="execution"',
-        'data-key="governance"', 'data-key="supervision"', 'data-key="calibration"',
-        'data-key="orchestration"', 'data-key="routing"', 'data-key="policy"',
-        'data-key="feedback"', 'data-key="control"', "GOVERNANCE", "SUPERVISION", "CALIBRATION",
-        "ORCHESTRATION", "ROUTING", "POLICY ENGINE", "FEEDBACK LOOP", "CONTROL GATES", "EXECUTION",
-        "edge-rail",
+        "GOVERNANCE", "SUPERVISION", "CALIBRATION", "ORCHESTRATION", "ROUTING",
+        "POLICY ENGINE", "FEEDBACK LOOP", "CONTROL GATES", "EXECUTION", "connector-pad",
     ]
-    missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Missing reference governance/control surface markers: {missing}"
+    assert not [m for m in required if m not in source]
 
 
-def test_production_splash_preserves_entry_and_descent_gate_contract():
+def test_reference_modules_are_moved_outward_to_open_pcb_fabric_space():
+    source = _source()
+    required = [
+        "#governance{left:78px;top:91px}", "#supervision{left:78px;top:268px}",
+        "#calibration{left:78px;top:447px}", "#orchestration{left:78px;top:626px}",
+        "#routing{right:78px;top:91px}", "#policy{right:78px;top:268px}",
+        "#feedback{right:78px;top:447px}", "#control{right:78px;top:626px}",
+        "left:642px;top:248px;width:388px;height:390px",
+    ]
+    assert not [m for m in required if m not in source]
+
+
+def test_entry_card_and_descent_gate_contract_remain_intact():
     source = _source()
     required = [
         '<div class="m">MAESTRO<span>.</span></div>', "Agent Governance, Calibration &amp;",
@@ -61,73 +83,28 @@ def test_production_splash_preserves_entry_and_descent_gate_contract():
         "maestro_descent_gate_seen_at", "sessionStorage.setItem", "window.location.href = '/login'",
         "background:rgba(22,29,42,.68)",
     ]
-    missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Production entry-card contract changed unexpectedly: {missing}"
+    assert not [m for m in required if m not in source]
 
 
-def test_production_splash_routes_use_regional_fabric_and_not_long_bridge_generator():
+def test_signal_layer_is_semantic_and_autonomous():
     source = _source()
     required = [
-        "function connectorPoint(node)", "node.querySelector('.connector-pad')", "fabricProfiles",
-        "function localFanout(", "function regionalFabric(", "function drawCrossFabric(c)",
-        "function drawBackplaneFabric(c)", "function registerSignal(", "function animate(now)", "semanticT(",
-        "requestAnimationFrame(animate)", "addEventListener('resize'",
+        "signalDirection", "governance:'outbound'", "supervision:'inbound'",
+        "calibration:'bidirectional'", "control:'roundtrip'", "execution:'downstream'",
+        "semanticT(", "requestAnimationFrame(animate)", "signal-wake", "node-bloom",
+        "destination-ack", "p3=E('circle'",
     ]
-    forbidden = [
-        "function pcb(", "for(let j=-9;j<=9;j++)", "function drawSideFabric(", "function focusRoute(key)",
-        "mouseenter", "mouseleave", "classList.toggle('active'", "classList.toggle('dim'",
-    ]
-    missing = [marker for marker in required if marker not in source]
-    old_route_engine = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Regional authored routes incomplete: {missing}"
-    assert not old_route_engine, f"Long-bridge/generic routing returned unexpectedly: {old_route_engine}"
+    forbidden = ["mouseenter", "mouseleave", "focusRoute(", "classList.toggle('dim'"]
+    assert not [m for m in required if m not in source]
+    assert not [m for m in forbidden if m in source]
 
 
-def test_production_splash_uses_reference_pcb_density_and_topology():
-    source = _source()
-    required = [
-        "function drawAmbientBoard(", "function drawCoreBreakout(", "function localFanout(",
-        "function regionalFabric(", "function drawCrossFabric(c)", "function drawBackplaneFabric(c)",
-        "function drawGovernanceFabric()", "function drawSupervisionFabric()", "function drawCalibrationFabric()",
-        "function drawOrchestrationFabric()", "function drawRoutingFabric()", "function drawPolicyFabric()",
-        "function drawFeedbackFabric()", "function drawControlFabric()", "function drawUpperFabric(",
-        "function drawExecutionFabric(", "for(let i=0;i<132;i++)", "for(let i=0;i<92;i++)",
-        "for(let i=0;i<44;i++)", "for(let i=0;i<48;i++)", "for(let i=0;i<38;i++)",
-        "for(let i=0;i<32;i++", "for(let i=0;i<18;i++", ".trace.dormant", ".trace.support",
-        ".trace.active", ".trace.hot", "via-node", "connector-pad", "node-bloom", "trace-wake",
-        "p3=E('circle'", "g.append(p1,p2,p3)", "telemetry-strip", "pin-side", "pin-top", "pin-bottom",
-    ]
-    missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Reference SVG PCB density/topology markers missing: {missing}"
-
-
-def test_production_splash_uses_svg_module_frames_and_reference_geometry():
-    source = _source()
-    required = [
-        "function framePath(r,side)", "function drawModuleFrames()", "data-frame",
-        "fill:'rgba(4,12,23,.59)'", "stroke:color",
-        ".module{--accent:var(--cyan-normal);position:absolute;width:318px;height:143px",
-        ".icon::before,.icon::after", "width:84px;height:84px", "left:622px;top:260px;width:390px;height:384px",
-        "#governance{left:136px;top:91px}", "#supervision{left:136px;top:268px}",
-        "#calibration{left:136px;top:447px}", "#orchestration{left:136px;top:626px}",
-        "#routing{right:136px;top:91px}", "#policy{right:136px;top:268px}",
-        "#feedback{right:136px;top:447px}", "#control{right:136px;top:626px}",
-    ]
-    forbidden = [".module::before,.module::after", "clip-path:polygon(0 14%,4% 6%,15% 6%"]
-    missing = [marker for marker in required if marker not in source]
-    legacy = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Reference module/card geometry missing: {missing}"
-    assert not legacy, f"Legacy CSS panel geometry returned unexpectedly: {legacy}"
-
-
-def test_production_splash_keeps_reference_contain_and_reduced_motion_guards():
+def test_reference_contain_and_reduced_motion_guards_remain():
     source = _source()
     required = [
         "--stage-width:1672", "--stage-height:941", "const fit_rule='reference-contain-1672x941'",
-        "function fitStage()", "const scale=Math.min(viewportWidth/1672,viewportHeight/941)",
-        "worldWidth=1672", "stage.style.transform=`translate(-50%,-50%) scale(${scale})`",
-        "addEventListener('resize',fitStage", "@media(prefers-reduced-motion:reduce)", "reduceMotion.matches",
-        "reduceMotion.addEventListener?.('change',rebuild)", ".pulse{display:none}",
+        "function fitStage()", "Math.min(viewportWidth/1672,viewportHeight/941)", "worldWidth=1672",
+        "stage.style.transform=`translate(-50%,-50%) scale(${scale})`", "@media(prefers-reduced-motion:reduce)",
+        "reduceMotion.matches", "reduceMotion.addEventListener?.('change',rebuildSignals)", ".pulse{display:none}",
     ]
-    missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Missing reference-contain/reduced-motion protections: {missing}"
+    assert not [m for m in required if m not in source]
