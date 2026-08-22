@@ -82,7 +82,8 @@
       "secondary-bus",
       "tertiary-bus",
       "top-agent-node",
-      "bottom-execution-bus"
+      "function executionBay(c)",
+      "executionBay(c)"
     ]
   },
   "motion": {
