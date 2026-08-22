@@ -25,9 +25,7 @@ from processual_api.admin_marketplace.lemon_squeezy_reconciliation_persistence i
 from processual_api.admin_marketplace.lemon_squeezy_reconciliation_processor import (
     process_lemon_squeezy_reconciliation_factory,
 )
-from processual_api.admin_marketplace.lemon_squeezy_webhooks import (
-    LemonSqueezyWebhookError,
-)
+from processual_api.admin_marketplace.lemon_squeezy_webhooks import LemonSqueezyWebhookError
 from processual_api.admin_marketplace.models import (
     AdminMarketOffer,
     AdminMarketOrder,
@@ -91,129 +89,149 @@ async def test_reconciliation_updates_subscription_and_runtime_atomically_and_ro
     variant_id = str(500_000_000 + uuid.uuid4().int % 400_000_000)
 
     async with session_factory() as session:
-        session.add_all(
-            [
-                AdminMarketPlan(
-                    id=plan_id,
-                    plan_code=plan_code,
-                    display_name="PostgreSQL reconciliation plan",
-                    entitlement_profile_ref=f"ent-{suffix}",
-                    quota_profile_ref=f"quota-{suffix}",
-                    metadata_json={},
-                ),
-                AdminMarketOffer(
-                    id=offer_id,
-                    offer_code=offer_code,
-                    plan_id=plan_id,
-                    display_name="PostgreSQL reconciliation offer",
-                    currency="USD",
-                    sales_channel="lemon_squeezy",
-                    billing_period="monthly",
-                    amount=Decimal("10.000"),
-                    status="published",
-                    effective_at=EARLIER,
-                    expires_at=None,
-                    customer_specific=False,
-                ),
-                AdminMarketOrder(
-                    id=order_id,
-                    order_ref=order_ref,
-                    customer_ref=customer_ref,
-                    offer_id=offer_id,
-                    plan_id=plan_id,
-                    billing_period="monthly",
-                    selected_channel="lemon_squeezy",
-                    country_code="US",
-                    currency="USD",
-                    subtotal_amount=Decimal("10.000"),
-                    tax_amount=Decimal("0.000"),
-                    total_amount=Decimal("10.000"),
-                    status="activated",
-                    contract_status="completed",
-                    payment_requirement="required",
-                    payment_status="verified",
-                    payment_reference=f"pay-{suffix}",
-                    payment_destination_snapshot={},
-                    offer_snapshot={},
-                    creation_idempotency_key_hash=None,
-                    completed_at=EARLIER,
-                    cancelled_at=None,
-                ),
-                AdminMarketSubscription(
-                    id=subscription_id,
-                    subscription_ref=subscription_ref,
-                    customer_ref=customer_ref,
-                    order_id=order_id,
-                    offer_id=offer_id,
-                    plan_id=plan_id,
-                    status="suspended",
-                    starts_at=EARLIER,
-                    ends_at=None,
-                ),
-                AdminMarketLemonSqueezyCustomerBinding(
-                    id=customer_binding_id,
-                    customer_ref=customer_ref,
-                    provider_customer_id=provider_customer_id,
-                ),
-                AdminMarketLemonSqueezyBinding(
-                    id=provider_binding_id,
-                    customer_ref=customer_ref,
-                    order_id=order_id,
-                    offer_id=offer_id,
-                    subscription_id=subscription_id,
-                    provider_customer_id=provider_customer_id,
-                    provider_order_id=provider_order_id,
-                    provider_subscription_id=provider_subscription_id,
-                    variant_id=variant_id,
-                    currency="USD",
-                    total_amount="10.000",
-                    last_provider_effective_at=EARLIER,
-                ),
-                AdminMarketSubscriptionRuntime(
-                    id=runtime_id,
-                    subscription_id=subscription_id,
-                    customer_ref=customer_ref,
-                    entitlement_profile_ref=f"ent-{suffix}",
-                    quota_profile_ref=f"quota-{suffix}",
-                    access_stage="suspended",
-                    version=2,
-                    effective_at=EARLIER,
-                    grace_until=None,
-                    suspended_at=EARLIER,
-                    terminated_at=None,
-                ),
-                AdminMarketLemonSqueezyWebhookInbox(
-                    id=good_inbox_id,
-                    event_identity_hash=("a" + uuid.uuid4().hex * 2)[:64],
-                    payload_digest=("b" + uuid.uuid4().hex * 2)[:64],
-                    event_name="subscription_updated",
-                    resource_type="subscriptions",
-                    external_resource_id=provider_subscription_id,
-                    store_id="7001",
-                    customer_ref=customer_ref,
-                    order_ref=order_ref,
-                    offer_ref=offer_code,
-                    test_mode=False,
-                    processing_status="received",
-                    attempt_count=0,
-                    evidence_schema_version=1,
-                    provider_customer_id=provider_customer_id,
-                    provider_order_id=provider_order_id,
-                    provider_subscription_id=provider_subscription_id,
-                    variant_id=variant_id,
-                    currency=None,
-                    subtotal_amount=None,
-                    total_amount=None,
-                    refunded_amount=None,
-                    provider_status="active",
-                    provider_effective_at=NOW,
-                    last_error_code=None,
-                    received_at=NOW,
-                    claimed_at=None,
-                    processed_at=None,
-                    rejected_at=None,
-                ),
-            ]
+        session.add(
+            AdminMarketPlan(
+                id=plan_id,
+                plan_code=plan_code,
+                display_name="PostgreSQL reconciliation plan",
+                entitlement_profile_ref=f"ent-{suffix}",
+                quota_profile_ref=f"quota-{suffix}",
+                metadata_json={},
+            )
+        )
+        await session.flush()
+
+        session.add(
+            AdminMarketOffer(
+                id=offer_id,
+                offer_code=offer_code,
+                plan_id=plan_id,
+                display_name="PostgreSQL reconciliation offer",
+                currency="USD",
+                sales_channel="lemon_squeezy",
+                billing_period="monthly",
+                amount=Decimal("10.000"),
+                status="published",
+                effective_at=EARLIER,
+                expires_at=None,
+                customer_specific=False,
+            )
+        )
+        await session.flush()
+
+        session.add(
+            AdminMarketOrder(
+                id=order_id,
+                order_ref=order_ref,
+                customer_ref=customer_ref,
+                offer_id=offer_id,
+                plan_id=plan_id,
+                billing_period="monthly",
+                selected_channel="lemon_squeezy",
+                country_code="US",
+                currency="USD",
+                subtotal_amount=Decimal("10.000"),
+                tax_amount=Decimal("0.000"),
+                total_amount=Decimal("10.000"),
+                status="activated",
+                contract_status="completed",
+                payment_requirement="required",
+                payment_status="verified",
+                payment_reference=f"pay-{suffix}",
+                payment_destination_snapshot={},
+                offer_snapshot={},
+                creation_idempotency_key_hash=None,
+                completed_at=EARLIER,
+                cancelled_at=None,
+            )
+        )
+        await session.flush()
+
+        session.add(
+            AdminMarketSubscription(
+                id=subscription_id,
+                subscription_ref=subscription_ref,
+                customer_ref=customer_ref,
+                order_id=order_id,
+                offer_id=offer_id,
+                plan_id=plan_id,
+                status="suspended",
+                starts_at=EARLIER,
+                ends_at=None,
+            )
+        )
+        session.add(
+            AdminMarketLemonSqueezyCustomerBinding(
+                id=customer_binding_id,
+                customer_ref=customer_ref,
+                provider_customer_id=provider_customer_id,
+            )
+        )
+        await session.flush()
+
+        session.add(
+            AdminMarketLemonSqueezyBinding(
+                id=provider_binding_id,
+                customer_ref=customer_ref,
+                order_id=order_id,
+                offer_id=offer_id,
+                subscription_id=subscription_id,
+                provider_customer_id=provider_customer_id,
+                provider_order_id=provider_order_id,
+                provider_subscription_id=provider_subscription_id,
+                variant_id=variant_id,
+                currency="USD",
+                total_amount="10.000",
+                last_provider_effective_at=EARLIER,
+            )
+        )
+        session.add(
+            AdminMarketSubscriptionRuntime(
+                id=runtime_id,
+                subscription_id=subscription_id,
+                customer_ref=customer_ref,
+                entitlement_profile_ref=f"ent-{suffix}",
+                quota_profile_ref=f"quota-{suffix}",
+                access_stage="suspended",
+                version=2,
+                effective_at=EARLIER,
+                grace_until=None,
+                suspended_at=EARLIER,
+                terminated_at=None,
+            )
+        )
+        session.add(
+            AdminMarketLemonSqueezyWebhookInbox(
+                id=good_inbox_id,
+                event_identity_hash=("a" + uuid.uuid4().hex * 2)[:64],
+                payload_digest=("b" + uuid.uuid4().hex * 2)[:64],
+                event_name="subscription_updated",
+                resource_type="subscriptions",
+                external_resource_id=provider_subscription_id,
+                store_id="7001",
+                customer_ref=customer_ref,
+                order_ref=order_ref,
+                offer_ref=offer_code,
+                test_mode=False,
+                processing_status="received",
+                attempt_count=0,
+                evidence_schema_version=1,
+                provider_customer_id=provider_customer_id,
+                provider_order_id=provider_order_id,
+                provider_subscription_id=provider_subscription_id,
+                variant_id=variant_id,
+                currency=None,
+                subtotal_amount=None,
+                total_amount=None,
+                refunded_amount=None,
+                provider_status="active",
+                provider_effective_at=NOW,
+                last_error_code=None,
+                received_at=NOW,
+                claimed_at=None,
+                processed_at=None,
+                rejected_at=None,
+            )
         )
         await session.commit()
 
