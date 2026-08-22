@@ -48,7 +48,12 @@ def test_pricing_catalog_route_keeps_checkout_disabled_for_all_plans() -> None:
     payload = response.json()
     assert payload["checkout_enabled"] is False
 
+    fixed_price_ids = {"academic_individual", "starter", "business"}
     for plan in payload["plans"]:
         assert plan["checkout_enabled"] is False
-        assert plan["monthly_price_usd"] is None
-        assert plan["yearly_price_usd"] is None
+        if plan["plan_id"] in fixed_price_ids:
+            assert plan["monthly_price_usd"] is not None
+            assert plan["yearly_price_usd"] is not None
+        else:
+            assert plan["monthly_price_usd"] is None
+            assert plan["yearly_price_usd"] is None
