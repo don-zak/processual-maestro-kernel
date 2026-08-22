@@ -49,12 +49,12 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "checkout_creation_status IN ('not_started','creating','ready','uncertain')",
-            name="ck_admin_market_lemon_checkout_bindings_checkout_creation_status_allowed",
+            name="checkout_creation_status_allowed",
         ),
         sa.CheckConstraint(
             "(checkout_creation_status = 'ready' AND provider_checkout_id IS NOT NULL) "
             "OR checkout_creation_status != 'ready'",
-            name="ck_admin_market_lemon_checkout_bindings_ready_checkout_has_provider_id",
+            name="ready_checkout_has_provider_id",
         ),
     )
 
