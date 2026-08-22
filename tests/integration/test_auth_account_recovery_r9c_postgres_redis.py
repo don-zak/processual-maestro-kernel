@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -102,7 +103,10 @@ async def test_account_recovery_http_postgres_redis_revokes_all_authority(tmp_pa
     recovery_code_id = uuid.uuid4()
     primary_email = f"r9c-primary-{suffix}@example.test"
     recovery_email = f"r9c-recovery-{suffix}@example.test"
-    client_ip = f"2001:db8::{suffix[:8]}"
+    client_ip = (
+        f"2001:db8:{suffix[:4]}:{suffix[4:8]}:"
+        f"{suffix[8:12]}:{suffix[12:16]}::1"
+    )
     rate_prefix = f"rl:auth:r9c:{suffix}"
 
     password_service = PasswordService()
@@ -141,7 +145,7 @@ async def test_account_recovery_http_postgres_redis_revokes_all_authority(tmp_pa
 
     def settings_loader(value: str):
         assert value == str(user_id)
-        return external_settings
+        return deepcopy(external_settings)
 
     def settings_saver(value: str, raw: dict):
         assert value == str(user_id)
