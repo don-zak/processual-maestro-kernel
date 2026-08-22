@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260821_0057"
+HEAD_REVISION = "20260822_0058"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -113,6 +113,8 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260818_0056:20260818_0055"),
         ("upgrade", "20260818_0056:20260821_0057"),
         ("downgrade", "20260821_0057:20260818_0056"),
+        ("upgrade", "20260821_0057:20260822_0058"),
+        ("downgrade", "20260822_0058:20260821_0057"),
     )
 
     for command, revision_range in ranges:
@@ -248,6 +250,10 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260821_0057_account_recovery_escalations.py": (
             "Downgrade blocked: durable account recovery escalation rows exist",
+            "context.is_offline_mode()",
+        ),
+        "20260822_0058_repair_admin_market_order_status_constraint.py": (
+            "Downgrade blocked: current order statuses cannot safely restore the overlapping legacy constraint.",
             "context.is_offline_mode()",
         ),
     }
