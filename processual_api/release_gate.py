@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-EXPECTED_ALEMBIC_HEAD = "20260818_0054"
+EXPECTED_ALEMBIC_HEAD = "20260822_0060"
 ALLOWED_RELEASE_ENVIRONMENTS = {"staging", "production"}
 _PLACEHOLDER_MARKERS = (
     "replace_with",
@@ -66,7 +66,9 @@ def _required_value(environment: Mapping[str, str], name: str) -> str:
 def _reject_placeholder(name: str, value: str) -> None:
     normalized = value.lower()
     if any(marker in normalized for marker in _PLACEHOLDER_MARKERS):
-        raise RuntimeError(f"release gate: release value {name} contains a placeholder marker")
+        raise RuntimeError(
+            f"release gate: release value {name} contains a placeholder marker"
+        )
 
 
 def _require_secret_strength(name: str, value: str, *, minimum: int = 32) -> None:
@@ -110,10 +112,14 @@ def evaluate_release_environment(
 
     store_id = required["LEMONSQUEEZY_STORE_ID"]
     if not store_id.isdigit() or int(store_id) <= 0:
-        raise RuntimeError("release gate: LEMONSQUEEZY_STORE_ID must be a positive integer")
+        raise RuntimeError(
+            "release gate: LEMONSQUEEZY_STORE_ID must be a positive integer"
+        )
 
     cors_origins = tuple(
-        value.strip() for value in required["CORS_ORIGINS"].split(",") if value.strip()
+        value.strip()
+        for value in required["CORS_ORIGINS"].split(",")
+        if value.strip()
     )
     if not cors_origins:
         raise RuntimeError("release gate: CORS_ORIGINS must contain at least one origin")
