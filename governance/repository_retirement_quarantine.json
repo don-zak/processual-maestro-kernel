@@ -1,8 +1,8 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "purpose": "Prevent retired or compatibility-only repository surfaces from silently regaining primary authority while preserving history and required compatibility until deletion is proven safe.",
   "authority": {
-    "repository_reconciliation_complete": false,
+    "repository_reconciliation_complete": true,
     "real_staging_qualified": false,
     "production_authority_granted": false
   },
@@ -24,18 +24,9 @@
       "file_count": 6,
       "distinct_sha256_count": 3,
       "pairs": [
-        [
-          "cgt17_branch_retirement_audit_20260811_141201.json",
-          "cgt17_branch_retirement_audit_20260811_141433.json"
-        ],
-        [
-          "cgt17_branch_retirement_audit_20260811_142300.json",
-          "cgt17_branch_retirement_audit_20260811_142957.json"
-        ],
-        [
-          "cgt17_branch_retirement_audit_20260811_143802.json",
-          "cgt17_branch_retirement_audit_20260811_143853.json"
-        ]
+        ["cgt17_branch_retirement_audit_20260811_141201.json", "cgt17_branch_retirement_audit_20260811_141433.json"],
+        ["cgt17_branch_retirement_audit_20260811_142300.json", "cgt17_branch_retirement_audit_20260811_142957.json"],
+        ["cgt17_branch_retirement_audit_20260811_143802.json", "cgt17_branch_retirement_audit_20260811_143853.json"]
       ],
       "historical_files_must_be_preserved": true
     },
@@ -44,11 +35,7 @@
       "validated_file_count": 4,
       "validator": "python-json",
       "root_type": "OBJECT",
-      "required_top_level_keys": [
-        "files",
-        "meta",
-        "totals"
-      ],
+      "required_top_level_keys": ["files", "meta", "totals"],
       "files": [
         ".pmk-validation/20260811_211659/coverage/coverage.json",
         ".pmk-validation/20260811_213207/coverage/coverage.json",
@@ -66,6 +53,18 @@
       ],
       "corruption_asserted": false,
       "preserve_until_final_qualification": true
+    },
+    "final_repository_closeout": {
+      "classification": "ALL_EXIT_CRITERIA_ZERO",
+      "observed_at_head": "a20372acc24c48045051a74135377dc0c0d6aa5f",
+      "archive_receipt_verified": true,
+      "exit_criteria": {
+        "REVIEW_REQUIRED": 0,
+        "SAFE_LOCAL_RESIDUE": 0,
+        "UNEXPLAINED_LOCAL_ARTIFACT": 0,
+        "UNPROTECTED_RETIRED_TOOL": 0,
+        "UNIQUE_BACKUP_CONTENT": 0
+      }
     }
   },
   "protected_path_prefixes": [
@@ -152,12 +151,7 @@
   ],
   "retired_public_symbols": [
     {
-      "symbols": [
-        "enterprise_pilot",
-        "enterprise_core",
-        "enterprise_scale",
-        "enterprise_strategic"
-      ],
+      "symbols": ["enterprise_pilot", "enterprise_core", "enterprise_scale", "enterprise_strategic"],
       "classification": "HISTORICAL_COMPATIBILITY_ONLY",
       "public_reintroduction_forbidden": true,
       "deletion_allowed": false,
