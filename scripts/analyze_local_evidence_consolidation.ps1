@@ -151,14 +151,37 @@ except Exception as exc:
     print(json.dumps({"ok": False, "error": str(exc)}))
 '@
 
-    $output = & $python.Source -c $script $File.FullName 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $output) {
-        return $null
-    }
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        return ($output | Out-String | ConvertFrom-Json)
-    } catch {
-        return $null
+        $process = Start-Process -FilePath $python.Source `
+            -ArgumentList @('-c', $script, $File.FullName) `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $stdout = Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue
+        $stderr = Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue
+
+        if ([string]::IsNullOrWhiteSpace($stdout)) {
+            if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+                return [pscustomobject]@{ ok = $false; error = $stderr.Trim() }
+            }
+            return $null
+        }
+
+        try {
+            $parsedOutput = $stdout | ConvertFrom-Json
+            if ($process.ExitCode -ne 0 -and $parsedOutput.ok) {
+                return [pscustomobject]@{ ok = $false; error = "Python exited with code $($process.ExitCode)." }
+            }
+            return $parsedOutput
+        } catch {
+            $message = if (-not [string]::IsNullOrWhiteSpace($stderr)) { $stderr.Trim() } else { $_.Exception.Message }
+            return [pscustomobject]@{ ok = $false; error = $message }
+        }
+    } finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -338,7 +361,7 @@ $summary = [pscustomobject][ordered]@{
 }
 
 $manifest = [pscustomobject][ordered]@{
-    schema_version = 4
+    schema_version = 5
     policy = [pscustomobject][ordered]@{
         mode = 'READ_ONLY_EVIDENCE_CONSOLIDATION'
         deletion_authorized = $false
@@ -347,6 +370,7 @@ $manifest = [pscustomobject][ordered]@{
         old_tracked_version_requires_historical_proof = $true
         unknown_provenance_is_null = $true
         unknown_dependency_is_null = $true
+        python_fallback_stderr_isolated = $true
     }
     summary = $summary
     artifacts = @($records)
