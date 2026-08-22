@@ -40,12 +40,7 @@ class FakeRepository:
 
 
 class FakeProvider:
-    def __init__(
-        self,
-        error_code=None,
-        *,
-        retryable=True,
-    ) -> None:
+    def __init__(self, error_code=None, *, retryable=True) -> None:
         self.error_code = error_code
         self.retryable = retryable
         self.calls = []
@@ -53,10 +48,7 @@ class FakeProvider:
     async def send_verification_email(self, **values):
         self.calls.append(values)
         if self.error_code:
-            raise DeliveryProviderError(
-                self.error_code,
-                retryable=self.retryable,
-            )
+            raise DeliveryProviderError(self.error_code, retryable=self.retryable)
 
 
 class SequencedProvider:
@@ -66,14 +58,9 @@ class SequencedProvider:
 
     async def send_verification_email(self, **values):
         self.calls.append(values)
-
         if not self.outcomes:
-            raise AssertionError(
-                "Provider received more calls than expected."
-            )
-
+            raise AssertionError("Provider received more calls than expected.")
         outcome = self.outcomes.pop(0)
-
         if isinstance(outcome, Exception):
             raise outcome
 
@@ -124,15 +111,13 @@ def _recovery_claim(
     outbox_id = uuid.uuid4()
     user_id = uuid.uuid4()
     recovery_request_id = uuid.uuid4()
-
     encrypted = cipher.encrypt(
         "raw-account-recovery-token",
         outbox_id=str(outbox_id),
         user_id=str(user_id),
-        account_recovery_request_id=(str(recovery_request_id)),
+        account_recovery_request_id=str(recovery_request_id),
         purpose="account_recovery_verification",
     )
-
     return DeliveryClaim(
         outbox_id=outbox_id,
         user_id=user_id,
@@ -147,8 +132,8 @@ def _recovery_claim(
         action_token_consumed_at=None,
         action_token_invalidated_at=None,
         attempt_count=attempt_count,
-        account_recovery_request_id=(recovery_request_id),
-        account_recovery_expires_at=(expires_at or now + timedelta(minutes=30)),
+        account_recovery_request_id=recovery_request_id,
+        account_recovery_expires_at=expires_at or now + timedelta(minutes=30),
         account_recovery_state=state,
         account_recovery_revoked_at=revoked_at,
     )
@@ -176,9 +161,7 @@ def test_dispatch_success_uses_stable_idempotency_and_marks_claim_delivered():
     claim = _claim(now=now)
     repository = FakeRepository([claim])
     provider = FakeProvider()
-
     result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
-
     assert result.claimed == result.delivered == 1
     assert result.retry_scheduled == result.dead_lettered == result.stale_finalization == 0
     assert provider.calls[0]["recipient"] == "person@example.com"
@@ -192,127 +175,70 @@ def test_account_recovery_dispatch_uses_recovery_authority_and_template():
     claim = _recovery_claim(now=now)
     repository = FakeRepository([claim])
     provider = FakeProvider()
-
-    result = asyncio.run(
-        _dispatcher(
-            repository,
-            provider,
-            now=now,
-        ).dispatch_once()
-    )
-
+    result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
     assert result.claimed == 1
     assert result.delivered == 1
     assert result.retry_scheduled == 0
     assert result.dead_lettered == 0
-
     call = provider.calls[0]
-
-    assert call["template"] == ("account_recovery_verification")
-    assert call["recipient"] == ("recovery@example.com")
-    assert call["verification_url"].startswith("https://accounts.example.test/auth/account-recovery/verify?token=")
-    assert "raw-account-recovery-token" in (call["verification_url"])
-    assert repository.delivered[0]["claim_id"] == (claim.claim_id)
+    assert call["template"] == "account_recovery_verification"
+    assert call["recipient"] == "recovery@example.com"
+    assert call["verification_url"].startswith(
+        "https://accounts.example.test/console/recover-account.html?token="
+    )
+    assert "raw-account-recovery-token" in call["verification_url"]
+    assert f"request_id={claim.account_recovery_request_id}" in call["verification_url"]
+    assert repository.delivered[0]["claim_id"] == claim.claim_id
 
 
 @pytest.mark.parametrize(
     ("values", "error_code"),
     (
-        (
-            {
-                "expires_at": datetime(
-                    2026,
-                    7,
-                    24,
-                    8,
-                    tzinfo=UTC,
-                )
-            },
-            "account_recovery_expired",
-        ),
-        (
-            {"state": "verified"},
-            "account_recovery_ineligible",
-        ),
-        (
-            {
-                "revoked_at": datetime(
-                    2026,
-                    7,
-                    24,
-                    7,
-                    59,
-                    tzinfo=UTC,
-                )
-            },
-            "account_recovery_revoked",
-        ),
+        ({"expires_at": datetime(2026, 7, 24, 8, tzinfo=UTC)}, "account_recovery_expired"),
+        ({"state": "verified"}, "account_recovery_ineligible"),
+        ({"revoked_at": datetime(2026, 7, 24, 7, 59, tzinfo=UTC)}, "account_recovery_revoked"),
     ),
 )
-def test_ineligible_account_recovery_is_terminal(
-    values,
-    error_code,
-):
+def test_ineligible_account_recovery_is_terminal(values, error_code):
     now = datetime(2026, 7, 24, 8, tzinfo=UTC)
-    claim = _recovery_claim(
-        now=now,
-        **values,
-    )
+    claim = _recovery_claim(now=now, **values)
     repository = FakeRepository([claim])
     provider = FakeProvider()
-
-    result = asyncio.run(
-        _dispatcher(
-            repository,
-            provider,
-            now=now,
-        ).dispatch_once()
-    )
-
+    result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
     assert result.dead_lettered == 1
     assert result.delivered == 0
     assert provider.calls == []
-    assert repository.failed[0]["error_code"] == (error_code)
+    assert repository.failed[0]["error_code"] == error_code
 
 
 def test_claim_requires_exactly_one_delivery_authority():
     now = datetime(2026, 7, 24, 8, tzinfo=UTC)
     recovery_claim = _recovery_claim(now=now)
-
     invalid_claim = DeliveryClaim(
         outbox_id=recovery_claim.outbox_id,
         user_id=recovery_claim.user_id,
         action_token_id=uuid.uuid4(),
         claim_id=recovery_claim.claim_id,
-        recipient_email=(recovery_claim.recipient_email),
+        recipient_email=recovery_claim.recipient_email,
         user_status=recovery_claim.user_status,
         event_type=recovery_claim.event_type,
-        payload_ciphertext=(recovery_claim.payload_ciphertext),
-        payload_key_version=(recovery_claim.payload_key_version),
-        action_token_expires_at=(now + timedelta(minutes=30)),
+        payload_ciphertext=recovery_claim.payload_ciphertext,
+        payload_key_version=recovery_claim.payload_key_version,
+        action_token_expires_at=now + timedelta(minutes=30),
         action_token_consumed_at=None,
         action_token_invalidated_at=None,
         attempt_count=1,
-        account_recovery_request_id=(recovery_claim.account_recovery_request_id),
-        account_recovery_expires_at=(recovery_claim.account_recovery_expires_at),
+        account_recovery_request_id=recovery_claim.account_recovery_request_id,
+        account_recovery_expires_at=recovery_claim.account_recovery_expires_at,
         account_recovery_state="pending",
         account_recovery_revoked_at=None,
     )
-
     repository = FakeRepository([invalid_claim])
     provider = FakeProvider()
-
-    result = asyncio.run(
-        _dispatcher(
-            repository,
-            provider,
-            now=now,
-        ).dispatch_once()
-    )
-
+    result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
     assert result.dead_lettered == 1
     assert provider.calls == []
-    assert repository.failed[0]["error_code"] == ("delivery_authority_invalid")
+    assert repository.failed[0]["error_code"] == "delivery_authority_invalid"
 
 
 def test_provider_failure_schedules_bounded_retry_without_exposing_payload():
@@ -320,9 +246,7 @@ def test_provider_failure_schedules_bounded_retry_without_exposing_payload():
     claim = _claim(now=now, attempt_count=1)
     repository = FakeRepository([claim])
     provider = FakeProvider("provider_5xx")
-
     result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
-
     assert result.retry_scheduled == 1
     assert result.dead_lettered == 0
     failure = repository.failed[0]
@@ -332,80 +256,35 @@ def test_provider_failure_schedules_bounded_retry_without_exposing_payload():
     assert "raw-verification-token" not in repr(result)
 
 
-def test_unexpected_provider_crash_is_retried_and_batch_continues(
-    caplog,
-):
+def test_unexpected_provider_crash_is_retried_and_batch_continues(caplog):
     now = datetime(2026, 7, 24, 16, tzinfo=UTC)
     first_claim = _claim(now=now, attempt_count=1)
     second_claim = _claim(now=now, attempt_count=1)
-
-    repository = FakeRepository(
-        [
-            first_claim,
-            second_claim,
-        ]
-    )
-
-    sensitive_failure_text = (
-        "provider crashed with "
-        "raw-verification-token "
-        "person@example.com"
-    )
-
-    provider = SequencedProvider(
-        [
-            RuntimeError(sensitive_failure_text),
-            None,
-        ]
-    )
-
-    result = asyncio.run(
-        _dispatcher(
-            repository,
-            provider,
-            now=now,
-        ).dispatch_once()
-    )
-
+    repository = FakeRepository([first_claim, second_claim])
+    sensitive_failure_text = "provider crashed with raw-verification-token person@example.com"
+    provider = SequencedProvider([RuntimeError(sensitive_failure_text), None])
+    result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
     assert result.claimed == 2
     assert result.delivered == 1
     assert result.retry_scheduled == 1
     assert result.dead_lettered == 0
     assert result.stale_finalization == 0
-
     assert len(provider.calls) == 2
     assert len(repository.failed) == 1
     assert len(repository.delivered) == 1
-
-    assert repository.failed[0]["outbox_id"] == (
-        first_claim.outbox_id
-    )
-    assert repository.failed[0]["error_code"] == (
-        "provider_unexpected"
-    )
+    assert repository.failed[0]["outbox_id"] == first_claim.outbox_id
+    assert repository.failed[0]["error_code"] == "provider_unexpected"
     assert repository.failed[0]["dead_lettered_at"] is None
-
-    assert repository.delivered[0]["outbox_id"] == (
-        second_claim.outbox_id
-    )
-
+    assert repository.delivered[0]["outbox_id"] == second_claim.outbox_id
     log_text = caplog.text
-
-    assert (
-        "identity_delivery_provider_unexpected_failure"
-        in log_text
-    )
-
+    assert "identity_delivery_provider_unexpected_failure" in log_text
     unexpected_records = [
         record
         for record in caplog.records
-        if record.getMessage()
-        == "identity_delivery_provider_unexpected_failure"
+        if record.getMessage() == "identity_delivery_provider_unexpected_failure"
     ]
-
     assert len(unexpected_records) == 1
     assert unexpected_records[0].exception_type == "RuntimeError"
-
     assert sensitive_failure_text not in log_text
     assert "raw-verification-token" not in log_text
     assert "person@example.com" not in log_text
@@ -415,19 +294,8 @@ def test_permanent_provider_failure_is_dead_lettered_immediately():
     now = datetime(2026, 7, 24, 16, tzinfo=UTC)
     claim = _claim(now=now, attempt_count=1)
     repository = FakeRepository([claim])
-    provider = FakeProvider(
-        "provider_4xx",
-        retryable=False,
-    )
-
-    result = asyncio.run(
-        _dispatcher(
-            repository,
-            provider,
-            now=now,
-        ).dispatch_once()
-    )
-
+    provider = FakeProvider("provider_4xx", retryable=False)
+    result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
     assert result.retry_scheduled == 0
     assert result.dead_lettered == 1
     assert result.delivered == 0
@@ -440,16 +308,9 @@ def test_max_attempt_failure_moves_claim_to_dead_letter():
     now = datetime(2026, 7, 22, 16, tzinfo=UTC)
     claim = _claim(now=now, attempt_count=3)
     repository = FakeRepository([claim])
-
     result = asyncio.run(
-        _dispatcher(
-            repository,
-            FakeProvider("provider_timeout"),
-            now=now,
-            max_attempts=3,
-        ).dispatch_once()
+        _dispatcher(repository, FakeProvider("provider_timeout"), now=now, max_attempts=3).dispatch_once()
     )
-
     assert result.dead_lettered == 1
     assert result.retry_scheduled == 0
     assert repository.failed[0]["dead_lettered_at"] == now
@@ -460,9 +321,7 @@ def test_ineligible_token_is_terminal_without_decryption_or_provider_call():
     claim = _claim(now=now, invalidated=now - timedelta(seconds=1))
     repository = FakeRepository([claim])
     provider = FakeProvider()
-
     result = asyncio.run(_dispatcher(repository, provider, now=now).dispatch_once())
-
     assert result.dead_lettered == 1
     assert provider.calls == []
     assert repository.failed[0]["error_code"] == "action_token_invalidated"
@@ -471,9 +330,7 @@ def test_ineligible_token_is_terminal_without_decryption_or_provider_call():
 def test_stale_claim_owner_cannot_finalize_after_lease_reclaim():
     now = datetime(2026, 7, 22, 16, tzinfo=UTC)
     repository = FakeRepository([_claim(now=now)], finalize=False)
-
     result = asyncio.run(_dispatcher(repository, FakeProvider(), now=now).dispatch_once())
-
     assert result.delivered == 0
     assert result.stale_finalization == 1
 
