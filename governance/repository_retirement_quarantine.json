@@ -28,6 +28,39 @@
     "*.zip",
     ".pmk-repo-audit/"
   ],
+  "local_tooling_quarantine": {
+    "repository_tracking_forbidden": true,
+    "force_add_is_not_authorized": true,
+    "canonical_local_only": [
+      "Invoke-PMKRepoAudit-v20.ps1",
+      "Retire-Safe-CGT17Branches-v3.ps1"
+    ],
+    "retired_exact_paths": [
+      "Invoke-PMKRepoAudit-v1.ps1",
+      "Invoke-PMKRepoAudit-v2.ps1",
+      "Invoke-PMKRepoAudit-v3.ps1",
+      "Invoke-PMKRepoAudit-v4.ps1",
+      "Invoke-PMKRepoAudit-v5.ps1",
+      "Invoke-PMKRepoAudit-v6.ps1",
+      "Invoke-PMKRepoAudit-v7.ps1",
+      "Invoke-PMKRepoAudit-v8.ps1",
+      "Invoke-PMKRepoAudit-v8-fixed.ps1",
+      "Invoke-PMKRepoAudit-v9.ps1",
+      "Invoke-PMKRepoAudit-v10.ps1",
+      "Invoke-PMKRepoAudit-v11.ps1",
+      "Invoke-PMKRepoAudit-v12.ps1",
+      "Invoke-PMKRepoAudit-v13.ps1",
+      "Invoke-PMKRepoAudit-v14.ps1",
+      "Invoke-PMKRepoAudit-v15.ps1",
+      "Invoke-PMKRepoAudit-v16.ps1",
+      "Invoke-PMKRepoAudit-v17.ps1",
+      "Invoke-PMKRepoAudit-v18.ps1",
+      "Invoke-PMKRepoAudit-v19.ps1",
+      "Retire-Safe-CGT17Branches-fixed.ps1",
+      "Retire-Safe-CGT17Branches-v2.ps1"
+    ],
+    "release_condition": "These root-local operator tools are outside repository authority. Retired paths must remain absent from git ls-files, and canonical local-only tools must remain untracked unless governance is intentionally revised with independent review evidence."
+  },
   "tracked_surfaces": [
     {
       "path": "processual_api/routers/client_provider_alias_18.py",
