@@ -7,7 +7,7 @@ def read(path: str) -> str:
 
 def test_vq1_workflow_runs_button_action_validator_before_summary_and_upload():
     workflow = read(".github/workflows/vq1-browser-qualification.yml")
-    validator = "python qualification/vq1_button_action_validator.py"
+    validator = "python qualification/vq1_button_action_validator_v2.py"
     assert "Validate all delivered button actions" in workflow
     assert validator in workflow
     assert "artifacts/vq1/button_action_report.json" in workflow
