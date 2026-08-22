@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "authority": {
     "repository_reconciliation_complete": true,
     "deletion_authorized": false,
@@ -38,12 +38,16 @@
           "path": "processual_api/services/plan_store.py",
           "decision": "KEEP_ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE",
           "deletion_authorized": false
+        },
+        {
+          "path": "processual_api/admin_marketplace/subscription_usage_service.py",
+          "decision": "KEEP_ACTIVE_TRANSITIONAL_ASSESSMENT_BOOTSTRAP_HOLD",
+          "deletion_authorized": false
         }
       ]
     },
     "a8_final_repository_retirement_audit": {
-      "status": "CLOSED_ALL_EXIT_CRITERIA_ZERO",
-      "observed_at_head": "a20372acc24c48045051a74135377dc0c0d6aa5f",
+      "status": "CLOSED_ALL_EXIT_CRITERIA_ZERO_WITH_ACTIVE_KEEP_HOLDS",
       "archive_receipt_verified": true,
       "exit_criteria": {
         "REVIEW_REQUIRED": 0,
@@ -61,5 +65,35 @@
       "deletion_authorized": false
     },
     "next_phase": "B_COMMERCIAL_AND_AUTHORITY_QUALIFICATION"
+  },
+  "launch_closeout": {
+    "real_db_authority_gate": {
+      "status": "PASS_CLOSED",
+      "evidence": "Launch Closeout Gate #103 and real PostgreSQL/Redis integration suite"
+    },
+    "retirement_qualification": {
+      "status": "IN_PROGRESS_KEEP_HOLDS",
+      "deletion_authorized": false,
+      "blocking_hold": "assessment/bootstrap legacy quota-account compatibility path"
+    },
+    "final_repository_closeout": {
+      "status": "PASS_CLOSED_FOR_PUBLIC_CI",
+      "qualified_head": "5bf92fd2245804f4b4e39cf78c430724e7ae52b3",
+      "ci_public_run": 1426,
+      "ci_public_run_id": 32576713507,
+      "full_pytest": "PASS",
+      "ruff": "PASS",
+      "flake8": "PASS",
+      "mypy": "PASS",
+      "capacity_regression": "PASS",
+      "package_build": "PASS",
+      "package_metadata": "PASS"
+    }
+  },
+  "launch_authority": {
+    "commercial_launch": "NO_GO",
+    "real_staging_qualified": false,
+    "production_authority_granted": false,
+    "reason": "Synthetic CI closeout is green, but the canonical roadmap still requires real staging, release-candidate approval, and controlled production pilot gates."
   }
 }
