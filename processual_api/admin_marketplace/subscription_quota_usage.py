@@ -13,6 +13,7 @@ from processual_api.admin_marketplace.subscription_runtime_access_policy import 
     advance_expired_runtime_stage,
     runtime_allows_usage,
 )
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
 
 
 class SubscriptionQuotaUsageError(RuntimeError):
@@ -22,13 +23,13 @@ class SubscriptionQuotaUsageError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class SubscriptionQuotaUsageCommand:
     subscription_id: uuid.UUID
-    quota_cycle_id: uuid.UUID
     customer_ref: str
     metric_code: str
     units: int
     idempotency_key_hash: str
     dimensions_digest: str
     occurred_at: datetime
+    quota_cycle_id: uuid.UUID | None = None
 
 
 def record_subscription_quota_usage_factory(
@@ -39,13 +40,18 @@ def record_subscription_quota_usage_factory(
         command: SubscriptionQuotaUsageCommand,
     ) -> AdminMarketSubscriptionQuotaCycleUsage:
         _validate(command)
+        canonical_metric_code = normalize_maestro_metric_code(command.metric_code)
         async with unit_of_work_factory() as uow:
             existing = await uow.subscription_quota_cycle_usage.get_by_idempotency_hash(
                 command.idempotency_key_hash,
                 for_update=True,
             )
             if existing is not None:
-                _assert_replay_matches(command, existing)
+                _assert_replay_matches(
+                    command,
+                    existing,
+                    canonical_metric_code=canonical_metric_code,
+                )
                 return existing
 
             subscription = await uow.subscriptions.get_by_id(
@@ -93,16 +99,25 @@ def record_subscription_quota_usage_factory(
                     "quota usage is blocked by runtime access stage."
                 )
 
-            cycle = await uow.subscription_quota_cycles.get_by_id(
-                command.quota_cycle_id,
-                for_update=True,
-            )
+            if command.quota_cycle_id is None:
+                cycle = await uow.subscription_quota_cycles.get_current(
+                    subscription_id=command.subscription_id,
+                    metric_code=canonical_metric_code,
+                    occurred_at=command.occurred_at,
+                    for_update=True,
+                )
+            else:
+                cycle = await uow.subscription_quota_cycles.get_by_id(
+                    command.quota_cycle_id,
+                    for_update=True,
+                )
             if cycle is None:
                 raise SubscriptionQuotaUsageError("quota cycle was not found.")
             if (
                 cycle.subscription_id != command.subscription_id
                 or cycle.customer_ref != command.customer_ref
-                or cycle.metric_code != command.metric_code
+                or normalize_maestro_metric_code(cycle.metric_code)
+                != canonical_metric_code
             ):
                 raise SubscriptionQuotaUsageError(
                     "quota cycle conflicts with usage command."
@@ -129,7 +144,7 @@ def record_subscription_quota_usage_factory(
                 quota_cycle_id=cycle.id,
                 subscription_id=cycle.subscription_id,
                 customer_ref=cycle.customer_ref,
-                metric_code=cycle.metric_code,
+                metric_code=canonical_metric_code,
                 units=command.units,
                 idempotency_key_hash=command.idempotency_key_hash,
                 dimensions_digest=command.dimensions_digest,
@@ -204,12 +219,14 @@ def _validate(command: SubscriptionQuotaUsageCommand) -> None:
 def _assert_replay_matches(
     command: SubscriptionQuotaUsageCommand,
     existing: AdminMarketSubscriptionQuotaCycleUsage,
+    *,
+    canonical_metric_code: str,
 ) -> None:
     if (
-        existing.quota_cycle_id != command.quota_cycle_id
+        (command.quota_cycle_id is not None and existing.quota_cycle_id != command.quota_cycle_id)
         or existing.subscription_id != command.subscription_id
         or existing.customer_ref != command.customer_ref
-        or existing.metric_code != command.metric_code
+        or normalize_maestro_metric_code(existing.metric_code) != canonical_metric_code
         or existing.units != command.units
         or existing.dimensions_digest != command.dimensions_digest
         or existing.occurred_at != command.occurred_at
