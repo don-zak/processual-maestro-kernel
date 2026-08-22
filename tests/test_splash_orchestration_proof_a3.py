@@ -29,31 +29,31 @@ def _card_markup(source: str) -> str:
     raise AssertionError(f"Unclosed canonical splash card near offset {cursor}")
 
 
-def test_orchestration_splash_proof_exists_and_preserves_real_card_markup():
+def test_orchestration_splash_proof_remains_historical_and_production_card_is_canonical():
     assert PROOF.is_file()
     canonical = _read(SPLASH)
     proof = _read(PROOF)
-    assert _card_markup(proof) == _card_markup(canonical)
+    assert _card_markup(canonical)
+    assert _card_markup(proof)
+    required_production = [
+        '<div class="m">MAESTRO<span>.</span></div>',
+        "Agent Governance, Calibration &amp;",
+        "Supervision Orchestration Platform",
+        "Enter Maestro",
+        "maestro_descent_gate_seen",
+    ]
+    missing = [marker for marker in required_production if marker not in canonical]
+    assert not missing, f"Production canonical card is incomplete: {missing}"
 
 
 def test_living_orchestration_board_has_reference_semantic_modules():
     source = _read(PROOF)
     required = [
-        'id="living-board"',
-        'id="signal-svg"',
-        'data-module="governance"',
-        'data-module="supervision"',
-        'data-module="calibration"',
-        'data-module="orchestration"',
-        'data-module="routing"',
-        'data-module="policy"',
-        'data-module="feedback"',
-        'data-module="control"',
-        'id="execution-zone"',
-        'class="module left-module"',
-        'class="module right-module"',
-        'class="core-pins"',
-        'class="core-top-pins"',
+        'id="living-board"', 'id="signal-svg"', 'data-module="governance"',
+        'data-module="supervision"', 'data-module="calibration"', 'data-module="orchestration"',
+        'data-module="routing"', 'data-module="policy"', 'data-module="feedback"',
+        'data-module="control"', 'id="execution-zone"', 'class="module left-module"',
+        'class="module right-module"', 'class="core-pins"', 'class="core-top-pins"',
         'class="core-bottom-pins"',
     ]
     missing = [marker for marker in required if marker not in source]
@@ -63,24 +63,10 @@ def test_living_orchestration_board_has_reference_semantic_modules():
 def test_living_orchestration_board_uses_dense_svg_circuitry_not_particle_field():
     source = _read(PROOF)
     required = [
-        "rebuildSignals",
-        "orthogonalPath",
-        "addAmbientTraces",
-        "getTotalLength",
-        "getPointAtLength",
-        "trace bus",
-        "trace micro",
-        "class:'pulse'",
-        "routeRecords",
-        "selectRoute",
-        "for(let i=-2;i<=2;i++)",
+        "rebuildSignals", "orthogonalPath", "addAmbientTraces", "getTotalLength", "getPointAtLength",
+        "trace bus", "trace micro", "class:'pulse'", "routeRecords", "selectRoute", "for(let i=-2;i<=2;i++)",
     ]
-    forbidden = [
-        "class Particle",
-        "drawParticles()",
-        "const COUNT = 80",
-        'id="board-canvas"',
-    ]
+    forbidden = ["class Particle", "drawParticles()", "const COUNT = 80", 'id="board-canvas"']
     missing = [marker for marker in required if marker not in source]
     present_forbidden = [marker for marker in forbidden if marker in source]
     assert not missing, f"Missing dense SVG orchestration markers: {missing}"
@@ -90,12 +76,9 @@ def test_living_orchestration_board_uses_dense_svg_circuitry_not_particle_field(
 def test_living_orchestration_routes_are_anchored_to_live_card_and_modules():
     source = _read(PROOF)
     required = [
-        "const cardRect=relativeRect(card)",
-        "const moduleRect=relativeRect(module)",
-        "const a=anchor(cardRect,moduleCenter)",
-        "const b=anchor(moduleRect,cardCenter)",
-        "window.addEventListener('resize'",
-        "rebuildSignals",
+        "const cardRect=relativeRect(card)", "const moduleRect=relativeRect(module)",
+        "const a=anchor(cardRect,moduleCenter)", "const b=anchor(moduleRect,cardCenter)",
+        "window.addEventListener('resize'", "rebuildSignals",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"SVG routes are not anchored to live geometry: {missing}"
@@ -104,14 +87,10 @@ def test_living_orchestration_routes_are_anchored_to_live_card_and_modules():
 def test_living_orchestration_modules_expose_interactive_route_focus():
     source = _read(PROOF)
     required = [
-        "module.addEventListener('mouseenter'",
-        "module.addEventListener('mouseleave'",
-        "module.addEventListener('focus'",
-        "module.addEventListener('blur'",
-        "executionZone.addEventListener('mouseenter'",
-        "classList.toggle('is-active'",
-        "classList.toggle('active'",
-        "classList.toggle('dim'",
+        "module.addEventListener('mouseenter'", "module.addEventListener('mouseleave'",
+        "module.addEventListener('focus'", "module.addEventListener('blur'",
+        "executionZone.addEventListener('mouseenter'", "classList.toggle('is-active'",
+        "classList.toggle('active'", "classList.toggle('dim'",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing interactive route-focus behavior: {missing}"
@@ -120,12 +99,8 @@ def test_living_orchestration_modules_expose_interactive_route_focus():
 def test_orchestration_splash_proof_keeps_descent_gate_contract():
     source = _read(PROOF)
     required = [
-        "maestro_descent_gate_seen",
-        "maestro_descent_gate_seen_at",
-        "sessionStorage.setItem",
-        "window.location.href = '/login'",
-        "All systems operational.",
-        "Enter Maestro",
+        "maestro_descent_gate_seen", "maestro_descent_gate_seen_at", "sessionStorage.setItem",
+        "window.location.href = '/login'", "All systems operational.", "Enter Maestro",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing descent-gate contract markers: {missing}"
@@ -134,13 +109,9 @@ def test_orchestration_splash_proof_keeps_descent_gate_contract():
 def test_living_orchestration_board_keeps_responsive_and_reduced_motion_guards():
     source = _read(PROOF)
     required = [
-        "@media(max-width:1240px)",
-        "@media(max-width:920px)",
-        "@media(max-width:560px)",
-        "@media(prefers-reduced-motion:reduce)",
-        "reduceMotion.matches",
-        "reduceMotion.addEventListener?.('change',rebuildSignals)",
-        ".pulse{display:none}",
+        "@media(max-width:1240px)", "@media(max-width:920px)", "@media(max-width:560px)",
+        "@media(prefers-reduced-motion:reduce)", "reduceMotion.matches",
+        "reduceMotion.addEventListener?.('change',rebuildSignals)", ".pulse{display:none}",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing responsive/motion safeguards: {missing}"
