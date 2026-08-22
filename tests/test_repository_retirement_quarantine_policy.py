@@ -23,7 +23,7 @@ def _policy() -> dict:
 def test_quarantine_policy_preserves_protected_history_and_disables_auto_deletion() -> None:
     policy = _policy()
 
-    assert policy["authority"]["repository_reconciliation_complete"] is False
+    assert policy["authority"]["repository_reconciliation_complete"] is True
     assert policy["authority"]["real_staging_qualified"] is False
     assert policy["authority"]["production_authority_granted"] is False
     assert policy["evidence_closeout"]["deletion_authorized"] is False
@@ -32,6 +32,20 @@ def test_quarantine_policy_preserves_protected_history_and_disables_auto_deletio
     assert "docs/" in policy["protected_path_prefixes"]
     assert "qualification/" in policy["protected_path_prefixes"]
     assert all(item["deletion_allowed"] is False for item in policy["tracked_surfaces"])
+
+
+def test_final_repository_closeout_records_all_exit_criteria_zero() -> None:
+    closeout = _policy()["evidence_closeout"]["final_repository_closeout"]
+
+    assert closeout["classification"] == "ALL_EXIT_CRITERIA_ZERO"
+    assert closeout["archive_receipt_verified"] is True
+    assert closeout["exit_criteria"] == {
+        "REVIEW_REQUIRED": 0,
+        "SAFE_LOCAL_RESIDUE": 0,
+        "UNEXPLAINED_LOCAL_ARTIFACT": 0,
+        "UNPROTECTED_RETIRED_TOOL": 0,
+        "UNIQUE_BACKUP_CONTENT": 0,
+    }
 
 
 def test_review_decision_closeout_records_identity_complete_but_not_exact_history() -> None:
