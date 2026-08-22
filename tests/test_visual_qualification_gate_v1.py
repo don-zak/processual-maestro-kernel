@@ -45,6 +45,9 @@ def test_visual_gate_covers_current_public_routes_and_active_console_sections() 
     ):
         assert f"`{route}`" in text
 
+    console_inventory = text.split("## Console section inventory", 1)[1].split(
+        "## Admin section inventory", 1
+    )[0]
     for section in (
         "Overview",
         "Workflows",
@@ -55,7 +58,7 @@ def test_visual_gate_covers_current_public_routes_and_active_console_sections() 
         "Simulation",
         "Settings",
     ):
-        assert f"- {section};" in text
+        assert f"- {section}" in console_inventory
 
 
 def test_visual_gate_requires_state_viewport_locale_and_screenshot_evidence() -> None:
