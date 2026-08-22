@@ -152,6 +152,27 @@ class LemonCheckoutOrderAuthority:
                 )
                 return _result(existing, offer_ref=offer_ref, replayed=True)
 
+            offer = await unit.offers.get_by_id(offer_id, for_update=True)
+            if offer is None:
+                raise LemonCheckoutOrderAuthorityError("canonical_offer_not_found")
+            if (
+                offer.offer_code.strip().lower() != offer_ref
+                or offer.plan_id != plan_id
+                or offer.status.strip().lower() != "published"
+                or offer.sales_channel.strip().lower() != "lemon_squeezy"
+                or offer.billing_period.strip().lower() != billing_period
+                or offer.currency.strip().upper() != currency
+                or Decimal(offer.amount).quantize(Decimal("0.001")) != amount
+                or offer.display_name.strip() != display_name
+            ):
+                raise LemonCheckoutOrderAuthorityError(
+                    "canonical_offer_changed_before_order_commit"
+                )
+            if offer.effective_at is not None and offer.effective_at > now:
+                raise LemonCheckoutOrderAuthorityError("canonical_offer_not_effective")
+            if offer.expires_at is not None and offer.expires_at <= now:
+                raise LemonCheckoutOrderAuthorityError("canonical_offer_expired")
+
             eligibility = await unit.channel_eligibilities.get_by_customer_ref(
                 customer_ref,
                 for_update=True,
