@@ -17,6 +17,9 @@ from processual_api.admin_marketplace.errors import (
 from processual_api.admin_marketplace.subscription_activation_service import (
     SubscriptionActivationOrchestrator,
 )
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_CATALOG_VERSION,
+)
 
 NOW = datetime(2026, 8, 5, 16, 0, tzinfo=UTC)
 ORDER_ID = uuid.UUID("10000000-0000-0000-0000-000000000001")
@@ -104,7 +107,7 @@ class SubscriptionRuntime(SingleRepository):
         )
 
 
-class SubscriptionQuotas(SingleRepository):
+class SubscriptionQuotaCycles(SingleRepository):
     async def get_current(
         self,
         *,
@@ -166,7 +169,7 @@ class Unit:
         self.offers = SingleRepository(offer())
         self.plans = SingleRepository(plan())
         self.subscription_runtime = SubscriptionRuntime()
-        self.subscription_quotas = SubscriptionQuotas()
+        self.subscription_quota_cycles = SubscriptionQuotaCycles()
         self.commercial_audit = Audit()
         self.notification_outbox = NotificationOutbox()
         self.commit_calls = 0
@@ -301,6 +304,18 @@ def kwargs():
     }
 
 
+def _assert_authoritative_cycle(unit: Unit) -> None:
+    assert len(unit.subscription_quota_cycles.items) == 1
+    cycle = unit.subscription_quota_cycles.items[0]
+    metric = STARTER_QUOTA.metrics[0]
+    assert cycle.metric_code == metric.metric_code
+    assert cycle.base_limit_units == metric.limit_units
+    assert cycle.plan_code == STARTER_PLAN.plan_code
+    assert cycle.plan_catalog_version == PLAN_FULFILLMENT_CATALOG_VERSION
+    assert cycle.quota_profile_ref == STARTER_PLAN.quota_profile_ref
+    assert tuple(cycle.entitlement_codes) == STARTER_PLAN.entitlement_codes
+
+
 @pytest.mark.asyncio
 async def test_activation_creates_subscription_entitlement_and_audit_atomically() -> None:
     unit = Unit()
@@ -315,7 +330,7 @@ async def test_activation_creates_subscription_entitlement_and_audit_atomically(
     assert len(unit.subscriptions.items) == 1
     assert len(unit.entitlement_activations.items) == 1
     assert len(unit.subscription_runtime.items) == 1
-    assert len(unit.subscription_quotas.items) == len(STARTER_QUOTA.metrics)
+    _assert_authoritative_cycle(unit)
     activation = unit.entitlement_activations.items[0]
     assert activation.automatic_activation_allowed is True
     assert activation.order_id == ORDER_ID
@@ -337,7 +352,7 @@ async def test_activation_replay_does_not_duplicate_or_commit() -> None:
     assert unit.commit_calls == 1
     assert len(unit.subscriptions.items) == 1
     assert len(unit.subscription_runtime.items) == 1
-    assert len(unit.subscription_quotas.items) == len(STARTER_QUOTA.metrics)
+    _assert_authoritative_cycle(unit)
     assert len(unit.commercial_audit.items) == 1
 
 
