@@ -30,13 +30,15 @@ def test_production_splash_uses_authored_svg_dom_hybrid_board():
 def test_authored_reference_board_is_dense_and_layered():
     board = _board()
     required = [
-        'viewBox="0 0 1672 941"', 'id="grid"', 'id="glowC"', 'id="glowA"',
+        'viewBox="0 0 1672 941"', 'id="grid"', 'id="dotsC"', 'id="dotsA"', 'id="glow"',
         'stroke="#36bfff"', 'stroke="#e59a20"', 'stroke="#23d8c8"', 'stroke="#c16fff"',
-        '<ellipse cx="836" cy="452"', '<circle cx="456" cy="165"',
+        '<ellipse cx="836" cy="452"', 'sculpted module frame rails',
+        'long ambient branches that intentionally do not terminate at cards',
+        'dense page-wide node matrices',
     ]
     assert not [m for m in required if m not in board]
-    assert board.count("<path") >= 70
-    assert board.count("<circle") >= 12
+    assert board.count("<path") >= 100
+    assert board.count("<circle") >= 30
 
 
 def test_production_splash_is_full_landing_page():
