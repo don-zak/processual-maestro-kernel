@@ -133,7 +133,7 @@ jobs:
               conn = await asyncpg.connect("postgresql://maestro:maestro_qualification@127.0.0.1:5432/maestro_qualification")
               try:
                   revision = await conn.fetchval("SELECT version_num FROM alembic_version")
-                  assert revision == "20260822_0059", revision
+                  assert revision == "20260822_0060", revision
                   tables = (
                       "sandbox_api_key_authority",
                       "evaluation_grant_authority",
@@ -146,6 +146,15 @@ jobs:
                           f"public.{table}",
                       )
                       assert exists is True, table
+                  for retired in (
+                      "admin_market_subscription_quota_accounts",
+                      "admin_market_subscription_usage_ledger",
+                  ):
+                      exists = await conn.fetchval(
+                          "SELECT to_regclass($1) IS NOT NULL",
+                          f"public.{retired}",
+                      )
+                      assert exists is False, retired
               finally:
                   await conn.close()
 
@@ -249,7 +258,8 @@ jobs:
             echo "workflow=Sandbox Integration Qualification"
             echo "postgres=17"
             echo "redis=7"
-            echo "alembic_expected_head=20260822_0059"
+            echo "alembic_expected_head=20260822_0060"
+            echo "legacy_subscription_quota_tables_retired=true"
             echo "clean_alembic_chain_tested=true"
             echo "postgres_json_migration_contract=true"
             echo "durable_sandbox_auth_fail_closed_tests=true"
