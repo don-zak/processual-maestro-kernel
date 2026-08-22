@@ -1,6 +1,7 @@
 # ruff: noqa: F401
 # Route extensions that belong to the Admin Marketplace router.
 from processual_api.admin_marketplace import catalog_router as _catalog_router
+from processual_api.admin_marketplace import dashboard_router as _dashboard_router
 from processual_api.admin_marketplace import (
     local_tunisia_top_up_router as _local_tunisia_top_up_router,
 )
