@@ -58,6 +58,27 @@ def test_cgt17_closeout_records_three_exact_duplicate_pairs_without_deletion_aut
     assert all(len(pair) == 2 for pair in evidence["pairs"])
 
 
+def test_coverage_json_closeout_records_python_validation_not_corruption() -> None:
+    evidence = _policy()["evidence_closeout"]["coverage_json_evidence"]
+
+    assert evidence["classification"] == "VALID_JSON_POWERSHELL_INCOMPATIBILITY_ONLY"
+    assert evidence["validated_file_count"] == 4
+    assert evidence["validator"] == "python-json"
+    assert evidence["root_type"] == "OBJECT"
+    assert evidence["required_top_level_keys"] == ["files", "meta", "totals"]
+    assert evidence["powershell_convertfrom_json_is_not_corruption_authority"] is True
+    assert evidence["preserve_until_final_qualification"] is True
+
+
+def test_empty_tool_outputs_are_preserved_without_corruption_claim() -> None:
+    evidence = _policy()["evidence_closeout"]["empty_tool_outputs"]
+
+    assert evidence["classification"] == "EMPTY_HISTORICAL_OUTPUTS"
+    assert len(evidence["files"]) == 2
+    assert evidence["corruption_asserted"] is False
+    assert evidence["preserve_until_final_qualification"] is True
+
+
 def test_client_provider_alias_remains_explicitly_deprecated_and_non_primary() -> None:
     policy = _policy()
     entry = next(
