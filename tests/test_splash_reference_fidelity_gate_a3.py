@@ -28,7 +28,7 @@ def _category_score(source: str, markers: list[str], weight: int) -> tuple[float
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v3"
+    assert contract["contract_version"] == "A3-splash-reference-v4"
     assert contract["score_total"] == 100
     assert contract["minimum_score"] >= 99
     assert sum(contract["scoring"].values()) == 100
@@ -121,14 +121,15 @@ def test_splash_motion_semantics_are_not_decorative_only():
     assert not [marker for marker in forbidden if marker in source]
 
 
-def test_splash_reference_requires_regional_pcb_fabric_not_long_bridges():
+def test_splash_reference_requires_regional_and_backplane_pcb_fabric_not_long_bridges():
     source = _source()
     pcb = _contract()["pcb"]
     assert pcb["regional_bus_required"] is True
     assert pcb["local_fanout_required"] is True
     assert pcb["cross_fabric_required"] is True
+    assert pcb["backplane_fabric_required"] is True
     missing = _missing(source, pcb["required_markers"])
-    assert not missing, f"Regional connector/PCB topology is incomplete: {missing}"
+    assert not missing, f"Regional/backplane connector PCB topology is incomplete: {missing}"
     forbidden = ["function pcb(", "for(let j=-9;j<=9;j++)", "function drawSideFabric("]
     assert not [marker for marker in forbidden if marker in source]
 
