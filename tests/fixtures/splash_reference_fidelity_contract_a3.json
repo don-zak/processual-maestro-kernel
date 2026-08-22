@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-v1",
+  "contract_version": "A3-splash-reference-v2",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
@@ -12,7 +12,7 @@
       "--stage-width:1440",
       "--stage-height:1080",
       "const fit_rule='full-bleed-fluid-width'",
-      "worldWidth=Math.max(1440,viewportWidth / scale)",
+      "worldWidth=Math.max(1440,viewportWidth/scale)",
       "stage.style.width=`${worldWidth}px`",
       "stage.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`"
     ]
@@ -49,12 +49,12 @@
     "execution_center": {"x": 720, "y": 850, "tolerance_px": 36},
     "modules": {
       "governance": {"side": "left", "x": 35, "y": 110, "w": 315, "h": 145},
-      "supervision": {"side": "left", "x": 35, "y": 335, "w": 315, "h": 140},
-      "calibration": {"side": "left", "x": 35, "y": 555, "w": 315, "h": 140},
+      "supervision": {"side": "left", "x": 35, "y": 335, "w": 315, "h": 145},
+      "calibration": {"side": "left", "x": 35, "y": 555, "w": 315, "h": 145},
       "orchestration": {"side": "left", "x": 35, "y": 775, "w": 315, "h": 145},
       "routing": {"side": "right", "x": 1090, "y": 110, "w": 315, "h": 145},
-      "policy": {"side": "right", "x": 1090, "y": 335, "w": 315, "h": 140},
-      "feedback": {"side": "right", "x": 1090, "y": 555, "w": 315, "h": 140},
+      "policy": {"side": "right", "x": 1090, "y": 335, "w": 315, "h": 145},
+      "feedback": {"side": "right", "x": 1090, "y": 555, "w": 315, "h": 145},
       "control": {"side": "right", "x": 1090, "y": 775, "w": 315, "h": 145}
     }
   },
@@ -67,8 +67,8 @@
   "pcb": {
     "primary_paths_per_subsystem_min": 5,
     "secondary_paths_per_subsystem_min": 8,
-    "tertiary_paths_per_subsystem_min": 6,
-    "total_visual_paths_per_subsystem_min": 19,
+    "tertiary_paths_per_subsystem_min": 10,
+    "total_visual_paths_per_subsystem_min": 23,
     "connector_pad_required": true,
     "vias_required": true,
     "branching_required": true,
@@ -78,12 +78,23 @@
     "required_markers": [
       "connector-pad",
       "via-node",
-      "primary-bus",
-      "secondary-bus",
-      "tertiary-bus",
+      "trace dormant",
+      "trace support",
+      "trace active",
+      "trace hot",
       "top-agent-node",
-      "function executionBay(c)",
-      "executionBay(c)"
+      "function drawCoreBreakout(c)",
+      "function drawAmbientBoard(c)",
+      "function drawUpperFabric(c)",
+      "function drawExecutionFabric(c)",
+      "function drawGovernanceFabric()",
+      "function drawSupervisionFabric()",
+      "function drawCalibrationFabric()",
+      "function drawOrchestrationFabric()",
+      "function drawRoutingFabric()",
+      "function drawPolicyFabric()",
+      "function drawFeedbackFabric()",
+      "function drawControlFabric()"
     ]
   },
   "motion": {
@@ -110,6 +121,7 @@
       "node-bloom",
       "destination-ack",
       "signalDirection",
+      "registerSignal",
       "bidirectional",
       "roundtrip",
       "downstream",
