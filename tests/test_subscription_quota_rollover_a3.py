@@ -36,6 +36,31 @@ class SingleRepo:
         return self.value
 
 
+class BindingRepo:
+    def __init__(self, value: object | None) -> None:
+        self.value = value
+
+    async def get_by_subscription_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ):
+        if self.value is None or self.value.subscription_id != subscription_id:
+            return None
+        return self.value
+
+
+class ProfileRepo:
+    def __init__(self, value: object | None) -> None:
+        self.value = value
+
+    async def get_by_profile_ref(self, profile_ref: str, *, for_update: bool = False):
+        if self.value is None or self.value.profile_ref != profile_ref:
+            return None
+        return self.value
+
+
 class CycleRepo:
     def __init__(self, source: object | None, existing: object | None = None) -> None:
         self.source = source
@@ -69,10 +94,15 @@ class FakeUow:
         *,
         plan: object | None = None,
         existing: object | None = None,
+        assessment_binding: object | None = None,
+        assessment_profile: object | None = None,
     ) -> None:
         self.subscriptions = SingleRepo(subscription)
         self.plans = SingleRepo(plan or _plan())
         self.subscription_quota_cycles = CycleRepo(source, existing)
+        if assessment_binding is not None:
+            self.assessment_subscription_bindings = BindingRepo(assessment_binding)
+            self.assessment_quota_profiles = ProfileRepo(assessment_profile)
         self.commits = 0
 
     async def __aenter__(self):
@@ -141,6 +171,51 @@ def _command(**overrides: object) -> SubscriptionQuotaRolloverCommand:
     return SubscriptionQuotaRolloverCommand(**values)
 
 
+def _assessment_binding() -> SimpleNamespace:
+    return SimpleNamespace(
+        subscription_id=SUBSCRIPTION_ID,
+        customer_ref="customer_001",
+        entitlement_plan_id=PLAN_ID,
+        entitlement_source_plan_code="academic",
+        quota_profile_ref="assessment_quota_approved",
+    )
+
+
+def _assessment_profile() -> SimpleNamespace:
+    return SimpleNamespace(
+        profile_ref="assessment_quota_approved",
+        customer_ref="customer_001",
+        metric_code="maestro_units",
+        limit_units=125_000,
+        definition_version="2026-08-assessment-quota-profile-v1",
+        entitlement_codes_json=["maestro_execution", "academic_use"],
+    )
+
+
+def _assessment_source(**overrides: object) -> SimpleNamespace:
+    profile = _assessment_profile()
+    values = {
+        "id": SOURCE_ID,
+        "subscription_id": SUBSCRIPTION_ID,
+        "customer_ref": "customer_001",
+        "plan_code": "academic",
+        "plan_catalog_version": profile.definition_version,
+        "entitlement_codes": list(profile.entitlement_codes_json),
+        "quota_profile_ref": profile.profile_ref,
+        "metric_code": "maestro_units",
+        "period_start": START,
+        "period_end": NEXT,
+        "base_limit_units": profile.limit_units,
+        "rollover_units": 20_000,
+        "top_up_units": 0,
+        "used_units": 50_000,
+        "rollover_eligible_units": 95_000,
+        "available_units": 95_000,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
 @pytest.mark.asyncio
 async def test_active_subscription_rolls_authoritative_plan_quota() -> None:
     uow = FakeUow(_subscription(), _source())
@@ -159,6 +234,48 @@ async def test_active_subscription_rolls_authoritative_plan_quota() -> None:
         PLAN_FULFILLMENT_SPECS["starter"].entitlement_codes
     )
     assert uow.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_assessment_quota_renews_from_durable_profile_without_silent_rollover() -> None:
+    profile = _assessment_profile()
+    uow = FakeUow(
+        _subscription(),
+        _assessment_source(),
+        plan=_plan("academic"),
+        assessment_binding=_assessment_binding(),
+        assessment_profile=profile,
+    )
+    rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
+
+    cycle = await rollover(_command(base_limit_units=125_000))
+
+    assert cycle.plan_code == "academic"
+    assert cycle.plan_catalog_version == profile.definition_version
+    assert cycle.quota_profile_ref == profile.profile_ref
+    assert cycle.entitlement_codes == list(profile.entitlement_codes_json)
+    assert cycle.base_limit_units == 125_000
+    assert cycle.rollover_units == 0
+    assert cycle.top_up_units == 0
+    assert cycle.available_units == 125_000
+    assert uow.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_assessment_quota_rejects_catalog_limit_substitution() -> None:
+    uow = FakeUow(
+        _subscription(),
+        _assessment_source(),
+        plan=_plan("academic"),
+        assessment_binding=_assessment_binding(),
+        assessment_profile=_assessment_profile(),
+    )
+    rollover = rollover_subscription_quota_factory(unit_of_work_factory=lambda: uow)
+
+    with pytest.raises(SubscriptionQuotaRolloverError, match="base limit conflicts"):
+        await rollover(_command(base_limit_units=5_000))
+
+    assert uow.commits == 0
 
 
 @pytest.mark.asyncio
@@ -245,15 +362,19 @@ async def test_inactive_subscription_cannot_roll_quota() -> None:
 
 @pytest.mark.asyncio
 async def test_replay_returns_existing_cycle_without_commit() -> None:
+    spec = get_plan_fulfillment_spec("starter")
     existing = SimpleNamespace(
         subscription_id=SUBSCRIPTION_ID,
         source_cycle_id=SOURCE_ID,
         metric_code="credits",
         plan_code="starter",
         plan_catalog_version=PLAN_FULFILLMENT_CATALOG_VERSION,
+        entitlement_codes=list(spec.entitlement_codes),
+        quota_profile_ref="quota.starter.v1",
         period_start=NEXT,
         period_end=END,
         base_limit_units=10_000,
+        rollover_units=5_000,
         top_up_units=0,
     )
     uow = FakeUow(_subscription(), _source(), existing=existing)
@@ -265,15 +386,19 @@ async def test_replay_returns_existing_cycle_without_commit() -> None:
 
 @pytest.mark.asyncio
 async def test_conflicting_replay_fails_closed() -> None:
+    spec = get_plan_fulfillment_spec("starter")
     existing = SimpleNamespace(
         subscription_id=SUBSCRIPTION_ID,
         source_cycle_id=SOURCE_ID,
         metric_code="credits",
         plan_code="starter",
         plan_catalog_version=PLAN_FULFILLMENT_CATALOG_VERSION,
+        entitlement_codes=list(spec.entitlement_codes),
+        quota_profile_ref="quota.starter.v1",
         period_start=NEXT,
         period_end=END,
         base_limit_units=100_000,
+        rollover_units=5_000,
         top_up_units=0,
     )
     uow = FakeUow(_subscription(), _source(), existing=existing)
