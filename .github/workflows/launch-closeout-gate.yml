@@ -70,7 +70,7 @@ jobs:
         run: |
           python -m alembic upgrade head
           python -m alembic current | tee alembic-current.txt
-          grep -q "20260822_0059" alembic-current.txt
+          grep -q "20260822_0060" alembic-current.txt
 
       - name: Run consolidated PostgreSQL and Redis authority gate
         run: |
