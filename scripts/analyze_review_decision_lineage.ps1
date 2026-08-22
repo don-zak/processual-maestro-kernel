@@ -49,19 +49,26 @@ $files = @(Get-ChildItem -LiteralPath $rootPath -Filter 'pmk-review-decisions-v*
 $versions = [System.Collections.Generic.List[object]]::new()
 foreach ($file in $files) {
     $version = Get-VersionNumber -File $file
-    $items = @(Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json)
+    $parsed = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
     $map = @{}
-    foreach ($item in $items) {
+    $itemCount = 0
+
+    # Windows PowerShell 5.1 can preserve a JSON root array as a single
+    # pipeline object in some expressions. Enumerating $parsed directly avoids
+    # accidentally wrapping the whole array as one review-decision item.
+    foreach ($item in $parsed) {
+        $itemCount += 1
         $identity = Get-Identity -Item $item
         if ($map.ContainsKey($identity)) {
             throw "Duplicate decision identity inside $($file.Name): $identity"
         }
         $map[$identity] = $item
     }
+
     $versions.Add([pscustomobject]@{
         version = $version
         file = $file.Name
-        item_count = $items.Count
+        item_count = $itemCount
         map = $map
     })
 }
@@ -122,7 +129,7 @@ $summary = [pscustomobject][ordered]@{
 }
 
 $result = [pscustomobject][ordered]@{
-    schema_version = 1
+    schema_version = 2
     policy = [pscustomobject][ordered]@{
         mode = 'READ_ONLY_REVIEW_DECISION_LINEAGE'
         deletion_authorized = $false
