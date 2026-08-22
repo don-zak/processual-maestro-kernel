@@ -125,7 +125,10 @@ function Get-JsonMetadata {
 
     $metadata = [ordered]@{
         json_parse_status = $null
+        json_root_type = $null
+        json_item_count = $null
         json_top_level_keys = @()
+        json_item_keys = @()
     }
 
     if ($File.Extension -ne '.json') {
@@ -133,12 +136,35 @@ function Get-JsonMetadata {
     }
 
     try {
-        $parsed = Get-Content -LiteralPath $File.FullName -Raw | ConvertFrom-Json
+        $raw = Get-Content -LiteralPath $File.FullName -Raw
+        $parsed = $raw | ConvertFrom-Json
         $metadata.json_parse_status = 'VALID'
-        if ($null -ne $parsed) {
-            $metadata.json_top_level_keys = @(
-                $parsed.PSObject.Properties.Name | Sort-Object -Unique
-            )
+
+        $trimmed = $raw.TrimStart()
+        if ($trimmed.StartsWith('[')) {
+            $metadata.json_root_type = 'ARRAY'
+            $items = @($parsed)
+            $metadata.json_item_count = $items.Count
+            $itemKeys = [System.Collections.Generic.List[string]]::new()
+            foreach ($item in $items) {
+                if ($null -ne $item) {
+                    foreach ($name in @($item.PSObject.Properties.Name)) {
+                        if (-not $itemKeys.Contains($name)) {
+                            $itemKeys.Add($name)
+                        }
+                    }
+                }
+            }
+            $metadata.json_item_keys = @($itemKeys | Sort-Object -Unique)
+        } elseif ($trimmed.StartsWith('{')) {
+            $metadata.json_root_type = 'OBJECT'
+            if ($null -ne $parsed) {
+                $metadata.json_top_level_keys = @(
+                    $parsed.PSObject.Properties.Name | Sort-Object -Unique
+                )
+            }
+        } else {
+            $metadata.json_root_type = 'SCALAR'
         }
     } catch {
         $metadata.json_parse_status = 'INVALID'
@@ -217,7 +243,10 @@ foreach ($file in $uniqueFiles) {
         retirement_candidate = $false
         deletion_authorized = $false
         json_parse_status = $jsonMetadata.json_parse_status
+        json_root_type = $jsonMetadata.json_root_type
+        json_item_count = $jsonMetadata.json_item_count
         json_top_level_keys = @($jsonMetadata.json_top_level_keys)
+        json_item_keys = @($jsonMetadata.json_item_keys)
         backup_classification = $backupClassification
     })
 }
@@ -249,7 +278,7 @@ $summary = [pscustomobject][ordered]@{
 }
 
 $manifest = [pscustomobject][ordered]@{
-    schema_version = 1
+    schema_version = 2
     policy = [pscustomobject][ordered]@{
         mode = 'READ_ONLY_EVIDENCE_CONSOLIDATION'
         deletion_authorized = $false
