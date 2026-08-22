@@ -1,0 +1,80 @@
+name: Launch Closeout Gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-db-authority-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres-launch-gate
+          POSTGRES_DB: maestro_launch_gate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d maestro_launch_gate"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
+      ADMIN_MARKET_INTEGRATION_DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
+      AUTH_R9C_INTEGRATION_DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
+      AUTH_R9C_INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/15
+      REDIS_URL: redis://127.0.0.1:6379/14
+      POSTGRES_PASSWORD: postgres-launch-gate
+      REDIS_PASSWORD: launch-gate-not-used-local-service
+      GRAFANA_ADMIN_PASSWORD: launch-gate-grafana-password-2026-only
+      JWT_SECRET: launch-gate-jwt-secret-material-2026-minimum-32-bytes
+      API_KEYS: launch-gate-api-key-material-2026-minimum-32-bytes
+      PROCESSUAL_CRYPTO_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      MAESTRO_ADMIN_EMAIL: launch-gate-admin@example.test
+      MAESTRO_ADMIN_PASSWORD: Launch-Gate-Admin-Password-2026!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install project and qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Upgrade real PostgreSQL to Alembic head
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current | tee alembic-current.txt
+          grep -q "20260822_0059" alembic-current.txt
+
+      - name: Run consolidated PostgreSQL and Redis authority gate
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/integration/test_lemon_subscription_checkout_postgres.py \
+            tests/integration/test_subscription_quota_usage_postgres.py \
+            tests/integration/test_auth_account_recovery_r9c_postgres_redis.py \
+            tests/integration/test_admin_marketplace_lemon_squeezy_ingestion_postgres.py \
+            tests/integration/test_admin_marketplace_lemon_squeezy_reconciliation_postgres.py
