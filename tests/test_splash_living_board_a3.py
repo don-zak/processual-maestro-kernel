@@ -15,6 +15,8 @@ def test_production_splash_uses_reference_living_board_not_legacy_starfield():
         'id="trace-svg"',
         'class="maestro-reference-stage"',
         "function microField(",
+        "function drawModuleFrames(",
+        "function drawChipFanout(",
         "function crown(",
         "function executionBay(",
         "function rings(",
@@ -27,7 +29,7 @@ def test_production_splash_uses_reference_living_board_not_legacy_starfield():
     forbidden = ['id="bg-canvas"', "class Particle", "const COUNT = 80", "drawParticles()"]
     missing = [marker for marker in required if marker not in source]
     legacy = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Missing near-reference living-board markers: {missing}"
+    assert not missing, f"Missing SVG-first living-board markers: {missing}"
     assert not legacy, f"Legacy starfield markers remain in production splash: {legacy}"
 
 
@@ -45,6 +47,13 @@ def test_production_splash_is_a_full_landing_page_not_only_a_splash_card():
         "SYSTEM STATUS",
         "ALL SYSTEMS OPERATIONAL",
         'class="signin" href="/login"',
+        'class="telemetry-strip"',
+        "SYSTEM METRICS",
+        "THROUGHPUT",
+        "TASK SUCCESS RATE",
+        "LATENCY",
+        "QUEUE DEPTH",
+        "SYSTEM HEALTH",
         'class="site-footer"',
         "Privacy Policy",
         "Terms of Service",
@@ -110,17 +119,20 @@ def test_production_splash_routes_are_geometry_bound_and_self_animated_without_h
     assert not hover_deps, f"Hover-dependent routing returned unexpectedly: {hover_deps}"
 
 
-def test_production_splash_uses_near_reference_pcb_density_and_topology():
+def test_production_splash_uses_svg_first_reference_pcb_density_and_topology():
     source = _source()
     required = [
         "for(let j=-9;j<=9;j++)",
         "klass=j===0?'trace primary-bus main':Math.abs(j)<=4?'trace secondary-bus fine':'trace tertiary-bus ghost'",
-        "for(let i=0;i<52;i()" if False else "for(let i=0;i<52;i++)",
-        "for(let i=0;i<34;i++)",
-        "const count=30",
-        "const count=24",
-        "[.13,.26,.39,.52,.65,.78,.9].forEach",
+        "for(let i=0;i<76;i++)",
+        "for(let i=0;i<48;i++)",
+        "for(let i=0;i<26;i++)",
+        "for(let i=0;i<30;i++)",
+        "for(let i=0;i<24;i++)",
+        "[.1,.22,.34,.46,.58,.7,.82,.92].forEach",
         "function microField(",
+        "function drawModuleFrames(",
+        "function drawChipFanout(",
         "function crown(",
         "function executionBay(",
         "function rings(",
@@ -135,30 +147,37 @@ def test_production_splash_uses_near_reference_pcb_density_and_topology():
         "trace-wake",
         "p3=E('circle'",
         "g.append(p1,p2,p3)",
-        "activity-bars",
-        "governance-trend",
-        "integrity-ring",
+        "telemetry-strip",
         "pin-side",
         "pin-top",
         "pin-bottom",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Near-reference PCB density/topology markers missing: {missing}"
+    assert not missing, f"SVG-first PCB density/topology markers missing: {missing}"
 
 
-def test_production_splash_cards_use_open_reference_like_frames_and_hex_sockets():
+def test_production_splash_uses_svg_module_frames_instead_of_css_card_panels():
     source = _source()
     required = [
-        ".module::before,.module::after",
-        "clip-path:polygon(0 14%,4% 6%,15% 6%,18% 0,88% 0,94% 6%,100% 6%,100% 86%,96% 94%,86% 94%,82% 100%,13% 100%,7% 94%,0 94%)",
+        "function framePath(r,side)",
+        "function drawModuleFrames()",
+        "data-frame",
+        "fill:'rgba(4,12,23,.56)'",
+        "stroke:color",
+        ".module{--accent:var(--cyan-normal);position:absolute;width:350px;height:138px",
         ".icon::before,.icon::after",
-        "width:82px;height:82px",
-        "width:390px;height:150px",
-        "width:550px;height:500px",
+        "width:78px;height:78px",
+        "width:470px;height:420px",
         "edge-rail",
     ]
+    forbidden = [
+        ".module::before,.module::after",
+        "clip-path:polygon(0 14%,4% 6%,15% 6%",
+    ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Reference-like open card/socket geometry missing: {missing}"
+    css_card_frames = [marker for marker in forbidden if marker in source]
+    assert not missing, f"SVG-first module/card geometry missing: {missing}"
+    assert not css_card_frames, f"Legacy CSS card-frame geometry returned unexpectedly: {css_card_frames}"
 
 
 def test_production_splash_keeps_full_bleed_stage_and_reduced_motion_guards():
