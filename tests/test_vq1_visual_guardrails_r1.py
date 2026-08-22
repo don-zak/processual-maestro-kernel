@@ -76,7 +76,7 @@ def test_admin_market_navigation_stays_visible_but_authority_remains_backend_con
     assert "ensureMarketplaceNavigationVisible" in layout
     assert "visible-fail-closed" in layout
     assert "backend platform-administrator authority is required" in layout
-    assert "response.status === 403 || response.status === 401" in marketplace
+    assert "error.status === 403 || error.status === 401" in marketplace
     assert "Platform authority required" in marketplace
     assert "Sign-in required" in marketplace
 
