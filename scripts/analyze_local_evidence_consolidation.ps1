@@ -33,13 +33,6 @@ function Get-RelativePath {
     return ($relative -replace "\\", "/")
 }
 
-function Test-GitTrackedPath {
-    param([Parameter(Mandatory = $true)][string]$RelativePath)
-
-    & git -C $rootPath ls-files --error-unmatch -- $RelativePath *> $null
-    return ($LASTEXITCODE -eq 0)
-}
-
 function Get-EvidenceCategory {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
@@ -55,6 +48,20 @@ function Get-EvidenceCategory {
         '(pytest|test[-_]?run).*\.(log|txt)$' { return 'TEST_RUN_EVIDENCE' }
         default { return 'QUALIFICATION_EVIDENCE' }
     }
+}
+
+function Get-QualificationDependency {
+    param([Parameter(Mandatory = $true)][string]$Category)
+
+    if ($Category -in @(
+        'ACTIVE_LOCAL_QUALIFICATION_EVIDENCE',
+        'LOCAL_QUALIFICATION_RESULT_SET',
+        'REGENERABLE_COVERAGE_EVIDENCE',
+        'TEST_RUN_EVIDENCE'
+    )) {
+        return $true
+    }
+    return $null
 }
 
 function Get-BackupClassification {
@@ -73,10 +80,9 @@ function Get-BackupClassification {
             return 'EXACT_CURRENT_COPY'
         }
 
-        $currentRelative = ($backupRelative -replace "\\", "/")
-        if (Test-GitTrackedPath -RelativePath $currentRelative) {
-            return 'OLD_TRACKED_VERSION'
-        }
+        # A differing current file does not prove that the backup blob is an
+        # OLD_TRACKED_VERSION. Historical blob proof is required before that
+        # stronger classification may be asserted.
         return 'DIVERGENT_UNTRACKED'
     }
 
@@ -172,12 +178,13 @@ foreach ($file in $uniqueFiles) {
         sha256 = $sha256
         created_timestamp = $file.CreationTimeUtc.ToString('o')
         modified_timestamp = $file.LastWriteTimeUtc.ToString('o')
-        source_head = $head
+        source_head = $null
+        observed_at_head = $head
         duplicate_group = $null
         superseded_by = $null
         unique_information = $null
-        runtime_dependency = $false
-        qualification_dependency = ($category -ne 'BACKUP_SNAPSHOT')
+        runtime_dependency = $null
+        qualification_dependency = Get-QualificationDependency -Category $category
         archive_candidate = ($category -in @('HISTORICAL_REVIEW_DECISION', 'HISTORICAL_RETIREMENT_EVIDENCE', 'HANDOFF_EVIDENCE', 'BACKUP_SNAPSHOT'))
         retirement_candidate = $false
         deletion_authorized = $false
@@ -203,7 +210,7 @@ $invalidJsonCount = @($records | Where-Object { $_.json_parse_status -eq 'INVALI
 
 $summary = [pscustomobject][ordered]@{
     generated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
-    source_head = $head
+    observed_at_head = $head
     artifact_count = $records.Count
     duplicate_artifact_count = @($records | Where-Object { $_.duplicate_group }).Count
     invalid_json_count = $invalidJsonCount
@@ -220,6 +227,9 @@ $manifest = [pscustomobject][ordered]@{
         deletion_authorized = $false
         version_number_is_not_supersession_authority = $true
         exact_sha256_is_duplicate_authority = $true
+        old_tracked_version_requires_historical_proof = $true
+        unknown_provenance_is_null = $true
+        unknown_dependency_is_null = $true
     }
     summary = $summary
     artifacts = @($records)
@@ -235,7 +245,7 @@ $records | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding utf8
 $markdown = [System.Collections.Generic.List[string]]::new()
 $markdown.Add('# Evidence Consolidation')
 $markdown.Add('')
-$markdown.Add("- Source HEAD: ``$head``")
+$markdown.Add("- Observed at HEAD: ``$head``")
 $markdown.Add("- Artifacts: $($summary.artifact_count)")
 $markdown.Add("- Exact-hash duplicate members: $($summary.duplicate_artifact_count)")
 $markdown.Add("- Invalid JSON files: $($summary.invalid_json_count)")
