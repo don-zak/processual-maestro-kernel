@@ -26,11 +26,36 @@ def test_quarantine_policy_preserves_protected_history_and_disables_auto_deletio
     assert policy["authority"]["repository_reconciliation_complete"] is False
     assert policy["authority"]["real_staging_qualified"] is False
     assert policy["authority"]["production_authority_granted"] is False
+    assert policy["evidence_closeout"]["deletion_authorized"] is False
     assert "alembic/versions/" in policy["protected_path_prefixes"]
     assert "tests/" in policy["protected_path_prefixes"]
     assert "docs/" in policy["protected_path_prefixes"]
     assert "qualification/" in policy["protected_path_prefixes"]
     assert all(item["deletion_allowed"] is False for item in policy["tracked_surfaces"])
+
+
+def test_review_decision_closeout_records_identity_complete_but_not_exact_history() -> None:
+    review = _policy()["evidence_closeout"]["review_decisions"]
+
+    assert review["classification"] == "LATEST_IDENTITY_COMPLETE_WITH_HISTORICAL_PAYLOAD_CHANGES"
+    assert review["latest_version"] == 8
+    assert review["latest_item_count"] == 57
+    assert review["all_historical_identity_count"] == 57
+    assert review["identities_missing_from_latest"] == 0
+    assert review["every_transition_identity_monotonic"] is True
+    assert review["every_transition_exact_monotonic"] is False
+    assert review["historical_versions_must_be_preserved"] is True
+
+
+def test_cgt17_closeout_records_three_exact_duplicate_pairs_without_deletion_authority() -> None:
+    evidence = _policy()["evidence_closeout"]["cgt17_retirement_evidence"]
+
+    assert evidence["classification"] == "THREE_EXACT_DUPLICATE_PAIRS"
+    assert evidence["file_count"] == 6
+    assert evidence["distinct_sha256_count"] == 3
+    assert evidence["historical_files_must_be_preserved"] is True
+    assert len(evidence["pairs"]) == 3
+    assert all(len(pair) == 2 for pair in evidence["pairs"])
 
 
 def test_client_provider_alias_remains_explicitly_deprecated_and_non_primary() -> None:
