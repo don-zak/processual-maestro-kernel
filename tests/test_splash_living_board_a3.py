@@ -8,13 +8,13 @@ def _source() -> str:
     return SPLASH.read_text(encoding="utf-8")
 
 
-def test_production_splash_uses_living_maestro_board_not_legacy_starfield():
+def test_production_splash_uses_reference_living_board_not_legacy_starfield():
     source = _source()
     required = [
-        'id="maestro-board"',
-        'id="signal-svg"',
+        'id="board"',
+        'id="trace-svg"',
         "function ambient(",
-        "function build()",
+        "function rebuild()",
         "function animate(now)",
         "getTotalLength",
         "getPointAtLength",
@@ -28,22 +28,30 @@ def test_production_splash_uses_living_maestro_board_not_legacy_starfield():
     ]
     missing = [marker for marker in required if marker not in source]
     legacy = [marker for marker in forbidden if marker in source]
-    assert not missing, f"Missing living-board markers: {missing}"
+    assert not missing, f"Missing reference living-board markers: {missing}"
     assert not legacy, f"Legacy starfield markers remain in production splash: {legacy}"
 
 
-def test_production_splash_exposes_all_governance_control_modules_and_execution_node():
+def test_production_splash_exposes_all_reference_modules_and_execution_node():
     source = _source()
     required = [
-        'data-module="governance"',
-        'data-module="supervision"',
-        'data-module="calibration"',
-        'data-module="orchestration"',
-        'data-module="routing"',
-        'data-module="policy"',
-        'data-module="feedback"',
-        'data-module="control"',
-        'id="execution-zone"',
+        'id="governance"',
+        'id="supervision"',
+        'id="calibration"',
+        'id="orchestration"',
+        'id="routing"',
+        'id="policy"',
+        'id="feedback"',
+        'id="control"',
+        'id="execution"',
+        'data-key="governance"',
+        'data-key="supervision"',
+        'data-key="calibration"',
+        'data-key="orchestration"',
+        'data-key="routing"',
+        'data-key="policy"',
+        'data-key="feedback"',
+        'data-key="control"',
         "GOVERNANCE",
         "SUPERVISION",
         "CALIBRATION",
@@ -55,7 +63,7 @@ def test_production_splash_exposes_all_governance_control_modules_and_execution_
         "EXECUTION",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Missing governance/control surface markers: {missing}"
+    assert not missing, f"Missing reference governance/control surface markers: {missing}"
 
 
 def test_production_splash_preserves_real_entry_card_and_descent_gate_contract():
@@ -72,7 +80,7 @@ def test_production_splash_preserves_real_entry_card_and_descent_gate_contract()
         "maestro_descent_gate_seen",
         "maestro_descent_gate_seen_at",
         "sessionStorage.setItem",
-        "window.location.href = '/login'",
+        "window.location.href='/login'",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Production entry-card contract changed unexpectedly: {missing}"
@@ -81,10 +89,9 @@ def test_production_splash_preserves_real_entry_card_and_descent_gate_contract()
 def test_production_splash_routes_are_live_geometry_bound_and_interactive():
     source = _source()
     required = [
-        "const cr=rr(card)",
-        "const mr=rr(m)",
-        "edgeAnchor(cr,mc)",
-        "edgeAnchor(mr,cc)",
+        "const w=board.clientWidth,h=board.clientHeight,c=rr(core)",
+        "const n=rr(node),a=edge(c,n),b=edge(n,c)",
+        "function pcb(",
         "function focusRoute(key)",
         "classList.toggle('active'",
         "classList.toggle('dim'",
@@ -92,22 +99,40 @@ def test_production_splash_routes_are_live_geometry_bound_and_interactive():
         "mouseleave",
         "focus",
         "blur",
-        "window.addEventListener('resize'",
+        "addEventListener('resize'",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Living routes are not fully geometry-bound/interactive: {missing}"
+    assert not missing, f"Reference routes are not fully geometry-bound/interactive: {missing}"
+
+
+def test_production_splash_uses_dense_reference_pcb_buses():
+    source = _source()
+    required = [
+        "for(let j=-4;j<=4;j++)",
+        "class:j===0?'trace main':Math.abs(j)<=2?'trace fine':'trace ghost'",
+        "for(let i=0;i<18;i++)",
+        "for(let i=0;i<14;i++)",
+        "for(let i=0;i<12;i++)",
+        "pin-side",
+        "pin-top",
+        "pin-bottom",
+        "agent-matrix",
+        "hud-left",
+        "hud-right",
+    ]
+    missing = [marker for marker in required if marker not in source]
+    assert not missing, f"Reference PCB density/telemetry markers missing: {missing}"
 
 
 def test_production_splash_keeps_responsive_and_reduced_motion_guards():
     source = _source()
     required = [
-        "@media(max-width:1220px)",
-        "@media(max-width:900px)",
-        "@media(max-width:560px)",
+        "@media(max-width:1250px)",
+        "@media(max-width:980px)",
         "@media(prefers-reduced-motion:reduce)",
         "reduceMotion.matches",
-        "reduceMotion.addEventListener?.('change',build)",
-        ".signal-pulse{display:none}",
+        "reduceMotion.addEventListener?.('change',rebuild)",
+        ".pulse{display:none}",
     ]
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing responsive/reduced-motion protections: {missing}"
