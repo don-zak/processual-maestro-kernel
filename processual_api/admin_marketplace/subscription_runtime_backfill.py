@@ -15,6 +15,9 @@ from processual_api.admin_marketplace.models import (
     AdminMarketPlan,
     AdminMarketSubscription,
 )
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    SqlAlchemySubscriptionQuotaCycleRepository,
+)
 from processual_api.admin_marketplace.subscription_runtime import (
     SubscriptionRuntimeError,
 )
@@ -24,7 +27,6 @@ from processual_api.admin_marketplace.subscription_runtime_bootstrap import (
 )
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
     AdminMarketSubscriptionRuntime,
-    SqlAlchemySubscriptionQuotaRepository,
     SqlAlchemySubscriptionRuntimeRepository,
 )
 from processual_api.db.session import get_session_factory
@@ -40,7 +42,9 @@ class _BootstrapUnit:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.subscription_runtime = SqlAlchemySubscriptionRuntimeRepository(session)
-        self.subscription_quotas = SqlAlchemySubscriptionQuotaRepository(session)
+        self.subscription_quota_cycles = SqlAlchemySubscriptionQuotaCycleRepository(
+            session
+        )
 
     async def __aenter__(self) -> _BootstrapUnit:
         return self
@@ -70,7 +74,7 @@ async def backfill_active_subscription_runtime_in_session(
     *,
     session: AsyncSession,
 ) -> SubscriptionRuntimeBackfillResult:
-    """Backfill every active subscription missing runtime in one transaction."""
+    """Backfill every active catalog subscription missing runtime authority."""
 
     missing_runtime = ~exists(
         select(AdminMarketSubscriptionRuntime.id).where(
