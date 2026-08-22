@@ -14,6 +14,9 @@ from processual_api.admin_marketplace.commercial_plan_projection import (
 from processual_api.admin_marketplace.subscription_activation_service import (
     SubscriptionActivationOrchestrator,
 )
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_CATALOG_VERSION,
+)
 
 NOW = datetime(2026, 8, 17, 20, 0, tzinfo=UTC)
 ORDER_ID = uuid.UUID("10000000-0000-0000-0000-000000000001")
@@ -106,7 +109,7 @@ class _RuntimeRepository:
         self.by_subscription[runtime.subscription_id] = runtime
 
 
-class _QuotaRepository:
+class _QuotaCycleRepository:
     def __init__(self) -> None:
         self.added = []
         self.fail_on_add = False
@@ -130,10 +133,10 @@ class _QuotaRepository:
             None,
         )
 
-    def add(self, account) -> None:
+    def add(self, cycle) -> None:
         if self.fail_on_add:
             raise RuntimeError("forced quota persistence failure")
-        self.added.append(account)
+        self.added.append(cycle)
 
 
 class _AuditRepository:
@@ -158,7 +161,7 @@ class _UnitOfWork:
         self.offers = _SingleRecordRepository(offer, key_name="id")
         self.plans = _SingleRecordRepository(plan, key_name="id")
         self.subscription_runtime = _RuntimeRepository()
-        self.subscription_quotas = _QuotaRepository()
+        self.subscription_quota_cycles = _QuotaCycleRepository()
         self.commercial_audit = _AuditRepository()
         self.commit_count = 0
         self._snapshot = None
@@ -175,7 +178,7 @@ class _UnitOfWork:
             "activations_by_order": dict(self.entitlement_activations.by_order),
             "activations_by_hash": dict(self.entitlement_activations.by_hash),
             "runtime": dict(self.subscription_runtime.by_subscription),
-            "quotas": list(self.subscription_quotas.added),
+            "quota_cycles": list(self.subscription_quota_cycles.added),
             "audit": list(self.commercial_audit.added),
         }
         return self
@@ -202,7 +205,7 @@ class _UnitOfWork:
             self._snapshot["activations_by_hash"]
         )
         self.subscription_runtime.by_subscription = dict(self._snapshot["runtime"])
-        self.subscription_quotas.added = list(self._snapshot["quotas"])
+        self.subscription_quota_cycles.added = list(self._snapshot["quota_cycles"])
         self.commercial_audit.added = list(self._snapshot["audit"])
 
 
@@ -309,6 +312,18 @@ def _orchestrator(unit: _UnitOfWork) -> SubscriptionActivationOrchestrator:
     )
 
 
+def _assert_cycle_matches_profile(unit: _UnitOfWork, quota_profile: object) -> None:
+    assert len(unit.subscription_quota_cycles.added) == 1
+    cycle = unit.subscription_quota_cycles.added[0]
+    metric = quota_profile.metrics[0]
+    projection = build_commercial_plan_projections()[0]
+    assert cycle.metric_code == metric.metric_code
+    assert cycle.base_limit_units == metric.limit_units
+    assert cycle.plan_code == projection.plan_code
+    assert cycle.plan_catalog_version == PLAN_FULFILLMENT_CATALOG_VERSION
+    assert tuple(cycle.entitlement_codes) == projection.entitlement_codes
+
+
 @pytest.mark.asyncio
 async def test_direct_activation_bootstraps_runtime_and_quota_in_same_commit() -> None:
     unit, quota_profile = _fixture()
@@ -332,20 +347,14 @@ async def test_direct_activation_bootstraps_runtime_and_quota_in_same_commit() -
     assert runtime.entitlement_profile_ref == result.entitlement_profile_ref
     assert runtime.quota_profile_ref == quota_profile.profile_ref
     assert runtime.access_stage == "active"
-    assert len(unit.subscription_quotas.added) == len(quota_profile.metrics)
-    assert {
-        (account.metric_code, account.limit_units)
-        for account in unit.subscription_quotas.added
-    } == {
-        (metric.metric_code, metric.limit_units) for metric in quota_profile.metrics
-    }
+    _assert_cycle_matches_profile(unit, quota_profile)
     assert len(unit.commercial_audit.added) == 1
 
 
 @pytest.mark.asyncio
 async def test_runtime_quota_failure_rolls_back_entire_activation_unit() -> None:
     unit, _ = _fixture()
-    unit.subscription_quotas.fail_on_add = True
+    unit.subscription_quota_cycles.fail_on_add = True
     service = _orchestrator(unit)
 
     with pytest.raises(RuntimeError, match="forced quota persistence failure"):
@@ -362,7 +371,7 @@ async def test_runtime_quota_failure_rolls_back_entire_activation_unit() -> None
     assert unit.entitlement_activations.by_order == {}
     assert unit.entitlement_activations.by_hash == {}
     assert unit.subscription_runtime.by_subscription == {}
-    assert unit.subscription_quotas.added == []
+    assert unit.subscription_quota_cycles.added == []
     assert unit.commercial_audit.added == []
 
 
@@ -389,5 +398,5 @@ async def test_activation_replay_does_not_duplicate_runtime_or_quota() -> None:
     assert len(unit.subscriptions.by_id) == 1
     assert len(unit.entitlement_activations.by_order) == 1
     assert len(unit.subscription_runtime.by_subscription) == 1
-    assert len(unit.subscription_quotas.added) == len(quota_profile.metrics)
+    _assert_cycle_matches_profile(unit, quota_profile)
     assert len(unit.commercial_audit.added) == 1
