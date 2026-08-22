@@ -108,11 +108,14 @@ def test_production_splash_routes_are_live_geometry_bound_and_interactive():
 def test_production_splash_uses_dense_reference_pcb_buses():
     source = _source()
     required = [
-        "for(let j=-4;j<=4;j++)",
-        "class:j===0?'trace main':Math.abs(j)<=2?'trace fine':'trace ghost'",
+        "for(let j=-6;j<=6;j++)",
+        "class:j===0?'trace main':Math.abs(j)<=3?'trace fine':'trace ghost'",
+        "for(let i=0;i<24;i++)",
         "for(let i=0;i<18;i++)",
-        "for(let i=0;i<14;i++)",
-        "for(let i=0;i<12;i++)",
+        "for(let i=0;i<16;i++)",
+        "function addBranches(",
+        "[.24,.48,.72].forEach",
+        "const p3=E('circle'",
         "pin-side",
         "pin-top",
         "pin-bottom",
@@ -121,7 +124,7 @@ def test_production_splash_uses_dense_reference_pcb_buses():
         "hud-right",
     ]
     missing = [marker for marker in required if marker not in source]
-    assert not missing, f"Reference PCB density/telemetry markers missing: {missing}"
+    assert not missing, f"Dense live PCB choreography markers missing: {missing}"
 
 
 def test_production_splash_keeps_responsive_and_reduced_motion_guards():
