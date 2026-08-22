@@ -103,6 +103,7 @@ def test_main_serves_static_console_login_and_splash_pages():
     missing = [marker for marker in required_markers if marker not in source]
     assert not missing, f"Missing main.py static serving markers: {missing}"
 
+
 def test_static_login_and_splash_preserve_descent_gate_markers():
     splash_source = read_text(STATIC_ROOT / "splash.html")
     login_source = read_text(STATIC_ROOT / "login.html")
@@ -124,14 +125,8 @@ def test_static_login_and_splash_preserve_descent_gate_markers():
         "maestro_ui_session_started_at",
     ]
 
-    missing_splash = [
-        marker for marker in splash_markers
-        if marker not in splash_source
-    ]
-    missing_login = [
-        marker for marker in login_markers
-        if marker not in login_source
-    ]
+    missing_splash = [marker for marker in splash_markers if marker not in splash_source]
+    missing_login = [marker for marker in login_markers if marker not in login_source]
 
     assert not missing_splash, f"Missing splash descent gate markers: {missing_splash}"
     assert not missing_login, f"Missing login entry mode markers: {missing_login}"
@@ -140,10 +135,11 @@ def test_static_login_and_splash_preserve_descent_gate_markers():
 def test_static_console_auth_uses_session_storage_for_ui_session():
     login_source = read_text(STATIC_ROOT / "login.html")
     auth_source = read_text(STATIC_ROOT / "js" / "auth.js")
+    compact_login = re.sub(r"\s+", "", login_source)
 
     login_markers = [
-        "sessionStorage.setItem('maestro_token', data.access_token)",
-        "sessionStorage.setItem('maestro_role', currentRole)",
+        "sessionStorage.setItem('maestro_token',data.access_token)",
+        "sessionStorage.setItem('maestro_role',currentRole)",
         "localStorage.removeItem('maestro_token')",
         "localStorage.removeItem('maestro_role')",
     ]
@@ -162,22 +158,14 @@ def test_static_console_auth_uses_session_storage_for_ui_session():
         "localStorage.setItem(STORAGE_KEY, token)",
     ]
 
-    missing_login = [
-        marker for marker in login_markers
-        if marker not in login_source
-    ]
-    missing_auth = [
-        marker for marker in auth_markers
-        if marker not in auth_source
-    ]
-    forbidden_auth = [
-        marker for marker in forbidden_auth_markers
-        if marker in auth_source
-    ]
+    missing_login = [marker for marker in login_markers if marker not in compact_login]
+    missing_auth = [marker for marker in auth_markers if marker not in auth_source]
+    forbidden_auth = [marker for marker in forbidden_auth_markers if marker in auth_source]
 
     assert not missing_login, f"Missing login session storage markers: {missing_login}"
     assert not missing_auth, f"Missing auth session storage markers: {missing_auth}"
     assert not forbidden_auth, f"Forbidden auth localStorage markers found: {forbidden_auth}"
+
 
 def test_static_console_app_guards_direct_console_entry():
     app_source = read_text(STATIC_ROOT / "js" / "app.js")
@@ -191,10 +179,7 @@ def test_static_console_app_guards_direct_console_entry():
         "AUTH.init()",
     ]
 
-    missing = [
-        marker for marker in required_markers
-        if marker not in app_source
-    ]
+    missing = [marker for marker in required_markers if marker not in app_source]
 
     assert not missing, f"Missing console direct entry guard markers: {missing}"
 
@@ -257,22 +242,9 @@ def test_static_console_settings_and_adapter_pages_keep_api_markers():
     adapters_source = read_text(STATIC_ROOT / "js" / "pages" / "adapters.js")
     adapter_api_source = read_text(STATIC_ROOT / "js" / "adapters" / "adapters.js")
 
-    settings_markers = [
-        "settings",
-        "client",
-        "preferences",
-        "subscription",
-    ]
-
-    adapters_markers = [
-        "adapters",
-        "provider",
-        "model",
-    ]
-
-    adapter_api_markers = [
-        "adapters",
-    ]
+    settings_markers = ["settings", "client", "preferences", "subscription"]
+    adapters_markers = ["adapters", "provider", "model"]
+    adapter_api_markers = ["adapters"]
 
     missing_settings = [
         marker for marker in settings_markers
@@ -312,7 +284,6 @@ def test_static_html_local_asset_references_exist():
             clean = ref.split("?", 1)[0].split("#", 1)[0]
 
             if clean == "/console/favicon.svg":
-
                 continue
             if clean.startswith("/console/"):
                 candidate = STATIC_ROOT / clean.removeprefix("/console/")
@@ -322,8 +293,6 @@ def test_static_html_local_asset_references_exist():
                 candidate = html_file.parent / clean
 
             if not candidate.exists():
-                missing_assets.append(
-                    f"{html_file.relative_to(ROOT)} -> {ref}"
-                )
+                missing_assets.append(f"{html_file.relative_to(ROOT)} -> {ref}")
 
     assert not missing_assets, f"Missing local static asset references: {missing_assets}"
