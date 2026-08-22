@@ -92,6 +92,8 @@
     "trace_wake_required": true,
     "node_bloom_required": true,
     "destination_ack_required": true,
+    "autonomous_motion_required": true,
+    "pointer_route_interaction_required": false,
     "semantic_directions": {
       "governance": "outbound",
       "policy": "outbound",
@@ -110,7 +112,8 @@
       "signalDirection",
       "bidirectional",
       "roundtrip",
-      "downstream"
+      "downstream",
+      "requestAnimationFrame"
     ]
   },
   "color_system": {
@@ -136,7 +139,8 @@
   },
   "accessibility": {
     "reduced_motion": true,
-    "keyboard_focus_routes": true,
+    "keyboard_focusable_modules": true,
+    "pointer_route_interaction_required": false,
     "all_content_visible_in_desktop_stage": true
   },
   "scoring": {
