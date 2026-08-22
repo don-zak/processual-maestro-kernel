@@ -36,7 +36,7 @@ def test_splash_reference_contract_is_explicit_and_requires_99_percent():
         "width": 1440,
         "height": 1080,
         "aspect_ratio": "4:3",
-        "fit_rule": "contain",
+        "fit_rule": "full-bleed-fluid-width",
         "required_markers": contract["reference_stage"]["required_markers"],
     }
 
@@ -44,10 +44,8 @@ def test_splash_reference_contract_is_explicit_and_requires_99_percent():
 def test_splash_core_entry_card_is_a_non_compensable_gate():
     source = _source()
     contract = _contract()["mandatory_core_contract"]
-
     missing_content = _missing(source, contract["preserve_card_markers"])
     missing_color = _missing(source, contract["preserve_color_markers"])
-
     assert contract["preserve_dark_card"] is True
     assert not missing_content, (
         "Central Maestro entry card contract changed; fidelity points cannot compensate for this: "
@@ -68,14 +66,8 @@ def test_splash_reference_geometry_contract_is_machine_readable():
     assert contract["execution_center"]["x"] == 720
     assert contract["execution_center"]["y"] == 850
     assert set(contract["modules"]) == {
-        "governance",
-        "supervision",
-        "calibration",
-        "orchestration",
-        "routing",
-        "policy",
-        "feedback",
-        "control",
+        "governance", "supervision", "calibration", "orchestration",
+        "routing", "policy", "feedback", "control",
     }
     assert {module["side"] for module in contract["modules"].values()} == {"left", "right"}
 
@@ -84,93 +76,41 @@ def test_splash_reference_fidelity_score_must_reach_99_percent():
     source = _source()
     contract = _contract()
     scoring = contract["scoring"]
-
     categories: dict[str, tuple[list[str], int]] = {
-        "stage_geometry": (
-            contract["reference_stage"]["required_markers"],
-            scoring["stage_geometry"],
-        ),
+        "stage_geometry": (contract["reference_stage"]["required_markers"], scoring["stage_geometry"]),
         "core_preservation": (
             contract["mandatory_core_contract"]["preserve_card_markers"]
             + contract["mandatory_core_contract"]["preserve_color_markers"],
             scoring["core_preservation"],
         ),
-        "module_geometry_and_hierarchy": (
-            [
-                'id="governance"',
-                'id="supervision"',
-                'id="calibration"',
-                'id="orchestration"',
-                'id="routing"',
-                'id="policy"',
-                'id="feedback"',
-                'id="control"',
-                'id="execution"',
-                "secondary_cards_are_nodes_not_dashboard_cards",
-                "connector-pad",
-            ],
-            scoring["module_geometry_and_hierarchy"],
-        ),
+        "module_geometry_and_hierarchy": ([
+            'id="governance"','id="supervision"','id="calibration"','id="orchestration"',
+            'id="routing"','id="policy"','id="feedback"','id="control"','id="execution"',
+            "secondary_cards_are_nodes_not_dashboard_cards","connector-pad",
+        ], scoring["module_geometry_and_hierarchy"]),
         "pcb_density_and_connectivity": (
             contract["pcb"]["required_markers"]
-            + [
-                "primary-bus",
-                "secondary-bus",
-                "tertiary-bus",
-                "via-node",
-                "connector-pad",
-            ],
+            + ["primary-bus","secondary-bus","tertiary-bus","via-node","connector-pad"],
             scoring["pcb_density_and_connectivity"],
         ),
         "motion_semantics": (
-            contract["motion"]["required_markers"]
-            + [
-                "governance:'outbound'",
-                "policy:'outbound'",
-                "routing:'outbound'",
-                "supervision:'inbound'",
-                "feedback:'inbound'",
-                "calibration:'bidirectional'",
-                "orchestration:'bidirectional'",
-                "control:'roundtrip'",
-                "execution:'downstream'",
-            ],
-            scoring["motion_semantics"],
-        ),
-        "telemetry_and_depth": (
-            [
-                "top-agent-node",
-                "activity-bars",
-                "governance-trend",
-                "integrity-ring",
-            ],
-            scoring["telemetry_and_depth"],
-        ),
+            contract["motion"]["required_markers"] + [
+                "governance:'outbound'","policy:'outbound'","routing:'outbound'",
+                "supervision:'inbound'","feedback:'inbound'","calibration:'bidirectional'",
+                "orchestration:'bidirectional'","control:'roundtrip'","execution:'downstream'",
+            ], scoring["motion_semantics"]),
+        "telemetry_and_depth": (["top-agent-node","activity-bars","governance-trend","integrity-ring"], scoring["telemetry_and_depth"]),
         "color_and_typography": (
-            contract["color_system"]["background_layers"]
-            + contract["color_system"]["cyan_levels"]
+            contract["color_system"]["background_layers"] + contract["color_system"]["cyan_levels"]
             + contract["color_system"]["amber_levels"]
-            + [
-                "direction:rtl",
-                "font-family:var(--display)",
-                "font-family:var(--mono)",
-            ],
+            + ["direction:rtl","font-family:var(--display)","font-family:var(--mono)"],
             scoring["color_and_typography"],
         ),
-        "accessibility_and_responsiveness": (
-            [
-                "@media(prefers-reduced-motion:reduce)",
-                "mouseenter",
-                "mouseleave",
-                "focus",
-                "blur",
-                "addEventListener('resize'",
-                "fit_rule",
-            ],
-            scoring["accessibility_and_responsiveness"],
-        ),
+        "accessibility_and_responsiveness": ([
+            "@media(prefers-reduced-motion:reduce)","mouseenter","mouseleave","focus","blur",
+            "addEventListener('resize'","fit_rule","worldWidth=Math.max(1440,viewportWidth / scale)",
+        ], scoring["accessibility_and_responsiveness"]),
     }
-
     total = 0.0
     details: list[str] = []
     for name, (markers, weight) in categories.items():
@@ -178,13 +118,10 @@ def test_splash_reference_fidelity_score_must_reach_99_percent():
         total += score
         if missing:
             details.append(f"{name}: {score:.2f}/{weight} missing={missing}")
-
     assert total >= contract["minimum_score"], (
-        f"Splash reference fidelity score {total:.2f}/100 is below required "
-        f"{contract['minimum_score']}/100. "
-        "The gate is intentionally strict and should remain red until the reference-stage, "
-        "PCB topology, semantic motion, telemetry, color depth and typography contract are implemented. "
-        + " | ".join(details)
+        f"Splash reference fidelity score {total:.2f}/100 is below required {contract['minimum_score']}/100. "
+        "The gate is intentionally strict and should remain red until the reference-stage, PCB topology, "
+        "semantic motion, telemetry, color depth and typography contract are implemented. " + " | ".join(details)
     )
 
 
@@ -196,12 +133,8 @@ def test_splash_motion_semantics_are_not_decorative_only():
     assert motion["destination_ack_required"] is True
     assert motion["pulse_count_per_active_route_min"] >= 2
     assert motion["pulse_count_per_active_route_max"] <= 4
-
     missing = _missing(source, motion["required_markers"])
-    assert not missing, (
-        "Motion is still decorative rather than semantically governed. Missing: "
-        f"{missing}"
-    )
+    assert not missing, f"Motion is still decorative rather than semantically governed. Missing: {missing}"
 
 
 def test_splash_reference_requires_real_connector_topology_and_full_vertical_networks():
@@ -214,7 +147,6 @@ def test_splash_reference_requires_real_connector_topology_and_full_vertical_net
     assert pcb["top_vertical_bus_min"] >= 10
     assert pcb["bottom_vertical_bus_min"] >= 10
     assert pcb["ambient_layers_min"] >= 3
-
     missing = _missing(source, pcb["required_markers"])
     assert not missing, f"Reference connector/PCB topology is incomplete: {missing}"
 
@@ -222,15 +154,8 @@ def test_splash_reference_requires_real_connector_topology_and_full_vertical_net
 def test_splash_reference_telemetry_and_typography_are_part_of_acceptance():
     source = _source()
     contract = _contract()
-    telemetry_markers = [
-        "top-agent-node",
-        "activity-bars",
-        "governance-trend",
-        "integrity-ring",
-    ]
-    missing_telemetry = _missing(source, telemetry_markers)
+    missing_telemetry = _missing(source, ["top-agent-node","activity-bars","governance-trend","integrity-ring"])
     assert not missing_telemetry, f"Reference telemetry system is incomplete: {missing_telemetry}"
-
     typography = contract["typography"]
     assert typography["titles_use_display_font"] is True
     assert typography["status_uses_mono"] is True
@@ -245,11 +170,8 @@ def test_splash_reference_reduced_motion_must_remain_a_complete_static_board():
     assert accessibility["keyboard_focus_routes"] is True
     assert accessibility["all_content_visible_in_desktop_stage"] is True
     required = [
-        "@media(prefers-reduced-motion:reduce)",
-        ".pulse{display:none}",
-        "focusRoute",
-        "addEventListener('focus'",
-        "addEventListener('blur'",
+        "@media(prefers-reduced-motion:reduce)", ".pulse{display:none}", "focusRoute",
+        "addEventListener('focus'", "addEventListener('blur'",
     ]
     missing = _missing(source, required)
     assert not missing, f"Reduced-motion/keyboard reference gate incomplete: {missing}"
