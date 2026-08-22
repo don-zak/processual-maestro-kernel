@@ -2,16 +2,11 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import Any
 
-import httpx
 import pytest
 from fastapi import HTTPException
 
 from processual_api.billing import router as billing_router
-from processual_api.billing.canonical_checkout_resolution import (
-    CanonicalCheckoutResolution,
-)
 
 
 @pytest.mark.asyncio
@@ -78,113 +73,51 @@ async def test_checkout_route_requires_offer_ref_before_db_or_env(
 
 
 @pytest.mark.asyncio
-async def test_checkout_route_uses_resolved_provider_variant_and_offer_ref(
+async def test_checkout_route_requires_session_authority_before_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class SessionContext:
-        async def __aenter__(self) -> object:
-            return object()
+    def fail_session_factory():
+        raise AssertionError("missing session authority must fail before DB access")
 
-        async def __aexit__(
-            self,
-            exc_type: object,
-            exc: object,
-            traceback: object,
-        ) -> bool:
-            return False
+    monkeypatch.setattr(billing_router, "get_session_factory", fail_session_factory)
 
-    captured_request: dict[str, Any] = {}
-
-    async def fake_resolve(*, session: object, offer_ref: str):
-        del session
-        assert offer_ref == "starter-monthly"
-        return CanonicalCheckoutResolution(
-            offer_ref="starter-monthly",
-            provider_variant_id="67890",
+    with pytest.raises(HTTPException) as captured:
+        await billing_router.create_checkout(
+            {"offer_ref": "starter-monthly"},
+            current_user={
+                "user_id": "00000000-0000-0000-0000-000000000001",
+            },
+            idempotency_key="checkout-test-key-0001",
         )
 
-    def fake_required_environment(name: str) -> str:
-        return {
-            "LEMONSQUEEZY_API_KEY": "secret",
-            "LEMONSQUEEZY_STORE_ID": "24680",
-            "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL": "https://example.com/success",
-            "LEMONSQUEEZY_CHECKOUT_CANCEL_URL": "https://example.com/cancel",
-        }[name]
-
-    class FakeResponse:
-        status_code = 201
-
-        def json(self) -> dict[str, object]:
-            return {
-                "data": {
-                    "id": "checkout-1",
-                    "attributes": {"url": "https://example.com/checkout"},
-                }
-            }
-
-    class FakeAsyncClient:
-        def __init__(self, *, timeout: int) -> None:
-            assert timeout == 15
-
-        async def __aenter__(self) -> FakeAsyncClient:
-            return self
-
-        async def __aexit__(
-            self,
-            exc_type: object,
-            exc: object,
-            traceback: object,
-        ) -> bool:
-            return False
-
-        async def post(
-            self,
-            url: str,
-            *,
-            json: dict[str, Any],
-            headers: dict[str, str],
-        ) -> FakeResponse:
-            captured_request.update(
-                {"url": url, "json": json, "headers": headers}
-            )
-            return FakeResponse()
-
-    monkeypatch.setattr(
-        billing_router,
-        "get_session_factory",
-        lambda: lambda: SessionContext(),
-    )
-    monkeypatch.setattr(
-        billing_router,
-        "resolve_canonical_checkout_in_session",
-        fake_resolve,
-    )
-    monkeypatch.setattr(
-        billing_router,
-        "_required_environment",
-        fake_required_environment,
-    )
-    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
-
-    result = await billing_router.create_checkout(
-        {"offer_ref": "Starter-Monthly", "email": " buyer@example.com "},
-        current_user={"user_id": "00000000-0000-0000-0000-000000000001"},
-    )
-
-    attributes = captured_request["json"]["data"]["attributes"]
-    assert attributes["variant_id"] == 67890
-    assert attributes["custom_data"] == {
-        "customer_ref": "00000000-0000-0000-0000-000000000001",
-        "offer_ref": "starter-monthly",
-    }
-    assert attributes["customer_email"] == "buyer@example.com"
-    assert result == {
-        "url": "https://example.com/checkout",
-        "checkout_id": "checkout-1",
-    }
+    assert captured.value.status_code == 403
+    assert captured.value.detail == "Billing access denied."
 
 
-def test_checkout_route_has_no_legacy_variant_authority() -> None:
+@pytest.mark.asyncio
+async def test_checkout_route_requires_bounded_idempotency_key_before_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_session_factory():
+        raise AssertionError("invalid idempotency key must fail before DB access")
+
+    monkeypatch.setattr(billing_router, "get_session_factory", fail_session_factory)
+
+    with pytest.raises(HTTPException) as captured:
+        await billing_router.create_checkout(
+            {"offer_ref": "starter-monthly"},
+            current_user={
+                "user_id": "00000000-0000-0000-0000-000000000001",
+                "session_id": "session-1",
+            },
+            idempotency_key="short",
+        )
+
+    assert captured.value.status_code == 400
+    assert captured.value.detail == "A valid Idempotency-Key header is required."
+
+
+def test_checkout_route_uses_current_canonical_order_authority() -> None:
     source = inspect.getsource(billing_router)
     checkout_source = inspect.getsource(billing_router.create_checkout)
 
@@ -196,6 +129,12 @@ def test_checkout_route_has_no_legacy_variant_authority() -> None:
     assert "require_canonical_checkout_request" in checkout_source
     assert "resolve_canonical_checkout_in_session" in checkout_source
     assert "resolution.provider_variant_id" in checkout_source
+    assert "_checkout_session_id" in checkout_source
+    assert "build_lemon_checkout_order_authority" in checkout_source
+    assert "order_authority.prepare" in checkout_source
+    assert "idempotency_key=normalized_idempotency_key" in checkout_source
+    assert "final_resolution != resolution" in checkout_source
+    assert '"order_ref": provider_checkout.order_ref' in checkout_source
 
 
 def test_production_env_has_no_legacy_checkout_variant_keys() -> None:
