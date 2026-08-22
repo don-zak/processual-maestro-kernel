@@ -22,7 +22,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v5"
+    assert contract["contract_version"] == "A3-splash-reference-v6"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -51,6 +51,14 @@ def test_authored_board_asset_meets_reference_density_gate():
     for marker in ['stroke="#36bfff"', 'stroke="#e59a20"', 'stroke="#23d8c8"', 'stroke="#c16fff"']:
         assert marker in board
     assert '<ellipse cx="836" cy="452"' in board
+    assert 'id="dotsC"' in board
+    assert 'id="dotsA"' in board
+    assert 'sculpted module frame rails' in board
+    assert 'long ambient branches that intentionally do not terminate at cards' in board
+    assert 'dense page-wide node matrices' in board
+    assert pcb["nonterminating_ambient_branches_required"] is True
+    assert pcb["distributed_dot_matrices_required"] is True
+    assert pcb["sculpted_module_frame_rails_required"] is True
 
 
 def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
