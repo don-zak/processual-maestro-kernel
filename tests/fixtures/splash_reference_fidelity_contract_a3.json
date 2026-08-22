@@ -33,7 +33,7 @@
       "window.location.href = '/login'"
     ],
     "preserve_color_markers": [
-      ".card{background:rgba(22,29,42",
+      "background:rgba(22,29,42,.68)",
       "--amber:#f5a623"
     ],
     "allowed_changes": [
