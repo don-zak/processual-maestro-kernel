@@ -73,8 +73,12 @@ def evaluate_staging_routes(app) -> tuple[str, ...]:
         raise RuntimeError("staging smoke: legacy webhook side effects are installed")
 
     usage_source = inspect.getsource(record_subscription_usage_endpoint)
-    if "record_subscription_usage_factory" not in usage_source:
-        raise RuntimeError("staging smoke: atomic usage service is not installed")
+    if "record_subscription_quota_usage_factory" not in usage_source:
+        raise RuntimeError("staging smoke: authoritative quota-cycle usage service is not installed")
+    if "record_subscription_usage_factory" in usage_source:
+        raise RuntimeError("staging smoke: legacy quota-account usage service is installed")
+    if "quota_cycle_id=None" not in usage_source:
+        raise RuntimeError("staging smoke: quota cycle selection is not server authoritative")
     if "customer_ref" in getattr(record_subscription_usage_endpoint, "__annotations__", {}):
         raise RuntimeError("staging smoke: usage endpoint accepts external customer binding")
 
