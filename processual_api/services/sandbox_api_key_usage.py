@@ -6,9 +6,11 @@ from typing import Any
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
-from processual_api.admin_marketplace.subscription_usage_service import (
-    record_subscription_usage_factory,
+from processual_api.admin_marketplace.subscription_quota_usage import (
+    SubscriptionQuotaUsageCommand,
+    record_subscription_quota_usage_factory,
 )
+from processual_api.admin_marketplace.subscription_runtime import build_usage_reservation
 from processual_api.db.session import get_session_factory
 
 
@@ -25,12 +27,7 @@ async def record_sandbox_api_key_usage(
     units: int,
     idempotency_key: str,
 ):
-    """Record metered sandbox API-key usage in the durable subscription ledger.
-
-    The caller must already have authenticated the key through durable sandbox
-    authority. Subscription/customer identity is therefore taken from that
-    authenticated identity rather than from request payloads or Settings JSON.
-    """
+    """Record metered sandbox API-key usage in the authoritative quota-cycle ledger."""
 
     if current_user.get("session_type") != "sandbox_api_key":
         raise ValueError("durable sandbox API-key identity required")
@@ -47,11 +44,7 @@ async def record_sandbox_api_key_usage(
     if not customer_ref or not api_key_id:
         raise ValueError("durable sandbox customer/key identity required")
 
-    record_usage = record_subscription_usage_factory(uow_factory=_uow_factory)
-    return await record_usage(
-        subscription_id=subscription_id,
-        customer_ref=customer_ref,
-        metric_code=metric_code,
+    reservation = build_usage_reservation(
         units=units,
         idempotency_key=idempotency_key,
         dimensions={
@@ -65,6 +58,21 @@ async def record_sandbox_api_key_usage(
             ),
             "environment": "sandbox",
         },
+    )
+    record_usage = record_subscription_quota_usage_factory(
+        unit_of_work_factory=_uow_factory
+    )
+    return await record_usage(
+        SubscriptionQuotaUsageCommand(
+            subscription_id=subscription_id,
+            customer_ref=customer_ref,
+            metric_code=metric_code,
+            units=units,
+            idempotency_key_hash=reservation.idempotency_key_hash,
+            dimensions_digest=reservation.dimensions_digest,
+            occurred_at=reservation.occurred_at,
+            quota_cycle_id=None,
+        )
     )
 
 
