@@ -1,12 +1,13 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "authority": {
-    "repository_reconciliation_complete": false,
+    "repository_reconciliation_complete": true,
     "deletion_authorized": false,
     "real_staging_qualified": false,
     "production_authority_granted": false
   },
   "phase_a": {
+    "status": "CLOSED",
     "a5_backup_reconciliation": {
       "status": "CLOSED_WITH_EXTERNAL_HASH_VERIFIED_ARCHIVE",
       "archive_set": "C:\\Users\\zaksam\\maestro-evidence-archive\\maestro-update-backup-20260822-054347",
@@ -26,23 +27,39 @@
         {
           "path": "processual_api/routers/client_provider_alias_18.py",
           "decision": "KEEP_COMPATIBILITY_HOLD",
-          "reason": "Deprecated compatibility endpoint remains intentionally available for external clients and points to /settings/provider-connection.",
           "deletion_authorized": false
         },
         {
           "path": "processual_api/routers/settings_provider_test_runtime.py",
           "decision": "KEEP_ACTIVE_RUNTIME_WITH_DEPRECATED_COMPATIBILITY",
-          "reason": "File implements the current /settings/provider-connection/test runtime and also retains the deprecated /settings/llm-provider/test compatibility route.",
           "deletion_authorized": false
         },
         {
           "path": "processual_api/services/plan_store.py",
           "decision": "KEEP_ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE",
-          "reason": "Current commercial plan identifiers resolve through the authoritative fulfillment catalog while historical API-key plan policies and aliases remain supported.",
           "deletion_authorized": false
         }
       ]
     },
-    "next_phase": "A8_FINAL_REPOSITORY_RETIREMENT_AUDIT"
+    "a8_final_repository_retirement_audit": {
+      "status": "CLOSED_ALL_EXIT_CRITERIA_ZERO",
+      "observed_at_head": "a20372acc24c48045051a74135377dc0c0d6aa5f",
+      "archive_receipt_verified": true,
+      "exit_criteria": {
+        "REVIEW_REQUIRED": 0,
+        "SAFE_LOCAL_RESIDUE": 0,
+        "UNEXPLAINED_LOCAL_ARTIFACT": 0,
+        "UNPROTECTED_RETIRED_TOOL": 0,
+        "UNIQUE_BACKUP_CONTENT": 0
+      },
+      "known_local_runtime_holds": [
+        ".venv/",
+        "data/",
+        "processual_api/data/"
+      ],
+      "repository_reconciliation_complete": true,
+      "deletion_authorized": false
+    },
+    "next_phase": "B_COMMERCIAL_AND_AUTHORITY_QUALIFICATION"
   }
 }
