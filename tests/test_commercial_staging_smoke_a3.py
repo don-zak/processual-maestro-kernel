@@ -72,6 +72,41 @@ def test_smoke_rejects_legacy_webhook_side_effects(monkeypatch) -> None:
         smoke.evaluate_staging_routes(app)
 
 
+def test_smoke_rejects_legacy_quota_account_usage_service(monkeypatch) -> None:
+    import processual_api.staging_smoke as smoke
+    from processual_api.main import app
+
+    real_getsource = smoke.inspect.getsource
+
+    def fake_getsource(value):
+        if getattr(value, "__name__", "") == "record_subscription_usage_endpoint":
+            return (
+                "record_subscription_usage_factory(); "
+                "quota_cycle_id=None; customer_ref = current_user['user_id']"
+            )
+        return real_getsource(value)
+
+    monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
+    with pytest.raises(RuntimeError, match="authoritative quota-cycle usage service"):
+        smoke.evaluate_staging_routes(app)
+
+
+def test_smoke_rejects_client_selected_quota_cycle(monkeypatch) -> None:
+    import processual_api.staging_smoke as smoke
+    from processual_api.main import app
+
+    real_getsource = smoke.inspect.getsource
+
+    def fake_getsource(value):
+        if getattr(value, "__name__", "") == "record_subscription_usage_endpoint":
+            return "record_subscription_quota_usage_factory(); quota_cycle_id=body.quota_cycle_id"
+        return real_getsource(value)
+
+    monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
+    with pytest.raises(RuntimeError, match="quota cycle selection"):
+        smoke.evaluate_staging_routes(app)
+
+
 def test_smoke_rejects_subscription_json_fallback(monkeypatch) -> None:
     import processual_api.staging_smoke as smoke
     from processual_api.main import app
