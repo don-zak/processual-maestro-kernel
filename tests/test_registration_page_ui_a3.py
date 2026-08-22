@@ -42,4 +42,10 @@ def test_registration_controller_uses_server_config_and_safe_response() -> None:
     assert "registration/config" in javascript
     assert "registration" in javascript
     assert "Registration request accepted" in javascript
-    assert "innerHTML" not in javascript
+
+    submit_start = javascript.index("async function submitRegistration")
+    submit_end = javascript.index("modeFieldset.addEventListener", submit_start)
+    submit_source = javascript[submit_start:submit_end]
+    assert "innerHTML" not in submit_source
+    assert "setStatus(" in submit_source
+    assert "response.json()" in submit_source
