@@ -53,8 +53,8 @@ def _valid_environment() -> dict[str, str]:
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
-    assert staging.expected_alembic_head == "20260818_0054"
-    assert EXPECTED_ALEMBIC_HEAD == "20260818_0054"
+    assert staging.expected_alembic_head == "20260822_0060"
+    assert EXPECTED_ALEMBIC_HEAD == "20260822_0060"
     assert set(staging.checks) == {
         "required_values",
         "secret_strength",
@@ -129,18 +129,20 @@ def test_backup_and_restore_rehearsal_references_must_be_distinct() -> None:
 
 
 def test_release_workflow_requires_migration_rehearsal_before_publish() -> None:
-    workflow_path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
+    workflow_path = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
+    )
     workflow = workflow_path.read_text(encoding="utf-8")
     required = (
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
         "MIGRATION_BACKUP_REFERENCE: ${{ secrets.MIGRATION_BACKUP_REFERENCE }}",
         "MIGRATION_RESTORE_REHEARSAL_REFERENCE: ${{ secrets.MIGRATION_RESTORE_REHEARSAL_REFERENCE }}",
-        "20260818_0054 (head)",
+        "20260822_0060 (head)",
         "Verify declared migration head",
-        "Apply staging schema migrations",
+        "Apply guarded staging schema migrations",
         "python -m alembic upgrade head",
-        "Backfill legacy subscription runtime",
+        "Backfill missing subscription runtime",
         "python -m processual_api.admin_marketplace.subscription_runtime_backfill",
         "Verify subscription runtime backfill replay is empty",
         "subscription-runtime-backfill scanned=0 created=0",
@@ -161,8 +163,8 @@ def test_release_workflow_requires_migration_rehearsal_before_publish() -> None:
     order = (
         "Commercial release environment gate",
         "Verify declared migration head",
-        "Apply staging schema migrations",
-        "Backfill legacy subscription runtime",
+        "Apply guarded staging schema migrations",
+        "Backfill missing subscription runtime",
         "Verify subscription runtime backfill replay is empty",
         "Verify staging database migration head",
         "Commercial staging smoke gate",
