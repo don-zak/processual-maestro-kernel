@@ -53,9 +53,8 @@ foreach ($file in $files) {
     $map = @{}
     $itemCount = 0
 
-    # Windows PowerShell 5.1 can preserve a JSON root array as a single
-    # pipeline object in some expressions. Enumerating $parsed directly avoids
-    # accidentally wrapping the whole array as one review-decision item.
+    # Enumerate the parsed root directly. This avoids wrapping a JSON root array
+    # as a single pipeline object on Windows PowerShell 5.1.
     foreach ($item in $parsed) {
         $itemCount += 1
         $identity = Get-Identity -Item $item
@@ -74,7 +73,7 @@ foreach ($file in $files) {
 }
 
 $transitions = [System.Collections.Generic.List[object]]::new()
-for ($i = 1; $i -lt $versions.Count; $i++) {
+for ($i = 1; $i -lt @($versions).Count; $i++) {
     $previous = $versions[$i - 1]
     $current = $versions[$i]
     $previousKeys = @($previous.map.Keys)
@@ -90,51 +89,62 @@ for ($i = 1; $i -lt $versions.Count; $i++) {
         (Get-Payload -Item $previous.map[$_]) -eq (Get-Payload -Item $current.map[$_])
     })
 
+    $addedCount = @($added).Count
+    $removedCount = @($removed).Count
+    $changedCount = @($changed).Count
+    $unchangedCount = @($unchanged).Count
+
     $transitions.Add([pscustomobject][ordered]@{
         from_version = $previous.version
         to_version = $current.version
         previous_count = $previous.item_count
         current_count = $current.item_count
-        added = $added.Count
-        removed = $removed.Count
-        changed = $changed.Count
-        unchanged = $unchanged.Count
-        previous_is_identity_subset = ($removed.Count -eq 0)
-        previous_is_exact_subset = (($removed.Count -eq 0) -and ($changed.Count -eq 0))
+        added = $addedCount
+        removed = $removedCount
+        changed = $changedCount
+        unchanged = $unchangedCount
+        previous_is_identity_subset = ($removedCount -eq 0)
+        previous_is_exact_subset = (($removedCount -eq 0) -and ($changedCount -eq 0))
     })
 }
 
-$latest = if ($versions.Count -gt 0) { $versions[$versions.Count - 1] } else { $null }
+$versionCount = @($versions).Count
+$latest = if ($versionCount -gt 0) { $versions[$versionCount - 1] } else { $null }
 $allHistoricalIdentities = @{}
 foreach ($version in $versions) {
     foreach ($identity in $version.map.Keys) {
         $allHistoricalIdentities[$identity] = $true
     }
 }
-$missingFromLatest = if ($null -eq $latest) {
-    @()
-} else {
-    @($allHistoricalIdentities.Keys | Where-Object { -not $latest.map.ContainsKey($_) })
-}
+$missingFromLatest = @(
+    if ($null -ne $latest) {
+        $allHistoricalIdentities.Keys | Where-Object { -not $latest.map.ContainsKey($_) }
+    }
+)
+
+$missingFromLatestCount = @($missingFromLatest).Count
+$nonIdentityMonotonic = @($transitions | Where-Object { -not $_.previous_is_identity_subset })
+$nonExactMonotonic = @($transitions | Where-Object { -not $_.previous_is_exact_subset })
 
 $summary = [pscustomobject][ordered]@{
-    version_count = $versions.Count
+    version_count = $versionCount
     latest_version = if ($null -ne $latest) { $latest.version } else { $null }
     latest_item_count = if ($null -ne $latest) { $latest.item_count } else { 0 }
-    all_historical_identity_count = $allHistoricalIdentities.Count
-    identities_missing_from_latest = $missingFromLatest.Count
-    every_transition_identity_monotonic = (@($transitions | Where-Object { -not $_.previous_is_identity_subset }).Count -eq 0)
-    every_transition_exact_monotonic = (@($transitions | Where-Object { -not $_.previous_is_exact_subset }).Count -eq 0)
+    all_historical_identity_count = @($allHistoricalIdentities.Keys).Count
+    identities_missing_from_latest = $missingFromLatestCount
+    every_transition_identity_monotonic = (@($nonIdentityMonotonic).Count -eq 0)
+    every_transition_exact_monotonic = (@($nonExactMonotonic).Count -eq 0)
     deletion_authorized = $false
 }
 
 $result = [pscustomobject][ordered]@{
-    schema_version = 2
+    schema_version = 3
     policy = [pscustomobject][ordered]@{
         mode = 'READ_ONLY_REVIEW_DECISION_LINEAGE'
         deletion_authorized = $false
         version_number_is_not_supersession_authority = $true
         exact_subset_proof_required = $true
+        windows_powershell_scalar_safe_counts = $true
     }
     summary = $summary
     versions = @($versions | ForEach-Object {
