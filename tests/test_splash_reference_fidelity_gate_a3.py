@@ -22,7 +22,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v8"
+    assert contract["contract_version"] == "A3-splash-reference-v9"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -58,9 +58,12 @@ def test_authored_board_asset_meets_reference_density_gate():
         'sculpted module frame rails',
         'long ambient branches that intentionally do not terminate at cards',
         'central-origin surface merge network',
+        'organic micro-topology islands and ring via clusters',
         'core rim integration: nested processor rails and pin landing geometry',
+        'crown breakout with hotspot clusters',
         'execution radial fabric and bottom telemetry backplane',
         'explicit wide-spread luminous via network / dense page-wide node matrices',
+        'ring via clusters',
         'pin landing nodes',
     ]
     assert not [marker for marker in required_board_markers if marker not in board]
@@ -74,6 +77,10 @@ def test_authored_board_asset_meets_reference_density_gate():
     assert pcb["processor_pin_landing_nodes_required"] is True
     assert pcb["execution_radial_fabric_required"] is True
     assert pcb["telemetry_backplane_required"] is True
+    assert pcb["organic_micro_topology_required"] is True
+    assert pcb["ring_via_clusters_required"] is True
+    assert pcb["crown_hotspot_clusters_required"] is True
+    assert pcb["irregular_branching_required"] is True
 
 
 def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
