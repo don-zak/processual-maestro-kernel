@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "authority": {
     "repository_reconciliation_complete": true,
     "deletion_authorized": false,
@@ -65,13 +65,58 @@
       ],
       "repository_reconciliation_complete": true,
       "deletion_authorized": false
+    }
+  },
+  "phase_b_agent_governance": {
+    "status": "CLOSED",
+    "gov_a_authority_enforcement": {
+      "status": "PASS_CLOSED",
+      "qualified_head": "0089211f2376f20b1dc710c951c2b0eedc20930b",
+      "authority_contract": "exact delegated permissions, wildcard denial, recent MFA for sensitive actions",
+      "deprovision_contract": "platform-admin step-up, atomic supervisor authority and permission revocation, session and refresh-token revocation, immutable audit events, replay fail-closed",
+      "postgresql_proof": "PASS",
+      "http_proof": "PASS",
+      "no_silent_reactivation": "PASS",
+      "supporting_gates": {
+        "ci_public": 1543,
+        "launch_closeout": 337,
+        "sandbox_integration": 786,
+        "program_release": 636,
+        "packaging": 605,
+        "public_docker": 478,
+        "camara_public_source": 648,
+        "repository_evidence": 189
+      }
     },
-    "next_phase": "B_AGENT_GOVERNANCE_QUALIFICATION"
+    "gov_b_supervisor_audit_benchmark": {
+      "status": "PASS_CLOSED",
+      "qualified_head": "6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82",
+      "historical_authority_visibility": "PASS",
+      "historical_permission_visibility": "PASS",
+      "revocation_provenance_visibility": "PASS",
+      "platform_admin_step_up_review_surface": "PASS",
+      "review_supervisor_read_only_benchmark": "PASS",
+      "operations_supervisor_exact_permission_benchmark": "PASS",
+      "wildcard_denial_benchmark": "PASS",
+      "sensitive_action_recent_mfa_benchmark": "PASS",
+      "postgresql_revocation_history_proof": "PASS",
+      "supporting_gates": {
+        "ci_public": 1549,
+        "launch_closeout": 349,
+        "sandbox_integration": 792,
+        "program_release": 642,
+        "packaging": 612,
+        "public_docker": 484,
+        "camara_public_source": 654,
+        "repository_evidence": 195
+      }
+    },
+    "next_phase": "C_REAL_GCP_CLOUD_RUN_STAGING_QUALIFICATION"
   },
   "launch_closeout": {
     "real_db_authority_gate": {
       "status": "PASS_CLOSED",
-      "evidence": "Launch Closeout Gate #327 on e2aefa982017dadc3ab3142fef31ed7f1651d364"
+      "evidence": "Launch Closeout Gate #349 on 6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82"
     },
     "retirement_qualification": {
       "status": "PASS_CLOSED_LEGACY_QUOTA_USAGE",
@@ -90,9 +135,9 @@
     },
     "final_repository_closeout": {
       "status": "PASS_CLOSED_FOR_PUBLIC_CI",
-      "qualified_head": "e2aefa982017dadc3ab3142fef31ed7f1651d364",
-      "ci_public_run": 1538,
-      "ci_public_run_id": 32613923115,
+      "qualified_head": "6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82",
+      "ci_public_run": 1549,
+      "ci_public_run_id": 32617154129,
       "full_pytest": "PASS",
       "ruff": "PASS",
       "flake8": "PASS",
@@ -101,13 +146,13 @@
       "package_build": "PASS",
       "package_metadata": "PASS",
       "supporting_gates": {
-        "launch_closeout": 327,
-        "sandbox_integration": 781,
-        "program_release": 631,
-        "packaging": 599,
-        "public_docker": 473,
-        "camara_public_source": 643,
-        "repository_evidence": 184
+        "launch_closeout": 349,
+        "sandbox_integration": 792,
+        "program_release": 642,
+        "packaging": 612,
+        "public_docker": 484,
+        "camara_public_source": 654,
+        "repository_evidence": 195
       }
     }
   },
@@ -115,6 +160,6 @@
     "commercial_launch": "NO_GO",
     "real_staging_qualified": false,
     "production_authority_granted": false,
-    "reason": "Stage 1 repository retirement is closed for the legacy quota/usage scope, but the canonical roadmap still requires Agent Governance qualification, real staging, release-candidate approval, and controlled production pilot gates before production authority."
+    "reason": "Repository retirement and Agent Governance qualification are closed in synthetic/public CI, but the canonical roadmap still requires real GCP/Cloud Run staging qualification, release-candidate approval, and a controlled production pilot before production authority."
   }
 }
