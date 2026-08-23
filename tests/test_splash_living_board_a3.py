@@ -85,6 +85,31 @@ def test_reference_modules_are_moved_outward_to_open_pcb_fabric_space():
     assert not [m for m in required if m not in source]
 
 
+def test_side_modules_are_visually_reduced_and_use_segmented_reference_rails():
+    source = _source()
+    required = [
+        "transform:scale(.90)",
+        "transform-origin:100% 50%",
+        "transform-origin:0 50%",
+        "/* segmented reference card rails */",
+        "color-mix(in srgb,var(--accent) 78%,transparent)",
+        "color-mix(in srgb,var(--accent) 74%,transparent)",
+    ]
+    assert not [m for m in required if m not in source]
+
+
+def test_processor_teeth_inherit_route_color_groups():
+    source = _source()
+    required = [
+        "/* route-colored processor teeth */",
+        "linear-gradient(180deg,#36bfff 0 24%,#23d8c8 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
+        "linear-gradient(180deg,#e59a20 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
+        "linear-gradient(90deg,#36bfff 0 22%,#23d8c8 22% 43%,#8bddff 43% 50%,#e59a20 50% 79%,#ffc65c 79% 100%)",
+        "linear-gradient(90deg,#36bfff 0 24%,#23d8c8 24% 36%,#c16fff 36% 47%,#36bfff 47% 56%,#e59a20 56% 73%,#c16fff 73% 100%)",
+    ]
+    assert not [m for m in required if m not in source]
+
+
 def test_entry_card_and_descent_gate_contract_remain_intact():
     source = _source()
     required = [
