@@ -2,7 +2,7 @@
 
 This module composes existing public agent state, authoritative calibration
 metadata, and the sanitized private-evaluation boundary into one versioned
-GovernanceOutcome.  It deliberately does not execute an agent action; execution
+GovernanceOutcome. It deliberately does not execute an agent action; execution
 enforcement is a separate boundary layered on top of this canonical outcome.
 """
 
@@ -77,6 +77,13 @@ _STATE_ACTION: dict[AgentState, GovernanceAction] = {
     AgentState.DEACTIVATED: GovernanceAction.REJECT,
 }
 
+_CONFIDENCE_SCORE: dict[str, float] = {
+    "low": 0.30,
+    "medium": 0.60,
+    "high": 0.90,
+    "very_high": 0.99,
+}
+
 
 def _required_reference(name: str, value: str) -> str:
     candidate = value.strip() if isinstance(value, str) else ""
@@ -93,6 +100,29 @@ def _recommended_state(previous_state: AgentState, action: GovernanceAction) -> 
     if action is GovernanceAction.REJECT and previous_state is AgentState.DEACTIVATED:
         return AgentState.DEACTIVATED
     return previous_state
+
+
+def _apply_calibration(
+    *,
+    action: GovernanceAction,
+    confidence_band: str,
+    profile: CalibrationProfile,
+) -> tuple[GovernanceAction, str | None]:
+    """Allow calibration to tighten KEEP decisions, never weaken an intervention."""
+
+    if action is not GovernanceAction.KEEP:
+        return action, None
+    confidence = _CONFIDENCE_SCORE.get(confidence_band)
+    if confidence is None:
+        raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
+
+    keep_min = profile.parameter("keep_min_confidence")
+    repair_min = profile.parameter("repair_min_confidence")
+    if confidence >= keep_min:
+        return GovernanceAction.KEEP, None
+    if confidence >= repair_min:
+        return GovernanceAction.REPAIR, "calibration_requires_repair"
+    return GovernanceAction.ESCALATE, "calibration_requires_escalation"
 
 
 class AgentGovernanceService:
@@ -171,14 +201,19 @@ class AgentGovernanceService:
     ) -> GovernanceOutcome:
         if decision.policy_version != profile.policy_version:
             raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
-        action = _ACTION_MAP.get(decision.next_gate)
-        if action is None:
+        private_action = _ACTION_MAP.get(decision.next_gate)
+        if private_action is None:
             raise PrivateEvaluationContractViolationError("private_evaluation_contract_violation")
+        action, calibration_reason = _apply_calibration(
+            action=private_action,
+            confidence_band=decision.confidence_band,
+            profile=profile,
+        )
         return GovernanceOutcome(
             agent_id=agent.agent_id,
             evaluation_id=evaluation_id,
             action=action,
-            reason_code=decision.explanation_code,
+            reason_code=calibration_reason or decision.explanation_code,
             risk_level=agent.risk_level,
             policy_profile=profile.profile_id,
             policy_version=decision.policy_version,
