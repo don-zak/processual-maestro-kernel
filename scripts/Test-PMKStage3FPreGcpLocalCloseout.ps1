@@ -30,7 +30,7 @@ try {
             continue
         }
         if ($allowed -notcontains [string]$stage.status) {
-            $failures.Add("STAGE_NOT_CLOSED:$stageName:$($stage.status)")
+            $failures.Add("STAGE_NOT_CLOSED:${stageName}:$($stage.status)")
         }
     }
 
