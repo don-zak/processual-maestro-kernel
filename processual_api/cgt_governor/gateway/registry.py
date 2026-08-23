@@ -24,7 +24,6 @@ class AgentRegistry:
         self._load()
 
     def _load(self) -> None:
-        """Load agents from storage on startup."""
         raw_list = self._storage.load_agents()
         for item in raw_list:
             agent = _dict_to_agent(item)
@@ -33,7 +32,6 @@ class AgentRegistry:
             logger.info("Loaded %d agents from storage", len(raw_list))
 
     def _persist(self) -> None:
-        """Write current state to storage."""
         agents = [_agent_to_dict(a) for a in self._agents.values()]
         self._storage.save_agents(agents)
 
@@ -51,50 +49,52 @@ class AgentRegistry:
             return list(self._agents.values())
         return [a for a in self._agents.values() if a.state == state]
 
-    def change_state(
-        self,
-        agent_id: str,
-        new_state: AgentState,
-        reason: str = "",
-    ) -> Agent:
+    def change_state(self, agent_id: str, new_state: AgentState, reason: str = "") -> Agent:
         agent = self._agents.get(agent_id)
         if agent is None:
             raise KeyError(f"Agent not found: {agent_id}")
-
         if new_state == agent.state and new_state != AgentState.ESCALATED:
             return agent
-
         old_state = agent.state
         agent.state = new_state
         agent.last_state_change = datetime.now(UTC).isoformat()
         agent.last_state_reason = reason
-
         if new_state != AgentState.ACTIVE:
             agent.consecutive_failures = 0
-
         self._persist()
-        logger.info(
-            "Agent %s state: %s → %s (%s)",
-            agent_id,
-            old_state.value,
-            new_state.value,
-            reason,
-        )
+        logger.info("Agent %s state: %s → %s (%s)", agent_id, old_state.value, new_state.value, reason)
+        return agent
+
+    def change_priority(self, agent_id: str, new_priority: int, reason: str = "") -> Agent:
+        if new_priority < 0:
+            raise ValueError("agent_priority_must_be_non_negative")
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            raise KeyError(f"Agent not found: {agent_id}")
+        agent.priority = new_priority
+        agent.last_state_reason = reason
+        self._persist()
+        return agent
+
+    def change_policy_profile(self, agent_id: str, profile_id: str, reason: str = "") -> Agent:
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            raise KeyError(f"Agent not found: {agent_id}")
+        agent.policy_profile = profile_id
+        agent.last_state_reason = reason
+        self._persist()
         return agent
 
     def add_evaluation(self, agent_id: str, record: EvaluationRecord) -> None:
         agent = self._agents.get(agent_id)
         if agent is None:
             raise KeyError(f"Agent not found: {agent_id}")
-
         agent.evaluation_history.append(record)
         agent.performance_window.append(record.reward)
-
         if record.action_taken in (GatewayAction.BLOCK, GatewayAction.ESCALATE):
             agent.consecutive_failures += 1
         else:
             agent.consecutive_failures = 0
-
         self._persist()
 
     def agents_at_risk(self, threshold: float = 0.0) -> list[Agent]:
