@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-v10",
+  "contract_version": "A3-splash-reference-v11",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
@@ -30,8 +30,8 @@
     }
   },
   "pcb": {
-    "authored_paths_min": 170,
-    "authored_nodes_min": 90,
+    "authored_paths_min": 100,
+    "authored_nodes_min": 60,
     "cyan_required": true,
     "amber_required": true,
     "teal_required": true,
@@ -54,6 +54,8 @@
     "top_ring_clusters_forbidden": true,
     "crown_hotspot_clusters_required": true,
     "irregular_branching_required": true,
+    "balanced_density_required": true,
+    "visual_breathing_corridors_required": true,
     "long_bridge_generator_forbidden": true
   },
   "viewport": {
