@@ -16,11 +16,40 @@ function Assert-Command {
 
 function Invoke-Docker {
     param([Parameter(Mandatory=$true)][string[]]$Arguments)
-    $output = & docker @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "docker command failed: $($Arguments -join ' ')`n$output"
+
+    # Windows PowerShell can promote ordinary native stderr (for example Docker pull
+    # progress) into ErrorRecord objects when the caller uses ErrorActionPreference=Stop.
+    # Docker success/failure authority is its process exit code, not whether stderr was used.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & docker @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
     }
-    return ($output | Out-String).Trim()
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    $text = (($output | ForEach-Object { $_.ToString() }) | Out-String).Trim()
+    if ($exitCode -ne 0) {
+        throw "docker command failed: $($Arguments -join ' ')`n$text"
+    }
+    return $text
+}
+
+function Test-DockerCommand {
+    param([Parameter(Mandatory=$true)][string[]]$Arguments)
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "SilentlyContinue"
+        & docker @Arguments *> $null
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    return ($exitCode -eq 0)
 }
 
 Assert-Command -Name "docker"
@@ -35,6 +64,9 @@ $oldDatabaseUrl = $env:DATABASE_URL
 $createdSnapshot = $false
 
 try {
+    Write-Host "Ensuring PostgreSQL 16 image is available..."
+    Invoke-Docker -Arguments @("pull", "postgres:16") | Out-Null
+
     Invoke-Docker -Arguments @(
         "run", "--detach", "--rm",
         "--name", $container,
@@ -45,8 +77,7 @@ try {
 
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        & docker exec $container pg_isready -U postgres *> $null
-        if ($LASTEXITCODE -eq 0) {
+        if (Test-DockerCommand -Arguments @("exec", $container, "pg_isready", "-U", "postgres")) {
             $ready = $true
             break
         }
@@ -200,7 +231,7 @@ finally {
         $env:DATABASE_URL = $oldDatabaseUrl
     }
     if (-not $KeepContainer) {
-        & docker rm -f $container *> $null
+        $null = Test-DockerCommand -Arguments @("rm", "-f", $container)
     } else {
         Write-Host "Rehearsal container retained: $container"
     }

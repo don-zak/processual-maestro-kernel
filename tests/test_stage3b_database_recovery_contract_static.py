@@ -10,6 +10,7 @@ def test_stage3b_script_is_fail_closed_and_non_authoritative() -> None:
 
     required = [
         "postgres:16",
+        'Invoke-Docker -Arguments @(\"pull\", \"postgres:16\")',
         "python -m alembic upgrade head",
         "pg_dump",
         "--format=custom",
@@ -29,6 +30,16 @@ def test_stage3b_script_is_fail_closed_and_non_authoritative() -> None:
     assert "POSTGRES_PASSWORD=$password" in text
     assert "processual-maestro-staging" not in text
     assert "gcloud" not in text
+
+
+def test_stage3b_native_docker_stderr_uses_exit_code_as_authority() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert '$previousErrorActionPreference = $ErrorActionPreference' in text
+    assert '$ErrorActionPreference = "Continue"' in text
+    assert "$exitCode = $LASTEXITCODE" in text
+    assert "if ($exitCode -ne 0)" in text
+    assert "ForEach-Object { $_.ToString() }" in text
 
 
 def test_stage3b_rollback_proves_post_snapshot_mutation_is_absent() -> None:
