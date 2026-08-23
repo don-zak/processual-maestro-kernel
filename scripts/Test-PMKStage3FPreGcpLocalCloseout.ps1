@@ -52,13 +52,13 @@ try {
 
     $gitignore = Get-Content ".gitignore" -Raw
     $dockerignore = Get-Content ".dockerignore" -Raw
-    if ($gitignore -notmatch '(?m)^\.pmk-validation/$') {
+    if ($gitignore -notmatch '(?m)^\.pmk-validation/\r?$') {
         $failures.Add("PMK_VALIDATION_NOT_GIT_IGNORED")
     }
-    if ($dockerignore -notmatch '(?m)^\.pmk-validation$') {
+    if ($dockerignore -notmatch '(?m)^\.pmk-validation\r?$') {
         $failures.Add("PMK_VALIDATION_NOT_DOCKER_IGNORED")
     }
-    if ($dockerignore -notmatch '(?m)^\.env\.\*$') {
+    if ($dockerignore -notmatch '(?m)^\.env\.\*\r?$') {
         $failures.Add("ENV_VARIANTS_NOT_DOCKER_IGNORED")
     }
 
