@@ -1,5 +1,5 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "authority": {
     "repository_reconciliation_complete": true,
     "deletion_authorized": false,
@@ -189,18 +189,39 @@
       }
     },
     "stage_3d_operational_readiness_preparation": {
-      "status": "CONTRACT_IMPLEMENTED_CI_PENDING",
+      "status": "PASS_CLOSED",
+      "qualified_head": "4d996e24fe01e7b2b042abc53786d7d6cd887a40",
       "contract": "governance/stage3d_operational_readiness_contract.json",
       "validator": "scripts/Test-PMKStage3DOperationalReadiness.ps1",
       "documentation": "docs/STAGE_3D_OPERATIONAL_READINESS_PREPARATION.md",
-      "observability_static_contract": "IMPLEMENTED",
-      "browser_route_contract": "IMPLEMENTED",
+      "observability_static_contract": "PASS",
+      "browser_route_contract": "PASS",
       "load_endurance_contract": "PREPARED_NOT_EXECUTED",
-      "security_static_contract": "IMPLEMENTED",
+      "security_static_contract": "PASS",
       "real_alert_delivery_verified": false,
       "real_browser_execution_verified": false,
       "real_staging_load_verified": false,
       "real_security_review_verified": false,
+      "real_staging_qualified": false,
+      "supporting_ci_gates": {
+        "ci_public": 1566,
+        "launch_closeout": 383,
+        "sandbox_integration": 809,
+        "program_release": 659,
+        "packaging": 630,
+        "public_docker": 501,
+        "camara_public_source": 671,
+        "repository_evidence": 212
+      }
+    },
+    "stage_3e_real_staging_execution_handoff": {
+      "status": "CONTRACT_IMPLEMENTED_CI_PENDING",
+      "contract": "governance/stage3e_real_staging_handoff_contract.json",
+      "runner": "scripts/Invoke-PMKStage3ERealStagingHandoff.ps1",
+      "documentation": "docs/STAGE_3E_REAL_STAGING_EXECUTION_HANDOFF.md",
+      "prepare_mode_requires_gcp": false,
+      "real_gcp_mode_requires_explicit_target": true,
+      "secret_values_recorded": false,
       "real_staging_qualified": false
     },
     "remaining_required_gates": [
@@ -218,12 +239,12 @@
       "signed_go_no_go"
     ],
     "real_staging_qualified": false,
-    "next_action": "CI-qualify Stage 3D operational readiness preparation, then execute its local validator and prepare the real-staging execution handoff while GCP billing remains externally blocked."
+    "next_action": "CI-qualify Stage 3E and run its Prepare mode locally; resume RealGcp mode only after billing and the explicit real staging target exist."
   },
   "launch_closeout": {
     "real_db_authority_gate": {
       "status": "PASS_CLOSED",
-      "evidence": "Launch Closeout Gate #373 on c9b316d20717042c22e1bdf066f0dc4691e480cb"
+      "evidence": "Launch Closeout Gate #383 on 4d996e24fe01e7b2b042abc53786d7d6cd887a40"
     },
     "retirement_qualification": {
       "status": "PASS_CLOSED_LEGACY_QUOTA_USAGE",
@@ -242,8 +263,8 @@
     },
     "final_repository_closeout": {
       "status": "PASS_CLOSED_FOR_PUBLIC_CI",
-      "qualified_head": "c9b316d20717042c22e1bdf066f0dc4691e480cb",
-      "ci_public_run": 1561,
+      "qualified_head": "4d996e24fe01e7b2b042abc53786d7d6cd887a40",
+      "ci_public_run": 1566,
       "full_pytest": "PASS",
       "ruff": "PASS",
       "flake8": "PASS",
@@ -252,13 +273,13 @@
       "package_build": "PASS",
       "package_metadata": "PASS",
       "supporting_gates": {
-        "launch_closeout": 373,
-        "sandbox_integration": 804,
-        "program_release": 654,
-        "packaging": 625,
-        "public_docker": 496,
-        "camara_public_source": 666,
-        "repository_evidence": 207
+        "launch_closeout": 383,
+        "sandbox_integration": 809,
+        "program_release": 659,
+        "packaging": 630,
+        "public_docker": 501,
+        "camara_public_source": 671,
+        "repository_evidence": 212
       }
     }
   },
@@ -266,6 +287,6 @@
     "commercial_launch": "NO_GO",
     "real_staging_qualified": false,
     "production_authority_granted": false,
-    "reason": "Repository retirement, Agent Governance, local database recovery rehearsal, and Stage 3C runtime/packaging readiness are closed. Stage 3D operational readiness preparation is being CI-qualified. Real GCP evidence, real secret injection, managed-database recovery, alert delivery, external integration, real browser/load/security proof, human approval, and signed Go/No-Go remain outstanding."
+    "reason": "Repository retirement, Agent Governance, local database recovery rehearsal, runtime/packaging readiness, and Stage 3D operational preparation are closed. Stage 3E real-staging execution handoff is implemented and being CI-qualified. Real GCP evidence, real secret injection, managed-database recovery, alert delivery, external integration, real browser/load/security proof, human approval, and signed Go/No-Go remain outstanding."
   }
 }
