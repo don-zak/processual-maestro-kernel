@@ -49,6 +49,13 @@ def test_stage3f_powershell_interpolation_is_parser_safe() -> None:
     assert 'STAGE_NOT_CLOSED:$stageName:$($stage.status)' not in text
 
 
+def test_stage3f_ignore_regexes_accept_windows_crlf() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert r"(?m)^\.pmk-validation/\r?$" in text
+    assert r"(?m)^\.pmk-validation\r?$" in text
+    assert r"(?m)^\.env\.\*\r?$" in text
+
+
 def test_stage3f_documentation_states_external_only_boundary() -> None:
     text = DOC.read_text(encoding="utf-8")
     assert "final local/repository closeout" in text
