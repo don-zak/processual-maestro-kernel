@@ -1,5 +1,5 @@
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "authority": {
     "repository_reconciliation_complete": true,
     "deletion_authorized": false,
@@ -55,6 +55,18 @@
     },
     "next_phase":"C_REAL_GCP_CLOUD_RUN_STAGING_QUALIFICATION"
   },
+  "pre_cloud_governance_qualification": {
+    "status":"PASS_LOCAL_CI_CLOSED",
+    "receipt":"governance/pre_cloud_governance_qualification_receipt.json",
+    "governance_core":{"status":"PASS_CLOSED","qualified_head":"36d2e051f2160b2f1fad556fa2fb7d9031e90f67","ci_public":1590},
+    "execution_enforcement":{"status":"PASS_CLOSED","qualified_head":"cfb4f6e9ebeede0534d3cf467d45b623670bf282","ci_public":1591},
+    "cross_agent_local_contract":{"status":"PASS_LOCAL_CI_CLOSED","qualified_head":"6096498bb5f8f0026048079e7e906ab7a18f18ec","ci_public":1592},
+    "decision_effective_calibration":{"status":"PASS_CLOSED","qualified_head":"69029333bda5cc9425fb3ea857a88a715f3e88d0","ci_public":1599},
+    "qualified_flags":{"agent_governance_core_qualified":true,"calibration_qualified":true,"execution_enforcement_qualified":true,"cross_agent_contract_qualified":true},
+    "not_proven":{"real_external_agent_provider_e2e":false,"real_private_provider_operational_e2e":false,"real_staging_governance_execution":false,"operational_load_benchmark":false,"production_governance_authority":false},
+    "pre_cloud_governance_ready":true,
+    "next_required_evidence_class":"REAL_EXTERNAL_OR_REAL_STAGING_EXECUTION"
+  },
   "phase_c_real_staging": {
     "status":"LOCAL_PRE_GCP_CLOSEOUT_COMPLETE_EXTERNAL_GATES_ONLY",
     "stage_3a_preflight_contract": {
@@ -93,6 +105,6 @@
   },
   "launch_authority": {
     "commercial_launch":"NO_GO","real_staging_qualified":false,"production_authority_granted":false,
-    "reason":"All repository/local pre-GCP closeout work is complete and CI-qualified. The remaining gates are exclusively real GCP/external execution, real operational evidence, named human approval, and signed Go/No-Go."
+    "reason":"Repository/local pre-cloud qualification is complete and CI-qualified, including governance core, decision-effective calibration, execution enforcement, and cross-agent contract qualification. Remaining gates require real external or real GCP staging execution, operational evidence, named human approval, and signed Go/No-Go."
   }
 }
