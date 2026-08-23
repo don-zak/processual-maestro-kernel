@@ -41,6 +41,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
       ADMIN_MARKET_INTEGRATION_DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
+      ADMIN_GOVERNANCE_INTEGRATION_DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
       AUTH_R9C_INTEGRATION_DATABASE_URL: postgresql://postgres:postgres-launch-gate@127.0.0.1:5432/maestro_launch_gate
       AUTH_R9C_INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/15
       REDIS_URL: redis://127.0.0.1:6379/14
@@ -85,5 +86,6 @@ jobs:
             tests/integration/test_lemon_subscription_checkout_postgres.py \
             tests/integration/test_subscription_quota_usage_postgres.py \
             tests/integration/test_auth_account_recovery_r9c_postgres_redis.py \
+            tests/integration/test_admin_governance_deprovision_postgres.py \
             tests/integration/test_admin_marketplace_lemon_squeezy_ingestion_postgres.py \
             tests/integration/test_admin_marketplace_lemon_squeezy_reconciliation_postgres.py

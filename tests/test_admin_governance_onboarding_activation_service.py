@@ -3,10 +3,12 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
 from processual_api.admin_governance.onboarding_activation_service import (
+    AdministratorOnboardingActivationConflictError,
     AdministratorOnboardingActivationDeniedError,
     AdministratorOnboardingActivationService,
     OPERATIONS_SUPERVISOR_PERMISSIONS,
@@ -47,6 +49,7 @@ class FakeRepository:
         self.user = FakeUser()
         self.mfa = object()
         self.actor = object()
+        self.existing_authority = None
         self.authorities: list[dict] = []
         self.permission_grants: list[dict] = []
         self.audit_events: list[dict] = []
@@ -65,7 +68,7 @@ class FakeRepository:
 
     async def platform_authority_for_update(self, *, user_id: uuid.UUID, authority: str):
         del user_id, authority
-        return None
+        return self.existing_authority
 
     async def permission_grant_for_update(self, *, user_id: uuid.UUID, permission: str):
         del user_id, permission
@@ -160,3 +163,24 @@ async def test_activation_requires_active_mfa_and_active_inviter() -> None:
 
     assert unit.committed is False
     assert repository.user.status == "pending_verification"
+
+
+@pytest.mark.asyncio
+async def test_revoked_supervisor_authority_cannot_be_silently_reactivated() -> None:
+    repository = FakeRepository()
+    repository.existing_authority = SimpleNamespace(
+        authority="platform_supervisor",
+        status="revoked",
+    )
+    service, unit = _service(repository)
+
+    with pytest.raises(
+        AdministratorOnboardingActivationConflictError,
+        match="platform authority already exists",
+    ):
+        await service.activate(invitation_id=INVITATION_ID, user_id=USER_ID)
+
+    assert unit.committed is False
+    assert repository.user.status == "pending_verification"
+    assert repository.authorities == []
+    assert repository.permission_grants == []

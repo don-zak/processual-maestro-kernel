@@ -30,6 +30,7 @@ from . import (  # noqa: F401,E402
 )
 from . import settings_provider_test_runtime as _settings_provider_test_runtime  # noqa: F401,E402
 from . import settings_subscription_runtime as _settings_subscription_runtime  # noqa: F401,E402
+from .administrator_deprovision import router as administrator_deprovision_router
 from .applications import router as applications_router
 from .cgt import router as cgt_router
 from .cgt_governor import router as cgt_governor_router
@@ -41,6 +42,8 @@ from .reports import router as reports_router
 from .settings import router as settings_router
 from .telemetry import router as telemetry_router
 from .workflows import router as workflows_router
+
+governance_router.include_router(administrator_deprovision_router)
 
 # Canonical protected evaluation is attached at the application composition edge.
 # The HTTP contract itself remains DB-independent; public quota governance is
