@@ -54,9 +54,15 @@ def _request() -> PrivateEvaluationRequest:
 
 
 class Provider:
-    def __init__(self, next_gate: str = "keep", policy_version: str = POLICY_VERSION) -> None:
+    def __init__(
+        self,
+        next_gate: str = "keep",
+        policy_version: str = POLICY_VERSION,
+        confidence_band: str = "high",
+    ) -> None:
         self.next_gate = next_gate
         self.policy_version = policy_version
+        self.confidence_band = confidence_band
         self.calls = 0
 
     def evaluate(self, request: PrivateEvaluationRequest) -> SanitizedPrivateDecision:
@@ -65,7 +71,7 @@ class Provider:
             existence_rank="stable",
             dominant_constraint="none",
             next_gate=self.next_gate,
-            confidence_band="high",
+            confidence_band=self.confidence_band,
             explanation_code="fixture_decision",
             policy_version=self.policy_version,
         )
@@ -177,6 +183,39 @@ def test_calibration_profile_is_versioned_approved_and_observably_distinct() -> 
     conservative_outcome = _evaluate(AgentGovernanceService(Provider()), _agent(profile="conservative"))
     assert default_outcome.calibration_hash != conservative_outcome.calibration_hash
     assert default_outcome.calibration_version != conservative_outcome.calibration_version
+    assert default_outcome.action is GovernanceAction.KEEP
+    assert conservative_outcome.action is GovernanceAction.REPAIR
+    assert conservative_outcome.reason_code == "calibration_requires_repair"
+
+
+def test_calibration_can_tighten_same_medium_confidence_keep_to_repair_or_escalate() -> None:
+    default_outcome = _evaluate(
+        AgentGovernanceService(Provider(confidence_band="medium")),
+        _agent(profile="default"),
+    )
+    conservative_outcome = _evaluate(
+        AgentGovernanceService(Provider(confidence_band="medium")),
+        _agent(profile="conservative"),
+    )
+    assert default_outcome.action is GovernanceAction.REPAIR
+    assert default_outcome.reason_code == "calibration_requires_repair"
+    assert conservative_outcome.action is GovernanceAction.ESCALATE
+    assert conservative_outcome.reason_code == "calibration_requires_escalation"
+    assert conservative_outcome.recommended_state is AgentState.ESCALATED
+
+
+def test_calibration_never_weakens_private_intervention() -> None:
+    outcome = _evaluate(
+        AgentGovernanceService(Provider(next_gate="freeze", confidence_band="low")),
+        _agent(profile="permissive"),
+    )
+    assert outcome.action is GovernanceAction.FREEZE
+    assert outcome.reason_code == "fixture_decision"
+
+
+def test_unknown_confidence_band_fails_closed_for_keep_decision() -> None:
+    with pytest.raises(PrivateEvaluationContractViolationError, match="private_evaluation_contract_violation"):
+        _evaluate(AgentGovernanceService(Provider(confidence_band="uncalibrated")), _agent())
 
 
 def test_policy_version_mismatch_fails_closed() -> None:
