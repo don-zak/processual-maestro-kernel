@@ -14,6 +14,9 @@ from processual_api.admin_governance.administrator_deprovision_repository import
 from processual_api.admin_governance.administrator_deprovision_service import (
     AdministratorDeprovisionService,
 )
+from processual_api.admin_governance.administrator_governance_history import (
+    AdministratorGovernanceHistoryService,
+)
 from processual_api.admin_governance.models import (
     AdministratorGovernanceAuditEvent,
     AdministratorInvitation,
@@ -210,6 +213,23 @@ async def test_supervisor_deprovision_revokes_authority_grants_and_sessions_atom
                 "administrator.permission.revoked",
                 "administrator.supervisor_authority.revoked",
             ]
+
+        history = await AdministratorGovernanceHistoryService(
+            session_factory=session_factory
+        ).get_history(user_id=target_id)
+        assert history is not None
+        assert history.user_id == target_id
+        assert len(history.authorities) == 1
+        assert history.authorities[0].authority == "platform_supervisor"
+        assert history.authorities[0].status == "revoked"
+        assert history.authorities[0].revoked_by_user_id == actor_id
+        assert history.authorities[0].revoke_reason == reason
+        assert len(history.permissions) == 1
+        assert history.permissions[0].permission == "governance.activity.view"
+        assert history.permissions[0].status == "revoked"
+        assert history.permissions[0].source_invitation_id == invitation_id
+        assert history.permissions[0].revoked_by_user_id == actor_id
+        assert history.permissions[0].revocation_reason == reason
     finally:
         async with session_factory() as session:
             await session.execute(
