@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "qualification": "STAGE_3D_OPERATIONAL_READINESS_PREPARATION",
+  "authority": {
+    "synthetic_preparation_only": true,
+    "real_staging_qualified": false,
+    "production_authority_granted": false
+  },
+  "observability": {
+    "required_endpoints": ["/health/live", "/health/ready", "/metrics"],
+    "required_runtime_components": ["MetricsMiddleware", "RequestIDMiddleware", "AuditMiddleware"],
+    "real_alert_delivery_verified": false
+  },
+  "browser_e2e": {
+    "required_public_pages": ["/", "/login", "/register", "/verify-email", "/plans", "/pricing"],
+    "required_admin_pages": ["/admin", "/console"],
+    "real_browser_execution_verified": false
+  },
+  "load_endurance": {
+    "required_targets": ["/health/live", "/health/ready"],
+    "real_staging_load_verified": false
+  },
+  "security": {
+    "production_docs_disabled": true,
+    "wildcard_cors_forbidden": true,
+    "weak_secrets_forbidden": true,
+    "private_runtime_modules_forbidden": ["cgtlib/private", "processual_api/private_integrations"],
+    "real_security_review_verified": false
+  },
+  "remaining_real_gates": [
+    "metrics_alert_delivery",
+    "external_provider_integration",
+    "browser_e2e_real_staging",
+    "load_endurance_real_staging",
+    "security_review_real_staging",
+    "named_human_approvals",
+    "signed_go_no_go"
+  ]
+}
