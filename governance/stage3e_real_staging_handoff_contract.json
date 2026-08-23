@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "qualification": "STAGE_3E_REAL_STAGING_EXECUTION_HANDOFF",
+  "authority": {
+    "prepare_mode_can_run_without_gcp": true,
+    "real_gcp_mode_requires_explicit_target": true,
+    "secret_values_recorded": false,
+    "real_staging_qualified": false,
+    "production_authority_granted": false
+  },
+  "required_local_evidence": [
+    ".pmk-validation/stage3b-database-recovery.json"
+  ],
+  "prepare_validators": [
+    "scripts/Test-PMKStage3DOperationalReadiness.ps1"
+  ],
+  "runtime_validator": "scripts/Test-PMKStagingRuntimeContract.ps1",
+  "real_gcp_preflight": "scripts/Invoke-PMKRealStagingPreflight.ps1",
+  "real_target_parameters": ["ProjectId", "Region", "Service"],
+  "remaining_after_real_preflight": [
+    "real_staging_secret_injection",
+    "real_staging_managed_database_migration",
+    "real_staging_backup_restore",
+    "real_staging_rollback",
+    "metrics_alert_delivery",
+    "external_provider_integration",
+    "browser_e2e_real_staging",
+    "load_endurance_real_staging",
+    "security_review_real_staging",
+    "named_human_approvals",
+    "signed_go_no_go"
+  ]
+}
