@@ -43,6 +43,12 @@ def test_stage3f_validator_is_fail_closed_and_does_not_record_secrets() -> None:
         assert marker in text
 
 
+def test_stage3f_powershell_interpolation_is_parser_safe() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'STAGE_NOT_CLOSED:${stageName}:$($stage.status)' in text
+    assert 'STAGE_NOT_CLOSED:$stageName:$($stage.status)' not in text
+
+
 def test_stage3f_documentation_states_external_only_boundary() -> None:
     text = DOC.read_text(encoding="utf-8")
     assert "final local/repository closeout" in text
