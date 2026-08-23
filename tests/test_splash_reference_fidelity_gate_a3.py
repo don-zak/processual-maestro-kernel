@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +23,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v11"
+    assert contract["contract_version"] == "A3-splash-reference-v12"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -99,6 +100,31 @@ def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
     forbidden = ["function pcb(", "function drawSideFabric(", "function regionalFabric(", "drawAmbientBoard("]
     assert not [m for m in required if m not in source]
     assert not [m for m in forbidden if m in source]
+
+
+def test_original_maestro_identity_and_english_only_copy_are_locked():
+    source = _source()
+    branding = _contract()["branding"]
+    assert branding["original_maestro_emblem_required"] is True
+    assert branding["header_wordmark_required"] is True
+    assert branding["core_emblem_required"] is True
+    assert branding["english_only_copy_required"] is True
+    assert branding["concise_copy_required"] is True
+    required = [
+        'class="maestro-emblem"', 'class="brand-word">MAESTRO<b>.</b>', 'class="core-emblem"',
+        "Govern • Supervise • Calibrate • Orchestrate",
+        "Centralized AI policy, safety and performance control.",
+        "Human oversight for agents, tasks and decisions.",
+        "Model tuning and profile optimization for best-fit performance.",
+        "Task and agent coordination across scalable workflows.",
+        "Intelligent routing for requests, tasks and optimal agent selection.",
+        "Advanced policy enforcement for rules, approvals and automated decisions.",
+        "Continuous feedback and learning for improved outcomes.",
+        "Authority, access and guardrail controls.",
+        "Controlled real-time execution",
+    ]
+    assert not [m for m in required if m not in source]
+    assert re.search(r"[\u0600-\u06FF]", source) is None
 
 
 def test_core_entry_contract_is_non_compensable():
