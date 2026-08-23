@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "qualification": "STAGE_3F_PRE_GCP_FINAL_LOCAL_CLOSEOUT_CI",
+  "status": "PASS_CI_CLOSED_AWAITING_LOCAL_VALIDATOR",
+  "qualified_head": "b814a5d73e7a6fc2b77b3a22669d57cbd14967b4",
+  "supporting_ci_gates": {
+    "ci_public": 1577,
+    "launch_closeout": 405,
+    "sandbox_integration": 820,
+    "program_release": 670,
+    "packaging": 641,
+    "public_docker": 512,
+    "camara_public_source": 682,
+    "repository_evidence": 223,
+    "private_ci": "SKIPPED_EXPECTED"
+  },
+  "local_validator": "scripts/Test-PMKStage3FPreGcpLocalCloseout.ps1",
+  "local_validator_executed": false,
+  "local_closeout_complete": false,
+  "real_staging_qualified": false,
+  "production_authority_granted": false,
+  "commercial_launch": "NO_GO",
+  "next_action": "Run the Stage 3F local validator against a working tree updated to this receipt commit or later and retain its .pmk-validation evidence."
+}
