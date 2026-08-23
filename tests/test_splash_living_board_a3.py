@@ -35,14 +35,17 @@ def test_authored_reference_board_is_dense_and_layered():
         'stroke="#c16fff"', '<ellipse cx="836" cy="452"', 'sculpted module frame rails',
         'long ambient branches that intentionally do not terminate at cards',
         'central-origin surface merge network',
+        'organic micro-topology islands and ring via clusters',
         'core rim integration: nested processor rails and pin landing geometry',
+        'crown breakout with hotspot clusters',
         'execution radial fabric and bottom telemetry backplane',
         'explicit wide-spread luminous via network / dense page-wide node matrices',
+        'ring via clusters',
         'pin landing nodes',
     ]
     assert not [m for m in required if m not in board]
-    assert board.count("<path") >= 140
-    assert board.count("<circle") >= 70
+    assert board.count("<path") >= 180
+    assert board.count("<circle") >= 100
 
 
 def test_production_splash_is_full_landing_page():
