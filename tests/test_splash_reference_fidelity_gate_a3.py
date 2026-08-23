@@ -22,7 +22,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v10"
+    assert contract["contract_version"] == "A3-splash-reference-v11"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -56,6 +56,7 @@ def test_authored_board_asset_meets_reference_density_gate():
         'id="dotsA"',
         'id="dotsV"',
         'sculpted module frame rails',
+        'balanced density envelope / visual breathing corridors',
         'long ambient branches that intentionally do not terminate at cards',
         'asymmetric right-side ambient fabric: intentionally not mirrored',
         'central-origin surface merge network',
@@ -74,7 +75,6 @@ def test_authored_board_asset_meets_reference_density_gate():
     assert pcb["distributed_dot_matrices_required"] is True
     assert pcb["sculpted_module_frame_rails_required"] is True
     assert pcb["core_origin_merge_network_required"] is True
-    assert pcb["dead_end_surface_runs_required"] is True
     assert pcb["wide_luminous_node_field_required"] is True
     assert pcb["core_rim_integration_required"] is True
     assert pcb["processor_pin_landing_nodes_required"] is True
@@ -85,6 +85,8 @@ def test_authored_board_asset_meets_reference_density_gate():
     assert pcb["top_ring_clusters_forbidden"] is True
     assert pcb["crown_hotspot_clusters_required"] is True
     assert pcb["irregular_branching_required"] is True
+    assert pcb["balanced_density_required"] is True
+    assert pcb["visual_breathing_corridors_required"] is True
 
 
 def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
