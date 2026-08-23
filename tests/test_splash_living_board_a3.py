@@ -27,25 +27,26 @@ def test_production_splash_uses_authored_svg_dom_hybrid_board():
     assert not [m for m in forbidden if m in source]
 
 
-def test_authored_reference_board_is_dense_and_layered():
+def test_authored_reference_board_is_dense_layered_and_asymmetric():
     board = _board()
     required = [
         'viewBox="0 0 1672 941"', 'id="grid"', 'id="dotsC"', 'id="dotsA"', 'id="dotsV"',
         'id="glow"', 'stroke="#36bfff"', 'stroke="#e59a20"', 'stroke="#23d8c8"',
         'stroke="#c16fff"', '<ellipse cx="836" cy="452"', 'sculpted module frame rails',
         'long ambient branches that intentionally do not terminate at cards',
-        'central-origin surface merge network',
-        'organic micro-topology islands and ring via clusters',
+        'asymmetric right-side ambient fabric: intentionally not mirrored',
+        'central-origin surface merge network', 'asymmetric right merge fabric',
+        'organic micro-topology islands',
         'core rim integration: nested processor rails and pin landing geometry',
-        'crown breakout with hotspot clusters',
+        'crown breakout with scattered hotspots; top rings deliberately removed',
         'execution radial fabric and bottom telemetry backplane',
         'explicit wide-spread luminous via network / dense page-wide node matrices',
-        'ring via clusters',
-        'pin landing nodes',
+        'scattered crown hotspots, not circular ring clusters', 'pin landing nodes',
     ]
     assert not [m for m in required if m not in board]
-    assert board.count("<path") >= 180
-    assert board.count("<circle") >= 100
+    assert 'ring via clusters' not in board
+    assert board.count("<path") >= 170
+    assert board.count("<circle") >= 90
 
 
 def test_production_splash_is_full_landing_page():
@@ -95,24 +96,24 @@ def test_entry_card_and_descent_gate_contract_remain_intact():
     assert not [m for m in required if m not in source]
 
 
-def test_signal_layer_is_semantic_and_autonomous():
+def test_signal_layer_is_semantic_autonomous_and_not_mirrored():
     source = _source()
     required = [
         "signalDirection", "governance:'outbound'", "supervision:'inbound'",
         "calibration:'bidirectional'", "control:'roundtrip'", "execution:'downstream'",
         "semanticT(", "requestAnimationFrame(animate)", "signal-wake", "node-bloom",
-        "destination-ack", "p3=E('circle'",
+        "destination-ack", "p3=E('circle'", "M1276 162 H1214 L1188 146",
     ]
     forbidden = ["mouseenter", "mouseleave", "focusRoute(", "classList.toggle('dim'"]
     assert not [m for m in required if m not in source]
     assert not [m for m in forbidden if m in source]
 
 
-def test_reference_contain_and_reduced_motion_guards_remain():
+def test_reference_cover_and_reduced_motion_guards_remain():
     source = _source()
     required = [
-        "--stage-width:1672", "--stage-height:941", "const fit_rule='reference-contain-1672x941'",
-        "function fitStage()", "Math.min(viewportWidth/1672,viewportHeight/941)", "worldWidth=1672",
+        "--stage-width:1672", "--stage-height:941", "const fit_rule='reference-cover-1672x941'",
+        "function fitStage()", "Math.max(viewportWidth/1672,viewportHeight/941)", "worldWidth=1672",
         "stage.style.transform=`translate(-50%,-50%) scale(${scale})`", "@media(prefers-reduced-motion:reduce)",
         "reduceMotion.matches", "reduceMotion.addEventListener?.('change',rebuildSignals)", ".pulse{display:none}",
     ]
