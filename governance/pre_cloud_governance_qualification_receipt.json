@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "qualification": "AGENT_GOVERNANCE_PRE_CLOUD_QUALIFICATION",
+  "status": "PASS_LOCAL_CI_CLOSED",
+  "scope": "repository_local_and_public_ci_only",
+  "qualification_chain": {
+    "governance_core": {
+      "status": "PASS_CLOSED",
+      "qualified_head": "36d2e051f2160b2f1fad556fa2fb7d9031e90f67",
+      "evidence": [
+        "canonical GovernanceOutcome",
+        "AgentGovernanceService",
+        "six agent lifecycle states",
+        "eight canonical governance actions",
+        "approved versioned calibration profiles",
+        "private boundary fail-closed behavior"
+      ],
+      "supporting_ci_gates": {
+        "ci_public": 1590,
+        "launch_closeout": 431,
+        "sandbox_integration": 833,
+        "program_release": 684,
+        "packaging": 655,
+        "public_docker": 525,
+        "camara_public_source": 695,
+        "repository_evidence": 236,
+        "private_ci": "SKIPPED_EXPECTED"
+      }
+    },
+    "execution_enforcement": {
+      "status": "PASS_CLOSED",
+      "qualified_head": "cfb4f6e9ebeede0534d3cf467d45b623670bf282",
+      "evidence": [
+        "GovernedExecutionGate",
+        "authoritative AgentRegistry lifecycle mutations",
+        "keep repair retry planner lower-priority freeze escalate reject enforcement",
+        "stale outcome and binding mismatch fail-closed",
+        "restricted rehabilitation with conservative profile and proof window"
+      ],
+      "supporting_ci_gates": {
+        "ci_public": 1591,
+        "launch_closeout": 433,
+        "sandbox_integration": 834,
+        "program_release": 685,
+        "packaging": 657,
+        "public_docker": 526,
+        "camara_public_source": 696,
+        "repository_evidence": 237,
+        "private_ci": "SKIPPED_EXPECTED"
+      }
+    },
+    "cross_agent_local_qualification": {
+      "status": "PASS_LOCAL_CI_CLOSED",
+      "qualified_head": "6096498bb5f8f0026048079e7e906ab7a18f18ec",
+      "evidence": [
+        "generic external-agent adapter contract",
+        "same governance plane for external-agent execution",
+        "HTTPS-only endpoint contract",
+        "embedded-credential rejection",
+        "transport failure fail-closed",
+        "deterministic governance benchmark metrics",
+        "danger interception false intervention recovery consistency audit completeness p50 p95 p99"
+      ],
+      "supporting_ci_gates": {
+        "ci_public": 1592,
+        "launch_closeout": 435,
+        "sandbox_integration": 835,
+        "program_release": 686,
+        "packaging": 659,
+        "public_docker": 527,
+        "camara_public_source": 697,
+        "repository_evidence": 238,
+        "private_ci": "SKIPPED_EXPECTED"
+      }
+    },
+    "decision_effective_calibration": {
+      "status": "PASS_CLOSED",
+      "qualified_head": "69029333bda5cc9425fb3ea857a88a715f3e88d0",
+      "evidence": [
+        "calibration thresholds alter canonical decisions",
+        "conservative profiles can tighten KEEP into REPAIR or ESCALATE",
+        "calibration cannot weaken existing interventions",
+        "unknown confidence and invalid calibration fail closed"
+      ],
+      "supporting_ci_gates": {
+        "ci_public": 1599,
+        "launch_closeout": 449,
+        "sandbox_integration": 842,
+        "program_release": 693,
+        "packaging": 668,
+        "public_docker": 534,
+        "camara_public_source": 704,
+        "repository_evidence": 245,
+        "private_ci": "SKIPPED_EXPECTED"
+      }
+    }
+  },
+  "local_ci_qualification_flags": {
+    "agent_governance_core_qualified": true,
+    "calibration_qualified": true,
+    "execution_enforcement_qualified": true,
+    "cross_agent_contract_qualified": true
+  },
+  "not_proven_by_this_receipt": {
+    "real_external_agent_provider_e2e": false,
+    "real_private_provider_operational_e2e": false,
+    "real_staging_governance_execution": false,
+    "operational_load_benchmark": false,
+    "production_governance_authority": false
+  },
+  "authority": {
+    "real_staging_qualified": false,
+    "production_authority_granted": false,
+    "commercial_launch": "NO_GO",
+    "deletion_authorized": false
+  },
+  "pre_cloud_governance_ready": true,
+  "next_required_evidence_class": "REAL_EXTERNAL_OR_REAL_STAGING_EXECUTION"
+}
