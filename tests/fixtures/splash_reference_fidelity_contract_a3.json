@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-v11",
+  "contract_version": "A3-splash-reference-v12",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
@@ -28,6 +28,13 @@
       "feedback": {"side": "right", "x": 1276, "y": 447, "w": 318, "h": 143},
       "control": {"side": "right", "x": 1276, "y": 626, "w": 318, "h": 143}
     }
+  },
+  "branding": {
+    "original_maestro_emblem_required": true,
+    "header_wordmark_required": true,
+    "core_emblem_required": true,
+    "english_only_copy_required": true,
+    "concise_copy_required": true
   },
   "pcb": {
     "authored_paths_min": 100,
@@ -76,6 +83,7 @@
     "preserve_dark_card": true,
     "preserve_markers": [
       "MAESTRO",
+      "Govern • Supervise • Calibrate • Orchestrate",
       "Agent Governance, Calibration &",
       "Supervision Orchestration Platform",
       "API Server",
@@ -97,7 +105,8 @@
     "stage_geometry": 15,
     "hybrid_architecture": 20,
     "module_geometry": 15,
-    "pcb_fidelity": 25,
+    "pcb_fidelity": 20,
+    "branding_and_copy": 5,
     "motion_semantics": 10,
     "core_contract": 10,
     "accessibility": 5
