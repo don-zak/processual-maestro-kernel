@@ -1,5 +1,5 @@
 {
-  "schema_version": 10,
+  "schema_version": 11,
   "authority": {
     "repository_reconciliation_complete": true,
     "deletion_authorized": false,
@@ -24,293 +24,75 @@
       "review_required_count": 0,
       "retirement_authorized_count": 1,
       "candidates": [
-        {
-          "path": "processual_api/routers/client_provider_alias_18.py",
-          "decision": "KEEP_COMPATIBILITY_HOLD",
-          "deletion_authorized": false
-        },
-        {
-          "path": "processual_api/routers/settings_provider_test_runtime.py",
-          "decision": "KEEP_ACTIVE_RUNTIME_WITH_DEPRECATED_COMPATIBILITY",
-          "deletion_authorized": false
-        },
-        {
-          "path": "processual_api/services/plan_store.py",
-          "decision": "KEEP_ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE",
-          "deletion_authorized": false
-        },
-        {
-          "path": "processual_api/admin_marketplace/subscription_usage_service.py",
-          "decision": "DELETE_COMPLETED_QUALIFIED",
-          "deletion_authorized": true,
-          "deleted": true,
-          "qualified_head": "e2aefa982017dadc3ab3142fef31ed7f1651d364"
-        }
+        {"path":"processual_api/routers/client_provider_alias_18.py","decision":"KEEP_COMPATIBILITY_HOLD","deletion_authorized":false},
+        {"path":"processual_api/routers/settings_provider_test_runtime.py","decision":"KEEP_ACTIVE_RUNTIME_WITH_DEPRECATED_COMPATIBILITY","deletion_authorized":false},
+        {"path":"processual_api/services/plan_store.py","decision":"KEEP_ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE","deletion_authorized":false},
+        {"path":"processual_api/admin_marketplace/subscription_usage_service.py","decision":"DELETE_COMPLETED_QUALIFIED","deletion_authorized":true,"deleted":true,"qualified_head":"e2aefa982017dadc3ab3142fef31ed7f1651d364"}
       ]
     },
     "a8_final_repository_retirement_audit": {
-      "status": "CLOSED_ALL_EXIT_CRITERIA_ZERO_WITH_INDEPENDENT_KEEP_HOLDS",
-      "archive_receipt_verified": true,
-      "exit_criteria": {
-        "REVIEW_REQUIRED": 0,
-        "SAFE_LOCAL_RESIDUE": 0,
-        "UNEXPLAINED_LOCAL_ARTIFACT": 0,
-        "UNPROTECTED_RETIRED_TOOL": 0,
-        "UNIQUE_BACKUP_CONTENT": 0
-      },
-      "known_local_runtime_holds": [
-        ".venv/",
-        "data/",
-        "processual_api/data/"
-      ],
-      "repository_reconciliation_complete": true,
-      "deletion_authorized": false
+      "status":"CLOSED_ALL_EXIT_CRITERIA_ZERO_WITH_INDEPENDENT_KEEP_HOLDS",
+      "archive_receipt_verified":true,
+      "exit_criteria":{"REVIEW_REQUIRED":0,"SAFE_LOCAL_RESIDUE":0,"UNEXPLAINED_LOCAL_ARTIFACT":0,"UNPROTECTED_RETIRED_TOOL":0,"UNIQUE_BACKUP_CONTENT":0},
+      "known_local_runtime_holds":[".venv/","data/","processual_api/data/"],
+      "repository_reconciliation_complete":true,
+      "deletion_authorized":false
     }
   },
   "phase_b_agent_governance": {
-    "status": "CLOSED",
+    "status":"CLOSED",
     "gov_a_authority_enforcement": {
-      "status": "PASS_CLOSED",
-      "qualified_head": "0089211f2376f20b1dc710c951c2b0eedc20930b",
-      "authority_contract": "exact delegated permissions, wildcard denial, recent MFA for sensitive actions",
-      "deprovision_contract": "platform-admin step-up, atomic supervisor authority and permission revocation, session and refresh-token revocation, immutable governance audit events, replay fail-closed",
-      "postgresql_proof": "PASS",
-      "http_proof": "PASS",
-      "no_silent_reactivation": "PASS",
-      "supporting_gates": {
-        "ci_public": 1543,
-        "launch_closeout": 337,
-        "sandbox_integration": 786,
-        "program_release": 636,
-        "packaging": 605,
-        "public_docker": 478,
-        "camara_public_source": 648,
-        "repository_evidence": 189
-      }
+      "status":"PASS_CLOSED","qualified_head":"0089211f2376f20b1dc710c951c2b0eedc20930b",
+      "authority_contract":"exact delegated permissions, wildcard denial, recent MFA for sensitive actions",
+      "deprovision_contract":"platform-admin step-up, atomic supervisor authority and permission revocation, session and refresh-token revocation, immutable governance audit events, replay fail-closed",
+      "postgresql_proof":"PASS","http_proof":"PASS","no_silent_reactivation":"PASS",
+      "supporting_gates":{"ci_public":1543,"launch_closeout":337,"sandbox_integration":786,"program_release":636,"packaging":605,"public_docker":478,"camara_public_source":648,"repository_evidence":189}
     },
     "gov_b_supervisor_audit_benchmark": {
-      "status": "PASS_CLOSED",
-      "qualified_head": "6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82",
-      "historical_authority_visibility": "PASS",
-      "historical_permission_visibility": "PASS",
-      "revocation_provenance_visibility": "PASS",
-      "platform_admin_step_up_review_surface": "PASS",
-      "review_supervisor_read_only_benchmark": "PASS",
-      "operations_supervisor_exact_permission_benchmark": "PASS",
-      "wildcard_denial_benchmark": "PASS",
-      "sensitive_action_recent_mfa_benchmark": "PASS",
-      "postgresql_revocation_history_proof": "PASS",
-      "supporting_gates": {
-        "ci_public": 1549,
-        "launch_closeout": 349,
-        "sandbox_integration": 792,
-        "program_release": 642,
-        "packaging": 612,
-        "public_docker": 484,
-        "camara_public_source": 654,
-        "repository_evidence": 195
-      }
+      "status":"PASS_CLOSED","qualified_head":"6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82",
+      "historical_authority_visibility":"PASS","historical_permission_visibility":"PASS","revocation_provenance_visibility":"PASS","platform_admin_step_up_review_surface":"PASS","review_supervisor_read_only_benchmark":"PASS","operations_supervisor_exact_permission_benchmark":"PASS","wildcard_denial_benchmark":"PASS","sensitive_action_recent_mfa_benchmark":"PASS","postgresql_revocation_history_proof":"PASS",
+      "supporting_gates":{"ci_public":1549,"launch_closeout":349,"sandbox_integration":792,"program_release":642,"packaging":612,"public_docker":484,"camara_public_source":654,"repository_evidence":195}
     },
-    "next_phase": "C_REAL_GCP_CLOUD_RUN_STAGING_QUALIFICATION"
+    "next_phase":"C_REAL_GCP_CLOUD_RUN_STAGING_QUALIFICATION"
   },
   "phase_c_real_staging": {
-    "status": "IN_PROGRESS",
+    "status":"LOCAL_PRE_GCP_CLOSEOUT_COMPLETE_EXTERNAL_GATES_ONLY",
     "stage_3a_preflight_contract": {
-      "status": "READY_FOR_REAL_EXECUTION",
-      "qualified_contract_head": "7e50295ab1201b09d4eca95285f6a922374c730b",
-      "synthetic_ci_only": true,
-      "real_gcp_evidence_captured": false,
-      "checks": [
-        "active_gcloud_account",
-        "cloud_run_service",
-        "https_service_url",
-        "latest_ready_revision",
-        "immutable_sha256_image_digest",
-        "100_percent_revision_traffic",
-        "health_live",
-        "health_ready",
-        "secret_manager_references"
-      ],
-      "supporting_ci_gates": {
-        "ci_public": 1551,
-        "launch_closeout": 353,
-        "sandbox_integration": 794,
-        "program_release": 644,
-        "packaging": 614,
-        "public_docker": 486,
-        "camara_public_source": 656,
-        "repository_evidence": 197
-      }
+      "status":"READY_FOR_REAL_EXECUTION","qualified_contract_head":"7e50295ab1201b09d4eca95285f6a922374c730b","synthetic_ci_only":true,"real_gcp_evidence_captured":false,
+      "checks":["active_gcloud_account","cloud_run_service","https_service_url","latest_ready_revision","immutable_sha256_image_digest","100_percent_revision_traffic","health_live","health_ready","secret_manager_references"],
+      "supporting_ci_gates":{"ci_public":1551,"launch_closeout":353,"sandbox_integration":794,"program_release":644,"packaging":614,"public_docker":486,"camara_public_source":656,"repository_evidence":197}
     },
     "stage_3b_database_recovery_rehearsal": {
-      "status": "PASS_LOCAL_REHEARSAL",
-      "qualified_contract_head": "2813dca526133b2fcc57829d28f2904a01bacba1",
-      "postgresql_version_family": "16",
-      "migration_head": "20260822_0060",
-      "migration_rehearsal": "PASS",
-      "backup_restore": "PASS",
-      "rollback_to_snapshot": "PASS",
-      "local_evidence_path": ".pmk-validation/stage3b-database-recovery.json",
-      "local_snapshot_path": ".pmk-validation/stage3b-postgres.snapshot.dump",
-      "synthetic_rehearsal_only": true,
-      "real_staging_qualified": false,
-      "supporting_ci_gates": {
-        "ci_public": 1554,
-        "launch_closeout": 359,
-        "sandbox_integration": 797,
-        "program_release": 647,
-        "packaging": 617,
-        "public_docker": 489,
-        "camara_public_source": 659,
-        "repository_evidence": 200
-      }
+      "status":"PASS_LOCAL_REHEARSAL","qualified_contract_head":"2813dca526133b2fcc57829d28f2904a01bacba1","postgresql_version_family":"16","migration_head":"20260822_0060","migration_rehearsal":"PASS","backup_restore":"PASS","rollback_to_snapshot":"PASS","local_evidence_path":".pmk-validation/stage3b-database-recovery.json","local_snapshot_path":".pmk-validation/stage3b-postgres.snapshot.dump","synthetic_rehearsal_only":true,"real_staging_qualified":false,
+      "supporting_ci_gates":{"ci_public":1554,"launch_closeout":359,"sandbox_integration":797,"program_release":647,"packaging":617,"public_docker":489,"camara_public_source":659,"repository_evidence":200}
     },
     "stage_3c_runtime_packaging_readiness": {
-      "status": "PASS_CLOSED",
-      "qualified_head": "c9b316d20717042c22e1bdf066f0dc4691e480cb",
-      "contract": "governance/staging_runtime_contract.json",
-      "validator": "scripts/Test-PMKStagingRuntimeContract.ps1",
-      "documentation": "docs/STAGE_3C_STAGING_RUNTIME_READINESS.md",
-      "secret_values_in_repository_authority": false,
-      "local_validation_artifacts_git_ignored": true,
-      "local_validation_artifacts_docker_ignored": true,
-      "env_variants_docker_ignored": true,
-      "real_staging_secret_injection_verified": false,
-      "real_staging_qualified": false,
-      "supporting_ci_gates": {
-        "ci_public": 1561,
-        "launch_closeout": 373,
-        "sandbox_integration": 804,
-        "program_release": 654,
-        "packaging": 625,
-        "public_docker": 496,
-        "camara_public_source": 666,
-        "repository_evidence": 207
-      }
+      "status":"PASS_CLOSED","qualified_head":"c9b316d20717042c22e1bdf066f0dc4691e480cb","contract":"governance/staging_runtime_contract.json","validator":"scripts/Test-PMKStagingRuntimeContract.ps1","documentation":"docs/STAGE_3C_STAGING_RUNTIME_READINESS.md","secret_values_in_repository_authority":false,"local_validation_artifacts_git_ignored":true,"local_validation_artifacts_docker_ignored":true,"env_variants_docker_ignored":true,"real_staging_secret_injection_verified":false,"real_staging_qualified":false,
+      "supporting_ci_gates":{"ci_public":1561,"launch_closeout":373,"sandbox_integration":804,"program_release":654,"packaging":625,"public_docker":496,"camara_public_source":666,"repository_evidence":207}
     },
     "stage_3d_operational_readiness_preparation": {
-      "status": "PASS_CLOSED",
-      "qualified_head": "4d996e24fe01e7b2b042abc53786d7d6cd887a40",
-      "contract": "governance/stage3d_operational_readiness_contract.json",
-      "validator": "scripts/Test-PMKStage3DOperationalReadiness.ps1",
-      "documentation": "docs/STAGE_3D_OPERATIONAL_READINESS_PREPARATION.md",
-      "observability_static_contract": "PASS",
-      "browser_route_contract": "PASS",
-      "load_endurance_contract": "PREPARED_NOT_EXECUTED",
-      "security_static_contract": "PASS",
-      "real_alert_delivery_verified": false,
-      "real_browser_execution_verified": false,
-      "real_staging_load_verified": false,
-      "real_security_review_verified": false,
-      "real_staging_qualified": false,
-      "supporting_ci_gates": {
-        "ci_public": 1566,
-        "launch_closeout": 383,
-        "sandbox_integration": 809,
-        "program_release": 659,
-        "packaging": 630,
-        "public_docker": 501,
-        "camara_public_source": 671,
-        "repository_evidence": 212
-      }
+      "status":"PASS_CLOSED","qualified_head":"4d996e24fe01e7b2b042abc53786d7d6cd887a40","contract":"governance/stage3d_operational_readiness_contract.json","validator":"scripts/Test-PMKStage3DOperationalReadiness.ps1","documentation":"docs/STAGE_3D_OPERATIONAL_READINESS_PREPARATION.md","observability_static_contract":"PASS","browser_route_contract":"PASS","load_endurance_contract":"PREPARED_NOT_EXECUTED","security_static_contract":"PASS","real_alert_delivery_verified":false,"real_browser_execution_verified":false,"real_staging_load_verified":false,"real_security_review_verified":false,"real_staging_qualified":false,
+      "supporting_ci_gates":{"ci_public":1566,"launch_closeout":383,"sandbox_integration":809,"program_release":659,"packaging":630,"public_docker":501,"camara_public_source":671,"repository_evidence":212}
     },
     "stage_3e_real_staging_execution_handoff": {
-      "status": "PASS_CLOSED",
-      "qualified_head": "65dd608beb745e1ede2d039029c930f7b93c2307",
-      "contract": "governance/stage3e_real_staging_handoff_contract.json",
-      "runner": "scripts/Invoke-PMKStage3ERealStagingHandoff.ps1",
-      "documentation": "docs/STAGE_3E_REAL_STAGING_EXECUTION_HANDOFF.md",
-      "prepare_mode_requires_gcp": false,
-      "real_gcp_mode_requires_explicit_target": true,
-      "secret_values_recorded": false,
-      "real_staging_qualified": false,
-      "supporting_ci_gates": {
-        "ci_public": 1568,
-        "launch_closeout": 387,
-        "sandbox_integration": 811,
-        "program_release": 661,
-        "packaging": 632,
-        "public_docker": 503,
-        "camara_public_source": 673,
-        "repository_evidence": 214
-      }
+      "status":"PASS_CLOSED","qualified_head":"65dd608beb745e1ede2d039029c930f7b93c2307","contract":"governance/stage3e_real_staging_handoff_contract.json","runner":"scripts/Invoke-PMKStage3ERealStagingHandoff.ps1","documentation":"docs/STAGE_3E_REAL_STAGING_EXECUTION_HANDOFF.md","prepare_mode_requires_gcp":false,"real_gcp_mode_requires_explicit_target":true,"secret_values_recorded":false,"real_staging_qualified":false,
+      "supporting_ci_gates":{"ci_public":1568,"launch_closeout":387,"sandbox_integration":811,"program_release":661,"packaging":632,"public_docker":503,"camara_public_source":673,"repository_evidence":214}
     },
     "stage_3f_pre_gcp_final_local_closeout": {
-      "status": "CONTRACT_IMPLEMENTED_CI_PENDING",
-      "contract": "governance/stage3f_pre_gcp_local_closeout_contract.json",
-      "validator": "scripts/Test-PMKStage3FPreGcpLocalCloseout.ps1",
-      "documentation": "docs/STAGE_3F_PRE_GCP_FINAL_LOCAL_CLOSEOUT.md",
-      "local_closeout_can_pass_without_gcp": true,
-      "external_blockers_only_declared": true,
-      "secret_values_recorded": false,
-      "real_staging_qualified": false,
-      "production_authority_granted": false,
-      "commercial_launch": "NO_GO"
+      "status":"PASS_CLOSED","qualified_head":"12795a3eaf960229ade06a68cad22bd4465e355c","contract":"governance/stage3f_pre_gcp_local_closeout_contract.json","validator":"scripts/Test-PMKStage3FPreGcpLocalCloseout.ps1","documentation":"docs/STAGE_3F_PRE_GCP_FINAL_LOCAL_CLOSEOUT.md","ci_receipt":"governance/stage3f_ci_closeout_receipt.json","local_validator_result":"PASS","local_evidence_path":".pmk-validation/stage3f-pre-gcp-local-closeout.json","local_closeout_complete":true,"external_blockers_only_declared":true,"secret_values_recorded":false,"real_staging_qualified":false,"production_authority_granted":false,"commercial_launch":"NO_GO",
+      "supporting_ci_gates":{"ci_public":1587,"launch_closeout":425,"sandbox_integration":830,"program_release":681,"packaging":651,"public_docker":522,"camara_public_source":692,"repository_evidence":233,"private_ci":"SKIPPED_EXPECTED"}
     },
-    "remaining_required_gates": [
-      "gcp_billing",
-      "real_gcp_preflight_execution",
-      "real_staging_secret_injection",
-      "real_staging_managed_database_migration",
-      "real_staging_backup_restore",
-      "real_staging_rollback",
-      "metrics_alert_delivery",
-      "external_provider_integration",
-      "browser_e2e_real_staging",
-      "load_endurance_real_staging",
-      "security_review_real_staging",
-      "named_human_approvals",
-      "signed_go_no_go"
-    ],
-    "real_staging_qualified": false,
-    "next_action": "CI-qualify Stage 3F and execute its local validator. After that, all remaining Phase C gates are external/real-staging gates blocked on GCP billing and a real target."
+    "remaining_required_gates":["gcp_billing","real_gcp_preflight_execution","real_staging_secret_injection","real_staging_managed_database_migration","real_staging_backup_restore","real_staging_rollback","metrics_alert_delivery","external_provider_integration","browser_e2e_real_staging","load_endurance_real_staging","security_review_real_staging","named_human_approvals","signed_go_no_go"],
+    "real_staging_qualified":false,
+    "next_action":"Resume Phase C on the real GCP staging target after billing is available. Execute the prepared real-GCP handoff and preserve all authority flags until every real-staging gate passes."
   },
   "launch_closeout": {
-    "real_db_authority_gate": {
-      "status": "PASS_CLOSED",
-      "evidence": "Launch Closeout Gate #387 on 65dd608beb745e1ede2d039029c930f7b93c2307"
-    },
-    "retirement_qualification": {
-      "status": "PASS_CLOSED_LEGACY_QUOTA_USAGE",
-      "qualified_head": "e2aefa982017dadc3ab3142fef31ed7f1651d364",
-      "migration_head": "20260822_0060",
-      "legacy_usage_service_deleted": true,
-      "legacy_quota_account_schema_retired": true,
-      "legacy_usage_ledger_schema_retired": true,
-      "zero_runtime_reference_gate": "PASS",
-      "repository_wide_deletion_authorized": false,
-      "remaining_independent_holds": [
-        "processual_api/routers/client_provider_alias_18.py",
-        "processual_api/routers/settings_provider_test_runtime.py",
-        "processual_api/services/plan_store.py"
-      ]
-    },
-    "final_repository_closeout": {
-      "status": "PASS_CLOSED_FOR_PUBLIC_CI",
-      "qualified_head": "65dd608beb745e1ede2d039029c930f7b93c2307",
-      "ci_public_run": 1568,
-      "full_pytest": "PASS",
-      "ruff": "PASS",
-      "flake8": "PASS",
-      "mypy": "PASS",
-      "capacity_regression": "PASS",
-      "package_build": "PASS",
-      "package_metadata": "PASS",
-      "supporting_gates": {
-        "launch_closeout": 387,
-        "sandbox_integration": 811,
-        "program_release": 661,
-        "packaging": 632,
-        "public_docker": 503,
-        "camara_public_source": 673,
-        "repository_evidence": 214
-      }
-    }
+    "real_db_authority_gate":{"status":"PASS_CLOSED","evidence":"Launch Closeout Gate #425 on 12795a3eaf960229ade06a68cad22bd4465e355c"},
+    "retirement_qualification":{"status":"PASS_CLOSED_LEGACY_QUOTA_USAGE","qualified_head":"e2aefa982017dadc3ab3142fef31ed7f1651d364","migration_head":"20260822_0060","legacy_usage_service_deleted":true,"legacy_quota_account_schema_retired":true,"legacy_usage_ledger_schema_retired":true,"zero_runtime_reference_gate":"PASS","repository_wide_deletion_authorized":false,"remaining_independent_holds":["processual_api/routers/client_provider_alias_18.py","processual_api/routers/settings_provider_test_runtime.py","processual_api/services/plan_store.py"]},
+    "final_repository_closeout":{"status":"PASS_CLOSED_FOR_PUBLIC_CI","qualified_head":"12795a3eaf960229ade06a68cad22bd4465e355c","ci_public_run":1587,"full_pytest":"PASS","ruff":"PASS","flake8":"PASS","mypy":"PASS","capacity_regression":"PASS","package_build":"PASS","package_metadata":"PASS","supporting_gates":{"launch_closeout":425,"sandbox_integration":830,"program_release":681,"packaging":651,"public_docker":522,"camara_public_source":692,"repository_evidence":233}}
   },
   "launch_authority": {
-    "commercial_launch": "NO_GO",
-    "real_staging_qualified": false,
-    "production_authority_granted": false,
-    "reason": "Repository retirement, Agent Governance, local database recovery rehearsal, runtime/packaging readiness, operational preparation, and the real-staging execution handoff are closed. Stage 3F is the final pre-GCP local closeout. All remaining qualification gates require real GCP/external execution, named human approval, or signed Go/No-Go."
+    "commercial_launch":"NO_GO","real_staging_qualified":false,"production_authority_granted":false,
+    "reason":"All repository/local pre-GCP closeout work is complete and CI-qualified. The remaining gates are exclusively real GCP/external execution, real operational evidence, named human approval, and signed Go/No-Go."
   }
 }
