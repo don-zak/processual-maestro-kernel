@@ -76,6 +76,8 @@ async def test_supervisor_deprovision_revokes_authority_grants_and_sessions_atom
                 email_verified_at=NOW,
             )
             session.add_all([actor, target])
+            await session.flush()
+
             session.add(
                 IdentityPlatformAuthority(
                     user_id=actor_id,
@@ -86,20 +88,21 @@ async def test_supervisor_deprovision_revokes_authority_grants_and_sessions_atom
                     granted_at=NOW,
                 )
             )
-            session.add(
-                AdministratorInvitation(
-                    id=invitation_id,
-                    email_normalized=target.email_normalized,
-                    supervision_level="operations_supervisor",
-                    token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
-                    status="accepted",
-                    invited_by_user_id=actor_id,
-                    invite_reason="Integration supervisor authority seed",
-                    expires_at=NOW + timedelta(days=1),
-                    accepted_by_user_id=target_id,
-                    accepted_at=NOW,
-                )
+            invitation = AdministratorInvitation(
+                id=invitation_id,
+                email_normalized=target.email_normalized,
+                supervision_level="operations_supervisor",
+                token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+                status="accepted",
+                invited_by_user_id=actor_id,
+                invite_reason="Integration supervisor authority seed",
+                expires_at=NOW + timedelta(days=1),
+                accepted_by_user_id=target_id,
+                accepted_at=NOW,
             )
+            session.add(invitation)
+            await session.flush()
+
             session.add(
                 IdentityPlatformAuthority(
                     id=authority_id,
@@ -123,17 +126,17 @@ async def test_supervisor_deprovision_revokes_authority_grants_and_sessions_atom
                     granted_at=NOW,
                 )
             )
-            session.add(
-                AuthSession(
-                    id=session_id,
-                    user_id=target_id,
-                    refresh_family_id=family_id,
-                    authenticated_at=NOW,
-                    mfa_satisfied_at=NOW,
-                    last_seen_at=NOW,
-                    expires_at=NOW + timedelta(hours=4),
-                )
+            auth_session = AuthSession(
+                id=session_id,
+                user_id=target_id,
+                refresh_family_id=family_id,
+                authenticated_at=NOW,
+                mfa_satisfied_at=NOW,
+                last_seen_at=NOW,
+                expires_at=NOW + timedelta(hours=4),
             )
+            session.add(auth_session)
+            await session.flush()
             session.add(
                 AuthRefreshToken(
                     id=refresh_id,
