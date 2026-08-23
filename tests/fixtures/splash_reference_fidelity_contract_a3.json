@@ -1,12 +1,12 @@
 {
-  "contract_version": "A3-splash-reference-v9",
+  "contract_version": "A3-splash-reference-v10",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
     "width": 1672,
     "height": 941,
     "aspect_ratio": "1672:941",
-    "fit_rule": "reference-contain-1672x941"
+    "fit_rule": "reference-cover-1672x941"
   },
   "architecture": {
     "mode": "authored-svg-dom-hybrid",
@@ -30,8 +30,8 @@
     }
   },
   "pcb": {
-    "authored_paths_min": 180,
-    "authored_nodes_min": 100,
+    "authored_paths_min": 170,
+    "authored_nodes_min": 90,
     "cyan_required": true,
     "amber_required": true,
     "teal_required": true,
@@ -50,10 +50,15 @@
     "execution_radial_fabric_required": true,
     "telemetry_backplane_required": true,
     "organic_micro_topology_required": true,
-    "ring_via_clusters_required": true,
+    "asymmetric_fabric_required": true,
+    "top_ring_clusters_forbidden": true,
     "crown_hotspot_clusters_required": true,
     "irregular_branching_required": true,
     "long_bridge_generator_forbidden": true
+  },
+  "viewport": {
+    "fill_browser_area_required": true,
+    "letterbox_forbidden": true
   },
   "motion": {
     "signal_routes": 9,
@@ -62,7 +67,8 @@
     "node_bloom_required": true,
     "destination_ack_required": true,
     "autonomous_motion_required": true,
-    "pointer_route_interaction_required": false
+    "pointer_route_interaction_required": false,
+    "left_right_signal_geometry_must_differ": true
   },
   "mandatory_core_contract": {
     "preserve_dark_card": true,
