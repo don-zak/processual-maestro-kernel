@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "authority": {
     "repository_reconciliation_complete": true,
     "deletion_authorized": false,
@@ -73,7 +73,7 @@
       "status": "PASS_CLOSED",
       "qualified_head": "0089211f2376f20b1dc710c951c2b0eedc20930b",
       "authority_contract": "exact delegated permissions, wildcard denial, recent MFA for sensitive actions",
-      "deprovision_contract": "platform-admin step-up, atomic supervisor authority and permission revocation, session and refresh-token revocation, immutable audit events, replay fail-closed",
+      "deprovision_contract": "platform-admin step-up, atomic supervisor authority and permission revocation, session and refresh-token revocation, immutable governance audit events, replay fail-closed",
       "postgresql_proof": "PASS",
       "http_proof": "PASS",
       "no_silent_reactivation": "PASS",
@@ -113,10 +113,55 @@
     },
     "next_phase": "C_REAL_GCP_CLOUD_RUN_STAGING_QUALIFICATION"
   },
+  "phase_c_real_staging": {
+    "status": "IN_PROGRESS",
+    "stage_3a_preflight_contract": {
+      "status": "READY_FOR_REAL_EXECUTION",
+      "qualified_contract_head": "7e50295ab1201b09d4eca95285f6a922374c730b",
+      "synthetic_ci_only": true,
+      "real_gcp_evidence_captured": false,
+      "checks": [
+        "active_gcloud_account",
+        "cloud_run_service",
+        "https_service_url",
+        "latest_ready_revision",
+        "immutable_sha256_image_digest",
+        "100_percent_revision_traffic",
+        "health_live",
+        "health_ready",
+        "secret_manager_references"
+      ],
+      "remaining_required_gates": [
+        "real_gcp_preflight_execution",
+        "migration_rehearsal",
+        "backup_restore",
+        "rollback",
+        "metrics_alerts",
+        "external_provider_integration",
+        "browser_e2e",
+        "load_endurance",
+        "security_review",
+        "named_human_approvals",
+        "signed_go_no_go"
+      ],
+      "supporting_ci_gates": {
+        "ci_public": 1551,
+        "launch_closeout": 353,
+        "sandbox_integration": 794,
+        "program_release": 644,
+        "packaging": 614,
+        "public_docker": 486,
+        "camara_public_source": 656,
+        "repository_evidence": 197
+      }
+    },
+    "real_staging_qualified": false,
+    "next_action": "Run scripts/Invoke-PMKRealStagingPreflight.ps1 against the actual GCP project, region, and Cloud Run service and retain the generated evidence JSON."
+  },
   "launch_closeout": {
     "real_db_authority_gate": {
       "status": "PASS_CLOSED",
-      "evidence": "Launch Closeout Gate #349 on 6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82"
+      "evidence": "Launch Closeout Gate #353 on 7e50295ab1201b09d4eca95285f6a922374c730b"
     },
     "retirement_qualification": {
       "status": "PASS_CLOSED_LEGACY_QUOTA_USAGE",
@@ -135,9 +180,9 @@
     },
     "final_repository_closeout": {
       "status": "PASS_CLOSED_FOR_PUBLIC_CI",
-      "qualified_head": "6bcecc01ed089c4c513c0c9b27eaf7d9feecfb82",
-      "ci_public_run": 1549,
-      "ci_public_run_id": 32617154129,
+      "qualified_head": "7e50295ab1201b09d4eca95285f6a922374c730b",
+      "ci_public_run": 1551,
+      "ci_public_run_id": 32618198427,
       "full_pytest": "PASS",
       "ruff": "PASS",
       "flake8": "PASS",
@@ -146,13 +191,13 @@
       "package_build": "PASS",
       "package_metadata": "PASS",
       "supporting_gates": {
-        "launch_closeout": 349,
-        "sandbox_integration": 792,
-        "program_release": 642,
-        "packaging": 612,
-        "public_docker": 484,
-        "camara_public_source": 654,
-        "repository_evidence": 195
+        "launch_closeout": 353,
+        "sandbox_integration": 794,
+        "program_release": 644,
+        "packaging": 614,
+        "public_docker": 486,
+        "camara_public_source": 656,
+        "repository_evidence": 197
       }
     }
   },
@@ -160,6 +205,6 @@
     "commercial_launch": "NO_GO",
     "real_staging_qualified": false,
     "production_authority_granted": false,
-    "reason": "Repository retirement and Agent Governance qualification are closed in synthetic/public CI, but the canonical roadmap still requires real GCP/Cloud Run staging qualification, release-candidate approval, and a controlled production pilot before production authority."
+    "reason": "Repository retirement and Agent Governance are closed and the real-staging preflight contract is CI-qualified, but no real GCP staging evidence has yet been captured. Migration, backup/restore, rollback, observability, external integration, browser, load, security, human approval, and signed Go/No-Go gates remain outstanding."
   }
 }
