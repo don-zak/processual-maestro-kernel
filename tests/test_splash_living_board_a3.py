@@ -102,10 +102,23 @@ def test_processor_teeth_inherit_route_color_groups():
     source = _source()
     required = [
         "/* route-colored processor teeth */",
-        "linear-gradient(180deg,#36bfff 0 24%,#23d8c8 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
-        "linear-gradient(180deg,#e59a20 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
-        "linear-gradient(90deg,#36bfff 0 22%,#23d8c8 22% 43%,#8bddff 43% 50%,#e59a20 50% 79%,#ffc65c 79% 100%)",
-        "linear-gradient(90deg,#36bfff 0 24%,#23d8c8 24% 36%,#c16fff 36% 47%,#36bfff 47% 56%,#e59a20 56% 73%,#c16fff 73% 100%)",
+        "linear-gradient(180deg,#21c9ff 0 24%,#22dfcd 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
+        "linear-gradient(180deg,#f1a21d 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
+        "linear-gradient(90deg,#20c7ff 0 24%,#1ee0cf 24% 44%,#33cfff 44% 50%,#f0a21f 50% 80%,#ffc24d 80% 100%)",
+        "linear-gradient(90deg,#20c7ff 0 22%,#23d8c8 22% 34%,#c16fff 34% 48%,#36bfff 48% 57%,#f0a21f 57% 72%,#c16fff 72% 100%)",
+    ]
+    assert not [m for m in required if m not in source]
+
+
+def test_cover_fit_uses_adaptive_safe_bands_for_chrome_and_telemetry():
+    source = _source()
+    required = [
+        "/* adaptive safe bands keep reference chrome visible under cover-fit */",
+        "--header-drop:0px", "--footer-lift:0px", "--telemetry-lift:0px", "--safe-x:0px",
+        "const visibleWorldWidth=viewportWidth/scale,visibleWorldHeight=viewportHeight/scale",
+        "const cropX=Math.max(0,(1672-visibleWorldWidth)/2),cropY=Math.max(0,(941-visibleWorldHeight)/2)",
+        "stage.style.setProperty('--safe-x'", "stage.style.setProperty('--header-drop'",
+        "stage.style.setProperty('--footer-lift'", "stage.style.setProperty('--telemetry-lift'",
     ]
     assert not [m for m in required if m not in source]
 
