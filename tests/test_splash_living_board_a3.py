@@ -85,27 +85,47 @@ def test_reference_modules_are_moved_outward_to_open_pcb_fabric_space():
     assert not [m for m in required if m not in source]
 
 
-def test_side_modules_are_visually_reduced_and_use_segmented_reference_rails():
+def test_side_modules_are_embedded_and_visually_reduced():
     source = _source()
     required = [
-        "transform:scale(.90)",
+        "transform:scale(.88)",
         "transform-origin:100% 50%",
         "transform-origin:0 50%",
-        "/* segmented reference card rails */",
-        "color-mix(in srgb,var(--accent) 78%,transparent)",
-        "color-mix(in srgb,var(--accent) 74%,transparent)",
+        "/* embedded segmented reference card rails */",
+        "background:linear-gradient(145deg,rgba(3,14,26,.58),rgba(2,9,18,.46))",
+        "backdrop-filter:blur(5px)",
+        "0 1px 3px rgba(0,0,0,.18)",
     ]
     assert not [m for m in required if m not in source]
 
 
-def test_processor_teeth_inherit_route_color_groups():
+def test_core_is_elevated_and_processor_teeth_are_slim_route_colored():
     source = _source()
     required = [
-        "/* route-colored processor teeth */",
+        "/* elevated central processor */",
+        "transform:scale(1.045)",
+        "filter:drop-shadow(0 16px 20px rgba(0,0,0,.34))",
+        "/* slim route-colored processor teeth */",
+        "width:4px",
+        "height:4px",
         "linear-gradient(180deg,#21c9ff 0 24%,#22dfcd 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
         "linear-gradient(180deg,#f1a21d 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
         "linear-gradient(90deg,#20c7ff 0 24%,#1ee0cf 24% 44%,#33cfff 44% 50%,#f0a21f 50% 80%,#ffc24d 80% 100%)",
         "linear-gradient(90deg,#20c7ff 0 22%,#23d8c8 22% 34%,#c16fff 34% 48%,#36bfff 48% 57%,#f0a21f 57% 72%,#c16fff 72% 100%)",
+    ]
+    assert not [m for m in required if m not in source]
+
+
+def test_visual_trace_density_is_selectively_reduced_without_removing_live_semantics():
+    source = _source()
+    required = [
+        "/* selective trace pruning veil */",
+        "#pcb-reference{position:absolute;inset:0;width:1672px;height:941px;z-index:1;pointer-events:none;user-select:none;opacity:.88}",
+        ".signal-base{stroke-width:.95;opacity:.64",
+        ".signal-wake{stroke-width:2.3;opacity:.065",
+        "p1=E('circle',{r:'2.4'",
+        "p2=E('circle',{r:'1.5'",
+        "p3=E('circle',{r:'1.0'",
     ]
     assert not [m for m in required if m not in source]
 
