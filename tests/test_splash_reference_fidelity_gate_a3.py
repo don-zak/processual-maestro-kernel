@@ -23,7 +23,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v13"
+    assert contract["contract_version"] == "A3-splash-reference-v14"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -39,11 +39,15 @@ def test_reference_stage_and_outward_geometry_are_locked():
         "fit_rule": "reference-cover-1672x941",
     }
     layout = contract["logical_layout"]
-    assert layout["core_bounds"] == {"x": 642, "y": 248, "w": 388, "h": 390, "tolerance_px": 16}
+    assert layout["core_bounds"] == {"x": 642, "y": 248, "w": 388, "h": 390, "tolerance_px": 18}
     assert layout["modules"]["governance"]["x"] == 78
     assert layout["modules"]["routing"]["x"] == 1276
-    assert layout["side_module_visual_scale"] == 0.90
+    assert layout["side_module_visual_scale"] == 0.88
     assert layout["segmented_variable_weight_card_rails_required"] is True
+    assert layout["embedded_side_modules_required"] is True
+    assert layout["core_visual_scale"] == 1.045
+    assert layout["elevated_core_required"] is True
+    assert layout["slim_processor_teeth_required"] is True
 
 
 def test_authored_board_asset_meets_reference_density_gate():
@@ -91,6 +95,8 @@ def test_authored_board_asset_meets_reference_density_gate():
     assert pcb["balanced_density_required"] is True
     assert pcb["visual_breathing_corridors_required"] is True
     assert pcb["route_colored_processor_teeth_required"] is True
+    assert pcb["selective_trace_pruning_required"] is True
+    assert pcb["live_signal_weight_reduced_required"] is True
 
 
 def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
@@ -138,6 +144,25 @@ def test_core_entry_contract_is_non_compensable():
     assert "--amber:#f5a623" in source
 
 
+def test_elevated_core_slim_teeth_and_embedded_modules_are_explicit():
+    source = _source()
+    required = [
+        "/* elevated central processor */",
+        "transform:scale(1.045)",
+        "drop-shadow(0 16px 20px rgba(0,0,0,.34))",
+        "/* slim route-colored processor teeth */",
+        "width:4px",
+        "height:4px",
+        "/* embedded segmented reference card rails */",
+        "transform:scale(.88)",
+        "backdrop-filter:blur(5px)",
+        "/* selective trace pruning veil */",
+        ".signal-base{stroke-width:.95;opacity:.64",
+        ".signal-wake{stroke-width:2.3;opacity:.065",
+    ]
+    assert not [m for m in required if m not in source]
+
+
 def test_motion_semantics_remain_autonomous_directional_and_asymmetric():
     source = _source()
     required = [
@@ -172,10 +197,9 @@ def test_accessibility_viewport_fill_and_safe_bands_remain_intact():
     assert viewport["telemetry_must_remain_visible_under_cover"] is True
 
 
-def test_route_colored_processor_teeth_are_explicit_and_vivid():
+def test_route_colored_processor_teeth_remain_explicit():
     source = _source()
     required = [
-        "/* route-colored processor teeth */",
         "linear-gradient(180deg,#21c9ff 0 24%,#22dfcd 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
         "linear-gradient(180deg,#f1a21d 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
         "linear-gradient(90deg,#20c7ff 0 24%,#1ee0cf 24% 44%,#33cfff 44% 50%,#f0a21f 50% 80%,#ffc24d 80% 100%)",
