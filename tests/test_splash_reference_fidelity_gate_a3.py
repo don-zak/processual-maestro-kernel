@@ -23,7 +23,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v12"
+    assert contract["contract_version"] == "A3-splash-reference-v13"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -42,6 +42,8 @@ def test_reference_stage_and_outward_geometry_are_locked():
     assert layout["core_bounds"] == {"x": 642, "y": 248, "w": 388, "h": 390, "tolerance_px": 16}
     assert layout["modules"]["governance"]["x"] == 78
     assert layout["modules"]["routing"]["x"] == 1276
+    assert layout["side_module_visual_scale"] == 0.90
+    assert layout["segmented_variable_weight_card_rails_required"] is True
 
 
 def test_authored_board_asset_meets_reference_density_gate():
@@ -88,6 +90,7 @@ def test_authored_board_asset_meets_reference_density_gate():
     assert pcb["irregular_branching_required"] is True
     assert pcb["balanced_density_required"] is True
     assert pcb["visual_breathing_corridors_required"] is True
+    assert pcb["route_colored_processor_teeth_required"] is True
 
 
 def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
@@ -150,13 +153,32 @@ def test_motion_semantics_remain_autonomous_directional_and_asymmetric():
     assert _contract()["motion"]["left_right_signal_geometry_must_differ"] is True
 
 
-def test_accessibility_and_viewport_fill_remain_intact():
+def test_accessibility_viewport_fill_and_safe_bands_remain_intact():
     source = _source()
+    viewport = _contract()["viewport"]
     required = [
         "@media(prefers-reduced-motion:reduce)", ".pulse{display:none}", 'tabindex="0"',
         "const fit_rule='reference-cover-1672x941'", "Math.max(viewportWidth/1672,viewportHeight/941)",
+        "const visibleWorldWidth=viewportWidth/scale,visibleWorldHeight=viewportHeight/scale",
+        "const cropX=Math.max(0,(1672-visibleWorldWidth)/2),cropY=Math.max(0,(941-visibleWorldHeight)/2)",
+        "--header-drop", "--footer-lift", "--telemetry-lift", "--safe-x",
         "reduceMotion.addEventListener?.('change',rebuildSignals)",
     ]
     assert not [m for m in required if m not in source]
-    assert _contract()["viewport"]["fill_browser_area_required"] is True
-    assert _contract()["viewport"]["letterbox_forbidden"] is True
+    assert viewport["fill_browser_area_required"] is True
+    assert viewport["letterbox_forbidden"] is True
+    assert viewport["adaptive_safe_bands_required"] is True
+    assert viewport["header_footer_must_remain_visible_under_cover"] is True
+    assert viewport["telemetry_must_remain_visible_under_cover"] is True
+
+
+def test_route_colored_processor_teeth_are_explicit_and_vivid():
+    source = _source()
+    required = [
+        "/* route-colored processor teeth */",
+        "linear-gradient(180deg,#21c9ff 0 24%,#22dfcd 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
+        "linear-gradient(180deg,#f1a21d 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
+        "linear-gradient(90deg,#20c7ff 0 24%,#1ee0cf 24% 44%,#33cfff 44% 50%,#f0a21f 50% 80%,#ffc24d 80% 100%)",
+        "linear-gradient(90deg,#20c7ff 0 22%,#23d8c8 22% 34%,#c16fff 34% 48%,#36bfff 48% 57%,#f0a21f 57% 72%,#c16fff 72% 100%)",
+    ]
+    assert not [m for m in required if m not in source]
