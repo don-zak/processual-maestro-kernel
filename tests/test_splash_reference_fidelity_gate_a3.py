@@ -23,7 +23,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v14"
+    assert contract["contract_version"] == "A3-splash-reference-v15"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -58,45 +58,43 @@ def test_authored_board_asset_meets_reference_density_gate():
     for marker in ['stroke="#36bfff"', 'stroke="#e59a20"', 'stroke="#23d8c8"', 'stroke="#c16fff"']:
         assert marker in board
     required_board_markers = [
-        '<ellipse cx="836" cy="452"',
-        'id="dotsC"',
-        'id="dotsA"',
-        'id="dotsV"',
-        'sculpted module frame rails',
-        'balanced density envelope / visual breathing corridors',
+        '<ellipse cx="836" cy="452"', 'id="dotsC"', 'id="dotsA"', 'id="dotsV"',
+        'sculpted module frame rails', 'balanced density envelope / visual breathing corridors',
         'long ambient branches that intentionally do not terminate at cards',
         'asymmetric right-side ambient fabric: intentionally not mirrored',
-        'central-origin surface merge network',
-        'asymmetric right merge fabric',
+        'central-origin surface merge network', 'asymmetric right merge fabric',
         'organic micro-topology islands',
+        'reference-flowing secondary branches with terminal dead-end nodes',
+        'explicit dead-end flow branches: tapered spread, no card termination',
         'core rim integration: nested processor rails and pin landing geometry',
         'crown breakout with scattered hotspots; top rings deliberately removed',
+        'crown side-slip dead ends',
         'execution radial fabric and bottom telemetry backplane',
+        'lower dead-end fanout',
         'explicit wide-spread luminous via network / dense page-wide node matrices',
-        'scattered crown hotspots, not circular ring clusters',
+        'terminal beacons: upper crown + side dead ends + lower execution dead ends',
+        'scattered passive micro-vias remain subordinate to route terminal hierarchy',
         'pin landing nodes',
     ]
     assert not [marker for marker in required_board_markers if marker not in board]
     assert 'ring via clusters' not in board
-    assert pcb["nonterminating_ambient_branches_required"] is True
-    assert pcb["distributed_dot_matrices_required"] is True
-    assert pcb["sculpted_module_frame_rails_required"] is True
-    assert pcb["core_origin_merge_network_required"] is True
-    assert pcb["wide_luminous_node_field_required"] is True
-    assert pcb["core_rim_integration_required"] is True
-    assert pcb["processor_pin_landing_nodes_required"] is True
-    assert pcb["execution_radial_fabric_required"] is True
-    assert pcb["telemetry_backplane_required"] is True
-    assert pcb["organic_micro_topology_required"] is True
-    assert pcb["asymmetric_fabric_required"] is True
-    assert pcb["top_ring_clusters_forbidden"] is True
-    assert pcb["crown_hotspot_clusters_required"] is True
-    assert pcb["irregular_branching_required"] is True
-    assert pcb["balanced_density_required"] is True
-    assert pcb["visual_breathing_corridors_required"] is True
-    assert pcb["route_colored_processor_teeth_required"] is True
-    assert pcb["selective_trace_pruning_required"] is True
-    assert pcb["live_signal_weight_reduced_required"] is True
+    for flag in [
+        "nonterminating_ambient_branches_required", "distributed_dot_matrices_required",
+        "sculpted_module_frame_rails_required", "core_origin_merge_network_required",
+        "dead_end_surface_runs_required", "wide_luminous_node_field_required",
+        "core_rim_integration_required", "processor_pin_landing_nodes_required",
+        "execution_radial_fabric_required", "telemetry_backplane_required",
+        "organic_micro_topology_required", "asymmetric_fabric_required",
+        "top_ring_clusters_forbidden", "crown_hotspot_clusters_required",
+        "irregular_branching_required", "balanced_density_required",
+        "visual_breathing_corridors_required", "route_colored_processor_teeth_required",
+        "selective_trace_pruning_required", "live_signal_weight_reduced_required",
+        "flowing_secondary_branch_layer_required", "branch_merge_diverge_language_required",
+        "dead_end_terminal_beacons_required", "upper_terminal_beacons_required",
+        "lower_terminal_beacons_required", "passive_micro_vias_subordinate_required",
+        "terminal_hierarchy_required",
+    ]:
+        assert pcb[flag] is True
 
 
 def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
@@ -129,8 +127,7 @@ def test_original_maestro_identity_and_english_only_copy_are_locked():
         "Intelligent routing for requests, tasks and optimal agent selection.",
         "Advanced policy enforcement for rules, approvals and automated decisions.",
         "Continuous feedback and learning for improved outcomes.",
-        "Authority, access and guardrail controls.",
-        "Controlled real-time execution",
+        "Authority, access and guardrail controls.", "Controlled real-time execution",
     ]
     assert not [m for m in required if m not in source]
     assert re.search(r"[\u0600-\u06FF]", source) is None
@@ -147,20 +144,33 @@ def test_core_entry_contract_is_non_compensable():
 def test_elevated_core_slim_teeth_and_embedded_modules_are_explicit():
     source = _source()
     required = [
-        "/* elevated central processor */",
-        "transform:scale(1.045)",
-        "drop-shadow(0 16px 20px rgba(0,0,0,.34))",
-        "/* slim route-colored processor teeth */",
-        "width:4px",
-        "height:4px",
-        "/* embedded segmented reference card rails */",
-        "transform:scale(.88)",
-        "backdrop-filter:blur(5px)",
-        "/* selective trace pruning veil */",
-        ".signal-base{stroke-width:.95;opacity:.64",
+        "/* elevated central processor */", "transform:scale(1.045)",
+        "drop-shadow(0 16px 20px rgba(0,0,0,.34))", "/* slim route-colored processor teeth */",
+        "width:4px", "height:4px", "/* embedded segmented reference card rails */",
+        "transform:scale(.88)", "backdrop-filter:blur(5px)",
+        "/* selective trace pruning veil */", ".signal-base{stroke-width:.95;opacity:.64",
         ".signal-wake{stroke-width:2.3;opacity:.065",
     ]
     assert not [m for m in required if m not in source]
+
+
+def test_flowing_topology_dead_end_beacons_and_terminal_hierarchy_are_explicit():
+    board = _board()
+    required = [
+        'aria-label="Maestro authored PCB reference fabric v9 flowing terminals"',
+        'id="terminalGlow"', 'id="terminal-beacons"',
+        'reference-flowing secondary branches with terminal dead-end nodes',
+        'explicit dead-end flow branches: tapered spread, no card termination',
+        'crown side-slip dead ends', 'lower dead-end fanout',
+        'terminal beacons: upper crown + side dead ends + lower execution dead ends',
+        'scattered passive micro-vias remain subordinate to route terminal hierarchy',
+        '<circle cx="672" cy="102" r="2.7" fill="#36bfff"/>',
+        '<circle cx="386" cy="331" r="2.4" fill="#36bfff"/>',
+        '<circle cx="1287" cy="327" r="2.4" fill="#e59a20"/>',
+        '<circle cx="676" cy="743" r="2.4" fill="#36bfff"/>',
+        '<circle cx="1029" cy="789" r="2.3" fill="#c16fff"/>',
+    ]
+    assert not [m for m in required if m not in board]
 
 
 def test_motion_semantics_remain_autonomous_directional_and_asymmetric():
