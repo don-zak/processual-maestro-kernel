@@ -130,6 +130,26 @@ def test_visual_trace_density_is_selectively_reduced_without_removing_live_seman
     assert not [m for m in required if m not in source]
 
 
+def test_authored_board_has_actual_pruning_and_vivid_route_hierarchy():
+    board = _board()
+    required = [
+        'aria-label="Maestro authored PCB reference fabric v8 pruned vivid"',
+        '<g stroke="#36bfff" stroke-opacity=".16" stroke-width=".62">',
+        '<g stroke="#e59a20" stroke-opacity=".17" stroke-width=".64">',
+        '<g stroke="#36bfff" stroke-opacity=".91" stroke-width="1.16" filter="url(#glowC)">',
+        '<g stroke="#e59a20" stroke-opacity=".93" stroke-width="1.18" filter="url(#glowA)">',
+        '<g stroke="#23d8c8" stroke-opacity=".83" stroke-width="1.04" filter="url(#glow)">',
+        '<g stroke="#c16fff" stroke-opacity=".86" stroke-width="1.05" filter="url(#glow)">',
+    ]
+    assert not [m for m in required if m not in board]
+    # Pruning is geometric, not a blanket dimming operation: ambient runs are sparse,
+    # while the surviving primary routes are intentionally brighter and heavier.
+    assert board.count('stroke-opacity=".16"') >= 1
+    assert board.count('stroke-opacity=".17"') >= 1
+    assert board.count('stroke-opacity=".91"') >= 1
+    assert board.count('stroke-opacity=".93"') >= 1
+
+
 def test_cover_fit_uses_adaptive_safe_bands_for_chrome_and_telemetry():
     source = _source()
     required = [
