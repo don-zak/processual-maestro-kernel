@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-v14",
+  "contract_version": "A3-splash-reference-v15",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
@@ -44,7 +44,7 @@
   },
   "pcb": {
     "authored_paths_min": 100,
-    "authored_nodes_min": 60,
+    "authored_nodes_min": 80,
     "cyan_required": true,
     "amber_required": true,
     "teal_required": true,
@@ -72,7 +72,14 @@
     "route_colored_processor_teeth_required": true,
     "selective_trace_pruning_required": true,
     "live_signal_weight_reduced_required": true,
-    "long_bridge_generator_forbidden": true
+    "long_bridge_generator_forbidden": true,
+    "flowing_secondary_branch_layer_required": true,
+    "branch_merge_diverge_language_required": true,
+    "dead_end_terminal_beacons_required": true,
+    "upper_terminal_beacons_required": true,
+    "lower_terminal_beacons_required": true,
+    "passive_micro_vias_subordinate_required": true,
+    "terminal_hierarchy_required": true
   },
   "viewport": {
     "fill_browser_area_required": true,
