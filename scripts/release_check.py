@@ -9,7 +9,7 @@ Checks:
 5. No weak / default secrets in .env or docker-compose.yml
 6. All required env vars documented in .env.production.example
 7. Public Docker target builds without error (if Docker available)
-8. pytest passes with >= 90% pass rate
+8. pytest completes successfully with zero failures/errors
 9. README exists and contains no placeholder text
 
 Exit code 0 = release ready, 1 = issues found.
@@ -47,7 +47,7 @@ WEAK_PATTERNS: list[re.Pattern] = [
 
 DIR_ARTIFACTS = {"__pycache__", ".pytest_cache", ".hypothesis", ".mypy_cache", ".ruff_cache"}
 FILE_ARTIFACTS = {".pyc", ".pyo", ".coverage"}
-EXEMPT_DIRS = {".git", ".venv"}  # .venv excluded from walk but checked separately
+EXEMPT_DIRS = {".git", ".venv"}
 
 
 def _error(msg: str) -> None:
@@ -84,19 +84,16 @@ def check_no_cache_artifacts(base: Path) -> int:
     errors = 0
     for root, dirs, files in os.walk(base):
         dirs[:] = [d for d in dirs if d not in EXEMPT_DIRS]
-
         for dname in dirs:
             if dname in DIR_ARTIFACTS:
                 _error(f"Found {dname} directory: {os.path.join(root, dname)}")
                 errors += 1
-
         for fname in files:
             for pat in FILE_ARTIFACTS:
                 if fname.endswith(pat) or fname == pat:
                     _error(f"Found {pat} file: {os.path.join(root, fname)}")
                     errors += 1
                     break
-
     if errors == 0:
         _ok("No cache / bytecode artifacts found")
     return errors
@@ -131,9 +128,7 @@ def check_no_weak_secrets(base: Path) -> int:
         text = path.read_text(encoding="utf-8", errors="replace")
         for i, line in enumerate(text.splitlines(), 1):
             stripped = line.strip()
-            if stripped.startswith("#") or not stripped:
-                continue
-            if "=" not in stripped:
+            if stripped.startswith("#") or not stripped or "=" not in stripped:
                 continue
             for pat in WEAK_PATTERNS:
                 if pat.search(stripped):
@@ -210,7 +205,6 @@ def check_docker_public_build() -> int:
 
 
 def run_pytest() -> int:
-    errors = 0
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "--tb=short", "-q"],
@@ -220,32 +214,25 @@ def run_pytest() -> int:
             timeout=300,
         )
         output = result.stdout + result.stderr
-
         pass_match = re.search(r"(\d+) passed", output)
         fail_match = re.search(r"(\d+) failed", output)
         error_match = re.search(r"(\d+) error", output)
         passed = int(pass_match.group(1)) if pass_match else 0
         failed = int(fail_match.group(1)) if fail_match else 0
         test_errors = int(error_match.group(1)) if error_match else 0
-        total = passed + failed
 
-        if total == 0:
-            _error("pytest returned 0 tests — check pytest configuration")
+        if passed == 0 and failed == 0 and test_errors == 0:
+            _error("pytest returned no recognizable test summary")
+            return 1
+        if result.returncode != 0 or failed > 0 or test_errors > 0:
+            _error(
+                "pytest did not complete cleanly: "
+                f"exit={result.returncode}, passed={passed}, failed={failed}, errors={test_errors}"
+            )
             return 1
 
-        pass_pct = (passed / total) * 100
-        if pass_pct < 90:
-            _error(f"pytest: {passed}/{total} passed ({pass_pct:.1f}%) — below 90% threshold")
-            errors += 1
-        else:
-            _ok(f"pytest: {passed}/{total} passed ({pass_pct:.1f}%)")
-
-        if test_errors > 0:
-            _error(f"pytest: {test_errors} error(s) found")
-            errors += 1
-        if failed > 0:
-            _warn(f"pytest: {failed} test(s) failed")
-        return errors
+        _ok(f"pytest: {passed} passed with zero failures/errors")
+        return 0
     except FileNotFoundError:
         _error("pytest not found")
         return 1
@@ -262,7 +249,6 @@ def main() -> NoReturn:
     args = parser.parse_args()
 
     base = Path(args.root).resolve() if args.root else REPO_ROOT
-
     total_errors = 0
     total_errors += check_no_venv(base)
     total_errors += check_no_env_file(base)
@@ -280,9 +266,8 @@ def main() -> NoReturn:
     if total_errors == 0:
         print("RESULT: RELEASE READY — all checks passed")
         sys.exit(0)
-    else:
-        print(f"RESULT: {total_errors} check(s) FAILED — fix before release")
-        sys.exit(1)
+    print(f"RESULT: {total_errors} check(s) FAILED — fix before release")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
