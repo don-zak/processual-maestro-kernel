@@ -282,7 +282,7 @@ class CommercialTopUpApplicationService:
                 requested_units=command.requested_units,
                 bundle_count=command.bundle_count,
                 total_price_usd=command.total_price_usd,
-                settlement_currency=command.settlement_currency.strip().upper(),
+                settlement_currency=_command_settlement_currency(command),
                 settlement_amount=command.settlement_amount,
                 exchange_rate_usd_tnd=command.exchange_rate_usd_tnd,
                 exchange_rate_source=command.exchange_rate_source,
@@ -399,12 +399,12 @@ class CommercialTopUpApplicationService:
                     f"atomic unit grant was not approved: {decision.reason}"
                 )
 
-            payment_payload = {
+            payment_payload: dict[str, object] = {
                 "provider_reference": command.provider_reference,
                 "verified_amount": str(command.verified_amount),
                 "verified_currency": command.verified_currency.strip().upper(),
             }
-            grant_payload = {
+            grant_payload: dict[str, object] = {
                 "grant_idempotency_key": decision.grant_idempotency_key,
                 "units": decision.units,
                 "outcome": decision.outcome.value,
@@ -517,6 +517,13 @@ class CommercialTopUpApplicationService:
             raise TopUpApplicationServiceDisabledError(message)
 
 
+def _command_settlement_currency(command: CreateTopUpOrderCommand) -> str:
+    settlement_currency = command.settlement_currency
+    if settlement_currency is None:
+        raise TopUpApplicationConflictError("top-up settlement currency is missing")
+    return settlement_currency.strip().upper()
+
+
 def _same_order(
     existing: CommercialTopUpOrder,
     command: CreateTopUpOrderCommand,
@@ -529,7 +536,7 @@ def _same_order(
         and existing.requested_units == command.requested_units
         and existing.bundle_count == command.bundle_count
         and existing.total_price_usd == command.total_price_usd
-        and existing.settlement_currency == command.settlement_currency.strip().upper()
+        and existing.settlement_currency == _command_settlement_currency(command)
         and existing.settlement_amount == command.settlement_amount
         and existing.exchange_rate_usd_tnd == command.exchange_rate_usd_tnd
         and existing.exchange_rate_source == command.exchange_rate_source
@@ -550,9 +557,14 @@ def _to_order_contract(
         TopUpOrderState.DRAFT,
         TopUpOrderState.AWAITING_CONFIRMATION,
     }
+    account_id = order.account_id
+    if account_id is None:
+        raise TopUpApplicationConflictError(
+            "stored top-up order is missing its account authority"
+        )
     return TopUpOrderContract(
         order_id=order.id,
-        account_id=order.account_id,
+        account_id=account_id,
         subscription_id=order.subscription_id,
         plan_code=order.plan_code,
         requested_units=order.requested_units,
