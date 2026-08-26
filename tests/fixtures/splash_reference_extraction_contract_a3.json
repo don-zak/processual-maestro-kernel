@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-extraction-v6",
+  "contract_version": "A3-splash-reference-extraction-v7",
   "source_of_truth": "approved pivot reference image",
   "reference_size": [1672, 941],
   "reference_core_bounds": [608, 224, 1041, 632],
@@ -21,6 +21,9 @@
     "global-path-continuity-ownership-resolution",
     "manhattan-sequence-ownership-resolution",
     "branch-ancestry-ownership-closeout",
+    "targeted-reference-gap-recovery",
+    "full-repartition-after-targeted-recovery",
+    "reconciliation-region-remap",
     "corrected-canonical-skeleton-build",
     "canonical-manifest-promotion"
   ],
@@ -35,57 +38,79 @@
       "top": 30,
       "bottom": 30
     },
-    "recovered_route_pixels": 57557,
+    "targeted_reference_recovery": {
+      "new_reference_pixels": 30,
+      "synthetic_pixels": 0,
+      "recovered_previous_regions": [
+        "unassigned-003",
+        "unassigned-019",
+        "unassigned-022",
+        "unassigned-024",
+        "unassigned-026"
+      ]
+    },
     "partition": {
+      "skeleton_pixels": 18394,
+      "assigned_skeleton_pixels": 17891,
       "route_tree_count": 125,
       "disconnected_route_tree_count": 0,
       "conflict_pixels": 74,
-      "unassigned_pixels": 477,
-      "unresolved_pixels": 551,
+      "unassigned_pixels": 429,
+      "unresolved_pixels": 503,
+      "min_route_tree_pixels": 2,
+      "max_route_tree_pixels": 1021,
       "full_route_tree_pixel_export": true
     },
-    "region_closeout": {
-      "total_regions": 97,
-      "pending_regions": 0,
-      "verified_geometry_kept_without_forced_ownership": 11
+    "reconciliation": {
+      "region_count": 92,
+      "previous_region_count": 97,
+      "exactly_preserved_previous_region_count": 92,
+      "new_or_changed_residual_region_count": 0,
+      "classification_counts": {
+        "manual-conflict-review": 29,
+        "likely-glow-bridge": 40,
+        "likely-shared-junction": 1,
+        "manual-unassigned-review": 15,
+        "likely-isolated-artifact": 7
+      }
     },
     "ownership_resolution": {
-      "kept_fragment_count": 11,
-      "resolved_unique_owner_count": 6,
-      "shared_geometry_count": 4,
-      "preserved_unowned_route_count": 1,
       "remaining_ambiguous_fragment_count": 0,
-      "unique_owner_regions": [
-        {"region":"unassigned-011","target_tree":30,"stage":"local-continuity"},
-        {"region":"unassigned-019","target_tree":96,"stage":"global-continuity"},
-        {"region":"unassigned-022","target_tree":98,"stage":"global-continuity"},
-        {"region":"unassigned-003","target_tree":92,"stage":"manhattan-sequence"},
-        {"region":"unassigned-024","target_tree":119,"stage":"manhattan-sequence"},
-        {"region":"unassigned-026","target_tree":121,"stage":"manhattan-sequence"}
+      "recovered_into_partition_count": 5,
+      "recovered_into_partition": [
+        {"previous_region":"unassigned-003","target_tree":92},
+        {"previous_region":"unassigned-019","target_tree":96},
+        {"previous_region":"unassigned-022","target_tree":98},
+        {"previous_region":"unassigned-024","target_tree":119},
+        {"previous_region":"unassigned-026","target_tree":121}
       ],
+      "shared_geometry_count": 5,
       "shared_geometry_regions": [
-        {"region":"unassigned-002","target_trees":[86,87]},
         {"region":"unassigned-001","target_trees":[1,67]},
-        {"region":"unassigned-004","target_trees":[74,75]},
-        {"region":"unassigned-006","target_trees":[39,40]}
+        {"region":"unassigned-002","target_trees":[86,87]},
+        {"region":"unassigned-003","target_trees":[74,75],"previous_region":"unassigned-004"},
+        {"region":"unassigned-005","target_trees":[39,40],"previous_region":"unassigned-006"},
+        {"region":"unassigned-010","target_trees":[30,31],"bridge_region":"conflict-060","previous_region":"unassigned-011"}
       ],
+      "preserved_unowned_route_count": 1,
       "preserved_unowned_regions": [
-        {"region":"unassigned-027","reason":"visible reference geometry with no defensible unique or shared pin ownership"}
+        {"region":"unassigned-022","previous_region":"unassigned-027","reason":"visible reference geometry with no defensible unique or shared pin ownership"}
       ]
     },
-    "audit_interpretation": "ownership ambiguity is closed without forcing unsupported pin ownership. Six preserved fragments have unique owners supported by progressively stronger continuity evidence; four are represented explicitly as shared geometry between independently seeded route trees; one visible route fragment is preserved without pin ownership because no defensible owner exists. Canonical manifest build may proceed, but Splash reconstruction remains blocked until the corrected canonical skeleton and manifest are built and audited against the approved reference."
+    "audit_interpretation": "Thirty pixels recovered directly from the approved reference were added and the full pin-seeded partition was rerun from scratch. All 125 pin trees remain present and connected. Five previously unresolved unique-owner fragments disappear into their intended pin trees. The residual reconciliation set shrinks from 97 to 92 regions, and every residual region is pixel-identical to a previously reviewed region, so prior review semantics can be deterministically remapped. The former unique-owner fragment unassigned-011 remains separated by the one-pixel conflict boundary conflict-060 and is therefore represented conservatively as shared geometry between trees 30 and 31. Canonical candidate construction may now use the fresh repartition and remapped residual semantics; Splash reconstruction remains blocked until candidate pixel accounting and overlay audit pass."
   },
   "prohibited_shortcuts": [
     "procedural-route-generation",
     "hand-authored-reference-approximation",
     "invented-route-topology",
+    "synthetic-gap-interpolation",
     "automatic-deletion-of-unresolved-high-chroma-regions",
-    "forcing-ambiguous-kept-geometry-into-one-pin-tree",
+    "forcing-shared-geometry-into-one-pin-tree",
     "proximity-only-ownership-assignment",
     "dropping-shared-or-unowned-reference-geometry",
     "splash-reconstruction-before-canonical-manifest"
   ],
-  "current_status": "OWNERSHIP_AMBIGUITY_CLOSED_CANONICAL_BUILD_REQUIRED",
+  "current_status": "TARGETED_REPARTITION_COMPLETE_CANONICAL_CANDIDATE_BUILD_REQUIRED",
   "canonical_manifest_ready": false,
   "canonical_manifest_build_allowed": true,
   "splash_reconstruction_allowed": false
