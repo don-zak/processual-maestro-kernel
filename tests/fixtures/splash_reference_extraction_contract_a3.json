@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-extraction-v2",
+  "contract_version": "A3-splash-reference-extraction-v3",
   "source_of_truth": "approved pivot reference image",
   "reference_size": [1672, 941],
   "reference_core_bounds": [608, 224, 1041, 632],
@@ -13,6 +13,8 @@
     "graph-edge-vectorization",
     "pin-origin-terminal-reconciliation",
     "tile-by-tile-overlay-audit",
+    "pin-seeded-geodesic-partition",
+    "unresolved-partition-region-reconciliation",
     "canonical-manifest-promotion"
   ],
   "latest_measured_audit": {
@@ -27,15 +29,38 @@
       "bottom": 30
     },
     "recovered_route_pixels": 57557,
-    "audit_interpretation": "core-pin coverage is complete, but route masks still require tile-by-tile false-positive/false-negative reconciliation before canonical promotion"
+    "partition": {
+      "route_tree_count": 125,
+      "disconnected_route_tree_count": 0,
+      "conflict_pixels": 74,
+      "unassigned_pixels": 477,
+      "unresolved_pixels": 551
+    },
+    "reconciliation": {
+      "region_count": 97,
+      "likely_glow_bridge": 40,
+      "likely_shared_junction": 1,
+      "likely_isolated_artifact": 7,
+      "manual_conflict_review": 29,
+      "manual_unassigned_review": 20,
+      "likely_route_continuation": 0
+    },
+    "largest_unassigned_regions": [
+      {"area": 158, "bbox": [911, 640, 97, 89], "chroma_support_ratio": 0.943},
+      {"area": 110, "bbox": [1081, 271, 102, 30], "chroma_support_ratio": 0.727},
+      {"area": 27, "bbox": [939, 643, 2, 27], "chroma_support_ratio": 1.0},
+      {"area": 25, "bbox": [1052, 555, 25, 2], "chroma_support_ratio": 0.96}
+    ],
+    "audit_interpretation": "all 125 central-core pin candidates remain covered and individually partitioned, but 97 unresolved regions remain. Forty are likely glow bridges and seven likely isolated artifacts; fifty regions require manual visual reconciliation before canonical promotion. Large high-chroma unassigned regions must be treated as probable real route continuations until proven otherwise."
   },
   "prohibited_shortcuts": [
     "procedural-route-generation",
     "hand-authored-reference-approximation",
     "invented-route-topology",
+    "automatic-deletion-of-unresolved-high-chroma-regions",
     "splash-reconstruction-before-audit"
   ],
-  "current_status": "PIN_COVERAGE_COMPLETE_TILE_AUDIT_REQUIRED",
+  "current_status": "UNRESOLVED_PARTITION_RECONCILIATION_REQUIRED",
   "canonical_manifest_ready": false,
   "splash_reconstruction_allowed": false
 }
