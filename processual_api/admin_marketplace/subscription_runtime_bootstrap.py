@@ -62,8 +62,11 @@ class SubscriptionQuotaRepository(Protocol):
 
 
 class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
-    subscription_runtime: SubscriptionRuntimeRepository
-    subscription_quotas: SubscriptionQuotaRepository
+    @property
+    def subscription_runtime(self) -> SubscriptionRuntimeRepository: ...
+
+    @property
+    def subscription_quotas(self) -> SubscriptionQuotaRepository: ...
 
     async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
