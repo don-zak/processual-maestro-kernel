@@ -124,7 +124,7 @@ async def bootstrap_subscription_runtime_in_unit(
             raise SubscriptionRuntimeError(
                 "runtime replay conflicts with the original subscription binding."
             )
-        accounts = []
+        replay_accounts: list[AdminMarketSubscriptionQuotaAccount] = []
         for metric in profile.metrics:
             account = await uow.subscription_quotas.get_current(
                 subscription_id=source.subscription_id,
@@ -144,10 +144,10 @@ async def bootstrap_subscription_runtime_in_unit(
                 raise SubscriptionRuntimeError(
                     "quota replay conflicts with the original profile binding."
                 )
-            accounts.append(account)
+            replay_accounts.append(account)
         return SubscriptionRuntimeBootstrapResult(
             runtime=existing,
-            quota_accounts=tuple(accounts),
+            quota_accounts=tuple(replay_accounts),
             replayed=True,
         )
 
