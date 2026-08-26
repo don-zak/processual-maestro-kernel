@@ -6,15 +6,17 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, Self
 
+from processual_api.admin_marketplace.assessment_commercial_terms_persistence import (
+    AdminMarketAssessmentCommercialTerms,
+)
 from processual_api.admin_marketplace.assessment_commercial_terms_service import (
     ApprovedAssessmentCommercialTerms,
-    AssessmentCommercialTermsUnitOfWork,
     ensure_assessment_commercial_terms_in_unit,
 )
 from processual_api.admin_marketplace.assessment_quota_profile_service import (
-    AssessmentQuotaProfileUnitOfWork,
+    AssessmentQuotaProfileRepository,
     ensure_assessment_quota_profile_in_unit,
 )
 from processual_api.admin_marketplace.assessment_subscription_persistence import (
@@ -33,8 +35,9 @@ from processual_api.admin_marketplace.models import (
     AdminMarketSubscription,
 )
 from processual_api.admin_marketplace.subscription_runtime_bootstrap import (
+    SubscriptionQuotaRepository,
     SubscriptionRuntimeBootstrapInput,
-    SubscriptionRuntimeBootstrapUnitOfWork,
+    SubscriptionRuntimeRepository,
     bootstrap_subscription_runtime_in_unit,
 )
 from processual_api.billing.assessment_activation_preparation import (
@@ -112,17 +115,38 @@ class _CommercialAuditRepository(Protocol):
     def append(self, audit_record: AdminMarketAuditRecord) -> None: ...
 
 
-class AssessmentSubscriptionActivationUnitOfWork(
-    AssessmentQuotaProfileUnitOfWork,
-    AssessmentCommercialTermsUnitOfWork,
-    SubscriptionRuntimeBootstrapUnitOfWork,
-    Protocol,
-):
+class _AssessmentCommercialTermsRepository(Protocol):
+    async def get_by_binding_hash(
+        self,
+        assessment_binding_hash: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketAssessmentCommercialTerms | None: ...
+
+    async def get_by_approval_reference(
+        self,
+        approval_reference: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketAssessmentCommercialTerms | None: ...
+
+    def add(self, terms: AdminMarketAssessmentCommercialTerms) -> None: ...
+
+
+class AssessmentSubscriptionActivationUnitOfWork(Protocol):
+    assessment_quota_profiles: AssessmentQuotaProfileRepository
+    assessment_commercial_terms: _AssessmentCommercialTermsRepository
+    subscription_runtime: SubscriptionRuntimeRepository
+    subscription_quotas: SubscriptionQuotaRepository
     plans: _PlanRepository
     subscriptions: _SubscriptionRepository
     entitlement_activations: _EntitlementActivationRepository
     assessment_subscription_bindings: _AssessmentSubscriptionBindingRepository
     commercial_audit: _CommercialAuditRepository
+
+    async def __aenter__(self) -> Self: ...
+    async def __aexit__(self, exc_type, exc, traceback) -> None: ...
+    async def commit(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
