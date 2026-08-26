@@ -20,10 +20,25 @@ def test_public_ci_keeps_python_314_and_public_strip_gates():
         "flake8 . --count --select=E9,F63,F7,F82 --statistics",
         "processual_api/auth/security.py",
         "processual_api/middleware/subscription.py",
-        "--follow-imports=skip",
+        "--follow-imports=silent",
         "PYTHONPATH=. python -m pytest",
         "--cov=processual_kernel --cov=processual_api",
         "python -m twine check dist/*",
+    )
+
+    for marker in required_markers:
+        assert marker in public_ci
+
+
+def test_public_ci_is_least_privilege_and_supply_chain_pinned():
+    public_ci = Path(".github/workflows/ci-public.yml").read_text(encoding="utf-8")
+
+    required_markers = (
+        "permissions:\n  contents: read",
+        "persist-credentials: false",
+        "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
     )
 
     for marker in required_markers:
