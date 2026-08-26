@@ -2,9 +2,10 @@
 """Audit that the canonical graph round-trips exactly to canonical pixels.
 
 Every graph edge is expected to preserve its source pixel walk exactly. This
-auditor rasterizes all tree/shared/unowned edge paths and compares the union to
-the canonical pixel manifest without smoothing, interpolation, or line drawing.
-Any missing or extra pixel is a hard promotion failure.
+auditor reconstructs all tree/shared/unowned graph pixels from edge paths plus
+explicit isolated nodes and compares the union to the canonical pixel manifest
+without smoothing, interpolation, or line drawing. Any missing or extra pixel is
+a hard promotion failure.
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ def graph_pixels(graph):
         for item in graph.get(group,[]):
             for edge in item.get("edges",[]):
                 for x,y in edge.get("path",[]): out.add((int(x),int(y)))
+            for x,y in item.get("isolated_nodes",[]):
+                out.add((int(x),int(y)))
     return out
 
 
