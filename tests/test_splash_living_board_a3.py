@@ -15,6 +15,18 @@ def _board() -> str:
     return BOARD.read_text(encoding="utf-8")
 
 
+def _endpoint_y(d: str) -> int:
+    """Return the final Y coordinate for the authored SVG path.
+
+    The reference routes intentionally use more than one legal SVG ending style:
+    some finish with V<y>, while others finish with a final L<x> <y> segment.
+    The acceptance gate cares about the rendered endpoint Y, not the command type.
+    """
+    nums = [int(n) for n in re.findall(r"\d+", d)]
+    assert len(nums) >= 2, d
+    return nums[-1]
+
+
 def test_production_splash_keeps_dom_ui_plus_one_visible_authored_board():
     source = _source()
     required = [
@@ -111,11 +123,12 @@ def test_side_route_spacing_expands_toward_the_modules():
     routing = re.findall(r'data-route="route-[1-5]"[^>]*d="([^"]+)"', board)
     assert len(gov) == 5
     assert len(routing) == 5
-    # near-core starts are tightly packed by 10 px; destination Y values span a wider module band.
+    # Near-core starts are tightly packed; the authored route endpoints must span
+    # a wider module band. Endpoint parsing is command-agnostic (V or final L).
     gov_start_y = [int(re.match(r"M624 (\d+)", d).group(1)) for d in gov]
-    gov_end_y = [int(re.search(r"V(\d+)$", d).group(1)) for d in gov]
+    gov_end_y = [_endpoint_y(d) for d in gov]
     route_start_y = [int(re.match(r"M1048 (\d+)", d).group(1)) for d in routing]
-    route_end_y = [int(re.search(r"V(\d+)$", d).group(1)) for d in routing]
+    route_end_y = [_endpoint_y(d) for d in routing]
     assert max(gov_end_y) - min(gov_end_y) > max(gov_start_y) - min(gov_start_y)
     assert max(route_end_y) - min(route_end_y) > max(route_start_y) - min(route_start_y)
 
