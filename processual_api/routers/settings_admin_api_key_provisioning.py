@@ -49,6 +49,12 @@ def _require_api_key_provisioning_admin(current_user: dict) -> None:
     )
 
 
+def _string_values(value: object) -> list[str]:
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return []
+    return [str(item) for item in value if item]
+
+
 def _route_catalog(request: Request) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for route in request.app.routes:
@@ -88,7 +94,11 @@ def _route_catalog(request: Request) -> list[dict[str, object]]:
                     ),
                     "grantable": grantable,
                     "control_plane": control_plane,
-                    "production_allowed": policy.production_allowed if grantable else None,
+                    "production_allowed": (
+                        policy.production_allowed
+                        if policy is not None and grantable
+                        else None
+                    ),
                     "selection_reason": (
                         "canonical_runtime_access_policy"
                         if grantable
@@ -111,7 +121,7 @@ async def admin_api_key_operational_profiles(
     _require_api_key_provisioning_admin(current_user)
     payload = api_key_operational_profiles_payload()
     profiles = [
-        *list(payload.get("profiles") or []),
+        *_string_values(payload.get("profiles")),
         *list_platform_api_key_operational_profiles(),
     ]
     return {
@@ -143,9 +153,9 @@ async def admin_api_key_access_catalog(
     grantable = [endpoint for endpoint in endpoints if endpoint["grantable"]]
     scopes = sorted(
         {
-            str(scope)
+            scope
             for endpoint in grantable
-            for scope in endpoint.get("required_scopes", [])
+            for scope in _string_values(endpoint.get("required_scopes"))
         }
     )
     tasks = sorted(
@@ -157,9 +167,9 @@ async def admin_api_key_access_catalog(
     )
     profiles = sorted(
         {
-            str(profile_id)
+            profile_id
             for endpoint in grantable
-            for profile_id in endpoint.get("operational_profile_ids", [])
+            for profile_id in _string_values(endpoint.get("operational_profile_ids"))
         }
     )
     return {
