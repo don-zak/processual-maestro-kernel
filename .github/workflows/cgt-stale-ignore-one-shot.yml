@@ -1,0 +1,42 @@
+name: One-shot CGT stale-ignore cleanup
+
+on:
+  push:
+    branches: [agent/cgt-stale-ignore-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'chore: stage one-shot CGT stale-ignore cleanup'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: agent/cgt-stale-ignore-v2
+
+      - name: Remove exactly one confirmed stale ignore
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('processual_api/routers/cgt_governor.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'results.sort(key=lambda r: r["reward"], reverse=True)  # type: ignore[arg-type, return-value]'
+          new = 'results.sort(key=lambda r: r["reward"], reverse=True)'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one stale-ignore match, found {count}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+          git diff -- processual_api/routers/cgt_governor.py
+
+      - name: Commit exact cleanup
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add processual_api/routers/cgt_governor.py
+          git commit -m "fix: remove stale CGT ignore"
+          git push origin HEAD:agent/cgt-stale-ignore-v2
