@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from .base import BaseLLMAdapter
+
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam
 
 
 class AnthropicAdapter(BaseLLMAdapter):
@@ -28,7 +32,7 @@ class AnthropicAdapter(BaseLLMAdapter):
             from anthropic import AsyncAnthropic
 
             client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-            await client.ping()
+            await client.models.list(limit=1)
             return True
         except Exception:
             return False
@@ -46,13 +50,16 @@ class AnthropicAdapter(BaseLLMAdapter):
         from anthropic import AsyncAnthropic
 
         client = AsyncAnthropic(api_key=api_key)
-
-        model = kwargs.get("model") or self.default_model
+        model = str(kwargs.get("model") or self.default_model)
+        max_tokens = int(kwargs.get("max_tokens", 2048))
+        messages: list[MessageParam] = [{"role": "user", "content": prompt}]
         response = await client.messages.create(
             model=model,
             system=system_prompt or "",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=kwargs.get("max_tokens", 2048),
-            temperature=kwargs.get("temperature", 0.7),
+            messages=messages,
+            max_tokens=max_tokens,
         )
-        return response.content[0].text if response.content else ""
+        if not response.content:
+            return ""
+        first = response.content[0]
+        return first.text if first.type == "text" else ""
