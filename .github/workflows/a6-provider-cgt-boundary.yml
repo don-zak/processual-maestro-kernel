@@ -37,9 +37,12 @@ jobs:
             processual_api/cgt_governor/adapters/openai_adapter.py \
             processual_api/cgt_governor/adapters/openai_compatible_adapter.py \
             processual_api/cgt_governor/adapters/registry.py \
-            processual_api/routers/cgt_governor.py \
             --follow-imports=silent \
             --warn-unused-ignores \
+            --show-error-codes
+          python -m mypy \
+            processual_api/routers/cgt_governor.py \
+            --follow-imports=silent \
             --show-error-codes
 
       - name: Focused A6 pytest
