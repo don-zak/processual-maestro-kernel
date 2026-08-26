@@ -5,6 +5,8 @@ This stage performs topology-preserving graph compression only. It does not
 invent, interpolate, smooth, or move route geometry. Every emitted graph edge is
 an ordered walk through measured canonical pixels. Degree-2 runs are compressed
 between terminals/junctions while preserving the exact source pixel path.
+Singleton reviewed geometry is represented explicitly as an isolated node rather
+than being dropped or converted into a synthetic self-edge.
 """
 
 from __future__ import annotations
@@ -30,11 +32,11 @@ def neighbours(point, pixels):
 
 def compress_graph(pixels):
     if not pixels:
-        return [],[],[]
+        return [],[],[],[]
     degree={p:len(neighbours(p,pixels)) for p in pixels}
-    nodes={p for p,d in degree.items() if d!=2}
-    if not nodes:
-        # Closed loop: pick one stable anchor so the cycle remains representable.
+    isolated=sorted([p for p,d in degree.items() if d==0],key=lambda p:(p[1],p[0]))
+    nodes={p for p,d in degree.items() if d!=2 and d!=0}
+    if not nodes and not isolated:
         nodes={min(pixels,key=lambda p:(p[1],p[0]))}
     visited=set(); edges=[]
     for start in sorted(nodes,key=lambda p:(p[1],p[0])):
@@ -45,18 +47,24 @@ def compress_graph(pixels):
             while cur not in nodes:
                 opts=[p for p in neighbours(cur,pixels) if p!=prev]
                 if not opts: break
-                # A degree-2 run should have exactly one forward continuation.
                 candidate=opts[0]
                 visited.add(frozenset((cur,candidate)))
                 path.append(candidate); prev,cur=cur,candidate
             edges.append(path)
     terminals=sorted([p for p,d in degree.items() if d==1],key=lambda p:(p[1],p[0]))
     junctions=sorted([p for p,d in degree.items() if d>=3],key=lambda p:(p[1],p[0]))
-    return edges,terminals,junctions
+    return edges,terminals,junctions,isolated
 
 
 def encode_path(path):
     return [[int(x),int(y)] for x,y in path]
+
+
+def represented_pixels(edges, isolated):
+    result=set(isolated)
+    for edge in edges:
+        result.update(edge)
+    return result
 
 
 def main():
@@ -68,19 +76,17 @@ def main():
     if meta.get("promotion_blocked"):
         raise SystemExit("Canonical candidate is still promotion-blocked")
 
-    graph_trees=[]; total_edges=0; total_terminals=0; total_junctions=0
-    disconnected=[]
+    graph_trees=[]; total_edges=0; total_terminals=0; total_junctions=0; total_isolated=0
+    unrepresented=[]
     for tree in manifest.get("route_trees",[]):
         tid=int(tree["tree_id"])
         pixels={(int(x),int(y)) for x,y in tree.get("pixels",[])}
         if not pixels: raise SystemExit(f"Tree {tid} has no pixels")
-        edges,terminals,junctions=compress_graph(pixels)
-        represented=set()
-        for edge in edges: represented.update(edge)
-        missing=pixels-represented
+        edges,terminals,junctions,isolated=compress_graph(pixels)
+        missing=pixels-represented_pixels(edges,isolated)
         if missing:
-            disconnected.append({"tree_id":tid,"unrepresented_pixel_count":len(missing)})
-        total_edges+=len(edges); total_terminals+=len(terminals); total_junctions+=len(junctions)
+            unrepresented.append({"tree_id":tid,"unrepresented_pixel_count":len(missing)})
+        total_edges+=len(edges); total_terminals+=len(terminals); total_junctions+=len(junctions); total_isolated+=len(isolated)
         graph_trees.append({
             "tree_id":tid,
             "pin_id":tree.get("pin_id"),
@@ -91,8 +97,10 @@ def main():
             "edge_count":len(edges),
             "terminal_count":len(terminals),
             "junction_count":len(junctions),
+            "isolated_node_count":len(isolated),
             "terminals":[list(p) for p in terminals],
             "junctions":[list(p) for p in junctions],
+            "isolated_nodes":[list(p) for p in isolated],
             "edges":[{"edge_id":f"tree-{tid:03d}-edge-{i+1:03d}","path":encode_path(path),"pixel_count":len(path)} for i,path in enumerate(edges)],
         })
 
@@ -100,7 +108,10 @@ def main():
         result=[]
         for index,item in enumerate(records,start=1):
             pixels={(int(x),int(y)) for x,y in item.get("pixels",[])}
-            edges,terminals,junctions=compress_graph(pixels)
+            edges,terminals,junctions,isolated=compress_graph(pixels)
+            missing=pixels-represented_pixels(edges,isolated)
+            if missing:
+                raise SystemExit(f"{kind} geometry {item.get('region')} has unrepresented pixels")
             result.append({
                 "id":item.get("region",f"{kind}-{index:03d}"),
                 "kind":kind,
@@ -110,6 +121,7 @@ def main():
                 "edges":[{"edge_id":f"{kind}-{index:03d}-edge-{i+1:03d}","path":encode_path(path)} for i,path in enumerate(edges)],
                 "terminals":[list(p) for p in terminals],
                 "junctions":[list(p) for p in junctions],
+                "isolated_nodes":[list(p) for p in isolated],
             })
         return result
 
@@ -123,9 +135,10 @@ def main():
             "total_tree_edge_count":total_edges,
             "total_tree_terminal_count":total_terminals,
             "total_tree_junction_count":total_junctions,
+            "total_tree_isolated_node_count":total_isolated,
             "shared_geometry_count":len(shared),
             "preserved_unowned_geometry_count":len(unowned),
-            "unrepresented_tree_count":len(disconnected),
+            "unrepresented_tree_count":len(unrepresented),
             "canonical_promoted":False,
             "splash_reconstruction_allowed":False,
             "promotion_gate":"zero unrepresented trees + raster roundtrip audit + reference overlay audit",
@@ -133,11 +146,11 @@ def main():
         "route_trees":graph_trees,
         "shared_geometry":shared,
         "preserved_unowned_geometry":unowned,
-        "unrepresented_trees":disconnected,
+        "unrepresented_trees":unrepresented,
     }
     (args.out/"canonical_graph_candidate.json").write_text(json.dumps(result,indent=2),encoding="utf-8")
     print(json.dumps(result["meta"],indent=2))
-    if disconnected:
+    if unrepresented:
         raise SystemExit("Graph candidate does not represent all canonical tree pixels")
 
 if __name__=="__main__": main()
