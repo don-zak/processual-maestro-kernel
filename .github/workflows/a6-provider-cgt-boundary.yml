@@ -1,0 +1,62 @@
+name: A6 Provider Adapter and CGT Boundary Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "processual_api/cgt_governor/adapters/anthropic_adapter.py"
+      - "processual_api/cgt_governor/adapters/openai_adapter.py"
+      - "processual_api/cgt_governor/adapters/openai_compatible_adapter.py"
+      - "processual_api/cgt_governor/adapters/registry.py"
+      - "processual_api/routers/cgt_governor.py"
+      - "tests/test_cgt_wave3d_llm_adapters_bundle.py"
+      - "tests/test_adapter_registry.py"
+      - "tests/test_cgt_governor_behavior.py"
+      - ".github/workflows/a6-provider-cgt-boundary.yml"
+
+jobs:
+  qualify-a6:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install project and QA dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Focused A6 mypy
+        run: |
+          python -m mypy \
+            processual_api/cgt_governor/adapters/anthropic_adapter.py \
+            processual_api/cgt_governor/adapters/openai_adapter.py \
+            processual_api/cgt_governor/adapters/openai_compatible_adapter.py \
+            processual_api/cgt_governor/adapters/registry.py \
+            processual_api/routers/cgt_governor.py \
+            --follow-imports=silent \
+            --warn-unused-ignores \
+            --show-error-codes
+
+      - name: Focused A6 pytest
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_cgt_wave3d_llm_adapters_bundle.py \
+            tests/test_adapter_registry.py \
+            tests/test_cgt_governor_behavior.py
+
+      - name: Focused A6 Ruff
+        run: |
+          ruff check \
+            processual_api/cgt_governor/adapters/anthropic_adapter.py \
+            processual_api/cgt_governor/adapters/openai_adapter.py \
+            processual_api/cgt_governor/adapters/openai_compatible_adapter.py \
+            processual_api/cgt_governor/adapters/registry.py \
+            processual_api/routers/cgt_governor.py \
+            tests/test_cgt_wave3d_llm_adapters_bundle.py \
+            tests/test_adapter_registry.py \
+            tests/test_cgt_governor_behavior.py
