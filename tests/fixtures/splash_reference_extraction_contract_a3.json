@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-extraction-v8",
+  "contract_version": "A3-splash-reference-extraction-v9",
   "source_of_truth": "approved pivot reference image",
   "reference_size": [1672, 941],
   "reference_core_bounds": [608, 224, 1041, 632],
@@ -27,7 +27,11 @@
     "legacy-reviewed-attachment-reference-recovery",
     "full-repartition-after-legacy-attachment-recovery",
     "corrected-canonical-skeleton-build",
-    "canonical-manifest-promotion"
+    "canonical-graph-build",
+    "exact-graph-raster-roundtrip-audit",
+    "canonical-reference-overlay-audit",
+    "reference-derived-render-semantics",
+    "canonical-render-manifest-promotion"
   ],
   "latest_measured_audit": {
     "reference_file": "approved 1672x941 pivot reference",
@@ -69,26 +73,37 @@
         {"region":"unassigned-005","target_trees":[39,40]},
         {"region":"unassigned-007","target_trees":[30,31],"bridge_region":"conflict-060"}
       ],
-      "junction_regions": [
-        {"region":"conflict-014","target_trees":[68,69,70]}
-      ],
-      "shared_conflict_regions": [
-        {"region":"conflict-060","target_trees":[30,31]}
-      ],
-      "preserved_unowned_regions": [
-        {"region":"unassigned-013","reason":"visible reference geometry with no defensible unique or shared pin ownership"}
-      ]
+      "junction_regions": [{"region":"conflict-014","target_trees":[68,69,70]}],
+      "shared_conflict_regions": [{"region":"conflict-060","target_trees":[30,31]}],
+      "preserved_unowned_regions": [{"region":"unassigned-013","reason":"visible reference geometry with no defensible unique or shared pin ownership"}]
     },
-    "canonical_candidate_pixel_accounting": {
+    "canonical_geometry": {
       "owned_pixels": 18144,
       "shared_or_junction_pixels": 135,
       "preserved_unowned_pixels": 6,
       "canonical_union_pixels": 18285,
       "owned_shared_overlap_pixels": 0,
       "owned_unowned_overlap_pixels": 0,
-      "shared_unowned_overlap_pixels": 0
+      "shared_unowned_overlap_pixels": 0,
+      "tree_edge_count": 5474,
+      "tree_terminal_count": 740,
+      "tree_junction_count": 3102,
+      "unrepresented_tree_count": 0,
+      "graph_roundtrip_missing_pixels": 0,
+      "graph_roundtrip_extra_pixels": 0,
+      "graph_roundtrip_exact": true,
+      "canonical_pixels_outside_recovered_skeleton": 0,
+      "reviewed_excluded_recovered_pixels": 126,
+      "reference_overlay_structurally_exact": true,
+      "geometry_promoted": true
     },
-    "audit_interpretation": "Fifty pixels have now been recovered directly from the approved reference across two targeted recovery passes, with zero synthetic interpolation. After the second full repartition, all 125 pin trees remain present and connected, the nine legacy reviewed ATTACH_CONTINUATION fragments are absorbed into their intended route trees, and the residual reconciliation set shrinks to 83 pixel-identical previously reviewed regions with no new or changed residual geometry. All residual semantics are explicit and pending count is zero. The canonical candidate has exact pixel accounting of 18,285 pixels with no ownership-category overlap. Canonical promotion still requires a final graph/vector manifest build and visual overlay audit against the approved reference before Splash reconstruction can begin."
+    "render_semantics": {
+      "required_color_families": ["amber","lime","teal","cyan","violet"],
+      "required_route_width_classes": 2,
+      "edge_color_assignment_complete": false,
+      "edge_width_assignment_complete": false
+    },
+    "audit_interpretation": "Canonical route geometry is now lossless and provenance-backed. The graph roundtrip reproduces all 18,285 canonical pixels exactly with zero missing and zero extra pixels, all 125 pin trees are represented, and no canonical pixel lies outside the recovered approved-reference skeleton. Geometry is therefore promoted independently. Splash reconstruction remains blocked because the canonical graph still needs reference-derived render semantics: every edge must receive its measured color family and one of the two permitted route-width classes before the render manifest can become canonical."
   },
   "prohibited_shortcuts": [
     "procedural-route-generation",
@@ -99,10 +114,11 @@
     "forcing-shared-geometry-into-one-pin-tree",
     "proximity-only-ownership-assignment",
     "dropping-shared-or-unowned-reference-geometry",
-    "splash-reconstruction-before-canonical-manifest"
+    "inventing-edge-colors-or-widths",
+    "splash-reconstruction-before-canonical-render-manifest"
   ],
-  "current_status": "CANONICAL_PIXEL_ACCOUNTING_COMPLETE_GRAPH_OVERLAY_AUDIT_REQUIRED",
-  "canonical_manifest_ready": false,
-  "canonical_manifest_build_allowed": true,
+  "current_status": "CANONICAL_GEOMETRY_PROMOTED_RENDER_SEMANTICS_REQUIRED",
+  "canonical_geometry_ready": true,
+  "canonical_render_manifest_ready": false,
   "splash_reconstruction_allowed": false
 }
