@@ -1,0 +1,60 @@
+name: M4 Quota Usage and Top-Up Authority Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "processual_api/admin_marketplace/subscription_quota_usage.py"
+      - "processual_api/admin_marketplace/subscription_quota_usage_persistence.py"
+      - "processual_api/admin_marketplace/subscription_runtime_access_policy.py"
+      - "processual_api/billing/commercial_top_up_application_service.py"
+      - "processual_api/billing/commercial_top_up_event_ledger.py"
+      - "processual_api/billing/commercial_top_up_models.py"
+      - "processual_api/billing/commercial_top_up_order_grant_contracts.py"
+      - "tests/test_subscription_quota_usage_a3.py"
+      - "tests/test_commercial_top_up_application_service_group2.py"
+      - "tests/test_commercial_top_up_application_service_boundaries_group2.py"
+      - ".github/workflows/m4-quota-usage-topup-authority.yml"
+
+jobs:
+  qualify-m4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install project and QA dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Focused M4 mypy
+        run: |
+          python -m mypy \
+            processual_api/admin_marketplace/subscription_quota_usage.py \
+            processual_api/admin_marketplace/subscription_quota_usage_persistence.py \
+            processual_api/billing/commercial_top_up_application_service.py \
+            --follow-imports=silent \
+            --warn-unused-ignores \
+            --show-error-codes
+
+      - name: Focused M4 pytest
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_subscription_quota_usage_a3.py \
+            tests/test_commercial_top_up_application_service_group2.py \
+            tests/test_commercial_top_up_application_service_boundaries_group2.py
+
+      - name: Focused M4 Ruff
+        run: |
+          ruff check \
+            processual_api/admin_marketplace/subscription_quota_usage.py \
+            processual_api/admin_marketplace/subscription_quota_usage_persistence.py \
+            processual_api/billing/commercial_top_up_application_service.py \
+            tests/test_subscription_quota_usage_a3.py \
+            tests/test_commercial_top_up_application_service_group2.py \
+            tests/test_commercial_top_up_application_service_boundaries_group2.py
