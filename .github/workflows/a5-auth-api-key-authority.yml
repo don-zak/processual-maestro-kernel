@@ -1,0 +1,62 @@
+name: A5 Auth and API-Key Authority Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "processual_api/auth/rate_limit.py"
+      - "processual_api/integrations/api_key_access_policy.py"
+      - "processual_api/routers/settings_admin_api_key_provisioning.py"
+      - "processual_api/routers/settings_admin_evaluation_grants.py"
+      - "tests/test_auth_rate_limit_r5a.py"
+      - "tests/test_admin_api_key_provisioning_workspace.py"
+      - "tests/test_admin_api_key_canonical_access_policy.py"
+      - "tests/test_admin_evaluation_grants.py"
+      - ".github/workflows/a5-auth-api-key-authority.yml"
+
+jobs:
+  qualify-a5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install project and QA dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Focused A5 mypy
+        run: |
+          python -m mypy \
+            processual_api/auth/rate_limit.py \
+            processual_api/integrations/api_key_access_policy.py \
+            processual_api/routers/settings_admin_api_key_provisioning.py \
+            processual_api/routers/settings_admin_evaluation_grants.py \
+            --follow-imports=silent \
+            --warn-unused-ignores \
+            --show-error-codes
+
+      - name: Focused A5 pytest
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_auth_rate_limit_r5a.py \
+            tests/test_admin_api_key_provisioning_workspace.py \
+            tests/test_admin_api_key_canonical_access_policy.py \
+            tests/test_admin_evaluation_grants.py
+
+      - name: Focused A5 Ruff
+        run: |
+          ruff check \
+            processual_api/auth/rate_limit.py \
+            processual_api/integrations/api_key_access_policy.py \
+            processual_api/routers/settings_admin_api_key_provisioning.py \
+            processual_api/routers/settings_admin_evaluation_grants.py \
+            tests/test_auth_rate_limit_r5a.py \
+            tests/test_admin_api_key_provisioning_workspace.py \
+            tests/test_admin_api_key_canonical_access_policy.py \
+            tests/test_admin_evaluation_grants.py
