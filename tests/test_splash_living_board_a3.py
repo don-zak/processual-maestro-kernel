@@ -28,7 +28,8 @@ def test_legacy_authored_board_is_deleted_and_inline_board_is_canonical():
 
 def test_model_represents_all_four_core_edges_as_active_pin_families():
     model = _read(MODEL)
-    assert "const SIDE_Y = Array.from({ length: 28 }" in model
+    assert "pinCount: 120" in model
+    assert "const SIDE_Y = Array.from({ length: 30 }" in model
     assert "const EDGE_X = Array.from({ length: 30 }" in model
     assert "for (const side of ['left', 'right'])" in model
     assert "for (const side of ['top', 'bottom'])" in model
