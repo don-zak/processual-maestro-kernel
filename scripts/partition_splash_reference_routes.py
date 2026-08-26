@@ -7,7 +7,9 @@ core-pin attachment points as seeds. Pixels equidistant between competing pins
 are marked as conflict boundaries instead of merging the two route trees.
 
 The output remains audit-only and cannot promote the reference manifest to
-canonical or enable Splash reconstruction.
+canonical or enable Splash reconstruction. The audit now exports exact pixel
+ownership for every pin-seeded route tree so later continuity analysis can resolve
+visually verified KEEP fragments without falling back to proximity-only guesses.
 """
 
 from __future__ import annotations
@@ -182,6 +184,7 @@ def main() -> None:
     kernel[1, 1] = 0
 
     route_trees: list[dict[str, object]] = []
+    route_tree_pixels: dict[str, list[list[int]]] = {}
     disconnected_tree_count = 0
     for label, pin in enumerate(pins, start=1):
         tree = (labels == label).astype(np.uint8)
@@ -192,8 +195,11 @@ def main() -> None:
         degree = cv2.filter2D(tree, -1, kernel, borderType=cv2.BORDER_CONSTANT)
         terminal_points = np.argwhere((tree > 0) & (degree == 1))
         junction_points = np.argwhere((tree > 0) & (degree >= 3))
+        tree_points = np.argwhere(tree > 0)
+        route_tree_pixels[str(label)] = [[int(x), int(y)] for y, x in tree_points]
         route_trees.append(
             {
+                "tree_id": label,
                 "pin_id": pin["id"],
                 "side": pin["side"],
                 "pixel_count": int(tree.sum()),
@@ -205,6 +211,7 @@ def main() -> None:
         )
 
     pin_pixel_counts = Counter(labels[assigned].tolist())
+    exported_pixels = sum(len(points) for points in route_tree_pixels.values())
     result = {
         "meta": {
             "stage": "PIN_SEEDED_GEODESIC_PARTITION_AUDIT",
@@ -215,6 +222,8 @@ def main() -> None:
             "unattached_pin_count": len(pins) - len(seeds),
             "skeleton_pixels": int(skeleton.sum()),
             "assigned_skeleton_pixels": int(assigned.sum()),
+            "exported_route_tree_pixels": exported_pixels,
+            "route_tree_pixel_export_complete": exported_pixels == int(assigned.sum()),
             "conflict_boundary_pixels": int(conflicts.sum()),
             "unassigned_skeleton_pixels": int(unassigned.sum()),
             "route_tree_count": len(pin_pixel_counts),
@@ -229,6 +238,7 @@ def main() -> None:
         },
         "pins": pins,
         "route_trees": route_trees,
+        "route_tree_pixels": route_tree_pixels,
     }
     (args.out / "pin_partition_audit.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
 
