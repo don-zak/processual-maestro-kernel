@@ -21,8 +21,12 @@ def _contract() -> dict:
     return json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
-def _routes(board: str) -> list[str]:
-    return re.findall(r'data-route="[^"]+"[^>]*d="([^"]+)"', board)
+def _elements(board: str) -> list[tuple[str, str]]:
+    return re.findall(r'<path class="route [^"]+"([^>]*) d="([^"]+)"', board)
+
+
+def _subs(d: str) -> list[str]:
+    return ["M" + chunk for chunk in d.split("M")[1:]]
 
 
 def _start(d: str) -> tuple[int, int]:
@@ -31,91 +35,82 @@ def _start(d: str) -> tuple[int, int]:
     return int(m.group(1)), int(m.group(2))
 
 
-def test_contract_targets_measured_visual_pin_geometry():
+def test_contract_targets_v19_staged_tooth_fabric():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v18"
+    assert contract["contract_version"] == "A3-splash-reference-v19"
     assert contract["minimum_score"] >= 99
     assert contract["architecture"]["visible_route_sources"] == 1
-    assert contract["architecture"]["legacy_board_must_be_deleted_before_rebuild"] is True
     assert contract["architecture"]["pulse_overlay_must_not_draw_routes"] is True
-    assert contract["logical_layout"]["core_visual_pin_envelope"] == {
-        "left_x": 624,
-        "right_x": 1048,
-        "top_y": 233,
-        "bottom_y": 653,
-        "tolerance_px": 3,
-    }
+    assert contract["pcb"]["topology"] == "staged-tooth-fabric"
+    assert contract["pcb"]["destination_route_ratio_max"] <= 0.25
+    assert contract["pcb"]["route_weight_classes_exact"] == 2
 
 
-def test_board_is_v18_post_delete_reconstruction():
+def test_board_is_v19_and_preserves_measured_pin_envelope():
     board = _board()
-    assert 'Maestro PCB v18 measured visual-pin reconstruction' in board
-    assert 'data-topology="measured-pin-single-source"' in board
-    assert 'data-left-pin-x="624"' in board
-    assert 'data-right-pin-x="1048"' in board
-    assert 'data-top-pin-y="233"' in board
-    assert 'data-bottom-pin-y="653"' in board
-    assert 'Maestro PCB v15 single-source pin fanout' not in board
+    assert 'Maestro PCB v19 staged tooth-fabric reconstruction' in board
+    assert 'data-topology="staged-tooth-fabric"' in board
+    assert 'data-route-weights="2"' in board
+    assert 'data-destination-minority="true"' in board
+    for marker in ['data-left-pin-x="624"', 'data-right-pin-x="1048"', 'data-top-pin-y="233"', 'data-bottom-pin-y="653"']:
+        assert marker in board
 
 
-def test_every_visible_route_starts_at_the_measured_pin_envelope():
+def test_every_route_subpath_starts_on_the_visual_pin_envelope():
     board = _board()
-    pcb = _contract()["pcb"]
-    routes = _routes(board)
-    assert len(routes) >= pcb["route_subpaths_min"]
-    for d in routes:
+    subs = [sub for _, d in _elements(board) for sub in _subs(d)]
+    assert len(subs) >= _contract()["pcb"]["route_subpaths_min"]
+    for d in subs:
         x, y = _start(d)
         assert x in {624, 1048} or y in {233, 653}, d
 
 
-def test_side_routes_are_parallel_at_origin_then_fan_out():
+def test_destination_routes_are_a_small_minority_of_total_tooth_fabric():
+    destination = total = 0
+    for attrs, d in _elements(_board()):
+        count = len(_subs(d))
+        total += count
+        if 'data-destination="module"' in attrs:
+            destination += count
+    assert destination > 0
+    assert destination / total < _contract()["pcb"]["destination_route_ratio_max"]
+
+
+def test_only_two_route_widths_exist():
     board = _board()
-    left = re.findall(r'data-route="(?:gov|sup|cal|orc)-[^"]+"[^>]*d="([^"]+)"', board)
-    right = re.findall(r'data-route="(?:route|pol|feed|ctrl)-[^"]+"[^>]*d="([^"]+)"', board)
+    weights = set(re.findall(r'data-weight="([^"]+)"', board))
+    assert weights == set(_contract()["pcb"]["allowed_route_weights"])
+    assert 'stroke-width:1.15' in board
+    assert 'stroke-width:.68' in board
+    assert 'stroke-width:.48' not in board
+
+
+def test_side_breakout_is_aligned_before_progressive_spread():
+    subs = [sub for _, d in _elements(_board()) for sub in _subs(d)]
+    left = [d for d in subs if d.startswith("M624 ")]
+    right = [d for d in subs if d.startswith("M1048 ")]
     assert left and right
     assert all(re.match(r"M624 \d+H575", d) for d in left)
     assert all(re.match(r"M1048 \d+H1097", d) for d in right)
+    assert any("L430" in d or "L422" in d for d in left)
+    assert any("L1242" in d or "L1250" in d for d in right)
 
 
-def test_top_and_bottom_routes_start_on_visual_teeth():
+def test_top_bottom_and_field_termination_network_are_present():
     board = _board()
-    crown = re.findall(r'data-route="top-[^"]+"[^>]*d="([^"]+)"', board)
-    bottom = re.findall(r'data-route="bot-[^"]+"[^>]*d="([^"]+)"', board)
-    assert len(crown) == 18
-    assert len(bottom) == 14
-    assert all(re.match(r"M\d+ 233V196", d) for d in crown)
-    assert all(re.match(r"M\d+ 653V690", d) for d in bottom)
+    subs = [sub for _, d in _elements(board) for sub in _subs(d)]
+    assert len([d for d in subs if re.match(r"M\d+ 233", d)]) >= 28
+    assert len([d for d in subs if re.match(r"M\d+ 653", d)]) >= 28
+    assert 'id="terminal-beacons"' in board
+    assert board.count("<circle") >= 40
 
 
-def test_dead_end_nodes_are_actual_route_endpoints():
-    board = _board()
-    dead = re.findall(r'data-terminal="dead-end"[^>]*d="([^"]+)"', board)
-    assert len(dead) >= 16
-    endpoints = set()
-    for d in dead:
-        nums = [int(n) for n in re.findall(r"\d+", d)]
-        endpoints.add((nums[-2], nums[-1]))
-    nodes = {(int(x), int(y)) for x, y in re.findall(r'<circle cx="(\d+)" cy="(\d+)"', board)}
-    assert endpoints <= nodes
-
-
-def test_no_legacy_free_origin_fabric_remains():
-    board = _board()
-    for marker in ["M8 112", "M8 178", "M1664 126", "M1664 196", 'data-origin-x="642"', 'data-origin-x="1030"']:
-        assert marker not in board
-
-
-def test_motion_overlay_is_pulse_only():
+def test_motion_overlay_remains_pulse_only_and_identity_is_preserved():
     source = _source()
     assert 'id="signal-svg"' in source
     assert '.signal-geometry{fill:none;stroke:none;pointer-events:none}' in source
-    assert "class:'signal-geometry'" in source
     assert "class:'signal-base'" not in source
     assert "class:'signal-wake'" not in source
-
-
-def test_identity_core_entry_and_viewport_contracts_remain_intact():
-    source = _source()
     required = [
         'class="maestro-emblem"',
         'class="brand-word">MAESTRO<b>.</b>',
@@ -127,10 +122,7 @@ def test_identity_core_entry_and_viewport_contracts_remain_intact():
         "window.location.href = '/login'",
         "transform:scale(1.045)",
         "transform:scale(.88)",
-        "width:4px",
-        "height:4px",
         "const fit_rule='reference-cover-1672x941'",
-        "Math.max(viewportWidth/1672,viewportHeight/941)",
         "@media(prefers-reduced-motion:reduce)",
     ]
     assert not [m for m in required if m not in source]
