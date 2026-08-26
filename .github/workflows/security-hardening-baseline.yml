@@ -24,7 +24,7 @@ jobs:
       - name: Install package and security tooling
         run: |
           python -m pip install --upgrade pip
-          pip install .[dev,api,observability,security,database,cache,reports,llm]
+          pip install -e .[dev,api,observability,security,database,cache,reports,llm]
 
       - name: Bandit security scan
         run: |
@@ -33,7 +33,7 @@ jobs:
             -ll -ii
 
       - name: Python dependency vulnerability audit
-        run: pip-audit --strict
+        run: pip-audit --strict --skip-editable
 
       - name: Reject private CGT leakage from public tree
         run: |
