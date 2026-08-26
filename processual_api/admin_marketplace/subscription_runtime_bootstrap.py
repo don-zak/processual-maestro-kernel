@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, Self
 
 from processual_api.admin_marketplace.subscription_billing_period import quota_period_end
 from processual_api.admin_marketplace.subscription_quota_profiles import (
@@ -65,7 +65,7 @@ class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
     subscription_runtime: SubscriptionRuntimeRepository
     subscription_quotas: SubscriptionQuotaRepository
 
-    async def __aenter__(self) -> SubscriptionRuntimeBootstrapUnitOfWork: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 
