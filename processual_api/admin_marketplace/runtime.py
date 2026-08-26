@@ -5,12 +5,15 @@ import binascii
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Self
 
 from processual_api.admin_marketplace.assessment_commercial_read_service import (
+    AssessmentCommercialReadUnitOfWork,
     AssessmentSubscriptionCommercialReadService,
 )
 from processual_api.admin_marketplace.assessment_subscription_activation_service import (
     AssessmentSubscriptionActivationService,
+    AssessmentSubscriptionActivationUnitOfWork,
 )
 from processual_api.admin_marketplace.commercial_read_service import (
     AdminMarketplaceCommercialReadService,
@@ -33,6 +36,9 @@ from processual_api.admin_marketplace.payment_evidence_service import (
 from processual_api.admin_marketplace.payment_reconciliation_service import (
     PaymentReconciliationService,
 )
+from processual_api.admin_marketplace.persistence.protocols import (
+    AdminMarketplaceUnitOfWork,
+)
 from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
@@ -45,6 +51,33 @@ from processual_api.settings import APISettings, settings
 
 class AdminMarketplaceRuntimeUnavailableError(RuntimeError):
     """Admin Marketplace read authority is unavailable."""
+
+
+class _AdminMarketplaceRuntimeUnitOfWork(
+    SqlAlchemyAdminMarketplaceUnitOfWork,
+    AdminMarketplaceUnitOfWork,
+):
+    async def __aenter__(self) -> Self:
+        await super().__aenter__()
+        return self
+
+
+class _AssessmentCommercialReadRuntimeUnitOfWork(
+    SqlAlchemyAdminMarketplaceUnitOfWork,
+    AssessmentCommercialReadUnitOfWork,
+):
+    async def __aenter__(self) -> Self:
+        await super().__aenter__()
+        return self
+
+
+class _AssessmentSubscriptionActivationRuntimeUnitOfWork(
+    SqlAlchemyAdminMarketplaceUnitOfWork,
+    AssessmentSubscriptionActivationUnitOfWork,
+):
+    async def __aenter__(self) -> Self:
+        await super().__aenter__()
+        return self
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,8 +130,14 @@ async def build_admin_marketplace_runtime(
             seconds=config.auth_mfa_step_up_seconds,
         )
 
-        def unit_of_work_factory() -> SqlAlchemyAdminMarketplaceUnitOfWork:
-            return SqlAlchemyAdminMarketplaceUnitOfWork(session_factory)
+        def unit_of_work_factory() -> _AdminMarketplaceRuntimeUnitOfWork:
+            return _AdminMarketplaceRuntimeUnitOfWork(session_factory)
+
+        def assessment_commercial_read_unit_of_work_factory() -> _AssessmentCommercialReadRuntimeUnitOfWork:
+            return _AssessmentCommercialReadRuntimeUnitOfWork(session_factory)
+
+        def assessment_subscription_activation_unit_of_work_factory() -> _AssessmentSubscriptionActivationRuntimeUnitOfWork:
+            return _AssessmentSubscriptionActivationRuntimeUnitOfWork(session_factory)
 
         authority_resolver = AdminMarketplaceIdentityAuthorityResolver(
             session_factory=session_factory,
@@ -111,7 +150,7 @@ async def build_admin_marketplace_runtime(
             unit_of_work_factory=unit_of_work_factory,
         )
         assessment_commercial_read_service = AssessmentSubscriptionCommercialReadService(
-            unit_of_work_factory=unit_of_work_factory,
+            unit_of_work_factory=assessment_commercial_read_unit_of_work_factory,
         )
         payment_verification_service = AdminPaymentVerificationService(
             unit_of_work_factory=unit_of_work_factory,
@@ -122,7 +161,7 @@ async def build_admin_marketplace_runtime(
             clock=lambda: datetime.now(UTC),
         )
         assessment_subscription_activation_service = AssessmentSubscriptionActivationService(
-            unit_of_work_factory=unit_of_work_factory,
+            unit_of_work_factory=assessment_subscription_activation_unit_of_work_factory,
             clock=lambda: datetime.now(UTC),
         )
         payment_reconciliation_service = PaymentReconciliationService(
