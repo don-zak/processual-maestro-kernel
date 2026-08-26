@@ -36,15 +36,21 @@ def test_canonical_splash_uses_authored_board_plus_pulse_only_overlay():
     assert not [marker for marker in forbidden if marker in source]
 
 
-def test_reference_board_asset_is_v18_measured_and_geometrically_dense():
+def test_reference_board_asset_is_v19_staged_and_dense():
     board = _read(BOARD)
     assert 'viewBox="0 0 1672 941"' in board
-    assert 'data-topology="measured-pin-single-source"' in board
+    assert 'Maestro PCB v19 staged tooth-fabric reconstruction' in board
+    assert 'data-topology="staged-tooth-fabric"' in board
+    assert 'data-route-weights="2"' in board
+    assert 'data-destination-minority="true"' in board
     assert 'data-left-pin-x="624"' in board
     assert 'data-right-pin-x="1048"' in board
     assert 'data-top-pin-y="233"' in board
     assert 'data-bottom-pin-y="653"' in board
-    assert board.count('data-route="') >= 70
+    assert board.count("M624 ") >= 20
+    assert board.count("M1048 ") >= 20
+    assert board.count(" 233V196") >= 20
+    assert board.count(" 653V690") >= 20
     assert board.count("<circle") >= 40
 
 
