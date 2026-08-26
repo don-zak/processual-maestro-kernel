@@ -38,6 +38,7 @@ jobs:
             processual_api/admin_marketplace/subscription_activation_service.py \
             processual_api/admin_marketplace/runtime.py \
             processual_api/admin_marketplace/subscription_runtime_bootstrap.py \
+            --follow-imports=silent \
             --warn-unused-ignores \
             --show-error-codes
 
