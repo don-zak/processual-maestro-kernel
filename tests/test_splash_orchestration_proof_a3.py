@@ -4,8 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = ROOT / "processual_api" / "static"
 SPLASH = STATIC_ROOT / "splash.html"
 PROOF = STATIC_ROOT / "splash_orchestration_proof.html"
-BLUEPRINT = STATIC_ROOT / "splash_reference_blueprint.js"
-MODEL = STATIC_ROOT / "splash_routing_model.js"
+TRACE = STATIC_ROOT / "splash_reference_routes.js"
 ROUTING = STATIC_ROOT / "splash_routing.js"
 LEGACY_BOARD = STATIC_ROOT / "splash_reference_board.svg"
 
@@ -21,43 +20,36 @@ def test_historical_orchestration_proof_is_retained_but_not_canonical():
     assert "Enter Maestro" in proof
 
 
-def test_canonical_splash_uses_inline_generated_board_and_one_motion_geometry():
+def test_canonical_splash_uses_pixel_traced_reference_and_one_motion_geometry():
     source = _read(SPLASH)
+    trace = _read(TRACE)
     routing = _read(ROUTING)
     required = [
         'id="pcb-board"',
         'id="pcb-routes"',
-        'id="pcb-branches"',
         'id="pcb-terminals"',
         'id="pcb-pulses"',
         'type="module" src="./splash_routing.js"',
+        "REFERENCE_ROUTE_TRACE.segments.forEach",
         "getTotalLength()",
         "getPointAtLength",
         "requestAnimationFrame",
-        "reference_outward_module_geometry",
+        "A3-splash-reference-pixeltrace-v22",
     ]
-    combined = source + routing
+    combined = source + trace + routing
     assert not [marker for marker in required if marker not in combined]
     assert not LEGACY_BOARD.exists()
     assert 'id="pcb-reference"' not in source
     assert "authoredSignalMap" not in combined
+    assert "PINS.forEach(renderRoute)" not in routing
 
 
-def test_generated_model_is_v21_reference_blueprint_and_activates_all_four_edges():
-    blueprint = _read(BLUEPRINT)
-    model = _read(MODEL)
-    assert "A3-splash-reference-blueprint-v21" in blueprint
-    assert "source: 'pivot-reference-image'" in blueprint
-    assert "version: REFERENCE_BLUEPRINT.version" in model
-    assert "pinCount: 120" in model
-    assert "left: 624" in model
-    assert "right: 1048" in model
-    assert "top: 233" in model
-    assert "bottom: 653" in model
-    assert "const SIDE_Y = Array.from({ length: 30 }" in model
-    assert "const EDGE_X = Array.from({ length: 30 }" in model
-    assert "destinationRatioMax: REFERENCE_BLUEPRINT.destinationRatioMax" in model
-    assert "ROUTE_WEIGHTS = REFERENCE_BLUEPRINT.routeWeights" in model
+def test_reference_trace_records_the_source_image_geometry():
+    trace = _read(TRACE)
+    assert '"source_width":970' in trace
+    assert '"source_height":560' in trace
+    assert '"core_reference_px":[339,126,623,351]' in trace
+    assert '"segment_count":166' in trace
 
 
 def test_canonical_splash_keeps_descent_gate_contract():
@@ -73,7 +65,7 @@ def test_canonical_splash_keeps_descent_gate_contract():
     assert not [marker for marker in required if marker not in source]
 
 
-def test_generated_board_keeps_reduced_motion_guards():
+def test_reference_board_keeps_reduced_motion_guards():
     source = _read(SPLASH)
     routing = _read(ROUTING)
     required = [
