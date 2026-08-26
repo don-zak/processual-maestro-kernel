@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Final, Protocol, Self
 
 from processual_api.admin_marketplace.assessment_quota_profile_persistence import (
     AdminMarketAssessmentQuotaProfile,
@@ -55,7 +55,7 @@ class AssessmentQuotaProfileRepository(Protocol):
 class AssessmentQuotaProfileUnitOfWork(Protocol):
     assessment_quota_profiles: AssessmentQuotaProfileRepository
 
-    async def __aenter__(self) -> AssessmentQuotaProfileUnitOfWork: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 
@@ -139,144 +139,56 @@ def _definition_from_outcome(
     )
 
 
-def _record_payload(record: AdminMarketAssessmentQuotaProfile) -> dict[str, object]:
-    return {
-        "profile_ref": record.profile_ref,
-        "assessment_binding_hash": record.assessment_binding_hash,
-        "assessment_id": record.assessment_id,
-        "customer_ref": record.customer_ref,
-        "public_plan_id": record.public_plan_id,
-        "entitlement_source_plan_code": record.entitlement_source_plan_code,
-        "approved_by": record.approved_by,
-        "approval_reference": record.approval_reference,
-        "entitlement_codes_json": list(record.entitlement_codes_json),
-        "metric_code": record.metric_code,
-        "limit_units": record.limit_units,
-        "cycle_kind": record.cycle_kind,
-        "compatibility_period_days": record.compatibility_period_days,
-        "definition_version": record.definition_version,
-    }
-
-
-def _record_matches(
-    record: AdminMarketAssessmentQuotaProfile,
-    definition: dict[str, object],
-) -> bool:
-    return all(getattr(record, field) == value for field, value in definition.items())
-
-
-def _verify_assessment_binding(record: AdminMarketAssessmentQuotaProfile) -> None:
-    try:
-        rebuilt = build_assessment_activation_profile(
-            ApprovedAssessmentOutcome(
-                assessment_id=record.assessment_id,
-                customer_ref=record.customer_ref,
-                public_plan_id=record.public_plan_id,
-                approval_status="approved",
-                approved_quota_units=record.limit_units,
-                approved_entitlement_codes=tuple(record.entitlement_codes_json),
-                approved_by=record.approved_by,
-                approval_reference=record.approval_reference,
-            )
-        )
-    except (AssessmentActivationPreparationError, KeyError, TypeError, ValueError) as exc:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile cannot reproduce an authoritative approved assessment."
-        ) from exc
-
-    if (
-        rebuilt["assessment_binding_hash"] != record.assessment_binding_hash
-        or rebuilt["quota_profile_ref"] != record.profile_ref
-        or rebuilt["public_plan_id"] != record.public_plan_id
-        or rebuilt["entitlement_source_plan_code"]
-        != record.entitlement_source_plan_code
-    ):
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile binding does not match the authoritative assessment template."
-        )
-
-
-def _trusted_runtime_profile(
-    record: AdminMarketAssessmentQuotaProfile,
-) -> SubscriptionQuotaProfile:
-    try:
-        payload = _record_payload(record)
-    except (TypeError, ValueError) as exc:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile payload is malformed."
-        ) from exc
-    expected_digest = _payload_digest(payload)
-    if record.payload_digest != expected_digest:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile payload digest does not match its durable definition."
-        )
-    if record.metric_code != QUOTA_METRIC_CODE:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile metric is not authoritative."
-        )
-    if record.cycle_kind != ASSESSMENT_QUOTA_CYCLE_KIND:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile cycle is not calendar-month anchored."
-        )
-    if record.compatibility_period_days != MONTHLY_COMPATIBILITY_PERIOD_DAYS:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile monthly compatibility marker is invalid."
-        )
-    if record.definition_version != ASSESSMENT_QUOTA_PROFILE_VERSION:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile definition version is not supported."
-        )
-    if (
-        isinstance(record.limit_units, bool)
-        or not isinstance(record.limit_units, int)
-        or record.limit_units <= 0
-    ):
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile limit is invalid."
-        )
-    _verify_assessment_binding(record)
-    return _runtime_profile(
-        profile_ref=record.profile_ref,
-        limit_units=record.limit_units,
-    )
-
-
 async def ensure_assessment_quota_profile_in_unit(
     *,
     outcome: ApprovedAssessmentOutcome,
     unit: AssessmentQuotaProfileUnitOfWork,
 ) -> AssessmentQuotaProfileResult:
-    """Ensure an assessment quota profile without owning the transaction boundary."""
+    try:
+        definition, runtime_profile = _definition_from_outcome(outcome)
+    except (AssessmentActivationPreparationError, ValueError) as exc:
+        raise AssessmentQuotaProfileIntegrityError(str(exc)) from exc
 
-    definition, runtime_profile = _definition_from_outcome(outcome)
     profile_ref = str(definition["profile_ref"])
     binding_hash = str(definition["assessment_binding_hash"])
-
     existing = await unit.assessment_quota_profiles.get_by_profile_ref(
         profile_ref,
         for_update=True,
     )
+    if existing is None:
+        existing = await unit.assessment_quota_profiles.get_by_binding_hash(
+            binding_hash,
+            for_update=True,
+        )
     if existing is not None:
-        if not _record_matches(existing, definition):
+        expected_digest = str(definition["payload_digest"])
+        if existing.payload_digest != expected_digest:
             raise AssessmentQuotaProfileConflictError(
-                "assessment quota profile reference conflicts with its durable definition."
+                "assessment quota profile conflicts with durable state"
             )
         return AssessmentQuotaProfileResult(
             record=existing,
-            runtime_profile=_trusted_runtime_profile(existing),
+            runtime_profile=runtime_profile,
             replayed=True,
         )
 
-    binding_existing = await unit.assessment_quota_profiles.get_by_binding_hash(
-        binding_hash,
-        for_update=True,
+    record = AdminMarketAssessmentQuotaProfile(
+        profile_ref=profile_ref,
+        assessment_binding_hash=binding_hash,
+        assessment_id=str(definition["assessment_id"]),
+        customer_ref=str(definition["customer_ref"]),
+        public_plan_id=str(definition["public_plan_id"]),
+        entitlement_source_plan_code=str(definition["entitlement_source_plan_code"]),
+        approved_by=str(definition["approved_by"]),
+        approval_reference=str(definition["approval_reference"]),
+        entitlement_codes_json=list(definition["entitlement_codes_json"]),
+        metric_code=str(definition["metric_code"]),
+        limit_units=int(definition["limit_units"]),
+        cycle_kind=str(definition["cycle_kind"]),
+        compatibility_period_days=int(definition["compatibility_period_days"]),
+        definition_version=str(definition["definition_version"]),
+        payload_digest=str(definition["payload_digest"]),
     )
-    if binding_existing is not None:
-        raise AssessmentQuotaProfileConflictError(
-            "assessment quota binding already exists under a different profile reference."
-        )
-
-    record = AdminMarketAssessmentQuotaProfile(**definition)
     unit.assessment_quota_profiles.add(record)
     return AssessmentQuotaProfileResult(
         record=record,
@@ -285,38 +197,12 @@ async def ensure_assessment_quota_profile_in_unit(
     )
 
 
-async def resolve_assessment_quota_profile_in_unit(
-    *,
-    profile_ref: str,
-    unit: AssessmentQuotaProfileUnitOfWork,
-) -> SubscriptionQuotaProfile:
-    """Resolve a trusted assessment quota profile inside an existing transaction."""
-
-    normalized_ref = profile_ref.strip().lower()
-    if not normalized_ref:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile reference is required."
-        )
-    record = await unit.assessment_quota_profiles.get_by_profile_ref(
-        normalized_ref,
-        for_update=False,
-    )
-    if record is None:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile was not found."
-        )
-    if record.profile_ref != normalized_ref:
-        raise AssessmentQuotaProfileIntegrityError(
-            "assessment quota profile reference is not canonical."
-        )
-    return _trusted_runtime_profile(record)
-
-
 def ensure_assessment_quota_profile_factory(
     *,
     unit_of_work_factory: Callable[[], AssessmentQuotaProfileUnitOfWork],
 ):
     async def ensure(
+        *,
         outcome: ApprovedAssessmentOutcome,
     ) -> AssessmentQuotaProfileResult:
         async with unit_of_work_factory() as unit:
@@ -331,29 +217,15 @@ def ensure_assessment_quota_profile_factory(
     return ensure
 
 
-def resolve_assessment_quota_profile_factory(
-    *,
-    unit_of_work_factory: Callable[[], AssessmentQuotaProfileUnitOfWork],
-):
-    async def resolve(profile_ref: str) -> SubscriptionQuotaProfile:
-        async with unit_of_work_factory() as unit:
-            return await resolve_assessment_quota_profile_in_unit(
-                profile_ref=profile_ref,
-                unit=unit,
-            )
-
-    return resolve
-
-
 __all__ = [
     "ASSESSMENT_QUOTA_CYCLE_KIND",
     "ASSESSMENT_QUOTA_PROFILE_VERSION",
-    "MONTHLY_COMPATIBILITY_PERIOD_DAYS",
     "AssessmentQuotaProfileConflictError",
     "AssessmentQuotaProfileIntegrityError",
+    "AssessmentQuotaProfileRepository",
     "AssessmentQuotaProfileResult",
+    "AssessmentQuotaProfileUnitOfWork",
+    "MONTHLY_COMPATIBILITY_PERIOD_DAYS",
     "ensure_assessment_quota_profile_factory",
     "ensure_assessment_quota_profile_in_unit",
-    "resolve_assessment_quota_profile_factory",
-    "resolve_assessment_quota_profile_in_unit",
 ]
