@@ -1,17 +1,18 @@
 {
-  "contract_version": "A3-splash-reference-v20",
+  "contract_version": "A3-splash-reference-v21",
   "minimum_score": 99,
   "score_total": 100,
-  "reference_stage": {"width": 1672, "height": 941, "aspect_ratio": "1672:941", "fit_rule": "reference-cover-1672x941"},
+  "reference_stage": {"width": 1672, "height": 941, "aspect_ratio": "1672:941", "fit_rule": "reference-cover-1672x941", "source": "pivot-reference-image"},
   "architecture": {
-    "mode": "inline-generated-single-source-routing",
+    "mode": "inline-generated-reference-blueprint-routing",
     "dom_cards_required": true,
     "visible_route_sources": 1,
     "legacy_external_board_forbidden": true,
     "legacy_authored_signal_map_forbidden": true,
     "pulse_must_follow_visible_routes": true,
     "one_root_route_per_pin": true,
-    "deterministic_generation_required": true
+    "deterministic_generation_required": true,
+    "reference_blueprint_required": true
   },
   "logical_layout": {
     "core_bounds": {"x": 642, "y": 248, "w": 388, "h": 390, "tolerance_px": 18},
@@ -21,20 +22,22 @@
     "core_visual_scale": 1.045
   },
   "pcb": {
-    "topology": "generated-staged-pin-fabric",
+    "topology": "reference-corridor-staged-pin-fabric",
     "pin_count_expected": 120,
-    "destination_route_ratio_max": 0.20,
-    "field_route_ratio_min": 0.80,
+    "destination_route_ratio_max": 0.16,
+    "field_route_ratio_min": 0.84,
     "route_weight_classes_exact": 2,
     "allowed_route_weights": ["thick", "thin"],
     "all_root_routes_must_begin_on_visual_pin_envelope": true,
     "aligned_breakout_required": true,
-    "progressive_fanout_required": true,
+    "corridor_guided_progressive_fanout_required": true,
     "short_medium_long_field_terminations_required": true,
     "controlled_branches_required": true,
     "terminal_beacons_must_use_true_endpoints": true,
     "free_floating_route_origins_forbidden": true,
     "repeated_identical_staircase_bundles_forbidden": true,
+    "top_vertical_forest_forbidden": true,
+    "bottom_vertical_forest_forbidden": true,
     "cyan_required": true,
     "amber_required": true,
     "teal_required": true,
@@ -45,7 +48,7 @@
     "route_colored_processor_teeth_required": true
   },
   "motion": {
-    "pulse_ratio_max": 0.20,
+    "pulse_ratio_max": 0.18,
     "pulses_are_selective_not_universal": true,
     "pulses_include_thick_and_thin_routes": true,
     "pulse_geometry_is_visible_route_geometry": true,
