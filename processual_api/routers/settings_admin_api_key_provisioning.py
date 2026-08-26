@@ -49,6 +49,12 @@ def _require_api_key_provisioning_admin(current_user: dict) -> None:
     )
 
 
+def _list_values(value: object) -> list[object]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return list(value)
+
+
 def _string_values(value: object) -> list[str]:
     if not isinstance(value, (list, tuple, set, frozenset)):
         return []
@@ -121,7 +127,7 @@ async def admin_api_key_operational_profiles(
     _require_api_key_provisioning_admin(current_user)
     payload = api_key_operational_profiles_payload()
     profiles = [
-        *_string_values(payload.get("profiles")),
+        *_list_values(payload.get("profiles")),
         *list_platform_api_key_operational_profiles(),
     ]
     return {
