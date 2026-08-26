@@ -27,6 +27,7 @@ def test_contract_targets_v20_generated_pin_fabric():
     assert contract["architecture"]["legacy_external_board_forbidden"] is True
     assert contract["architecture"]["legacy_authored_signal_map_forbidden"] is True
     assert contract["architecture"]["pulse_must_follow_visible_routes"] is True
+    assert contract["pcb"]["pin_count_expected"] == 120
     assert contract["pcb"]["destination_route_ratio_max"] <= 0.20
     assert contract["pcb"]["route_weight_classes_exact"] == 2
 
@@ -44,11 +45,12 @@ def test_splash_contains_inline_generated_board_and_no_legacy_geometry():
     assert "authoredSignalMap" not in source
 
 
-def test_model_preserves_measured_visual_pin_envelope():
+def test_model_preserves_measured_visual_pin_envelope_and_full_cadence():
     model = _read(MODEL)
     for marker in ["left: 624", "right: 1048", "top: 233", "bottom: 653"]:
         assert marker in model
-    assert "const SIDE_Y = Array.from({ length: 28 }" in model
+    assert "pinCount: 120" in model
+    assert "const SIDE_Y = Array.from({ length: 30 }" in model
     assert "const EDGE_X = Array.from({ length: 30 }" in model
 
 
@@ -87,8 +89,9 @@ def test_five_route_variants_prevent_uniform_bus_copying():
     routing = _read(ROUTING)
     for variant in range(5):
         assert f"if (pin.variant === {variant})" in routing
-    assert "variant: (i * 7" in _read(MODEL)
-    assert "variant: (i * 9" in _read(MODEL)
+    model = _read(MODEL)
+    assert "variant: (i * 7" in model
+    assert "variant: (i * 9" in model
 
 
 def test_short_medium_long_and_true_terminal_network_are_present():
