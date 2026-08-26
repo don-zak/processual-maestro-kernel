@@ -4,7 +4,15 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol, Self
 
+from processual_api.admin_marketplace.models import AdminMarketSubscription
+from processual_api.admin_marketplace.subscription_delinquency_persistence import (
+    AdminMarketSubscriptionDelinquency,
+)
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    AdminMarketSubscriptionQuotaCycle,
+)
 from processual_api.admin_marketplace.subscription_quota_usage_persistence import (
     AdminMarketSubscriptionQuotaCycleUsage,
 )
@@ -12,6 +20,9 @@ from processual_api.admin_marketplace.subscription_runtime_access_policy import 
     SubscriptionRuntimeAccessError,
     advance_expired_runtime_stage,
     runtime_allows_usage,
+)
+from processual_api.admin_marketplace.subscription_runtime_persistence import (
+    AdminMarketSubscriptionRuntime,
 )
 
 
@@ -31,9 +42,84 @@ class SubscriptionQuotaUsageCommand:
     occurred_at: datetime
 
 
+class _SubscriptionRepository(Protocol):
+    async def get_by_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None: ...
+
+
+class _SubscriptionRuntimeRepository(Protocol):
+    async def get_by_subscription_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionRuntime | None: ...
+
+
+class _SubscriptionQuotaCycleRepository(Protocol):
+    async def get_by_id(
+        self,
+        cycle_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaCycle | None: ...
+
+
+class _SubscriptionQuotaCycleUsageRepository(Protocol):
+    async def get_by_idempotency_hash(
+        self,
+        value: str,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaCycleUsage | None: ...
+
+    async def sum_units_since(
+        self,
+        *,
+        quota_cycle_id: uuid.UUID,
+        occurred_at: datetime,
+    ) -> int: ...
+
+    def add(self, usage: AdminMarketSubscriptionQuotaCycleUsage) -> None: ...
+
+
+class _SubscriptionDelinquencyRepository(Protocol):
+    async def get_by_subscription_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionDelinquency | None: ...
+
+
+class SubscriptionQuotaUsageUnitOfWork(Protocol):
+    @property
+    def subscriptions(self) -> _SubscriptionRepository: ...
+
+    @property
+    def subscription_runtime(self) -> _SubscriptionRuntimeRepository: ...
+
+    @property
+    def subscription_quota_cycles(self) -> _SubscriptionQuotaCycleRepository: ...
+
+    @property
+    def subscription_quota_cycle_usage(self) -> _SubscriptionQuotaCycleUsageRepository: ...
+
+    @property
+    def subscription_delinquency(self) -> _SubscriptionDelinquencyRepository: ...
+
+    async def __aenter__(self) -> Self: ...
+    async def __aexit__(self, exc_type, exc, traceback) -> None: ...
+    async def commit(self) -> None: ...
+
+
 def record_subscription_quota_usage_factory(
     *,
-    unit_of_work_factory: Callable[[], object],
+    unit_of_work_factory: Callable[[], SubscriptionQuotaUsageUnitOfWork],
 ):
     async def record(
         command: SubscriptionQuotaUsageCommand,
@@ -144,10 +230,10 @@ def record_subscription_quota_usage_factory(
 
 async def _enforce_degraded_grace_cap(
     *,
-    uow: object,
+    uow: SubscriptionQuotaUsageUnitOfWork,
     command: SubscriptionQuotaUsageCommand,
-    cycle: object,
-    runtime: object,
+    cycle: AdminMarketSubscriptionQuotaCycle,
+    runtime: AdminMarketSubscriptionRuntime,
 ) -> None:
     delinquency = await uow.subscription_delinquency.get_by_subscription_id(
         command.subscription_id,
@@ -222,5 +308,6 @@ def _assert_replay_matches(
 __all__ = [
     "SubscriptionQuotaUsageCommand",
     "SubscriptionQuotaUsageError",
+    "SubscriptionQuotaUsageUnitOfWork",
     "record_subscription_quota_usage_factory",
 ]
