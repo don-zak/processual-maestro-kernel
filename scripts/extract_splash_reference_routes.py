@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""Extract the PCB routing graph from the approved Splash reference image.
+"""Extract and audit PCB routing from the approved Splash reference image.
 
-This script is intentionally an extraction/audit tool, not a Splash renderer.
-It preserves the reference image as the source of truth and emits:
-  * a pixel-derived route mask;
-  * a skeleton graph;
-  * vector edge geometry between graph nodes;
-  * a visual audit overlay.
+This is an extraction tool only. It must never invent route topology or render a
+replacement Splash. The approved reference image remains the source of truth.
 
-The generated data MUST be visually audited before it can be promoted to the
-canonical Splash routing manifest. No procedural route generation is allowed.
+The extractor now separates the five route color families, confines analysis to
+measured route corridors around the central core, inventories visible core-pin
+candidates, and emits a non-canonical graph for tile-by-tile audit.
 """
 
 from __future__ import annotations
@@ -21,33 +18,23 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from scipy.signal import find_peaks
 from skimage.morphology import skeletonize
 
-REFERENCE_CORE = (608, 224, 1041, 632)  # x1, y1, x2, y2 on 1672x941 reference
+REFERENCE_CORE = (608, 224, 1041, 632)
 REFERENCE_SIZE = (1672, 941)
+EXECUTION_CENTER = (821, 724)
+EXECUTION_RADIUS = 58
 
-# OpenCV HSV hue bands for the five reference route families.
+# Deliberately non-overlapping hue bands. The previous cyan/teal overlap made
+# color classification ambiguous and inflated cyan route counts.
 HUE_RANGES = {
-    "cyan": ((88, 118),),
-    "teal": ((76, 93),),
-    "lime": ((34, 58),),
-    "amber": ((7, 30),),
-    "violet": ((126, 160),),
+    "amber": (7, 30),
+    "lime": (34, 58),
+    "teal": (76, 91),
+    "cyan": (92, 118),
+    "violet": (126, 160),
 }
-
-# UI card interiors are excluded so their outlines/icons/text cannot be
-# mistaken for PCB routing. Their connector-facing edges remain auditable from
-# the original image and can later be reconciled explicitly.
-MODULE_BOXES = (
-    (65, 80, 410, 237),
-    (65, 247, 410, 407),
-    (65, 417, 410, 579),
-    (65, 588, 410, 754),
-    (1255, 80, 1590, 237),
-    (1255, 247, 1590, 407),
-    (1255, 417, 1590, 579),
-    (1255, 588, 1590, 754),
-)
 
 NEIGHBOURS = (
     (-1, -1), (-1, 0), (-1, 1),
@@ -60,73 +47,66 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("image", type=Path, help="Approved reference PNG")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument(
-        "--mode",
-        choices=("core-connected", "full-field"),
-        default="core-connected",
-        help="core-connected is the canonical tracing candidate; full-field is an audit surface",
-    )
-    parser.add_argument("--connectivity", type=int, choices=(3, 5, 7, 9), default=7)
+    parser.add_argument("--saturation-min", type=int, default=70)
+    parser.add_argument("--value-min", type=int, default=65)
     return parser.parse_args()
 
 
-def color_masks(image: np.ndarray) -> dict[str, np.ndarray]:
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    result: dict[str, np.ndarray] = {}
-    for name, ranges in HUE_RANGES.items():
-        mask = np.zeros(image.shape[:2], dtype=np.uint8)
-        for lo, hi in ranges:
-            mask |= cv2.inRange(
-                hsv,
-                np.array([lo, 60, 48]),
-                np.array([hi, 255, 255]),
-            )
-        result[name] = mask
-    return result
-
-
-def field_roi(shape: tuple[int, int], core: tuple[int, int, int, int]) -> np.ndarray:
+def route_corridor_roi(shape: tuple[int, int]) -> np.ndarray:
+    """Return only the four measured regions in which core routes can exist."""
     h, w = shape
-    roi = np.full((h, w), 255, dtype=np.uint8)
-    roi[:52, :] = 0
-    roi[883:, :] = 0
-    x1, y1, x2, y2 = core
-    roi[y1 + 5 : y2 - 5, x1 + 5 : x2 - 5] = 0
-    for left, top, right, bottom in MODULE_BOXES:
-        roi[top:bottom, left:right] = 0
+    roi = np.zeros((h, w), dtype=np.uint8)
+    cv2.rectangle(roi, (390, 52), (612, 770), 255, -1)
+    cv2.rectangle(roi, (1037, 52), (1270, 770), 255, -1)
+    cv2.rectangle(roi, (580, 52), (1090, 228), 255, -1)
+    cv2.rectangle(roi, (570, 628), (1100, 790), 255, -1)
+    cv2.rectangle(roi, (608, 224), (1041, 632), 0, -1)
+    cv2.circle(roi, EXECUTION_CENTER, EXECUTION_RADIUS, 0, -1)
     return roi
 
 
-def origin_band(shape: tuple[int, int], core: tuple[int, int, int, int]) -> np.ndarray:
+def origin_band(shape: tuple[int, int]) -> np.ndarray:
     h, w = shape
-    x1, y1, x2, y2 = core
+    x1, y1, x2, y2 = REFERENCE_CORE
     band = np.zeros((h, w), dtype=np.uint8)
-    band[max(0, y1 - 12) : min(h, y2 + 12), max(0, x1 - 14) : min(w, x1 + 14)] = 1
-    band[max(0, y1 - 12) : min(h, y2 + 12), max(0, x2 - 14) : min(w, x2 + 14)] = 1
-    band[max(0, y1 - 14) : min(h, y1 + 14), max(0, x1 - 12) : min(w, x2 + 12)] = 1
-    band[max(0, y2 - 14) : min(h, y2 + 14), max(0, x1 - 12) : min(w, x2 + 12)] = 1
+    cv2.rectangle(band, (596, y1), (610, y2), 255, -1)
+    cv2.rectangle(band, (1039, y1), (1053, y2), 255, -1)
+    cv2.rectangle(band, (x1, 212), (x2, 226), 255, -1)
+    cv2.rectangle(band, (x1, 630), (x2, 644), 255, -1)
     return band
 
 
-def retain_route_surface(
-    field: np.ndarray,
-    origin: np.ndarray,
-    mode: str,
-    connectivity: int,
-) -> np.ndarray:
-    if mode == "full-field":
-        return field
+def color_masks(image: np.ndarray, saturation_min: int, value_min: int) -> dict[str, np.ndarray]:
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hue, saturation, value = cv2.split(hsv)
+    roi = route_corridor_roi(image.shape[:2])
+    masks: dict[str, np.ndarray] = {}
+    for name, (lo, hi) in HUE_RANGES.items():
+        selected = (
+            (hue >= lo)
+            & (hue <= hi)
+            & (saturation >= saturation_min)
+            & (value >= value_min)
+        ).astype(np.uint8) * 255
+        masks[name] = cv2.bitwise_and(selected, roi)
+    return masks
 
-    connected = cv2.dilate(field, np.ones((connectivity, connectivity), np.uint8), iterations=1)
-    count, labels, stats, _ = cv2.connectedComponentsWithStats((connected > 0).astype(np.uint8), 8)
-    keep = np.zeros_like(field)
-    for label in range(1, count):
-        component = labels == label
-        if stats[label, cv2.CC_STAT_AREA] < 6:
+
+def retain_core_connected(mask: np.ndarray, origin: np.ndarray) -> tuple[np.ndarray, int]:
+    # Closing only two pixels repairs antialias gaps without intentionally
+    # bridging adjacent PCB lanes.
+    closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8))
+    count, labels, stats, _ = cv2.connectedComponentsWithStats((closed > 0).astype(np.uint8), 8)
+    keep = np.zeros_like(closed)
+    kept_components = 0
+    for label_id in range(1, count):
+        component = labels == label_id
+        if stats[label_id, cv2.CC_STAT_AREA] < 5:
             continue
         if np.any(component & (origin > 0)):
             keep[component] = 255
-    return cv2.bitwise_and(field, keep)
+            kept_components += 1
+    return keep, kept_components
 
 
 def neighbours(pixel: tuple[int, int], pixels: set[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -138,12 +118,11 @@ def edge_key(a: tuple[int, int], b: tuple[int, int]) -> tuple[tuple[int, int], t
     return tuple(sorted((a, b)))  # type: ignore[return-value]
 
 
-def trace_graph_edges(skeleton: np.ndarray) -> list[list[tuple[int, int]]]:
+def trace_graph_edges(skeleton: np.ndarray) -> tuple[list[list[tuple[int, int]]], set[tuple[int, int]], set[tuple[int, int]]]:
     pixels = set(map(tuple, np.argwhere(skeleton).tolist()))
     nodes = {pixel for pixel in pixels if len(neighbours(pixel, pixels)) != 2}
     visited: set[tuple[tuple[int, int], tuple[int, int]]] = set()
     chains: list[list[tuple[int, int]]] = []
-
     for start in nodes:
         for candidate in neighbours(start, pixels):
             if edge_key(start, candidate) in visited:
@@ -157,8 +136,7 @@ def trace_graph_edges(skeleton: np.ndarray) -> list[list[tuple[int, int]]]:
                 if current in nodes and current != start:
                     break
                 options = [
-                    item
-                    for item in neighbours(current, pixels)
+                    item for item in neighbours(current, pixels)
                     if item != previous and edge_key(current, item) not in visited
                 ]
                 if not options:
@@ -172,12 +150,12 @@ def trace_graph_edges(skeleton: np.ndarray) -> list[list[tuple[int, int]]]:
                 next_pixel = options[0]
                 visited.add(edge_key(current, next_pixel))
                 previous, current = current, next_pixel
-            if len(chain) >= 4:
+            if len(chain) >= 3:
                 chains.append(chain)
-    return chains
+    return chains, pixels, nodes
 
 
-def rdp(points: list[tuple[float, float]], epsilon: float = 1.2) -> list[tuple[float, float]]:
+def rdp(points: list[tuple[float, float]], epsilon: float = 1.0) -> list[tuple[float, float]]:
     if len(points) < 3:
         return points
     a = np.array(points[0], dtype=float)
@@ -199,32 +177,64 @@ def rdp(points: list[tuple[float, float]], epsilon: float = 1.2) -> list[tuple[f
     return [points[0], points[-1]]
 
 
-def core_distance(point: tuple[float, float], core: tuple[int, int, int, int]) -> float:
-    x, y = point
-    x1, y1, x2, y2 = core
-    candidates = []
-    if y1 - 15 <= y <= y2 + 15:
-        candidates.extend((abs(x - x1), abs(x - x2)))
-    if x1 - 15 <= x <= x2 + 15:
-        candidates.extend((abs(y - y1), abs(y - y2)))
-    return min(candidates, default=99999.0)
+def core_distance(x: float, y: float) -> float:
+    x1, y1, x2, y2 = REFERENCE_CORE
+    if y1 - 18 <= y <= y2 + 18:
+        return min(abs(x - x1), abs(x - x2))
+    if x1 - 18 <= x <= x2 + 18:
+        return min(abs(y - y1), abs(y - y2))
+    dx = 0 if x1 <= x <= x2 else min(abs(x - x1), abs(x - x2))
+    dy = 0 if y1 <= y <= y2 else min(abs(y - y1), abs(y - y2))
+    return math.hypot(dx, dy)
 
 
-def side_for(point: tuple[float, float], core: tuple[int, int, int, int]) -> str:
-    x, y = point
-    x1, y1, x2, y2 = core
+def side_for(x: float, y: float) -> str:
+    x1, y1, x2, y2 = REFERENCE_CORE
     return min(
         (("left", abs(x - x1)), ("right", abs(x - x2)), ("top", abs(y - y1)), ("bottom", abs(y - y2))),
         key=lambda item: item[1],
     )[0]
 
 
-def classify_color(chain: list[tuple[int, int]], masks: dict[str, np.ndarray]) -> str:
-    counts = {name: 0 for name in masks}
-    for y, x in chain:
-        for name, mask in masks.items():
-            counts[name] += int(mask[y, x] > 0)
-    return max(counts, key=counts.get)
+def detect_pin_candidates(image: np.ndarray) -> list[dict[str, object]]:
+    """Inventory bright teeth from measured strips immediately outside the core.
+
+    These are audit candidates, not yet canonical pin identities. The output is
+    intentionally kept separate from the route graph until every peak has been
+    reconciled against the reference overlay.
+    """
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    _, saturation, value = cv2.split(hsv)
+    score = value.astype(float) * (saturation.astype(float) / 255.0)
+    x1, y1, x2, y2 = REFERENCE_CORE
+    profiles = {
+        "left": score[y1:y2, 596:606].max(axis=1),
+        "right": score[y1:y2, 1043:1053].max(axis=1),
+        "top": score[212:222, x1:x2].max(axis=0),
+        "bottom": score[634:644, x1:x2].max(axis=0),
+    }
+    pins: list[dict[str, object]] = []
+    for side, profile in profiles.items():
+        peaks, _ = find_peaks(profile, distance=8, prominence=12, height=75)
+        peaks = peaks[(peaks > 5) & (peaks < len(profile) - 6)]
+        for peak in peaks:
+            if side == "left":
+                x, y = 601, y1 + int(peak)
+            elif side == "right":
+                x, y = 1048, y1 + int(peak)
+            elif side == "top":
+                x, y = x1 + int(peak), 217
+            else:
+                x, y = x1 + int(peak), 639
+            pins.append({
+                "id": f"pin-candidate-{len(pins) + 1:03d}",
+                "side": side,
+                "x": x,
+                "y": y,
+                "profile_score": round(float(profile[peak]), 2),
+                "status": "AUDIT_REQUIRED",
+            })
+    return pins
 
 
 def main() -> None:
@@ -237,67 +247,96 @@ def main() -> None:
     if (w, h) != REFERENCE_SIZE:
         raise SystemExit(f"Reference size changed: {(w, h)} != {REFERENCE_SIZE}")
 
-    masks = color_masks(image)
-    combined = np.zeros((h, w), dtype=np.uint8)
-    for mask in masks.values():
-        combined |= mask
+    origin = origin_band((h, w))
+    masks = color_masks(image, args.saturation_min, args.value_min)
+    edges: list[dict[str, object]] = []
+    nodes: list[dict[str, object]] = []
+    selected_masks: dict[str, np.ndarray] = {}
+    color_stats: dict[str, object] = {}
 
-    roi = field_roi((h, w), REFERENCE_CORE)
-    field = cv2.bitwise_and(combined, roi)
-    origin = origin_band((h, w), REFERENCE_CORE)
-    selected = retain_route_surface(field, origin, args.mode, args.connectivity)
-    selected = cv2.morphologyEx(selected, cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8))
-    skeleton = skeletonize(selected > 0)
+    for color, mask in masks.items():
+        selected, component_count = retain_core_connected(mask, origin)
+        selected_masks[color] = selected
+        skeleton = skeletonize(selected > 0)
+        chains, pixels, graph_nodes = trace_graph_edges(skeleton)
+        degree = {pixel: len(neighbours(pixel, pixels)) for pixel in graph_nodes}
 
-    chains = trace_graph_edges(skeleton)
-    routes = []
-    for chain in chains:
-        points = rdp([(float(x), float(y)) for y, x in chain])
-        length = sum(math.dist(a, b) for a, b in zip(points, points[1:]))
-        if length < 7:
-            continue
-        if core_distance(points[-1], REFERENCE_CORE) < core_distance(points[0], REFERENCE_CORE):
-            points.reverse()
-        routes.append(
-            {
-                "id": f"route-edge-{len(routes) + 1:04d}",
-                "origin": "core" if core_distance(points[0], REFERENCE_CORE) <= 15 else "field",
-                "side": side_for(points[0], REFERENCE_CORE),
-                "color": classify_color(chain, masks),
+        for y, x in graph_nodes:
+            distance = core_distance(x, y)
+            node_type = "junction" if degree[(y, x)] >= 3 else "terminal"
+            if distance <= 17:
+                node_type = "origin-candidate"
+            nodes.append({
+                "x": int(x),
+                "y": int(y),
+                "color": color,
+                "degree": int(degree[(y, x)]),
+                "type": node_type,
+                "side": side_for(x, y) if node_type == "origin-candidate" else None,
+            })
+
+        color_edge_start = len(edges)
+        for chain in chains:
+            points = rdp([(float(x), float(y)) for y, x in chain])
+            length = sum(math.dist(a, b) for a, b in zip(points, points[1:]))
+            if length < 6:
+                continue
+            if core_distance(*points[-1]) < core_distance(*points[0]):
+                points.reverse()
+            edges.append({
+                "id": f"edge-{len(edges) + 1:04d}",
+                "color": color,
                 "length_px": round(length, 2),
+                "origin_edge": core_distance(*points[0]) <= 17,
                 "points": [[round(x, 1), round(y, 1)] for x, y in points],
-            }
-        )
+            })
 
+        color_stats[color] = {
+            "kept_components": component_count,
+            "selected_pixels": int((selected > 0).sum()),
+            "skeleton_pixels": int(skeleton.sum()),
+            "graph_edges": len(edges) - color_edge_start,
+        }
+
+    pins = detect_pin_candidates(image)
+    pin_counts = {side: sum(pin["side"] == side for pin in pins) for side in ("left", "right", "top", "bottom")}
     manifest = {
         "meta": {
             "source": args.image.name,
             "width": w,
             "height": h,
             "core_bounds": list(REFERENCE_CORE),
-            "mode": args.mode,
-            "connectivity": args.connectivity,
-            "selected_pixel_count": int((selected > 0).sum()),
-            "skeleton_pixel_count": int(skeleton.sum()),
-            "edge_count": len(routes),
+            "method": "exclusive-HSV + measured route corridors + per-color core-connected skeleton graph",
+            "edge_count": len(edges),
+            "node_count": len(nodes),
+            "pin_candidate_count": len(pins),
+            "pin_candidates_by_side": pin_counts,
+            "color_stats": color_stats,
             "status": "AUDIT_REQUIRED",
             "canonical": False,
+            "splash_reconstruction_allowed": False,
         },
-        "routes": routes,
+        "pin_candidates": pins,
+        "nodes": nodes,
+        "edges": edges,
     }
-    (args.out / "reference_route_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    cv2.imwrite(str(args.out / "reference_route_mask.png"), selected)
+    (args.out / "reference_route_graph_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
+    combined = np.zeros((h, w), dtype=np.uint8)
     overlay = image.copy()
-    for route in routes:
-        points = np.array(route["points"], np.int32).reshape((-1, 1, 2))
-        cv2.polylines(overlay, [points], False, (255, 255, 255), 1, cv2.LINE_AA)
-        sx, sy = map(int, route["points"][0])
-        ex, ey = map(int, route["points"][-1])
-        cv2.circle(overlay, (sx, sy), 2, (0, 255, 0), -1)
-        cv2.circle(overlay, (ex, ey), 2, (0, 0, 255), -1)
-    cv2.imwrite(str(args.out / "reference_route_overlay.png"), overlay)
+    for selected in selected_masks.values():
+        combined |= selected
+        overlay[skeletonize(selected > 0)] = (245, 245, 245)
+    for pin in pins:
+        cv2.circle(overlay, (int(pin["x"]), int(pin["y"])), 4, (0, 255, 0), 1)
+    for node in nodes:
+        if node["type"] == "terminal":
+            cv2.circle(overlay, (int(node["x"]), int(node["y"])), 2, (0, 0, 255), -1)
+        elif node["type"] == "junction":
+            cv2.circle(overlay, (int(node["x"]), int(node["y"])), 2, (0, 255, 255), -1)
 
+    cv2.imwrite(str(args.out / "reference_route_graph_mask.png"), combined)
+    cv2.imwrite(str(args.out / "reference_route_graph_overlay.png"), overlay)
     print(json.dumps(manifest["meta"], indent=2))
 
 
