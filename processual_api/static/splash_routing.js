@@ -1,4 +1,5 @@
 import { CORE, STAGE, COLORS, ROUTE_WEIGHTS, CONTRACT, PINS } from './splash_routing_model.js';
+import { REFERENCE_BLUEPRINT } from './splash_reference_blueprint.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const board = document.getElementById('pcb-board');
@@ -20,21 +21,8 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function reachFor(pin) {
-  const band = CONTRACT.reach[pin.lengthClass] || CONTRACT.reach.medium;
-  const span = band[1] - band[0];
-  return band[0] + ((pin.variant * 17 + Number(pin.id.slice(-2)) * 11) % Math.max(1, span));
-}
-
-function sideSign(side) {
-  return side === 'left' || side === 'top' ? -1 : 1;
-}
-
-function spreadOffset(pin, stage) {
-  const i = Number(pin.id.slice(-2));
-  const base = ((i % 7) - 3) * (stage === 1 ? 2.2 : stage === 2 ? 4.4 : 6.4);
-  const variant = [0, 6, -5, 10, -9][pin.variant] || 0;
-  return base + variant * (stage / 3);
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }
 
 function pointsToD(points) {
@@ -42,71 +30,115 @@ function pointsToD(points) {
   return points.map((p, i) => `${i ? 'L' : 'M'}${Math.round(p[0])} ${Math.round(p[1])}`).join('');
 }
 
-function buildSideRoute(pin) {
+function deterministicRange(pin, band) {
+  const span = Math.max(1, band[1] - band[0]);
+  const n = (pin.index * 19 + pin.variant * 23 + pin.side.length * 11) % span;
+  return band[0] + n;
+}
+
+function reachFor(pin) {
+  if (pin.side === 'top') return deterministicRange(pin, REFERENCE_BLUEPRINT.topReach[pin.lengthClass] || REFERENCE_BLUEPRINT.topReach.medium);
+  if (pin.side === 'bottom') return deterministicRange(pin, REFERENCE_BLUEPRINT.bottomReach[pin.lengthClass] || REFERENCE_BLUEPRINT.bottomReach.medium);
+  return deterministicRange(pin, REFERENCE_BLUEPRINT.sideReach[pin.lengthClass] || REFERENCE_BLUEPRINT.sideReach.medium);
+}
+
+function corridorY(pin) {
+  if (!pin.corridor) return pin.y;
+  const [minY, maxY] = pin.corridor.fieldY;
+  const [lo, hi] = pin.corridor.range;
+  const t = hi === lo ? 0.5 : (pin.index - lo) / (hi - lo);
+  const base = lerp(minY, maxY, t);
+  const jitter = [0, -7, 5, -12, 10][pin.variant] || 0;
+  return clamp(base + jitter, minY, maxY);
+}
+
+function sideFieldRoute(pin) {
   const dir = pin.side === 'left' ? -1 : 1;
   const stemX = pin.x + dir * CONTRACT.sideStem;
-  const points = [[pin.x, pin.y], [stemX, pin.y]];
-
-  if (pin.destination.type === 'module') {
-    const targetX = pin.side === 'left' ? 396 : 1276;
-    const targetY = pin.destination.targetY;
-    const width = Math.abs(targetX - stemX);
-    const x1 = stemX + dir * Math.round(width * 0.24);
-    const x2 = stemX + dir * Math.round(width * 0.52);
-    const x3 = stemX + dir * Math.round(width * 0.78);
-    const y1 = pin.y + (targetY - pin.y) * 0.18;
-    const y2 = pin.y + (targetY - pin.y) * 0.48;
-    const y3 = pin.y + (targetY - pin.y) * 0.76;
-    points.push([x1, pin.y], [x1 + dir * 16, y1], [x2, y1], [x2 + dir * 18, y2], [x3, y2], [x3 + dir * 14, y3], [targetX, targetY]);
-    return points;
-  }
-
   const reach = reachFor(pin);
   const endX = stemX + dir * reach;
-  const x1 = stemX + dir * Math.round(reach * 0.26);
-  const x2 = stemX + dir * Math.round(reach * 0.56);
-  const x3 = stemX + dir * Math.round(reach * 0.82);
-  const o1 = spreadOffset(pin, 1);
-  const o2 = spreadOffset(pin, 2);
-  const o3 = spreadOffset(pin, 3);
+  const cy = corridorY(pin);
+  const x1 = stemX + dir * Math.max(22, Math.round(reach * 0.22));
+  const x2 = stemX + dir * Math.max(48, Math.round(reach * 0.48));
+  const x3 = stemX + dir * Math.max(70, Math.round(reach * 0.74));
+  const y1 = lerp(pin.y, cy, 0.22);
+  const y2 = lerp(pin.y, cy, 0.54);
+  const y3 = lerp(pin.y, cy, 0.82);
+  const points = [[pin.x, pin.y], [stemX, pin.y]];
 
-  points.push([x1, pin.y]);
-  if (pin.variant === 0) points.push([x1 + dir * 14, pin.y + o1], [x2, pin.y + o1], [x2 + dir * 18, pin.y + o2], [x3, pin.y + o2], [endX, pin.y + o3]);
-  if (pin.variant === 1) points.push([x1 + dir * 22, pin.y + o1], [x2, pin.y + o1], [x2 + dir * 12, pin.y + o2], [endX, pin.y + o3]);
-  if (pin.variant === 2) points.push([x1 + dir * 12, pin.y + o1], [x2, pin.y + o1], [x2 + dir * 24, pin.y + o2], [x3, pin.y + o2], [x3 + dir * 12, pin.y + o3], [endX, pin.y + o3]);
-  if (pin.variant === 3) points.push([x1 + dir * 18, pin.y + o1], [x2, pin.y + o1], [x2 + dir * 18, pin.y + o2], [endX, pin.y + o2]);
-  if (pin.variant === 4) points.push([x1 + dir * 26, pin.y + o1], [x2, pin.y + o1], [x2 + dir * 12, pin.y + o2], [x3, pin.y + o2], [endX, pin.y + o3]);
+  if (pin.variant === 0) points.push([x1, pin.y], [x1 + dir * 12, y1], [x2, y1], [x2 + dir * 18, y2], [x3, y2], [x3 + dir * 12, y3], [endX, cy]);
+  if (pin.variant === 1) points.push([x1, pin.y], [x1 + dir * 18, y1], [x2, y1], [x2 + dir * 10, y2], [x3, y2], [endX, cy]);
+  if (pin.variant === 2) points.push([x1, pin.y], [x1 + dir * 10, y1], [x2, y1], [x2 + dir * 22, y2], [x3, y2], [x3 + dir * 12, y3], [endX, cy]);
+  if (pin.variant === 3) points.push([x1, pin.y], [x1 + dir * 16, y1], [x2, y1], [x2 + dir * 14, y2], [endX, cy]);
+  if (pin.variant === 4) points.push([x1, pin.y], [x1 + dir * 22, y1], [x2, y1], [x2 + dir * 12, y2], [x3, y2], [endX, cy]);
   return points;
 }
 
-function buildVerticalRoute(pin) {
+function sideDestinationRoute(pin) {
+  const dir = pin.side === 'left' ? -1 : 1;
+  const stemX = pin.x + dir * CONTRACT.sideStem;
+  const targetX = pin.side === 'left' ? 396 : 1276;
+  const targetY = pin.destination.targetY;
+  const width = Math.abs(targetX - stemX);
+  const corridor = corridorY(pin);
+  const x1 = stemX + dir * Math.round(width * 0.20);
+  const x2 = stemX + dir * Math.round(width * 0.44);
+  const x3 = stemX + dir * Math.round(width * 0.70);
+  const y1 = lerp(pin.y, corridor, 0.28);
+  const y2 = lerp(corridor, targetY, 0.38);
+  const y3 = lerp(corridor, targetY, 0.72);
+  return [
+    [pin.x, pin.y], [stemX, pin.y],
+    [x1, pin.y], [x1 + dir * 12, y1],
+    [x2, y1], [x2 + dir * 18, y2],
+    [x3, y2], [x3 + dir * 14, y3],
+    [targetX, targetY],
+  ];
+}
+
+function buildSideRoute(pin) {
+  return pin.destination.type === 'module' ? sideDestinationRoute(pin) : sideFieldRoute(pin);
+}
+
+function verticalFieldRoute(pin) {
   const dir = pin.side === 'top' ? -1 : 1;
   const stemY = pin.y + dir * CONTRACT.verticalStem;
-  const points = [[pin.x, pin.y], [pin.x, stemY]];
-
-  if (pin.destination.type === 'module' && pin.destination.target === 'execution') {
-    const targetX = 836 + (Number(pin.id.slice(-2)) - 14) * 14;
-    const targetY = pin.destination.targetY;
-    points.push([pin.x, stemY + dir * 30], [targetX, stemY + dir * 56], [targetX, targetY]);
-    return points;
-  }
-
   const reach = reachFor(pin);
   const endY = stemY + dir * reach;
-  const y1 = stemY + dir * Math.round(reach * 0.27);
-  const y2 = stemY + dir * Math.round(reach * 0.58);
-  const y3 = stemY + dir * Math.round(reach * 0.84);
-  const o1 = spreadOffset(pin, 1) * 0.7;
-  const o2 = spreadOffset(pin, 2) * 0.8;
-  const o3 = spreadOffset(pin, 3) * 0.9;
+  const centerBias = (pin.x - CORE.centerX) / 212;
+  const outward = centerBias === 0 ? (pin.variant % 2 ? 1 : -1) : Math.sign(centerBias);
+  const baseSpread = 14 + Math.abs(centerBias) * 18;
+  const variantSpread = [8, 14, 11, 19, 16][pin.variant];
+  const x1 = pin.x + outward * (baseSpread * 0.35);
+  const x2 = pin.x + outward * (baseSpread + variantSpread * 0.35);
+  const x3 = pin.x + outward * (baseSpread + variantSpread);
+  const y1 = stemY + dir * Math.max(16, Math.round(reach * 0.22));
+  const y2 = stemY + dir * Math.max(32, Math.round(reach * 0.50));
+  const y3 = stemY + dir * Math.max(48, Math.round(reach * 0.78));
+  const points = [[pin.x, pin.y], [pin.x, stemY]];
 
-  points.push([pin.x, y1]);
-  if (pin.variant === 0) points.push([pin.x + o1, y1 + dir * 12], [pin.x + o1, y2], [pin.x + o2, y2 + dir * 14], [pin.x + o2, y3], [pin.x + o3, endY]);
-  if (pin.variant === 1) points.push([pin.x + o1, y1 + dir * 18], [pin.x + o1, y2], [pin.x + o2, y2 + dir * 12], [pin.x + o3, endY]);
-  if (pin.variant === 2) points.push([pin.x + o1, y1 + dir * 10], [pin.x + o1, y2], [pin.x + o2, y2 + dir * 20], [pin.x + o2, y3], [pin.x + o3, endY]);
-  if (pin.variant === 3) points.push([pin.x + o1, y1 + dir * 14], [pin.x + o2, y2], [pin.x + o2, y3], [pin.x + o3, endY]);
-  if (pin.variant === 4) points.push([pin.x + o1, y1 + dir * 20], [pin.x + o1, y2], [pin.x + o2, y2 + dir * 12], [pin.x + o3, endY]);
+  if (pin.variant === 0) points.push([pin.x, y1], [x1, y1 + dir * 10], [x1, y2], [x2, y2 + dir * 12], [x2, y3], [x3, endY]);
+  if (pin.variant === 1) points.push([pin.x, y1], [x1, y1 + dir * 14], [x1, y2], [x2, y2 + dir * 10], [x3, endY]);
+  if (pin.variant === 2) points.push([pin.x, y1], [x1, y1 + dir * 8], [x1, y2], [x2, y2 + dir * 16], [x2, y3], [x3, endY]);
+  if (pin.variant === 3) points.push([pin.x, y1], [x1, y1 + dir * 12], [x2, y2], [x2, y3], [x3, endY]);
+  if (pin.variant === 4) points.push([pin.x, y1], [x1, y1 + dir * 16], [x1, y2], [x2, y2 + dir * 10], [x3, endY]);
   return points;
+}
+
+function bottomExecutionRoute(pin) {
+  const stemY = pin.y + CONTRACT.verticalStem;
+  const offset = (pin.index - 14.5) * 12;
+  const targetX = CORE.centerX + offset;
+  return [
+    [pin.x, pin.y], [pin.x, stemY],
+    [pin.x, stemY + 22], [targetX, stemY + 42],
+    [targetX, 748],
+  ];
+}
+
+function buildVerticalRoute(pin) {
+  if (pin.side === 'bottom' && pin.destination.type === 'module') return bottomExecutionRoute(pin);
+  return verticalFieldRoute(pin);
 }
 
 function buildRoute(pin) {
@@ -114,18 +146,17 @@ function buildRoute(pin) {
 }
 
 function buildBranch(pin, mainPoints) {
-  if (!pin.branch || mainPoints.length < 5) return null;
-  const originIndex = Math.min(mainPoints.length - 2, 3 + (pin.variant % 2));
+  if (!pin.branch || mainPoints.length < 6) return null;
+  const originIndex = Math.min(mainPoints.length - 3, 4 + (pin.variant % 2));
   const origin = mainPoints[originIndex];
-  const sign = sideSign(pin.side);
   if (pin.side === 'left' || pin.side === 'right') {
     const dir = pin.side === 'left' ? -1 : 1;
-    const vertical = ((Number(pin.id.slice(-2)) % 2) ? 1 : -1) * (18 + pin.variant * 4);
-    return [origin, [origin[0] + dir * 24, origin[1]], [origin[0] + dir * 42, origin[1] + vertical], [origin[0] + dir * 74, origin[1] + vertical]];
+    const vertical = ((pin.index % 2) ? 1 : -1) * (14 + pin.variant * 4);
+    return [origin, [origin[0] + dir * 18, origin[1]], [origin[0] + dir * 34, origin[1] + vertical], [origin[0] + dir * 54, origin[1] + vertical]];
   }
-  const horizontal = ((Number(pin.id.slice(-2)) % 2) ? 1 : -1) * (18 + pin.variant * 4);
   const dir = pin.side === 'top' ? -1 : 1;
-  return [origin, [origin[0], origin[1] + dir * 24], [origin[0] + horizontal, origin[1] + dir * 42], [origin[0] + horizontal, origin[1] + dir * 72]];
+  const horizontal = ((pin.index % 2) ? 1 : -1) * (14 + pin.variant * 4);
+  return [origin, [origin[0], origin[1] + dir * 18], [origin[0] + horizontal, origin[1] + dir * 34], [origin[0] + horizontal, origin[1] + dir * 54]];
 }
 
 function terminal(points, color, branch = false) {
@@ -133,9 +164,10 @@ function terminal(points, color, branch = false) {
   return E('circle', {
     cx: x,
     cy: y,
-    r: branch ? 1.8 : 2.2,
+    r: branch ? 1.7 : 2.15,
     fill: color,
     class: 'pcb-terminal',
+    style: `color:${color}`,
   });
 }
 
@@ -147,6 +179,7 @@ function renderRoute(pin) {
     d: pointsToD(points),
     class: `pcb-route pcb-route-${pin.weight}`,
     stroke: color,
+    style: `color:${color}`,
     'stroke-width': ROUTE_WEIGHTS[pin.weight],
     'data-route-id': pin.id,
     'data-pin-id': pin.id,
@@ -167,6 +200,7 @@ function renderRoute(pin) {
       d: pointsToD(branchPoints),
       class: 'pcb-route pcb-route-thin pcb-branch',
       stroke: color,
+      style: `color:${color}`,
       'stroke-width': ROUTE_WEIGHTS.thin,
       'data-branch-parent': pin.id,
     });
@@ -180,8 +214,8 @@ function renderRoute(pin) {
 function renderSubstrate() {
   const defs = E('defs');
   defs.innerHTML = `
-    <pattern id="pcb-grid" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M18 0H0V18" fill="none" stroke="#2a638d" stroke-opacity=".065" stroke-width=".4"/><circle cx="2" cy="2" r=".65" fill="#4aa5d7" fill-opacity=".10"/></pattern>
-    <radialGradient id="pcb-halo"><stop stop-color="#0b6fa9" stop-opacity=".16"/><stop offset=".62" stop-color="#06233e" stop-opacity=".05"/><stop offset="1" stop-color="#020712" stop-opacity="0"/></radialGradient>
+    <pattern id="pcb-grid" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M18 0H0V18" fill="none" stroke="#2a638d" stroke-opacity=".062" stroke-width=".4"/><circle cx="2" cy="2" r=".65" fill="#4aa5d7" fill-opacity=".11"/></pattern>
+    <radialGradient id="pcb-halo"><stop stop-color="#0b6fa9" stop-opacity=".17"/><stop offset=".62" stop-color="#06233e" stop-opacity=".05"/><stop offset="1" stop-color="#020712" stop-opacity="0"/></radialGradient>
   `;
   board.prepend(defs);
   board.insertBefore(E('rect', { width: STAGE.width, height: STAGE.height, fill: 'url(#pcb-grid)', class: 'pcb-substrate' }), routesLayer);
@@ -195,9 +229,11 @@ function rebuildFabric() {
   pulsesLayer.replaceChildren();
   pulseRoutes = [];
   PINS.forEach(renderRoute);
+  const destinations = PINS.filter(p => p.destination.type === 'module').length;
   board.dataset.routingVersion = CONTRACT.version;
   board.dataset.pinCount = String(PINS.length);
-  board.dataset.destinationCount = String(PINS.filter(p => p.destination.type === 'module').length);
+  board.dataset.destinationCount = String(destinations);
+  board.dataset.destinationRatio = (destinations / PINS.length).toFixed(3);
   board.dataset.pulseCount = String(PINS.filter(p => p.pulse).length);
 }
 
@@ -208,9 +244,9 @@ function pulseCircle(color, radius) {
 function mountPulses() {
   pulsesLayer.replaceChildren();
   for (const item of pulseRoutes) {
-    item.pulse = pulseCircle(item.color, item.pin.weight === 'thick' ? 2.4 : 1.8);
-    item.phase = (Number(item.pin.id.slice(-2)) * 0.137 + (item.pin.side === 'right' ? 0.23 : 0)) % 1;
-    item.speed = 0.000035 + (item.pin.variant * 0.000004);
+    item.pulse = pulseCircle(item.color, item.pin.weight === 'thick' ? 2.25 : 1.7);
+    item.phase = (item.pin.index * 0.137 + (item.pin.side === 'right' ? 0.23 : item.pin.side === 'bottom' ? 0.41 : 0)) % 1;
+    item.speed = 0.000032 + (item.pin.variant * 0.0000035);
     pulsesLayer.append(item.pulse);
   }
 }
