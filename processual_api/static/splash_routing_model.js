@@ -20,6 +20,7 @@ export const COLORS = Object.freeze({
 
 export const CONTRACT = Object.freeze({
   version: 'A3-splash-routing-v20',
+  pinCount: 120,
   destinationRatioMax: 0.20,
   pulseRatioMax: 0.20,
   branchRatioMax: 0.26,
@@ -32,18 +33,18 @@ export const CONTRACT = Object.freeze({
   },
 });
 
-const SIDE_Y = Array.from({ length: 28 }, (_, i) => 270 + i * 12);
+const SIDE_Y = Array.from({ length: 30 }, (_, i) => 254 + i * 13);
 const EDGE_X = Array.from({ length: 30 }, (_, i) => 650 + i * 13);
 
 function sideColor(side, i) {
   if (side === 'left') {
-    if (i < 7) return 'cyan';
-    if (i < 14) return 'teal';
-    if (i < 21) return i % 4 === 0 ? 'cyan' : 'lime';
+    if (i < 8) return 'cyan';
+    if (i < 15) return 'teal';
+    if (i < 22) return i % 4 === 0 ? 'cyan' : 'lime';
     return 'violet';
   }
-  if (i < 14) return 'amber';
-  if (i < 21) return i % 5 === 0 ? 'amber' : 'teal';
+  if (i < 15) return 'amber';
+  if (i < 22) return i % 5 === 0 ? 'amber' : 'teal';
   return 'violet';
 }
 
@@ -71,7 +72,7 @@ function weightFor(i) {
 }
 
 function pulseFor(i) {
-  return i % 7 === 0 || i % 13 === 0;
+  return i % 8 === 0 || i % 17 === 0;
 }
 
 function branchFor(i) {
@@ -81,15 +82,15 @@ function branchFor(i) {
 const SIDE_DESTINATIONS = Object.freeze({
   left: [
     { indexes: [1, 5], target: 'governance', y: 162 },
-    { indexes: [8, 12], target: 'supervision', y: 339 },
-    { indexes: [15, 19], target: 'calibration', y: 518 },
-    { indexes: [22, 26], target: 'orchestration', y: 697 },
+    { indexes: [9, 12], target: 'supervision', y: 339 },
+    { indexes: [17, 20], target: 'calibration', y: 518 },
+    { indexes: [25, 28], target: 'orchestration', y: 697 },
   ],
   right: [
     { indexes: [1, 5], target: 'routing', y: 162 },
-    { indexes: [8, 12], target: 'policy', y: 339 },
-    { indexes: [15, 19], target: 'feedback', y: 518 },
-    { indexes: [22, 26], target: 'control', y: 697 },
+    { indexes: [9, 12], target: 'policy', y: 339 },
+    { indexes: [17, 20], target: 'feedback', y: 518 },
+    { indexes: [25, 28], target: 'control', y: 697 },
   ],
 });
 
