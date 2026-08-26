@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1672 941" role="img" aria-label="Maestro PCB v18 measured visual-pin reconstruction">
+<defs>
+  <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M18 0H0V18" fill="none" stroke="#2a638d" stroke-opacity=".07" stroke-width=".4"/><circle cx="2" cy="2" r=".65" fill="#4aa5d7" fill-opacity=".11"/></pattern>
+  <pattern id="dotsL" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="3" cy="4" r=".8" fill="#36bfff" fill-opacity=".34"/><circle cx="15" cy="13" r=".55" fill="#23d8c8" fill-opacity=".22"/></pattern>
+  <pattern id="dotsR" width="23" height="21" patternUnits="userSpaceOnUse"><circle cx="4" cy="3" r=".78" fill="#e59a20" fill-opacity=".33"/><circle cx="16" cy="14" r=".52" fill="#ffc65c" fill-opacity=".20"/></pattern>
+  <filter id="routeGlow"><feGaussianBlur stdDeviation="1.45" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="nodeGlow"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <radialGradient id="halo"><stop stop-color="#0b6fa9" stop-opacity=".15"/><stop offset=".62" stop-color="#06233e" stop-opacity=".05"/><stop offset="1" stop-color="#020712" stop-opacity="0"/></radialGradient>
+  <style>
+    .route{fill:none;stroke-linecap:round;stroke-linejoin:round;filter:url(#routeGlow)}
+    .primary{stroke-width:1.15;opacity:.96}.secondary{stroke-width:.74;opacity:.62}.micro{stroke-width:.48;opacity:.32}
+    .cyan{stroke:#36bfff}.teal{stroke:#23d8c8}.lime{stroke:#a7d67b}.amber{stroke:#f5a623}.violet{stroke:#c16fff}
+    .rail{fill:none;stroke-width:.72;opacity:.45}.node{filter:url(#nodeGlow)}
+  </style>
+</defs>
+<rect width="1672" height="941" fill="url(#grid)"/>
+<ellipse cx="836" cy="444" rx="610" ry="410" fill="url(#halo)"/>
+<rect x="20" y="55" width="610" height="740" fill="url(#dotsL)" opacity=".23"/>
+<rect x="1042" y="55" width="610" height="740" fill="url(#dotsR)" opacity=".22"/>
+
+<!-- side module substrate rails: decorative frames only, never signal origins -->
+<g id="module-rails">
+  <path class="rail cyan" d="M70 82H330L350 100V230L330 248H70L54 232V98Z"/><path class="rail teal" d="M70 259H330L350 277V407L330 425H70L54 409V275Z"/><path class="rail lime" d="M70 438H330L350 456V586L330 604H70L54 588V454Z"/><path class="rail violet" d="M70 617H330L350 635V765L330 783H70L54 767V633Z"/>
+  <path class="rail amber" d="M1602 82H1342L1322 100V230L1342 248H1602L1618 232V98Z"/><path class="rail amber" d="M1602 259H1342L1322 277V407L1342 425H1602L1618 409V275Z"/><path class="rail teal" d="M1602 438H1342L1322 456V586L1342 604H1602L1618 588V454Z"/><path class="rail violet" d="M1602 617H1342L1322 635V765L1342 783H1602L1618 767V633Z"/>
+</g>
+
+<!-- SINGLE VISIBLE ROUTING SOURCE. Measured pin envelope from scaled core: left=624 right=1048 top=233 bottom=653. -->
+<g id="pcb-routing" data-topology="measured-pin-single-source" data-left-pin-x="624" data-right-pin-x="1048" data-top-pin-y="233" data-bottom-pin-y="653">
+  <!-- LEFT / GOVERNANCE: aligned 49px breakout, then progressive fan-out -->
+  <g id="left-governance" data-origin="core-left-pins">
+    <path class="route primary cyan" data-route="gov-1" d="M624 274H575L550 260H520L492 235H462L432 207H396V150"/>
+    <path class="route primary cyan" data-route="gov-2" d="M624 284H575L550 272H520L492 249H462L432 225H396V160"/>
+    <path class="route primary cyan" data-route="gov-3" d="M624 294H575L550 284H520L492 263H462L432 243H396V170"/>
+    <path class="route secondary cyan" data-route="gov-4" d="M624 304H575L550 296H520L492 277H462L432 261H414L396 179"/>
+    <path class="route secondary cyan" data-route="gov-5" d="M624 314H575L550 308H520L492 291H462L432 279H414L396 189"/>
+    <path class="route secondary cyan" data-route="gov-dead-1" data-terminal="dead-end" d="M624 279H575L550 266H520L492 245H468L444 226"/>
+    <path class="route micro cyan" data-route="gov-dead-2" data-terminal="dead-end" d="M624 299H575L550 290H520L492 273H472L450 258"/>
+  </g>
+  <!-- LEFT / SUPERVISION -->
+  <g id="left-supervision" data-origin="core-left-pins">
+    <path class="route primary teal" data-route="sup-1" d="M624 334H575L550 330H520L492 320H462L432 307H396V305"/>
+    <path class="route primary teal" data-route="sup-2" d="M624 344H575L550 342H520L492 334H462L432 325H396V320"/>
+    <path class="route primary teal" data-route="sup-3" d="M624 354H575L550 354H520L492 348H462L432 343H396V338"/>
+    <path class="route primary teal" data-route="sup-4" d="M624 364H575L550 366H520L492 362H462L432 361H396V356"/>
+    <path class="route secondary cyan" data-route="sup-5" d="M624 374H575L550 378H520L492 376H462L432 379H396V373"/>
+    <path class="route secondary teal" data-route="sup-dead-1" data-terminal="dead-end" d="M624 349H575L550 347H520L492 340H468L446 332"/>
+    <path class="route micro cyan" data-route="sup-dead-2" data-terminal="dead-end" d="M624 369H575L550 372H520L492 369H468L442 372"/>
+  </g>
+  <!-- LEFT / CALIBRATION -->
+  <g id="left-calibration" data-origin="core-left-pins">
+    <path class="route primary lime" data-route="cal-1" d="M624 434H575L550 438H520L492 446H462L432 458H396V478"/>
+    <path class="route primary lime" data-route="cal-2" d="M624 444H575L550 450H520L492 460H462L432 476H396V492"/>
+    <path class="route primary lime" data-route="cal-3" d="M624 454H575L550 462H520L492 474H462L432 494H396V508"/>
+    <path class="route primary lime" data-route="cal-4" d="M624 464H575L550 474H520L492 488H462L432 512H396V524"/>
+    <path class="route secondary cyan" data-route="cal-5" d="M624 474H575L550 486H520L492 502H462L432 530H396V540"/>
+    <path class="route secondary lime" data-route="cal-dead-1" data-terminal="dead-end" d="M624 439H575L550 444H520L492 454H468L444 466"/>
+    <path class="route micro cyan" data-route="cal-dead-2" data-terminal="dead-end" d="M624 469H575L550 480H520L492 496H468L442 514"/>
+  </g>
+  <!-- LEFT / ORCHESTRATION -->
+  <g id="left-orchestration" data-origin="core-left-pins">
+    <path class="route primary violet" data-route="orc-1" d="M624 544H575L550 556H520L492 576H462L432 606H396V642"/>
+    <path class="route primary violet" data-route="orc-2" d="M624 554H575L550 568H520L492 590H462L432 624H396V655"/>
+    <path class="route primary violet" data-route="orc-3" d="M624 564H575L550 580H520L492 604H462L432 642H396V670"/>
+    <path class="route primary violet" data-route="orc-4" d="M624 574H575L550 592H520L492 618H462L432 660H396V685"/>
+    <path class="route secondary violet" data-route="orc-5" d="M624 584H575L550 604H520L492 632H462L432 678H396V700"/>
+    <path class="route secondary violet" data-route="orc-dead-1" data-terminal="dead-end" d="M624 549H575L550 562H520L492 584H468L444 608"/>
+    <path class="route micro violet" data-route="orc-dead-2" data-terminal="dead-end" d="M624 579H575L550 598H520L492 626H468L442 654"/>
+  </g>
+
+  <!-- RIGHT / ROUTING -->
+  <g id="right-routing" data-origin="core-right-pins">
+    <path class="route primary amber" data-route="route-1" d="M1048 274H1097L1122 260H1152L1180 235H1210L1240 207H1276V150"/>
+    <path class="route primary amber" data-route="route-2" d="M1048 284H1097L1122 272H1152L1180 249H1210L1240 225H1276V160"/>
+    <path class="route primary amber" data-route="route-3" d="M1048 294H1097L1122 284H1152L1180 263H1210L1240 243H1276V170"/>
+    <path class="route secondary amber" data-route="route-4" d="M1048 304H1097L1122 296H1152L1180 277H1210L1240 261H1258L1276 179"/>
+    <path class="route secondary amber" data-route="route-5" d="M1048 314H1097L1122 308H1152L1180 291H1210L1240 279H1258L1276 189"/>
+    <path class="route secondary amber" data-route="route-dead-1" data-terminal="dead-end" d="M1048 279H1097L1122 266H1152L1180 245H1204L1228 226"/>
+    <path class="route micro amber" data-route="route-dead-2" data-terminal="dead-end" d="M1048 299H1097L1122 290H1152L1180 273H1200L1222 258"/>
+  </g>
+  <!-- RIGHT / POLICY -->
+  <g id="right-policy" data-origin="core-right-pins">
+    <path class="route primary amber" data-route="pol-1" d="M1048 334H1097L1122 330H1152L1180 320H1210L1240 307H1276V305"/>
+    <path class="route primary amber" data-route="pol-2" d="M1048 344H1097L1122 342H1152L1180 334H1210L1240 325H1276V320"/>
+    <path class="route primary amber" data-route="pol-3" d="M1048 354H1097L1122 354H1152L1180 348H1210L1240 343H1276V338"/>
+    <path class="route primary amber" data-route="pol-4" d="M1048 364H1097L1122 366H1152L1180 362H1210L1240 361H1276V356"/>
+    <path class="route secondary amber" data-route="pol-5" d="M1048 374H1097L1122 378H1152L1180 376H1210L1240 379H1276V373"/>
+    <path class="route secondary amber" data-route="pol-dead-1" data-terminal="dead-end" d="M1048 349H1097L1122 347H1152L1180 340H1204L1226 332"/>
+    <path class="route micro amber" data-route="pol-dead-2" data-terminal="dead-end" d="M1048 369H1097L1122 372H1152L1180 369H1204L1230 372"/>
+  </g>
+  <!-- RIGHT / FEEDBACK -->
+  <g id="right-feedback" data-origin="core-right-pins">
+    <path class="route primary teal" data-route="feed-1" d="M1048 434H1097L1122 438H1152L1180 446H1210L1240 458H1276V478"/>
+    <path class="route primary teal" data-route="feed-2" d="M1048 444H1097L1122 450H1152L1180 460H1210L1240 476H1276V492"/>
+    <path class="route primary teal" data-route="feed-3" d="M1048 454H1097L1122 462H1152L1180 474H1210L1240 494H1276V508"/>
+    <path class="route primary teal" data-route="feed-4" d="M1048 464H1097L1122 474H1152L1180 488H1210L1240 512H1276V524"/>
+    <path class="route secondary amber" data-route="feed-5" d="M1048 474H1097L1122 486H1152L1180 502H1210L1240 530H1276V540"/>
+    <path class="route secondary teal" data-route="feed-dead-1" data-terminal="dead-end" d="M1048 439H1097L1122 444H1152L1180 454H1204L1228 466"/>
+    <path class="route micro teal" data-route="feed-dead-2" data-terminal="dead-end" d="M1048 469H1097L1122 480H1152L1180 496H1204L1230 514"/>
+  </g>
+  <!-- RIGHT / CONTROL -->
+  <g id="right-control" data-origin="core-right-pins">
+    <path class="route primary violet" data-route="ctrl-1" d="M1048 544H1097L1122 556H1152L1180 576H1210L1240 606H1276V642"/>
+    <path class="route primary violet" data-route="ctrl-2" d="M1048 554H1097L1122 568H1152L1180 590H1210L1240 624H1276V655"/>
+    <path class="route primary violet" data-route="ctrl-3" d="M1048 564H1097L1122 580H1152L1180 604H1210L1240 642H1276V670"/>
+    <path class="route primary violet" data-route="ctrl-4" d="M1048 574H1097L1122 592H1152L1180 618H1210L1240 660H1276V685"/>
+    <path class="route secondary violet" data-route="ctrl-5" d="M1048 584H1097L1122 604H1152L1180 632H1210L1240 678H1276V700"/>
+    <path class="route secondary violet" data-route="ctrl-dead-1" data-terminal="dead-end" d="M1048 549H1097L1122 562H1152L1180 584H1204L1228 608"/>
+    <path class="route micro violet" data-route="ctrl-dead-2" data-terminal="dead-end" d="M1048 579H1097L1122 598H1152L1180 626H1204L1230 654"/>
+  </g>
+
+  <!-- TOP CROWN: every line starts exactly at visual top pin Y=233, stays aligned first, then disperses. -->
+  <g id="crown-routes" data-origin="core-top-pins">
+    <path class="route primary cyan" data-route="top-1" d="M650 233V196L640 178V150L614 118L580 78"/>
+    <path class="route primary cyan" data-route="top-2" d="M670 233V196L662 176V142L638 110L610 54"/>
+    <path class="route primary cyan" data-route="top-3" d="M690 233V196L684 174V134L662 102L642 82"/>
+    <path class="route primary cyan" data-route="top-4" d="M710 233V196L706 172V126L688 94L674 44"/>
+    <path class="route primary cyan" data-route="top-5" d="M730 233V196L728 170V118L714 86L706 66"/>
+    <path class="route primary teal" data-route="top-6" d="M750 233V196L750 168V110L744 78L742 30"/>
+    <path class="route primary teal" data-route="top-7" d="M770 233V196L772 168V110L778 78L780 54"/>
+    <path class="route primary teal" data-route="top-8" d="M790 233V196L794 170V118L808 86L814 38"/>
+    <path class="route primary cyan" data-route="top-9" d="M810 233V196L816 172V126L834 94L846 70"/>
+    <path class="route primary amber" data-route="top-10" d="M862 233V196L856 172V126L838 94L826 62"/>
+    <path class="route primary amber" data-route="top-11" d="M882 233V196L878 170V118L864 86L858 42"/>
+    <path class="route primary amber" data-route="top-12" d="M902 233V196L900 168V110L894 78L892 28"/>
+    <path class="route primary amber" data-route="top-13" d="M922 233V196L922 168V110L928 78L930 58"/>
+    <path class="route primary amber" data-route="top-14" d="M942 233V196L944 170V118L958 86L964 40"/>
+    <path class="route primary amber" data-route="top-15" d="M962 233V196L966 172V126L984 94L996 72"/>
+    <path class="route primary amber" data-route="top-16" d="M982 233V196L988 174V134L1010 102L1030 48"/>
+    <path class="route primary amber" data-route="top-17" d="M1002 233V196L1010 176V142L1034 110L1062 80"/>
+    <path class="route primary amber" data-route="top-18" d="M1022 233V196L1032 178V150L1058 118L1092 58"/>
+  </g>
+
+  <!-- BOTTOM / EXECUTION: all routes start at bottom teeth and fan around execution. -->
+  <g id="bottom-routes" data-origin="core-bottom-pins">
+    <path class="route primary cyan" data-route="bot-1" d="M690 653V690L680 710V742L654 774L620 820"/>
+    <path class="route primary cyan" data-route="bot-2" d="M712 653V690L704 712V750L680 782L650 850"/>
+    <path class="route primary cyan" data-route="bot-3" d="M734 653V690L728 714V758L708 790L686 826"/>
+    <path class="route primary teal" data-route="bot-4" d="M756 653V690L752 716V766L738 798L724 858"/>
+    <path class="route primary teal" data-route="bot-5" d="M778 653V690L776 718V774L770 806L766 838"/>
+    <path class="route primary cyan" data-route="bot-6" d="M800 653V690L800 720V782L798 814L798 864"/>
+    <path class="route primary cyan" data-route="bot-7" d="M822 653V690L824 720V786L826 820L826 842"/>
+    <path class="route primary amber" data-route="bot-8" d="M850 653V690L848 720V786L846 820L846 872"/>
+    <path class="route primary amber" data-route="bot-9" d="M872 653V690L872 720V782L874 814L874 840"/>
+    <path class="route primary amber" data-route="bot-10" d="M894 653V690L896 718V774L902 806L906 864"/>
+    <path class="route primary amber" data-route="bot-11" d="M916 653V690L920 716V766L934 798L948 838"/>
+    <path class="route primary violet" data-route="bot-12" d="M938 653V690L944 714V758L964 790L986 858"/>
+    <path class="route primary violet" data-route="bot-13" d="M960 653V690L968 712V750L992 782L1022 826"/>
+    <path class="route primary violet" data-route="bot-14" d="M982 653V690L992 710V742L1018 774L1052 850"/>
+  </g>
+</g>
+
+<!-- terminal lights are exact endpoints of dead-end and crown/bottom routes -->
+<g id="terminal-beacons" class="node">
+  <circle cx="444" cy="226" r="2.7" fill="#36bfff"/><circle cx="450" cy="258" r="2.3" fill="#36bfff"/>
+  <circle cx="446" cy="332" r="2.6" fill="#23d8c8"/><circle cx="442" cy="372" r="2.3" fill="#36bfff"/>
+  <circle cx="444" cy="466" r="2.6" fill="#a7d67b"/><circle cx="442" cy="514" r="2.3" fill="#36bfff"/>
+  <circle cx="444" cy="608" r="2.6" fill="#c16fff"/><circle cx="442" cy="654" r="2.3" fill="#c16fff"/>
+  <circle cx="1228" cy="226" r="2.7" fill="#f5a623"/><circle cx="1222" cy="258" r="2.3" fill="#f5a623"/>
+  <circle cx="1226" cy="332" r="2.6" fill="#f5a623"/><circle cx="1230" cy="372" r="2.3" fill="#f5a623"/>
+  <circle cx="1228" cy="466" r="2.6" fill="#23d8c8"/><circle cx="1230" cy="514" r="2.3" fill="#23d8c8"/>
+  <circle cx="1228" cy="608" r="2.6" fill="#c16fff"/><circle cx="1230" cy="654" r="2.3" fill="#c16fff"/>
+  <circle cx="580" cy="78" r="2.8" fill="#36bfff"/><circle cx="610" cy="54" r="2.6" fill="#36bfff"/><circle cx="642" cy="82" r="2.5" fill="#36bfff"/><circle cx="674" cy="44" r="2.8" fill="#36bfff"/><circle cx="706" cy="66" r="2.4" fill="#36bfff"/><circle cx="742" cy="30" r="2.8" fill="#23d8c8"/><circle cx="780" cy="54" r="2.5" fill="#23d8c8"/><circle cx="814" cy="38" r="2.8" fill="#23d8c8"/><circle cx="846" cy="70" r="2.5" fill="#36bfff"/>
+  <circle cx="826" cy="62" r="2.5" fill="#f5a623"/><circle cx="858" cy="42" r="2.8" fill="#f5a623"/><circle cx="892" cy="28" r="2.8" fill="#f5a623"/><circle cx="930" cy="58" r="2.5" fill="#f5a623"/><circle cx="964" cy="40" r="2.8" fill="#f5a623"/><circle cx="996" cy="72" r="2.5" fill="#f5a623"/><circle cx="1030" cy="48" r="2.8" fill="#f5a623"/><circle cx="1062" cy="80" r="2.5" fill="#f5a623"/><circle cx="1092" cy="58" r="2.8" fill="#f5a623"/>
+  <circle cx="620" cy="820" r="2.6" fill="#36bfff"/><circle cx="650" cy="850" r="2.6" fill="#36bfff"/><circle cx="686" cy="826" r="2.5" fill="#36bfff"/><circle cx="724" cy="858" r="2.7" fill="#23d8c8"/><circle cx="766" cy="838" r="2.5" fill="#23d8c8"/><circle cx="798" cy="864" r="2.7" fill="#36bfff"/><circle cx="826" cy="842" r="2.5" fill="#36bfff"/>
+  <circle cx="846" cy="872" r="2.7" fill="#f5a623"/><circle cx="874" cy="840" r="2.5" fill="#f5a623"/><circle cx="906" cy="864" r="2.7" fill="#f5a623"/><circle cx="948" cy="838" r="2.5" fill="#f5a623"/><circle cx="986" cy="858" r="2.7" fill="#c16fff"/><circle cx="1022" cy="826" r="2.5" fill="#c16fff"/><circle cx="1052" cy="850" r="2.7" fill="#c16fff"/>
+</g>
+
+<!-- passive vias only; never route origins -->
+<g id="passive-vias" opacity=".56">
+  <circle cx="118" cy="116" r="1.2" fill="#36bfff"/><circle cx="176" cy="212" r="1" fill="#23d8c8"/><circle cx="232" cy="344" r="1.2" fill="#36bfff"/><circle cx="292" cy="528" r="1" fill="#a7d67b"/><circle cx="348" cy="688" r="1.2" fill="#c16fff"/>
+  <circle cx="1554" cy="118" r="1.2" fill="#f5a623"/><circle cx="1496" cy="214" r="1" fill="#ffc65c"/><circle cx="1440" cy="344" r="1.2" fill="#f5a623"/><circle cx="1380" cy="528" r="1" fill="#23d8c8"/><circle cx="1324" cy="688" r="1.2" fill="#c16fff"/>
+</g>
+</svg>
