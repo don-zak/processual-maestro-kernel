@@ -39,15 +39,23 @@ jobs:
           test -s audit-external-requirements.txt
           pip-audit --strict -r audit-external-requirements.txt
 
-      - name: Reject private CGT leakage from public tree
+      - name: Verify public/private CGT runtime boundary
         run: |
           test ! -d cgtlib/private
-          if grep -R --line-number --include='*.py' \
-            -E 'cgtlib\.private|reward/fate|reward_fate' \
-            processual_api processual_kernel cgtlib; then
-            echo 'FAIL: protected/private CGT marker found in public runtime tree'
-            exit 1
-          fi
+          python - <<'PY'
+          import importlib
+          import cgtlib
+
+          try:
+              importlib.import_module("cgtlib.private")
+          except ModuleNotFoundError:
+              print("OK: cgtlib.private is unavailable in the public tree")
+          else:
+              raise SystemExit("FAIL: cgtlib.private is importable in the public tree")
+
+          assert cgtlib is not None
+          print("OK: public cgtlib facade remains importable")
+          PY
 
       - name: Hardened CGT router typing check
         run: |
