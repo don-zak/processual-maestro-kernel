@@ -4,9 +4,10 @@
 This is an extraction tool only. It must never invent route topology or render a
 replacement Splash. The approved reference image remains the source of truth.
 
-The extractor now separates the five route color families, confines analysis to
-measured route corridors around the central core, inventories visible core-pin
-candidates, and emits a non-canonical graph for tile-by-tile audit.
+The extractor separates route color families, confines analysis to measured
+corridors around the central core, inventories visible core-pin candidates,
+reconciles those pins with graph origins, and traces each matched origin to
+reachable terminals. Every result remains non-canonical until visual audit.
 """
 
 from __future__ import annotations
@@ -14,20 +15,19 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections import defaultdict
 from pathlib import Path
 
 import cv2
 import numpy as np
-from scipy.signal import find_peaks
 from skimage.morphology import skeletonize
 
 REFERENCE_CORE = (608, 224, 1041, 632)
 REFERENCE_SIZE = (1672, 941)
 EXECUTION_CENTER = (821, 724)
 EXECUTION_RADIUS = 58
+PIN_MATCH_RADIUS = 24.0
 
-# Deliberately non-overlapping hue bands. The previous cyan/teal overlap made
-# color classification ambiguous and inflated cyan route counts.
 HUE_RANGES = {
     "amber": (7, 30),
     "lime": (34, 58),
@@ -93,8 +93,6 @@ def color_masks(image: np.ndarray, saturation_min: int, value_min: int) -> dict[
 
 
 def retain_core_connected(mask: np.ndarray, origin: np.ndarray) -> tuple[np.ndarray, int]:
-    # Closing only two pixels repairs antialias gaps without intentionally
-    # bridging adjacent PCB lanes.
     closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8))
     count, labels, stats, _ = cv2.connectedComponentsWithStats((closed > 0).astype(np.uint8), 8)
     keep = np.zeros_like(closed)
@@ -196,13 +194,23 @@ def side_for(x: float, y: float) -> str:
     )[0]
 
 
-def detect_pin_candidates(image: np.ndarray) -> list[dict[str, object]]:
-    """Inventory bright teeth from measured strips immediately outside the core.
+def simple_peaks(profile: np.ndarray, *, distance: int = 8, prominence: float = 12.0, height: float = 75.0) -> list[int]:
+    """Small dependency-free 1D peak detector for the core tooth profiles."""
+    candidates = [
+        index for index in range(1, len(profile) - 1)
+        if profile[index] >= height
+        and profile[index] >= profile[index - 1]
+        and profile[index] > profile[index + 1]
+        and profile[index] - min(profile[index - 1], profile[index + 1]) >= prominence
+    ]
+    accepted: list[int] = []
+    for index in sorted(candidates, key=lambda item: float(profile[item]), reverse=True):
+        if all(abs(index - other) >= distance for other in accepted):
+            accepted.append(index)
+    return sorted(accepted)
 
-    These are audit candidates, not yet canonical pin identities. The output is
-    intentionally kept separate from the route graph until every peak has been
-    reconciled against the reference overlay.
-    """
+
+def detect_pin_candidates(image: np.ndarray) -> list[dict[str, object]]:
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     _, saturation, value = cv2.split(hsv)
     score = value.astype(float) * (saturation.astype(float) / 255.0)
@@ -215,8 +223,8 @@ def detect_pin_candidates(image: np.ndarray) -> list[dict[str, object]]:
     }
     pins: list[dict[str, object]] = []
     for side, profile in profiles.items():
-        peaks, _ = find_peaks(profile, distance=8, prominence=12, height=75)
-        peaks = peaks[(peaks > 5) & (peaks < len(profile) - 6)]
+        peaks = simple_peaks(profile)
+        peaks = [peak for peak in peaks if 5 < peak < len(profile) - 6]
         for peak in peaks:
             if side == "left":
                 x, y = 601, y1 + int(peak)
@@ -235,6 +243,87 @@ def detect_pin_candidates(image: np.ndarray) -> list[dict[str, object]]:
                 "status": "AUDIT_REQUIRED",
             })
     return pins
+
+
+def node_key(color: str, x: int, y: int) -> tuple[str, int, int]:
+    return color, x, y
+
+
+def reconcile_pins(
+    pins: list[dict[str, object]],
+    nodes: list[dict[str, object]],
+    edges: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Attach measured pin candidates to nearby graph origins and trace terminals."""
+    origins = [node for node in nodes if node["type"] == "origin-candidate"]
+    node_by_key = {
+        node_key(str(node["color"]), int(node["x"]), int(node["y"])): node
+        for node in nodes
+    }
+    adjacency: dict[tuple[str, int, int], list[tuple[tuple[str, int, int], str]]] = defaultdict(list)
+    for edge in edges:
+        points = edge["points"]
+        assert isinstance(points, list) and len(points) >= 2
+        sx, sy = points[0]
+        ex, ey = points[-1]
+        a = node_key(str(edge["color"]), int(round(sx)), int(round(sy)))
+        b = node_key(str(edge["color"]), int(round(ex)), int(round(ey)))
+        adjacency[a].append((b, str(edge["id"])))
+        adjacency[b].append((a, str(edge["id"])))
+
+    reconciled: list[dict[str, object]] = []
+    for pin in pins:
+        px, py = int(pin["x"]), int(pin["y"])
+        side = str(pin["side"])
+        candidates = []
+        for origin in origins:
+            if origin.get("side") != side:
+                continue
+            distance = math.hypot(px - int(origin["x"]), py - int(origin["y"]))
+            if distance <= PIN_MATCH_RADIUS:
+                candidates.append((distance, origin))
+        candidates.sort(key=lambda item: item[0])
+        record = dict(pin)
+        if not candidates:
+            record.update({
+                "matched": False,
+                "origin_node_id": None,
+                "origin_distance_px": None,
+                "terminal_paths": [],
+            })
+            reconciled.append(record)
+            continue
+
+        distance, origin = candidates[0]
+        origin_key = node_key(str(origin["color"]), int(origin["x"]), int(origin["y"]))
+        terminal_paths: list[dict[str, object]] = []
+        stack: list[tuple[tuple[str, int, int], list[str], set[tuple[str, int, int]]]] = [
+            (origin_key, [], {origin_key})
+        ]
+        while stack:
+            current, path_edges, visited_nodes = stack.pop()
+            current_node = node_by_key.get(current)
+            if current != origin_key and current_node and current_node["type"] == "terminal":
+                terminal_paths.append({
+                    "terminal_node_id": current_node["id"],
+                    "edge_ids": path_edges,
+                })
+                continue
+            for next_key, edge_id in adjacency.get(current, []):
+                if next_key in visited_nodes:
+                    continue
+                stack.append((next_key, path_edges + [edge_id], visited_nodes | {next_key}))
+
+        record.update({
+            "matched": True,
+            "origin_node_id": origin["id"],
+            "origin_distance_px": round(distance, 2),
+            "route_color": origin["color"],
+            "terminal_paths": terminal_paths,
+            "status": "AUDIT_REQUIRED",
+        })
+        reconciled.append(record)
+    return reconciled
 
 
 def main() -> None:
@@ -260,13 +349,17 @@ def main() -> None:
         skeleton = skeletonize(selected > 0)
         chains, pixels, graph_nodes = trace_graph_edges(skeleton)
         degree = {pixel: len(neighbours(pixel, pixels)) for pixel in graph_nodes}
+        node_ids: dict[tuple[int, int], str] = {}
 
-        for y, x in graph_nodes:
+        for y, x in sorted(graph_nodes):
             distance = core_distance(x, y)
             node_type = "junction" if degree[(y, x)] >= 3 else "terminal"
             if distance <= 17:
                 node_type = "origin-candidate"
+            node_id = f"node-{len(nodes) + 1:04d}"
+            node_ids[(y, x)] = node_id
             nodes.append({
+                "id": node_id,
                 "x": int(x),
                 "y": int(y),
                 "color": color,
@@ -277,17 +370,24 @@ def main() -> None:
 
         color_edge_start = len(edges)
         for chain in chains:
+            raw_start = chain[0]
+            raw_end = chain[-1]
             points = rdp([(float(x), float(y)) for y, x in chain])
             length = sum(math.dist(a, b) for a, b in zip(points, points[1:]))
             if length < 6:
                 continue
+            start_node_id = node_ids.get(raw_start)
+            end_node_id = node_ids.get(raw_end)
             if core_distance(*points[-1]) < core_distance(*points[0]):
                 points.reverse()
+                start_node_id, end_node_id = end_node_id, start_node_id
             edges.append({
                 "id": f"edge-{len(edges) + 1:04d}",
                 "color": color,
                 "length_px": round(length, 2),
                 "origin_edge": core_distance(*points[0]) <= 17,
+                "start_node_id": start_node_id,
+                "end_node_id": end_node_id,
                 "points": [[round(x, 1), round(y, 1)] for x, y in points],
             })
 
@@ -299,24 +399,33 @@ def main() -> None:
         }
 
     pins = detect_pin_candidates(image)
-    pin_counts = {side: sum(pin["side"] == side for pin in pins) for side in ("left", "right", "top", "bottom")}
+    reconciled_pins = reconcile_pins(pins, nodes, edges)
+    pin_counts = {
+        side: sum(pin["side"] == side for pin in reconciled_pins)
+        for side in ("left", "right", "top", "bottom")
+    }
+    matched_count = sum(bool(pin["matched"]) for pin in reconciled_pins)
+    path_count = sum(len(pin["terminal_paths"]) for pin in reconciled_pins)
     manifest = {
         "meta": {
             "source": args.image.name,
             "width": w,
             "height": h,
             "core_bounds": list(REFERENCE_CORE),
-            "method": "exclusive-HSV + measured route corridors + per-color core-connected skeleton graph",
+            "method": "exclusive-HSV + measured corridors + per-color graph + pin-origin reconciliation",
             "edge_count": len(edges),
             "node_count": len(nodes),
-            "pin_candidate_count": len(pins),
+            "pin_candidate_count": len(reconciled_pins),
+            "matched_pin_count": matched_count,
+            "unmatched_pin_count": len(reconciled_pins) - matched_count,
+            "terminal_path_count": path_count,
             "pin_candidates_by_side": pin_counts,
             "color_stats": color_stats,
             "status": "AUDIT_REQUIRED",
             "canonical": False,
             "splash_reconstruction_allowed": False,
         },
-        "pin_candidates": pins,
+        "pin_candidates": reconciled_pins,
         "nodes": nodes,
         "edges": edges,
     }
@@ -327,13 +436,15 @@ def main() -> None:
     for selected in selected_masks.values():
         combined |= selected
         overlay[skeletonize(selected > 0)] = (245, 245, 245)
-    for pin in pins:
-        cv2.circle(overlay, (int(pin["x"]), int(pin["y"])), 4, (0, 255, 0), 1)
+    for pin in reconciled_pins:
+        center = (int(pin["x"]), int(pin["y"]))
+        cv2.circle(overlay, center, 4, (0, 255, 0) if pin["matched"] else (0, 0, 255), 1)
     for node in nodes:
+        center = (int(node["x"]), int(node["y"]))
         if node["type"] == "terminal":
-            cv2.circle(overlay, (int(node["x"]), int(node["y"])), 2, (0, 0, 255), -1)
+            cv2.circle(overlay, center, 2, (0, 0, 255), -1)
         elif node["type"] == "junction":
-            cv2.circle(overlay, (int(node["x"]), int(node["y"])), 2, (0, 255, 255), -1)
+            cv2.circle(overlay, center, 2, (0, 255, 255), -1)
 
     cv2.imwrite(str(args.out / "reference_route_graph_mask.png"), combined)
     cv2.imwrite(str(args.out / "reference_route_graph_overlay.png"), overlay)
