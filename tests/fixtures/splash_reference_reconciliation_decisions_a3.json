@@ -1,0 +1,49 @@
+{
+  "version": "A3-splash-reference-reconciliation-decisions-v1",
+  "source": "approved pivot reference image + recovered skeleton audit",
+  "policy": {
+    "automatic_topology_invention_forbidden": true,
+    "high_chroma_single_tree_fragments_may_attach_only_with_local_proximity_evidence": true,
+    "multi_tree_or_high_chroma_ambiguous_fragments_require_manual_review": true,
+    "low_chroma_isolated_fragments_may_be_excluded_only_when_no_route-shape evidence remains": true
+  },
+  "decisions": [
+    {"region":"unassigned-005","decision":"EXCLUDE_ARTIFACT","evidence":"area=10, chroma=0.100, nearest tree=91 at 8px"},
+    {"region":"unassigned-007","decision":"EXCLUDE_ARTIFACT","evidence":"area=5, chroma=0.000, nearest tree=40 at 3px"},
+    {"region":"unassigned-013","decision":"EXCLUDE_ARTIFACT","evidence":"area=14, chroma=0.000, nearest tree=112 at 3px"},
+    {"region":"unassigned-014","decision":"EXCLUDE_ARTIFACT","evidence":"area=6, chroma=0.000, nearest tree=115 at 4px"},
+    {"region":"unassigned-017","decision":"EXCLUDE_ARTIFACT","evidence":"area=6, chroma=0.167, nearest trees=121/123 at 8px"},
+    {"region":"unassigned-021","decision":"EXCLUDE_ARTIFACT","evidence":"area=5, chroma=0.000, nearest trees only at 16px"},
+
+    {"region":"unassigned-008","decision":"ATTACH_CONTINUATION","target_tree":17,"evidence":"area=3, chroma=0.667, single nearest tree=17 at 3px"},
+    {"region":"unassigned-009","decision":"ATTACH_CONTINUATION","target_tree":60,"evidence":"area=25, chroma=0.960, single nearest tree=60 at 2px; visible horizontal route continuation"},
+    {"region":"unassigned-010","decision":"ATTACH_CONTINUATION","target_tree":29,"evidence":"area=7, chroma=0.429, single nearest tree=29 at 3px"},
+    {"region":"unassigned-012","decision":"ATTACH_CONTINUATION","target_tree":32,"evidence":"area=4, chroma=1.000, single nearest tree=32 at 6px"},
+    {"region":"unassigned-016","decision":"ATTACH_CONTINUATION","target_tree":116,"evidence":"area=24, chroma=0.708, single nearest tree=116 at 2px"},
+    {"region":"unassigned-018","decision":"ATTACH_CONTINUATION","target_tree":116,"evidence":"area=4, chroma=1.000, single nearest tree=116 at 3px"},
+    {"region":"unassigned-020","decision":"ATTACH_CONTINUATION","target_tree":116,"evidence":"area=158, chroma=0.943, single nearest tree=116 at 3px; large visible violet route structure"},
+    {"region":"unassigned-023","decision":"ATTACH_CONTINUATION","target_tree":116,"evidence":"area=4, chroma=1.000, nearest tree=116; kept with same visible lower route family"},
+    {"region":"unassigned-025","decision":"ATTACH_CONTINUATION","target_tree":124,"evidence":"area=7, chroma=0.429, single nearest tree=124 at 2px"},
+
+    {"region":"unassigned-001","decision":"PENDING_MANUAL","evidence":"high chroma but equidistant to trees 1/67"},
+    {"region":"unassigned-002","decision":"PENDING_MANUAL","evidence":"high chroma, near trees 86/87"},
+    {"region":"unassigned-003","decision":"PENDING_MANUAL","evidence":"low support but near trees 92/93; verify visually"},
+    {"region":"unassigned-004","decision":"PENDING_MANUAL","evidence":"high chroma, near trees 74/75"},
+    {"region":"unassigned-006","decision":"PENDING_MANUAL","evidence":"area=110, chroma=0.727, visible amber route structure near trees 39/40"},
+    {"region":"unassigned-011","decision":"PENDING_MANUAL","evidence":"area=10, chroma=1.000, near trees 30/31"},
+    {"region":"unassigned-015","decision":"PENDING_MANUAL","evidence":"low chroma but near trees 115/116"},
+    {"region":"unassigned-019","decision":"PENDING_MANUAL","evidence":"chroma=0.875, nearest tree 96 at 6px; gap requires visual confirmation"},
+    {"region":"unassigned-022","decision":"PENDING_MANUAL","evidence":"chroma=1.000, near trees 98/99"},
+    {"region":"unassigned-024","decision":"PENDING_MANUAL","evidence":"area=27, chroma=1.000, vertical visible route segment near trees 118/119"},
+    {"region":"unassigned-026","decision":"PENDING_MANUAL","evidence":"chroma=0.714, near trees 119/120/121"},
+    {"region":"unassigned-027","decision":"PENDING_MANUAL","evidence":"chroma=0.833, near trees 96/97"}
+  ],
+  "summary": {
+    "unassigned_regions_total": 27,
+    "attach_continuation": 9,
+    "exclude_artifact": 6,
+    "pending_manual": 12,
+    "canonical_ready": false,
+    "splash_reconstruction_allowed": false
+  }
+}
