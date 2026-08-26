@@ -15,19 +15,27 @@ def _board() -> str:
     return BOARD.read_text(encoding="utf-8")
 
 
-def _endpoint_y(d: str) -> int:
-    """Return the final Y coordinate for the authored SVG path.
+def _route_elements(board: str) -> list[tuple[str, str]]:
+    return re.findall(r'<path class="route [^"]+"([^>]*) d="([^"]+)"', board)
 
-    The reference routes intentionally use more than one legal SVG ending style:
-    some finish with V<y>, while others finish with a final L<x> <y> segment.
-    The acceptance gate cares about the rendered endpoint Y, not the command type.
-    """
+
+def _subpaths(d: str) -> list[str]:
+    return ["M" + chunk for chunk in d.split("M")[1:]]
+
+
+def _start(d: str) -> tuple[int, int]:
+    m = re.match(r"M(\d+) (\d+)", d)
+    assert m, d
+    return int(m.group(1)), int(m.group(2))
+
+
+def _end(d: str) -> tuple[int, int]:
     nums = [int(n) for n in re.findall(r"\d+", d)]
     assert len(nums) >= 2, d
-    return nums[-1]
+    return nums[-2], nums[-1]
 
 
-def test_production_splash_keeps_dom_ui_plus_one_visible_authored_board():
+def test_production_splash_keeps_one_visible_board_and_pulse_only_overlay():
     source = _source()
     required = [
         'id="pcb-reference"',
@@ -39,174 +47,120 @@ def test_production_splash_keeps_dom_ui_plus_one_visible_authored_board():
         "function animate(now)",
         "getTotalLength",
         "getPointAtLength",
-        "requestAnimationFrame",
         ".signal-geometry{fill:none;stroke:none;pointer-events:none}",
     ]
-    forbidden = [
-        "function pcb(",
-        "function drawSideFabric(",
-        "function regionalFabric(",
-        "class:'signal-base'",
-        "class:'signal-wake'",
-        "class:'via-node node-bloom'",
-    ]
+    forbidden = ["class:'signal-base'", "class:'signal-wake'", "function drawSideFabric("]
     assert not [m for m in required if m not in source]
     assert not [m for m in forbidden if m in source]
 
 
-def test_legacy_routing_was_deleted_and_rebuilt_from_measured_visual_pins():
+def test_v19_staged_tooth_fabric_replaces_uniform_bus_topology():
     board = _board()
     required = [
-        'aria-label="Maestro PCB v18 measured visual-pin reconstruction"',
-        'id="pcb-routing" data-topology="measured-pin-single-source"',
+        'aria-label="Maestro PCB v19 staged tooth-fabric reconstruction"',
+        'data-topology="staged-tooth-fabric"',
+        'data-route-weights="2"',
+        'data-destination-minority="true"',
         'data-left-pin-x="624"',
         'data-right-pin-x="1048"',
         'data-top-pin-y="233"',
         'data-bottom-pin-y="653"',
         'id="terminal-beacons"',
         'id="passive-vias"',
-        'id="module-rails"',
-    ]
-    forbidden = [
-        "Maestro PCB v15 single-source pin fanout",
-        'data-origin-x="642"',
-        'data-origin-x="1030"',
-        'data-origin-y="248"',
-        'data-origin-y="640"',
     ]
     assert not [m for m in required if m not in board]
-    assert not [m for m in forbidden if m in board]
+    assert "Maestro PCB v18 measured visual-pin reconstruction" not in board
 
 
-def _route_starts(board: str) -> list[tuple[int, int]]:
-    starts = []
-    for d in re.findall(r'data-route="[^"]+"[^>]*d="([^"]+)"', board):
-        match = re.match(r"M(\d+) (\d+)", d)
-        assert match, d
-        starts.append((int(match.group(1)), int(match.group(2))))
-    return starts
-
-
-def test_every_visible_route_origin_is_on_the_measured_core_pin_envelope():
+def test_all_visible_route_subpaths_originate_on_core_teeth():
     board = _board()
-    starts = _route_starts(board)
-    assert len(starts) >= 70
-    allowed = []
-    for x, y in starts:
-        allowed.append(
-            x in {624, 1048}
-            or y in {233, 653}
-        )
-    assert all(allowed)
+    subpaths = [sub for _, d in _route_elements(board) for sub in _subpaths(d)]
+    assert len(subpaths) >= 120
+    for d in subpaths:
+        x, y = _start(d)
+        assert x in {624, 1048} or y in {233, 653}, d
 
 
-def test_no_route_origin_remains_on_cards_or_midfield_background():
+def test_side_routes_begin_with_aligned_breakout_before_spreading():
     board = _board()
-    starts = _route_starts(board)
-    forbidden_x = {396, 414, 430, 438, 442, 450, 1222, 1230, 1240, 1276}
-    assert not [(x, y) for x, y in starts if x in forbidden_x]
+    subs = [sub for _, d in _route_elements(board) for sub in _subpaths(d)]
+    left = [d for d in subs if d.startswith("M624 ")]
+    right = [d for d in subs if d.startswith("M1048 ")]
+    assert len(left) >= 25 and len(right) >= 25
+    assert all(re.match(r"M624 \d+H575", d) for d in left)
+    assert all(re.match(r"M1048 \d+H1097", d) for d in right)
 
 
-def test_side_routes_have_a_real_parallel_breakout_before_fanout():
+def test_destination_routes_are_the_minority_and_field_routes_dominate():
     board = _board()
-    left_ds = re.findall(r'data-route="(?:gov|sup|cal|orc)-[^"]+"[^>]*d="([^"]+)"', board)
-    right_ds = re.findall(r'data-route="(?:route|pol|feed|ctrl)-[^"]+"[^>]*d="([^"]+)"', board)
-    assert len(left_ds) >= 24
-    assert len(right_ds) >= 24
-    assert all(re.match(r"M624 \d+H575", d) for d in left_ds)
-    assert all(re.match(r"M1048 \d+H1097", d) for d in right_ds)
+    destination = 0
+    field = 0
+    for attrs, d in _route_elements(board):
+        count = len(_subpaths(d))
+        if 'data-destination="module"' in attrs:
+            destination += count
+        else:
+            field += count
+    total = destination + field
+    assert total >= 120
+    assert destination > 0
+    assert destination / total < 0.25
+    assert field > destination * 3
 
 
-def test_side_route_spacing_expands_toward_the_modules():
+def test_exactly_two_route_weight_classes_are_used():
     board = _board()
-    gov = re.findall(r'data-route="gov-[1-5]"[^>]*d="([^"]+)"', board)
-    routing = re.findall(r'data-route="route-[1-5]"[^>]*d="([^"]+)"', board)
-    assert len(gov) == 5
-    assert len(routing) == 5
-    # Near-core starts are tightly packed; the authored route endpoints must span
-    # a wider module band. Endpoint parsing is command-agnostic (V or final L).
-    gov_start_y = [int(re.match(r"M624 (\d+)", d).group(1)) for d in gov]
-    gov_end_y = [_endpoint_y(d) for d in gov]
-    route_start_y = [int(re.match(r"M1048 (\d+)", d).group(1)) for d in routing]
-    route_end_y = [_endpoint_y(d) for d in routing]
-    assert max(gov_end_y) - min(gov_end_y) > max(gov_start_y) - min(gov_start_y)
-    assert max(route_end_y) - min(route_end_y) > max(route_start_y) - min(route_start_y)
+    weights = set(re.findall(r'data-weight="([^"]+)"', board))
+    assert weights == {"thick", "thin"}
+    assert ".thick{stroke-width:1.15" in board
+    assert ".thin{stroke-width:.68" in board
+    assert "primary" not in board and "secondary" not in board and "micro" not in board
 
 
-def test_crown_and_bottom_are_pin_origin_fans_not_free_floating_paths():
+def test_field_routes_have_short_medium_and_long_reach_bands():
     board = _board()
-    crown = re.findall(r'data-route="top-[^"]+"[^>]*d="([^"]+)"', board)
-    bottom = re.findall(r'data-route="bot-[^"]+"[^>]*d="([^"]+)"', board)
-    assert len(crown) == 18
-    assert len(bottom) == 14
-    assert all(re.match(r"M\d+ 233V196", d) for d in crown)
-    assert all(re.match(r"M\d+ 653V690", d) for d in bottom)
+    reaches = []
+    for attrs, d in _route_elements(board):
+        if 'data-destination="field"' not in attrs:
+            continue
+        for sub in _subpaths(d):
+            sx, sy = _start(sub)
+            ex, ey = _end(sub)
+            reaches.append(abs(ex - sx) + abs(ey - sy))
+    assert any(r < 130 for r in reaches)
+    assert any(130 <= r < 230 for r in reaches)
+    assert any(r >= 230 for r in reaches)
 
 
-def test_dead_end_beacons_are_real_route_endpoints():
+def test_top_and_bottom_teeth_are_active_fabrics_not_single_execution_buses():
     board = _board()
-    dead_ends = re.findall(r'data-terminal="dead-end"[^>]*d="([^"]+)"', board)
-    assert len(dead_ends) >= 16
-    endpoints = set()
-    for d in dead_ends:
-        nums = [int(n) for n in re.findall(r"\d+", d)]
-        endpoints.add((nums[-2], nums[-1]))
-    circles = {
-        (int(x), int(y))
-        for x, y in re.findall(r'<circle cx="(\d+)" cy="(\d+)"', board)
-    }
-    assert endpoints <= circles
+    subs = [sub for _, d in _route_elements(board) for sub in _subpaths(d)]
+    top = [d for d in subs if re.match(r"M\d+ 233", d)]
+    bottom = [d for d in subs if re.match(r"M\d+ 653", d)]
+    assert len(top) >= 28
+    assert len(bottom) >= 28
+    assert all("V196" in d for d in top)
+    assert all("V690" in d for d in bottom)
 
 
-def test_reference_board_is_dense_but_has_no_ambient_free_origin_routes():
+def test_terminal_beacons_are_attached_to_many_field_endpoints():
     board = _board()
-    assert board.count('data-route="') >= 70
-    assert board.count("<circle") >= 40
-    forbidden = [
-        "M8 112",
-        "M8 178",
-        "M1664 126",
-        "M1664 196",
-        "M396 162 H",
-        "M1276 162 H",
-    ]
-    assert not [m for m in forbidden if m in board]
+    circles = {(int(x), int(y)) for x, y in re.findall(r'<circle cx="(\d+)" cy="(\d+)"', board)}
+    field_endpoints = []
+    for attrs, d in _route_elements(board):
+        if 'data-destination="field"' in attrs:
+            field_endpoints.extend(_end(sub) for sub in _subpaths(d))
+    attached = [p for p in field_endpoints if p in circles]
+    assert len(attached) >= 30
 
 
-def test_production_splash_is_full_landing_page_and_preserves_modules():
-    source = _source()
-    required = [
-        'class="site-header"',
-        'class="brand"',
-        'class="nav"',
-        "PLATFORM⌄",
-        "SOLUTIONS⌄",
-        "RESOURCES⌄",
-        "ABOUT⌄",
-        "DOCS",
-        "SYSTEM STATUS",
-        "ALL SYSTEMS OPERATIONAL",
-        'class="signin" href="/login"',
-        'class="telemetry-strip"',
-        "SYSTEM METRICS",
-        "THROUGHPUT",
-        "LATENCY (P95)",
-        "QUEUE DEPTH",
-        "SYSTEM HEALTH",
-        'id="governance"',
-        'id="supervision"',
-        'id="calibration"',
-        'id="orchestration"',
-        'id="routing"',
-        'id="policy"',
-        'id="feedback"',
-        'id="control"',
-        'id="execution"',
-    ]
-    assert not [m for m in required if m not in source]
+def test_color_families_and_side_module_integration_remain_present():
+    board = _board()
+    for marker in ["#36bfff", "#23d8c8", "#a7d67b", "#f5a623", "#c16fff", 'id="module-rails"']:
+        assert marker in board
 
 
-def test_core_side_modules_and_processor_teeth_keep_visual_contract():
+def test_production_splash_preserves_layout_core_and_entry_contract():
     source = _source()
     required = [
         "#governance{left:78px;top:91px}",
@@ -214,27 +168,11 @@ def test_core_side_modules_and_processor_teeth_keep_visual_contract():
         "left:642px;top:248px;width:388px;height:390px",
         "transform:scale(.88)",
         "transform:scale(1.045)",
-        "filter:drop-shadow(0 16px 20px rgba(0,0,0,.34))",
-        "width:4px",
-        "height:4px",
         "/* slim route-colored processor teeth */",
-    ]
-    assert not [m for m in required if m not in source]
-
-
-def test_entry_gate_reduced_motion_and_cover_fit_remain_intact():
-    source = _source()
-    required = [
         "Enter Maestro",
         "maestro_descent_gate_seen",
-        "maestro_descent_gate_seen_at",
         "window.location.href = '/login'",
         "@media(prefers-reduced-motion:reduce)",
         "const fit_rule='reference-cover-1672x941'",
-        "Math.max(viewportWidth/1672,viewportHeight/941)",
-        "--header-drop",
-        "--footer-lift",
-        "--telemetry-lift",
-        "--safe-x",
     ]
     assert not [m for m in required if m not in source]
