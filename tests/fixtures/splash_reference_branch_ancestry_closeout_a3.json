@@ -1,0 +1,46 @@
+{
+  "version": "A3-splash-reference-branch-ancestry-closeout-v1",
+  "source": "approved pivot reference image + Manhattan ownership audit + pin-seeded route-tree ancestry",
+  "policy": {
+    "do_not_force_owner_when_competing_pin_ancestry_remains_tied": true,
+    "shared_geometry_is_valid_canonical_semantics": true,
+    "preserved_unowned_route_is_valid_only_when_visible_geometry_is_real_and_no_pin_owner_is_defensible": true,
+    "no_new_pixels_may_be_added": true,
+    "zero_ambiguous_regions_required_for_manifest_build": true
+  },
+  "decisions": [
+    {
+      "region": "unassigned-001",
+      "decision": "SHARED_GEOMETRY",
+      "target_trees": [1, 67],
+      "evidence": "single cyan reference pixel is equally supported by trees 1 and 67; prior Manhattan margin=0.079 and no directional run exists to justify a unique owner"
+    },
+    {
+      "region": "unassigned-004",
+      "decision": "SHARED_GEOMETRY",
+      "target_trees": [74, 75],
+      "evidence": "short top cyan E-N fragment remains supported by two independently seeded adjacent trees; prior margin=0.6028 is below the strict unique-owner gate"
+    },
+    {
+      "region": "unassigned-006",
+      "decision": "SHARED_GEOMETRY",
+      "target_trees": [39, 40],
+      "evidence": "large visible amber route structure remains effectively tied between trees 39 and 40; prior Manhattan margin=0.0327 and forcing either owner would invent topology"
+    },
+    {
+      "region": "unassigned-027",
+      "decision": "PRESERVED_UNOWNED_ROUTE",
+      "target_trees": [],
+      "evidence": "visible lower route geometry has no defensible candidate tree within local, global, or Manhattan continuity windows; preserve the reference geometry explicitly without manufactured ownership"
+    }
+  ],
+  "summary": {
+    "input_ambiguous_fragment_count": 4,
+    "shared_geometry_count": 3,
+    "preserved_unowned_route_count": 1,
+    "remaining_ambiguous_fragment_count": 0,
+    "ownership_ambiguity_closed": true,
+    "canonical_manifest_build_allowed": true,
+    "splash_reconstruction_allowed": false
+  }
+}
