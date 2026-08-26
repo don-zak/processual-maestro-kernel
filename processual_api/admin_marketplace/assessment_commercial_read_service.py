@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, Self
 
 from processual_api.admin_marketplace.assessment_commercial_terms_persistence import (
     AdminMarketAssessmentCommercialTerms,
@@ -75,13 +75,22 @@ class _AssessmentCommercialTermsRepository(Protocol):
 
 
 class AssessmentCommercialReadUnitOfWork(Protocol):
-    entitlement_activations: _EntitlementActivationRepository
-    subscriptions: _SubscriptionRepository
-    assessment_subscription_bindings: _AssessmentSubscriptionBindingRepository
-    assessment_quota_profiles: _AssessmentQuotaProfileRepository
-    assessment_commercial_terms: _AssessmentCommercialTermsRepository
+    @property
+    def entitlement_activations(self) -> _EntitlementActivationRepository: ...
 
-    async def __aenter__(self) -> AssessmentCommercialReadUnitOfWork: ...
+    @property
+    def subscriptions(self) -> _SubscriptionRepository: ...
+
+    @property
+    def assessment_subscription_bindings(self) -> _AssessmentSubscriptionBindingRepository: ...
+
+    @property
+    def assessment_quota_profiles(self) -> _AssessmentQuotaProfileRepository: ...
+
+    @property
+    def assessment_commercial_terms(self) -> _AssessmentCommercialTermsRepository: ...
+
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
 
 
