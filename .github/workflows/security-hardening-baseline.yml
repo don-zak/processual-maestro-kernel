@@ -33,7 +33,11 @@ jobs:
             -ll -ii
 
       - name: Python dependency vulnerability audit
-        run: pip-audit --strict --skip-editable
+        run: |
+          python -m pip freeze --exclude-editable > audit-requirements.txt
+          grep -v '^processual-maestro-kernel==' audit-requirements.txt > audit-external-requirements.txt || true
+          test -s audit-external-requirements.txt
+          pip-audit --strict -r audit-external-requirements.txt
 
       - name: Reject private CGT leakage from public tree
         run: |
