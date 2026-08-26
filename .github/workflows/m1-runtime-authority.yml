@@ -1,0 +1,59 @@
+name: M1 Runtime Authority Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "processual_api/admin_marketplace/assessment_subscription_activation_service.py"
+      - "processual_api/admin_marketplace/assessment_quota_profile_service.py"
+      - "processual_api/admin_marketplace/assessment_commercial_terms_service.py"
+      - "processual_api/admin_marketplace/subscription_activation_service.py"
+      - "processual_api/admin_marketplace/subscription_runtime_bootstrap.py"
+      - "processual_api/admin_marketplace/runtime.py"
+      - "processual_api/admin_marketplace/persistence/**"
+      - "tests/test_assessment_subscription_activation_a3.py"
+      - "tests/test_admin_marketplace_subscription_runtime_bootstrap_a3.py"
+      - ".github/workflows/m1-runtime-authority.yml"
+
+jobs:
+  qualify-m1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install project and QA dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Focused M1 mypy
+        run: |
+          python -m mypy \
+            processual_api/admin_marketplace/assessment_subscription_activation_service.py \
+            processual_api/admin_marketplace/subscription_activation_service.py \
+            processual_api/admin_marketplace/runtime.py \
+            processual_api/admin_marketplace/subscription_runtime_bootstrap.py \
+            --follow-imports=silent \
+            --warn-unused-ignores \
+            --show-error-codes
+
+      - name: Focused M1 pytest
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_assessment_subscription_activation_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_bootstrap_a3.py
+
+      - name: Focused M1 Ruff
+        run: |
+          ruff check \
+            processual_api/admin_marketplace/assessment_subscription_activation_service.py \
+            processual_api/admin_marketplace/subscription_activation_service.py \
+            processual_api/admin_marketplace/runtime.py \
+            processual_api/admin_marketplace/subscription_runtime_bootstrap.py \
+            tests/test_assessment_subscription_activation_a3.py \
+            tests/test_admin_marketplace_subscription_runtime_bootstrap_a3.py

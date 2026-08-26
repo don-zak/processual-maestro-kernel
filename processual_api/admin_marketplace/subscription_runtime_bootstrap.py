@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, Self
 
 from processual_api.admin_marketplace.subscription_billing_period import quota_period_end
 from processual_api.admin_marketplace.subscription_quota_profiles import (
@@ -37,11 +37,38 @@ class SubscriptionRuntimeBootstrapResult:
     replayed: bool
 
 
-class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
-    subscription_runtime: object
-    subscription_quotas: object
+class SubscriptionRuntimeRepository(Protocol):
+    async def get_by_subscription_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionRuntime | None: ...
 
-    async def __aenter__(self) -> SubscriptionRuntimeBootstrapUnitOfWork: ...
+    def add(self, runtime: AdminMarketSubscriptionRuntime) -> None: ...
+
+
+class SubscriptionQuotaRepository(Protocol):
+    async def get_current(
+        self,
+        *,
+        subscription_id: uuid.UUID,
+        metric_code: str,
+        occurred_at: datetime,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaAccount | None: ...
+
+    def add(self, account: AdminMarketSubscriptionQuotaAccount) -> None: ...
+
+
+class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
+    @property
+    def subscription_runtime(self) -> SubscriptionRuntimeRepository: ...
+
+    @property
+    def subscription_quotas(self) -> SubscriptionQuotaRepository: ...
+
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 
@@ -100,7 +127,7 @@ async def bootstrap_subscription_runtime_in_unit(
             raise SubscriptionRuntimeError(
                 "runtime replay conflicts with the original subscription binding."
             )
-        accounts = []
+        replay_accounts: list[AdminMarketSubscriptionQuotaAccount] = []
         for metric in profile.metrics:
             account = await uow.subscription_quotas.get_current(
                 subscription_id=source.subscription_id,
@@ -120,10 +147,10 @@ async def bootstrap_subscription_runtime_in_unit(
                 raise SubscriptionRuntimeError(
                     "quota replay conflicts with the original profile binding."
                 )
-            accounts.append(account)
+            replay_accounts.append(account)
         return SubscriptionRuntimeBootstrapResult(
             runtime=existing,
-            quota_accounts=tuple(accounts),
+            quota_accounts=tuple(replay_accounts),
             replayed=True,
         )
 
@@ -189,9 +216,11 @@ def bootstrap_subscription_runtime_factory(
 
 
 __all__ = [
+    "SubscriptionQuotaRepository",
     "SubscriptionRuntimeBootstrapInput",
     "SubscriptionRuntimeBootstrapResult",
     "SubscriptionRuntimeBootstrapUnitOfWork",
+    "SubscriptionRuntimeRepository",
     "bootstrap_subscription_runtime_factory",
     "bootstrap_subscription_runtime_in_unit",
 ]

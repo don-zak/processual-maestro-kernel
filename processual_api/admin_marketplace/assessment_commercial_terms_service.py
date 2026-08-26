@@ -5,7 +5,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final, Protocol
+from typing import Final, Protocol, Self
 
 from processual_api.admin_marketplace.assessment_commercial_terms_persistence import (
     AdminMarketAssessmentCommercialTerms,
@@ -67,10 +67,13 @@ class _AssessmentCommercialTermsRepository(Protocol):
 
 
 class AssessmentCommercialTermsUnitOfWork(Protocol):
-    assessment_quota_profiles: AssessmentQuotaProfileRepository
-    assessment_commercial_terms: _AssessmentCommercialTermsRepository
+    @property
+    def assessment_quota_profiles(self) -> AssessmentQuotaProfileRepository: ...
 
-    async def __aenter__(self) -> AssessmentCommercialTermsUnitOfWork: ...
+    @property
+    def assessment_commercial_terms(self) -> _AssessmentCommercialTermsRepository: ...
+
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 

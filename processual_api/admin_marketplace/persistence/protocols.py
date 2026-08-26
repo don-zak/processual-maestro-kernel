@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Self, runtime_checkable
 
 from processual_api.admin_marketplace.models import (
     AdminMarketAuditRecord,
@@ -405,27 +405,58 @@ class NotificationOutboxRepository(Protocol):
 
 @runtime_checkable
 class AdminMarketplaceUnitOfWork(Protocol):
-    plans: PlanRepository
-    offers: OfferRepository
-    subscriptions: SubscriptionRepository
-    trials: TrialRepository
-    orders: OrderRepository
-    contracts: ContractRepository
-    payment_destinations: PaymentDestinationRepository
-    payment_verifications: PaymentVerificationRepository
-    payment_evidence: PaymentEvidenceRepository
-    payment_reconciliations: PaymentReconciliationRepository
-    invoices: InvoiceRepository
-    entitlement_activations: EntitlementActivationRepository
-    channel_eligibilities: ChannelEligibilityRepository
-    channel_selections: ChannelSelectionRepository
-    commercial_decisions: CommercialDecisionRepository
-    commercial_audit: CommercialAuditRepository
-    notification_outbox: NotificationOutboxRepository
+    @property
+    def plans(self) -> PlanRepository: ...
 
-    async def __aenter__(
-        self,
-    ) -> AdminMarketplaceUnitOfWork: ...
+    @property
+    def offers(self) -> OfferRepository: ...
+
+    @property
+    def subscriptions(self) -> SubscriptionRepository: ...
+
+    @property
+    def trials(self) -> TrialRepository: ...
+
+    @property
+    def orders(self) -> OrderRepository: ...
+
+    @property
+    def contracts(self) -> ContractRepository: ...
+
+    @property
+    def payment_destinations(self) -> PaymentDestinationRepository: ...
+
+    @property
+    def payment_verifications(self) -> PaymentVerificationRepository: ...
+
+    @property
+    def payment_evidence(self) -> PaymentEvidenceRepository: ...
+
+    @property
+    def payment_reconciliations(self) -> PaymentReconciliationRepository: ...
+
+    @property
+    def invoices(self) -> InvoiceRepository: ...
+
+    @property
+    def entitlement_activations(self) -> EntitlementActivationRepository: ...
+
+    @property
+    def channel_eligibilities(self) -> ChannelEligibilityRepository: ...
+
+    @property
+    def channel_selections(self) -> ChannelSelectionRepository: ...
+
+    @property
+    def commercial_decisions(self) -> CommercialDecisionRepository: ...
+
+    @property
+    def commercial_audit(self) -> CommercialAuditRepository: ...
+
+    @property
+    def notification_outbox(self) -> NotificationOutboxRepository: ...
+
+    async def __aenter__(self) -> Self: ...
 
     async def commit(self) -> None: ...
 

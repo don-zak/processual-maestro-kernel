@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Final, Protocol, Self
 
 from processual_api.admin_marketplace.assessment_quota_profile_persistence import (
     AdminMarketAssessmentQuotaProfile,
@@ -53,9 +53,10 @@ class AssessmentQuotaProfileRepository(Protocol):
 
 
 class AssessmentQuotaProfileUnitOfWork(Protocol):
-    assessment_quota_profiles: AssessmentQuotaProfileRepository
+    @property
+    def assessment_quota_profiles(self) -> AssessmentQuotaProfileRepository: ...
 
-    async def __aenter__(self) -> AssessmentQuotaProfileUnitOfWork: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
     async def commit(self) -> None: ...
 
