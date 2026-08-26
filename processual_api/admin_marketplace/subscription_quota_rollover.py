@@ -4,7 +4,12 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol, Self
 
+from processual_api.admin_marketplace.models import (
+    AdminMarketPlan,
+    AdminMarketSubscription,
+)
 from processual_api.admin_marketplace.subscription_billing_period import (
     next_anchored_month_boundary,
 )
@@ -33,7 +38,61 @@ class SubscriptionQuotaRolloverCommand:
     base_limit_units: int
 
 
-def rollover_subscription_quota_factory(*, unit_of_work_factory: Callable[[], object]):
+class _SubscriptionRepository(Protocol):
+    async def get_by_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscription | None: ...
+
+
+class _PlanRepository(Protocol):
+    async def get_by_id(
+        self,
+        plan_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketPlan | None: ...
+
+
+class _SubscriptionQuotaCycleRepository(Protocol):
+    async def get_by_id(
+        self,
+        cycle_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaCycle | None: ...
+
+    async def get_by_source_cycle_id(
+        self,
+        source_cycle_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaCycle | None: ...
+
+    def add(self, cycle: AdminMarketSubscriptionQuotaCycle) -> None: ...
+
+
+class SubscriptionQuotaRolloverUnitOfWork(Protocol):
+    @property
+    def subscriptions(self) -> _SubscriptionRepository: ...
+
+    @property
+    def plans(self) -> _PlanRepository: ...
+
+    @property
+    def subscription_quota_cycles(self) -> _SubscriptionQuotaCycleRepository: ...
+
+    async def __aenter__(self) -> Self: ...
+    async def __aexit__(self, exc_type, exc, traceback) -> None: ...
+    async def commit(self) -> None: ...
+
+
+def rollover_subscription_quota_factory(
+    *,
+    unit_of_work_factory: Callable[[], SubscriptionQuotaRolloverUnitOfWork],
+):
     async def rollover(
         command: SubscriptionQuotaRolloverCommand,
     ) -> AdminMarketSubscriptionQuotaCycle:
@@ -180,5 +239,6 @@ def _assert_replay_matches(
 __all__ = [
     "SubscriptionQuotaRolloverCommand",
     "SubscriptionQuotaRolloverError",
+    "SubscriptionQuotaRolloverUnitOfWork",
     "rollover_subscription_quota_factory",
 ]
