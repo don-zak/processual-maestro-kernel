@@ -37,9 +37,33 @@ class SubscriptionRuntimeBootstrapResult:
     replayed: bool
 
 
+class SubscriptionRuntimeRepository(Protocol):
+    async def get_by_subscription_id(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionRuntime | None: ...
+
+    def add(self, runtime: AdminMarketSubscriptionRuntime) -> None: ...
+
+
+class SubscriptionQuotaRepository(Protocol):
+    async def get_current(
+        self,
+        *,
+        subscription_id: uuid.UUID,
+        metric_code: str,
+        occurred_at: datetime,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaAccount | None: ...
+
+    def add(self, account: AdminMarketSubscriptionQuotaAccount) -> None: ...
+
+
 class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
-    subscription_runtime: object
-    subscription_quotas: object
+    subscription_runtime: SubscriptionRuntimeRepository
+    subscription_quotas: SubscriptionQuotaRepository
 
     async def __aenter__(self) -> SubscriptionRuntimeBootstrapUnitOfWork: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
@@ -189,9 +213,11 @@ def bootstrap_subscription_runtime_factory(
 
 
 __all__ = [
+    "SubscriptionQuotaRepository",
     "SubscriptionRuntimeBootstrapInput",
     "SubscriptionRuntimeBootstrapResult",
     "SubscriptionRuntimeBootstrapUnitOfWork",
+    "SubscriptionRuntimeRepository",
     "bootstrap_subscription_runtime_factory",
     "bootstrap_subscription_runtime_in_unit",
 ]
