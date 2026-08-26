@@ -22,7 +22,7 @@
   },
   "pcb": {
     "topology": "generated-staged-pin-fabric",
-    "pin_count_expected": 116,
+    "pin_count_expected": 120,
     "destination_route_ratio_max": 0.20,
     "field_route_ratio_min": 0.80,
     "route_weight_classes_exact": 2,
