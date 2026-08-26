@@ -5,113 +5,108 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "processual_api" / "static"
 SPLASH = STATIC / "splash.html"
-BOARD = STATIC / "splash_reference_board.svg"
+MODEL = STATIC / "splash_routing_model.js"
+ROUTING = STATIC / "splash_routing.js"
 CONTRACT = ROOT / "tests" / "fixtures" / "splash_reference_fidelity_contract_a3.json"
 
 
-def _source() -> str:
-    return SPLASH.read_text(encoding="utf-8")
-
-
-def _board() -> str:
-    return BOARD.read_text(encoding="utf-8")
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
 def _contract() -> dict:
     return json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
-def _elements(board: str) -> list[tuple[str, str]]:
-    return re.findall(r'<path class="route [^"]+"([^>]*) d="([^"]+)"', board)
-
-
-def _subs(d: str) -> list[str]:
-    return ["M" + chunk for chunk in d.split("M")[1:]]
-
-
-def _start(d: str) -> tuple[int, int]:
-    m = re.match(r"M(\d+) (\d+)", d)
-    assert m, d
-    return int(m.group(1)), int(m.group(2))
-
-
-def test_contract_targets_v19_staged_tooth_fabric():
+def test_contract_targets_v20_generated_pin_fabric():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v19"
+    assert contract["contract_version"] == "A3-splash-reference-v20"
     assert contract["minimum_score"] >= 99
+    assert contract["architecture"]["mode"] == "inline-generated-single-source-routing"
     assert contract["architecture"]["visible_route_sources"] == 1
-    assert contract["architecture"]["pulse_overlay_must_not_draw_routes"] is True
-    assert contract["pcb"]["topology"] == "staged-tooth-fabric"
-    assert contract["pcb"]["destination_route_ratio_max"] <= 0.25
+    assert contract["architecture"]["legacy_external_board_forbidden"] is True
+    assert contract["architecture"]["legacy_authored_signal_map_forbidden"] is True
+    assert contract["architecture"]["pulse_must_follow_visible_routes"] is True
+    assert contract["pcb"]["destination_route_ratio_max"] <= 0.20
     assert contract["pcb"]["route_weight_classes_exact"] == 2
 
 
-def test_board_is_v19_and_preserves_measured_pin_envelope():
-    board = _board()
-    assert 'Maestro PCB v19 staged tooth-fabric reconstruction' in board
-    assert 'data-topology="staged-tooth-fabric"' in board
-    assert 'data-route-weights="2"' in board
-    assert 'data-destination-minority="true"' in board
-    for marker in ['data-left-pin-x="624"', 'data-right-pin-x="1048"', 'data-top-pin-y="233"', 'data-bottom-pin-y="653"']:
-        assert marker in board
+def test_splash_contains_inline_generated_board_and_no_legacy_geometry():
+    source = _read(SPLASH)
+    assert 'id="pcb-board"' in source
+    assert 'id="pcb-routes"' in source
+    assert 'id="pcb-branches"' in source
+    assert 'id="pcb-terminals"' in source
+    assert 'id="pcb-pulses"' in source
+    assert 'src="./splash_routing.js"' in source
+    assert 'id="pcb-reference"' not in source
+    assert "splash_reference_board.svg" not in source
+    assert "authoredSignalMap" not in source
 
 
-def test_every_route_subpath_starts_on_the_visual_pin_envelope():
-    board = _board()
-    subs = [sub for _, d in _elements(board) for sub in _subs(d)]
-    assert len(subs) >= _contract()["pcb"]["route_subpaths_min"]
-    for d in subs:
-        x, y = _start(d)
-        assert x in {624, 1048} or y in {233, 653}, d
+def test_model_preserves_measured_visual_pin_envelope():
+    model = _read(MODEL)
+    for marker in ["left: 624", "right: 1048", "top: 233", "bottom: 653"]:
+        assert marker in model
+    assert "const SIDE_Y = Array.from({ length: 28 }" in model
+    assert "const EDGE_X = Array.from({ length: 30 }" in model
 
 
-def test_destination_routes_are_a_small_minority_of_total_tooth_fabric():
-    destination = total = 0
-    for attrs, d in _elements(_board()):
-        count = len(_subs(d))
-        total += count
-        if 'data-destination="module"' in attrs:
-            destination += count
-    assert destination > 0
-    assert destination / total < _contract()["pcb"]["destination_route_ratio_max"]
+def test_destination_routes_are_a_small_minority_of_generated_fabric():
+    model = _read(MODEL)
+    assert "destinationRatioMax: 0.20" in model
+    assert model.count("indexes: [") == 8
+    assert "[13, 14, 15].includes(i)" in model
 
 
 def test_only_two_route_widths_exist():
-    board = _board()
-    weights = set(re.findall(r'data-weight="([^"]+)"', board))
-    assert weights == set(_contract()["pcb"]["allowed_route_weights"])
-    assert 'stroke-width:1.15' in board
-    assert 'stroke-width:.68' in board
-    assert 'stroke-width:.48' not in board
+    model = _read(MODEL)
+    routing = _read(ROUTING)
+    assert "ROUTE_WEIGHTS = Object.freeze({ thick: 1.1, thin: 0.68 })" in model
+    assert "ROUTE_WEIGHTS[pin.weight]" in routing
+    assert "ROUTE_WEIGHTS.thin" in routing
+    assert "micro" not in model + routing
 
 
-def test_side_breakout_is_aligned_before_progressive_spread():
-    subs = [sub for _, d in _elements(_board()) for sub in _subs(d)]
-    left = [d for d in subs if d.startswith("M624 ")]
-    right = [d for d in subs if d.startswith("M1048 ")]
-    assert left and right
-    assert all(re.match(r"M624 \d+H575", d) for d in left)
-    assert all(re.match(r"M1048 \d+H1097", d) for d in right)
-    assert any("L430" in d or "L422" in d for d in left)
-    assert any("L1242" in d or "L1250" in d for d in right)
-
-
-def test_top_bottom_and_field_termination_network_are_present():
-    board = _board()
-    subs = [sub for _, d in _elements(board) for sub in _subs(d)]
-    assert len([d for d in subs if re.match(r"M\d+ 233", d)]) >= 28
-    assert len([d for d in subs if re.match(r"M\d+ 653", d)]) >= 28
-    assert 'id="terminal-beacons"' in board
-    assert board.count("<circle") >= 40
-
-
-def test_motion_overlay_remains_pulse_only_and_identity_is_preserved():
-    source = _source()
-    assert 'id="signal-svg"' in source
-    assert '.signal-geometry{fill:none;stroke:none;pointer-events:none}' in source
-    assert "class:'signal-base'" not in source
-    assert "class:'signal-wake'" not in source
+def test_aligned_breakout_then_progressive_spread_is_encoded_in_generator():
+    routing = _read(ROUTING)
     required = [
+        "const points = [[pin.x, pin.y], [stemX, pin.y]]",
+        "const points = [[pin.x, pin.y], [pin.x, stemY]]",
+        "const x1 = stemX + dir * Math.round(reach * 0.26)",
+        "const x2 = stemX + dir * Math.round(reach * 0.56)",
+        "const x3 = stemX + dir * Math.round(reach * 0.82)",
+        "const y1 = stemY + dir * Math.round(reach * 0.27)",
+        "const y2 = stemY + dir * Math.round(reach * 0.58)",
+        "const y3 = stemY + dir * Math.round(reach * 0.84)",
+    ]
+    assert not [marker for marker in required if marker not in routing]
+
+
+def test_five_route_variants_prevent_uniform_bus_copying():
+    routing = _read(ROUTING)
+    for variant in range(5):
+        assert f"if (pin.variant === {variant})" in routing
+    assert "variant: (i * 7" in _read(MODEL)
+    assert "variant: (i * 9" in _read(MODEL)
+
+
+def test_short_medium_long_and_true_terminal_network_are_present():
+    model = _read(MODEL)
+    routing = _read(ROUTING)
+    for marker in ["short: [82, 126]", "medium: [146, 218]", "long: [236, 322]"]:
+        assert marker in model
+    assert "const [x, y] = points[points.length - 1]" in routing
+    assert "class: 'pcb-terminal'" in routing
+
+
+def test_motion_uses_visible_route_geometry_and_identity_is_preserved():
+    source = _read(SPLASH)
+    routing = _read(ROUTING)
+    required = [
+        "pulseRoutes.push({ pin, route, color })",
+        "item.route.getTotalLength()",
+        "item.route.getPointAtLength",
         'class="maestro-emblem"',
         'class="brand-word">MAESTRO<b>.</b>',
         'class="core-emblem"',
@@ -125,5 +120,7 @@ def test_motion_overlay_remains_pulse_only_and_identity_is_preserved():
         "const fit_rule='reference-cover-1672x941'",
         "@media(prefers-reduced-motion:reduce)",
     ]
-    assert not [m for m in required if m not in source]
+    combined = source + routing
+    assert not [marker for marker in required if marker not in combined]
+    assert "authoredSignalMap" not in combined
     assert re.search(r"[\u0600-\u06FF]", source) is None
