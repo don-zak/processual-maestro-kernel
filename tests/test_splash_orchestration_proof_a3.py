@@ -18,21 +18,26 @@ def test_historical_orchestration_proof_is_retained_but_not_canonical():
     assert "Enter Maestro" in proof
 
 
-def test_canonical_splash_is_now_the_reference_traced_hybrid():
+def test_canonical_splash_uses_authored_board_plus_pulse_only_overlay():
     source = _read(SPLASH)
     required = [
         'id="pcb-reference"', 'src="./splash_reference_board.svg"', 'id="signal-svg"',
-        "authoredSignalMap", "rebuildSignals", "getTotalLength", "getPointAtLength",
-        "requestAnimationFrame", "reference_outward_module_geometry",
+        "rebuildSignals", "getTotalLength", "getPointAtLength", "requestAnimationFrame",
+        "reference_outward_module_geometry", ".signal-geometry{fill:none;stroke:none;pointer-events:none}",
     ]
+    forbidden = ["class:'signal-base'", "class:'signal-wake'"]
     assert not [marker for marker in required if marker not in source]
+    assert not [marker for marker in forbidden if marker in source]
 
 
-def test_reference_board_asset_is_present_and_dense():
+def test_reference_board_asset_is_present_and_geometrically_dense():
     board = _read(BOARD)
     assert 'viewBox="0 0 1672 941"' in board
-    assert board.count("<path") >= 70
-    assert board.count("<circle") >= 12
+    assert 'data-topology="single-source"' in board
+    assert board.count("<path") >= 25
+    assert board.count("M642 ") >= 20
+    assert board.count("M1030 ") >= 20
+    assert board.count("<circle") >= 50
 
 
 def test_canonical_splash_keeps_descent_gate_contract():
