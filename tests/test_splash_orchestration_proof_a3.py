@@ -21,23 +21,31 @@ def test_historical_orchestration_proof_is_retained_but_not_canonical():
 def test_canonical_splash_uses_authored_board_plus_pulse_only_overlay():
     source = _read(SPLASH)
     required = [
-        'id="pcb-reference"', 'src="./splash_reference_board.svg"', 'id="signal-svg"',
-        "rebuildSignals", "getTotalLength", "getPointAtLength", "requestAnimationFrame",
-        "reference_outward_module_geometry", ".signal-geometry{fill:none;stroke:none;pointer-events:none}",
+        'id="pcb-reference"',
+        'src="./splash_reference_board.svg"',
+        'id="signal-svg"',
+        "rebuildSignals",
+        "getTotalLength",
+        "getPointAtLength",
+        "requestAnimationFrame",
+        "reference_outward_module_geometry",
+        ".signal-geometry{fill:none;stroke:none;pointer-events:none}",
     ]
     forbidden = ["class:'signal-base'", "class:'signal-wake'"]
     assert not [marker for marker in required if marker not in source]
     assert not [marker for marker in forbidden if marker in source]
 
 
-def test_reference_board_asset_is_present_and_geometrically_dense():
+def test_reference_board_asset_is_v18_measured_and_geometrically_dense():
     board = _read(BOARD)
     assert 'viewBox="0 0 1672 941"' in board
-    assert 'data-topology="single-source"' in board
-    assert board.count("<path") >= 25
-    assert board.count("M642 ") >= 20
-    assert board.count("M1030 ") >= 20
-    assert board.count("<circle") >= 50
+    assert 'data-topology="measured-pin-single-source"' in board
+    assert 'data-left-pin-x="624"' in board
+    assert 'data-right-pin-x="1048"' in board
+    assert 'data-top-pin-y="233"' in board
+    assert 'data-bottom-pin-y="653"' in board
+    assert board.count('data-route="') >= 70
+    assert board.count("<circle") >= 40
 
 
 def test_canonical_splash_keeps_descent_gate_contract():
