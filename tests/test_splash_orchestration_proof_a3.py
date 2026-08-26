@@ -4,7 +4,9 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = ROOT / "processual_api" / "static"
 SPLASH = STATIC_ROOT / "splash.html"
 PROOF = STATIC_ROOT / "splash_orchestration_proof.html"
-BOARD = STATIC_ROOT / "splash_reference_board.svg"
+MODEL = STATIC_ROOT / "splash_routing_model.js"
+ROUTING = STATIC_ROOT / "splash_routing.js"
+LEGACY_BOARD = STATIC_ROOT / "splash_reference_board.svg"
 
 
 def _read(path: Path) -> str:
@@ -18,40 +20,39 @@ def test_historical_orchestration_proof_is_retained_but_not_canonical():
     assert "Enter Maestro" in proof
 
 
-def test_canonical_splash_uses_authored_board_plus_pulse_only_overlay():
+def test_canonical_splash_uses_inline_generated_board_and_one_motion_geometry():
     source = _read(SPLASH)
+    routing = _read(ROUTING)
     required = [
-        'id="pcb-reference"',
-        'src="./splash_reference_board.svg"',
-        'id="signal-svg"',
-        "rebuildSignals",
-        "getTotalLength",
+        'id="pcb-board"',
+        'id="pcb-routes"',
+        'id="pcb-branches"',
+        'id="pcb-terminals"',
+        'id="pcb-pulses"',
+        'type="module" src="./splash_routing.js"',
+        "getTotalLength()",
         "getPointAtLength",
         "requestAnimationFrame",
         "reference_outward_module_geometry",
-        ".signal-geometry{fill:none;stroke:none;pointer-events:none}",
     ]
-    forbidden = ["class:'signal-base'", "class:'signal-wake'"]
-    assert not [marker for marker in required if marker not in source]
-    assert not [marker for marker in forbidden if marker in source]
+    combined = source + routing
+    assert not [marker for marker in required if marker not in combined]
+    assert not LEGACY_BOARD.exists()
+    assert 'id="pcb-reference"' not in source
+    assert "authoredSignalMap" not in combined
 
 
-def test_reference_board_asset_is_v19_staged_and_dense():
-    board = _read(BOARD)
-    assert 'viewBox="0 0 1672 941"' in board
-    assert 'Maestro PCB v19 staged tooth-fabric reconstruction' in board
-    assert 'data-topology="staged-tooth-fabric"' in board
-    assert 'data-route-weights="2"' in board
-    assert 'data-destination-minority="true"' in board
-    assert 'data-left-pin-x="624"' in board
-    assert 'data-right-pin-x="1048"' in board
-    assert 'data-top-pin-y="233"' in board
-    assert 'data-bottom-pin-y="653"' in board
-    assert board.count("M624 ") >= 20
-    assert board.count("M1048 ") >= 20
-    assert board.count(" 233V196") >= 20
-    assert board.count(" 653V690") >= 20
-    assert board.count("<circle") >= 40
+def test_generated_model_is_v20_and_activates_all_four_core_edges():
+    model = _read(MODEL)
+    assert "A3-splash-routing-v20" in model
+    assert "left: 624" in model
+    assert "right: 1048" in model
+    assert "top: 233" in model
+    assert "bottom: 653" in model
+    assert "const SIDE_Y = Array.from({ length: 28 }" in model
+    assert "const EDGE_X = Array.from({ length: 30 }" in model
+    assert "destinationRatioMax: 0.20" in model
+    assert "ROUTE_WEIGHTS = Object.freeze({ thick: 1.1, thin: 0.68 })" in model
 
 
 def test_canonical_splash_keeps_descent_gate_contract():
@@ -67,12 +68,14 @@ def test_canonical_splash_keeps_descent_gate_contract():
     assert not [marker for marker in required if marker not in source]
 
 
-def test_hybrid_board_keeps_reduced_motion_guards():
+def test_generated_board_keeps_reduced_motion_guards():
     source = _read(SPLASH)
+    routing = _read(ROUTING)
     required = [
         "@media(prefers-reduced-motion:reduce)",
         "reduceMotion.matches",
-        "reduceMotion.addEventListener?.('change',rebuildSignals)",
-        ".pulse{display:none}",
+        "reduceMotion.addEventListener?.('change', restartMotion)",
+        ".pcb-pulse{display:none}",
     ]
-    assert not [marker for marker in required if marker not in source]
+    combined = source + routing
+    assert not [marker for marker in required if marker not in combined]
