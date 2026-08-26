@@ -14,7 +14,8 @@ def _read(path: Path) -> str:
 def test_v20_model_uses_one_record_per_visible_pin_family():
     source = _read(MODEL)
     assert "A3-splash-routing-v20" in source
-    assert "const SIDE_Y = Array.from({ length: 28 }" in source
+    assert "pinCount: 120" in source
+    assert "const SIDE_Y = Array.from({ length: 30 }" in source
     assert "const EDGE_X = Array.from({ length: 30 }" in source
     assert "export const PINS = Object.freeze(buildPins())" in source
     assert "id: `${side}-${String(i + 1).padStart(2, '0')}`" in source
@@ -44,6 +45,7 @@ def test_short_medium_long_bands_and_selective_motion_are_bounded():
     assert "pulseRatioMax: 0.20" in source
     assert "branchRatioMax: 0.26" in source
     assert "function pulseFor(i)" in source
+    assert "i % 8 === 0 || i % 17 === 0" in source
     assert "function branchFor(i)" in source
 
 
@@ -52,7 +54,7 @@ def test_routing_generator_uses_the_model_as_single_geometry_source():
     required = [
         "import { CORE, STAGE, COLORS, ROUTE_WEIGHTS, CONTRACT, PINS }",
         "PINS.forEach(renderRoute)",
-        "function buildAlignedStem" if False else "function buildSideRoute",
+        "function buildSideRoute",
         "function buildVerticalRoute",
         "function buildBranch",
         "getTotalLength()",
