@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.auth.models import (
+    AuthAccountRecoveryRequest,
     AuthMfaFactor,
     AuthRefreshToken,
     AuthSession,
@@ -56,6 +57,7 @@ class SqlAlchemySessionRepository:
             )
         )
         return tuple(result.all())
+
     async def requires_mfa(self, user_id: uuid.UUID) -> bool:
         factor_id = await self._session.scalar(
             select(AuthMfaFactor.id)
@@ -80,10 +82,20 @@ class SqlAlchemySessionRepository:
             )
             .limit(1)
         )
+        completed_recovery_id = await self._session.scalar(
+            select(AuthAccountRecoveryRequest.id)
+            .where(
+                AuthAccountRecoveryRequest.user_id == user_id,
+                AuthAccountRecoveryRequest.state == "completed",
+            )
+            .order_by(AuthAccountRecoveryRequest.completed_at.desc())
+            .limit(1)
+        )
         return (
             factor_id is not None
             or privileged_membership_id is not None
             or active_platform_admin_authority_id is not None
+            or completed_recovery_id is not None
         )
 
     def add_session(

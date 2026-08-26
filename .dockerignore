@@ -13,6 +13,8 @@ ops
 *.md
 *.txt
 .env
+.env.*
+.pmk-validation
 .venv
 venv
 

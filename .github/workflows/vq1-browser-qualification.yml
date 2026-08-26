@@ -1,0 +1,98 @@
+name: VQ-1 Browser Qualification
+
+on:
+  pull_request:
+    branches:
+      - agent/admin-governance-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VQ1_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      VQ1_BASE_URL: http://127.0.0.1:8000
+      VQ1_OUTPUT_DIR: artifacts/vq1
+      ENVIRONMENT: development
+      RATE_LIMIT_ENABLED: "false"
+      AUDIT_ENABLED: "false"
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source checkout
+        run: test "$(git rev-parse HEAD)" = "$VQ1_SOURCE_SHA"
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install application and qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[api,security,database,cache]' -r qualification/vq1-requirements.txt
+
+      - name: Install matching Chromium binary
+        run: python -m playwright install chromium
+
+      - name: Record Playwright browser installation
+        run: python -m playwright install --list
+
+      - name: Start controlled qualification application
+        run: |
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 > /tmp/vq1-uvicorn.log 2>&1 &
+          echo $! > /tmp/vq1-uvicorn.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/vq1-uvicorn.log
+          exit 1
+
+      - name: Capture VQ-1 route and section evidence
+        run: python qualification/vq1_browser_harness.py
+
+      - name: Capture controlled UI state matrix
+        run: python qualification/vq1_ui_state_matrix.py
+
+      - name: Capture extended controlled UI states
+        run: python qualification/vq1_ui_state_matrix_extended.py
+
+      - name: Validate controlled browser states
+        run: python qualification/vq1_browser_state_validator.py
+
+      - name: Refresh all clean Settings default evidence
+        run: python qualification/vq1_settings_default_evidence_refresh.py
+
+      - name: Validate executable Settings tab switching
+        run: python qualification/vq1_settings_tab_action_validator.py
+
+      - name: Validate all delivered button actions
+        run: python qualification/vq1_button_action_validator_v2.py
+
+      - name: Show capture summary
+        if: always()
+        run: |
+          test -f artifacts/vq1/metadata.json && cat artifacts/vq1/metadata.json || true
+          test -f artifacts/vq1/inventory.json && cat artifacts/vq1/inventory.json || true
+          test -f artifacts/vq1/button_action_report.json && cat artifacts/vq1/button_action_report.json || true
+          test -f /tmp/vq1-uvicorn.log && tail -n 100 /tmp/vq1-uvicorn.log || true
+
+      - name: Upload VQ-1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vq1-browser-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/vq1
+          if-no-files-found: error
+          retention-days: 14

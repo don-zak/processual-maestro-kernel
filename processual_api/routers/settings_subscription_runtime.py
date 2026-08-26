@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,10 +24,10 @@ def _customer_ref(current_user: dict) -> str:
         or current_user.get("user_id")
         or current_user.get("sub")
     )
-    try:
-        return str(uuid.UUID(str(candidate)))
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=403, detail="Subscription access denied.") from exc
+    normalized = str(candidate or "").strip().lower()
+    if not normalized or len(normalized) > 128:
+        raise HTTPException(status_code=403, detail="Subscription access denied.")
+    return normalized
 
 
 def _first_verified_plan(*candidates: Any) -> str:

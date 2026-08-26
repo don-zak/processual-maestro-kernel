@@ -185,11 +185,12 @@ def test_gateway_module_files_keep_core_behavior_markers():
         "engine.py": [
             "class GatewayEngine:",
             "def evaluate(",
-            "analyze_cgt(",
-            "policy_engine.decide(",
-            "sign_response(",
-            "gateway_registry.add_evaluation(",
-            "gateway_registry.change_state(",
+            "gateway_registry.get(",
+            "AgentState.ACTIVE",
+            "AgentState.REHABILITATING",
+            "GatewayAction.BLOCK",
+            "PrivateEvaluationUnavailableError",
+            "private_evaluation_unavailable",
         ],
         "models.py": [
             "class AgentState",

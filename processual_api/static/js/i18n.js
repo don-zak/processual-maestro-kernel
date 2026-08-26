@@ -40,7 +40,7 @@ const I18N = (() => {
       evaluate:     'Evaluate',
       register:     'Register',
       sha3:         'SHA3-256',
-      demo_mode:    'Demo Mode',
+      demo_mode:    'Qualification Ready',
       active:       'Active',
       pending:      'Pending',
       frozen:       'Frozen',
@@ -49,8 +49,8 @@ const I18N = (() => {
       stable:       'Stable',
       hybrid:       'Hybrid',
       transient:    'Transient',
-      extinct:      'Extinct',
-      distorted:    'Distorted',
+      extinct:     'Extinct',
+      distorted:   'Distorted',
       pass:         'PASS',
       repair:       'REPAIR',
       block:        'BLOCK',
@@ -98,7 +98,7 @@ const I18N = (() => {
       evaluate:     'تقييم',
       register:     'تسجيل',
       sha3:         'SHA3-256',
-      demo_mode:    'وضع العرض',
+      demo_mode:    'جاهز للتأهيل',
       active:       'نشط',
       pending:      'قيد الانتظار',
       frozen:       'مجمّد',
@@ -108,7 +108,7 @@ const I18N = (() => {
       hybrid:       'هجين',
       transient:    'عابر',
       extinct:      'منقرض',
-      distorted:    'مشوّه',
+      distorted:   'مشوّه',
       pass:         'نجاح',
       repair:       'إصلاح',
       block:        'حظر',
@@ -133,4 +133,24 @@ const I18N = (() => {
   function toggle() { setLang(_lang === 'en' ? 'ar' : 'en'); }
 
   return { t, lang, setLang, toggle };
+})();
+
+(function lockConsoleToEnglish() {
+  function apply() {
+    I18N.setLang('en');
+    document.documentElement.lang = 'en';
+    document.documentElement.dir = 'ltr';
+    if (document.body) document.body.dir = 'ltr';
+    const toggle = document.getElementById('lang-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-hidden', 'true');
+      toggle.tabIndex = -1;
+      toggle.remove();
+    }
+  }
+
+  apply();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply, { once: true });
+  }
 })();

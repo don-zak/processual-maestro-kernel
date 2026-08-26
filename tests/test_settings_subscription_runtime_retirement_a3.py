@@ -78,7 +78,21 @@ async def test_runtime_subscription_missing_or_failure_is_fail_closed(monkeypatc
     assert "database" not in str(captured.value.detail).lower()
 
 
-def test_invalid_identity_is_rejected_before_runtime_lookup() -> None:
+def test_customer_reference_accepts_opaque_identity_and_normalizes_case() -> None:
+    assert runtime_route._customer_ref({"user_id": " Customer-Ref-01 "}) == "customer-ref-01"
+
+
+@pytest.mark.parametrize(
+    "current_user",
+    (
+        {},
+        {"user_id": ""},
+        {"user_id": "x" * 129},
+    ),
+)
+def test_missing_or_oversized_identity_is_rejected_before_runtime_lookup(
+    current_user: dict,
+) -> None:
     with pytest.raises(HTTPException) as captured:
-        runtime_route._customer_ref({"user_id": "not-a-uuid"})
+        runtime_route._customer_ref(current_user)
     assert captured.value.status_code == 403

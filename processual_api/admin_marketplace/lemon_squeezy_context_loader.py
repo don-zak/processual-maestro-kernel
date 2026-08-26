@@ -37,6 +37,7 @@ def lemon_squeezy_reconciliation_context_loader_factory(
         offer_ref = getattr(inbox, "offer_ref", None)
         provider_customer_id = getattr(inbox, "provider_customer_id", None)
         provider_subscription_id = getattr(inbox, "provider_subscription_id", None)
+        resource_type = getattr(inbox, "resource_type", None)
 
         if not all(
             isinstance(value, str) and value
@@ -159,6 +160,11 @@ def lemon_squeezy_reconciliation_context_loader_factory(
                 )
             expected_subscription_id = provider_subscription_id
 
+        expected_currency = binding.currency if resource_type in {"orders", "subscription-invoices"} else None
+        expected_total_amount = (
+            binding.total_amount if resource_type in {"orders", "subscription-invoices"} else None
+        )
+
         return LemonSqueezyReconciliationContext(
             expected_customer_ref=customer_ref,
             expected_order_ref=order.order_ref,
@@ -170,8 +176,8 @@ def lemon_squeezy_reconciliation_context_loader_factory(
             expected_provider_order_id=binding.provider_order_id,
             expected_provider_subscription_id=expected_subscription_id,
             expected_variant_id=binding.variant_id,
-            expected_currency=binding.currency,
-            expected_total_amount=binding.total_amount,
+            expected_currency=expected_currency,
+            expected_total_amount=expected_total_amount,
             latest_provider_effective_at=binding.last_provider_effective_at,
         )
 

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "qualification": "STAGE_3F_PRE_GCP_FINAL_LOCAL_CLOSEOUT",
+  "authority": {
+    "local_closeout_can_pass_without_gcp": true,
+    "real_staging_qualified": false,
+    "production_authority_granted": false,
+    "commercial_launch": "NO_GO"
+  },
+  "required_repository_status": {
+    "stage_3b_database_recovery_rehearsal": ["PASS_LOCAL_REHEARSAL"],
+    "stage_3c_runtime_packaging_readiness": ["PASS_CLOSED"],
+    "stage_3d_operational_readiness_preparation": ["PASS_CLOSED"],
+    "stage_3e_real_staging_execution_handoff": ["PASS_CLOSED"]
+  },
+  "required_local_evidence": [
+    ".pmk-validation/stage3b-database-recovery.json"
+  ],
+  "required_local_runner": "scripts/Invoke-PMKStage3ERealStagingHandoff.ps1",
+  "forbidden_local_authority_claims": {
+    "real_staging_qualified": true,
+    "production_authority_granted": true,
+    "commercial_launch": "GO"
+  },
+  "external_blockers_only": [
+    "gcp_billing",
+    "real_gcp_preflight_execution",
+    "real_staging_secret_injection",
+    "real_staging_managed_database_migration",
+    "real_staging_backup_restore",
+    "real_staging_rollback",
+    "metrics_alert_delivery",
+    "external_provider_integration",
+    "browser_e2e_real_staging",
+    "load_endurance_real_staging",
+    "security_review_real_staging",
+    "named_human_approvals",
+    "signed_go_no_go"
+  ]
+}

@@ -9,11 +9,14 @@ from processual_api.admin_marketplace.persistence.unit_of_work import (
     SqlAlchemyAdminMarketplaceUnitOfWork,
 )
 from processual_api.admin_marketplace.router import router
+from processual_api.admin_marketplace.subscription_quota_usage import (
+    SubscriptionQuotaUsageCommand,
+    SubscriptionQuotaUsageError,
+    record_subscription_quota_usage_factory,
+)
 from processual_api.admin_marketplace.subscription_runtime import (
     SubscriptionRuntimeError,
-)
-from processual_api.admin_marketplace.subscription_usage_service import (
-    record_subscription_usage_factory,
+    build_usage_reservation,
 )
 from processual_api.auth.session_router import get_identity_user
 from processual_api.db.session import get_session_factory
@@ -56,19 +59,45 @@ async def record_subscription_usage_endpoint(
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=403, detail="Usage recording denied.") from exc
 
-    record_usage = record_subscription_usage_factory(uow_factory=_uow_factory)
     try:
-        usage = await record_usage(
-            subscription_id=body.subscription_id,
-            customer_ref=customer_ref,
-            metric_code=body.metric_code,
+        reservation = build_usage_reservation(
             units=body.units,
             idempotency_key=idempotency_key,
             dimensions=body.dimensions,
         )
     except SubscriptionRuntimeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Usage recording request is invalid.",
+        ) from exc
+
+    record_usage = record_subscription_quota_usage_factory(
+        unit_of_work_factory=_uow_factory
+    )
+    try:
+        usage = await record_usage(
+            SubscriptionQuotaUsageCommand(
+                subscription_id=body.subscription_id,
+                customer_ref=customer_ref,
+                metric_code=body.metric_code,
+                units=body.units,
+                idempotency_key_hash=reservation.idempotency_key_hash,
+                dimensions_digest=reservation.dimensions_digest,
+                occurred_at=reservation.occurred_at,
+                quota_cycle_id=None,
+            )
+        )
+    except SubscriptionQuotaUsageError as exc:
         message = str(exc)
-        status_code = 409 if "quota limit exceeded" in message else 403
+        status_code = (
+            409
+            if (
+                "balance is insufficient" in message
+                or "cap is exhausted" in message
+                or "replay conflicts" in message
+            )
+            else 403
+        )
         raise HTTPException(
             status_code=status_code,
             detail="Usage recording denied.",

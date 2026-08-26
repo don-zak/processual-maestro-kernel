@@ -1,5 +1,11 @@
-
 (function () {
+  const OWNED_ADMIN_SURFACES = {
+    'admin-integration-readiness-tracking-summary-host': 'page-admin-home',
+    'admin-integration-readiness-case-management-host': 'page-admin-clients',
+    'admin-integration-claim-keys-host': 'page-admin-clients',
+    'admin-integration-readiness-operator-package-host': 'page-operator-pilot-handoff',
+  };
+
   function installStyle() {
     if (document.getElementById('admin-layout-cleanup-style')) return;
 
@@ -23,6 +29,31 @@
     document.querySelectorAll('.admin-runtime-grid').forEach((grid) => {
       grid.setAttribute('data-admin-runtime-grid', '1');
     });
+  }
+
+  function resolveOwnerContainer(ownerPage, surfaceId) {
+    if (surfaceId === 'admin-integration-readiness-operator-package-host') {
+      const pilotRoot = ownerPage.querySelector('#operator-pilot-handoff-root');
+      return pilotRoot?.parentElement || ownerPage.firstElementChild || ownerPage;
+    }
+    return ownerPage.firstElementChild || ownerPage;
+  }
+
+  function containOwnedAdminSurfaces() {
+    Object.entries(OWNED_ADMIN_SURFACES).forEach(([surfaceId, ownerPageId]) => {
+      const surface = document.getElementById(surfaceId);
+      const ownerPage = document.getElementById(ownerPageId);
+      if (!surface || !ownerPage) return;
+
+      surface.dataset.adminOwnerPage = ownerPageId;
+      if (ownerPage.contains(surface)) return;
+
+      resolveOwnerContainer(ownerPage, surfaceId).appendChild(surface);
+    });
+  }
+
+  function containOwnedPilotSurfaces() {
+    containOwnedAdminSurfaces();
   }
 
   function pruneLegacyPlaceholders() {
@@ -53,18 +84,22 @@
   }
 
   function normalizeActivePage() {
+    const navApi = window.PMK_ADMIN_NAV;
+    const activeKey = document.body?.dataset?.adminActivePage || '';
+    const expectedId = activeKey && navApi?.pageIds ? navApi.pageIds[activeKey] : '';
+    const expectedPage = expectedId ? document.getElementById(expectedId) : null;
+
     document.querySelectorAll('.admin-page').forEach((page) => {
-      if (!page.classList.contains('active')) {
-        page.style.display = 'none';
-      } else {
-        page.style.display = 'block';
-      }
+      const isActive = expectedPage ? page === expectedPage : page.classList.contains('active');
+      page.classList.toggle('active', isActive);
+      page.style.display = isActive ? 'block' : 'none';
     });
   }
 
   function clean() {
     installStyle();
     markRuntimeGrids();
+    containOwnedAdminSurfaces();
     pruneLegacyPlaceholders();
     normalizeActivePage();
   }
@@ -72,7 +107,11 @@
   window.PMK_ADMIN_LAYOUT = {
     clean,
     markRuntimeGrids,
+    containOwnedAdminSurfaces,
+    containOwnedPilotSurfaces,
     pruneLegacyPlaceholders,
+    normalizeActivePage,
+    ownedAdminSurfaces: { ...OWNED_ADMIN_SURFACES },
   };
 
   if (document.readyState === 'loading') {

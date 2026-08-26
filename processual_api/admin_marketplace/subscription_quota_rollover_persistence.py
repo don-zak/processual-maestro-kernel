@@ -180,6 +180,24 @@ class SqlAlchemySubscriptionQuotaCycleRepository:
             statement = statement.with_for_update()
         return await self._session.scalar(statement)
 
+    async def get_current(
+        self,
+        *,
+        subscription_id: uuid.UUID,
+        metric_code: str,
+        occurred_at: datetime,
+        for_update: bool = False,
+    ) -> AdminMarketSubscriptionQuotaCycle | None:
+        statement = select(AdminMarketSubscriptionQuotaCycle).where(
+            AdminMarketSubscriptionQuotaCycle.subscription_id == subscription_id,
+            AdminMarketSubscriptionQuotaCycle.metric_code == metric_code,
+            AdminMarketSubscriptionQuotaCycle.period_start <= occurred_at,
+            AdminMarketSubscriptionQuotaCycle.period_end > occurred_at,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(statement)
+
     async def get_by_period(
         self,
         *,

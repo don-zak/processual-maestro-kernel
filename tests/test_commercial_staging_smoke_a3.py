@@ -9,6 +9,7 @@ _REQUIRED = (
     ("GET", "/health/live"),
     ("GET", "/health/ready"),
     ("POST", "/admin-marketplace/subscriptions/usage"),
+    ("POST", "/billing/checkout"),
     ("POST", "/billing/webhook"),
 )
 
@@ -38,6 +39,23 @@ def test_missing_or_duplicate_required_routes_fail_closed() -> None:
         evaluate_staging_routes(duplicate)
 
 
+def test_smoke_rejects_checkout_without_canonical_resolution(monkeypatch) -> None:
+    import processual_api.staging_smoke as smoke
+    from processual_api.billing.router import create_checkout
+    from processual_api.main import app
+
+    real_getsource = smoke.inspect.getsource
+
+    def fake_getsource(value):
+        if value is create_checkout:
+            return 'api_key = os.getenv("LEMONSQUEEZY_API_KEY")'
+        return real_getsource(value)
+
+    monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
+    with pytest.raises(RuntimeError, match="canonical checkout resolution"):
+        smoke.evaluate_staging_routes(app)
+
+
 def test_smoke_rejects_legacy_webhook_side_effects(monkeypatch) -> None:
     import processual_api.staging_smoke as smoke
     from processual_api.main import app
@@ -51,6 +69,41 @@ def test_smoke_rejects_legacy_webhook_side_effects(monkeypatch) -> None:
 
     monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
     with pytest.raises(RuntimeError, match="legacy webhook side effects"):
+        smoke.evaluate_staging_routes(app)
+
+
+def test_smoke_rejects_legacy_quota_account_usage_service(monkeypatch) -> None:
+    import processual_api.staging_smoke as smoke
+    from processual_api.main import app
+
+    real_getsource = smoke.inspect.getsource
+
+    def fake_getsource(value):
+        if getattr(value, "__name__", "") == "record_subscription_usage_endpoint":
+            return (
+                "record_subscription_usage_factory(); "
+                "quota_cycle_id=None; customer_ref = current_user['user_id']"
+            )
+        return real_getsource(value)
+
+    monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
+    with pytest.raises(RuntimeError, match="authoritative quota-cycle usage service"):
+        smoke.evaluate_staging_routes(app)
+
+
+def test_smoke_rejects_client_selected_quota_cycle(monkeypatch) -> None:
+    import processual_api.staging_smoke as smoke
+    from processual_api.main import app
+
+    real_getsource = smoke.inspect.getsource
+
+    def fake_getsource(value):
+        if getattr(value, "__name__", "") == "record_subscription_usage_endpoint":
+            return "record_subscription_quota_usage_factory(); quota_cycle_id=body.quota_cycle_id"
+        return real_getsource(value)
+
+    monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
+    with pytest.raises(RuntimeError, match="quota cycle selection"):
         smoke.evaluate_staging_routes(app)
 
 
@@ -69,3 +122,21 @@ def test_smoke_rejects_subscription_json_fallback(monkeypatch) -> None:
     monkeypatch.setattr(smoke.inspect, "getsource", fake_getsource)
     with pytest.raises(RuntimeError, match="legacy subscription JSON fallback"):
         smoke.evaluate_staging_routes(app)
+
+
+def test_staging_smoke_main_requires_release_environment(monkeypatch, capsys) -> None:
+    import processual_api.release_gate as release_gate
+    import processual_api.staging_smoke as smoke
+
+    def fail_release_environment():
+        raise RuntimeError("release gate: LEMONSQUEEZY_API_KEY is required")
+
+    monkeypatch.setattr(
+        release_gate,
+        "evaluate_release_environment",
+        fail_release_environment,
+    )
+
+    assert smoke.main() == 1
+    captured = capsys.readouterr()
+    assert "LEMONSQUEEZY_API_KEY is required" in captured.err

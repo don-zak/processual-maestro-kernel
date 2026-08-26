@@ -106,7 +106,7 @@ def test_public_top_level_exports_core_symbols_and_fallback_wrappers():
         assert hasattr(cgt, symbol), symbol
 
 
-def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
+def test_public_formal_core_remains_functional_without_private_package(tmp_path):
     source_package = Path(cgt.__file__).resolve().parent
     stripped_root = tmp_path / "public-strip"
     shutil.copytree(
@@ -117,57 +117,32 @@ def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
 
     probe = textwrap.dedent(
         """
+        import importlib.util
         import json
         import sys
 
         sys.path.insert(0, sys.argv[1])
         import cgtlib as cgt
 
-        unavailable_calls = [
-            lambda: cgt.build_public_api_snapshot(),
-            lambda: cgt.compute_phase_mass([0.2, 0.3, 0.5]),
-            lambda: cgt.compute_existential_score(0.9, 0.8, 0.7),
-            lambda: cgt.canonical_phase_state(
-                "phase",
-                mass=1.0,
-                mean_retention=0.8,
-                harmony=0.75,
-                fatigue=0.1,
-            ),
-            lambda: cgt.evaluate_fate_vector(
-                retention=0.8,
-                harmony=0.75,
-                compatibility=0.7,
-                distortion=0.1,
-            ),
-            lambda: cgt.validate_parameters(cgt.CGTParameters()),
-            lambda: cgt.validate_phase_state(
-                cgt.PhaseState(
-                    phase_id="phase-a",
-                    mass=1.0,
-                    mean_retention=0.8,
-                    harmony=0.75,
-                    fatigue=0.1,
-                )
-            ),
-        ]
-
-        errors = []
-        for call in unavailable_calls:
-            try:
-                call()
-            except Exception as exc:
-                errors.append([exc.__class__.__name__, str(exc)])
-            else:
-                errors.append([None, None])
+        params = cgt.CGTParameters()
+        phase = cgt.PhaseState(
+            phase_id="phase-public",
+            mass=1.0,
+            mean_retention=0.8,
+            harmony=0.75,
+            fatigue=0.1,
+        )
 
         print(
             json.dumps(
                 {
                     "has_private": cgt._HAS_PRIVATE,
-                    "errors": errors,
+                    "private_spec": importlib.util.find_spec("cgtlib.private") is not None,
                     "stable_api_is_tuple": isinstance(cgt.CGTLIB_STABLE_API, tuple),
                     "stable_api_contains_manifest": "build_cgtlib_manifest" in cgt.CGTLIB_STABLE_API,
+                    "parameters_validate": cgt.validate_parameters(params) is params,
+                    "phase_validates": cgt.validate_phase_state(phase) is phase,
+                    "manifest_library": cgt.build_cgtlib_manifest()["library"],
                 }
             )
         )
@@ -181,13 +156,15 @@ def test_private_engine_dependent_top_level_wrappers_fail_clearly(tmp_path):
     )
     payload = json.loads(result.stdout)
 
-    assert payload["has_private"] is False
-    assert payload["stable_api_is_tuple"] is True
-    assert payload["stable_api_contains_manifest"] is True
-    assert len(payload["errors"]) == 7
-    for error_name, message in payload["errors"]:
-        assert error_name == "_FeatureUnavailableError"
-        assert "private CGT engine" in message
+    assert payload == {
+        "has_private": False,
+        "private_spec": False,
+        "stable_api_is_tuple": True,
+        "stable_api_contains_manifest": True,
+        "parameters_validate": True,
+        "phase_validates": True,
+        "manifest_library": "cgtlib",
+    }
 
 
 def test_public_validation_primitives_work_without_private_engine():

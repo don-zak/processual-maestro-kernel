@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "qualification": "STAGE_3F_PRE_GCP_FINAL_LOCAL_CLOSEOUT",
+  "status": "PASS_CLOSED",
+  "qualified_head": "12795a3eaf960229ade06a68cad22bd4465e355c",
+  "supporting_ci_gates": {
+    "ci_public": 1587,
+    "launch_closeout": 425,
+    "sandbox_integration": 830,
+    "program_release": 681,
+    "packaging": 651,
+    "public_docker": 522,
+    "camara_public_source": 692,
+    "repository_evidence": 233,
+    "private_ci": "SKIPPED_EXPECTED"
+  },
+  "local_validator": "scripts/Test-PMKStage3FPreGcpLocalCloseout.ps1",
+  "local_validator_executed": true,
+  "local_validator_result": "PASS",
+  "local_evidence_path": ".pmk-validation/stage3f-pre-gcp-local-closeout.json",
+  "local_closeout_complete": true,
+  "pre_gcp_local_work_complete": true,
+  "remaining_gate_class": "EXTERNAL_REAL_STAGING_ONLY",
+  "real_staging_qualified": false,
+  "production_authority_granted": false,
+  "commercial_launch": "NO_GO",
+  "remaining_required_gates": [
+    "gcp_billing",
+    "real_gcp_preflight_execution",
+    "real_staging_secret_injection",
+    "real_staging_managed_database_migration",
+    "real_staging_backup_restore",
+    "real_staging_rollback",
+    "metrics_alert_delivery",
+    "external_provider_integration",
+    "browser_e2e_real_staging",
+    "load_endurance_real_staging",
+    "security_review_real_staging",
+    "named_human_approvals",
+    "signed_go_no_go"
+  ],
+  "next_action": "Resume Phase C only on a real GCP staging target after billing is available; preserve the same authority boundaries until all real-staging gates pass."
+}

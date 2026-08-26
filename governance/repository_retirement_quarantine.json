@@ -1,0 +1,161 @@
+{
+  "schema_version": 4,
+  "purpose": "Prevent retired or compatibility-only repository surfaces from silently regaining primary authority while preserving history and required compatibility until deletion is proven safe.",
+  "authority": {
+    "repository_reconciliation_complete": true,
+    "real_staging_qualified": false,
+    "production_authority_granted": false
+  },
+  "evidence_closeout": {
+    "deletion_authorized": false,
+    "review_decisions": {
+      "classification": "LATEST_IDENTITY_COMPLETE_WITH_HISTORICAL_PAYLOAD_CHANGES",
+      "latest_version": 8,
+      "latest_item_count": 57,
+      "all_historical_identity_count": 57,
+      "identities_missing_from_latest": 0,
+      "every_transition_identity_monotonic": true,
+      "every_transition_exact_monotonic": false,
+      "historical_versions_must_be_preserved": true,
+      "reason": "v8 contains every historical decision identity, but v1->v2 changed two existing payloads and v2->v3 changed one existing payload. From v3->v4 through v7->v8 the lineage is exact-monotonic additions only."
+    },
+    "cgt17_retirement_evidence": {
+      "classification": "THREE_EXACT_DUPLICATE_PAIRS",
+      "file_count": 6,
+      "distinct_sha256_count": 3,
+      "pairs": [
+        ["cgt17_branch_retirement_audit_20260811_141201.json", "cgt17_branch_retirement_audit_20260811_141433.json"],
+        ["cgt17_branch_retirement_audit_20260811_142300.json", "cgt17_branch_retirement_audit_20260811_142957.json"],
+        ["cgt17_branch_retirement_audit_20260811_143802.json", "cgt17_branch_retirement_audit_20260811_143853.json"]
+      ],
+      "historical_files_must_be_preserved": true
+    },
+    "coverage_json_evidence": {
+      "classification": "VALID_JSON_POWERSHELL_INCOMPATIBILITY_ONLY",
+      "validated_file_count": 4,
+      "validator": "python-json",
+      "root_type": "OBJECT",
+      "required_top_level_keys": ["files", "meta", "totals"],
+      "files": [
+        ".pmk-validation/20260811_211659/coverage/coverage.json",
+        ".pmk-validation/20260811_213207/coverage/coverage.json",
+        ".pmk-validation/20260811_214454/coverage/coverage.json",
+        ".pmk-validation/wave1-coverage.json"
+      ],
+      "powershell_convertfrom_json_is_not_corruption_authority": true,
+      "preserve_until_final_qualification": true
+    },
+    "empty_tool_outputs": {
+      "classification": "EMPTY_HISTORICAL_OUTPUTS",
+      "files": [
+        ".pmk-validation/20260811_204530/artifacts/bandit.json",
+        ".pmk-validation/20260811_204530/artifacts/pip-audit.json"
+      ],
+      "corruption_asserted": false,
+      "preserve_until_final_qualification": true
+    },
+    "final_repository_closeout": {
+      "classification": "ALL_EXIT_CRITERIA_ZERO",
+      "observed_at_head": "a20372acc24c48045051a74135377dc0c0d6aa5f",
+      "archive_receipt_verified": true,
+      "exit_criteria": {
+        "REVIEW_REQUIRED": 0,
+        "SAFE_LOCAL_RESIDUE": 0,
+        "UNEXPLAINED_LOCAL_ARTIFACT": 0,
+        "UNPROTECTED_RETIRED_TOOL": 0,
+        "UNIQUE_BACKUP_CONTENT": 0
+      }
+    }
+  },
+  "protected_path_prefixes": [
+    "alembic/versions/",
+    "tests/",
+    "docs/",
+    "qualification/",
+    ".github/workflows/"
+  ],
+  "local_generated_residue_patterns": [
+    "__pycache__/",
+    ".pytest_cache/",
+    ".hypothesis/",
+    "build/",
+    "dist/",
+    "tmp/",
+    "*.pyc",
+    "*.pyo",
+    "*.log",
+    "*.bak",
+    "*.bak_*",
+    "*.zip",
+    ".pmk-repo-audit/"
+  ],
+  "local_tooling_quarantine": {
+    "repository_tracking_forbidden": true,
+    "force_add_is_not_authorized": true,
+    "canonical_local_only": [
+      "Invoke-PMKRepoAudit-v20.ps1",
+      "Retire-Safe-CGT17Branches-v3.ps1"
+    ],
+    "retired_exact_paths": [
+      "Invoke-PMKRepoAudit-v1.ps1",
+      "Invoke-PMKRepoAudit-v2.ps1",
+      "Invoke-PMKRepoAudit-v3.ps1",
+      "Invoke-PMKRepoAudit-v4.ps1",
+      "Invoke-PMKRepoAudit-v5.ps1",
+      "Invoke-PMKRepoAudit-v6.ps1",
+      "Invoke-PMKRepoAudit-v7.ps1",
+      "Invoke-PMKRepoAudit-v8.ps1",
+      "Invoke-PMKRepoAudit-v8-fixed.ps1",
+      "Invoke-PMKRepoAudit-v9.ps1",
+      "Invoke-PMKRepoAudit-v10.ps1",
+      "Invoke-PMKRepoAudit-v11.ps1",
+      "Invoke-PMKRepoAudit-v12.ps1",
+      "Invoke-PMKRepoAudit-v13.ps1",
+      "Invoke-PMKRepoAudit-v14.ps1",
+      "Invoke-PMKRepoAudit-v15.ps1",
+      "Invoke-PMKRepoAudit-v16.ps1",
+      "Invoke-PMKRepoAudit-v17.ps1",
+      "Invoke-PMKRepoAudit-v18.ps1",
+      "Invoke-PMKRepoAudit-v19.ps1",
+      "Retire-Safe-CGT17Branches-fixed.ps1",
+      "Retire-Safe-CGT17Branches-v2.ps1"
+    ],
+    "release_condition": "These root-local operator tools are outside repository authority. Retired paths must remain absent from git ls-files, and canonical local-only tools must remain untracked unless governance is intentionally revised with independent review evidence."
+  },
+  "tracked_surfaces": [
+    {
+      "path": "processual_api/routers/client_provider_alias_18.py",
+      "classification": "COMPATIBILITY_HOLD",
+      "primary_authority": false,
+      "deletion_allowed": false,
+      "deprecated_surface": "/settings/client/provider-connection",
+      "successor_surface": "/settings/provider-connection",
+      "release_condition": "Delete only after external consumer absence is proven and the compatibility regression/workflow is intentionally retired."
+    },
+    {
+      "path": "processual_api/routers/settings_provider_test_runtime.py",
+      "classification": "ACTIVE_RUNTIME_WITH_DEPRECATED_COMPATIBILITY",
+      "primary_authority": true,
+      "deletion_allowed": false,
+      "deprecated_surface": "/settings/llm-provider/test",
+      "successor_surface": "/settings/provider-connection/test",
+      "release_condition": "Do not delete the file while the successor runtime is implemented here. Retire only the deprecated endpoint after consumer absence is proven."
+    },
+    {
+      "path": "processual_api/services/plan_store.py",
+      "classification": "ACTIVE_TRANSITIONAL_AUTHORITY_BRIDGE",
+      "primary_authority": true,
+      "deletion_allowed": false,
+      "release_condition": "Delete only after legacy API-key plan consumers and aliases have been migrated and authoritative quota resolution is proven without this bridge."
+    }
+  ],
+  "retired_public_symbols": [
+    {
+      "symbols": ["enterprise_pilot", "enterprise_core", "enterprise_scale", "enterprise_strategic"],
+      "classification": "HISTORICAL_COMPATIBILITY_ONLY",
+      "public_reintroduction_forbidden": true,
+      "deletion_allowed": false,
+      "release_condition": "Historical/internal compatibility references may be removed only after data migration and consumer-absence evidence. They must not reappear as public plans or public commercial CTAs."
+    }
+  ]
+}

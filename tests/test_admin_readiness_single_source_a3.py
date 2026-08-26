@@ -26,7 +26,7 @@ def test_home_layout_removes_legacy_readiness_surfaces() -> None:
     assert "admin-integration-readiness-case-management-host" in source
     assert "page-admin-integration-center" in source
     assert "MutationObserver" in source
-    assert "PMK_ADMIN_SURFACE_OWNERSHIP_OBSERVER" in source
+    assert "PMK_ADMIN_HOME_CANONICAL_OBSERVER" in source
     assert "removeLegacyUsagePlaceholder" in source
 
 

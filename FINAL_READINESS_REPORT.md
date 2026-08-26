@@ -1,99 +1,48 @@
-# Processual Maestro Kernel v2.0.0 — Final Readiness Report
+# Processual Maestro Kernel v2.0.0 — Historical Readiness Snapshot
 
-**Date:** 1 June 2026  
-**Status: ✅ CLEAN LOCAL GOVERNANCE REFERENCE**
+> **HISTORICAL / NON-AUTHORITATIVE — 1 June 2026 snapshot**
+>
+> This document is retained only as historical qualification evidence. It does **not** describe the current public/private trust-boundary architecture, current Docker/release topology, current test inventory, Real Staging status, provider/operator proof, or production authority. Do not use it as a release, deployment, staging, or production-readiness decision source.
+>
+> Current qualification authority is carried by exact-head CI evidence and the governed qualification artifacts under `docs/qualification/`. `GeneralPackagingComplete`, `RealStagingQualified`, and `ProductionAuthorityGranted` remain false unless explicitly proven by later governed evidence.
+
+**Original date:** 1 June 2026  
+**Original status:** CLEAN LOCAL GOVERNANCE REFERENCE
 
 ---
 
-## 1. Project Cleanup & Security
-| Item | Status |
-|---|---|
-| All `__pycache__`, `.coverage`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `.hypothesis/` removed | ✅ Verified zero remaining |
-| `debug` forced `False` in production; reads `API_DEBUG` env var only in non-production | ✅ |
-| `JWT_SECRET` validation: rejects sentinel default + empty string in production | ✅ |
-| `.gitignore` updated: `cgtlib/private/`, `private/`, `secrets/` | ✅ |
-| `processual_api/data/` cleaned of test artifacts (5 files removed) | ✅ |
+## Historical scope
 
-## 2. IP Protection — Private Module Isolation
-| Item | Status |
-|---|---|
-| All proprietary math moved to `cgtlib/private/compute.py` | ✅ |
-| All 11 public cgtlib modules rewritten as thin wrappers | ✅ |
-| Graceful fallback + `_HAS_PRIVATE = False` when private modules absent | ✅ |
-| `build_cgtlib_manifest()` handles missing private gracefully | ✅ |
-| Dual-package build config (root + `cgtlib/pyproject.toml`) | ✅ |
-| `cgtlib.private` added to `cgtlib/metadata.py` private modules list | ✅ |
+The statements below describe the repository as assessed on the original snapshot date. They are preserved for audit/history and are not automatically valid for the current branch.
 
-## 3. Agent Runtime Adapters
-| Item | Status |
-|---|---|
-| `RuntimeAdapter` ABC with `run_agent()`, `check_health()`, `list_agents()`, `stop_agent()` | ✅ |
-| `RuntimeAdapterRegistry` singleton with `register()`, `get()`, `all()`, `list()` | ✅ |
-| Adapter documentation at `docs/adapters/index.md` | ✅ |
+### Project cleanup and security
+- Cache/test artifacts were reported clean at that snapshot.
+- Production debug and secret validation were reported hardened for the then-current implementation.
 
-## 4. Deployment & Docker
-| Item | Status |
-|---|---|
-| Deployment guide at `docs/deployment/index.md` (Docker, K8s, cloud providers, split) | ✅ |
-| Docker multi-stage build (`private` and `public` targets) | ✅ |
-| Docker Compose: all passwords required (no weak defaults), healthchecks on all services, resource limits, read-only API, custom network, version pinning | ✅ |
-| Monorepo split instructions + `tools/split-public-repo.ps1` | ✅ |
+### Historical private-module model
+- The snapshot described proprietary math under `cgtlib/private/` with public wrappers/fallback behavior.
+- The current qualification program uses an explicit public/private trust-boundary model and fail-closed public behavior; this historical description must not be treated as the current runtime architecture.
 
-## 5. Dependencies
-| Item | Status |
-|---|---|
-| `bcrypt>=4.1` added to `[project.dependencies]`, `security` extra, and `all` extra | ✅ |
-| `dev` and `load` extras included in `all` extra | ✅ |
+### Historical deployment model
+- The snapshot described multi-target private/public Docker and monorepo split workflows.
+- Current public-image qualification must be taken from the current `Dockerfile`, exact-head CI, SBOM/private-path checks, and current qualification documentation instead.
 
-## 6. CI/CD Workflows
-| File | Purpose |
-|---|---|
-| `.github/workflows/ci.yml` | Full private monorepo CI (tests + private verification) |
-| `.github/workflows/ci-public.yml` | Public repo CI (without private modules) |
-| `.github/workflows/docker.yml` | Multi-target Docker build (private/public) |
-| `.github/workflows/release.yml` | GitHub release + package build |
-| `.github/workflows/security.yml` | Bandit scan + pip-audit |
+### Historical test evidence
+- Original snapshot reported 957 collected, 952 passed, 5 skipped, 0 failed.
+- Those counts are retained only as historical evidence and must not be presented as current-suite results.
 
-## 7. Documentation
-| Item | Status |
-|---|---|
-| `README.md` API routes table matches actual endpoints exactly | ✅ |
-| `docs/adapters/index.md` — adapter creation guide | ✅ |
-| `docs/deployment/index.md` — deployment + split instructions | ✅ |
+### Historical overall-readiness claim
+The original report used 100% readiness-style indicators for several local-governance categories. Those indicators are explicitly superseded as release authority. They did not prove and do not now prove:
 
-## 8. Demo
-| Item | Status |
-|---|---|
-| `examples/demo_full_flow.py` — full pipeline: adapter → governance → CGT → API | ✅ |
+- comprehensive visual qualification;
+- Real Staging;
+- real secret-authority binding;
+- backup/migration/backfill/restore rehearsal;
+- immutable promotion by image digest;
+- real provider sandbox evidence;
+- operator-network QoS evidence;
+- controlled pilot or GA authority.
 
-## 9. Test Results (1 June 2026)
-| Metric | Result |
-|---|---|
-| Total tests | **957 collected** |
-| Passed | **952** |
-| Skipped | **5** |
-| Failed | **0** |
-| Errors | **0** |
-| Coverage | — *not measured* — |
+## Current interpretation
 
-### Notes
-- All 5 skipped are platform-conditional tests (e.g., Azure SDK, Discord webhook, Docker)
-- No pre-existing failures: the atexit PermissionError (bridge MagicMock) is resolved
-- pytest report: `docs/reports/pytest_result_final.txt`
-
-## 10. Overall Readiness
-```
-API unification:      ████████████████████ 100%  (/batch + /report + analysis_mode)
-Security:             ████████████████████ 100%
-IP Protection:        ████████████████████ 100%
-Test suite:           ████████████████████ 100%  (952 passed, 0 failed)
-Documentation:        ████████████████████ 100%
-Build pipeline:       ████████████████████ 100%  (build_clean_release.py + release_check)
-Docker hardening:     ████████████████████ 100%
-```
-
-**The Processual Maestro Kernel v2.0.0 is a clean local governance reference.**
-Status must be reviewed after:
-1. Successful `release_check.py --root clean_build/`
-2. Docker smoke test (requires Docker)
-3. Multi-Agent / External Pilot production validation
+This file is **historical evidence only**. Current work proceeds through governed reconciliation, packaging, VQ-1 comprehensive visual qualification, Real Staging, provider/operator proof, release-candidate qualification, controlled pilot, and only then a separate production-authority decision.

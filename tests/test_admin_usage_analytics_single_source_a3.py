@@ -25,7 +25,7 @@ def test_usage_placeholder_is_removed_when_real_analytics_exists() -> None:
     assert "admin-subscription-analytics-host" in source
     assert "Planned usage view:" in source
     assert "evaluations used, evaluations remaining" in source
-    assert "PMK_ADMIN_SURFACE_OWNERSHIP_OBSERVER" in source
+    assert "PMK_ADMIN_HOME_CANONICAL_OBSERVER" in source
 
 
 def test_subscription_analytics_is_read_only() -> None:

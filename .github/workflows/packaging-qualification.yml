@@ -1,0 +1,250 @@
+name: Packaging Qualification
+
+on:
+  push:
+    branches:
+      - "agent/**"
+      - "release/**"
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "cgtlib/**"
+      - "processual_api/cgt_governor/**"
+      - "processual_api/integrations/private_evaluation_boundary.py"
+      - "processual_api/integrations/private_evaluation_http.py"
+      - "processual_api/integrations/private_evaluation_runtime.py"
+      - "processual_api/routers/__init__.py"
+      - "processual_api/routers/cgt_governor.py"
+      - "tools/dependency_license_review.py"
+      - "tools/release_evidence_inventory.py"
+      - "tools/secret_scan.py"
+      - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
+      - "tests/test_cgt_governor_private_boundary_r1.py"
+      - "tests/test_cgtlib_public_fallback_import_boundary.py"
+      - "tests/test_cgtlib_public_protected_math_boundary.py"
+      - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_dependency_license_review_r1.py"
+      - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_private_evaluation_error_surface_r1.py"
+      - "tests/test_private_evaluation_route.py"
+      - "tests/test_private_evaluation_runtime_binding.py"
+      - "tests/test_public_docker_trust_boundary_r1.py"
+      - "tests/test_public_private_source_boundary.py"
+      - "tests/test_release_*.py"
+      - ".github/workflows/docker.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/packaging-qualification.yml"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "cgtlib/**"
+      - "processual_api/cgt_governor/**"
+      - "processual_api/integrations/private_evaluation_boundary.py"
+      - "processual_api/integrations/private_evaluation_http.py"
+      - "processual_api/integrations/private_evaluation_runtime.py"
+      - "processual_api/routers/__init__.py"
+      - "processual_api/routers/cgt_governor.py"
+      - "tools/dependency_license_review.py"
+      - "tools/release_evidence_inventory.py"
+      - "tools/secret_scan.py"
+      - "tests/test_cgt_governor_legacy_boundary_debt_r1.py"
+      - "tests/test_cgt_governor_private_boundary_r1.py"
+      - "tests/test_cgtlib_public_fallback_import_boundary.py"
+      - "tests/test_cgtlib_public_protected_math_boundary.py"
+      - "tests/test_cgtlib_reference_data*.py"
+      - "tests/test_dependency_license_review_r1.py"
+      - "tests/test_private_evaluation_boundary.py"
+      - "tests/test_private_evaluation_error_surface_r1.py"
+      - "tests/test_private_evaluation_route.py"
+      - "tests/test_private_evaluation_runtime_binding.py"
+      - "tests/test_public_docker_trust_boundary_r1.py"
+      - "tests/test_public_private_source_boundary.py"
+      - "tests/test_release_*.py"
+      - ".github/workflows/docker.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/packaging-qualification.yml"
+  workflow_dispatch:
+
+jobs:
+  package-evidence:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install packaging qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,security]
+
+      - name: Focused packaging and trust-boundary regression
+        run: |
+          python -m pytest -q \
+            tests/test_cgt_governor_legacy_boundary_debt_r1.py \
+            tests/test_cgt_governor_private_boundary_r1.py \
+            tests/test_cgtlib_public_fallback_import_boundary.py \
+            tests/test_cgtlib_public_protected_math_boundary.py \
+            tests/test_cgtlib_reference_data_packaging.py \
+            tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_dependency_license_review_r1.py \
+            tests/test_private_evaluation_boundary.py \
+            tests/test_private_evaluation_error_surface_r1.py \
+            tests/test_private_evaluation_route.py \
+            tests/test_private_evaluation_runtime_binding.py \
+            tests/test_public_docker_trust_boundary_r1.py \
+            tests/test_public_private_source_boundary.py \
+            tests/test_release_packaging_reference_data_gate.py \
+            tests/test_release_evidence_inventory.py \
+            tests/test_release_secret_scan.py
+
+      - name: Ruff packaging and trust-boundary scope
+        run: |
+          ruff check \
+            processual_api/cgt_governor/governor.py \
+            processual_api/cgt_governor/gateway/engine.py \
+            processual_api/cgt_governor/simulation/__init__.py \
+            processual_api/cgt_governor/simulation/engine.py \
+            processual_api/integrations/private_evaluation_boundary.py \
+            processual_api/integrations/private_evaluation_http.py \
+            processual_api/integrations/private_evaluation_runtime.py \
+            tools/dependency_license_review.py \
+            tools/release_evidence_inventory.py \
+            tools/secret_scan.py \
+            tests/test_cgt_governor_legacy_boundary_debt_r1.py \
+            tests/test_cgt_governor_private_boundary_r1.py \
+            tests/test_cgtlib_public_fallback_import_boundary.py \
+            tests/test_cgtlib_public_protected_math_boundary.py \
+            tests/test_cgtlib_reference_data_packaging.py \
+            tests/test_cgtlib_reference_data_package_config.py \
+            tests/test_dependency_license_review_r1.py \
+            tests/test_private_evaluation_boundary.py \
+            tests/test_private_evaluation_error_surface_r1.py \
+            tests/test_private_evaluation_route.py \
+            tests/test_private_evaluation_runtime_binding.py \
+            tests/test_public_docker_trust_boundary_r1.py \
+            tests/test_public_private_source_boundary.py \
+            tests/test_release_packaging_reference_data_gate.py \
+            tests/test_release_evidence_inventory.py \
+            tests/test_release_secret_scan.py \
+            --output-format=github
+
+      - name: Flake8 critical errors
+        run: flake8 . --count --select=E9,F63,F7,F82 --statistics
+
+      - name: Type check boundary and release evidence tools
+        run: |
+          mypy \
+            processual_api/cgt_governor/governor.py \
+            processual_api/cgt_governor/gateway/engine.py \
+            processual_api/cgt_governor/simulation/__init__.py \
+            processual_api/cgt_governor/simulation/engine.py \
+            processual_api/integrations/private_evaluation_boundary.py \
+            processual_api/integrations/private_evaluation_http.py \
+            processual_api/integrations/private_evaluation_runtime.py \
+            tools/release_evidence_inventory.py \
+            tools/secret_scan.py \
+            --ignore-missing-imports \
+            --follow-imports=skip
+
+      - name: High-confidence secret scan
+        run: python tools/secret_scan.py .
+
+      - name: Dependency vulnerability audit
+        run: pip-audit
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+
+      - name: Verify canonical resource and private exclusion in wheel
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          wheels = sorted(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = archive.namelist()
+              assert "cgtlib/data/reference_scenarios.json" in names
+              assert "processual_api/integrations/private_evaluation_http.py" in names
+              assert "processual_api/integrations/private_evaluation_runtime.py" in names
+              assert not any(name.startswith("cgtlib/private/") for name in names)
+              assert not any(
+                  name.startswith("processual_api/private_integrations/")
+                  for name in names
+              )
+          PY
+
+      - name: Smoke test installed wheel resources and public boundary
+        shell: bash
+        run: |
+          python -m venv /tmp/pmk-packaging-smoke
+          /tmp/pmk-packaging-smoke/bin/python -m pip install --upgrade pip
+          /tmp/pmk-packaging-smoke/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/pmk-packaging-smoke/bin/python - <<'PY'
+          import importlib.util
+
+          import cgtlib
+          from cgtlib.reference_data import (
+              list_reference_dataset_ids,
+              load_reference_scenario_record,
+          )
+          from processual_api.cgt_governor.governor import govern_answer
+          from processual_api.integrations.private_evaluation_boundary import (
+              PrivateEvaluationUnavailableError,
+              boundary_contract_version,
+          )
+
+          assert cgtlib._HAS_PRIVATE is False
+          assert list_reference_dataset_ids() == (
+              "balanced_transition_band",
+              "stress_recovery_band",
+              "boundary_lock_band",
+          )
+          record = load_reference_scenario_record("boundary_lock_band")
+          assert record.scenario_pack.transitions
+          assert boundary_contract_version() == "private-evaluation-boundary/v1"
+          assert importlib.util.find_spec("cgtlib.private") is None
+          assert importlib.util.find_spec("processual_api.private_integrations") is None
+          try:
+              govern_answer(answer="public-wheel-probe")
+          except PrivateEvaluationUnavailableError as exc:
+              assert str(exc) == "private_evaluation_unavailable"
+          else:
+              raise AssertionError("public governor must fail closed without private decision")
+          PY
+
+      - name: Generate release evidence inventory
+        run: python tools/release_evidence_inventory.py --dist-dir dist --output release-evidence/release-inventory.json
+
+      - name: Generate dependency license review
+        run: python tools/dependency_license_review.py --output release-evidence/dependency-license-review.json
+
+      - name: Generate CycloneDX dependency SBOM
+        shell: bash
+        run: pip-audit --format cyclonedx-json > release-evidence/python-environment.cdx.json
+
+      - name: Upload packaging evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaging-evidence-${{ github.sha }}
+          path: |
+            dist/*
+            release-evidence/*
+          if-no-files-found: error
+          retention-days: 14

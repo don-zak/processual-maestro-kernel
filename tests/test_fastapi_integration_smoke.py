@@ -28,6 +28,7 @@ def client(monkeypatch):
     yield TestClient(app)
     app.dependency_overrides.clear()
 
+
 def _route_path(route):
     return getattr(route, "path", "").rstrip("/")
 
@@ -92,9 +93,6 @@ def _override_route_dependencies(path: str, method: str, value: dict):
     )
 
 
-
-
-
 def test_full_app_health_endpoints_and_global_headers(client):
     response = client.get("/health/live", headers={"X-Request-ID": "smoke-10a"})
 
@@ -102,10 +100,11 @@ def test_full_app_health_endpoints_and_global_headers(client):
     assert response.headers["x-request-id"] == "smoke-10a"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
-    assert response.headers["x-xss-protection"] == "1; mode=block"
+    assert response.headers["x-xss-protection"] == "0"
     assert response.headers["strict-transport-security"] == (
         "max-age=31536000; includeSubDomains"
     )
+    assert "default-src 'self'" in response.headers["content-security-policy"]
 
     ready = client.get("/health/ready")
     assert ready.status_code in {200, 503}
@@ -222,7 +221,6 @@ def test_full_app_cgt_govern_controlled_smoke_with_overridden_quota(
     assert payload["analysis_mode"] == "fallback"
 
 
-
 def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
     client,
     monkeypatch,
@@ -273,10 +271,8 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
 
     monkeypatch.setattr(api_key_store, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(quota_store, "DATA_DIR", tmp_path)
-
     monkeypatch.setattr(usage_log_store, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(usage_log_store, "_USAGE_LOG_PATH", usage_log_path)
-
 
     def fail_if_governor_executes(*_args, **_kwargs):
         raise AssertionError("quota must reject before governor execution")
@@ -289,7 +285,6 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
             "X-API-Key": raw_key,
             "X-Request-ID": "usage-quota-exhausted-03",
         },
-
         json={
             "answer": "This request should be rejected before evaluation.",
             "language": "en",
@@ -319,9 +314,7 @@ def test_full_app_cgt_govern_rejects_exhausted_dynamic_api_key(
     ]
 
     assert len(usage_records) == 1
-
     usage_record = usage_records[0]
-
     assert usage_record["request_id"] == "usage-quota-exhausted-03"
     assert usage_record["client_id"] == "quota-endpoint-client"
     assert usage_record["user_id"] == "quota_endpoint_user"

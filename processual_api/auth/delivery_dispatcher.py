@@ -49,7 +49,7 @@ DELIVERY_EVENT_PROFILES = {
     "account_recovery_verification": DeliveryEventProfile(
         purpose="account_recovery_verification",
         template="account_recovery_verification",
-        verification_path="/auth/account-recovery/verify",
+        verification_path="/console/recover-account.html",
         eligible_user_statuses=frozenset({"active"}),
     ),
 }

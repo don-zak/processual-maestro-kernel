@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from processual_api.services.evaluation_grants import key_evaluation_grant_state
+from processual_api.services.legacy_api_key_mode import (
+    legacy_dynamic_api_key_authority_enabled,
+)
 
 try:
     import bcrypt as _bcrypt_lib
@@ -135,6 +138,8 @@ def _public_identity(
 
 
 def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
+    if not legacy_dynamic_api_key_authority_enabled():
+        return None
     if not api_key or not api_key.startswith("pmk_"):
         return None
 

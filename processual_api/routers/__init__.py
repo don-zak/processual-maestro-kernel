@@ -1,5 +1,10 @@
 """API route handlers — all HTTP endpoints organized by domain."""
 
+from fastapi import Depends
+
+from ..auth.security import require_quota
+from ..integrations.private_evaluation_http import router as private_evaluation_router
+
 # Register route extensions on settings_router.
 # Importing for side effects is intentional: main.py already includes settings_router.
 from . import client_api_keys_18 as _client_api_keys_18  # noqa: F401,E402
@@ -7,6 +12,10 @@ from . import client_provider_alias_18 as _client_provider_alias_18  # noqa: F40
 from . import institution_cases_18 as _institution_cases_18  # noqa: F401,E402
 from . import settings_admin_api_key_provisioning as _settings_admin_api_key_provisioning  # noqa: F401,E402
 from . import settings_admin_evaluation_grants as _settings_admin_evaluation_grants  # noqa: F401,E402
+from . import settings_camara_qod_qualification_status as _settings_camara_qod_qualification_status  # noqa: F401,E402
+from . import (  # noqa: F401,E402
+    settings_endpoint_discovery_qualification_runtime as _settings_endpoint_discovery_qualification_runtime,
+)
 from . import (  # noqa: F401,E402
     settings_enterprise_endpoint_bindings_runtime as _settings_enterprise_endpoint_bindings_runtime,
 )
@@ -21,6 +30,8 @@ from . import (  # noqa: F401,E402
 )
 from . import settings_provider_test_runtime as _settings_provider_test_runtime  # noqa: F401,E402
 from . import settings_subscription_runtime as _settings_subscription_runtime  # noqa: F401,E402
+from .administrator_deprovision import router as administrator_deprovision_router
+from .administrator_governance_history import router as administrator_governance_history_router
 from .applications import router as applications_router
 from .cgt import router as cgt_router
 from .cgt_governor import router as cgt_governor_router
@@ -32,6 +43,17 @@ from .reports import router as reports_router
 from .settings import router as settings_router
 from .telemetry import router as telemetry_router
 from .workflows import router as workflows_router
+
+governance_router.include_router(administrator_deprovision_router)
+governance_router.include_router(administrator_governance_history_router)
+
+# Canonical protected evaluation is attached at the application composition edge.
+# The HTTP contract itself remains DB-independent; public quota governance is
+# added here where the full application dependency stack is already present.
+cgt_governor_router.include_router(
+    private_evaluation_router,
+    dependencies=[Depends(require_quota("evaluation"))],
+)
 
 __all__ = [
     "health_router",

@@ -1,76 +1,74 @@
-# Release Notes — Processual Maestro Kernel v2.0.0
+# Release Notes — Processual Maestro Kernel v2.0.0 Qualification Branch
 
-## Overview
+> **QUALIFICATION NOTES — NOT A RELEASE OR PRODUCTION AUTHORITY STATEMENT**
+>
+> This branch is under governed qualification. Historical release language has been reconciled to the current public/private trust-boundary, packaging, and visual-qualification model.
 
-Clean local governance reference build with unified API responses, automated release packaging, and pre-release validation.
+## Current focus
 
-## What's New
+The current branch coordinates:
 
-### Security Hardening
-- **Secrets validation**: Production startup rejects all weak/default secrets (not just JWT_SECRET)
-- **CORS wildcard rejection**: `CORS_ORIGINS=*` raises `RuntimeError` in production — explicit origins required
-- **Adapter KeyError fix**: All LLM adapters use `os.environ.get()` with descriptive `RuntimeError` instead of crashing on missing keys
-- **Error handler middleware**: Stack traces suppressed in production (500 responses return `{"detail": "..."}`)
-- **Docs disabled in production**: `/docs` and `/redoc` unavailable in production mode
+- public/private mathematical trust-boundary qualification;
+- commercial entitlement/quota/runtime qualification;
+- CAMARA non-real-environment qualification;
+- governed legacy-component quarantine and compatibility retirement;
+- public browser/security contract qualification;
+- release-truth reconciliation;
+- preparation for comprehensive Visual Qualification Gate V1 (VQ-1);
+- later Real Staging and controlled release qualification.
 
-### Public Build Profile
-- **`Dockerfile` public target**: Ships without proprietary CGT engine (`cgtlib/private/` excluded)
-- **`cgtlib/_fallback.py`**: Graceful stubs for all ~100 public CGT API functions — return structured `503` instead of crashing
-- **README updated**: Routes table matches actual API (no `/api/v2/` prefix)
+## Public build profile
 
-### Authentication Coverage
-- **Reports router** (`/reports/*`): All endpoints require `Depends(get_current_user)`
-- **Workflows router** (`/workflows/*`): All endpoints require `Depends(get_current_user)`
+The public repository contains governance, orchestration, authentication, commercial contracts, shared-safe adapters, and fail-closed public boundary code. Proprietary mathematical implementation remains private.
 
-### Operational
-- **Health endpoint** (`/health/ready`): Reports actual CGT engine availability (`_HAS_PRIVATE`)
-- **Docker Compose hardened**: Healthchecks, resource limits, read-only filesystem, internal network, version-pinned images, all secrets required via `:?`
-- **`scripts/release_check.py`**: Automated pre-release validation (cache artifacts, weak secrets, pytest threshold, Docker build, data artifacts)
-- **`.env.production.example`**: Reference template with all required variables documented
+Protected mathematical operations must not silently fall back to public approximations. When the approved private evaluation runtime is unavailable, protected operations fail closed through generic public-safe error contracts.
 
-### Documentation
-- **`DEPLOYMENT_EXTERNAL.md`**: Comprehensive external integration guide
-- **`RELEASE_NOTES.md`**: This file
-- **`EXTERNAL_READINESS_REPORT.md`**: External-facing readiness report
+Public-to-private requests are bounded to opaque references and evaluation time. Private-to-public results are limited to the approved sanitized six-field decision contract.
 
-## Breaking Changes
+Concrete opaque-reference issuance/resolution and private runtime connectivity remain unapproved until their architecture and backing topology are separately reviewed and qualified.
 
-1. **`CORS_ORIGINS` must be explicit in production** — wildcard `*` no longer allowed
-2. **All reports and workflows endpoints now require authentication** — update clients to pass JWT Bearer tokens
-3. **Secrets validation is strict** — startup fails if any required secret is empty or set to a weak value
-4. **Public build has no CGT engine** — CGT endpoints return `503` with `{"error": "private_cgt_engine_unavailable"}`
+## Packaging and Docker
 
-## API Changes
+The current public Docker qualification is defined by the repository's current `Dockerfile` and exact-head CI evidence. Historical descriptions of `public`/`full` Docker targets or shipping proprietary private modules in a combined image are not current release authority.
 
-| Change | Detail |
-|--------|--------|
-| Auth required on `/reports/*` | All POST endpoints added `Depends(get_current_user)` |
-| Auth required on `/workflows/*` | All endpoints added `Depends(get_current_user)` |
-| `/health/ready` | `cgtlib` field now reflects actual engine availability |
-| `/docs` | Disabled in production |
-| `/openapi.json` | Available (returns schema without credentials) |
+Public-image qualification includes private-path leak checks, SBOM generation/verification, source/runtime quarantine controls, non-root execution, and fail-closed public behavior. An immutable image digest must eventually become the promotion authority; mutable tags are not sufficient for Real Staging/RC/pilot/GA promotion.
 
-## Test Results
+## Browser and visual qualification
 
-- **957 total tests**, 952 passed, 5 skipped (platform-conditional), **0 failures, 0 errors**
-- **0 known failures** — atexit bridge teardown race condition on Windows is resolved
-- Report: `docs/reports/pytest_result_final.txt`
+Current rendered HTTP/security coverage is **VQ-0 contract qualification**. It checks active public entry surfaces, Console delivery controls, Admin DOM/no-store contracts, security headers, quarantined legacy assets, and pinned Chart.js delivery.
 
-## Build Profiles
+A separate **Visual Qualification Gate V1 (VQ-1)** is the next near-term UI gate after release-truth reconciliation and before Real Staging. VQ-1 will run and present the complete user-visible program for systematic review of every page and active section, declared desktop/narrow viewports, relevant success/error/fail-closed/subscription states, and a screenshot/evidence matrix tied to an exact source SHA.
 
-```bash
-# Public (no CGT engine)
-docker build --target public -t processual-maestro:public .
+VQ-1 cannot close with unreviewed user-visible pages or active sections, or with unresolved Blocker/High visual defects.
 
-# Full (includes CGT engine — internal only)
-docker build --target full -t processual-maestro:full .
-```
+## Legacy and compatibility control
 
-## Upgrade Notes
+Legacy raw-math browser sources remain quarantined from active delivery and from the public runtime image while retained in source history for review. Compatibility-only routes/modules remain available only where external compatibility has not yet been proven safe to remove; qualification rejects new internal dependencies on those legacy surfaces.
 
-1. Update `.env` with all required variables (see `.env.production.example`)
-2. Set `JWT_SECRET` to a strong random string (min 32 characters)
-3. Set `CORS_ORIGINS` to explicit origins (comma-separated)
-4. Ensure `API_DEBUG=false` in production
-5. Rebuild Docker images with `docker compose build --no-cache`
-6. Run `python scripts/release_check.py` to validate deployment readiness
+Deletion is evidence-driven and never inferred from naming or age.
+
+## CAMARA
+
+CAMARA QoD remains qualified only for the currently exercised non-real/mock interoperability scope. It does not prove full operator/provider conformance, does not prove operator-network QoS, does not waive unresolved API gaps, and does not grant Real Staging or production authority.
+
+## Release truth and licensing
+
+Historical static test counts, coverage percentages, endpoint totals, or past readiness labels are not current release evidence. Current status must be taken from exact-head CI and governed qualification artifacts.
+
+The repository's product-distribution license remains an explicit owner/legal decision. README or dependency license statements alone do not establish external distribution authority. Root license artifact, package metadata, and documentation must be synchronized before external distribution.
+
+## Remaining gates
+
+Before production authority can be considered, the program still requires release-truth closure, VQ-1, opaque-reference topology approval and implementation, final public/private boundary migration, explicit license resolution, immutable release artifact/digest qualification, Real Staging, secret binding/rotation/audit, migration/backfill/backup/restore rehearsal, commercial E2E, load/concurrency/security/observability/rollback evidence, real provider/operator proof as applicable, release-candidate qualification, and a controlled pilot.
+
+## Authority
+
+This document does not grant staging, RC, pilot, GA, or production authority.
+
+- `GeneralPackagingComplete=false`
+- `PrivateRuntimeAuthorityGranted=false`
+- `runtime_connector_approved=false`
+- `provider_sandbox_proven=false`
+- `operator_network_qos_proven=false`
+- `RealStagingQualified=false`
+- `ProductionAuthorityGranted=false`

@@ -11,6 +11,18 @@ MIGRATION_PATH = (
     / "versions"
     / "20260805_0028_subscription_runtime_quotas_usage.py"
 )
+RETIREMENT_MIGRATION_PATH = (
+    ROOT
+    / "alembic"
+    / "versions"
+    / "20260822_0060_retire_legacy_subscription_quota.py"
+)
+RUNTIME_PERSISTENCE_PATH = (
+    ROOT
+    / "processual_api"
+    / "admin_marketplace"
+    / "subscription_runtime_persistence.py"
+)
 
 
 def _load_migration():
@@ -50,14 +62,17 @@ def test_subscription_runtime_migration_contains_security_constraints() -> None:
         assert marker in source
 
 
-def test_usage_ledger_has_no_update_or_delete_contract() -> None:
-    from processual_api.admin_marketplace.subscription_runtime_persistence import (
-        SqlAlchemySubscriptionUsageRepository,
-    )
+def test_legacy_usage_repository_is_retired_by_revision_0060() -> None:
+    runtime_source = RUNTIME_PERSISTENCE_PATH.read_text(encoding="utf-8")
+    retirement_source = RETIREMENT_MIGRATION_PATH.read_text(encoding="utf-8")
 
-    public_methods = {
-        name
-        for name, value in vars(SqlAlchemySubscriptionUsageRepository).items()
-        if callable(value) and not name.startswith("_")
-    }
-    assert public_methods == {"get_by_idempotency_hash", "add"}
+    assert "SqlAlchemySubscriptionUsageRepository" not in runtime_source
+    assert "SqlAlchemySubscriptionQuotaRepository" not in runtime_source
+    assert "AdminMarketSubscriptionUsageLedger" not in runtime_source
+    assert "AdminMarketSubscriptionQuotaAccount" not in runtime_source
+    assert 'revision: str = "20260822_0060"' in retirement_source
+    assert 'LEGACY_USAGE = "admin_market_subscription_usage_ledger"' in retirement_source
+    assert 'LEGACY_QUOTAS = "admin_market_subscription_quota_accounts"' in retirement_source
+    assert "_backfill_and_verify()" in retirement_source
+    assert "op.drop_table(LEGACY_USAGE)" in retirement_source
+    assert "op.drop_table(LEGACY_QUOTAS)" in retirement_source

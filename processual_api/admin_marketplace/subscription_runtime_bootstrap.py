@@ -3,20 +3,34 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Protocol
 
-from processual_api.admin_marketplace.subscription_billing_period import quota_period_end
+from processual_api.admin_marketplace.commercial_plan_projection import (
+    build_commercial_plan_projections,
+)
+from processual_api.admin_marketplace.subscription_authoritative_quota_bootstrap import (
+    AuthoritativeQuotaBootstrapInput,
+    AuthoritativeQuotaBootstrapUnitOfWork,
+    bootstrap_authoritative_quota_in_unit,
+)
 from processual_api.admin_marketplace.subscription_quota_profiles import (
     SubscriptionQuotaProfile,
     validate_quota_profile,
+)
+from processual_api.admin_marketplace.subscription_quota_rollover_persistence import (
+    AdminMarketSubscriptionQuotaCycle,
 )
 from processual_api.admin_marketplace.subscription_runtime import (
     SubscriptionRuntimeError,
 )
 from processual_api.admin_marketplace.subscription_runtime_persistence import (
-    AdminMarketSubscriptionQuotaAccount,
     AdminMarketSubscriptionRuntime,
+)
+from processual_api.billing.maestro_units import normalize_maestro_metric_code
+from processual_api.billing.plan_fulfillment_catalog import (
+    PLAN_FULFILLMENT_CATALOG_VERSION,
+    QUOTA_METRIC_CODE,
 )
 
 
@@ -33,30 +47,53 @@ class SubscriptionRuntimeBootstrapInput:
 @dataclass(frozen=True, slots=True)
 class SubscriptionRuntimeBootstrapResult:
     runtime: AdminMarketSubscriptionRuntime
-    quota_accounts: tuple[AdminMarketSubscriptionQuotaAccount, ...]
+    quota_cycles: tuple[AdminMarketSubscriptionQuotaCycle, ...]
     replayed: bool
 
 
-class SubscriptionRuntimeBootstrapUnitOfWork(Protocol):
-    subscription_runtime: object
-    subscription_quotas: object
-
-    async def __aenter__(self) -> SubscriptionRuntimeBootstrapUnitOfWork: ...
-    async def __aexit__(self, exc_type, exc, traceback) -> None: ...
-    async def commit(self) -> None: ...
+class SubscriptionRuntimeBootstrapUnitOfWork(
+    AuthoritativeQuotaBootstrapUnitOfWork,
+    Protocol,
+):
+    pass
 
 
-def _require_ref(value: str, name: str) -> str:
-    normalized = value.strip().lower()
-    if not normalized or len(normalized) > 128:
-        raise SubscriptionRuntimeError(f"{name} is invalid.")
-    return normalized
-
-
-def _require_aware(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        raise SubscriptionRuntimeError("runtime effective_at must be timezone-aware.")
-    return value.astimezone(UTC)
+def _projection_for_source(
+    *,
+    source: SubscriptionRuntimeBootstrapInput,
+    quota_profile: SubscriptionQuotaProfile,
+):
+    profile = validate_quota_profile(quota_profile)
+    entitlement_profile_ref = source.entitlement_profile_ref.strip().lower()
+    quota_profile_ref = source.quota_profile_ref.strip().lower()
+    matches = tuple(
+        projection
+        for projection in build_commercial_plan_projections()
+        if projection.entitlement_profile_ref == entitlement_profile_ref
+        and projection.quota_profile_ref == quota_profile_ref
+    )
+    if len(matches) != 1:
+        raise SubscriptionRuntimeError(
+            "commercial runtime bootstrap requires one authoritative plan projection."
+        )
+    projection = matches[0]
+    if profile.profile_ref != projection.quota_profile_ref:
+        raise SubscriptionRuntimeError(
+            "quota profile binding diverges from the authoritative plan projection."
+        )
+    if len(profile.metrics) != 1:
+        raise SubscriptionRuntimeError(
+            "commercial runtime bootstrap requires one canonical quota metric."
+        )
+    metric = profile.metrics[0]
+    if (
+        normalize_maestro_metric_code(metric.metric_code) != QUOTA_METRIC_CODE
+        or metric.limit_units != projection.monthly_unit_allowance
+    ):
+        raise SubscriptionRuntimeError(
+            "quota profile diverges from the authoritative plan fulfillment contract."
+        )
+    return projection, metric
 
 
 async def bootstrap_subscription_runtime_in_unit(
@@ -65,104 +102,32 @@ async def bootstrap_subscription_runtime_in_unit(
     quota_profile: SubscriptionQuotaProfile,
     uow: SubscriptionRuntimeBootstrapUnitOfWork,
 ) -> SubscriptionRuntimeBootstrapResult:
-    """Bootstrap runtime state without owning the surrounding transaction."""
+    """Bootstrap catalog subscription runtime and quota-cycle authority in one unit."""
 
-    customer_ref = _require_ref(source.customer_ref, "customer reference")
-    entitlement_profile_ref = _require_ref(
-        source.entitlement_profile_ref,
-        "entitlement profile reference",
+    projection, metric = _projection_for_source(
+        source=source,
+        quota_profile=quota_profile,
     )
-    quota_profile_ref = _require_ref(
-        source.quota_profile_ref,
-        "quota profile reference",
-    )
-    effective_at = _require_aware(source.effective_at)
-    profile = validate_quota_profile(quota_profile)
-
-    if source.subscription_status != "active":
-        raise SubscriptionRuntimeError(
-            "only an active subscription can bootstrap runtime access."
-        )
-    if profile.profile_ref != quota_profile_ref:
-        raise SubscriptionRuntimeError("quota profile binding mismatch.")
-
-    existing = await uow.subscription_runtime.get_by_subscription_id(
-        source.subscription_id,
-        for_update=True,
-    )
-    if existing is not None:
-        if (
-            existing.customer_ref != customer_ref
-            or existing.entitlement_profile_ref != entitlement_profile_ref
-            or existing.quota_profile_ref != quota_profile_ref
-            or existing.access_stage != "active"
-        ):
-            raise SubscriptionRuntimeError(
-                "runtime replay conflicts with the original subscription binding."
-            )
-        accounts = []
-        for metric in profile.metrics:
-            account = await uow.subscription_quotas.get_current(
-                subscription_id=source.subscription_id,
-                metric_code=metric.metric_code,
-                occurred_at=effective_at,
-                for_update=True,
-            )
-            if account is None:
-                raise SubscriptionRuntimeError(
-                    "runtime replay is missing an expected quota account."
-                )
-            if (
-                account.customer_ref != customer_ref
-                or account.quota_profile_ref != quota_profile_ref
-                or account.limit_units != metric.limit_units
-            ):
-                raise SubscriptionRuntimeError(
-                    "quota replay conflicts with the original profile binding."
-                )
-            accounts.append(account)
-        return SubscriptionRuntimeBootstrapResult(
-            runtime=existing,
-            quota_accounts=tuple(accounts),
-            replayed=True,
-        )
-
-    runtime = AdminMarketSubscriptionRuntime(
-        id=uuid.uuid4(),
-        subscription_id=source.subscription_id,
-        customer_ref=customer_ref,
-        entitlement_profile_ref=entitlement_profile_ref,
-        quota_profile_ref=quota_profile_ref,
-        access_stage="active",
-        version=0,
-        effective_at=effective_at,
-    )
-    period_end = quota_period_end(
-        starts_at=effective_at,
-        period_days=profile.period_days,
-    )
-    accounts = tuple(
-        AdminMarketSubscriptionQuotaAccount(
-            id=uuid.uuid4(),
+    result = await bootstrap_authoritative_quota_in_unit(
+        source=AuthoritativeQuotaBootstrapInput(
             subscription_id=source.subscription_id,
-            customer_ref=customer_ref,
-            quota_profile_ref=quota_profile_ref,
+            customer_ref=source.customer_ref,
+            entitlement_profile_ref=projection.entitlement_profile_ref,
+            quota_profile_ref=projection.quota_profile_ref,
+            subscription_status=source.subscription_status,
+            effective_at=source.effective_at,
+            plan_code=projection.plan_code,
+            authority_version=PLAN_FULFILLMENT_CATALOG_VERSION,
+            entitlement_codes=projection.entitlement_codes,
             metric_code=metric.metric_code,
-            period_start=effective_at,
-            period_end=period_end,
-            limit_units=metric.limit_units,
-            used_units=0,
-            version=0,
-        )
-        for metric in profile.metrics
+            base_limit_units=metric.limit_units,
+        ),
+        uow=uow,
     )
-    uow.subscription_runtime.add(runtime)
-    for account in accounts:
-        uow.subscription_quotas.add(account)
     return SubscriptionRuntimeBootstrapResult(
-        runtime=runtime,
-        quota_accounts=accounts,
-        replayed=False,
+        runtime=result.runtime,
+        quota_cycles=(result.quota_cycle,),
+        replayed=result.replayed,
     )
 
 

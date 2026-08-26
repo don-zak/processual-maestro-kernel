@@ -1,0 +1,59 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+STATIC_ROOT = ROOT / "processual_api" / "static"
+SPLASH = STATIC_ROOT / "splash.html"
+PROOF = STATIC_ROOT / "splash_orchestration_proof.html"
+BOARD = STATIC_ROOT / "splash_reference_board.svg"
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_historical_orchestration_proof_is_retained_but_not_canonical():
+    assert PROOF.is_file()
+    proof = _read(PROOF)
+    assert "maestro_descent_gate_seen" in proof
+    assert "Enter Maestro" in proof
+
+
+def test_canonical_splash_is_now_the_reference_traced_hybrid():
+    source = _read(SPLASH)
+    required = [
+        'id="pcb-reference"', 'src="./splash_reference_board.svg"', 'id="signal-svg"',
+        "authoredSignalMap", "rebuildSignals", "getTotalLength", "getPointAtLength",
+        "requestAnimationFrame", "reference_outward_module_geometry",
+    ]
+    assert not [marker for marker in required if marker not in source]
+
+
+def test_reference_board_asset_is_present_and_dense():
+    board = _read(BOARD)
+    assert 'viewBox="0 0 1672 941"' in board
+    assert board.count("<path") >= 70
+    assert board.count("<circle") >= 12
+
+
+def test_canonical_splash_keeps_descent_gate_contract():
+    source = _read(SPLASH)
+    required = [
+        "maestro_descent_gate_seen",
+        "maestro_descent_gate_seen_at",
+        "sessionStorage.setItem",
+        "window.location.href = '/login'",
+        "All systems operational.",
+        "Enter Maestro",
+    ]
+    assert not [marker for marker in required if marker not in source]
+
+
+def test_hybrid_board_keeps_reduced_motion_guards():
+    source = _read(SPLASH)
+    required = [
+        "@media(prefers-reduced-motion:reduce)",
+        "reduceMotion.matches",
+        "reduceMotion.addEventListener?.('change',rebuildSignals)",
+        ".pulse{display:none}",
+    ]
+    assert not [marker for marker in required if marker not in source]

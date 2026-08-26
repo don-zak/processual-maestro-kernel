@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.auth.models import (
+    AuthAccountRecoveryRequest,
     AuthMfaFactor,
     AuthMfaRecoveryCode,
     AuthSession,
@@ -37,7 +38,18 @@ class SqlAlchemyMfaRepository:
             )
             .limit(1)
         )
-        return membership_id is not None
+        if membership_id is not None:
+            return True
+
+        completed_recovery_id = await self._session.scalar(
+            select(AuthAccountRecoveryRequest.id)
+            .where(
+                AuthAccountRecoveryRequest.user_id == user_id,
+                AuthAccountRecoveryRequest.state == "completed",
+            )
+            .limit(1)
+        )
+        return completed_recovery_id is not None
 
     async def active_factor_for_update(self, user_id: uuid.UUID) -> AuthMfaFactor | None:
         return await self._session.scalar(

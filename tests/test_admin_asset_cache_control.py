@@ -35,31 +35,31 @@ def _html_client() -> TestClient:
     return TestClient(app)
 
 
+def _assert_no_store(response) -> None:
+    assert response.headers['cache-control'] == 'no-store, no-cache, must-revalidate, max-age=0'
+    assert response.headers['pragma'] == 'no-cache'
+    assert response.headers['expires'] == '0'
+
+
 def test_admin_document_is_never_reused_from_stale_browser_cache() -> None:
     response = _client().get('/admin')
 
     assert response.status_code == 200
-    assert response.headers['cache-control'] == 'no-store, no-cache, must-revalidate, max-age=0'
-    assert response.headers['pragma'] == 'no-cache'
-    assert response.headers['expires'] == '0'
+    _assert_no_store(response)
 
 
 def test_admin_javascript_assets_are_never_reused_from_stale_browser_cache() -> None:
     response = _client().get('/console/js/admin_session.js?v=old-cache-key')
 
     assert response.status_code == 200
-    assert response.headers['cache-control'] == 'no-store, no-cache, must-revalidate, max-age=0'
-    assert response.headers['pragma'] == 'no-cache'
-    assert response.headers['expires'] == '0'
+    _assert_no_store(response)
 
 
-def test_non_admin_console_assets_keep_normal_cache_semantics() -> None:
+def test_all_console_assets_follow_no_store_security_boundary() -> None:
     response = _client().get('/console/js/client.js')
 
     assert response.status_code == 200
-    assert 'cache-control' not in response.headers
-    assert 'pragma' not in response.headers
-    assert 'expires' not in response.headers
+    _assert_no_store(response)
 
 
 def test_admin_html_always_loads_external_evaluation_dom_contract() -> None:

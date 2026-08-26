@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "qualification": "LEMON_SQUEEZY_PROVIDER_QUALIFICATION",
+  "status": "PREPARED_FOR_REAL_PROVIDER_EXECUTION",
+  "scope": "external_commercial_provider_preflight",
+  "provider": "lemon_squeezy",
+  "required_environment": [
+    "LEMONSQUEEZY_API_KEY",
+    "LEMONSQUEEZY_WEBHOOK_SECRET",
+    "LEMONSQUEEZY_STORE_ID"
+  ],
+  "required_repository_contracts": [
+    "processual_api/admin_marketplace/lemon_squeezy_secure_webhook_router.py",
+    "processual_api/admin_marketplace/lemon_squeezy_webhooks.py",
+    "processual_api/admin_marketplace/lemon_squeezy_binding_service.py",
+    "processual_api/admin_marketplace/commercial_offer_provider_binding.py",
+    "processual_api/admin_marketplace/lemon_squeezy_reconciliation_processor.py",
+    "processual_api/admin_marketplace/lemon_squeezy_subscription_reconciliation.py",
+    "processual_api/admin_marketplace/subscription_activation_service.py",
+    "processual_api/admin_marketplace/subscription_authoritative_quota_bootstrap.py"
+  ],
+  "required_real_provider_evidence": [
+    "test_mode_store_access",
+    "api_key_authenticated_request",
+    "verified_offer_variant_binding",
+    "https_webhook_delivery",
+    "valid_webhook_signature",
+    "authoritative_order_ref_match",
+    "provider_customer_ownership_match",
+    "provider_variant_match",
+    "amount_currency_match",
+    "webhook_replay_idempotency",
+    "subscription_activation",
+    "authoritative_quota_bootstrap",
+    "refund_or_cancellation_lifecycle",
+    "provider_failure_fail_closed"
+  ],
+  "secrets_recorded": false,
+  "real_provider_qualified": false,
+  "real_staging_qualified": false,
+  "production_authority_granted": false,
+  "commercial_launch": "NO_GO"
+}

@@ -335,7 +335,7 @@ async def test_usage_cannot_exceed_available_units() -> None:
 
 
 @pytest.mark.asyncio
-async def test_matching_replay_returns_existing_without_commit() -> None:
+async def test_matching_replay_commits_read_transaction_before_return() -> None:
     command = _command()
     existing = SimpleNamespace(
         quota_cycle_id=command.quota_cycle_id,
@@ -355,7 +355,7 @@ async def test_matching_replay_returns_existing_without_commit() -> None:
     result = await record(command)
 
     assert result is existing
-    assert uow.committed is False
+    assert uow.committed is True
 
 
 @pytest.mark.asyncio

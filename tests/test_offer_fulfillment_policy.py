@@ -37,6 +37,22 @@ def test_enterprise_offer_requires_review():
     assert policy["activation_policy"] == "manual_after_enterprise_review"
 
 
+def test_enterprise_deployment_is_never_self_service():
+    offer = {
+        "offer_id": "enterprise_deployment_contact",
+        "plan_id": "enterprise_deployment",
+    }
+
+    policy = classify_offer_fulfillment(offer)
+
+    assert policy["fulfillment_mode"] == "enterprise_review"
+    assert policy["requires_supervisor_review"] is True
+    assert policy["payment_required"] is False
+    assert policy["custom_quote_required"] is True
+    assert policy["checkout_mode"] == "contact_sales"
+    assert policy["activation_policy"] == "manual_after_enterprise_review"
+
+
 def test_policy_returns_copy_not_shared_state():
     offer = {"offer_id": "starter_monthly", "plan_id": "starter"}
 

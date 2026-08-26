@@ -24,6 +24,10 @@ from processual_api.cgt_governor.policy.engine import (
     PolicyEngine,
     map_to_governance_action,
 )
+from processual_api.integrations.private_evaluation_boundary import (
+    PrivateEvaluationUnavailableError,
+    SanitizedPrivateDecision,
+)
 
 
 def test_execution_fanout_policy_from_env_clamps_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -381,67 +385,50 @@ def test_policy_engine_history_distribution_recent_and_clear(monkeypatch: pytest
     assert engine.action_distribution == {}
 
 
-@pytest.mark.parametrize(
-    ("policy", "expected_fragment"),
-    [
-        ("repair_scaffold", "HYBRID"),
-        ("restructure", "DISTORTED"),
-        ("deepen_or_clarify", "TRANSIENT"),
-        ("accept", None),
-    ],
-)
-def test_govern_answer_routes_pipeline_and_repair_policy(
-    monkeypatch: pytest.MonkeyPatch,
-    policy: str,
-    expected_fragment: str | None,
-) -> None:
-    fate = SimpleNamespace(stability=0.8)
-    calls: dict[str, object] = {}
-
-    monkeypatch.setattr(governor_module, "maturity_score", lambda **kwargs: 0.7)
-    monkeypatch.setattr(governor_module, "premature_speed_risk", lambda **kwargs: 0.1)
-    monkeypatch.setattr(governor_module, "mature_speed_value", lambda **kwargs: 0.6)
-
-    def fake_fate(**kwargs):
-        calls["fate"] = kwargs
-        return fate
-
-    monkeypatch.setattr(governor_module, "compute_fate_vector", fake_fate)
-    monkeypatch.setattr(governor_module, "cgt_reward", lambda **kwargs: 0.87654)
-    monkeypatch.setattr(governor_module, "classify_rank", lambda _fate: SimpleNamespace(value="stable"))
-    monkeypatch.setattr(governor_module, "decide_policy", lambda _rank: policy)
-    monkeypatch.setattr(governor_module, "policy_info", lambda _policy: {"label": "Label", "description": "Description"})
-    monkeypatch.setattr(governor_module, "build_hybrid_repair_prompt", lambda answer, language: f"HYBRID:{language}:{answer}")
-    monkeypatch.setattr(governor_module, "build_distortion_repair_prompt", lambda answer, language: f"DISTORTED:{language}:{answer}")
-    monkeypatch.setattr(governor_module, "build_transient_deepen_prompt", lambda answer, language: f"TRANSIENT:{language}:{answer}")
-
-    result = governor_module.govern_answer(
-        "answer",
-        compatibility=0.9,
-        coherence=0.8,
-        structural_support=0.7,
-        usefulness=0.6,
-        complexity=0.5,
-        fatigue=0.2,
-        shock=0.1,
-        lift=0.4,
-        novelty=0.3,
-        no_answer=0.0,
-        hallucination=0.0,
-        constraint_failure=0.0,
-        speed=0.75,
-        language="ar",
+def _decision(rank: str) -> SanitizedPrivateDecision:
+    return SanitizedPrivateDecision(
+        existence_rank=f"rank:{rank}",
+        dominant_constraint="constraint:public-safe",
+        next_gate="gate:review",
+        confidence_band="confidence:bounded",
+        explanation_code="explanation:approved",
+        policy_version="policy:v1",
     )
 
-    assert result.answer == "answer"
-    assert result.fate is fate
-    assert result.reward == 0.8765
+
+def test_legacy_govern_answer_fails_closed_without_private_boundary() -> None:
+    with pytest.raises(PrivateEvaluationUnavailableError, match="private_evaluation_unavailable"):
+        governor_module.govern_answer("answer", compatibility=0.9, coherence=0.8)
+
+
+@pytest.mark.parametrize(
+    ("rank", "policy", "repair_fragment"),
+    [
+        ("stable", "accept", None),
+        ("hybrid", "repair_scaffold", "Preserve the correct core"),
+        ("distorted", "restructure", "Rebuild from scratch"),
+        ("transient", "deepen_or_clarify", "Deepen it without unnecessary length"),
+    ],
+)
+def test_govern_sanitized_decision_routes_public_policy_and_repairs(
+    rank: str,
+    policy: str,
+    repair_fragment: str | None,
+) -> None:
+    result = governor_module.govern_sanitized_decision(
+        "answer",
+        _decision(rank),
+        language="en",
+    )
+
+    assert result.rank.value == rank
     assert result.policy == policy
-    assert result.policy_label == "Label"
-    assert result.policy_description == "Description"
-    if expected_fragment is None:
+    assert result.dominant_constraint == "constraint:public-safe"
+    assert result.next_gate == "gate:review"
+    assert result.confidence_band == "confidence:bounded"
+    assert result.explanation_code == "explanation:approved"
+    assert result.policy_version == "policy:v1"
+    if repair_fragment is None:
         assert result.repair_prompt is None
     else:
-        assert result.repair_prompt == f"{expected_fragment}:ar:answer"
-    assert calls["fate"]["complexity"] == 0.5
-    assert calls["fate"]["compatibility"] == 0.9
+        assert repair_fragment in result.repair_prompt

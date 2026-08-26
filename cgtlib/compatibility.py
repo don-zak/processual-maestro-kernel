@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from cgtlib.private import compute as _compute
+from cgtlib._fallback import compute_compatibility as _compute_compatibility
 
 
 def compute_compatibility(
-    source_features: dict[str, float], target_features: dict[str, float], weights: dict[str, float] | None = None
+    source_features: dict[str, float],
+    target_features: dict[str, float],
+    weights: dict[str, float] | None = None,
 ) -> float:
-    return _compute.compute_compatibility(source_features, target_features, weights)
+    return _compute_compatibility(source_features, target_features, weights)

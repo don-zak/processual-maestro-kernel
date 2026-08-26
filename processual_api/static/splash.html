@@ -4,282 +4,73 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Processual Maestro Kernel v2.0.0</title>
-<link rel="icon" type="image/svg+xml" href="/console/favicon.svg">
-<link rel="apple-touch-icon" href="/console/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{--void:#080b0f;--surface-0:#111620;--amber:#f5a623;--amber-dim:#c47f10;--amber-glow:rgba(245,166,35,0.2);--text:#c8d8f0;--bright:#e8f0fc;--muted:#3d5070;--ghost:#5a7299;--soft:#8aa3c8;--ok:#22d3a0;--error:#f87171;--warn:#fbbf24;--rim:#2a3650;--font-display:'Syne',sans-serif;--font-mono:'Space Mono',monospace;--font-data:'DM Mono',monospace}
-body{background:var(--void);color:var(--text);font-family:var(--font-display);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased}
-#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
-#bg-gradient{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 60% 50% at 50% 40%,rgba(245,166,35,0.04) 0%,transparent 70%)}
-.splash-wrap{position:relative;z-index:2;width:100%;max-width:520px;padding:20px;animation:fadeIn 1s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.card{background:rgba(22,29,42,0.65);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(42,54,80,0.6);border-radius:20px;padding:48px 40px 36px;box-shadow:0 8px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(245,166,35,0.06)}
-.logo-area{text-align:center;margin-bottom:28px}
-#logo-svg{width:80px;height:80px;margin:0 auto;animation:logoFloat 4s ease-in-out infinite}
-@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-#logo-svg svg{width:80px;height:80px;filter:drop-shadow(0 0 20px rgba(245,166,35,0.15))}
-#logo-svg .hex-outer{stroke:#f5a623;stroke-width:1.5;fill:rgba(245,166,35,0.06);animation:glowPulse 3s ease-in-out infinite}
-#logo-svg .hex-inner{stroke:#f5a623;stroke-width:1;fill:none;opacity:0.6;animation:spinSlow 12s linear infinite;transform-origin:16px 16px}
-#logo-svg .hex-dot{fill:#f5a623;animation:dotPulse 2s ease-in-out infinite}
-@keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 4px rgba(245,166,35,0.2))}50%{filter:drop-shadow(0 0 16px rgba(245,166,35,0.45))}}
-@keyframes spinSlow{to{transform:rotate(360deg)}}
-@keyframes dotPulse{0%,100%{r:2.5;opacity:1}50%{r:3.5;opacity:0.7}}
-.logo-text{margin-top:14px}
-.logo-text .m{font-size:26px;font-weight:800;color:var(--bright);letter-spacing:3px;font-family:var(--font-display)}
-.logo-text .m span{color:var(--amber)}
-.logo-text .s{font-size:10px;color:var(--ghost);letter-spacing:4px;text-transform:uppercase;font-family:var(--font-data);margin-top:3px}
-#tagline-wrap{height:40px;display:flex;align-items:center;justify-content:center;margin-bottom:24px}
-#tagline{font-family:var(--font-data);font-size:13px;color:var(--soft);text-align:center;letter-spacing:0.04em;min-height:1.4em}
-#tagline .cursor{display:inline-block;width:2px;height:15px;background:var(--amber);margin-left:2px;animation:cursorBlink 0.7s step-end infinite;vertical-align:text-bottom}
-@keyframes cursorBlink{0%,100%{opacity:1}50%{opacity:0}}
-.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:28px}
-.status-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(17,22,32,0.6);border:1px solid var(--rim);border-radius:10px;transition:all 0.3s}
-.status-item .si-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:all 0.5s}
-.status-item .si-dot.loading{background:var(--muted);animation:pulseLoad 1s ease infinite}
-.status-item .si-dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.status-item .si-dot.off{background:var(--error);box-shadow:0 0 8px var(--error)}
-@keyframes pulseLoad{0%,100%{opacity:0.3}50%{opacity:1}}
-.status-item .si-label{font-family:var(--font-data);font-size:11px;color:var(--ghost);letter-spacing:0.06em}
-.status-item .si-status{font-family:var(--font-mono);font-size:9px;margin-left:auto;text-transform:uppercase;letter-spacing:0.08em}
-.status-item .si-status.loading{color:var(--muted)}
-.status-item .si-status.on{color:var(--ok)}
-.status-item .si-status.off{color:var(--error)}
-#progress-wrap{margin-bottom:28px}
-#progress-bar{width:100%;height:3px;background:var(--surface-0);border-radius:99px;overflow:hidden;position:relative}
-#progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--amber-dim),var(--amber),var(--amber-dim));border-radius:99px;transition:width 0.4s ease;position:relative}
-#progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);animation:shimmer 2s infinite}
-@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-#progress-text{font-family:var(--font-data);font-size:10px;color:var(--muted);text-align:center;margin-top:6px;letter-spacing:0.08em;transition:opacity 0.3s}
-.btn-area{text-align:center}
-#launch-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 36px;background:linear-gradient(135deg,var(--amber),#e0a020);border:none;border-radius:12px;color:var(--void);font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all 0.3s;text-transform:uppercase;opacity:0;transform:translateY(10px);pointer-events:none}
-#launch-btn.visible{opacity:1;transform:translateY(0);pointer-events:auto}
-#launch-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(245,166,35,0.35)}
-#launch-btn:active{transform:translateY(0)}
-#launch-btn .btn-arrow{font-size:18px;transition:transform 0.3s}
-#launch-btn:hover .btn-arrow{transform:translateX(4px)}
-.lang-bar{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:24px}
-.lang-btn{background:transparent;border:1px solid transparent;color:var(--muted);font-family:var(--font-data);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;transition:all 0.2s;letter-spacing:0.08em;text-transform:uppercase}
-.lang-btn.active{color:var(--amber);border-color:var(--amber-line,rgba(245,166,35,0.3));background:rgba(245,166,35,0.06)}
-.lang-btn:hover:not(.active){color:var(--soft);border-color:var(--rim)}
-.footer{text-align:center;margin-top:20px;font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:1.5px}
-.footer .v{color:var(--ghost)}
-[dir="rtl"] .status-item .si-status{margin-left:0;margin-right:auto}
-[dir="rtl"] #launch-btn .btn-arrow{transform:rotate(180deg)}
-[dir="rtl"] #launch-btn:hover .btn-arrow{transform:rotate(180deg) translateX(4px)}
-@media(max-width:480px){.card{padding:32px 24px 28px}.logo-text .m{font-size:20px;letter-spacing:2px}#logo-svg{width:64px;height:64px}#logo-svg svg{width:64px;height:64px}.status-grid{grid-template-columns:1fr}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--stage-width:1672;--stage-height:941;--void:#020712;--navy:#031426;--deep:#082642;--amber:#f5a623;--amber-hot:#ffc65c;--cyan:#36bfff;--cyan-hot:#8bddff;--teal:#23d8c8;--lime:#a7d67b;--violet:#c16fff;--text:#dbe8f7;--soft:#91a9c6;--ghost:#526986;--ok:#24d6a3;--display:system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"Consolas","SFMono-Regular",monospace}
+html,body{width:100%;height:100%;background:var(--void)}
+body{overflow:hidden;color:var(--text);font-family:var(--display);-webkit-font-smoothing:antialiased;background:#020712}
+#stage-host{position:fixed;inset:0;overflow:hidden;background:radial-gradient(ellipse 78% 76% at 50% 44%,#092644 0%,#041426 48%,#020712 100%)}
+.maestro-reference-stage{--safe-y:0px;--safe-x:0px;--header-drop:0px;--footer-lift:0px;--telemetry-lift:0px;position:absolute;left:50%;top:50%;width:1672px;height:941px;transform-origin:center center;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse 54% 58% at 50% 45%,rgba(9,41,72,.55),rgba(3,18,34,.46) 54%,rgba(2,7,18,.86) 100%)}
+#board{position:relative;width:100%;height:100%}
+#pcb-reference{position:absolute;inset:0;width:1672px;height:941px;z-index:1;pointer-events:none;user-select:none;opacity:.88}
+/* selective trace pruning veil */
+#board::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse 34% 49% at 50% 46%,rgba(2,7,18,.20) 0%,rgba(2,7,18,.10) 42%,transparent 72%),linear-gradient(90deg,transparent 0 24%,rgba(2,7,18,.08) 31%,transparent 39% 61%,rgba(2,7,18,.07) 70%,transparent 78%);mix-blend-mode:normal}
+#signal-svg{position:absolute;inset:0;width:1672px;height:941px;z-index:6;pointer-events:none;overflow:visible}
+.signal-base,.signal-wake{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.signal-base{stroke-width:.95;opacity:.64;filter:drop-shadow(0 0 3px currentColor)}.signal-wake{stroke-width:2.3;opacity:.065;filter:blur(.45px)}.pulse{filter:drop-shadow(0 0 8px currentColor)}.via-node{filter:drop-shadow(0 0 6px currentColor)}.node-bloom{animation:nodeBloom 2.4s ease-in-out infinite}@keyframes nodeBloom{50%{r:3.5;opacity:1}}.destination-ack{animation:ackPulse 2.8s ease-in-out infinite}@keyframes ackPulse{50%{filter:brightness(1.28)}}
+/* adaptive safe bands keep reference chrome visible under cover-fit */
+.site-header{position:absolute;z-index:30;left:calc(22px + var(--safe-x));right:calc(22px + var(--safe-x));top:10px;height:46px;display:grid;grid-template-columns:300px 1fr 370px;align-items:center;border-bottom:1px solid rgba(73,124,171,.07);background:linear-gradient(180deg,rgba(2,7,18,.62),transparent);transform:translateY(var(--header-drop));transition:transform .18s ease}
+.brand{display:flex;align-items:center;gap:10px;color:#f2f7ff;text-decoration:none}.maestro-emblem{width:32px;height:32px;filter:drop-shadow(0 0 8px rgba(245,166,35,.28));flex:0 0 auto}.brand-word{font:800 16px var(--display);letter-spacing:.14em}.brand-word b{color:var(--amber)}
+.nav{display:flex;justify-content:center;gap:38px;font:8px var(--mono);letter-spacing:.08em;color:#d1dceb}.header-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px}.system-pill{min-width:184px;padding:7px 12px;border:1px solid rgba(54,191,255,.18);border-radius:5px;background:rgba(5,17,29,.62);font:7px var(--mono);letter-spacing:.05em;color:#a7bad1}.system-pill strong{display:block;margin-top:3px;color:var(--ok);font-weight:500}.system-pill strong::before{content:"●";margin-right:6px}.lang-dot{width:31px;height:31px;border:1px solid rgba(245,166,35,.42);border-radius:50%;display:grid;place-items:center;color:var(--amber);font:700 11px var(--mono)}.signin{padding:10px 22px;border:1px solid rgba(245,166,35,.62);border-radius:5px;color:#f8ecd8;background:rgba(245,166,35,.025);font:700 8px var(--display);letter-spacing:.12em;text-decoration:none}
+/* embedded segmented reference card rails */
+.module{--accent:var(--cyan);position:absolute;width:318px;height:143px;z-index:10;display:grid;align-items:center;padding:14px 17px;gap:12px;background:linear-gradient(145deg,rgba(3,14,26,.58),rgba(2,9,18,.46));outline:none;clip-path:polygon(16px 0,calc(100% - 31px) 0,100% 31px,100% calc(100% - 22px),calc(100% - 22px) 100%,16px 100%,0 calc(100% - 16px),0 16px);border:0;box-shadow:inset 0 0 30px color-mix(in srgb,var(--accent) 6%,transparent),inset 0 1px 0 color-mix(in srgb,var(--accent) 13%,transparent),inset 0 -10px 22px rgba(0,0,0,.16),0 1px 3px rgba(0,0,0,.18);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.module::before{content:"";position:absolute;inset:0;z-index:0;clip-path:inherit;pointer-events:none;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 68%,transparent) 0 38%,transparent 38% 57%,color-mix(in srgb,var(--accent) 38%,transparent) 57% 81%,transparent 81%) 20px 5px/calc(100% - 42px) 1.5px no-repeat,linear-gradient(90deg,color-mix(in srgb,var(--accent) 27%,transparent) 0 22%,transparent 22% 42%,color-mix(in srgb,var(--accent) 58%,transparent) 42% 73%,transparent 73%) 22px calc(100% - 6px)/calc(100% - 45px) 1px no-repeat,linear-gradient(180deg,color-mix(in srgb,var(--accent) 64%,transparent) 0 24%,transparent 24% 43%,color-mix(in srgb,var(--accent) 29%,transparent) 43% 62%,transparent 62% 78%,color-mix(in srgb,var(--accent) 54%,transparent) 78% 100%) 5px 18px/1.5px calc(100% - 35px) no-repeat,linear-gradient(180deg,color-mix(in srgb,var(--accent) 29%,transparent) 0 16%,transparent 16% 34%,color-mix(in srgb,var(--accent) 62%,transparent) 34% 56%,transparent 56% 75%,color-mix(in srgb,var(--accent) 36%,transparent) 75% 100%) calc(100% - 6px) 24px/1px calc(100% - 42px) no-repeat;filter:drop-shadow(0 0 2px color-mix(in srgb,var(--accent) 16%,transparent))}
+.module::after{content:"";position:absolute;inset:7px;z-index:0;clip-path:inherit;pointer-events:none;background:linear-gradient(90deg,transparent 0 9%,color-mix(in srgb,var(--accent) 22%,transparent) 9% 32%,transparent 32% 55%,color-mix(in srgb,var(--accent) 13%,transparent) 55% 86%,transparent 86%) top/100% 1px no-repeat,linear-gradient(90deg,color-mix(in srgb,var(--accent) 12%,transparent) 0 27%,transparent 27% 49%,color-mix(in srgb,var(--accent) 28%,transparent) 49% 70%,transparent 70%) bottom/100% 1px no-repeat;opacity:.82}
+.module.left{grid-template-columns:1fr 88px;text-align:left;transform:scale(.88);transform-origin:100% 50%}.module.right{grid-template-columns:88px 1fr;text-align:left;transform:scale(.88);transform-origin:0 50%}.copy{position:relative;z-index:3}.copy h3{display:flex;align-items:center;gap:7px;margin-bottom:7px;font:700 15px var(--display);color:#f4f8ff;letter-spacing:.01em}.copy p{font-size:11px;line-height:1.48;color:#d7e0ec;direction:ltr;text-align:left;max-width:195px}.copy small{display:block;margin-top:8px;font:8px var(--mono);letter-spacing:.1em;color:color-mix(in srgb,var(--accent) 84%,var(--soft))}.status-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 7px var(--accent)}
+.icon{position:relative;z-index:3;width:84px;height:84px;display:grid;place-items:center;color:var(--accent);filter:drop-shadow(0 0 9px color-mix(in srgb,var(--accent) 26%,transparent))}.icon::before,.icon::after{content:"";position:absolute;clip-path:polygon(25% 2%,75% 2%,98% 25%,98% 75%,75% 98%,25% 98%,2% 75%,2% 25%)}.icon::before{inset:0;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 11%,#0a1827),rgba(4,10,17,.94));border:1px solid color-mix(in srgb,var(--accent) 68%,#213f5c);box-shadow:inset 0 0 18px color-mix(in srgb,var(--accent) 9%,transparent)}.icon::after{inset:8px;border:1px solid color-mix(in srgb,var(--accent) 46%,#233f5e)}.icon svg{position:relative;z-index:4;width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.connector-pad{position:absolute;top:50%;z-index:12;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);transform:translateY(-50%)}.module.left .connector-pad{right:-3px}.module.right .connector-pad{left:-3px}
+/* reference_outward_module_geometry */
+#governance{left:78px;top:91px}#supervision{left:78px;top:268px}#calibration{left:78px;top:447px}#orchestration{left:78px;top:626px}#routing{right:78px;top:91px}#policy{right:78px;top:268px}#feedback{right:78px;top:447px}#control{right:78px;top:626px}
+/* elevated central processor */
+.core{position:absolute;left:642px;top:248px;width:388px;height:390px;z-index:19;transform:scale(1.045);transform-origin:50% 50%;filter:drop-shadow(0 16px 20px rgba(0,0,0,.34))}.core::before{content:"";position:absolute;inset:-20px;z-index:-1;border:1px solid rgba(139,221,255,.23);border-radius:31px;box-shadow:0 18px 36px rgba(0,0,0,.28),0 0 118px rgba(54,191,255,.22),0 0 48px rgba(255,198,92,.08),inset 0 0 40px rgba(54,191,255,.05)}.core::after{content:"";position:absolute;inset:-39px;z-index:-2;border:1px solid rgba(255,198,92,.06);border-radius:44px;background:radial-gradient(ellipse at 50% 56%,rgba(54,191,255,.07),transparent 68%);box-shadow:0 0 0 1px rgba(54,191,255,.03)}
+/* slim route-colored processor teeth */
+.pin-side,.pin-top,.pin-bottom{position:absolute;z-index:4;pointer-events:none}.pin-side{inset:-9px}.pin-side::before,.pin-side::after{content:"";position:absolute;top:3%;bottom:3%;width:4px;-webkit-mask:repeating-linear-gradient(0deg,transparent 0 5px,#000 5px 7px,transparent 7px 13px);mask:repeating-linear-gradient(0deg,transparent 0 5px,#000 5px 7px,transparent 7px 13px)}.pin-side::before{left:0;background:linear-gradient(180deg,#21c9ff 0 24%,#22dfcd 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%);filter:drop-shadow(0 0 3px rgba(33,201,255,.56))}.pin-side::after{right:0;background:linear-gradient(180deg,#f1a21d 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%);filter:drop-shadow(0 0 3px rgba(241,162,29,.56))}.pin-top,.pin-bottom{left:4%;right:4%;height:4px;-webkit-mask:repeating-linear-gradient(90deg,transparent 0 5px,#000 5px 7px,transparent 7px 13px);mask:repeating-linear-gradient(90deg,transparent 0 5px,#000 5px 7px,transparent 7px 13px)}.pin-top{top:-5px;background:linear-gradient(90deg,#20c7ff 0 24%,#1ee0cf 24% 44%,#33cfff 44% 50%,#f0a21f 50% 80%,#ffc24d 80% 100%);filter:drop-shadow(0 0 3px rgba(54,191,255,.44))}.pin-bottom{bottom:-5px;background:linear-gradient(90deg,#20c7ff 0 22%,#23d8c8 22% 34%,#c16fff 34% 48%,#36bfff 48% 57%,#f0a21f 57% 72%,#c16fff 72% 100%);filter:drop-shadow(0 0 3px rgba(193,111,255,.36))}.splash-wrap{position:relative;width:100%;height:100%}.card{height:100%;background:rgba(22,29,42,.68);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(72,106,145,.82);border-radius:21px;padding:18px 25px 17px;box-shadow:0 18px 44px rgba(0,0,0,.38),0 0 0 1px rgba(54,191,255,.19),0 0 82px rgba(54,191,255,.17),0 0 36px rgba(255,198,92,.07),inset 0 1px 0 rgba(245,166,35,.10),inset 0 -12px 24px rgba(1,7,14,.18)}
+.logo-area{text-align:center;margin-bottom:7px}.core-emblem{width:38px;height:38px;margin:0 auto 5px;filter:drop-shadow(0 0 9px rgba(245,166,35,.28))}.logo-text .m{font:44px Georgia,"Times New Roman",serif;letter-spacing:4.6px;color:#f2f4fb;text-shadow:0 2px 12px rgba(0,0,0,.4)}.logo-text .m span{color:var(--amber)}.identity-line{font:12px/1.3 var(--display);color:#12bde7;letter-spacing:.02em;margin-top:1px;direction:ltr}.identity-sub{font:12px/1.35 var(--display);color:#8299b7;margin-top:10px}.description{margin:9px auto 8px;border:1px solid rgba(54,191,255,.13);border-radius:5px;padding:8px 12px;font:10px/1.45 var(--display);color:#aabbd1;direction:ltr;text-align:center;max-width:338px;background:rgba(2,15,29,.2)}.status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}.status-item{display:flex;align-items:center;gap:5px;padding:6px;background:rgba(4,18,32,.6);border:1px solid rgba(54,191,255,.13);border-radius:5px}.si-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}.si-dot.loading{background:var(--ghost)}.si-dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}.si-label{font:6px var(--mono);color:#6f88a4}.si-status{font:6px var(--mono);margin-left:auto;text-transform:uppercase}.si-status.loading{color:var(--ghost)}.si-status.on{color:var(--ok)}#progress-wrap{display:none}.btn-area{text-align:center}#launch-btn{display:inline-flex;align-items:center;justify-content:center;gap:12px;width:274px;padding:11px 24px;background:linear-gradient(135deg,#f5a623,#e9a21f);border:none;border-radius:7px;color:#090b0f;font:700 12px var(--display);letter-spacing:2px;cursor:pointer;text-transform:uppercase;opacity:0;transform:translateY(5px);pointer-events:none;transition:.25s;box-shadow:0 5px 24px rgba(245,166,35,.18)}#launch-btn.visible{opacity:1;transform:none;pointer-events:auto}#launch-btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,166,35,.36)}.footer{text-align:center;margin-top:8px;font:7px var(--mono);color:#647b97;letter-spacing:1px}
+.execution{position:absolute;left:758px;top:695px;width:156px;height:112px;z-index:16;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--cyan)}.exec-node{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(139,221,255,.9);background:radial-gradient(circle,rgba(54,191,255,.34),rgba(5,12,20,.98) 65%);box-shadow:0 0 0 7px rgba(54,191,255,.04),0 0 50px rgba(54,191,255,.34)}.exec-node svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:1.8}.execution strong{font:700 13px var(--display);letter-spacing:.11em;color:#eef5ff}.execution span{font-size:10px;line-height:1.3;direction:ltr;color:#cad5e4;text-align:center}
+.telemetry-strip{position:absolute;z-index:9;left:70px;right:70px;bottom:64px;height:86px;display:grid;grid-template-columns:1fr 1fr .76fr .86fr .86fr 1fr;gap:10px;transform:translateY(calc(-1 * var(--telemetry-lift)));transition:transform .18s ease}.telemetry-card{position:relative;border:1px solid rgba(54,191,255,.12);background:linear-gradient(180deg,rgba(5,17,30,.5),rgba(2,9,18,.34));padding:8px 10px;overflow:hidden}.telemetry-card h4{font:7px var(--mono);letter-spacing:.1em;color:#718aa7;margin-bottom:6px}.telemetry-card strong{font:700 12px var(--mono);color:var(--cyan-hot)}.bars{position:absolute;left:10px;right:10px;bottom:8px;height:44px;display:flex;align-items:end;gap:5px}.bars i{flex:1;min-width:4px;background:linear-gradient(180deg,rgba(54,191,255,.56),rgba(54,191,255,.08));height:var(--h)}.spark{position:absolute;left:9px;right:9px;bottom:14px;height:34px;border-bottom:1px solid rgba(54,191,255,.1)}.spark::before{content:"";position:absolute;inset:0;background:linear-gradient(150deg,transparent 0 9%,rgba(54,191,255,.5) 9% 10%,transparent 10% 21%,rgba(54,191,255,.5) 21% 22%,transparent 22% 38%,rgba(54,191,255,.5) 38% 39%,transparent 39% 56%,rgba(54,191,255,.5) 56% 57%,transparent 57% 74%,rgba(54,191,255,.5) 74% 75%,transparent 75%)}.ring-card::before{content:"";position:absolute;width:48px;height:48px;border-radius:50%;left:13px;bottom:11px;background:conic-gradient(var(--teal) 0 98%,rgba(35,216,200,.07) 98% 100%)}.ring-card::after{content:"98%";position:absolute;left:25px;bottom:29px;font:8px var(--mono);color:#dff}.health-list{font:6px/1.35 var(--mono);padding-left:70px}.health-list b{display:block;color:var(--ok);font-weight:500}
+.site-footer{position:absolute;z-index:20;left:calc(22px + var(--safe-x));right:calc(22px + var(--safe-x));bottom:0;height:46px;border-top:1px solid rgba(73,124,171,.08);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;font:7px var(--mono);color:#526986;transform:translateY(calc(-1 * var(--footer-lift)));transition:transform .18s ease}.site-footer .center{display:flex;gap:22px}.site-footer .right{text-align:right}
+@media(prefers-reduced-motion:reduce){.pulse{display:none}.node-bloom,.destination-ack{animation:none!important}.signal-base,.signal-wake{transition:none!important}.site-header,.site-footer,.telemetry-strip{transition:none!important}}
 </style>
 </head>
 <body>
-<canvas id="bg-canvas"></canvas>
-<div id="bg-gradient"></div>
-<div class="splash-wrap">
-  <div class="card">
-    <div class="lang-bar">
-      <button class="lang-btn active" data-lang="en" id="lang-en">EN</button>
-      <span style="color:var(--rim);font-size:10px">|</span>
-      <button class="lang-btn" data-lang="ar" id="lang-ar">AR</button>
-    </div>
-
-    <div class="logo-area">
-      <div id="logo-svg">
-        <svg viewBox="0 0 32 32" fill="none">
-          <polygon class="hex-outer" points="16,1.5 28.5,9 28.5,23 16,30.5 3.5,23 3.5,9"/>
-          <polygon class="hex-inner" points="16,8 22,11.5 22,20.5 16,24 10,20.5 10,11.5"/>
-          <circle class="hex-dot" cx="16" cy="16" r="2.5" fill="#f5a623"/>
-        </svg>
-      </div>
-      <div class="logo-text">
-        <div class="m">MAESTRO<span>.</span></div>
-        <div class="s">PROCESSUAL KERNEL</div>
-      </div>
-    </div>
-
-    <div id="tagline-wrap">
-      <div id="tagline"></div>
-    </div>
-
-    <div class="status-grid">
-      <div class="status-item"><div class="si-dot loading" id="sd-api"></div><span class="si-label" data-en="API Server" data-ar="خادم API">API Server</span><span class="si-status loading" id="ss-api">loading</span></div>
-      <div class="status-item"><div class="si-dot loading" id="sd-db"></div><span class="si-label" data-en="Database" data-ar="قاعدة البيانات">Database</span><span class="si-status loading" id="ss-db">loading</span></div>
-      <div class="status-item"><div class="si-dot loading" id="sd-redis"></div><span class="si-label" data-en="Cache" data-ar="الذاكرة المؤقتة">Cache</span><span class="si-status loading" id="ss-redis">loading</span></div>
-      <div class="status-item"><div class="si-dot loading" id="sd-kernel"></div><span class="si-label" data-en="Kernel" data-ar="النواة">Kernel</span><span class="si-status loading" id="ss-kernel">loading</span></div>
-    </div>
-
-    <div id="progress-wrap">
-      <div id="progress-bar"><div id="progress-fill"></div></div>
-      <div id="progress-text" data-en="Initializing services..." data-ar="جاري تهيئة الخدمات...">Initializing services...</div>
-    </div>
-
-    <div class="btn-area">
-      <button id="launch-btn"><span data-en="Enter Maestro" data-ar="الدخول إلى مايسترو">Enter Maestro</span><span class="btn-arrow">→</span></button>
-    </div>
-
-    <div class="footer"><span class="v">v2.0.0</span> &nbsp;·&nbsp; <span data-en="Production Ready" data-ar="جاهز للإنتاج">Production Ready</span> &nbsp;·&nbsp; CGT v2</div>
-  </div>
-</div>
-
+<div id="stage-host"><main class="maestro-reference-stage" id="maestro-reference-stage"><div id="board">
+<img id="pcb-reference" src="./splash_reference_board.svg" alt="" aria-hidden="true"/>
+<svg id="signal-svg" aria-hidden="true"></svg>
+<header class="site-header"><a class="brand" href="#" aria-label="Maestro home"><svg class="maestro-emblem" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2 35 11v18L20 38 5 29V11z" fill="none" stroke="#f5a623" stroke-width="2"/><path d="M20 8 30 14v12L20 32 10 26V14z" fill="none" stroke="#f5a623" stroke-width="2"/><path d="M20 14 25 17v6l-5 3-5-3v-6z" fill="#f5a623"/></svg><span class="brand-word">MAESTRO<b>.</b></span></a><nav class="nav" aria-label="Primary"><span>PLATFORM⌄</span><span>SOLUTIONS⌄</span><span>RESOURCES⌄</span><span>ABOUT⌄</span><span>DOCS</span></nav><div class="header-actions"><div class="system-pill">SYSTEM STATUS<strong>ALL SYSTEMS OPERATIONAL</strong></div><span class="lang-dot">◎</span><a class="signin" href="/login">SIGN IN</a></div></header>
+<article class="module left" id="governance" tabindex="0" data-key="governance" data-color="#36bfff" style="--accent:#36bfff"><div class="copy"><h3>GOVERNANCE <i class="status-dot"></i></h3><p>Centralized AI policy, safety and performance control.</p><small>POLICY FIELD / ACTIVE</small></div><div class="icon"><svg viewBox="0 0 32 32"><path d="M16 4l9 4v7c0 6-3.8 10.4-9 13-5.2-2.6-9-7-9-13V8l9-4z"/><path d="M12 16l2.5 2.5L20.5 12"/></svg></div><span class="connector-pad destination-ack"></span></article>
+<article class="module left" id="supervision" tabindex="0" data-key="supervision" data-color="#23d8c8" style="--accent:#23d8c8"><div class="copy"><h3>SUPERVISION <i class="status-dot"></i></h3><p>Human oversight for agents, tasks and decisions.</p><small>OBSERVER LOOP / STREAMING</small></div><div class="icon"><svg viewBox="0 0 32 32"><path d="M3 16s5-8 13-8 13 8 13 8-5 8-13 8S3 16 3 16z"/><circle cx="16" cy="16" r="4"/></svg></div><span class="connector-pad destination-ack"></span></article>
+<article class="module left" id="calibration" tabindex="0" data-key="calibration" data-color="#a7d67b" style="--accent:#a7d67b"><div class="copy"><h3>CALIBRATION <i class="status-dot"></i></h3><p>Model tuning and profile optimization for best-fit performance.</p><small>CGT PROFILE / CALIBRATED</small></div><div class="icon"><svg viewBox="0 0 32 32"><path d="M6 9h20M6 16h20M6 23h20"/><circle cx="12" cy="9" r="2"/><circle cx="21" cy="16" r="2"/><circle cx="15" cy="23" r="2"/></svg></div><span class="connector-pad destination-ack"></span></article>
+<article class="module left" id="orchestration" tabindex="0" data-key="orchestration" data-color="#c16fff" style="--accent:#c16fff"><div class="copy"><h3>ORCHESTRATION <i class="status-dot"></i></h3><p>Task and agent coordination across scalable workflows.</p><small>FLOW GRAPH / SYNCHRONIZED</small></div><div class="icon"><svg viewBox="0 0 32 32"><circle cx="16" cy="6" r="2.5"/><circle cx="7" cy="23" r="2.5"/><circle cx="25" cy="23" r="2.5"/><circle cx="16" cy="16" r="2.5"/><path d="M16 8.5V13.5M14 17.5L9 21M18 17.5l5 3.5"/></svg></div><span class="connector-pad destination-ack"></span></article>
+<article class="module right" id="routing" tabindex="0" data-key="routing" data-color="#e59a20" style="--accent:#e59a20"><span class="connector-pad destination-ack"></span><div class="icon"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="3"/><circle cx="16" cy="5" r="2"/><circle cx="6" cy="23" r="2"/><circle cx="26" cy="23" r="2"/><path d="M16 7v6M14 18L8 22M18 18l6 4"/></svg></div><div class="copy"><h3><i class="status-dot"></i> ROUTING</h3><p>Intelligent routing for requests, tasks and optimal agent selection.</p><small>ROUTE FABRIC / READY</small></div></article>
+<article class="module right" id="policy" tabindex="0" data-key="policy" data-color="#e59a20" style="--accent:#e59a20"><span class="connector-pad destination-ack"></span><div class="icon"><svg viewBox="0 0 32 32"><path d="M7 5h14l4 4v18H7z"/><path d="M11 11h8M11 16h8M11 21h5"/><circle cx="22" cy="22" r="4"/><path d="M20.5 22l1 1 2-2"/></svg></div><div class="copy"><h3><i class="status-dot"></i> POLICY ENGINE</h3><p>Advanced policy enforcement for rules, approvals and automated decisions.</p><small>DECISION ENGINE / ARMED</small></div></article>
+<article class="module right" id="feedback" tabindex="0" data-key="feedback" data-color="#23d8c8" style="--accent:#23d8c8"><span class="connector-pad destination-ack"></span><div class="icon"><svg viewBox="0 0 32 32"><path d="M25 12a10 10 0 10.5 8"/><path d="M25 6v6h-6"/><path d="M7 20a10 10 0 0018-.5"/></svg></div><div class="copy"><h3><i class="status-dot"></i> FEEDBACK LOOP</h3><p>Continuous feedback and learning for improved outcomes.</p><small>LEARNING LOOP / CLOSED</small></div></article>
+<article class="module right" id="control" tabindex="0" data-key="control" data-color="#c16fff" style="--accent:#c16fff"><span class="connector-pad destination-ack"></span><div class="icon"><svg viewBox="0 0 32 32"><rect x="8" y="14" width="16" height="13" rx="2"/><path d="M11 14V10a5 5 0 0110 0v4"/><path d="M16 19v4"/></svg></div><div class="copy"><h3><i class="status-dot"></i> CONTROL GATES</h3><p>Authority, access and guardrail controls.</p><small>AUTHORITY GATES / SECURED</small></div></article>
+<section class="core" id="core"><div class="pin-side"></div><div class="pin-top"></div><div class="pin-bottom"></div><div class="splash-wrap"><div class="card"><div class="logo-area"><svg class="core-emblem" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2 35 11v18L20 38 5 29V11z" fill="none" stroke="#f5a623" stroke-width="2"/><path d="M20 8 30 14v12L20 32 10 26V14z" fill="none" stroke="#f5a623" stroke-width="2"/><path d="M20 14 25 17v6l-5 3-5-3v-6z" fill="#f5a623"/></svg><div class="logo-text"><div class="m">MAESTRO<span>.</span></div><div class="identity-line">Govern • Supervise • Calibrate • Orchestrate</div><div class="identity-sub">Agent Governance, Calibration &amp;<br/>Supervision Orchestration Platform</div></div></div><div class="description">A command platform for governing AI agents, calibrating behavior, supervising execution and coordinating enterprise workflows.</div><div id="tagline" hidden></div><div class="status-grid"><div class="status-item"><div class="si-dot loading" id="sd-api"></div><span class="si-label">API Server</span><span class="si-status loading" id="ss-api">loading</span></div><div class="status-item"><div class="si-dot loading" id="sd-db"></div><span class="si-label">Database</span><span class="si-status loading" id="ss-db">loading</span></div><div class="status-item"><div class="si-dot loading" id="sd-redis"></div><span class="si-label">Cache</span><span class="si-status loading" id="ss-redis">loading</span></div><div class="status-item"><div class="si-dot loading" id="sd-kernel"></div><span class="si-label">Kernel</span><span class="si-status loading" id="ss-kernel">loading</span></div></div><div id="progress-wrap"><div id="progress-fill"></div><div id="progress-text">Initializing services...</div></div><div class="btn-area"><button id="launch-btn"><span>Enter Maestro</span><span>→</span></button></div><div class="footer"><span>v2.0.0</span> &nbsp;•&nbsp; Qualification Build &nbsp;•&nbsp; CGT v2</div></div></div></section>
+<section class="execution" id="execution" tabindex="0" data-key="execution" data-color="#36bfff"><div class="exec-node destination-ack"><svg viewBox="0 0 32 32"><path d="M11 7l14 9-14 9z"/></svg></div><strong>EXECUTION</strong><span>Controlled real-time execution<br/>for mission-critical tasks.</span></section>
+<section class="telemetry-strip" aria-hidden="true"><div class="telemetry-card"><h4>SYSTEM METRICS</h4><div class="bars"><i style="--h:42%"></i><i style="--h:70%"></i><i style="--h:55%"></i><i style="--h:86%"></i><i style="--h:63%"></i><i style="--h:92%"></i><i style="--h:74%"></i><i style="--h:98%"></i></div></div><div class="telemetry-card"><h4>THROUGHPUT</h4><div class="spark"></div><strong>+23.7%</strong></div><div class="telemetry-card"><h4>QUEUE DEPTH</h4><div class="bars"><i style="--h:35%"></i><i style="--h:48%"></i><i style="--h:62%"></i><i style="--h:45%"></i><i style="--h:72%"></i><i style="--h:58%"></i></div></div><div class="telemetry-card"><h4>LATENCY (P95)</h4><div class="spark"></div><strong>25.1 ms</strong></div><div class="telemetry-card"><h4>CONTROL PLANE</h4><div class="spark"></div><strong>ONLINE</strong></div><div class="telemetry-card ring-card"><h4>SYSTEM HEALTH</h4><div class="health-list"><b>GOVERNANCE</b><b>SUPERVISION</b><b>ROUTING</b><b>POLICY ENGINE</b><b>FEEDBACK LOOP</b><b>CONTROL GATES</b><b>ORCHESTRATION</b><b>EXECUTION</b></div></div></section>
+<footer class="site-footer"><span>© 2026 MAESTRO. All rights reserved.</span><div class="center"><span>Privacy Policy</span><span>Terms of Service</span><span>Security</span></div><span class="right">◎ English⌄</span></footer>
+</div></main></div>
 <script>
-// --- Particle Canvas ---
-const canvas = document.getElementById('bg-canvas');
-const ctx = canvas.getContext('2d');
-let W, H, particles = [];
-
-function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
-resize(); addEventListener('resize', resize);
-
-const COUNT = 80;
-const COLORS = ['rgba(245,166,35,', 'rgba(196,127,16,', 'rgba(232,240,252,'];
-
-class Particle {
-  constructor() { this.reset(); }
-  reset() {
-    this.x = Math.random() * W; this.y = Math.random() * H;
-    this.vx = (Math.random() - 0.5) * 0.3; this.vy = (Math.random() - 0.5) * 0.3;
-    this.r = Math.random() * 2 + 0.5;
-    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
-    this.alpha = Math.random() * 0.3 + 0.05;
-    this.life = 0; this.maxLife = Math.random() * 300 + 200;
-  }
-  update() {
-    this.x += this.vx; this.y += this.vy;
-    this.life++;
-    if (this.x < -10 || this.x > W + 10 || this.y < -10 || this.y > H + 10 || this.life > this.maxLife) this.reset();
-    if (this.x < 0) this.x = 0; if (this.x > W) this.x = W;
-    if (this.y < 0) this.y = 0; if (this.y > H) this.y = H;
-  }
-  draw() {
-    const fade = Math.min(1, (this.life / 60), ((this.maxLife - this.life) / 60));
-    ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-    ctx.fillStyle = this.color + (this.alpha * fade) + ')'; ctx.fill();
-  }
-}
-
-for (let i = 0; i < COUNT; i++) particles.push(new Particle());
-
-function drawParticles() {
-  ctx.clearRect(0, 0, W, H);
-  for (const p of particles) { p.update(); p.draw(); }
-  // connections
-  for (let i = 0; i < particles.length; i++) {
-    for (let j = i + 1; j < particles.length; j++) {
-      const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 120) {
-        ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y); ctx.lineTo(particles[j].x, particles[j].y);
-        ctx.strokeStyle = 'rgba(245,166,35,' + (0.04 * (1 - dist / 120)) + ')';
-        ctx.lineWidth = 0.5; ctx.stroke();
-      }
-    }
-  }
-  requestAnimationFrame(drawParticles);
-}
-drawParticles();
-
-// --- Boot Sequence ---
-const taglines = {
-  en: ['Initializing Processual Maestro Kernel...','Loading Adaptive Governance Toolkit...','Calibrating CGT v2 Fate Vectors...','Establishing Secure Channels...','System Ready — Orchestration Online'],
-  ar: ['جاري تشغيل نواة المايسترو...','تحميل أدوات الحوكمة التكيفية...','معايرة متجهات CGT v2...','تأسيس القنوات الآمنة...','النظام جاهز — الأوركسترا عبر الإنترنت']
-};
-const statusOrder = ['sd-api','sd-db','sd-redis','sd-kernel'];
-const statusLabels = {en:['API Server','Database','Cache','Kernel'],ar:['خادم API','قاعدة البيانات','الذاكرة المؤقتة','النواة']};
-
-let step = 0, lang = 'en', isComplete = false;
-
-const taglineEl = document.getElementById('tagline');
-const launchBtn = document.getElementById('launch-btn');
-const progressFill = document.getElementById('progress-fill');
-const progressText = document.getElementById('progress-text');
-
-function getText(key) {
-  const el = document.querySelector(`[data-${key}]`);
-  return el ? el.getAttribute('data-' + key) : '';
-}
-
-function typewriter(text, el, speed, cb) {
-  let i = 0; el.textContent = '';
-  const cursor = document.createElement('span'); cursor.className = 'cursor';
-  function type() {
-    if (i < text.length) { el.textContent = text.slice(0, i + 1); el.appendChild(cursor); i++; setTimeout(type, speed); }
-    else { if (cb) cb(); }
-  }
-  type();
-}
-
-function setStatusItem(id, state, label) {
-  const dot = document.getElementById(id);
-  const statusEl = document.getElementById(id.replace('sd-','ss-'));
-  if (!dot || !statusEl) return;
-  dot.className = 'si-dot ' + state;
-  statusEl.className = 'si-status ' + state;
-  statusEl.textContent = state === 'on' ? 'online' : state === 'off' ? 'offline' : 'loading';
-}
-
-function bootStep() {
-  if (step < 5) {
-    const idx = step;
-    const pct = ((idx + 1) / 5) * 100;
-    progressFill.style.width = pct + '%';
-    progressText.textContent = lang === 'en' ? taglines.en[idx] : taglines.ar[idx];
-    progressText.style.opacity = '1';
-
-    typewriter(lang === 'en' ? taglines.en[idx] : taglines.ar[idx], taglineEl, 20, () => {
-      if (idx < 4) {
-        setTimeout(() => { step++; bootStep(); }, 400);
-      } else {
-        // Mark all status online after final step
-        setTimeout(() => {
-          statusOrder.forEach(id => setStatusItem(id, 'on'));
-          progressFill.style.width = '100%';
-          progressText.textContent = lang === 'en' ? 'All systems operational.' : 'جميع الأنظمة جاهزة.';
-          isComplete = true;
-          launchBtn.classList.add('visible');
-        }, 500);
-      }
-    });
-
-    // Activate status items progressively
-    if (idx > 0 && idx <= 4) {
-      setStatusItem(statusOrder[idx - 1], 'on');
-    }
-  }
-}
-
-// --- Language ---
-function setLanguage(l) {
-  lang = l;
-  document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
-  document.documentElement.lang = l;
-  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === l));
-  document.querySelectorAll('[data-en]').forEach(el => {
-    if (el.hasAttribute('data-' + l)) el.textContent = el.getAttribute('data-' + l);
-  });
-  document.querySelectorAll('.status-item .si-label').forEach(el => {
-    if (el.hasAttribute('data-' + l)) el.textContent = el.getAttribute('data-' + l);
-  });
-  // Re-run current step if not complete
-  if (!isComplete) {
-    const idx = step;
-    if (idx < 5) {
-      progressText.textContent = l === 'en' ? taglines.en[idx] : taglines.ar[idx];
-    }
-  }
-}
-
-document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
-document.getElementById('lang-ar').addEventListener('click', () => setLanguage('ar'));
-
-launchBtn.addEventListener('click', () => {
-  sessionStorage.setItem('maestro_descent_gate_seen', '1');
-  sessionStorage.setItem('maestro_descent_gate_seen_at', new Date().toISOString());
-  window.location.href = '/login';
-});
-
-
-// --- Start ---
-setTimeout(() => { step = 0; bootStep(); }, 600);
+const fit_rule='reference-cover-1672x941';const stage=document.getElementById('maestro-reference-stage');let stageScale=1,worldWidth=1672;
+function fitStage(){const viewportWidth=innerWidth,viewportHeight=innerHeight;const scale=Math.max(viewportWidth/1672,viewportHeight/941);const visibleWorldWidth=viewportWidth/scale,visibleWorldHeight=viewportHeight/scale;const cropX=Math.max(0,(1672-visibleWorldWidth)/2),cropY=Math.max(0,(941-visibleWorldHeight)/2);const headerDrop=Math.max(0,cropY-8),footerLift=cropY,telemetryLift=Math.max(0,cropY-58);stageScale=scale;worldWidth=1672;stage.style.transform=`translate(-50%,-50%) scale(${scale})`;stage.style.setProperty('--safe-x',`${Math.max(0,cropX-8)}px`);stage.style.setProperty('--safe-y',`${cropY}px`);stage.style.setProperty('--header-drop',`${headerDrop}px`);stage.style.setProperty('--footer-lift',`${footerLift}px`);stage.style.setProperty('--telemetry-lift',`${telemetryLift}px`);stage.dataset.fit=fit_rule;stage.dataset.worldWidth='1672'}addEventListener('resize',fitStage,{passive:true});fitStage();
+const signalSvg=document.getElementById('signal-svg'),reduceMotion=matchMedia('(prefers-reduced-motion: reduce)'),NS='http://www.w3.org/2000/svg';let routes=[],raf=null;
+const signalDirection={governance:'outbound',policy:'outbound',routing:'outbound',supervision:'inbound',feedback:'inbound',calibration:'bidirectional',orchestration:'bidirectional',control:'roundtrip',execution:'downstream'};
+const authoredSignalMap={governance:['#36bfff','M396 162 H470 L510 184 H580 L618 218 H642'],supervision:['#23d8c8','M396 339 H468 L516 360 H574 L610 376 H642'],calibration:['#a7d67b','M396 518 H465 L515 500 H575 L612 484 H642'],orchestration:['#c16fff','M396 697 H464 L516 672 H577 L612 646 H642'],routing:['#e59a20','M1276 162 H1214 L1188 146 H1142 L1116 176 H1080 L1054 202 H1030'],policy:['#e59a20','M1276 339 H1221 L1190 365 H1140 L1112 342 H1084 L1054 382 H1030'],feedback:['#23d8c8','M1276 518 H1229 L1198 494 H1164 L1136 534 H1098 L1068 505 H1030'],control:['#c16fff','M1276 697 H1218 L1180 716 H1140 L1110 678 H1082 L1052 650 H1030'],execution:['#36bfff','M836 638 V672 L817 693 V718']};
+function E(n,a={}){const e=document.createElementNS(NS,n);for(const[k,v]of Object.entries(a))e.setAttribute(k,v);return e}
+function registerSignal(key,color,d){const wake=E('path',{d,class:'signal-wake',stroke:color}),main=E('path',{d,class:'signal-base',stroke:color,style:`color:${color}`}),node=E('circle',{cx:d.includes('1276')?'1276':d.includes('396')?'396':'836',cy:key==='execution'?'718':key==='governance'||key==='routing'?'162':key==='supervision'||key==='policy'?'339':key==='calibration'||key==='feedback'?'518':'697',r:'2.1',fill:color,class:'via-node node-bloom',style:`color:${color}`}),p1=E('circle',{r:'2.4',fill:color,class:'pulse',style:`color:${color}`}),p2=E('circle',{r:'1.5',fill:color,class:'pulse',style:`color:${color}`}),p3=E('circle',{r:'1.0',fill:color,class:'pulse',style:`color:${color}`});signalSvg.append(wake,main,node,p1,p2,p3);routes.push({key,main,p1,p2,p3,dir:signalDirection[key],phase:(routes.length*.137)%1,speed:.00004+(routes.length%4)*.000006})}
+function rebuildSignals(){if(raf)cancelAnimationFrame(raf);signalSvg.replaceChildren();routes=[];signalSvg.setAttribute('viewBox','0 0 1672 941');Object.entries(authoredSignalMap).forEach(([key,[color,d]])=>registerSignal(key,color,d));if(!reduceMotion.matches)animate(performance.now())}
+function semanticT(route,raw){if(route.dir==='inbound')return 1-raw;if(route.dir==='bidirectional')return raw<.5?raw*2:(1-raw)*2;if(route.dir==='roundtrip')return .5-.5*Math.cos(raw*Math.PI*2);return raw}
+function animate(now){for(const r of routes){const L=r.main.getTotalLength?.()||0;if(!L)continue;const raw=(r.phase+now*r.speed)%1,t=semanticT(r,raw),q=semanticT(r,(raw+.31)%1),s=semanticT(r,(raw+.63)%1),a=r.main.getPointAtLength(L*t),b=r.main.getPointAtLength(L*q),c=r.main.getPointAtLength(L*s);r.p1.setAttribute('cx',a.x);r.p1.setAttribute('cy',a.y);r.p2.setAttribute('cx',b.x);r.p2.setAttribute('cy',b.y);r.p3.setAttribute('cx',c.x);r.p3.setAttribute('cy',c.y)}raf=requestAnimationFrame(animate)}
+let rt;addEventListener('resize',()=>{clearTimeout(rt);fitStage();rt=setTimeout(rebuildSignals,100)},{passive:true});reduceMotion.addEventListener?.('change',rebuildSignals);requestAnimationFrame(()=>requestAnimationFrame(rebuildSignals));
+const taglines=['Initializing Processual Maestro Kernel...','Loading Adaptive Governance Toolkit...','Calibrating CGT v2 Fate Vectors...','Establishing Secure Channels...','System Ready — Orchestration Online'];const statusOrder=['sd-api','sd-db','sd-redis','sd-kernel'];let step=0,isComplete=false;const taglineEl=document.getElementById('tagline'),launchBtn=document.getElementById('launch-btn'),progressFill=document.getElementById('progress-fill'),progressText=document.getElementById('progress-text');function typewriter(text,el,speed,cb){let i=0;el.textContent='';function type(){if(i<text.length){el.textContent=text.slice(0,i+1);i++;setTimeout(type,speed)}else cb&&cb()}type()}function setStatusItem(id,state){const dot=document.getElementById(id),s=document.getElementById(id.replace('sd-','ss-'));if(!dot||!s)return;dot.className='si-dot '+state;s.className='si-status '+state;s.textContent=state==='on'?'online':state==='off'?'offline':'loading'}function bootStep(){if(step>=taglines.length)return;const idx=step;if(progressText)progressText.textContent=taglines[idx];typewriter(taglines[idx],taglineEl,8,()=>{if(idx<taglines.length-1){setTimeout(()=>{step++;bootStep()},140);return}setTimeout(()=>{statusOrder.forEach(id=>setStatusItem(id,'on'));if(progressText)progressText.textContent='All systems operational.';isComplete=true;launchBtn.classList.add('visible')},180)});if(idx>0&&idx<=statusOrder.length)setStatusItem(statusOrder[idx-1],'on')}launchBtn.addEventListener('click',()=>{if(!isComplete)return;sessionStorage.setItem('maestro_descent_gate_seen','1');sessionStorage.setItem('maestro_descent_gate_seen_at',new Date().toISOString());window.location.href = '/login'});setTimeout(()=>{step=0;bootStep()},220);
 </script>
 </body>
 </html>

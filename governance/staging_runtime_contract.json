@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "purpose": "Real-staging runtime configuration contract. This file contains names and policy only; never secret values.",
+  "environment_contract": {
+    "ENVIRONMENT": "production",
+    "API_DEBUG": "false",
+    "RATE_LIMIT_ENABLED": "true",
+    "AUDIT_ENABLED": "true"
+  },
+  "required_secret_env": [
+    "JWT_SECRET",
+    "API_KEYS",
+    "PROCESSUAL_CRYPTO_KEY_B64",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "MAESTRO_ADMIN_EMAIL",
+    "MAESTRO_ADMIN_PASSWORD",
+    "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
+    "GRAFANA_ADMIN_PASSWORD",
+    "AUTH_TOKEN_PEPPER",
+    "AUTH_RATE_LIMIT_PEPPER",
+    "AUTH_DELIVERY_KEY_RING_JSON",
+    "AUTH_DELIVERY_PROVIDER_TOKEN",
+    "AUTH_MFA_KEY_RING_JSON",
+    "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON"
+  ],
+  "required_non_secret_env": [
+    "CORS_ORIGINS",
+    "AUTH_DELIVERY_CURRENT_KEY_VERSION",
+    "AUTH_MFA_CURRENT_KEY_VERSION",
+    "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION",
+    "AUTH_PUBLIC_BASE_URL"
+  ],
+  "forbidden_values_case_insensitive": [
+    "",
+    "change_me",
+    "change_me_in_production",
+    "changeme",
+    "admin",
+    "password",
+    "processual",
+    "test",
+    "dev",
+    "default",
+    "secret",
+    "123456"
+  ],
+  "forbidden_cors_origins": ["*"],
+  "secret_delivery_authority": "external secret manager / deployment environment only",
+  "repository_secret_values_allowed": false,
+  "real_staging_qualified": false
+}

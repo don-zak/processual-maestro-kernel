@@ -15,10 +15,10 @@ def test_admin_route_is_served_separately_from_console() -> None:
 
 
 def test_login_routes_admin_to_admin_and_user_to_console() -> None:
-    source = LOGIN_HTML.read_text(encoding="utf-8")
+    source = "".join(LOGIN_HTML.read_text(encoding="utf-8").split())
 
-    assert "currentRole === 'admin' ? '/admin' : '/console'" in source
-    assert "JSON.stringify({ username: user, password: pass, role: currentRole })" in source
+    assert "window.location.href=currentRole==='admin'?'/admin':'/console'" in source
+    assert "JSON.stringify({username:user,password:pass,role:currentRole})" in source
 
 
 def test_admin_shell_exists_and_checks_admin_session() -> None:
@@ -53,6 +53,7 @@ def test_admin_shell_exists_and_checks_admin_session() -> None:
     assert "page-admin-usage" in nav_script
     assert "page-admin-program-progress" in nav_script
     assert "page-admin-system-health" in nav_script
+
 
 def test_admin_shell_is_not_pricing_or_checkout() -> None:
     html = ADMIN_HTML.read_text(encoding="utf-8").lower()
