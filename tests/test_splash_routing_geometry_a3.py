@@ -3,8 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "processual_api" / "static"
 SPLASH = STATIC / "splash.html"
-BLUEPRINT = STATIC / "splash_reference_blueprint.js"
-MODEL = STATIC / "splash_routing_model.js"
+TRACE = STATIC / "splash_reference_routes.js"
 ROUTING = STATIC / "splash_routing.js"
 LEGACY_BOARD = STATIC / "splash_reference_board.svg"
 
@@ -13,87 +12,55 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_legacy_external_routing_asset_is_not_canonical_anymore():
+def test_legacy_generated_routing_is_not_canonical_anymore():
     source = _read(SPLASH)
+    routing = _read(ROUTING)
     assert not LEGACY_BOARD.exists()
     assert 'id="pcb-reference"' not in source
-    assert "splash_reference_board.svg" not in source
-    assert "authoredSignalMap" not in source
-    assert 'id="pcb-board"' in source
-    assert 'id="pcb-routes"' in source
-    assert 'id="pcb-branches"' in source
-    assert 'id="pcb-terminals"' in source
-    assert 'id="pcb-pulses"' in source
-    assert 'src="./splash_routing.js"' in source
+    assert "authoredSignalMap" not in source + routing
+    assert "PINS.forEach(renderRoute)" not in routing
+    assert "sideFieldRoute" not in routing
+    assert "verticalFieldRoute" not in routing
 
 
-def test_every_root_route_is_created_from_a_pin_record():
-    source = _read(ROUTING)
-    assert "PINS.forEach(renderRoute)" in source
-    assert "'data-pin-id': pin.id" in source
-    assert "id: `route-${pin.id}`" in source
-    assert "buildRoute(pin)" in source
-
-
-def test_reference_breakout_is_explicit_before_any_corridor_spread():
-    source = _read(ROUTING)
-    model = _read(MODEL)
-    blueprint = _read(BLUEPRINT)
-    assert "breakout: Object.freeze({ side: 44, vertical: 34 })" in blueprint
-    assert "sideStem: REFERENCE_BLUEPRINT.breakout.side" in model
-    assert "verticalStem: REFERENCE_BLUEPRINT.breakout.vertical" in model
-    assert "const stemX = pin.x + dir * CONTRACT.sideStem" in source
-    assert "const points = [[pin.x, pin.y], [stemX, pin.y]]" in source
-    assert "const stemY = pin.y + dir * CONTRACT.verticalStem" in source
-    assert "const points = [[pin.x, pin.y], [pin.x, stemY]]" in source
-
-
-def test_side_spread_is_corridor_guided_and_progressive():
-    source = _read(ROUTING)
+def test_reference_pixels_are_piecewise_mapped_around_the_real_core():
+    routing = _read(ROUTING)
     required = [
-        "function corridorY(pin)",
-        "const cy = corridorY(pin)",
-        "const x1 = stemX + dir * Math.max(22, Math.round(reach * 0.22))",
-        "const x2 = stemX + dir * Math.max(48, Math.round(reach * 0.48))",
-        "const x3 = stemX + dir * Math.max(70, Math.round(reach * 0.74))",
-        "const y1 = lerp(pin.y, cy, 0.22)",
-        "const y2 = lerp(pin.y, cy, 0.54)",
-        "const y3 = lerp(pin.y, cy, 0.82)",
+        "const [REF_LEFT, REF_TOP, REF_RIGHT, REF_BOTTOM] = REF.core_reference_px",
+        "const TARGET = Object.freeze({ left: 624, top: 233, right: 1048, bottom: 653 })",
+        "function mapAxis(",
+        "function mapPoint([x, y])",
+        "REF.source_width",
+        "REF.source_height",
+        "STAGE.width",
+        "STAGE.height",
     ]
-    assert not [marker for marker in required if marker not in source]
+    assert not [marker for marker in required if marker not in routing]
 
 
-def test_top_and_bottom_are_not_vertical_forests_after_breakout():
-    source = _read(ROUTING)
-    required = [
-        "const centerBias = (pin.x - CORE.centerX) / 212",
-        "const outward = centerBias === 0",
-        "const x1 = pin.x + outward * (baseSpread * 0.35)",
-        "const x2 = pin.x + outward * (baseSpread + variantSpread * 0.35)",
-        "const x3 = pin.x + outward * (baseSpread + variantSpread)",
-    ]
-    assert not [marker for marker in required if marker not in source]
+def test_each_traced_segment_becomes_one_visible_svg_path():
+    trace = _read(TRACE)
+    routing = _read(ROUTING)
+    assert '"segment_count":166' in trace
+    assert "REFERENCE_ROUTE_TRACE.segments.forEach((segment, index) =>" in routing
+    assert "id: `reference-${segment.id}`" in routing
+    assert "d: pointsToD(points)" in routing
+    assert "'data-route-id': segment.id" in routing
+    assert "'data-source': 'pivot-reference-image'" in routing
 
 
-def test_branches_are_parent_linked_and_terminals_use_real_endpoints():
-    source = _read(ROUTING)
-    assert "'data-branch-parent': pin.id" in source
-    assert "const [x, y] = points[points.length - 1]" in source
-    assert "terminalsLayer.append(terminal(points, color))" in source
-    assert "terminalsLayer.append(terminal(branchPoints, color, true))" in source
+def test_only_two_visible_route_weights_are_used():
+    routing = _read(ROUTING)
+    assert "const ROUTE_WEIGHTS = Object.freeze({ thick: 1.08, thin: 0.66 })" in routing
+    assert "pcb-route-${weight}" in routing
+    assert "ROUTE_WEIGHTS[weight]" in routing
+    assert "micro" not in routing
 
 
-def test_pulses_follow_the_exact_visible_route_elements():
-    source = _read(ROUTING)
-    assert "pulseRoutes.push({ pin, route, color })" in source
-    assert "item.route.getTotalLength()" in source
-    assert "item.route.getPointAtLength" in source
-    assert "authoredSignalMap" not in source
-    assert "signal-geometry" not in source
-
-
-def test_no_third_route_weight_is_generated():
-    source = _read(ROUTING)
-    assert "ROUTE_WEIGHTS[pin.weight]" in source
-    assert "ROUTE_WEIGHTS.thin" in source
-    assert "micro" not in source
+def test_terminals_and_pulses_use_the_exact_traced_path_geometry():
+    routing = _read(ROUTING)
+    assert "const [x, y] = points[points.length - 1]" in routing
+    assert "item.route.getTotalLength()" in routing
+    assert "item.route.getPointAtLength" in routing
+    assert "authoredSignalMap" not in routing
+    assert "signal-geometry" not in routing
