@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import os
 import types
+from typing import TYPE_CHECKING
 
 from .base import BaseLLMAdapter
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
 
 
 class OpenAIAdapter(BaseLLMAdapter):
@@ -50,7 +54,7 @@ class OpenAIAdapter(BaseLLMAdapter):
             raise ImportError("live provider call disabled for test API key; mock the provider module")
 
         client = openai.AsyncOpenAI(api_key=api_key)
-        messages = []
+        messages: list[ChatCompletionMessageParam] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
