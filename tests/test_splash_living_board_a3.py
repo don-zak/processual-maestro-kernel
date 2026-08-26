@@ -132,7 +132,7 @@ def test_visual_trace_density_is_selectively_reduced_without_removing_live_seman
 def test_authored_board_has_reference_reconstruction_and_terminal_hierarchy():
     board = _board()
     required = [
-        'aria-label="Maestro authored PCB reference fabric v10 reference reconstruction"',
+        'aria-label="Maestro authored PCB reference fabric v11 pin-origin aligned fanout"',
         'reference reconstruction: three-zone flow topology',
         'core breakout zone: dense short fanout',
         'id="terminal-beacons"', 'filter="url(#terminalGlow)"',
@@ -144,6 +144,35 @@ def test_authored_board_has_reference_reconstruction_and_terminal_hierarchy():
     assert board.count('filter="url(#glowC)"') >= 8
     assert board.count('filter="url(#glowA)"') >= 8
     assert board.count('id="terminal-beacons"') == 1
+
+
+def test_reference_routes_begin_at_core_pin_edges_before_fanning_out():
+    board = _board()
+    required_pin_origins = [
+        'M642 286', 'M642 300', 'M642 314', 'M642 330', 'M642 346', 'M642 362',
+        'M642 382', 'M642 402', 'M642 422', 'M642 444', 'M642 466', 'M642 488',
+        'M642 510', 'M642 532', 'M642 554', 'M642 576', 'M642 598', 'M642 614',
+        'M1030 286', 'M1030 302', 'M1030 318', 'M1030 336', 'M1030 354', 'M1030 374',
+        'M1030 396', 'M1030 418', 'M1030 442', 'M1030 466', 'M1030 490', 'M1030 514',
+        'M1030 538', 'M1030 560', 'M1030 582', 'M1030 600', 'M1030 616',
+        'M690 248', 'M710 248', 'M730 248', 'M750 248', 'M770 248', 'M790 248',
+        'M810 248', 'M830 248', 'M850 248', 'M870 248', 'M890 248', 'M910 248',
+        'M930 248', 'M950 248', 'M970 248', 'M990 248',
+        'M704 640', 'M726 640', 'M748 640', 'M770 640', 'M792 640', 'M814 640',
+        'M836 640', 'M858 640', 'M880 640', 'M902 640', 'M924 640', 'M946 640', 'M968 640',
+    ]
+    assert not [m for m in required_pin_origins if m not in board]
+
+
+def test_reference_routes_have_aligned_near_core_segments_and_progressive_fanout():
+    board = _board()
+    required = [
+        'M642 286H610', 'M642 330H610', 'M642 444H610', 'M642 576H610',
+        'M1030 286H1062', 'M1030 336H1062', 'M1030 466H1062', 'M1030 600H1062',
+        'M690 248V210', 'M750 248V210', 'M850 248V210', 'M950 248V210',
+        'M704 640V680', 'M770 640V680', 'M858 640V680', 'M946 640V680',
+    ]
+    assert not [m for m in required if m not in board]
 
 
 def test_cover_fit_uses_adaptive_safe_bands_for_chrome_and_telemetry():
