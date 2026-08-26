@@ -32,7 +32,14 @@ class AnthropicAdapter(BaseLLMAdapter):
             from anthropic import AsyncAnthropic
 
             client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-            await client.models.list(limit=1)
+            models_api = getattr(client, "models", None)
+            if models_api is not None:
+                await models_api.list(limit=1)
+                return True
+            ping = getattr(client, "ping", None)
+            if ping is None:
+                return False
+            await ping()
             return True
         except Exception:
             return False
@@ -61,5 +68,5 @@ class AnthropicAdapter(BaseLLMAdapter):
         )
         if not response.content:
             return ""
-        first = response.content[0]
-        return first.text if first.type == "text" else ""
+        text = getattr(response.content[0], "text", None)
+        return text if isinstance(text, str) else ""
