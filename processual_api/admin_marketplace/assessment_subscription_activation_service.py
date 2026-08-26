@@ -134,15 +134,32 @@ class _AssessmentCommercialTermsRepository(Protocol):
 
 
 class AssessmentSubscriptionActivationUnitOfWork(Protocol):
-    assessment_quota_profiles: AssessmentQuotaProfileRepository
-    assessment_commercial_terms: _AssessmentCommercialTermsRepository
-    subscription_runtime: SubscriptionRuntimeRepository
-    subscription_quotas: SubscriptionQuotaRepository
-    plans: _PlanRepository
-    subscriptions: _SubscriptionRepository
-    entitlement_activations: _EntitlementActivationRepository
-    assessment_subscription_bindings: _AssessmentSubscriptionBindingRepository
-    commercial_audit: _CommercialAuditRepository
+    @property
+    def assessment_quota_profiles(self) -> AssessmentQuotaProfileRepository: ...
+
+    @property
+    def assessment_commercial_terms(self) -> _AssessmentCommercialTermsRepository: ...
+
+    @property
+    def subscription_runtime(self) -> SubscriptionRuntimeRepository: ...
+
+    @property
+    def subscription_quotas(self) -> SubscriptionQuotaRepository: ...
+
+    @property
+    def plans(self) -> _PlanRepository: ...
+
+    @property
+    def subscriptions(self) -> _SubscriptionRepository: ...
+
+    @property
+    def entitlement_activations(self) -> _EntitlementActivationRepository: ...
+
+    @property
+    def assessment_subscription_bindings(self) -> _AssessmentSubscriptionBindingRepository: ...
+
+    @property
+    def commercial_audit(self) -> _CommercialAuditRepository: ...
 
     async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type, exc, traceback) -> None: ...
