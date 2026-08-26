@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "processual_api" / "static"
 SPLASH = STATIC / "splash.html"
+BLUEPRINT = STATIC / "splash_reference_blueprint.js"
 MODEL = STATIC / "splash_routing_model.js"
 ROUTING = STATIC / "splash_routing.js"
 LEGACY = STATIC / "splash_reference_board.svg"
@@ -36,55 +37,58 @@ def test_model_represents_all_four_core_edges_as_active_pin_families():
     assert "export const PINS = Object.freeze(buildPins())" in model
 
 
-def test_module_reach_is_a_small_minority_and_field_routes_dominate():
+def test_reference_blueprint_makes_module_reach_a_small_minority():
+    blueprint = _read(BLUEPRINT)
     model = _read(MODEL)
-    assert "destinationRatioMax: 0.20" in model
-    assert model.count("indexes: [") == 8
-    assert "[13, 14, 15].includes(i)" in model
+    assert "destinationRatioMax: 0.16" in blueprint
+    assert "modulePins" in blueprint
+    assert "destinationRatioMax: REFERENCE_BLUEPRINT.destinationRatioMax" in model
     assert "destination.type === 'field'" in model
 
 
 def test_exactly_two_route_weight_classes_are_defined_and_rendered():
-    model = _read(MODEL)
+    blueprint = _read(BLUEPRINT)
     routing = _read(ROUTING)
-    assert "ROUTE_WEIGHTS = Object.freeze({ thick: 1.1, thin: 0.68 })" in model
+    assert "routeWeights: Object.freeze({ thick: 1.08, thin: 0.66 })" in blueprint
     assert "ROUTE_WEIGHTS[pin.weight]" in routing
     assert "ROUTE_WEIGHTS.thin" in routing
-    assert "micro" not in model
+    assert "micro" not in blueprint + routing
 
 
-def test_side_routes_have_parallel_breakout_before_staged_spread():
+def test_side_routes_have_parallel_breakout_before_reference_corridor_spread():
     routing = _read(ROUTING)
     required = [
         "const stemX = pin.x + dir * CONTRACT.sideStem",
         "const points = [[pin.x, pin.y], [stemX, pin.y]]",
-        "const x1 = stemX + dir * Math.round(reach * 0.26)",
-        "const x2 = stemX + dir * Math.round(reach * 0.56)",
-        "const x3 = stemX + dir * Math.round(reach * 0.82)",
-        "const o1 = spreadOffset(pin, 1)",
-        "const o2 = spreadOffset(pin, 2)",
-        "const o3 = spreadOffset(pin, 3)",
+        "function corridorY(pin)",
+        "const x1 = stemX + dir * Math.max(22, Math.round(reach * 0.22))",
+        "const x2 = stemX + dir * Math.max(48, Math.round(reach * 0.48))",
+        "const x3 = stemX + dir * Math.max(70, Math.round(reach * 0.74))",
     ]
     assert not [marker for marker in required if marker not in routing]
 
 
-def test_top_and_bottom_routes_use_the_same_staged_pin_logic():
+def test_top_and_bottom_routes_break_vertical_forest_after_stem():
     routing = _read(ROUTING)
     required = [
         "const stemY = pin.y + dir * CONTRACT.verticalStem",
         "const points = [[pin.x, pin.y], [pin.x, stemY]]",
-        "const y1 = stemY + dir * Math.round(reach * 0.27)",
-        "const y2 = stemY + dir * Math.round(reach * 0.58)",
-        "const y3 = stemY + dir * Math.round(reach * 0.84)",
+        "const centerBias = (pin.x - CORE.centerX) / 212",
+        "const x1 = pin.x + outward * (baseSpread * 0.35)",
+        "const x2 = pin.x + outward * (baseSpread + variantSpread * 0.35)",
+        "const x3 = pin.x + outward * (baseSpread + variantSpread)",
     ]
     assert not [marker for marker in required if marker not in routing]
 
 
-def test_field_routes_have_short_medium_and_long_bands():
-    model = _read(MODEL)
-    for marker in ["short: [82, 126]", "medium: [146, 218]", "long: [236, 322]"]:
-        assert marker in model
-    assert "function lengthClass(i)" in model
+def test_field_routes_have_reference_specific_short_medium_long_bands():
+    blueprint = _read(BLUEPRINT)
+    for marker in [
+        "sideReach: Object.freeze({ short: [58, 86], medium: [98, 136], long: [146, 188] })",
+        "topReach: Object.freeze({ short: [42, 66], medium: [76, 108], long: [118, 164] })",
+        "bottomReach: Object.freeze({ short: [38, 58], medium: [64, 92], long: [98, 132] })",
+    ]:
+        assert marker in blueprint
 
 
 def test_branches_are_controlled_and_begin_on_parent_geometry():
@@ -105,8 +109,8 @@ def test_terminal_beacons_are_bound_to_real_route_endpoints():
 def test_pulses_follow_selected_visible_routes_instead_of_duplicate_geometry():
     source = _read(SPLASH)
     routing = _read(ROUTING)
-    model = _read(MODEL)
-    assert "pulseRatioMax: 0.20" in model
+    blueprint = _read(BLUEPRINT)
+    assert "pulseRatioMax: 0.18" in blueprint
     assert "pulseRoutes.push({ pin, route, color })" in routing
     assert "item.route.getTotalLength()" in routing
     assert "item.route.getPointAtLength" in routing
