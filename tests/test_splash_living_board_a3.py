@@ -54,8 +54,8 @@ def test_authored_reference_board_is_dense_layered_asymmetric_and_breathable():
     ]
     assert not [m for m in required if m not in board]
     assert 'ring via clusters' not in board
-    assert board.count("<path") >= 95
-    assert board.count("<circle") >= 70
+    assert board.count("<path") >= 70
+    assert board.count("<circle") >= 45
 
 
 def test_production_splash_is_full_landing_page():
@@ -123,10 +123,13 @@ def test_visual_trace_density_is_selectively_reduced_without_removing_live_seman
     required = [
         "/* selective trace pruning veil */",
         "#pcb-reference{position:absolute;inset:0;width:1672px;height:941px;z-index:1;pointer-events:none;user-select:none;opacity:.88}",
-        ".signal-base{stroke-width:.95;opacity:.64", ".signal-wake{stroke-width:2.3;opacity:.065",
+        "/* pulse-only animation layer: visible routing lives exclusively in splash_reference_board.svg */",
+        ".signal-geometry{fill:none;stroke:none;pointer-events:none}",
         "p1=E('circle',{r:'2.4'", "p2=E('circle',{r:'1.5'", "p3=E('circle',{r:'1.0'",
     ]
+    forbidden = ["class:'signal-base'", "class:'signal-wake'", "class:'via-node node-bloom'"]
     assert not [m for m in required if m not in source]
+    assert not [m for m in forbidden if m in source]
 
 
 def test_authored_board_has_reference_reconstruction_and_terminal_hierarchy():
@@ -167,12 +170,30 @@ def test_reference_routes_begin_at_core_pin_edges_before_fanning_out():
 def test_reference_routes_have_aligned_near_core_segments_and_progressive_fanout():
     board = _board()
     required = [
-        'M642 286H610', 'M642 330H610', 'M642 444H610', 'M642 576H610',
-        'M1030 286H1062', 'M1030 336H1062', 'M1030 466H1062', 'M1030 600H1062',
-        'M690 248V210', 'M750 248V210', 'M850 248V210', 'M950 248V210',
-        'M704 640V680', 'M770 640V680', 'M858 640V680', 'M946 640V680',
+        'M642 286H612', 'M642 330H612', 'M642 444H612', 'M642 576H612',
+        'M1030 286H1060', 'M1030 336H1060', 'M1030 466H1060', 'M1030 600H1060',
+        'M690 248V214', 'M750 248V214', 'M850 248V214', 'M950 248V214',
+        'M704 640V676', 'M770 640V676', 'M858 640V676', 'M946 640V676',
     ]
     assert not [m for m in required if m not in board]
+
+
+def test_live_signal_geometry_is_core_origin_and_does_not_draw_second_routes():
+    source = _source()
+    required = [
+        "/* single-source PCB topology: invisible motion geometry exactly follows pin-origin authored routes */",
+        "governance:['#36bfff','M642 286H612", "supervision:['#23d8c8','M642 346H612",
+        "calibration:['#a7d67b','M642 488H612", "orchestration:['#c16fff','M642 614H612",
+        "routing:['#e59a20','M1030 286H1060", "policy:['#e59a20','M1030 354H1060",
+        "feedback:['#23d8c8','M1030 514H1060", "control:['#c16fff','M1030 616H1060",
+        "execution:['#36bfff','M836 640V768'", "class:'signal-geometry'",
+    ]
+    forbidden = [
+        "M396 162 H470", "M396 339 H468", "M1276 162 H1214", "M1276 339 H1221",
+        "const wake=E('path'", "class:'signal-base'", "class:'signal-wake'",
+    ]
+    assert not [m for m in required if m not in source]
+    assert not [m for m in forbidden if m in source]
 
 
 def test_cover_fit_uses_adaptive_safe_bands_for_chrome_and_telemetry():
@@ -205,8 +226,8 @@ def test_signal_layer_is_semantic_autonomous_and_not_mirrored():
     required = [
         "signalDirection", "governance:'outbound'", "supervision:'inbound'",
         "calibration:'bidirectional'", "control:'roundtrip'", "execution:'downstream'",
-        "semanticT(", "requestAnimationFrame(animate)", "signal-wake", "node-bloom",
-        "destination-ack", "p3=E('circle'", "M1276 162 H1214 L1188 146",
+        "semanticT(", "requestAnimationFrame(animate)", "destination-ack", "p3=E('circle'",
+        "M642 286H612", "M1030 286H1060",
     ]
     forbidden = ["mouseenter", "mouseleave", "focusRoute(", "classList.toggle('dim'"]
     assert not [m for m in required if m not in source]
