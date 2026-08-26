@@ -75,7 +75,9 @@ jobs:
             tests/test_auth_router_fail_closed_hardening.py \
             tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
             tests/test_lemon_squeezy_inbox_event_identity_a3.py \
-            tests/test_admin_marketplace_lemon_squeezy_security_regressions_a3.py
+            tests/test_admin_marketplace_lemon_squeezy_inbox_ingestion_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_security_regressions_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_uow_a3.py
 
       - name: Focused hardening Ruff
         run: |
@@ -94,4 +96,6 @@ jobs:
             tests/test_auth_router_fail_closed_hardening.py \
             tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
             tests/test_lemon_squeezy_inbox_event_identity_a3.py \
-            tests/test_admin_marketplace_lemon_squeezy_security_regressions_a3.py
+            tests/test_admin_marketplace_lemon_squeezy_inbox_ingestion_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_security_regressions_a3.py \
+            tests/test_admin_marketplace_lemon_squeezy_uow_a3.py
