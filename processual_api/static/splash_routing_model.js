@@ -1,3 +1,5 @@
+import { REFERENCE_BLUEPRINT, corridorFor } from './splash_reference_blueprint.js';
+
 export const STAGE = Object.freeze({ width: 1672, height: 941 });
 
 export const CORE = Object.freeze({
@@ -9,7 +11,7 @@ export const CORE = Object.freeze({
   centerY: 443,
 });
 
-export const ROUTE_WEIGHTS = Object.freeze({ thick: 1.1, thin: 0.68 });
+export const ROUTE_WEIGHTS = REFERENCE_BLUEPRINT.routeWeights;
 export const COLORS = Object.freeze({
   cyan: '#36bfff',
   teal: '#23d8c8',
@@ -19,18 +21,14 @@ export const COLORS = Object.freeze({
 });
 
 export const CONTRACT = Object.freeze({
-  version: 'A3-splash-routing-v20',
+  version: REFERENCE_BLUEPRINT.version,
   pinCount: 120,
-  destinationRatioMax: 0.20,
-  pulseRatioMax: 0.20,
-  branchRatioMax: 0.26,
-  sideStem: 46,
-  verticalStem: 38,
-  reach: {
-    short: [82, 126],
-    medium: [146, 218],
-    long: [236, 322],
-  },
+  destinationRatioMax: REFERENCE_BLUEPRINT.destinationRatioMax,
+  pulseRatioMax: REFERENCE_BLUEPRINT.pulseRatioMax,
+  branchRatioMax: REFERENCE_BLUEPRINT.branchRatioMax,
+  sideStem: REFERENCE_BLUEPRINT.breakout.side,
+  verticalStem: REFERENCE_BLUEPRINT.breakout.vertical,
+  reach: REFERENCE_BLUEPRINT.sideReach,
 });
 
 const SIDE_Y = Array.from({ length: 30 }, (_, i) => 254 + i * 13);
@@ -62,8 +60,8 @@ function edgeColor(side, i) {
 
 function lengthClass(i) {
   const slot = i % 20;
-  if (slot < 6) return 'short';
-  if (slot < 13) return 'medium';
+  if (slot < 7) return 'short';
+  if (slot < 14) return 'medium';
   return 'long';
 }
 
@@ -76,31 +74,23 @@ function pulseFor(i) {
 }
 
 function branchFor(i) {
-  return i % 5 === 2 || i % 11 === 4;
+  return i % 6 === 2 || i % 13 === 5;
 }
 
-const SIDE_DESTINATIONS = Object.freeze({
-  left: [
-    { indexes: [1, 5], target: 'governance', y: 162 },
-    { indexes: [9, 12], target: 'supervision', y: 339 },
-    { indexes: [17, 20], target: 'calibration', y: 518 },
-    { indexes: [25, 28], target: 'orchestration', y: 697 },
-  ],
-  right: [
-    { indexes: [1, 5], target: 'routing', y: 162 },
-    { indexes: [9, 12], target: 'policy', y: 339 },
-    { indexes: [17, 20], target: 'feedback', y: 518 },
-    { indexes: [25, 28], target: 'control', y: 697 },
-  ],
-});
-
 function destinationFor(side, i) {
-  const groups = SIDE_DESTINATIONS[side] || [];
-  for (const group of groups) {
-    const pos = group.indexes.indexOf(i);
-    if (pos >= 0) return { type: 'module', target: group.target, targetY: group.y + pos * 8 - 4 };
+  const moduleIndexes = REFERENCE_BLUEPRINT.modulePins[side] || [];
+  const matchIndex = moduleIndexes.indexOf(i);
+  if (matchIndex >= 0 && (side === 'left' || side === 'right')) {
+    const corridor = corridorFor(side, i);
+    if (corridor) {
+      const [minY, maxY] = corridor.targetY;
+      const slots = Math.max(1, moduleIndexes.filter(idx => idx >= corridor.range[0] && idx <= corridor.range[1]).length - 1);
+      const local = moduleIndexes.filter(idx => idx >= corridor.range[0] && idx <= corridor.range[1]).indexOf(i);
+      const targetY = Math.round(minY + ((maxY - minY) * (slots ? local / slots : 0.5)));
+      return { type: 'module', target: corridor.module, targetY };
+    }
   }
-  if (side === 'bottom' && [13, 14, 15].includes(i)) {
+  if (side === 'bottom' && moduleIndexes.includes(i)) {
     return { type: 'module', target: 'execution', targetY: 748 };
   }
   return { type: 'field', target: null, targetY: null };
@@ -111,8 +101,10 @@ export function buildPins() {
   SIDE_Y.forEach((y, i) => {
     for (const side of ['left', 'right']) {
       const destination = destinationFor(side, i);
+      const corridor = corridorFor(side, i);
       pins.push({
         id: `${side}-${String(i + 1).padStart(2, '0')}`,
+        index: i,
         side,
         x: side === 'left' ? CORE.left : CORE.right,
         y,
@@ -120,6 +112,7 @@ export function buildPins() {
         weight: weightFor(i),
         lengthClass: destination.type === 'module' ? 'destination' : lengthClass(i),
         destination,
+        corridor,
         branch: destination.type === 'field' && branchFor(i),
         pulse: pulseFor(i),
         variant: (i * 7 + (side === 'right' ? 3 : 0)) % 5,
@@ -131,6 +124,7 @@ export function buildPins() {
       const destination = destinationFor(side, i);
       pins.push({
         id: `${side}-${String(i + 1).padStart(2, '0')}`,
+        index: i,
         side,
         x,
         y: side === 'top' ? CORE.top : CORE.bottom,
@@ -138,6 +132,7 @@ export function buildPins() {
         weight: weightFor(i + 2),
         lengthClass: destination.type === 'module' ? 'destination' : lengthClass(i + 4),
         destination,
+        corridor: null,
         branch: destination.type === 'field' && branchFor(i + 3),
         pulse: pulseFor(i + 5),
         variant: (i * 9 + (side === 'bottom' ? 2 : 0)) % 5,
