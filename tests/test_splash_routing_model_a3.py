@@ -1,8 +1,8 @@
 from pathlib import Path
-import re
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "processual_api" / "static"
+BLUEPRINT = STATIC / "splash_reference_blueprint.js"
 MODEL = STATIC / "splash_routing_model.js"
 ROUTING = STATIC / "splash_routing.js"
 
@@ -11,51 +11,57 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_v20_model_uses_one_record_per_visible_pin_family():
-    source = _read(MODEL)
-    assert "A3-splash-routing-v20" in source
-    assert "pinCount: 120" in source
-    assert "const SIDE_Y = Array.from({ length: 30 }" in source
-    assert "const EDGE_X = Array.from({ length: 30 }" in source
-    assert "export const PINS = Object.freeze(buildPins())" in source
-    assert "id: `${side}-${String(i + 1).padStart(2, '0')}`" in source
+def test_v21_model_is_reference_blueprint_driven():
+    blueprint = _read(BLUEPRINT)
+    model = _read(MODEL)
+    assert "A3-splash-reference-blueprint-v21" in blueprint
+    assert "source: 'pivot-reference-image'" in blueprint
+    assert "import { REFERENCE_BLUEPRINT, corridorFor }" in model
+    assert "version: REFERENCE_BLUEPRINT.version" in model
+    assert "pinCount: 120" in model
+    assert "const SIDE_Y = Array.from({ length: 30 }" in model
+    assert "const EDGE_X = Array.from({ length: 30 }" in model
+    assert "export const PINS = Object.freeze(buildPins())" in model
 
 
-def test_destination_routes_are_explicitly_the_minority():
-    source = _read(MODEL)
-    assert "destinationRatioMax: 0.20" in source
-    side_destination_indexes = re.findall(r"indexes: \[([^\]]+)\]", source)
-    assert len(side_destination_indexes) == 8
-    assert "[13, 14, 15].includes(i)" in source
+def test_destination_routes_are_explicitly_the_minor_reference_population():
+    blueprint = _read(BLUEPRINT)
+    model = _read(MODEL)
+    assert "destinationRatioMax: 0.16" in blueprint
+    assert "modulePins" in blueprint
+    assert "left: Object.freeze([2, 6, 10, 13, 17, 20, 24, 28])" in blueprint
+    assert "right: Object.freeze([1, 5, 9, 12, 16, 20, 24, 27])" in blueprint
+    assert "bottom: Object.freeze([14, 15])" in blueprint
+    assert "destinationRatioMax: REFERENCE_BLUEPRINT.destinationRatioMax" in model
 
 
-def test_model_has_exactly_two_route_weights():
-    source = _read(MODEL)
-    match = re.search(r"ROUTE_WEIGHTS = Object\.freeze\(\{([^}]+)\}\)", source)
-    assert match
-    weights = re.findall(r"(thick|thin):", match.group(1))
-    assert weights == ["thick", "thin"]
-    assert "micro" not in match.group(1)
+def test_blueprint_has_exactly_two_route_weights():
+    blueprint = _read(BLUEPRINT)
+    assert "routeWeights: Object.freeze({ thick: 1.08, thin: 0.66 })" in blueprint
+    assert "micro" not in blueprint
 
 
-def test_short_medium_long_bands_and_selective_motion_are_bounded():
-    source = _read(MODEL)
-    for marker in ["short: [82, 126]", "medium: [146, 218]", "long: [236, 322]"]:
-        assert marker in source
-    assert "pulseRatioMax: 0.20" in source
-    assert "branchRatioMax: 0.26" in source
-    assert "function pulseFor(i)" in source
-    assert "i % 8 === 0 || i % 17 === 0" in source
-    assert "function branchFor(i)" in source
+def test_reference_reach_bands_are_side_top_bottom_specific():
+    blueprint = _read(BLUEPRINT)
+    for marker in [
+        "sideReach: Object.freeze({ short: [58, 86], medium: [98, 136], long: [146, 188] })",
+        "topReach: Object.freeze({ short: [42, 66], medium: [76, 108], long: [118, 164] })",
+        "bottomReach: Object.freeze({ short: [38, 58], medium: [64, 92], long: [98, 132] })",
+    ]:
+        assert marker in blueprint
+    assert "pulseRatioMax: 0.18" in blueprint
+    assert "branchRatioMax: 0.24" in blueprint
 
 
-def test_routing_generator_uses_the_model_as_single_geometry_source():
+def test_routing_generator_consumes_blueprint_and_model_as_single_geometry_source():
     source = _read(ROUTING)
     required = [
         "import { CORE, STAGE, COLORS, ROUTE_WEIGHTS, CONTRACT, PINS }",
+        "import { REFERENCE_BLUEPRINT }",
         "PINS.forEach(renderRoute)",
-        "function buildSideRoute",
-        "function buildVerticalRoute",
+        "function sideFieldRoute",
+        "function sideDestinationRoute",
+        "function verticalFieldRoute",
         "function buildBranch",
         "getTotalLength()",
         "getPointAtLength",
