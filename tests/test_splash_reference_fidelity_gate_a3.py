@@ -23,7 +23,7 @@ def _contract() -> dict:
 
 def test_splash_reference_contract_is_explicit_and_requires_99_percent():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v15"
+    assert contract["contract_version"] == "A3-splash-reference-v16"
     assert contract["minimum_score"] >= 99
     assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
@@ -62,6 +62,8 @@ def test_authored_board_asset_meets_reference_density_gate():
         'sculpted module frame rails', 'balanced density envelope / visual breathing corridors',
         'long ambient branches that intentionally do not terminate at cards',
         'asymmetric right-side ambient fabric: intentionally not mirrored',
+        'reference reconstruction: three-zone flow topology',
+        'core breakout zone: dense short fanout',
         'central-origin surface merge network', 'asymmetric right merge fabric',
         'organic micro-topology islands',
         'reference-flowing secondary branches with terminal dead-end nodes',
@@ -92,7 +94,9 @@ def test_authored_board_asset_meets_reference_density_gate():
         "flowing_secondary_branch_layer_required", "branch_merge_diverge_language_required",
         "dead_end_terminal_beacons_required", "upper_terminal_beacons_required",
         "lower_terminal_beacons_required", "passive_micro_vias_subordinate_required",
-        "terminal_hierarchy_required",
+        "terminal_hierarchy_required", "reference_reconstruction_required",
+        "three_zone_flow_topology_required", "dense_core_breakout_required",
+        "progressive_fanout_required", "reference_style_terminal_distribution_required",
     ]:
         assert pcb[flag] is True
 
@@ -154,21 +158,23 @@ def test_elevated_core_slim_teeth_and_embedded_modules_are_explicit():
     assert not [m for m in required if m not in source]
 
 
-def test_flowing_topology_dead_end_beacons_and_terminal_hierarchy_are_explicit():
+def test_reference_reconstruction_flow_and_terminal_hierarchy_are_explicit():
     board = _board()
     required = [
-        'aria-label="Maestro authored PCB reference fabric v9 flowing terminals"',
+        'aria-label="Maestro authored PCB reference fabric v10 reference reconstruction"',
         'id="terminalGlow"', 'id="terminal-beacons"',
+        'reference reconstruction: three-zone flow topology',
+        'core breakout zone: dense short fanout',
         'reference-flowing secondary branches with terminal dead-end nodes',
         'explicit dead-end flow branches: tapered spread, no card termination',
         'crown side-slip dead ends', 'lower dead-end fanout',
         'terminal beacons: upper crown + side dead ends + lower execution dead ends',
         'scattered passive micro-vias remain subordinate to route terminal hierarchy',
-        '<circle cx="672" cy="102" r="2.7" fill="#36bfff"/>',
-        '<circle cx="386" cy="331" r="2.4" fill="#36bfff"/>',
-        '<circle cx="1287" cy="327" r="2.4" fill="#e59a20"/>',
-        '<circle cx="676" cy="743" r="2.4" fill="#36bfff"/>',
-        '<circle cx="1029" cy="789" r="2.3" fill="#c16fff"/>',
+        '<circle cx="676" cy="72" r="2.4" fill="#36bfff"/>',
+        '<circle cx="390" cy="326" r="2.2" fill="#36bfff"/>',
+        '<circle cx="1274" cy="327" r="2.2" fill="#e59a20"/>',
+        '<circle cx="668" cy="828" r="2.2" fill="#36bfff"/>',
+        '<circle cx="1004" cy="828" r="2.2" fill="#c16fff"/>',
     ]
     assert not [m for m in required if m not in board]
 
