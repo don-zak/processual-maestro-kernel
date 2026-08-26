@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-extraction-v4",
+  "contract_version": "A3-splash-reference-extraction-v5",
   "source_of_truth": "approved pivot reference image",
   "reference_size": [1672, 941],
   "reference_core_bounds": [608, 224, 1041, 632],
@@ -16,6 +16,7 @@
     "pin-seeded-geodesic-partition",
     "unresolved-partition-region-reconciliation",
     "manual-region-closeout",
+    "full-route-tree-pixel-export",
     "kept-geometry-ownership-reconciliation",
     "canonical-manifest-promotion"
   ],
@@ -36,18 +37,35 @@
       "disconnected_route_tree_count": 0,
       "conflict_pixels": 74,
       "unassigned_pixels": 477,
-      "unresolved_pixels": 551
+      "unresolved_pixels": 551,
+      "full_route_tree_pixel_export": true
     },
     "region_closeout": {
       "total_regions": 97,
-      "resolved_by_existing_decisions": 56,
-      "manual_conflict_regions_closed": 29,
-      "manual_unassigned_regions_closed": 12,
       "pending_regions": 0,
-      "verified_geometry_kept_without_forced_ownership": 11,
-      "new_artifact_exclusions_from_manual_closeout": 30
+      "verified_geometry_kept_without_forced_ownership": 11
     },
-    "audit_interpretation": "all 97 reconciliation regions now have explicit reviewed decisions. No PENDING_MANUAL regions remain. Eleven real visible route fragments are intentionally kept without forced tree ownership because assigning them to one adjacent pin tree would invent topology. Canonical promotion remains blocked until those preserved fragments are reconciled into the final route graph using endpoint/continuity evidence."
+    "ownership_resolution": {
+      "kept_fragment_count": 11,
+      "resolved_fragment_count": 1,
+      "ambiguous_fragment_count": 10,
+      "resolved": [
+        {"region":"unassigned-011","target_tree":30,"evidence":"cyan continuity winner score=5.882 vs tree31 score=4.0; equal local gap but tree31 color mismatches"}
+      ],
+      "ambiguous_regions": [
+        "unassigned-001",
+        "unassigned-002",
+        "unassigned-003",
+        "unassigned-004",
+        "unassigned-006",
+        "unassigned-019",
+        "unassigned-022",
+        "unassigned-024",
+        "unassigned-026",
+        "unassigned-027"
+      ]
+    },
+    "audit_interpretation": "all route regions have been visually classified and full pixel ownership is available for all 125 pin trees. Continuity scoring resolves one preserved fragment uniquely (unassigned-011 -> tree 30). Ten preserved fragments remain genuinely ambiguous because competing trees are tied or evidence is below the strict confidence threshold; canonical promotion remains blocked rather than forcing ownership."
   },
   "prohibited_shortcuts": [
     "procedural-route-generation",
@@ -55,9 +73,10 @@
     "invented-route-topology",
     "automatic-deletion-of-unresolved-high-chroma-regions",
     "forcing-ambiguous-kept-geometry-into-one-pin-tree",
+    "proximity-only-ownership-assignment",
     "splash-reconstruction-before-canonical-manifest"
   ],
-  "current_status": "REGION_REVIEW_COMPLETE_OWNERSHIP_RECONCILIATION_REQUIRED",
+  "current_status": "OWNERSHIP_RECONCILIATION_PARTIAL_10_AMBIGUOUS",
   "canonical_manifest_ready": false,
   "splash_reconstruction_allowed": false
 }
