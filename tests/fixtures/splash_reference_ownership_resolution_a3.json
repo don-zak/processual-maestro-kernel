@@ -1,0 +1,33 @@
+{
+  "version": "A3-splash-reference-ownership-resolution-v1",
+  "source": "approved pivot reference image + recovered skeleton + full pin-tree pixel ownership",
+  "policy": {
+    "proximity_alone_is_insufficient": true,
+    "unique_continuity_winner_required": true,
+    "continuity_evidence": ["endpoint_gap", "local_tangent", "color_match", "outward_progression"],
+    "ambiguous_fragment_blocks_canonical_promotion": true
+  },
+  "measured_run": {
+    "pin_count": 125,
+    "attached_pin_seed_count": 125,
+    "kept_fragment_count": 11,
+    "resolved_fragment_count": 1,
+    "ambiguous_fragment_count": 10
+  },
+  "decisions": [
+    {"region":"unassigned-001","decision":"AMBIGUOUS","region_color":"cyan","candidates":[{"tree":1,"score":5.882,"gap_px":2.236,"color_match":true,"outward_progression":true},{"tree":67,"score":5.882,"gap_px":2.236,"color_match":true,"outward_progression":true}]},
+    {"region":"unassigned-002","decision":"AMBIGUOUS","region_color":"amber","candidates":[{"tree":86,"score":5.882,"gap_px":2.236,"color_match":true,"outward_progression":true},{"tree":87,"score":5.882,"gap_px":2.236,"color_match":true,"outward_progression":true}]},
+    {"region":"unassigned-003","decision":"AMBIGUOUS","region_color":"amber","candidates":[{"tree":92,"score":4.0,"gap_px":6.0,"color_match":true,"outward_progression":true},{"tree":93,"score":4.0,"gap_px":6.0,"color_match":true,"outward_progression":true}]},
+    {"region":"unassigned-004","decision":"AMBIGUOUS","region_color":"cyan","candidates":[{"tree":74,"score":4.882,"gap_px":2.236,"color_match":true,"outward_progression":false},{"tree":75,"score":4.882,"gap_px":2.236,"color_match":true,"outward_progression":false}]},
+    {"region":"unassigned-006","decision":"AMBIGUOUS","region_color":"amber","candidates":[{"tree":39,"score":6.0,"gap_px":2.0,"color_match":true,"outward_progression":true},{"tree":40,"score":5.882,"gap_px":2.236,"color_match":true,"outward_progression":true}]},
+    {"region":"unassigned-011","decision":"ATTACH_CONTINUATION","target_tree":30,"region_color":"cyan","winner":{"tree":30,"score":5.882,"gap_px":2.236,"color_match":true,"outward_progression":true},"runner_up":{"tree":31,"score":4.0,"gap_px":2.0,"color_match":false,"outward_progression":true}},
+    {"region":"unassigned-019","decision":"AMBIGUOUS","region_color":"violet","candidates":[{"tree":96,"score":1.0949,"gap_px":7.81,"color_match":false,"outward_progression":true}]},
+    {"region":"unassigned-022","decision":"AMBIGUOUS","region_color":"cyan","candidates":[{"tree":98,"score":4.5,"gap_px":5.0,"color_match":true,"outward_progression":true},{"tree":99,"score":4.0,"gap_px":6.0,"color_match":true,"outward_progression":true}]},
+    {"region":"unassigned-024","decision":"AMBIGUOUS","region_color":"violet","candidates":[{"tree":119,"score":2.6832,"gap_px":7.81,"color_match":true,"outward_progression":false},{"tree":118,"score":2.5,"gap_px":5.0,"color_match":false,"outward_progression":true}]},
+    {"region":"unassigned-026","decision":"AMBIGUOUS","region_color":"cyan","candidates":[{"tree":120,"score":4.3074,"gap_px":5.385,"color_match":true,"outward_progression":true},{"tree":121,"score":4.2946,"gap_px":6.403,"color_match":false,"outward_progression":true},{"tree":119,"score":0.8377,"gap_px":6.325,"color_match":false,"outward_progression":false}]},
+    {"region":"unassigned-027","decision":"AMBIGUOUS","region_color":"cyan","candidates":[]}
+  ],
+  "status": "OWNERSHIP_RECONCILIATION_PARTIAL",
+  "canonical_ready": false,
+  "splash_reconstruction_allowed": false
+}
