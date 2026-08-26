@@ -1,0 +1,30 @@
+{
+  "version": "A3-splash-reference-manhattan-ownership-v1",
+  "source": "approved pivot reference image + recovered skeleton + global ownership pass",
+  "policy": {
+    "ordered_bend_sequence_required": true,
+    "no_new_pixels_may_be_added": true,
+    "strict_winner_margin_required": true,
+    "near_ties_with_matching_sequence_may_be_shared_geometry": true,
+    "remaining_ambiguity_blocks_canonical_promotion": true
+  },
+  "measured_run": {
+    "input_ambiguous_fragment_count": 8,
+    "resolved_fragment_count": 3,
+    "shared_geometry_count": 1,
+    "remaining_ambiguous_fragment_count": 4
+  },
+  "decisions": [
+    {"region":"unassigned-002","decision":"SHARED_GEOMETRY","candidates":[{"tree":86,"score":16.9424,"sequence_similarity":0.9125},{"tree":87,"score":16.7514,"sequence_similarity":0.8654}],"winner_margin":0.1910},
+    {"region":"unassigned-003","decision":"ATTACH_CONTINUATION","target_tree":92,"winner_score":12.4534,"runner_up_score":10.6682,"winner_margin":1.7852,"evidence":"ordered bend sequence favors tree 92"},
+    {"region":"unassigned-024","decision":"ATTACH_CONTINUATION","target_tree":119,"winner_score":10.7062,"runner_up_score":4.9043,"winner_margin":5.8019,"evidence":"vertical violet sequence and bend order match tree 119"},
+    {"region":"unassigned-026","decision":"ATTACH_CONTINUATION","target_tree":121,"winner_score":16.4478,"runner_up_score":12.6454,"winner_margin":3.8024,"evidence":"S-E-S sequence and bend order align with tree 121"},
+    {"region":"unassigned-001","decision":"AMBIGUOUS","winner_margin":0.0790,"evidence":"single-pixel fragment has no directional sequence and trees 1/67 remain tied"},
+    {"region":"unassigned-004","decision":"AMBIGUOUS","winner_margin":0.6028,"evidence":"short E-N fragment does not produce a strict continuity winner between trees 74/75"},
+    {"region":"unassigned-006","decision":"AMBIGUOUS","winner_margin":0.0327,"evidence":"large amber fragment remains effectively tied between trees 39/40"},
+    {"region":"unassigned-027","decision":"AMBIGUOUS","winner_margin":null,"evidence":"no defensible candidate tree exists within the continuity window"}
+  ],
+  "status": "MANHATTAN_RESOLUTION_PARTIAL_4_AMBIGUOUS",
+  "canonical_ready": false,
+  "splash_reconstruction_allowed": false
+}
