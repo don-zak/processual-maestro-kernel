@@ -1,0 +1,63 @@
+name: Security Hardening Baseline
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install package and security tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Bandit security scan
+        run: |
+          bandit -r processual_api processual_kernel cgtlib \
+            -x tests \
+            -ll -ii
+
+      - name: Python dependency vulnerability audit
+        run: pip-audit --strict
+
+      - name: Reject private CGT leakage from public tree
+        run: |
+          test ! -d cgtlib/private
+          if grep -R --line-number --include='*.py' \
+            -E 'cgtlib\.private|reward/fate|reward_fate' \
+            processual_api processual_kernel cgtlib; then
+            echo 'FAIL: protected/private CGT marker found in public runtime tree'
+            exit 1
+          fi
+
+      - name: Hardened CGT router typing check
+        run: |
+          mypy processual_api/routers/cgt_governor.py \
+            --ignore-missing-imports \
+            --follow-imports=silent \
+            --warn-unused-ignores \
+            --show-error-codes
+
+      - name: Security-sensitive regression tests
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_secret_encryption_readiness_regression.py \
+            tests/test_adapter_configure_status_routes.py \
+            tests/test_cgt_governor_route_boundaries.py \
+            tests/test_governance_gateway_behavior_regression.py \
+            tests/operations/test_release_check_strict_pytest.py
