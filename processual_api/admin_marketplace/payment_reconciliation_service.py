@@ -177,6 +177,8 @@ class PaymentReconciliationService:
             if requested_exception_type is not None:
                 case.exception_type = requested_exception_type
             if action == "link":
+                if candidate is None:
+                    raise PaymentReconciliationConflictError("A candidate order is required.")
                 case.candidate_order_id = candidate.id
             elif action == "unlink":
                 case.candidate_order_id = None

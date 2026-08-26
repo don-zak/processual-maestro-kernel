@@ -170,7 +170,7 @@ class CustomerPaymentEvidenceService:
             replay = await unit.payment_evidence.get_by_submission_idempotency_key_hash(idempotency_hash)
             if replay is not None:
                 order = await unit.orders.get_by_id(replay.order_id)
-                _require_replay(
+                order = _require_replay(
                     evidence=replay,
                     order=order,
                     customer_ref=customer_ref,
@@ -183,7 +183,7 @@ class CustomerPaymentEvidenceService:
                 return _customer_result(replay, order, "payment_report_idempotent")
 
             order = await unit.orders.get_by_ref(order_ref, for_update=True)
-            _require_customer_payment_order(order, customer_ref)
+            order = _require_customer_payment_order(order, customer_ref)
             previous_digest = _digest(_order_payment_state(order))
 
             expected_reference = (order.payment_reference or "").strip().upper()
@@ -267,7 +267,7 @@ class CustomerPaymentEvidenceService:
                     "status": evidence.status,
                     "currency": evidence.currency,
                 },
-                deduplication_material=evidence.submission_idempotency_key_hash,
+                deduplication_material=idempotency_hash,
                 occurred_at=now,
             )
             await unit.commit()
@@ -289,7 +289,7 @@ class CustomerPaymentEvidenceService:
             if evidence is None:
                 return None
             order = await unit.orders.get_by_id(evidence.order_id)
-        _require_replay(
+        order = _require_replay(
             evidence=evidence,
             order=order,
             customer_ref=customer_ref,
@@ -465,7 +465,7 @@ class AdminPaymentVerificationService:
                     "verification_ref": verification.verification_ref,
                     "status": verification.status,
                 },
-                deduplication_material=verification.decision_idempotency_key_hash,
+                deduplication_material=idempotency_hash,
                 occurred_at=now,
             )
             await unit.commit()
@@ -497,7 +497,10 @@ class AdminPaymentVerificationService:
         return _verification_result(verification, evidence, order, "payment_decision_idempotent")
 
 
-def _require_customer_payment_order(order, customer_ref: str) -> None:
+def _require_customer_payment_order(
+    order: AdminMarketOrder | None,
+    customer_ref: str,
+) -> AdminMarketOrder:
     if order is None or not hmac.compare_digest(order.customer_ref, customer_ref):
         raise CommercialOrderNotFoundError("Commercial order was not found.")
     if order.selected_channel != "maestro_direct" or order.country_code != "TN":
@@ -508,19 +511,20 @@ def _require_customer_payment_order(order, customer_ref: str) -> None:
         raise PaymentEvidenceConflictError("Order is not accepting payment reports.")
     if order.payment_status not in {"pending", "customer_reported", "requires_review"}:
         raise PaymentEvidenceConflictError("Payment state does not accept reports.")
+    return order
 
 
 def _require_replay(
     *,
     evidence,
-    order,
+    order: AdminMarketOrder | None,
     customer_ref,
     order_ref,
     actual_amount,
     currency,
     payment_reference,
     source_hash,
-) -> None:
+) -> AdminMarketOrder:
     if order is None or not hmac.compare_digest(evidence.customer_ref, customer_ref):
         raise PaymentEvidenceConflictError("Idempotency key conflicts with stored state.")
     same = (
@@ -536,6 +540,7 @@ def _require_replay(
     )
     if not same:
         raise PaymentEvidenceConflictError("Idempotency key conflicts with stored state.")
+    return order
 
 
 def _require_verifiable(*, order, evidence, decision: str, reconciliation=None) -> None:
@@ -700,7 +705,10 @@ def _amount(value: Decimal) -> Decimal:
         amount = Decimal(value)
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise ValueError("actual_amount is invalid.") from exc
-    if not amount.is_finite() or amount < 0 or amount.as_tuple().exponent < -3:
+    if not amount.is_finite() or amount < 0:
+        raise ValueError("actual_amount must be a nonnegative amount with 3 decimals.")
+    exponent = amount.as_tuple().exponent
+    if not isinstance(exponent, int) or exponent < -3:
         raise ValueError("actual_amount must be a nonnegative amount with 3 decimals.")
     if amount.adjusted() > 14:
         raise ValueError("actual_amount is too large.")
