@@ -486,7 +486,7 @@ async def govern_batch(req: BatchGovernRequest, current_user: dict = Depends(get
             }
         )
 
-    results.sort(key=lambda r: r["reward"], reverse=True)  # type: ignore[arg-type, return-value]
+    results.sort(key=lambda r: r["reward"], reverse=True)
     return {"results": results, "count": len(results)}
 
 
