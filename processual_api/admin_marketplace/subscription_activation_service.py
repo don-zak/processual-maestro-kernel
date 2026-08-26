@@ -179,6 +179,8 @@ class SubscriptionActivationOrchestrator:
             )
 
             offer = await unit.offers.get_by_id(order.offer_id, for_update=True)
+            if offer is None:
+                raise SubscriptionActivationNotReadyError("offer_required")
             _require_offer_valid(offer=offer, order=order, now=now)
             plan = await unit.plans.get_by_id(order.plan_id, for_update=True)
             if (
@@ -289,7 +291,7 @@ class SubscriptionActivationOrchestrator:
                     "activation_ref": activation.activation_ref,
                     "status": activation.status,
                 },
-                deduplication_material=activation.activation_idempotency_key_hash,
+                deduplication_material=idempotency_hash,
                 occurred_at=now,
             )
             await unit.commit()
