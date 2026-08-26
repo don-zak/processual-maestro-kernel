@@ -45,11 +45,12 @@ def test_canonical_splash_uses_inline_generated_board_and_one_motion_geometry():
 def test_generated_model_is_v20_and_activates_all_four_core_edges():
     model = _read(MODEL)
     assert "A3-splash-routing-v20" in model
+    assert "pinCount: 120" in model
     assert "left: 624" in model
     assert "right: 1048" in model
     assert "top: 233" in model
     assert "bottom: 653" in model
-    assert "const SIDE_Y = Array.from({ length: 28 }" in model
+    assert "const SIDE_Y = Array.from({ length: 30 }" in model
     assert "const EDGE_X = Array.from({ length: 30 }" in model
     assert "destinationRatioMax: 0.20" in model
     assert "ROUTE_WEIGHTS = Object.freeze({ thick: 1.1, thin: 0.68 })" in model
