@@ -1,0 +1,24 @@
+{
+  "contract_version": "A3-splash-reference-extraction-v1",
+  "source_of_truth": "approved pivot reference image",
+  "reference_size": [1672, 941],
+  "reference_core_bounds": [608, 224, 1041, 632],
+  "required_pipeline": [
+    "pixel-color-segmentation",
+    "ui-region-exclusion",
+    "color-separated-skeletonization",
+    "origin-terminal-junction-detection",
+    "graph-edge-vectorization",
+    "tile-by-tile-overlay-audit",
+    "canonical-manifest-promotion"
+  ],
+  "prohibited_shortcuts": [
+    "procedural-route-generation",
+    "hand-authored-reference-approximation",
+    "invented-route-topology",
+    "splash-reconstruction-before-audit"
+  ],
+  "current_status": "AUDIT_REQUIRED",
+  "canonical_manifest_ready": false,
+  "splash_reconstruction_allowed": false
+}
