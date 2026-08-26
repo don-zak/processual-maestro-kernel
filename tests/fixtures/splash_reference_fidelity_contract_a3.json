@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-v17",
+  "contract_version": "A3-splash-reference-v18",
   "minimum_score": 99,
   "score_total": 100,
   "reference_stage": {
@@ -13,11 +13,13 @@
     "authored_board_asset": "splash_reference_board.svg",
     "dom_cards_required": true,
     "visible_route_sources": 1,
+    "legacy_board_must_be_deleted_before_rebuild": true,
     "pulse_overlay_must_not_draw_routes": true,
     "procedural_full_board_generation_forbidden": true
   },
   "logical_layout": {
     "core_bounds": {"x": 642, "y": 248, "w": 388, "h": 390, "tolerance_px": 18},
+    "core_visual_pin_envelope": {"left_x": 624, "right_x": 1048, "top_y": 233, "bottom_y": 653, "tolerance_px": 3},
     "execution_center": {"x": 836, "y": 751, "tolerance_px": 24},
     "modules": {
       "governance": {"side": "left", "x": 78, "y": 91, "w": 318, "h": 143},
@@ -43,17 +45,18 @@
     "concise_copy_required": true
   },
   "pcb": {
-    "authored_paths_min": 25,
-    "authored_nodes_min": 50,
-    "route_subpaths_min": 80,
-    "left_origin_x": 642,
-    "right_origin_x": 1030,
-    "top_origin_y": 248,
-    "bottom_origin_y": 640,
-    "aligned_stem_min_px": 28,
-    "all_visible_routes_must_begin_on_core_edge": true,
+    "authored_paths_min": 70,
+    "authored_nodes_min": 40,
+    "route_subpaths_min": 70,
+    "left_origin_x": 624,
+    "right_origin_x": 1048,
+    "top_origin_y": 233,
+    "bottom_origin_y": 653,
+    "aligned_stem_min_px": 45,
+    "all_visible_routes_must_begin_on_visual_pin_envelope": true,
     "progressive_fanout_required": true,
     "overlapping_duplicate_visible_geometry_forbidden": true,
+    "ambient_free_origin_routes_forbidden": true,
     "dead_end_terminal_beacons_required": true,
     "upper_terminal_beacons_required": true,
     "lower_terminal_beacons_required": true,
