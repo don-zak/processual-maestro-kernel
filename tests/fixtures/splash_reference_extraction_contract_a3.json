@@ -1,5 +1,5 @@
 {
-  "contract_version": "A3-splash-reference-extraction-v5",
+  "contract_version": "A3-splash-reference-extraction-v6",
   "source_of_truth": "approved pivot reference image",
   "reference_size": [1672, 941],
   "reference_core_bounds": [608, 224, 1041, 632],
@@ -17,7 +17,11 @@
     "unresolved-partition-region-reconciliation",
     "manual-region-closeout",
     "full-route-tree-pixel-export",
-    "kept-geometry-ownership-reconciliation",
+    "local-continuity-ownership-resolution",
+    "global-path-continuity-ownership-resolution",
+    "manhattan-sequence-ownership-resolution",
+    "branch-ancestry-ownership-closeout",
+    "corrected-canonical-skeleton-build",
     "canonical-manifest-promotion"
   ],
   "latest_measured_audit": {
@@ -47,25 +51,29 @@
     },
     "ownership_resolution": {
       "kept_fragment_count": 11,
-      "resolved_fragment_count": 1,
-      "ambiguous_fragment_count": 10,
-      "resolved": [
-        {"region":"unassigned-011","target_tree":30,"evidence":"cyan continuity winner score=5.882 vs tree31 score=4.0; equal local gap but tree31 color mismatches"}
+      "resolved_unique_owner_count": 6,
+      "shared_geometry_count": 4,
+      "preserved_unowned_route_count": 1,
+      "remaining_ambiguous_fragment_count": 0,
+      "unique_owner_regions": [
+        {"region":"unassigned-011","target_tree":30,"stage":"local-continuity"},
+        {"region":"unassigned-019","target_tree":96,"stage":"global-continuity"},
+        {"region":"unassigned-022","target_tree":98,"stage":"global-continuity"},
+        {"region":"unassigned-003","target_tree":92,"stage":"manhattan-sequence"},
+        {"region":"unassigned-024","target_tree":119,"stage":"manhattan-sequence"},
+        {"region":"unassigned-026","target_tree":121,"stage":"manhattan-sequence"}
       ],
-      "ambiguous_regions": [
-        "unassigned-001",
-        "unassigned-002",
-        "unassigned-003",
-        "unassigned-004",
-        "unassigned-006",
-        "unassigned-019",
-        "unassigned-022",
-        "unassigned-024",
-        "unassigned-026",
-        "unassigned-027"
+      "shared_geometry_regions": [
+        {"region":"unassigned-002","target_trees":[86,87]},
+        {"region":"unassigned-001","target_trees":[1,67]},
+        {"region":"unassigned-004","target_trees":[74,75]},
+        {"region":"unassigned-006","target_trees":[39,40]}
+      ],
+      "preserved_unowned_regions": [
+        {"region":"unassigned-027","reason":"visible reference geometry with no defensible unique or shared pin ownership"}
       ]
     },
-    "audit_interpretation": "all route regions have been visually classified and full pixel ownership is available for all 125 pin trees. Continuity scoring resolves one preserved fragment uniquely (unassigned-011 -> tree 30). Ten preserved fragments remain genuinely ambiguous because competing trees are tied or evidence is below the strict confidence threshold; canonical promotion remains blocked rather than forcing ownership."
+    "audit_interpretation": "ownership ambiguity is closed without forcing unsupported pin ownership. Six preserved fragments have unique owners supported by progressively stronger continuity evidence; four are represented explicitly as shared geometry between independently seeded route trees; one visible route fragment is preserved without pin ownership because no defensible owner exists. Canonical manifest build may proceed, but Splash reconstruction remains blocked until the corrected canonical skeleton and manifest are built and audited against the approved reference."
   },
   "prohibited_shortcuts": [
     "procedural-route-generation",
@@ -74,9 +82,11 @@
     "automatic-deletion-of-unresolved-high-chroma-regions",
     "forcing-ambiguous-kept-geometry-into-one-pin-tree",
     "proximity-only-ownership-assignment",
+    "dropping-shared-or-unowned-reference-geometry",
     "splash-reconstruction-before-canonical-manifest"
   ],
-  "current_status": "OWNERSHIP_RECONCILIATION_PARTIAL_10_AMBIGUOUS",
+  "current_status": "OWNERSHIP_AMBIGUITY_CLOSED_CANONICAL_BUILD_REQUIRED",
   "canonical_manifest_ready": false,
+  "canonical_manifest_build_allowed": true,
   "splash_reconstruction_allowed": false
 }
