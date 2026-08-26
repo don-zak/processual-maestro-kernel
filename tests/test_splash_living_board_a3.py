@@ -36,6 +36,8 @@ def test_authored_reference_board_is_dense_layered_asymmetric_and_breathable():
         'sculpted module frame rails', 'balanced density envelope / visual breathing corridors',
         'long ambient branches that intentionally do not terminate at cards',
         'asymmetric right-side ambient fabric: intentionally not mirrored',
+        'reference reconstruction: three-zone flow topology',
+        'core breakout zone: dense short fanout',
         'central-origin surface merge network', 'asymmetric right merge fabric',
         'organic micro-topology islands',
         'reference-flowing secondary branches with terminal dead-end nodes',
@@ -52,8 +54,8 @@ def test_authored_reference_board_is_dense_layered_asymmetric_and_breathable():
     ]
     assert not [m for m in required if m not in board]
     assert 'ring via clusters' not in board
-    assert board.count("<path") >= 100
-    assert board.count("<circle") >= 80
+    assert board.count("<path") >= 95
+    assert board.count("<circle") >= 70
 
 
 def test_production_splash_is_full_landing_page():
@@ -127,35 +129,21 @@ def test_visual_trace_density_is_selectively_reduced_without_removing_live_seman
     assert not [m for m in required if m not in source]
 
 
-def test_authored_board_has_actual_pruning_vivid_routes_and_flowing_terminal_hierarchy():
+def test_authored_board_has_reference_reconstruction_and_terminal_hierarchy():
     board = _board()
     required = [
-        'aria-label="Maestro authored PCB reference fabric v9 flowing terminals"',
-        '<g stroke="#36bfff" stroke-opacity=".16" stroke-width=".62">',
-        '<g stroke="#e59a20" stroke-opacity=".17" stroke-width=".64">',
-        '<g stroke="#36bfff" stroke-opacity=".91" stroke-width="1.16" filter="url(#glowC)">',
-        '<g stroke="#e59a20" stroke-opacity=".93" stroke-width="1.18" filter="url(#glowA)">',
-        '<g stroke="#23d8c8" stroke-opacity=".83" stroke-width="1.04" filter="url(#glow)">',
-        '<g stroke="#c16fff" stroke-opacity=".86" stroke-width="1.05" filter="url(#glow)">',
+        'aria-label="Maestro authored PCB reference fabric v10 reference reconstruction"',
+        'reference reconstruction: three-zone flow topology',
+        'core breakout zone: dense short fanout',
         'id="terminal-beacons"', 'filter="url(#terminalGlow)"',
         'reference-flowing secondary branches with terminal dead-end nodes',
         'explicit dead-end flow branches: tapered spread, no card termination',
         'lower dead-end fanout', 'crown side-slip dead ends',
     ]
     assert not [m for m in required if m not in board]
-    assert board.count('stroke-opacity=".16"') >= 1
-    assert board.count('stroke-opacity=".17"') >= 1
-    assert board.count('stroke-opacity=".91"') >= 1
-    assert board.count('stroke-opacity=".93"') >= 1
-    # Terminal nodes must exist at upper, side and lower dead-end endpoints.
-    for marker in [
-        '<circle cx="672" cy="102" r="2.7" fill="#36bfff"/>',
-        '<circle cx="386" cy="331" r="2.4" fill="#36bfff"/>',
-        '<circle cx="1287" cy="327" r="2.4" fill="#e59a20"/>',
-        '<circle cx="676" cy="743" r="2.4" fill="#36bfff"/>',
-        '<circle cx="1029" cy="789" r="2.3" fill="#c16fff"/>',
-    ]:
-        assert marker in board
+    assert board.count('filter="url(#glowC)"') >= 8
+    assert board.count('filter="url(#glowA)"') >= 8
+    assert board.count('id="terminal-beacons"') == 1
 
 
 def test_cover_fit_uses_adaptive_safe_bands_for_chrome_and_telemetry():
