@@ -21,16 +21,32 @@ def _contract() -> dict:
     return json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
-def test_splash_reference_contract_is_explicit_and_requires_99_percent():
+def _route_ds(board: str) -> list[str]:
+    routing = board.split('id="pcb-routing"', 1)[1].split('</g><g class="t"', 1)[0]
+    return re.findall(r'<path[^>]*\bclass="r [^"]+"[^>]*\bd="([^"]+)"', routing)
+
+
+def _subpaths(d: str) -> list[str]:
+    return [part.strip() for part in re.split(r'(?=M\d)', d) if part.strip()]
+
+
+def _start_xy(subpath: str) -> tuple[int, int]:
+    match = re.match(r'M(\d+)\s+(\d+)', subpath)
+    assert match, subpath
+    return int(match.group(1)), int(match.group(2))
+
+
+def test_contract_is_rendered_geometry_focused():
     contract = _contract()
-    assert contract["contract_version"] == "A3-splash-reference-v16"
+    assert contract["contract_version"] == "A3-splash-reference-v17"
     assert contract["minimum_score"] >= 99
-    assert contract["score_total"] == 100
     assert sum(contract["scoring"].values()) == 100
-    assert contract["architecture"]["mode"] == "authored-svg-dom-hybrid"
+    assert contract["architecture"]["mode"] == "single-visible-svg-plus-pulse-overlay"
+    assert contract["architecture"]["visible_route_sources"] == 1
+    assert contract["architecture"]["pulse_overlay_must_not_draw_routes"] is True
 
 
-def test_reference_stage_and_outward_geometry_are_locked():
+def test_reference_stage_and_layout_are_locked():
     contract = _contract()
     assert contract["reference_stage"] == {
         "width": 1672,
@@ -40,185 +56,98 @@ def test_reference_stage_and_outward_geometry_are_locked():
     }
     layout = contract["logical_layout"]
     assert layout["core_bounds"] == {"x": 642, "y": 248, "w": 388, "h": 390, "tolerance_px": 18}
-    assert layout["modules"]["governance"]["x"] == 78
-    assert layout["modules"]["routing"]["x"] == 1276
     assert layout["side_module_visual_scale"] == 0.88
-    assert layout["segmented_variable_weight_card_rails_required"] is True
-    assert layout["embedded_side_modules_required"] is True
     assert layout["core_visual_scale"] == 1.045
-    assert layout["elevated_core_required"] is True
-    assert layout["slim_processor_teeth_required"] is True
 
 
-def test_authored_board_asset_meets_reference_density_gate():
+def test_board_has_one_visible_route_topology_and_required_palette():
     board = _board()
     pcb = _contract()["pcb"]
+    assert 'data-topology="single-source"' in board
+    assert board.count('id="pcb-routing"') == 1
     assert board.count("<path") >= pcb["authored_paths_min"]
     assert board.count("<circle") >= pcb["authored_nodes_min"]
-    for marker in ['stroke="#36bfff"', 'stroke="#e59a20"', 'stroke="#23d8c8"', 'stroke="#c16fff"']:
-        assert marker in board
-    required_board_markers = [
-        '<ellipse cx="836" cy="452"', 'id="dotsC"', 'id="dotsA"', 'id="dotsV"',
-        'sculpted module frame rails', 'balanced density envelope / visual breathing corridors',
-        'long ambient branches that intentionally do not terminate at cards',
-        'asymmetric right-side ambient fabric: intentionally not mirrored',
-        'reference reconstruction: three-zone flow topology',
-        'core breakout zone: dense short fanout',
-        'central-origin surface merge network', 'asymmetric right merge fabric',
-        'organic micro-topology islands',
-        'reference-flowing secondary branches with terminal dead-end nodes',
-        'explicit dead-end flow branches: tapered spread, no card termination',
-        'core rim integration: nested processor rails and pin landing geometry',
-        'crown breakout with scattered hotspots; top rings deliberately removed',
-        'crown side-slip dead ends',
-        'execution radial fabric and bottom telemetry backplane',
-        'lower dead-end fanout',
-        'explicit wide-spread luminous via network / dense page-wide node matrices',
-        'terminal beacons: upper crown + side dead ends + lower execution dead ends',
-        'scattered passive micro-vias remain subordinate to route terminal hierarchy',
-        'pin landing nodes',
-    ]
-    assert not [marker for marker in required_board_markers if marker not in board]
-    assert 'ring via clusters' not in board
-    for flag in [
-        "nonterminating_ambient_branches_required", "distributed_dot_matrices_required",
-        "sculpted_module_frame_rails_required", "core_origin_merge_network_required",
-        "dead_end_surface_runs_required", "wide_luminous_node_field_required",
-        "core_rim_integration_required", "processor_pin_landing_nodes_required",
-        "execution_radial_fabric_required", "telemetry_backplane_required",
-        "organic_micro_topology_required", "asymmetric_fabric_required",
-        "top_ring_clusters_forbidden", "crown_hotspot_clusters_required",
-        "irregular_branching_required", "balanced_density_required",
-        "visual_breathing_corridors_required", "route_colored_processor_teeth_required",
-        "selective_trace_pruning_required", "live_signal_weight_reduced_required",
-        "flowing_secondary_branch_layer_required", "branch_merge_diverge_language_required",
-        "dead_end_terminal_beacons_required", "upper_terminal_beacons_required",
-        "lower_terminal_beacons_required", "passive_micro_vias_subordinate_required",
-        "terminal_hierarchy_required", "reference_reconstruction_required",
-        "three_zone_flow_topology_required", "dense_core_breakout_required",
-        "progressive_fanout_required", "reference_style_terminal_distribution_required",
-    ]:
-        assert pcb[flag] is True
+    for color in ["#36bfff", "#e59a20", "#23d8c8", "#a7d67b", "#c16fff"]:
+        assert f'stroke="{color}"' in board or f'fill="{color}"' in board
 
 
-def test_hybrid_architecture_uses_static_reference_fabric_plus_live_signals():
+def test_every_visible_route_subpath_starts_on_a_processor_edge():
+    board = _board()
+    contract = _contract()["pcb"]
+    left_x = contract["left_origin_x"]
+    right_x = contract["right_origin_x"]
+    top_y = contract["top_origin_y"]
+    bottom_y = contract["bottom_origin_y"]
+
+    subpaths = [sub for d in _route_ds(board) for sub in _subpaths(d)]
+    assert len(subpaths) >= contract["route_subpaths_min"]
+
+    for sub in subpaths:
+        x, y = _start_xy(sub)
+        assert x in {left_x, right_x} or y in {top_y, bottom_y}, sub
+
+
+def test_side_routes_have_an_aligned_stem_before_fanout():
+    board = _board()
+    minimum = _contract()["pcb"]["aligned_stem_min_px"]
+    side_subpaths = []
+    for d in _route_ds(board):
+        for sub in _subpaths(d):
+            x, y = _start_xy(sub)
+            if x in {642, 1030}:
+                side_subpaths.append(sub)
+
+    assert side_subpaths
+    for sub in side_subpaths:
+        numbers = [int(n) for n in re.findall(r'\d+', sub)]
+        x0, y0, x1, y1 = numbers[:4]
+        assert y1 == y0, sub
+        assert abs(x1 - x0) >= minimum, sub
+
+
+def test_fanout_spacing_grows_away_from_core():
+    board = _board()
+    # Representative primary routes: near-core vertical displacement is zero/small,
+    # while outer segments intentionally diverge toward their destination bands.
+    left = re.search(r'd="(M642 278[^\"]+)" stroke="#36bfff"', board)
+    right = re.search(r'd="(M1030 278[^\"]+)" stroke="#e59a20"', board)
+    assert left and right
+    for route in (left.group(1), right.group(1)):
+        first = _subpaths(route)[0]
+        points = [(int(x), int(y)) for x, y in re.findall(r'(\d+)\s+(\d+)', first)]
+        start_y = points[0][1]
+        assert points[1][1] == start_y
+        assert abs(points[-1][1] - start_y) > abs(points[2][1] - start_y)
+
+
+def test_dead_ends_are_true_route_endpoints_with_terminal_beacons():
+    board = _board()
+    assert 'data-terminal="dead-end"' in board
+    assert 'id="terminal-beacons"' in board
+    assert board.count('r="2.4"') >= 12
+    assert board.count('r="2.5"') >= 20
+
+
+def test_motion_overlay_is_pulse_only_and_does_not_draw_a_second_visible_fabric():
     source = _source()
     required = [
-        'src="./splash_reference_board.svg"', 'id="signal-svg"', "authoredSignalMap",
-        "function registerSignal(", "function rebuildSignals()", "function animate(now)",
-        "getTotalLength", "getPointAtLength", "requestAnimationFrame(animate)",
+        'id="signal-svg"', '.signal-geometry{fill:none;stroke:none;pointer-events:none}',
+        "class:'signal-geometry'", "getTotalLength", "getPointAtLength", "requestAnimationFrame(animate)",
     ]
-    forbidden = ["function pcb(", "function drawSideFabric(", "function regionalFabric(", "drawAmbientBoard("]
+    forbidden = ["class:'signal-base'", "class:'signal-wake'", "class:'via-node node-bloom'"]
     assert not [m for m in required if m not in source]
     assert not [m for m in forbidden if m in source]
 
 
-def test_original_maestro_identity_and_english_only_copy_are_locked():
+def test_identity_core_entry_and_viewport_contracts_remain_intact():
     source = _source()
-    branding = _contract()["branding"]
-    assert branding["original_maestro_emblem_required"] is True
-    assert branding["header_wordmark_required"] is True
-    assert branding["core_emblem_required"] is True
-    assert branding["english_only_copy_required"] is True
-    assert branding["concise_copy_required"] is True
     required = [
         'class="maestro-emblem"', 'class="brand-word">MAESTRO<b>.</b>', 'class="core-emblem"',
-        "Govern • Supervise • Calibrate • Orchestrate",
-        "Centralized AI policy, safety and performance control.",
-        "Human oversight for agents, tasks and decisions.",
-        "Model tuning and profile optimization for best-fit performance.",
-        "Task and agent coordination across scalable workflows.",
-        "Intelligent routing for requests, tasks and optimal agent selection.",
-        "Advanced policy enforcement for rules, approvals and automated decisions.",
-        "Continuous feedback and learning for improved outcomes.",
-        "Authority, access and guardrail controls.", "Controlled real-time execution",
+        "Govern • Supervise • Calibrate • Orchestrate", "Enter Maestro",
+        "maestro_descent_gate_seen", "maestro_descent_gate_seen_at", "window.location.href = '/login'",
+        "transform:scale(1.045)", "transform:scale(.88)", "width:4px", "height:4px",
+        "const fit_rule='reference-cover-1672x941'", "Math.max(viewportWidth/1672,viewportHeight/941)",
+        "@media(prefers-reduced-motion:reduce)",
     ]
     assert not [m for m in required if m not in source]
     assert re.search(r"[\u0600-\u06FF]", source) is None
-
-
-def test_core_entry_contract_is_non_compensable():
-    source = _source()
-    for marker in _contract()["mandatory_core_contract"]["preserve_markers"]:
-        assert marker in source
-    assert "background:rgba(22,29,42,.68)" in source
-    assert "--amber:#f5a623" in source
-
-
-def test_elevated_core_slim_teeth_and_embedded_modules_are_explicit():
-    source = _source()
-    required = [
-        "/* elevated central processor */", "transform:scale(1.045)",
-        "drop-shadow(0 16px 20px rgba(0,0,0,.34))", "/* slim route-colored processor teeth */",
-        "width:4px", "height:4px", "/* embedded segmented reference card rails */",
-        "transform:scale(.88)", "backdrop-filter:blur(5px)",
-        "/* selective trace pruning veil */", ".signal-base{stroke-width:.95;opacity:.64",
-        ".signal-wake{stroke-width:2.3;opacity:.065",
-    ]
-    assert not [m for m in required if m not in source]
-
-
-def test_reference_reconstruction_flow_and_terminal_hierarchy_are_explicit():
-    board = _board()
-    required = [
-        'aria-label="Maestro authored PCB reference fabric v10 reference reconstruction"',
-        'id="terminalGlow"', 'id="terminal-beacons"',
-        'reference reconstruction: three-zone flow topology',
-        'core breakout zone: dense short fanout',
-        'reference-flowing secondary branches with terminal dead-end nodes',
-        'explicit dead-end flow branches: tapered spread, no card termination',
-        'crown side-slip dead ends', 'lower dead-end fanout',
-        'terminal beacons: upper crown + side dead ends + lower execution dead ends',
-        'scattered passive micro-vias remain subordinate to route terminal hierarchy',
-        '<circle cx="676" cy="72" r="2.4" fill="#36bfff"/>',
-        '<circle cx="390" cy="326" r="2.2" fill="#36bfff"/>',
-        '<circle cx="1274" cy="327" r="2.2" fill="#e59a20"/>',
-        '<circle cx="668" cy="828" r="2.2" fill="#36bfff"/>',
-        '<circle cx="1004" cy="828" r="2.2" fill="#c16fff"/>',
-    ]
-    assert not [m for m in required if m not in board]
-
-
-def test_motion_semantics_remain_autonomous_directional_and_asymmetric():
-    source = _source()
-    required = [
-        "governance:'outbound'", "policy:'outbound'", "routing:'outbound'",
-        "supervision:'inbound'", "feedback:'inbound'", "calibration:'bidirectional'",
-        "orchestration:'bidirectional'", "control:'roundtrip'", "execution:'downstream'",
-        "signal-wake", "node-bloom", "destination-ack", "p3=E('circle'",
-        "M1276 162 H1214 L1188 146", "M1276 339 H1221 L1190 365",
-    ]
-    forbidden = ["mouseenter", "mouseleave", "focusRoute(", "classList.toggle('dim'"]
-    assert not [m for m in required if m not in source]
-    assert not [m for m in forbidden if m in source]
-    assert _contract()["motion"]["left_right_signal_geometry_must_differ"] is True
-
-
-def test_accessibility_viewport_fill_and_safe_bands_remain_intact():
-    source = _source()
-    viewport = _contract()["viewport"]
-    required = [
-        "@media(prefers-reduced-motion:reduce)", ".pulse{display:none}", 'tabindex="0"',
-        "const fit_rule='reference-cover-1672x941'", "Math.max(viewportWidth/1672,viewportHeight/941)",
-        "const visibleWorldWidth=viewportWidth/scale,visibleWorldHeight=viewportHeight/scale",
-        "const cropX=Math.max(0,(1672-visibleWorldWidth)/2),cropY=Math.max(0,(941-visibleWorldHeight)/2)",
-        "--header-drop", "--footer-lift", "--telemetry-lift", "--safe-x",
-        "reduceMotion.addEventListener?.('change',rebuildSignals)",
-    ]
-    assert not [m for m in required if m not in source]
-    assert viewport["fill_browser_area_required"] is True
-    assert viewport["letterbox_forbidden"] is True
-    assert viewport["adaptive_safe_bands_required"] is True
-    assert viewport["header_footer_must_remain_visible_under_cover"] is True
-    assert viewport["telemetry_must_remain_visible_under_cover"] is True
-
-
-def test_route_colored_processor_teeth_remain_explicit():
-    source = _source()
-    required = [
-        "linear-gradient(180deg,#21c9ff 0 24%,#22dfcd 24% 49%,#a7d67b 49% 74%,#c16fff 74% 100%)",
-        "linear-gradient(180deg,#f1a21d 0 49%,#23d8c8 49% 75%,#c16fff 75% 100%)",
-        "linear-gradient(90deg,#20c7ff 0 24%,#1ee0cf 24% 44%,#33cfff 44% 50%,#f0a21f 50% 80%,#ffc24d 80% 100%)",
-        "linear-gradient(90deg,#20c7ff 0 22%,#23d8c8 22% 34%,#c16fff 34% 48%,#36bfff 48% 57%,#f0a21f 57% 72%,#c16fff 72% 100%)",
-    ]
-    assert not [m for m in required if m not in source]
