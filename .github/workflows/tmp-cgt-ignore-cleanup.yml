@@ -2,20 +2,19 @@ name: Temporary CGT Ignore Cleanup
 
 on:
   push:
-    branches: [agent/cgt-stale-ignore-cleanup]
+    branches:
+      - agent/cgt-stale-ignore-cleanup
 
 permissions:
   contents: write
 
 jobs:
   cleanup:
-    if: github.event.head_commit.message == 'chore: stage exact CGT ignore cleanup'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v4
         with:
           ref: agent/cgt-stale-ignore-cleanup
-          persist-credentials: true
       - name: Remove only the proven stale suppression
         run: |
           python - <<'PY'
@@ -24,14 +23,20 @@ jobs:
           source = path.read_text(encoding='utf-8')
           old = '    results.sort(key=lambda r: r["reward"], reverse=True)  # type: ignore[arg-type, return-value]\n'
           new = '    results.sort(key=lambda r: r["reward"], reverse=True)\n'
-          if source.count(old) != 1:
-              raise SystemExit(f'expected exactly one stale suppression, found {source.count(old)}')
-          path.write_text(source.replace(old, new), encoding='utf-8')
+          count = source.count(old)
+          if count == 0:
+              print('stale suppression already absent')
+          elif count == 1:
+              path.write_text(source.replace(old, new), encoding='utf-8')
+          else:
+              raise SystemExit(f'expected at most one stale suppression, found {count}')
           PY
           git diff --check
-          git diff -- processual_api/routers/cgt_governor.py
-      - name: Commit cleanup
+      - name: Commit cleanup when needed
         run: |
+          if git diff --quiet -- processual_api/routers/cgt_governor.py; then
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add processual_api/routers/cgt_governor.py
