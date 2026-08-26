@@ -1,6 +1,6 @@
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
 from starlette.requests import Request
+from starlette.responses import Response
 
 
 _ADMIN_DOM_CONTRACT_SCRIPT = (
@@ -20,6 +20,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
 
         if path == "/admin" or path == "/admin/" or (
             path.startswith("/console/js/") and path.rsplit("/", 1)[-1].startswith("admin_")
