@@ -1,4 +1,4 @@
-﻿"""Generic OpenAI-compatible endpoint adapter.
+"""Generic OpenAI-compatible endpoint adapter.
 
 This adapter is intended for customer-owned or self-hosted endpoints that
 implement the OpenAI-compatible /v1 API surface.
@@ -12,8 +12,12 @@ Environment variables:
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from .base import BaseLLMAdapter
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
 
 
 class GenericOpenAICompatibleAdapter(BaseLLMAdapter):
@@ -69,7 +73,7 @@ class GenericOpenAICompatibleAdapter(BaseLLMAdapter):
             base_url=self.base_url,
         )
 
-        messages = []
+        messages: list[ChatCompletionMessageParam] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
