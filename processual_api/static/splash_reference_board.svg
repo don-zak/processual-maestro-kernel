@@ -28,11 +28,11 @@
 <g id="pcb-routing" data-topology="measured-pin-single-source" data-left-pin-x="624" data-right-pin-x="1048" data-top-pin-y="233" data-bottom-pin-y="653">
   <!-- LEFT / GOVERNANCE: aligned 49px breakout, then progressive fan-out -->
   <g id="left-governance" data-origin="core-left-pins">
-    <path class="route primary cyan" data-route="gov-1" d="M624 274H575L550 260H520L492 235H462L432 207H396V150"/>
-    <path class="route primary cyan" data-route="gov-2" d="M624 284H575L550 272H520L492 249H462L432 225H396V160"/>
+    <path class="route primary cyan" data-route="gov-1" d="M624 274H575L550 258H520L492 230H462L432 198H396V138"/>
+    <path class="route primary cyan" data-route="gov-2" d="M624 284H575L550 270H520L492 246H462L432 220H396V154"/>
     <path class="route primary cyan" data-route="gov-3" d="M624 294H575L550 284H520L492 263H462L432 243H396V170"/>
-    <path class="route secondary cyan" data-route="gov-4" d="M624 304H575L550 296H520L492 277H462L432 261H414L396 179"/>
-    <path class="route secondary cyan" data-route="gov-5" d="M624 314H575L550 308H520L492 291H462L432 279H414L396 189"/>
+    <path class="route secondary cyan" data-route="gov-4" d="M624 304H575L550 298H520L492 282H462L432 268H414L396 188"/>
+    <path class="route secondary cyan" data-route="gov-5" d="M624 314H575L550 312H520L492 301H462L432 293H414L396 208"/>
     <path class="route secondary cyan" data-route="gov-dead-1" data-terminal="dead-end" d="M624 279H575L550 266H520L492 245H468L444 226"/>
     <path class="route micro cyan" data-route="gov-dead-2" data-terminal="dead-end" d="M624 299H575L550 290H520L492 273H472L450 258"/>
   </g>
@@ -69,11 +69,11 @@
 
   <!-- RIGHT / ROUTING -->
   <g id="right-routing" data-origin="core-right-pins">
-    <path class="route primary amber" data-route="route-1" d="M1048 274H1097L1122 260H1152L1180 235H1210L1240 207H1276V150"/>
-    <path class="route primary amber" data-route="route-2" d="M1048 284H1097L1122 272H1152L1180 249H1210L1240 225H1276V160"/>
+    <path class="route primary amber" data-route="route-1" d="M1048 274H1097L1122 258H1152L1180 230H1210L1240 198H1276V138"/>
+    <path class="route primary amber" data-route="route-2" d="M1048 284H1097L1122 270H1152L1180 246H1210L1240 220H1276V154"/>
     <path class="route primary amber" data-route="route-3" d="M1048 294H1097L1122 284H1152L1180 263H1210L1240 243H1276V170"/>
-    <path class="route secondary amber" data-route="route-4" d="M1048 304H1097L1122 296H1152L1180 277H1210L1240 261H1258L1276 179"/>
-    <path class="route secondary amber" data-route="route-5" d="M1048 314H1097L1122 308H1152L1180 291H1210L1240 279H1258L1276 189"/>
+    <path class="route secondary amber" data-route="route-4" d="M1048 304H1097L1122 298H1152L1180 282H1210L1240 268H1258L1276 188"/>
+    <path class="route secondary amber" data-route="route-5" d="M1048 314H1097L1122 312H1152L1180 301H1210L1240 293H1258L1276 208"/>
     <path class="route secondary amber" data-route="route-dead-1" data-terminal="dead-end" d="M1048 279H1097L1122 266H1152L1180 245H1204L1228 226"/>
     <path class="route micro amber" data-route="route-dead-2" data-terminal="dead-end" d="M1048 299H1097L1122 290H1152L1180 273H1200L1222 258"/>
   </g>
