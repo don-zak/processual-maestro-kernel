@@ -9,7 +9,7 @@ Checks:
 5. No weak / default secrets in .env or docker-compose.yml
 6. All required env vars documented in .env.production.example
 7. Public Docker target builds without error (if Docker available)
-8. pytest passes with >= 90% pass rate
+8. pytest completes successfully with no failed/error tests
 9. README exists and contains no placeholder text
 
 Exit code 0 = release ready, 1 = issues found.
@@ -25,9 +25,6 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import NoReturn
-
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,6 +45,16 @@ WEAK_PATTERNS: list[re.Pattern] = [
 DIR_ARTIFACTS = {"__pycache__", ".pytest_cache", ".hypothesis", ".mypy_cache", ".ruff_cache"}
 FILE_ARTIFACTS = {".pyc", ".pyo", ".coverage"}
 EXEMPT_DIRS = {".git", ".venv"}  # .venv excluded from walk but checked separately
+
+
+def _configure_stdio() -> None:
+    """Use resilient UTF-8 output when the script is executed directly."""
+    stdout_buffer = getattr(sys.stdout, "buffer", None)
+    stderr_buffer = getattr(sys.stderr, "buffer", None)
+    if stdout_buffer is not None:
+        sys.stdout = io.TextIOWrapper(stdout_buffer, encoding="utf-8", errors="replace")
+    if stderr_buffer is not None:
+        sys.stderr = io.TextIOWrapper(stderr_buffer, encoding="utf-8", errors="replace")
 
 
 def _error(msg: str) -> None:
@@ -209,8 +216,31 @@ def check_docker_public_build() -> int:
         return 0
 
 
+def _evaluate_pytest_result(returncode: int, output: str) -> int:
+    """Fail closed unless pytest reports a clean successful test run."""
+    pass_match = re.search(r"(\d+) passed", output)
+    fail_match = re.search(r"(\d+) failed", output)
+    error_match = re.search(r"(\d+) error", output)
+    passed = int(pass_match.group(1)) if pass_match else 0
+    failed = int(fail_match.group(1)) if fail_match else 0
+    test_errors = int(error_match.group(1)) if error_match else 0
+    total = passed + failed
+
+    if total == 0:
+        _error("pytest returned 0 tests — check pytest configuration")
+        return 1
+    if returncode != 0:
+        _error(f"pytest exited with status {returncode}")
+        return 1
+    if failed > 0 or test_errors > 0:
+        _error(f"pytest reported {failed} failed and {test_errors} error(s)")
+        return 1
+
+    _ok(f"pytest: {passed}/{total} passed (100.0%)")
+    return 0
+
+
 def run_pytest() -> int:
-    errors = 0
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "--tb=short", "-q"],
@@ -220,32 +250,7 @@ def run_pytest() -> int:
             timeout=300,
         )
         output = result.stdout + result.stderr
-
-        pass_match = re.search(r"(\d+) passed", output)
-        fail_match = re.search(r"(\d+) failed", output)
-        error_match = re.search(r"(\d+) error", output)
-        passed = int(pass_match.group(1)) if pass_match else 0
-        failed = int(fail_match.group(1)) if fail_match else 0
-        test_errors = int(error_match.group(1)) if error_match else 0
-        total = passed + failed
-
-        if total == 0:
-            _error("pytest returned 0 tests — check pytest configuration")
-            return 1
-
-        pass_pct = (passed / total) * 100
-        if pass_pct < 90:
-            _error(f"pytest: {passed}/{total} passed ({pass_pct:.1f}%) — below 90% threshold")
-            errors += 1
-        else:
-            _ok(f"pytest: {passed}/{total} passed ({pass_pct:.1f}%)")
-
-        if test_errors > 0:
-            _error(f"pytest: {test_errors} error(s) found")
-            errors += 1
-        if failed > 0:
-            _warn(f"pytest: {failed} test(s) failed")
-        return errors
+        return _evaluate_pytest_result(result.returncode, output)
     except FileNotFoundError:
         _error("pytest not found")
         return 1
@@ -255,6 +260,7 @@ def run_pytest() -> int:
 
 
 def main() -> NoReturn:
+    _configure_stdio()
     parser = argparse.ArgumentParser(description="Pre-release validation for Processual Maestro Kernel")
     parser.add_argument("--root", type=str, default=None, help="Root directory to check (default: repo root)")
     parser.add_argument("--skip-pytest", action="store_true", help="Skip pytest execution")
