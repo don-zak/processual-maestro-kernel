@@ -1,9 +1,9 @@
 from pathlib import Path
-import re
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "processual_api" / "static"
 SPLASH = STATIC / "splash.html"
+BLUEPRINT = STATIC / "splash_reference_blueprint.js"
 MODEL = STATIC / "splash_routing_model.js"
 ROUTING = STATIC / "splash_routing.js"
 LEGACY_BOARD = STATIC / "splash_reference_board.svg"
@@ -15,6 +15,7 @@ def _read(path: Path) -> str:
 
 def test_legacy_external_routing_asset_is_not_canonical_anymore():
     source = _read(SPLASH)
+    assert not LEGACY_BOARD.exists()
     assert 'id="pcb-reference"' not in source
     assert "splash_reference_board.svg" not in source
     assert "authoredSignalMap" not in source
@@ -34,31 +35,44 @@ def test_every_root_route_is_created_from_a_pin_record():
     assert "buildRoute(pin)" in source
 
 
-def test_side_routes_have_an_explicit_aligned_breakout_before_spread():
+def test_reference_breakout_is_explicit_before_any_corridor_spread():
     source = _read(ROUTING)
     model = _read(MODEL)
-    assert "sideStem: 46" in model
-    assert "verticalStem: 38" in model
+    blueprint = _read(BLUEPRINT)
+    assert "breakout: Object.freeze({ side: 44, vertical: 34 })" in blueprint
+    assert "sideStem: REFERENCE_BLUEPRINT.breakout.side" in model
+    assert "verticalStem: REFERENCE_BLUEPRINT.breakout.vertical" in model
     assert "const stemX = pin.x + dir * CONTRACT.sideStem" in source
     assert "const points = [[pin.x, pin.y], [stemX, pin.y]]" in source
     assert "const stemY = pin.y + dir * CONTRACT.verticalStem" in source
     assert "const points = [[pin.x, pin.y], [pin.x, stemY]]" in source
 
 
-def test_progressive_spread_uses_multiple_stages_and_non_cloned_variants():
+def test_side_spread_is_corridor_guided_and_progressive():
     source = _read(ROUTING)
-    for marker in [
-        "function spreadOffset(pin, stage)",
-        "const o1 = spreadOffset(pin, 1)",
-        "const o2 = spreadOffset(pin, 2)",
-        "const o3 = spreadOffset(pin, 3)",
-        "if (pin.variant === 0)",
-        "if (pin.variant === 1)",
-        "if (pin.variant === 2)",
-        "if (pin.variant === 3)",
-        "if (pin.variant === 4)",
-    ]:
-        assert marker in source
+    required = [
+        "function corridorY(pin)",
+        "const cy = corridorY(pin)",
+        "const x1 = stemX + dir * Math.max(22, Math.round(reach * 0.22))",
+        "const x2 = stemX + dir * Math.max(48, Math.round(reach * 0.48))",
+        "const x3 = stemX + dir * Math.max(70, Math.round(reach * 0.74))",
+        "const y1 = lerp(pin.y, cy, 0.22)",
+        "const y2 = lerp(pin.y, cy, 0.54)",
+        "const y3 = lerp(pin.y, cy, 0.82)",
+    ]
+    assert not [marker for marker in required if marker not in source]
+
+
+def test_top_and_bottom_are_not_vertical_forests_after_breakout():
+    source = _read(ROUTING)
+    required = [
+        "const centerBias = (pin.x - CORE.centerX) / 212",
+        "const outward = centerBias === 0",
+        "const x1 = pin.x + outward * (baseSpread * 0.35)",
+        "const x2 = pin.x + outward * (baseSpread + variantSpread * 0.35)",
+        "const x3 = pin.x + outward * (baseSpread + variantSpread)",
+    ]
+    assert not [marker for marker in required if marker not in source]
 
 
 def test_branches_are_parent_linked_and_terminals_use_real_endpoints():
