@@ -151,6 +151,47 @@ def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
     return metrics
 
 
+def _resource_snapshot(page) -> dict[str, object]:
+    snapshot = page.evaluate(
+        """() => {
+          const resources = performance.getEntriesByType('resource').map(entry => ({
+            name: new URL(entry.name).pathname,
+            initiatorType: entry.initiatorType,
+            transferSize: entry.transferSize,
+            encodedBodySize: entry.encodedBodySize,
+            decodedBodySize: entry.decodedBodySize,
+            duration: Number(entry.duration.toFixed(3)),
+          }));
+          const images = resources.filter(entry => entry.initiatorType === 'img');
+          const navigation = performance.getEntriesByType('navigation')[0];
+          return {
+            resourceCount: resources.length,
+            imageCount: images.length,
+            imagePaths: images.map(entry => entry.name).sort(),
+            totalEncodedBodySize: resources.reduce((sum, entry) => sum + entry.encodedBodySize, 0),
+            totalDecodedBodySize: resources.reduce((sum, entry) => sum + entry.decodedBodySize, 0),
+            totalTransferSize: resources.reduce((sum, entry) => sum + entry.transferSize, 0),
+            domContentLoadedMs: navigation ? Number(navigation.domContentLoadedEventEnd.toFixed(3)) : null,
+            loadEventMs: navigation ? Number(navigation.loadEventEnd.toFixed(3)) : null,
+            resources,
+          };
+        }"""
+    )
+    assert snapshot["resourceCount"] == 6
+    assert snapshot["imageCount"] == 6
+    assert snapshot["imagePaths"] == [
+        "/console/splash_reference_board.svg",
+        "/console/splash_routes_amber.svg",
+        "/console/splash_routes_cyan.svg",
+        "/console/splash_routes_lime.svg",
+        "/console/splash_routes_teal.svg",
+        "/console/splash_routes_violet.svg",
+    ]
+    assert snapshot["totalEncodedBodySize"] > 0
+    assert snapshot["totalDecodedBodySize"] >= snapshot["totalEncodedBodySize"]
+    return snapshot
+
+
 def _pulse_snapshot(page) -> dict[str, object]:
     return page.evaluate(
         """() => ({
@@ -216,6 +257,7 @@ def main() -> None:
             static_page.on("pageerror", lambda exc: static_errors.append(str(exc)))
             static_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["static"] = _assert_page_contract(static_page, pulse_expected=False)
+            evidence["static_resources"] = _resource_snapshot(static_page)
             static_page.screenshot(path=str(ARTIFACTS / "splash-static-1672x941.png"), full_page=True)
             assert not static_errors, f"Static splash browser errors: {static_errors}"
             static_context.close()
@@ -231,6 +273,7 @@ def main() -> None:
             pulse_page.on("pageerror", lambda exc: pulse_errors.append(str(exc)))
             pulse_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["pulse"] = _assert_page_contract(pulse_page, pulse_expected=True)
+            evidence["pulse_resources"] = _resource_snapshot(pulse_page)
             evidence["pulse_snapshot"] = _wait_for_visible_pulse(pulse_page)
 
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
