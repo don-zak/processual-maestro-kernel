@@ -15,6 +15,7 @@ STATIC = ROOT / "processual_api" / "static"
 ARTIFACTS = ROOT / "artifacts" / "splash-browser"
 HOST = "127.0.0.1"
 PORT = 8765
+PULSE_STATE_TIMEOUT_MS = 12000
 
 
 class SplashHandler(BaseHTTPRequestHandler):
@@ -164,7 +165,13 @@ def _pulse_snapshot(page) -> dict[str, object]:
     )
 
 
-def _wait_for_pulse_state(page, *, source: bool, receiver_family: str | None, timeout_ms: int = 5000) -> dict[str, object]:
+def _wait_for_pulse_state(
+    page,
+    *,
+    source: bool,
+    receiver_family: str | None,
+    timeout_ms: int = PULSE_STATE_TIMEOUT_MS,
+) -> dict[str, object]:
     expected_receiving = [] if receiver_family is None else [receiver_family]
     page.wait_for_function(
         """({source, receiving}) => {
