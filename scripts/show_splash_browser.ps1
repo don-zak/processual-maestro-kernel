@@ -138,7 +138,8 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
             $routeLayer = @'
 <img class="surface-route-review-layer" src="/console/splash_surface_routes_review.svg" alt="" aria-hidden="true">
 '@
-            $html = $html.Replace('<div class="core-shadow"></div>', $routeLayer + "`r`n<div class="core-shadow"></div>")
+            $coreShadowMarkup = '<div class="core-shadow"></div>'
+            $html = $html.Replace($coreShadowMarkup, $routeLayer + "`r`n" + $coreShadowMarkup)
         }
 
         if ($FullViewport) {
