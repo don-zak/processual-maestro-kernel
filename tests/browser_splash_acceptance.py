@@ -164,6 +164,26 @@ def _pulse_snapshot(page) -> dict[str, object]:
     )
 
 
+def _wait_for_pulse_state(page, *, source: bool, receiver_family: str | None, timeout_ms: int = 5000) -> dict[str, object]:
+    expected_receiving = [] if receiver_family is None else [receiver_family]
+    page.wait_for_function(
+        """({source, receiving}) => {
+          const heads = [...document.querySelectorAll('.pulse-head')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).length;
+          const tails = [...document.querySelectorAll('.pulse-tail')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).length;
+          const coreSource = document.querySelector('.core').classList.contains('pulse-source');
+          const activeReceivers = [...document.querySelectorAll('.card.receiving')]
+            .map(card => card.dataset.routeFamily);
+          return heads === 1 && tails === 1 && coreSource === source
+            && JSON.stringify(activeReceivers) === JSON.stringify(receiving);
+        }""",
+        arg={"source": source, "receiving": expected_receiving},
+        timeout=timeout_ms,
+    )
+    return _pulse_snapshot(page)
+
+
 def main() -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer((HOST, PORT), SplashHandler)
@@ -202,21 +222,19 @@ def main() -> None:
             pulse_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["pulse"] = _assert_page_contract(pulse_page, pulse_expected=True)
 
-            pulse_page.wait_for_timeout(900)
-            source_snapshot = _pulse_snapshot(pulse_page)
-            assert source_snapshot["visibleHeads"] == 1
-            assert source_snapshot["visibleTails"] == 1
-            assert source_snapshot["coreSource"] is True
-            assert source_snapshot["receiving"] == []
-            evidence["source_snapshot_900ms"] = source_snapshot
+            source_snapshot = _wait_for_pulse_state(
+                pulse_page,
+                source=True,
+                receiver_family=None,
+            )
+            evidence["source_snapshot"] = source_snapshot
 
-            pulse_page.wait_for_timeout(2300)
-            receiver_snapshot = _pulse_snapshot(pulse_page)
-            assert receiver_snapshot["visibleHeads"] == 1
-            assert receiver_snapshot["visibleTails"] == 1
-            assert receiver_snapshot["coreSource"] is False
-            assert receiver_snapshot["receiving"] == ["cyan"]
-            evidence["receiver_snapshot_3200ms"] = receiver_snapshot
+            receiver_snapshot = _wait_for_pulse_state(
+                pulse_page,
+                source=False,
+                receiver_family="cyan",
+            )
+            evidence["receiver_snapshot"] = receiver_snapshot
 
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
             assert not pulse_errors, f"Animated splash browser errors: {pulse_errors}"
