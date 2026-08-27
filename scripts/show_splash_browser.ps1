@@ -4,7 +4,8 @@ param(
     [int]$Width = 1672,
     [int]$Height = 941,
     [string]$BrowserPath = "",
-    [switch]$Incognito
+    [switch]$Incognito,
+    [switch]$VisualReset
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,7 +59,35 @@ New-Item -ItemType Directory -Force -Path $consoleDir | Out-Null
 
 $server = $null
 try {
-    Copy-Item $splash (Join-Path $tempRoot "index.html")
+    $previewIndex = Join-Path $tempRoot "index.html"
+    Copy-Item $splash $previewIndex
+
+    if ($VisualReset) {
+        $html = Get-Content $previewIndex -Raw
+        $resetCss = @'
+<style id="maestro-visual-reset-preview">
+/* Preview-only reset: do not mutate canonical route assets. */
+#pcb-reference,
+.route-layer,
+.pulse-layer { display:none !important; }
+.core-shadow { opacity:.35 !important; filter:blur(10px) !important; }
+.card.c1,.card.c2,.card.c3,.card.c4 { left:54px !important; }
+.card.r1,.card.r2,.card.r3,.card.r4 { right:54px !important; }
+.card { width:320px !important; height:132px !important; }
+.card.c1,.card.r1 { top:96px !important; }
+.card.c2,.card.r2 { top:252px !important; }
+.card.c3,.card.r3 { top:408px !important; }
+.card.c4,.card.r4 { top:564px !important; }
+.core { left:619px !important; top:214px !important; width:433px !important; height:408px !important; transform:none !important; }
+.core-shadow { left:588px !important; top:184px !important; width:495px !important; height:468px !important; }
+.execution { left:758px !important; top:656px !important; }
+.telemetry { bottom:60px !important; }
+</style>
+'@
+        $html = $html -replace '</head>', ($resetCss + "`r`n</head>")
+        Set-Content -Path $previewIndex -Value $html -Encoding UTF8
+    }
+
     foreach ($asset in $visualAssets) {
         Copy-Item (Join-Path $staticDir $asset) (Join-Path $consoleDir $asset)
     }
@@ -104,7 +133,11 @@ try {
     Write-Host "Requested browser window: ${Width}x${Height}"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
-    Write-Host "Authored PCB board + canonical route layers: loaded from current branch"
+    if ($VisualReset) {
+        Write-Host "Preview mode: VISUAL RESET (legacy route layers hidden; layout spread for review)." -ForegroundColor Yellow
+    } else {
+        Write-Host "Preview mode: current branch presentation."
+    }
     Write-Host ""
     Write-Host "Keep this PowerShell window open while reviewing the splash." -ForegroundColor Cyan
     Write-Host "Press ENTER here when you are finished to stop the local server."
