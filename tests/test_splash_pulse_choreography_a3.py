@@ -32,3 +32,14 @@ def test_pulse_choreography_never_changes_canonical_route_geometry() -> None:
     assert "createElementNS" not in source
     assert "setAttribute('d'" not in source
     assert 'setAttribute("d"' not in source
+
+
+def test_static_cyan_rebalance_does_not_dim_animated_pulse_layer() -> None:
+    source = SPLASH.read_text(encoding="utf-8")
+
+    assert ".route-layer.cyan{opacity:.62;filter:brightness(.58) drop-shadow(0 0 .8px currentColor)}" in source
+    assert ".route-layer.cyan,.pulse-layer.cyan{color:var(--cyan)}" in source
+    assert ".pulse-layer.pulse-head{filter:drop-shadow(1.4px 0 0 currentColor)" in source
+    assert ".pulse-layer.pulse-tail{filter:drop-shadow(.65px 0 0 currentColor)" in source
+    assert ".pulse-layer.cyan{opacity:.62" not in source
+    assert ".pulse-layer.cyan{filter:brightness(.58)" not in source
