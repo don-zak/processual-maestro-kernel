@@ -86,6 +86,20 @@ def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
     return metrics
 
 
+def _pulse_snapshot(page) -> dict[str, object]:
+    return page.evaluate(
+        """() => ({
+          visibleHeads: [...document.querySelectorAll('.pulse-head')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).length,
+          visibleTails: [...document.querySelectorAll('.pulse-tail')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).length,
+          coreSource: document.querySelector('.core').classList.contains('pulse-source'),
+          receiving: [...document.querySelectorAll('.card.receiving')]
+            .map(card => card.dataset.routeFamily),
+        })"""
+    )
+
+
 def main() -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer((HOST, PORT), SplashHandler)
@@ -123,13 +137,23 @@ def main() -> None:
             pulse_page.on("pageerror", lambda exc: pulse_errors.append(str(exc)))
             pulse_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["pulse"] = _assert_page_contract(pulse_page, pulse_expected=True)
-            pulse_page.wait_for_timeout(1800)
-            pulse_opacity = pulse_page.eval_on_selector(
-                ".pulse-head",
-                "node => Number.parseFloat(getComputedStyle(node).opacity)",
-            )
-            assert pulse_opacity > 0.5, f"Pulse head is not visibly active: opacity={pulse_opacity}"
-            evidence["pulse_head_opacity_at_1800ms"] = pulse_opacity
+
+            pulse_page.wait_for_timeout(900)
+            source_snapshot = _pulse_snapshot(pulse_page)
+            assert source_snapshot["visibleHeads"] == 1
+            assert source_snapshot["visibleTails"] == 1
+            assert source_snapshot["coreSource"] is True
+            assert source_snapshot["receiving"] == []
+            evidence["source_snapshot_900ms"] = source_snapshot
+
+            pulse_page.wait_for_timeout(2300)
+            receiver_snapshot = _pulse_snapshot(pulse_page)
+            assert receiver_snapshot["visibleHeads"] == 1
+            assert receiver_snapshot["visibleTails"] == 1
+            assert receiver_snapshot["coreSource"] is False
+            assert receiver_snapshot["receiving"] == ["cyan"]
+            evidence["receiver_snapshot_3200ms"] = receiver_snapshot
+
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
             assert not pulse_errors, f"Animated splash browser errors: {pulse_errors}"
             pulse_context.close()
