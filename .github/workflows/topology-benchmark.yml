@@ -25,6 +25,29 @@ on:
       - processual_api/middleware/runtime_capacity_metrics.py
       - processual_api/cgt_governor/adapters/execution_fanout.py
       - processual_api/cgt_governor/adapters/registry.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - benchmarks/topology_compare.py
+      - benchmarks/staging_canary_gate.py
+      - benchmarks/fanout_app.py
+      - benchmarks/fanout_probe.py
+      - benchmarks/execution_mix_app.py
+      - benchmarks/execution_mix_probe.py
+      - benchmarks/execution_mix_compare.py
+      - benchmarks/flush_redis.py
+      - tests/test_topology_compare.py
+      - tests/test_staging_canary_gate.py
+      - tests/test_fanout_probe.py
+      - tests/test_execution_mix_benchmark.py
+      - tests/test_execution_fanout.py
+      - tests/test_adapter_registry.py
+      - .github/workflows/topology-benchmark.yml
+      - processual_api/middleware/runtime_capacity.py
+      - processual_api/middleware/runtime_capacity_metrics.py
+      - processual_api/cgt_governor/adapters/execution_fanout.py
+      - processual_api/cgt_governor/adapters/registry.py
 
 permissions:
   contents: read
@@ -76,6 +99,10 @@ jobs:
       EXECUTION_FANOUT_ENABLED: "true"
       EXECUTION_FANOUT_GLOBAL_LIMIT: "16"
       EXECUTION_FANOUT_PROVIDER_LIMIT: "8"
+      EXECUTION_FANOUT_LEASE_SECONDS: "180"
+      EXECUTION_FANOUT_WAIT_MS: "250"
+      EXECUTION_FANOUT_RETRY_MS: "25"
+      EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS: "120"
 
     steps:
       - uses: actions/checkout@v4
