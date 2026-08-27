@@ -15,9 +15,6 @@ except ImportError:
 _engine = None
 _session_factory = None
 
-_DATABASE_POOL_TIMEOUT_SECONDS = 30.0
-_DATABASE_POOL_RECYCLE_SECONDS = 1800
-
 
 def get_session_factory():
     if _session_factory is None:
@@ -34,14 +31,20 @@ def _get_database_url() -> str:
     return url
 
 
-def _validated_pool_bounds() -> tuple[int, int]:
+def _validated_pool_config() -> tuple[int, int, float, int]:
     pool_min = settings.database_pool_min
     pool_max = settings.database_pool_max
+    pool_timeout = settings.database_pool_timeout_seconds
+    pool_recycle = settings.database_pool_recycle_seconds
     if pool_min < 1:
         raise RuntimeError("DATABASE_POOL_MIN must be at least 1.")
     if pool_max < pool_min:
         raise RuntimeError("DATABASE_POOL_MAX must be greater than or equal to DATABASE_POOL_MIN.")
-    return pool_min, pool_max
+    if pool_timeout <= 0:
+        raise RuntimeError("DATABASE_POOL_TIMEOUT_SECONDS must be greater than 0.")
+    if pool_recycle <= 0:
+        raise RuntimeError("DATABASE_POOL_RECYCLE_SECONDS must be greater than 0.")
+    return pool_min, pool_max, pool_timeout, pool_recycle
 
 
 async def init_db():
@@ -49,14 +52,14 @@ async def init_db():
     url = _get_database_url()
     if not url or create_async_engine is None:
         return
-    pool_min, pool_max = _validated_pool_bounds()
+    pool_min, pool_max, pool_timeout, pool_recycle = _validated_pool_config()
     _engine = create_async_engine(
         url,
         pool_size=pool_min,
         max_overflow=pool_max - pool_min,
         pool_pre_ping=True,
-        pool_timeout=_DATABASE_POOL_TIMEOUT_SECONDS,
-        pool_recycle=_DATABASE_POOL_RECYCLE_SECONDS,
+        pool_timeout=pool_timeout,
+        pool_recycle=pool_recycle,
         echo=settings.debug,
     )
     _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
