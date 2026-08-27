@@ -156,6 +156,9 @@ def _pulse_snapshot(page) -> dict[str, object]:
         """() => ({
           visibleHeads: [...document.querySelectorAll('.pulse-head')]
             .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).length,
+          visibleHeadFamilies: [...document.querySelectorAll('.pulse-head')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5)
+            .map(node => ['cyan','teal','lime','amber','violet'].find(family => node.classList.contains(family))),
           visibleTails: [...document.querySelectorAll('.pulse-tail')]
             .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).length,
           coreSource: document.querySelector('.core').classList.contains('pulse-source'),
@@ -168,6 +171,8 @@ def _pulse_snapshot(page) -> dict[str, object]:
 def _assert_visible_pulse(snapshot: dict[str, object]) -> None:
     assert snapshot["visibleHeads"] == 1
     assert snapshot["visibleTails"] == 1
+    assert len(snapshot["visibleHeadFamilies"]) == 1
+    assert snapshot["visibleHeadFamilies"][0] in {"cyan", "teal", "lime", "amber", "violet"}
 
 
 def _wait_for_pulse_state(
@@ -238,13 +243,15 @@ def main() -> None:
                 receiver_family=None,
             )
             evidence["source_snapshot"] = source_snapshot
+            source_family = source_snapshot["visibleHeadFamilies"][0]
 
             receiver_snapshot = _wait_for_pulse_state(
                 pulse_page,
                 source=False,
-                receiver_family="cyan",
+                receiver_family=source_family,
             )
             evidence["receiver_snapshot"] = receiver_snapshot
+            assert receiver_snapshot["visibleHeadFamilies"] == [source_family]
 
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
             assert not pulse_errors, f"Animated splash browser errors: {pulse_errors}"
