@@ -6,6 +6,7 @@ param(
     [string]$BrowserPath = "",
     [switch]$Incognito,
     [switch]$VisualReset,
+    [switch]$FurnishReview,
     [switch]$FullViewport
 )
 
@@ -63,7 +64,7 @@ try {
     $previewIndex = Join-Path $tempRoot "index.html"
     Copy-Item $splash $previewIndex
 
-    if ($VisualReset -or $FullViewport) {
+    if ($VisualReset -or $FurnishReview -or $FullViewport) {
         $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
         $html = [System.IO.File]::ReadAllText($previewIndex, $utf8)
 
@@ -89,6 +90,14 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
 .core-shadow { left:588px !important; top:184px !important; width:495px !important; height:468px !important; }
 .execution { left:758px !important; top:656px !important; }
 .telemetry { bottom:60px !important; }
+'@
+        }
+        if ($FurnishReview) {
+            $previewCss += @'
+/* Review actual furnished production layout with legacy route assets isolated. */
+#pcb-reference,
+.route-layer,
+.pulse-layer { display:none !important; }
 '@
         }
         if ($FullViewport) {
@@ -168,7 +177,11 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     Write-Host "URL: $url"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
-    if ($VisualReset -and $FullViewport) {
+    if ($FurnishReview -and $FullViewport) {
+        Write-Host "Preview mode: FURNISH REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
+    } elseif ($FurnishReview) {
+        Write-Host "Preview mode: FURNISH REVIEW (legacy route layers hidden)." -ForegroundColor Yellow
+    } elseif ($VisualReset -and $FullViewport) {
         Write-Host "Preview mode: VISUAL RESET + FULL VIEWPORT." -ForegroundColor Yellow
     } elseif ($VisualReset) {
         Write-Host "Preview mode: VISUAL RESET (UTF-8 preserved; legacy route layers hidden)." -ForegroundColor Yellow
