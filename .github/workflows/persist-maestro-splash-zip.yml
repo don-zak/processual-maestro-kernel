@@ -1,0 +1,100 @@
+name: Persist Maestro Splash ZIP
+
+on:
+  push:
+    branches:
+      - agent/post-vq-local-web-acceptance
+    paths:
+      - .github/workflows/persist-maestro-splash-zip.yml
+
+permissions:
+  contents: write
+
+jobs:
+  persist-zip:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: 3775d5e4d8ab114f5503de57bab53ecc26e1b32e
+      TARGET_BRANCH: agent/post-vq-local-web-acceptance
+      ARCHIVE_NAME: maestro-splash-development-archive-2026-08-27
+      DEST: docs/archives/maestro-splash
+    steps:
+      - name: Checkout cleanup branch with preserved history
+        uses: actions/checkout@v4
+        with:
+          ref: agent/post-vq-local-web-acceptance
+          fetch-depth: 0
+
+      - name: Build ZIP from preserved source and committed inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git cat-file -t "$SOURCE_SHA")" = commit
+          test -f "$DEST/INVENTORY.json"
+          test -f "$DEST/ARCHIVE_MANIFEST.md"
+          test -f "$DEST/SOURCE_STATE.json"
+
+          ROOT="$ARCHIVE_NAME"
+          rm -rf "$ROOT" "$ARCHIVE_NAME.zip"
+          mkdir -p "$ROOT"
+
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import subprocess
+
+          source = os.environ["SOURCE_SHA"]
+          root = pathlib.Path(os.environ["ARCHIVE_NAME"])
+          dest = pathlib.Path(os.environ["DEST"])
+          rows = json.loads((dest / "INVENTORY.json").read_text())
+          if len(rows) != 60:
+              raise SystemExit(f"inventory drift: {len(rows)}")
+          counts = {}
+          for row in rows:
+              counts[row["classification"]] = counts.get(row["classification"], 0) + 1
+              path = row["path"]
+              payload = subprocess.run(
+                  ["git", "show", f"{source}:{path}"],
+                  check=True,
+                  stdout=subprocess.PIPE,
+              ).stdout
+              out = root / path
+              out.parent.mkdir(parents=True, exist_ok=True)
+              out.write_bytes(payload)
+          expected = {"ARCHIVE_DELETE": 58, "ARCHIVE_RESTORE_MAIN": 1, "HOLD": 1}
+          if any(counts.get(k, 0) != v for k, v in expected.items()):
+              raise SystemExit(f"classification drift: {counts}")
+          for name in ("ARCHIVE_MANIFEST.md", "SOURCE_STATE.json", "INVENTORY.json"):
+              (root / name).write_bytes((dest / name).read_bytes())
+          PY
+
+          (
+            cd "$ROOT"
+            find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+          zip -qr "$ARCHIVE_NAME.zip" "$ROOT"
+          unzip -t "$ARCHIVE_NAME.zip"
+          test -s "$ARCHIVE_NAME.zip"
+
+      - name: Force-track ZIP and verify repository copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$ARCHIVE_NAME.zip" "$DEST/$ARCHIVE_NAME.zip"
+          ZIP_SHA="$(sha256sum "$DEST/$ARCHIVE_NAME.zip" | awk '{print $1}')"
+          printf '%s  %s\n' "$ZIP_SHA" "$ARCHIVE_NAME.zip" > "$DEST/SHA256SUMS"
+          (
+            cd "$DEST"
+            sha256sum -c SHA256SUMS
+            unzip -t "$ARCHIVE_NAME.zip"
+          )
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$DEST/$ARCHIVE_NAME.zip"
+          git add "$DEST/SHA256SUMS"
+          git rm .github/workflows/persist-maestro-splash-zip.yml
+          git commit -m "chore(splash): store verified archive zip in repository"
+          git push origin "HEAD:$TARGET_BRANCH"
