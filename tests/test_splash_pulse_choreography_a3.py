@@ -12,10 +12,15 @@ def test_pulse_choreography_is_semantically_bound_to_active_family() -> None:
         "const cx=824.5,cy=428,maxR=690,duration=4300,rest=850,cycle=duration+rest",
         "cycleIndex=Math.floor(total/cycle)%pulses.length",
         "active=pulses[cycleIndex]",
+        "p.head.style.opacity=enabled?'.94':'0'",
+        "p.tail.style.opacity=enabled?'.58':'0'",
+        "p.head.style.maskImage=headMask",
+        "p.tail.style.maskImage=tailMask",
         "core.classList.toggle('pulse-source',t<.32)",
         "const receiverWindow=t>.68&&t<.96",
         "card.classList.toggle('receiving',receiverWindow&&card.dataset.routeFamily===active.family)",
         "core.style.setProperty('--pulse-color',familyColors[active.family])",
+        "requestAnimationFrame(frame)",
     )
     missing = [marker for marker in required if marker not in source]
     assert not missing, f"Missing deterministic pulse choreography markers: {missing}"
