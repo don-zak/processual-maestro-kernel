@@ -26,6 +26,15 @@ def test_pulse_choreography_is_semantically_bound_to_active_family() -> None:
     assert not missing, f"Missing deterministic pulse choreography markers: {missing}"
 
 
+def test_pulse_clock_is_anchored_to_first_animation_frame() -> None:
+    source = SPLASH.read_text(encoding="utf-8")
+
+    assert "let start=null" in source
+    assert "function frame(now){if(start===null)start=now;const total=now-start" in source
+    assert "let start=performance.now()" not in source
+    assert "const total=now-start" in source
+
+
 def test_pulse_choreography_never_changes_canonical_route_geometry() -> None:
     source = SPLASH.read_text(encoding="utf-8")
 
