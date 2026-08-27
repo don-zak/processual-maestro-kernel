@@ -1,0 +1,193 @@
+name: Persist Maestro Splash Archive
+
+on:
+  push:
+    branches:
+      - agent/post-vq-local-web-acceptance
+    paths:
+      - .github/workflows/persist-maestro-splash-archive.yml
+
+permissions:
+  contents: write
+
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: 3775d5e4d8ab114f5503de57bab53ecc26e1b32e
+      TARGET_BRANCH: agent/post-vq-local-web-acceptance
+      ARCHIVE_NAME: maestro-splash-development-archive-2026-08-27
+    steps:
+      - name: Checkout preserved Splash source
+        uses: actions/checkout@v4
+        with:
+          ref: 3775d5e4d8ab114f5503de57bab53ecc26e1b32e
+          fetch-depth: 0
+          path: source
+
+      - name: Checkout cleanup branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/post-vq-local-web-acceptance
+          fetch-depth: 0
+          path: target
+
+      - name: Rebuild exact verified Splash archive
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          MAIN_SHA="$(git rev-parse origin/main)"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          ROOT="$ARCHIVE_NAME"
+          rm -rf "$ROOT" "$ARCHIVE_NAME.zip"
+          mkdir -p "$ROOT"
+
+          MAIN_SHA="$MAIN_SHA" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import shutil
+          import subprocess
+
+          source_sha = os.environ["SOURCE_SHA"]
+          main_sha = os.environ["MAIN_SHA"]
+          root = pathlib.Path(os.environ["ARCHIVE_NAME"])
+
+          def git(*args, check=True):
+              p = subprocess.run(["git", *args], text=True, capture_output=True)
+              if check and p.returncode:
+                  raise RuntimeError(f"git {' '.join(args)} failed: {p.stderr}")
+              return p
+
+          paths = git("ls-tree", "-r", "--name-only", source_sha).stdout.splitlines()
+          candidates = sorted(p for p in paths if "splash" in p.lower())
+          if "processual_api/static/splash.html" not in candidates:
+              raise SystemExit("splash.html missing from candidate inventory")
+
+          def exists_at(ref, path):
+              return git("cat-file", "-e", f"{ref}:{path}", check=False).returncode == 0
+
+          def blob_at(ref, path):
+              p = git("rev-parse", f"{ref}:{path}", check=False)
+              return p.stdout.strip() if p.returncode == 0 else None
+
+          def cleanup_scope(path):
+              name = pathlib.PurePosixPath(path).name.lower()
+              return (
+                  (path.startswith("processual_api/static/") and name.startswith("splash") and name.endswith(".svg"))
+                  or (path.startswith("scripts/") and "splash" in name)
+                  or (path.startswith("tests/") and "splash" in name)
+                  or path == ".github/workflows/splash-visual-contract.yml"
+              )
+
+          rows = []
+          for path in candidates:
+              source_blob = blob_at(source_sha, path)
+              main_exists = exists_at("origin/main", path)
+              main_blob = blob_at("origin/main", path) if main_exists else None
+              if path == "processual_api/static/splash.html":
+                  classification = "ARCHIVE_RESTORE_MAIN" if source_blob != main_blob else "KEEP"
+              elif cleanup_scope(path):
+                  if not main_exists:
+                      classification = "ARCHIVE_DELETE"
+                  elif source_blob == main_blob:
+                      classification = "KEEP"
+                  else:
+                      classification = "HOLD"
+              else:
+                  classification = "KEEP" if main_exists and source_blob == main_blob else "HOLD"
+
+              src = pathlib.Path(path)
+              if not src.is_file():
+                  raise SystemExit(f"tracked candidate missing from checkout: {path}")
+              dst = root / path
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+              rows.append({
+                  "path": path,
+                  "classification": classification,
+                  "source_blob_sha": source_blob,
+                  "main_blob_sha": main_blob,
+                  "sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
+              })
+
+          counts = {}
+          for row in rows:
+              counts[row["classification"]] = counts.get(row["classification"], 0) + 1
+          expected = {"ARCHIVE_DELETE": 58, "ARCHIVE_RESTORE_MAIN": 1, "HOLD": 1}
+          for key, value in expected.items():
+              if counts.get(key, 0) != value:
+                  raise SystemExit(f"classification drift: {key}={counts.get(key, 0)} expected={value}")
+          if len(rows) != 60:
+              raise SystemExit(f"inventory drift: {len(rows)} expected=60")
+
+          state = {
+              "repository": "don-zak/processual-maestro-kernel",
+              "source_branch": "agent/post-vq-local-web-acceptance",
+              "source_head": source_sha,
+              "archive_branch": "archive/maestro-splash-development-2026-08-27",
+              "main_reference": main_sha,
+              "pull_request": 165,
+              "archived_at": "2026-08-27",
+              "inventory_file_count": len(rows),
+              "classifications": counts,
+              "restore_requires_manual_review": True,
+          }
+          (root / "SOURCE_STATE.json").write_text(json.dumps(state, indent=2) + "\n")
+          (root / "INVENTORY.json").write_text(json.dumps(rows, indent=2) + "\n")
+          (root / "ARCHIVE_MANIFEST.md").write_text(
+              "# MAESTRO Splash Development Archive\n\n"
+              f"- Source SHA: `{source_sha}`\n"
+              f"- Main reference: `{main_sha}`\n"
+              f"- Inventory files: **{len(rows)}**\n"
+              f"- ARCHIVE_DELETE: **{counts.get('ARCHIVE_DELETE', 0)}**\n"
+              f"- ARCHIVE_RESTORE_MAIN: **{counts.get('ARCHIVE_RESTORE_MAIN', 0)}**\n"
+              f"- HOLD: **{counts.get('HOLD', 0)}**\n\n"
+              "Restore only after manual review and rerun Splash visual/browser contracts.\n"
+          )
+          (root / "RESTORE_INSTRUCTIONS.md").write_text(
+              f"# Restore Instructions\n\n"
+              f"1. Review current main before restoring.\n"
+              f"2. Preserved source SHA: `{source_sha}`.\n"
+              "3. Restore files selectively; never overwrite unrelated current files.\n"
+              "4. Treat HOLD entries as manual-review only.\n"
+              "5. Re-run Splash contracts and browser acceptance.\n"
+          )
+          archived = [p for p in root.rglob("*") if p.is_file() and p.name != "SHA256SUMS.txt"]
+          with (root / "SHA256SUMS.txt").open("w") as out:
+              for p in sorted(archived):
+                  rel = p.relative_to(root)
+                  out.write(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {rel.as_posix()}\n")
+          print(json.dumps({"inventory": len(rows), "classifications": counts}, sort_keys=True))
+          PY
+
+          (cd "$ROOT" && sha256sum -c SHA256SUMS.txt)
+          zip -qr "$ARCHIVE_NAME.zip" "$ROOT"
+          unzip -t "$ARCHIVE_NAME.zip"
+          test -s "$ARCHIVE_NAME.zip"
+
+      - name: Persist archive inside repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="target/docs/archives/maestro-splash"
+          mkdir -p "$DEST"
+          cp "source/$ARCHIVE_NAME.zip" "$DEST/$ARCHIVE_NAME.zip"
+          cp "source/$ARCHIVE_NAME/ARCHIVE_MANIFEST.md" "$DEST/ARCHIVE_MANIFEST.md"
+          cp "source/$ARCHIVE_NAME/SOURCE_STATE.json" "$DEST/SOURCE_STATE.json"
+          cp "source/$ARCHIVE_NAME/INVENTORY.json" "$DEST/INVENTORY.json"
+          ZIP_SHA="$(sha256sum "$DEST/$ARCHIVE_NAME.zip" | awk '{print $1}')"
+          printf '%s  %s\n' "$ZIP_SHA" "$ARCHIVE_NAME.zip" > "$DEST/SHA256SUMS"
+          (cd target && unzip -t "docs/archives/maestro-splash/$ARCHIVE_NAME.zip")
+          (cd target && sha256sum -c docs/archives/maestro-splash/SHA256SUMS)
+
+          cd target
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/archives/maestro-splash
+          git rm .github/workflows/persist-maestro-splash-archive.yml
+          git commit -m "chore(splash): persist verified development archive"
+          git push origin "HEAD:$TARGET_BRANCH"
