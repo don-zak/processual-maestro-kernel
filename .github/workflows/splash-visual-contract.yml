@@ -14,6 +14,7 @@ on:
       - tests/test_build_splash_runtime_manifest_a3.py
       - tests/test_render_splash_canonical_pcb_a3.py
       - tests/browser_splash_acceptance.py
+      - tests/browser_splash_keyboard_acceptance.py
       - scripts/build_splash_runtime_manifest.py
       - scripts/render_splash_canonical_pcb.py
       - scripts/show_splash_browser.ps1
@@ -30,6 +31,7 @@ on:
       - tests/test_build_splash_runtime_manifest_a3.py
       - tests/test_render_splash_canonical_pcb_a3.py
       - tests/browser_splash_acceptance.py
+      - tests/browser_splash_keyboard_acceptance.py
       - scripts/build_splash_runtime_manifest.py
       - scripts/render_splash_canonical_pcb.py
       - scripts/show_splash_browser.ps1
@@ -58,6 +60,8 @@ jobs:
             tests/test_render_splash_canonical_pcb_a3.py
       - name: Run exact viewport Chromium acceptance
         run: PYTHONPATH=. python tests/browser_splash_acceptance.py
+      - name: Run keyboard focus Chromium acceptance
+        run: PYTHONPATH=tests:. python tests/browser_splash_keyboard_acceptance.py
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
