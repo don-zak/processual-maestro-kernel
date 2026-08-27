@@ -9,6 +9,8 @@ on:
       - "processual_api/auth/**"
       - "processual_api/billing/**"
       - "processual_api/admin_marketplace/**"
+      - "processual_api/db/**"
+      - "processual_api/settings.py"
       - "processual_api/middleware/security_headers.py"
       - "processual_api/routers/client_provider_alias_18.py"
       - "processual_api/routers/settings_provider_test_runtime.py"
@@ -25,6 +27,8 @@ on:
       - "tests/test_registration_plan_mode_matrix_a3.py"
       - "tests/test_admin_marketplace_*.py"
       - "tests/test_assessment_subscription_activation_a3.py"
+      - "tests/test_database_pool_hardening_r1.py"
+      - "tests/test_production_env_template_regression.py"
       - "tests/test_settings_subscription_runtime_regression.py"
       - "tests/test_settings_provider_test_runtime_regression.py"
       - "tests/test_client_provider_connection_endpoint_regression.py"
@@ -39,6 +43,8 @@ on:
       - "processual_api/auth/**"
       - "processual_api/billing/**"
       - "processual_api/admin_marketplace/**"
+      - "processual_api/db/**"
+      - "processual_api/settings.py"
       - "processual_api/middleware/security_headers.py"
       - "processual_api/routers/client_provider_alias_18.py"
       - "processual_api/routers/settings_provider_test_runtime.py"
@@ -55,6 +61,8 @@ on:
       - "tests/test_registration_plan_mode_matrix_a3.py"
       - "tests/test_admin_marketplace_*.py"
       - "tests/test_assessment_subscription_activation_a3.py"
+      - "tests/test_database_pool_hardening_r1.py"
+      - "tests/test_production_env_template_regression.py"
       - "tests/test_settings_subscription_runtime_regression.py"
       - "tests/test_settings_provider_test_runtime_regression.py"
       - "tests/test_client_provider_connection_endpoint_regression.py"
@@ -84,6 +92,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .[dev,api,security,database]
+
+      - name: Database pool resilience qualification
+        run: |
+          python -m pytest -q \
+            tests/test_database_pool_hardening_r1.py \
+            tests/test_production_env_template_regression.py
 
       - name: Registration and plan qualification
         run: |
@@ -138,9 +152,13 @@ jobs:
             processual_api/admin_marketplace/subscription_activation_service.py \
             processual_api/admin_marketplace/subscription_runtime_bootstrap.py \
             processual_api/admin_marketplace/subscription_quota_usage.py \
+            processual_api/db/session.py \
+            processual_api/settings.py \
             processual_api/middleware/security_headers.py \
             processual_api/routers/client_provider_alias_18.py \
             processual_api/routers/settings_provider_test_runtime.py \
+            tests/test_database_pool_hardening_r1.py \
+            tests/test_production_env_template_regression.py \
             tests/test_client_provider_connection_endpoint_regression.py \
             tests/test_settings_provider_test_runtime_regression.py \
             tests/test_release_commercial_entitlement_quota_contract_r1.py \
