@@ -57,3 +57,12 @@ def test_static_cyan_rebalance_does_not_dim_animated_pulse_layer() -> None:
     assert ".pulse-layer.pulse-tail{filter:drop-shadow(.65px 0 0 currentColor)" in source
     assert ".pulse-layer.cyan{opacity:.62" not in source
     assert ".pulse-layer.cyan{filter:brightness(.58)" not in source
+
+
+def test_base_routes_do_not_run_continuous_full_canvas_animation() -> None:
+    source = SPLASH.read_text(encoding="utf-8")
+
+    assert "@keyframes breathe" not in source
+    assert ".route-layer{animation:breathe" not in source
+    assert "requestAnimationFrame(frame)" in source
+    assert "@media(prefers-reduced-motion: reduce){.pulse-layer{display:none}" in source
