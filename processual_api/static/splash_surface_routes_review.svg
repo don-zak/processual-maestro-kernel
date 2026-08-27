@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1672 941" width="1672" height="941" role="img" aria-label="MAESTRO surface route review layer">
+  <defs>
+    <filter id="glow-cyan" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow-teal" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.0" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow-lime" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.0" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow-amber" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.0" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow-violet" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.0" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <!-- Track halos: broad enough to read as embedded PCB light, never as filled geometry. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".15" stroke-width="9">
+    <path stroke="#16d9ff" d="M608 270 H548 V160 H375"/>
+    <path stroke="#18f5e9" d="M608 338 H526 V327 H375"/>
+    <path stroke="#a6ff43" d="M608 408 H508 V496 H375"/>
+    <path stroke="#d36cff" d="M608 478 H490 V668 H375"/>
+    <path stroke="#ffad1f" d="M1041 270 H1101 V160 H1288"/>
+    <path stroke="#ffad1f" d="M1041 338 H1123 V327 H1288"/>
+    <path stroke="#18f5e9" d="M1041 408 H1141 V496 H1288"/>
+    <path stroke="#d36cff" d="M1041 478 H1159 V668 H1288"/>
+  </g>
+
+  <!-- Canonical-looking surface tracks: deliberately simple orthogonal routing for review. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4">
+    <path stroke="#16d9ff" filter="url(#glow-cyan)" d="M608 270 H548 V160 H375"/>
+    <path stroke="#18f5e9" filter="url(#glow-teal)" d="M608 338 H526 V327 H375"/>
+    <path stroke="#a6ff43" filter="url(#glow-lime)" d="M608 408 H508 V496 H375"/>
+    <path stroke="#d36cff" filter="url(#glow-violet)" d="M608 478 H490 V668 H375"/>
+    <path stroke="#ffad1f" filter="url(#glow-amber)" d="M1041 270 H1101 V160 H1288"/>
+    <path stroke="#ffad1f" filter="url(#glow-amber)" d="M1041 338 H1123 V327 H1288"/>
+    <path stroke="#18f5e9" filter="url(#glow-teal)" d="M1041 408 H1141 V496 H1288"/>
+    <path stroke="#d36cff" filter="url(#glow-violet)" d="M1041 478 H1159 V668 H1288"/>
+  </g>
+
+  <!-- Small branch signatures near receivers give each route a board-like landing without visual clutter. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" opacity=".72">
+    <path stroke="#16d9ff" d="M420 160 H400 M420 160 V143 H405"/>
+    <path stroke="#18f5e9" d="M420 327 H397 M420 327 V344 H402"/>
+    <path stroke="#a6ff43" d="M420 496 H396 M420 496 V479 H404"/>
+    <path stroke="#d36cff" d="M420 668 H398 M420 668 V650 H405"/>
+    <path stroke="#ffad1f" d="M1243 160 H1266 M1243 160 V143 H1258"/>
+    <path stroke="#ffad1f" d="M1243 327 H1266 M1243 327 V344 H1259"/>
+    <path stroke="#18f5e9" d="M1243 496 H1266 M1243 496 V479 H1258"/>
+    <path stroke="#d36cff" d="M1243 668 H1266 M1243 668 V650 H1258"/>
+  </g>
+
+  <!-- Core and receiver landing pads. -->
+  <g stroke-width="1.8">
+    <g fill="#06111d" stroke="#16d9ff"><circle cx="608" cy="270" r="5"/><circle cx="375" cy="160" r="5"/></g>
+    <g fill="#06111d" stroke="#18f5e9"><circle cx="608" cy="338" r="5"/><circle cx="375" cy="327" r="5"/><circle cx="1041" cy="408" r="5"/><circle cx="1288" cy="496" r="5"/></g>
+    <g fill="#06111d" stroke="#a6ff43"><circle cx="608" cy="408" r="5"/><circle cx="375" cy="496" r="5"/></g>
+    <g fill="#06111d" stroke="#d36cff"><circle cx="608" cy="478" r="5"/><circle cx="375" cy="668" r="5"/><circle cx="1041" cy="478" r="5"/><circle cx="1288" cy="668" r="5"/></g>
+    <g fill="#06111d" stroke="#ffad1f"><circle cx="1041" cy="270" r="5"/><circle cx="1288" cy="160" r="5"/><circle cx="1041" cy="338" r="5"/><circle cx="1288" cy="327" r="5"/></g>
+  </g>
+
+  <!-- Junction beads make turns legible while remaining subordinate to cards. -->
+  <g>
+    <circle fill="#16d9ff" cx="548" cy="160" r="3"/>
+    <circle fill="#18f5e9" cx="526" cy="327" r="3"/>
+    <circle fill="#a6ff43" cx="508" cy="496" r="3"/>
+    <circle fill="#d36cff" cx="490" cy="668" r="3"/>
+    <circle fill="#ffad1f" cx="1101" cy="160" r="3"/>
+    <circle fill="#ffad1f" cx="1123" cy="327" r="3"/>
+    <circle fill="#18f5e9" cx="1141" cy="496" r="3"/>
+    <circle fill="#d36cff" cx="1159" cy="668" r="3"/>
+  </g>
+</svg>
