@@ -182,7 +182,7 @@ jobs:
           ZIP_SHA="$(sha256sum "$DEST/$ARCHIVE_NAME.zip" | awk '{print $1}')"
           printf '%s  %s\n' "$ZIP_SHA" "$ARCHIVE_NAME.zip" > "$DEST/SHA256SUMS"
           (cd target && unzip -t "docs/archives/maestro-splash/$ARCHIVE_NAME.zip")
-          (cd target && sha256sum -c docs/archives/maestro-splash/SHA256SUMS)
+          (cd "$DEST" && sha256sum -c SHA256SUMS)
 
           cd target
           git config user.name "github-actions[bot]"
