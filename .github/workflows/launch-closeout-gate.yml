@@ -2,7 +2,9 @@ name: Launch Closeout Gate
 
 on:
   push:
-    branches: ["agent/post-vq-local-web-acceptance"]
+    branches:
+      - "agent/**"
+      - "release/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -66,6 +68,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .[dev,api,observability,security,database,cache,reports,llm]
+
+      - name: Verify database pool hardening contract
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            tests/test_database_pool_hardening_r1.py \
+            tests/test_production_env_template_regression.py
 
       - name: Upgrade real PostgreSQL to retirement predecessor
         run: |
