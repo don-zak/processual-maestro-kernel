@@ -62,6 +62,15 @@ def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
             const r = document.querySelector('.stage').getBoundingClientRect();
             return {x:r.x,y:r.y,width:r.width,height:r.height};
           })(),
+          board: (() => {
+            const board = document.querySelector('#pcb-reference');
+            return board ? {
+              complete: board.complete,
+              naturalWidth: board.naturalWidth,
+              naturalHeight: board.naturalHeight,
+              opacity: Number.parseFloat(getComputedStyle(board).opacity),
+            } : null;
+          })(),
           cards: document.querySelectorAll('.card').length,
           canonicalLayers: document.querySelectorAll('[data-canonical-route-layer]').length,
           pulseHeads: document.querySelectorAll('.pulse-head').length,
@@ -75,6 +84,11 @@ def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
     assert metrics["devicePixelRatio"] == 1
     assert metrics["stage"]["width"] == 1672
     assert metrics["stage"]["height"] == 941
+    assert metrics["board"] is not None
+    assert metrics["board"]["complete"] is True
+    assert metrics["board"]["naturalWidth"] == 1672
+    assert metrics["board"]["naturalHeight"] == 941
+    assert metrics["board"]["opacity"] >= 0.35
     assert metrics["cards"] == 8
     assert metrics["canonicalLayers"] == 5
     if pulse_expected:
