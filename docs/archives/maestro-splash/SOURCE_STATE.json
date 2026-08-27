@@ -1,0 +1,16 @@
+{
+  "repository": "don-zak/processual-maestro-kernel",
+  "source_branch": "agent/post-vq-local-web-acceptance",
+  "source_head": "3775d5e4d8ab114f5503de57bab53ecc26e1b32e",
+  "archive_branch": "archive/maestro-splash-development-2026-08-27",
+  "main_reference": "d2a0baa912efc384c57d086a4d67a8ac29d20987",
+  "pull_request": 165,
+  "archived_at": "2026-08-27",
+  "inventory_file_count": 60,
+  "classifications": {
+    "ARCHIVE_DELETE": 58,
+    "HOLD": 1,
+    "ARCHIVE_RESTORE_MAIN": 1
+  },
+  "restore_requires_manual_review": true
+}
