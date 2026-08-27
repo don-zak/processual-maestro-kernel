@@ -9,10 +9,10 @@ def _splash_html() -> str:
     return SPLASH.read_text(encoding="utf-8")
 
 
-def test_side_card_inner_edges_align_with_reference_attachment_zones() -> None:
+def test_side_card_bounds_align_with_reference_attachment_zones() -> None:
     html = _splash_html()
 
-    width_match = re.search(r"\.card\{[^}]*width:(\d+)px", html)
+    width_match = re.search(r"\.card\{[^}]*width:(\d+)px;[^}]*height:(\d+)px", html)
     left_match = re.search(
         r"\.card\.c1,\.card\.c2,\.card\.c3,\.card\.c4\{left:(\d+)px\}",
         html,
@@ -28,12 +28,22 @@ def test_side_card_inner_edges_align_with_reference_attachment_zones() -> None:
 
     stage_width = 1672
     card_width = int(width_match.group(1))
+    card_height = int(width_match.group(2))
     left = int(left_match.group(1))
     right = int(right_match.group(1))
 
-    assert card_width == 244
+    assert (card_width, card_height) == (335, 140)
     assert left + card_width == 415
     assert stage_width - right - card_width == 1240
+
+    expected_vertical_markers = [
+        ".card.c1,.card.r1{top:90px}",
+        ".card.c2,.card.r2{top:257px}",
+        ".card.c3,.card.r3{top:426px}",
+        ".card.c4,.card.r4{top:598px}",
+    ]
+    missing = [marker for marker in expected_vertical_markers if marker not in html]
+    assert not missing, f"Missing reference vertical module bounds: {missing}"
 
 
 def test_side_card_alignment_does_not_replace_canonical_route_layers() -> None:
