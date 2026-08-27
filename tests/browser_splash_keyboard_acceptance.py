@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import threading
+from http.server import ThreadingHTTPServer
 
 from playwright.sync_api import sync_playwright
 
 from browser_splash_acceptance import HOST, PORT, SplashHandler
-from http.server import ThreadingHTTPServer
 
 
 EXPECTED_TAB_TARGETS = [
@@ -21,7 +21,7 @@ EXPECTED_TAB_TARGETS = [
 
 def _active_target(page) -> dict[str, object]:
     return page.evaluate(
-        """() => {
+        r"""() => {
           const node = document.activeElement;
           const style = getComputedStyle(node);
           return {
@@ -31,6 +31,7 @@ def _active_target(page) -> dict[str, object]:
             outlineStyle: style.outlineStyle,
             outlineWidth: style.outlineWidth,
             outlineColor: style.outlineColor,
+            outlineOffset: style.outlineOffset,
           };
         }"""
     )
@@ -62,8 +63,10 @@ def main() -> None:
                 assert target["tag"] == "A", target
                 assert target["text"] == expected["text"], (target, expected)
                 assert target["href"] == expected["href"], (target, expected)
-                assert target["outlineStyle"] != "none", target
-                assert target["outlineWidth"] != "0px", target
+                assert target["outlineStyle"] == "solid", target
+                assert target["outlineWidth"] == "2px", target
+                assert target["outlineColor"] == "rgb(139, 221, 255)", target
+                assert target["outlineOffset"] == "4px", target
 
             assert not errors, f"Splash keyboard browser errors: {errors}"
             print({"keyboard_targets": observed, "console_errors": errors})
