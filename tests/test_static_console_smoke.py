@@ -130,7 +130,7 @@ def test_splash_preserves_canonical_route_assets_and_visual_semantics():
     for asset in canonical_assets:
         assert splash_source.count(asset) == 1, f"Canonical route asset must be referenced exactly once: {asset}"
     required_markers = [
-        "--card-radius:16px",
+        "--card-radius:18px",
         "module-accent",
         "pulse-layer",
         "pulse-head",
