@@ -63,7 +63,8 @@ try {
     Copy-Item $splash $previewIndex
 
     if ($VisualReset) {
-        $html = Get-Content $previewIndex -Raw
+        $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+        $html = [System.IO.File]::ReadAllText($previewIndex, $utf8)
         $resetCss = @'
 <style id="maestro-visual-reset-preview">
 /* Preview-only reset: do not mutate canonical route assets. */
@@ -84,8 +85,8 @@ try {
 .telemetry { bottom:60px !important; }
 </style>
 '@
-        $html = $html -replace '</head>', ($resetCss + "`r`n</head>")
-        Set-Content -Path $previewIndex -Value $html -Encoding UTF8
+        $html = $html.Replace('</head>', $resetCss + "`r`n</head>")
+        [System.IO.File]::WriteAllText($previewIndex, $html, $utf8)
     }
 
     foreach ($asset in $visualAssets) {
@@ -134,7 +135,7 @@ try {
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
     if ($VisualReset) {
-        Write-Host "Preview mode: VISUAL RESET (legacy route layers hidden; layout spread for review)." -ForegroundColor Yellow
+        Write-Host "Preview mode: VISUAL RESET (UTF-8 preserved; legacy route layers hidden; layout spread for review)." -ForegroundColor Yellow
     } else {
         Write-Host "Preview mode: current branch presentation."
     }
