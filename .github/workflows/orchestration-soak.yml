@@ -16,6 +16,20 @@ on:
       - processual_api/cgt_governor/adapters/execution_fanout.py
       - processual_api/cgt_governor/adapters/registry.py
       - processual_api/routers/workflows.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - benchmarks/orchestration_api_app.py
+      - benchmarks/orchestration_api_probe.py
+      - benchmarks/orchestration_api_soak.py
+      - tests/test_orchestration_api_soak.py
+      - .github/workflows/orchestration-soak.yml
+      - processual_api/cgt_governor/policy/fanout_planner.py
+      - processual_api/cgt_governor/policy/orchestration_metrics.py
+      - processual_api/cgt_governor/adapters/execution_fanout.py
+      - processual_api/cgt_governor/adapters/registry.py
+      - processual_api/routers/workflows.py
 
 permissions:
   contents: read
@@ -46,7 +60,10 @@ jobs:
       EXECUTION_FANOUT_ENABLED: "true"
       EXECUTION_FANOUT_GLOBAL_LIMIT: "16"
       EXECUTION_FANOUT_PROVIDER_LIMIT: "8"
+      EXECUTION_FANOUT_LEASE_SECONDS: "180"
       EXECUTION_FANOUT_WAIT_MS: "250"
+      EXECUTION_FANOUT_RETRY_MS: "25"
+      EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS: "120"
 
     steps:
       - uses: actions/checkout@v4
