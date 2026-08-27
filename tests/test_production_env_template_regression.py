@@ -58,6 +58,8 @@ def test_production_env_template_covers_runtime_pool_rate_limit_and_audit_keys()
         "API_LOG_LEVEL",
         "DATABASE_POOL_MIN",
         "DATABASE_POOL_MAX",
+        "DATABASE_POOL_TIMEOUT_SECONDS",
+        "DATABASE_POOL_RECYCLE_SECONDS",
         "RATE_LIMIT_ENABLED",
         "RATE_LIMIT_DEFAULT",
         "RATE_LIMIT_AUTHENTICATED",
@@ -66,6 +68,10 @@ def test_production_env_template_covers_runtime_pool_rate_limit_and_audit_keys()
 
     missing = [key for key in required if key not in values]
     assert not missing, f"Missing runtime/rate-limit/audit env keys: {missing}"
+    assert int(values["DATABASE_POOL_MIN"]) >= 1
+    assert int(values["DATABASE_POOL_MAX"]) >= int(values["DATABASE_POOL_MIN"])
+    assert float(values["DATABASE_POOL_TIMEOUT_SECONDS"]) > 0
+    assert int(values["DATABASE_POOL_RECYCLE_SECONDS"]) > 0
 
 
 def test_production_env_template_covers_observability_and_webhook_keys():
