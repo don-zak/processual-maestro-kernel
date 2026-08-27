@@ -15,6 +15,7 @@ STATIC = ROOT / "processual_api" / "static"
 ARTIFACTS = ROOT / "artifacts" / "splash-browser"
 HOST = "127.0.0.1"
 PORT = 8765
+MAX_TOTAL_ASSET_BYTES = 64 * 1024
 
 
 class SplashHandler(BaseHTTPRequestHandler):
@@ -186,7 +187,7 @@ def _resource_snapshot(page) -> dict[str, object]:
         "/console/splash_routes_teal.svg",
         "/console/splash_routes_violet.svg",
     ]
-    assert snapshot["totalEncodedBodySize"] > 0
+    assert 0 < snapshot["totalEncodedBodySize"] <= MAX_TOTAL_ASSET_BYTES
     assert snapshot["totalDecodedBodySize"] >= snapshot["totalEncodedBodySize"]
     return snapshot
 
