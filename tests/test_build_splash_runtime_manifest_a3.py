@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from collections import Counter
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "build_splash_runtime_manifest.py"
+CANONICAL_RENDER_CONTRACT = ROOT / "tests" / "fixtures" / "splash_reference_canonical_render_manifest_a3.json"
 
 
 def _load_compiler():
@@ -19,6 +21,10 @@ def _load_compiler():
     return module
 
 
+def _canonical_render_contract() -> dict[str, object]:
+    return json.loads(CANONICAL_RENDER_CONTRACT.read_text(encoding="utf-8"))
+
+
 def test_reference_render_distribution_is_locked_exactly() -> None:
     compiler = _load_compiler()
 
@@ -26,6 +32,23 @@ def test_reference_render_distribution_is_locked_exactly() -> None:
         Counter(compiler.EXPECTED_COLOR_FAMILY_COUNTS),
         Counter(compiler.EXPECTED_WIDTH_CLASS_COUNTS),
     )
+
+
+def test_compiler_distribution_constants_match_promoted_canonical_contract() -> None:
+    compiler = _load_compiler()
+    contract = _canonical_render_contract()
+    geometry = contract["geometry"]
+    semantics = contract["render_semantics"]
+
+    assert contract["source_of_truth"] == "approved 1672x941 pivot reference"
+    assert geometry["route_tree_count"] == compiler.EXPECTED_ROUTE_TREES
+    assert geometry["synthetic_geometry_pixels"] == 0
+    assert semantics["edge_count"] == compiler.EXPECTED_EDGES
+    assert semantics["color_family_counts"] == compiler.EXPECTED_COLOR_FAMILY_COUNTS
+    assert semantics["width_class_counts"] == compiler.EXPECTED_WIDTH_CLASS_COUNTS
+    assert semantics["zero_color_support_edge_count"] == 0
+    assert semantics["edge_color_assignment_complete"] is True
+    assert semantics["edge_width_assignment_complete"] is True
 
 
 def test_color_drift_fails_closed_even_when_total_edge_count_is_unchanged() -> None:
