@@ -34,6 +34,10 @@ class ExecutionFanoutLeaseLostError(RuntimeError):
     """Raised when a live provider call loses its shared lease."""
 
 
+class ExecutionFanoutOperationTimeoutError(TimeoutError):
+    """Raised when an admitted provider operation exceeds its execution budget."""
+
+
 @dataclass(frozen=True, slots=True)
 class ExecutionFanoutPolicy:
     enabled: bool
@@ -42,16 +46,46 @@ class ExecutionFanoutPolicy:
     lease_seconds: int
     wait_ms: int
     retry_ms: int
+    operation_timeout_seconds: float
 
     @classmethod
     def from_env(cls) -> ExecutionFanoutPolicy:
+        global_limit = int(os.environ.get("EXECUTION_FANOUT_GLOBAL_LIMIT", "16"))
+        provider_limit = int(os.environ.get("EXECUTION_FANOUT_PROVIDER_LIMIT", "8"))
+        lease_seconds = int(os.environ.get("EXECUTION_FANOUT_LEASE_SECONDS", "180"))
+        wait_ms = int(os.environ.get("EXECUTION_FANOUT_WAIT_MS", "250"))
+        retry_ms = int(os.environ.get("EXECUTION_FANOUT_RETRY_MS", "25"))
+        operation_timeout_seconds = float(
+            os.environ.get("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS", "120")
+        )
+        if global_limit < 1:
+            raise RuntimeError("EXECUTION_FANOUT_GLOBAL_LIMIT must be at least 1.")
+        if provider_limit < 1:
+            raise RuntimeError("EXECUTION_FANOUT_PROVIDER_LIMIT must be at least 1.")
+        if provider_limit > global_limit:
+            raise RuntimeError(
+                "EXECUTION_FANOUT_PROVIDER_LIMIT must not exceed EXECUTION_FANOUT_GLOBAL_LIMIT."
+            )
+        if lease_seconds < 5:
+            raise RuntimeError("EXECUTION_FANOUT_LEASE_SECONDS must be at least 5.")
+        if wait_ms < 0:
+            raise RuntimeError("EXECUTION_FANOUT_WAIT_MS must be non-negative.")
+        if retry_ms < 1:
+            raise RuntimeError("EXECUTION_FANOUT_RETRY_MS must be at least 1.")
+        if operation_timeout_seconds <= 0:
+            raise RuntimeError("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS must be greater than 0.")
+        if operation_timeout_seconds >= lease_seconds:
+            raise RuntimeError(
+                "EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS must be less than EXECUTION_FANOUT_LEASE_SECONDS."
+            )
         return cls(
             enabled=os.environ.get("EXECUTION_FANOUT_ENABLED", "true").lower() == "true",
-            global_limit=max(int(os.environ.get("EXECUTION_FANOUT_GLOBAL_LIMIT", "16")), 1),
-            provider_limit=max(int(os.environ.get("EXECUTION_FANOUT_PROVIDER_LIMIT", "8")), 1),
-            lease_seconds=max(int(os.environ.get("EXECUTION_FANOUT_LEASE_SECONDS", "180")), 5),
-            wait_ms=max(int(os.environ.get("EXECUTION_FANOUT_WAIT_MS", "250")), 0),
-            retry_ms=max(int(os.environ.get("EXECUTION_FANOUT_RETRY_MS", "25")), 5),
+            global_limit=global_limit,
+            provider_limit=provider_limit,
+            lease_seconds=lease_seconds,
+            wait_ms=wait_ms,
+            retry_ms=retry_ms,
+            operation_timeout_seconds=operation_timeout_seconds,
         )
 
 
@@ -329,11 +363,12 @@ async def run_with_execution_fanout[T](
         )
         if decision.admitted:
             break
-        if time.monotonic() >= deadline:
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0:
             raise ExecutionFanoutSaturatedError(
                 f"execution fan-out saturated: {decision.reason}"
             )
-        await asyncio.sleep(policy.retry_ms / 1000)
+        await asyncio.sleep(min(policy.retry_ms / 1000, remaining_seconds))
 
     heartbeat_task = asyncio.create_task(
         _heartbeat(
@@ -343,9 +378,10 @@ async def run_with_execution_fanout[T](
         )
     )
     operation_task = asyncio.create_task(operation())
+    timeout_task = asyncio.create_task(asyncio.sleep(policy.operation_timeout_seconds))
     try:
         done, _pending = await asyncio.wait(
-            {operation_task, heartbeat_task},
+            {operation_task, heartbeat_task, timeout_task},
             return_when=asyncio.FIRST_COMPLETED,
         )
         if heartbeat_task in done:
@@ -355,12 +391,19 @@ async def run_with_execution_fanout[T](
                 with suppress(asyncio.CancelledError):
                     await operation_task
                 raise heartbeat_error
+        if timeout_task in done and operation_task not in done:
+            operation_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await operation_task
+            raise ExecutionFanoutOperationTimeoutError(
+                "execution fan-out provider operation exceeded its timeout budget"
+            )
         return await operation_task
     finally:
-        for task in (heartbeat_task, operation_task):
+        for task in (heartbeat_task, operation_task, timeout_task):
             if not task.done():
                 task.cancel()
-        for task in (heartbeat_task, operation_task):
+        for task in (heartbeat_task, operation_task, timeout_task):
             if not task.done():
                 with suppress(asyncio.CancelledError):
                     await task
