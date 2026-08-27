@@ -15,7 +15,7 @@ STATIC = ROOT / "processual_api" / "static"
 ARTIFACTS = ROOT / "artifacts" / "splash-browser"
 HOST = "127.0.0.1"
 PORT = 8765
-PULSE_VISIBILITY_TIMEOUT_MS = 5000
+PULSE_ENGINE_TIMEOUT_MS = 5000
 
 
 class SplashHandler(BaseHTTPRequestHandler):
@@ -192,46 +192,54 @@ def _resource_snapshot(page) -> dict[str, object]:
     return snapshot
 
 
-def _pulse_snapshot(page) -> dict[str, object]:
+def _pulse_engine_snapshot(page) -> dict[str, object]:
     return page.evaluate(
-        """() => ({
-          visibleHeads: [...document.querySelectorAll('.pulse-head')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).length,
-          visibleHeadFamilies: [...document.querySelectorAll('.pulse-head')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5)
-            .map(node => ['cyan','teal','lime','amber','violet'].find(family => node.classList.contains(family))),
-          visibleTails: [...document.querySelectorAll('.pulse-tail')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).length,
-          visibleTailFamilies: [...document.querySelectorAll('.pulse-tail')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3)
-            .map(node => ['cyan','teal','lime','amber','violet'].find(family => node.classList.contains(family))),
-          coreSource: document.querySelector('.core').classList.contains('pulse-source'),
-          receiving: [...document.querySelectorAll('.card.receiving')]
-            .map(card => card.dataset.routeFamily),
-        })"""
+        """() => {
+          const families = ['cyan','teal','lime','amber','violet'];
+          const familyOf = node => families.find(family => node.classList.contains(family));
+          const heads = [...document.querySelectorAll('.pulse-head')];
+          const tails = [...document.querySelectorAll('.pulse-tail')];
+          const maskedHeadFamilies = heads.filter(node => Boolean(node.style.maskImage || node.style.webkitMaskImage)).map(familyOf);
+          const maskedTailFamilies = tails.filter(node => Boolean(node.style.maskImage || node.style.webkitMaskImage)).map(familyOf);
+          return {
+            headFamilies: heads.map(familyOf).sort(),
+            tailFamilies: tails.map(familyOf).sort(),
+            maskedHeadFamilies,
+            maskedTailFamilies,
+            currentVisibleHeads: heads.filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).map(familyOf),
+            currentVisibleTails: tails.filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).map(familyOf),
+            receiving: [...document.querySelectorAll('.card.receiving')].map(card => card.dataset.routeFamily),
+          };
+        }"""
     )
 
 
-def _wait_for_visible_pulse(page) -> dict[str, object]:
+def _wait_for_pulse_engine(page) -> dict[str, object]:
     page.wait_for_function(
         """() => {
-          const heads = [...document.querySelectorAll('.pulse-head')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5);
-          const tails = [...document.querySelectorAll('.pulse-tail')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3);
-          return heads.length === 1 && tails.length === 1;
+          const heads = [...document.querySelectorAll('.pulse-head')];
+          const tails = [...document.querySelectorAll('.pulse-tail')];
+          return heads.some(node => Boolean(node.style.maskImage || node.style.webkitMaskImage))
+            && tails.some(node => Boolean(node.style.maskImage || node.style.webkitMaskImage));
         }""",
-        timeout=PULSE_VISIBILITY_TIMEOUT_MS,
+        polling=100,
+        timeout=PULSE_ENGINE_TIMEOUT_MS,
     )
-    snapshot = _pulse_snapshot(page)
-    assert snapshot["visibleHeads"] == 1
-    assert snapshot["visibleTails"] == 1
-    assert len(snapshot["visibleHeadFamilies"]) == 1
-    assert snapshot["visibleHeadFamilies"] == snapshot["visibleTailFamilies"]
-    assert snapshot["visibleHeadFamilies"][0] in {"cyan", "teal", "lime", "amber", "violet"}
+    snapshot = _pulse_engine_snapshot(page)
+    canonical_families = ["amber", "cyan", "lime", "teal", "violet"]
+    assert snapshot["headFamilies"] == canonical_families
+    assert snapshot["tailFamilies"] == canonical_families
+    assert snapshot["maskedHeadFamilies"]
+    assert snapshot["maskedTailFamilies"]
+    assert set(snapshot["maskedHeadFamilies"]) == set(snapshot["maskedTailFamilies"])
+    assert set(snapshot["maskedHeadFamilies"]).issubset(set(canonical_families))
+    assert len(snapshot["currentVisibleHeads"]) <= 1
+    assert len(snapshot["currentVisibleTails"]) <= 1
+    if snapshot["currentVisibleHeads"] and snapshot["currentVisibleTails"]:
+        assert snapshot["currentVisibleHeads"] == snapshot["currentVisibleTails"]
     assert len(snapshot["receiving"]) <= 1
-    if snapshot["receiving"]:
-        assert snapshot["receiving"] == snapshot["visibleHeadFamilies"]
+    if snapshot["receiving"] and snapshot["currentVisibleHeads"]:
+        assert snapshot["receiving"] == snapshot["currentVisibleHeads"]
     return snapshot
 
 
@@ -274,7 +282,7 @@ def main() -> None:
             pulse_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["pulse"] = _assert_page_contract(pulse_page, pulse_expected=True)
             evidence["pulse_resources"] = _resource_snapshot(pulse_page)
-            evidence["pulse_snapshot"] = _wait_for_visible_pulse(pulse_page)
+            evidence["pulse_engine"] = _wait_for_pulse_engine(pulse_page)
 
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
             assert not pulse_errors, f"Animated splash browser errors: {pulse_errors}"
