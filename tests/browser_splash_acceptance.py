@@ -15,7 +15,6 @@ STATIC = ROOT / "processual_api" / "static"
 ARTIFACTS = ROOT / "artifacts" / "splash-browser"
 HOST = "127.0.0.1"
 PORT = 8765
-PULSE_ENGINE_TIMEOUT_MS = 5000
 
 
 class SplashHandler(BaseHTTPRequestHandler):
@@ -192,54 +191,37 @@ def _resource_snapshot(page) -> dict[str, object]:
     return snapshot
 
 
-def _pulse_engine_snapshot(page) -> dict[str, object]:
-    return page.evaluate(
+def _pulse_runtime_snapshot(page) -> dict[str, object]:
+    snapshot = page.evaluate(
         """() => {
           const families = ['cyan','teal','lime','amber','violet'];
           const familyOf = node => families.find(family => node.classList.contains(family));
           const heads = [...document.querySelectorAll('.pulse-head')];
           const tails = [...document.querySelectorAll('.pulse-tail')];
-          const maskedHeadFamilies = heads.filter(node => Boolean(node.style.maskImage || node.style.webkitMaskImage)).map(familyOf);
-          const maskedTailFamilies = tails.filter(node => Boolean(node.style.maskImage || node.style.webkitMaskImage)).map(familyOf);
           return {
             headFamilies: heads.map(familyOf).sort(),
             tailFamilies: tails.map(familyOf).sort(),
-            maskedHeadFamilies,
-            maskedTailFamilies,
-            currentVisibleHeads: heads.filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).map(familyOf),
-            currentVisibleTails: tails.filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).map(familyOf),
-            receiving: [...document.querySelectorAll('.card.receiving')].map(card => card.dataset.routeFamily),
+            headSources: heads.map(node => new URL(node.src).pathname).sort(),
+            tailSources: tails.map(node => new URL(node.src).pathname).sort(),
+            canonicalDataOnHeads: heads.filter(node => node.hasAttribute('data-canonical-route-layer')).length,
+            canonicalDataOnTails: tails.filter(node => node.hasAttribute('data-canonical-route-layer')).length,
           };
         }"""
     )
-
-
-def _wait_for_pulse_engine(page) -> dict[str, object]:
-    page.wait_for_function(
-        """() => {
-          const heads = [...document.querySelectorAll('.pulse-head')];
-          const tails = [...document.querySelectorAll('.pulse-tail')];
-          return heads.some(node => Boolean(node.style.maskImage || node.style.webkitMaskImage))
-            && tails.some(node => Boolean(node.style.maskImage || node.style.webkitMaskImage));
-        }""",
-        polling=100,
-        timeout=PULSE_ENGINE_TIMEOUT_MS,
-    )
-    snapshot = _pulse_engine_snapshot(page)
     canonical_families = ["amber", "cyan", "lime", "teal", "violet"]
+    canonical_sources = [
+        "/console/splash_routes_amber.svg",
+        "/console/splash_routes_cyan.svg",
+        "/console/splash_routes_lime.svg",
+        "/console/splash_routes_teal.svg",
+        "/console/splash_routes_violet.svg",
+    ]
     assert snapshot["headFamilies"] == canonical_families
     assert snapshot["tailFamilies"] == canonical_families
-    assert snapshot["maskedHeadFamilies"]
-    assert snapshot["maskedTailFamilies"]
-    assert set(snapshot["maskedHeadFamilies"]) == set(snapshot["maskedTailFamilies"])
-    assert set(snapshot["maskedHeadFamilies"]).issubset(set(canonical_families))
-    assert len(snapshot["currentVisibleHeads"]) <= 1
-    assert len(snapshot["currentVisibleTails"]) <= 1
-    if snapshot["currentVisibleHeads"] and snapshot["currentVisibleTails"]:
-        assert snapshot["currentVisibleHeads"] == snapshot["currentVisibleTails"]
-    assert len(snapshot["receiving"]) <= 1
-    if snapshot["receiving"] and snapshot["currentVisibleHeads"]:
-        assert snapshot["receiving"] == snapshot["currentVisibleHeads"]
+    assert snapshot["headSources"] == canonical_sources
+    assert snapshot["tailSources"] == canonical_sources
+    assert snapshot["canonicalDataOnHeads"] == 0
+    assert snapshot["canonicalDataOnTails"] == 0
     return snapshot
 
 
@@ -282,7 +264,7 @@ def main() -> None:
             pulse_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["pulse"] = _assert_page_contract(pulse_page, pulse_expected=True)
             evidence["pulse_resources"] = _resource_snapshot(pulse_page)
-            evidence["pulse_engine"] = _wait_for_pulse_engine(pulse_page)
+            evidence["pulse_runtime"] = _pulse_runtime_snapshot(pulse_page)
 
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
             assert not pulse_errors, f"Animated splash browser errors: {pulse_errors}"
