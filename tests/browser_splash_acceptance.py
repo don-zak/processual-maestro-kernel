@@ -165,6 +165,11 @@ def _pulse_snapshot(page) -> dict[str, object]:
     )
 
 
+def _assert_visible_pulse(snapshot: dict[str, object]) -> None:
+    assert snapshot["visibleHeads"] == 1
+    assert snapshot["visibleTails"] == 1
+
+
 def _wait_for_pulse_state(
     page,
     *,
@@ -175,20 +180,18 @@ def _wait_for_pulse_state(
     expected_receiving = [] if receiver_family is None else [receiver_family]
     page.wait_for_function(
         """({source, receiving}) => {
-          const heads = [...document.querySelectorAll('.pulse-head')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5).length;
-          const tails = [...document.querySelectorAll('.pulse-tail')]
-            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).length;
           const coreSource = document.querySelector('.core').classList.contains('pulse-source');
           const activeReceivers = [...document.querySelectorAll('.card.receiving')]
             .map(card => card.dataset.routeFamily);
-          return heads === 1 && tails === 1 && coreSource === source
+          return coreSource === source
             && JSON.stringify(activeReceivers) === JSON.stringify(receiving);
         }""",
         arg={"source": source, "receiving": expected_receiving},
         timeout=timeout_ms,
     )
-    return _pulse_snapshot(page)
+    snapshot = _pulse_snapshot(page)
+    _assert_visible_pulse(snapshot)
+    return snapshot
 
 
 def main() -> None:
