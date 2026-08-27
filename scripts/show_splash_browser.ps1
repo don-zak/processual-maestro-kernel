@@ -8,6 +8,7 @@ param(
     [switch]$VisualReset,
     [switch]$FurnishReview,
     [switch]$SurfaceRouteReview,
+    [switch]$CanonicalNetworkReview,
     [switch]$FullViewport
 )
 
@@ -19,7 +20,7 @@ if (-not (Test-Path $splash)) {
     throw "Splash not found: $splash"
 }
 
-if ($SurfaceRouteReview) {
+if ($SurfaceRouteReview -or $CanonicalNetworkReview) {
     $FullViewport = $true
 }
 
@@ -30,7 +31,8 @@ $visualAssets = @(
     "splash_routes_lime.svg",
     "splash_routes_amber.svg",
     "splash_routes_violet.svg",
-    "splash_surface_routes_review.svg"
+    "splash_surface_routes_review.svg",
+    "splash_routes_network_review.svg"
 )
 foreach ($asset in $visualAssets) {
     $candidate = Join-Path $staticDir $asset
@@ -70,7 +72,7 @@ try {
     $previewIndex = Join-Path $tempRoot "index.html"
     Copy-Item $splash $previewIndex
 
-    if ($VisualReset -or $FurnishReview -or $SurfaceRouteReview -or $FullViewport) {
+    if ($VisualReset -or $FurnishReview -or $SurfaceRouteReview -or $CanonicalNetworkReview -or $FullViewport) {
         $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
         $html = [System.IO.File]::ReadAllText($previewIndex, $utf8)
 
@@ -108,7 +110,7 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         }
         if ($SurfaceRouteReview) {
             $previewCss += @'
-/* Review the approved furnished layout with clean surface routing only. */
+/* Review the furnished layout with simplified surface routing only. */
 #pcb-reference,
 .route-layer,
 .pulse-layer { display:none !important; }
@@ -125,6 +127,29 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
 }
 '@
         }
+        if ($CanonicalNetworkReview) {
+            $previewCss += @'
+/* Review the original five-family network through edge-only presentation. */
+#pcb-reference,
+.route-layer,
+.pulse-layer,
+.surface-route-review-layer { display:none !important; }
+.card.c1,.card.c2,.card.c3,.card.c4 { left:40px !important; }
+.card.r1,.card.r2,.card.r3,.card.r4 { right:49px !important; }
+.canonical-network-review-layer {
+    position:absolute !important;
+    inset:0 !important;
+    width:1672px !important;
+    height:941px !important;
+    z-index:4 !important;
+    pointer-events:none !important;
+    user-select:none !important;
+    opacity:.92 !important;
+    mix-blend-mode:screen !important;
+    filter:drop-shadow(0 0 1.2px rgba(65,210,255,.32)) !important;
+}
+'@
+        }
         if ($FullViewport) {
             $previewCss += @'
 .viewport { display:block !important; background:#020712 !important; }
@@ -134,12 +159,18 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         $previewCss += "`r`n</style>"
         $html = $html.Replace('</head>', $previewCss + "`r`n</head>")
 
+        $coreShadowMarkup = '<div class="core-shadow"></div>'
         if ($SurfaceRouteReview) {
             $routeLayer = @'
 <img class="surface-route-review-layer" src="/console/splash_surface_routes_review.svg" alt="" aria-hidden="true">
 '@
-            $coreShadowMarkup = '<div class="core-shadow"></div>'
             $html = $html.Replace($coreShadowMarkup, $routeLayer + "`r`n" + $coreShadowMarkup)
+        }
+        if ($CanonicalNetworkReview) {
+            $networkLayer = @'
+<img class="canonical-network-review-layer" src="/console/splash_routes_network_review.svg" alt="" aria-hidden="true">
+'@
+            $html = $html.Replace($coreShadowMarkup, $networkLayer + "`r`n" + $coreShadowMarkup)
         }
 
         if ($FullViewport) {
@@ -210,9 +241,12 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     Write-Host "URL: $url"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
-    if ($SurfaceRouteReview) {
+    if ($CanonicalNetworkReview) {
+        Write-Host "Preview mode: CANONICAL NETWORK REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
+        Write-Host "Original five-family route network: edge-rendered; filled blotches suppressed; side cards expanded outward." -ForegroundColor Yellow
+    } elseif ($SurfaceRouteReview) {
         Write-Host "Preview mode: SURFACE ROUTE REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
-        Write-Host "Side cards: expanded outward; legacy route layers: isolated; new surface routes: enabled." -ForegroundColor Yellow
+        Write-Host "Side cards: expanded outward; legacy route layers: isolated; simplified surface routes: enabled." -ForegroundColor Yellow
     } elseif ($FurnishReview -and $FullViewport) {
         Write-Host "Preview mode: FURNISH REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
     } elseif ($FurnishReview) {
