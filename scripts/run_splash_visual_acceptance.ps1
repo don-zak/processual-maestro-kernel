@@ -9,6 +9,30 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-PngDimensions {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 24) {
+        throw "PNG file is too small to contain a valid IHDR header: $Path"
+    }
+
+    $signature = @(137, 80, 78, 71, 13, 10, 26, 10)
+    for ($i = 0; $i -lt $signature.Count; $i++) {
+        if ($bytes[$i] -ne $signature[$i]) {
+            throw "Screenshot is not a valid PNG file: $Path"
+        }
+    }
+
+    $pngWidth = [System.BitConverter]::ToUInt32(@($bytes[19], $bytes[18], $bytes[17], $bytes[16]), 0)
+    $pngHeight = [System.BitConverter]::ToUInt32(@($bytes[23], $bytes[22], $bytes[21], $bytes[20]), 0)
+
+    [pscustomobject]@{
+        Width = [int]$pngWidth
+        Height = [int]$pngHeight
+    }
+}
+
 $staticDir = Join-Path $RepoPath "processual_api\static"
 $splash = Join-Path $staticDir "splash.html"
 if (-not (Test-Path $splash)) {
@@ -110,13 +134,9 @@ try {
         throw "Browser did not produce screenshot: $OutputPath"
     }
 
-    $png = [System.Drawing.Image]::FromFile($OutputPath)
-    try {
-        if ($png.Width -ne $Width -or $png.Height -ne $Height) {
-            throw "Unexpected screenshot dimensions: $($png.Width)x$($png.Height); expected ${Width}x${Height}."
-        }
-    } finally {
-        $png.Dispose()
+    $dimensions = Get-PngDimensions -Path $OutputPath
+    if ($dimensions.Width -ne $Width -or $dimensions.Height -ne $Height) {
+        throw "Unexpected screenshot dimensions: $($dimensions.Width)x$($dimensions.Height); expected ${Width}x${Height}."
     }
 
     Write-Host "Splash visual acceptance capture complete." -ForegroundColor Green
