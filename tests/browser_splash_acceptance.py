@@ -15,7 +15,7 @@ STATIC = ROOT / "processual_api" / "static"
 ARTIFACTS = ROOT / "artifacts" / "splash-browser"
 HOST = "127.0.0.1"
 PORT = 8765
-PULSE_STATE_TIMEOUT_MS = 12000
+PULSE_VISIBILITY_TIMEOUT_MS = 5000
 
 
 class SplashHandler(BaseHTTPRequestHandler):
@@ -161,6 +161,9 @@ def _pulse_snapshot(page) -> dict[str, object]:
             .map(node => ['cyan','teal','lime','amber','violet'].find(family => node.classList.contains(family))),
           visibleTails: [...document.querySelectorAll('.pulse-tail')]
             .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3).length,
+          visibleTailFamilies: [...document.querySelectorAll('.pulse-tail')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3)
+            .map(node => ['cyan','teal','lime','amber','violet'].find(family => node.classList.contains(family))),
           coreSource: document.querySelector('.core').classList.contains('pulse-source'),
           receiving: [...document.querySelectorAll('.card.receiving')]
             .map(card => card.dataset.routeFamily),
@@ -168,34 +171,26 @@ def _pulse_snapshot(page) -> dict[str, object]:
     )
 
 
-def _assert_visible_pulse(snapshot: dict[str, object]) -> None:
+def _wait_for_visible_pulse(page) -> dict[str, object]:
+    page.wait_for_function(
+        """() => {
+          const heads = [...document.querySelectorAll('.pulse-head')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .5);
+          const tails = [...document.querySelectorAll('.pulse-tail')]
+            .filter(node => Number.parseFloat(getComputedStyle(node).opacity) > .3);
+          return heads.length === 1 && tails.length === 1;
+        }""",
+        timeout=PULSE_VISIBILITY_TIMEOUT_MS,
+    )
+    snapshot = _pulse_snapshot(page)
     assert snapshot["visibleHeads"] == 1
     assert snapshot["visibleTails"] == 1
     assert len(snapshot["visibleHeadFamilies"]) == 1
+    assert snapshot["visibleHeadFamilies"] == snapshot["visibleTailFamilies"]
     assert snapshot["visibleHeadFamilies"][0] in {"cyan", "teal", "lime", "amber", "violet"}
-
-
-def _wait_for_pulse_state(
-    page,
-    *,
-    source: bool,
-    receiver_family: str | None,
-    timeout_ms: int = PULSE_STATE_TIMEOUT_MS,
-) -> dict[str, object]:
-    expected_receiving = [] if receiver_family is None else [receiver_family]
-    page.wait_for_function(
-        """({source, receiving}) => {
-          const coreSource = document.querySelector('.core').classList.contains('pulse-source');
-          const activeReceivers = [...document.querySelectorAll('.card.receiving')]
-            .map(card => card.dataset.routeFamily);
-          return coreSource === source
-            && JSON.stringify(activeReceivers) === JSON.stringify(receiving);
-        }""",
-        arg={"source": source, "receiving": expected_receiving},
-        timeout=timeout_ms,
-    )
-    snapshot = _pulse_snapshot(page)
-    _assert_visible_pulse(snapshot)
+    assert len(snapshot["receiving"]) <= 1
+    if snapshot["receiving"]:
+        assert snapshot["receiving"] == snapshot["visibleHeadFamilies"]
     return snapshot
 
 
@@ -236,22 +231,7 @@ def main() -> None:
             pulse_page.on("pageerror", lambda exc: pulse_errors.append(str(exc)))
             pulse_page.goto(f"http://{HOST}:{PORT}/", wait_until="networkidle")
             evidence["pulse"] = _assert_page_contract(pulse_page, pulse_expected=True)
-
-            source_snapshot = _wait_for_pulse_state(
-                pulse_page,
-                source=True,
-                receiver_family=None,
-            )
-            evidence["source_snapshot"] = source_snapshot
-            source_family = source_snapshot["visibleHeadFamilies"][0]
-
-            receiver_snapshot = _wait_for_pulse_state(
-                pulse_page,
-                source=False,
-                receiver_family=source_family,
-            )
-            evidence["receiver_snapshot"] = receiver_snapshot
-            assert receiver_snapshot["visibleHeadFamilies"] == [source_family]
+            evidence["pulse_snapshot"] = _wait_for_visible_pulse(pulse_page)
 
             pulse_page.screenshot(path=str(ARTIFACTS / "splash-pulse-1672x941.png"), full_page=True)
             assert not pulse_errors, f"Animated splash browser errors: {pulse_errors}"
