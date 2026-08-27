@@ -64,12 +64,14 @@ def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
           })(),
           board: (() => {
             const board = document.querySelector('#pcb-reference');
-            return board ? {
+            if (!board) return null;
+            const r = board.getBoundingClientRect();
+            return {
               complete: board.complete,
-              naturalWidth: board.naturalWidth,
-              naturalHeight: board.naturalHeight,
+              width: r.width,
+              height: r.height,
               opacity: Number.parseFloat(getComputedStyle(board).opacity),
-            } : null;
+            };
           })(),
           cards: document.querySelectorAll('.card').length,
           canonicalLayers: document.querySelectorAll('[data-canonical-route-layer]').length,
@@ -86,8 +88,8 @@ def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
     assert metrics["stage"]["height"] == 941
     assert metrics["board"] is not None
     assert metrics["board"]["complete"] is True
-    assert metrics["board"]["naturalWidth"] == 1672
-    assert metrics["board"]["naturalHeight"] == 941
+    assert metrics["board"]["width"] == 1672
+    assert metrics["board"]["height"] == 941
     assert metrics["board"]["opacity"] >= 0.35
     assert metrics["cards"] == 8
     assert metrics["canonicalLayers"] == 5
