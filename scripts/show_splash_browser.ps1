@@ -5,7 +5,8 @@ param(
     [int]$Height = 941,
     [string]$BrowserPath = "",
     [switch]$Incognito,
-    [switch]$VisualReset
+    [switch]$VisualReset,
+    [switch]$FullViewport
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,11 +63,16 @@ try {
     $previewIndex = Join-Path $tempRoot "index.html"
     Copy-Item $splash $previewIndex
 
-    if ($VisualReset) {
+    if ($VisualReset -or $FullViewport) {
         $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
         $html = [System.IO.File]::ReadAllText($previewIndex, $utf8)
-        $resetCss = @'
-<style id="maestro-visual-reset-preview">
+
+        $previewCss = @'
+<style id="maestro-preview-overrides">
+html,body,.viewport { width:100% !important; height:100% !important; margin:0 !important; overflow:hidden !important; }
+'@
+        if ($VisualReset) {
+            $previewCss += @'
 /* Preview-only reset: do not mutate canonical route assets. */
 #pcb-reference,
 .route-layer,
@@ -83,9 +89,37 @@ try {
 .core-shadow { left:588px !important; top:184px !important; width:495px !important; height:468px !important; }
 .execution { left:758px !important; top:656px !important; }
 .telemetry { bottom:60px !important; }
-</style>
 '@
-        $html = $html.Replace('</head>', $resetCss + "`r`n</head>")
+        }
+        if ($FullViewport) {
+            $previewCss += @'
+.viewport { display:block !important; background:#020712 !important; }
+.stage { position:absolute !important; left:0 !important; top:0 !important; width:1672px !important; height:941px !important; transform-origin:0 0 !important; }
+'@
+        }
+        $previewCss += "`r`n</style>"
+        $html = $html.Replace('</head>', $previewCss + "`r`n</head>")
+
+        if ($FullViewport) {
+            $fullViewportScript = @'
+<script id="maestro-full-viewport-preview">
+(() => {
+  const applyFullViewport = () => {
+    const stage = document.getElementById('stage');
+    if (!stage) return;
+    const sx = window.innerWidth / 1672;
+    const sy = window.innerHeight / 941;
+    stage.style.setProperty('transform', `scale(${sx}, ${sy})`, 'important');
+    stage.style.setProperty('transform-origin', '0 0', 'important');
+  };
+  window.addEventListener('resize', applyFullViewport, { passive: true });
+  requestAnimationFrame(() => requestAnimationFrame(applyFullViewport));
+})();
+</script>
+'@
+            $html = $html.Replace('</body>', $fullViewportScript + "`r`n</body>")
+        }
+
         [System.IO.File]::WriteAllText($previewIndex, $html, $utf8)
     }
 
@@ -117,25 +151,29 @@ try {
         throw "Splash preview server did not become ready on $url"
     }
 
-    $browserArgs = @(
-        "--new-window",
-        "--force-device-scale-factor=1",
-        "--window-size=$Width,$Height"
-    )
-    if ($Incognito) {
-        $browserArgs += "--incognito"
+    $browserArgs = @("--force-device-scale-factor=1")
+    if ($FullViewport) {
+        $browserArgs += @("--app=$url", "--start-maximized")
+    } else {
+        $browserArgs += @("--new-window", "--window-size=$Width,$Height")
+        if ($Incognito) {
+            $browserArgs += "--incognito"
+        }
+        $browserArgs += $url
     }
-    $browserArgs += $url
 
     Start-Process -FilePath $BrowserPath -ArgumentList $browserArgs | Out-Null
 
     Write-Host "MAESTRO living splash preview is running." -ForegroundColor Green
     Write-Host "URL: $url"
-    Write-Host "Requested browser window: ${Width}x${Height}"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
-    if ($VisualReset) {
-        Write-Host "Preview mode: VISUAL RESET (UTF-8 preserved; legacy route layers hidden; layout spread for review)." -ForegroundColor Yellow
+    if ($VisualReset -and $FullViewport) {
+        Write-Host "Preview mode: VISUAL RESET + FULL VIEWPORT." -ForegroundColor Yellow
+    } elseif ($VisualReset) {
+        Write-Host "Preview mode: VISUAL RESET (UTF-8 preserved; legacy route layers hidden)." -ForegroundColor Yellow
+    } elseif ($FullViewport) {
+        Write-Host "Preview mode: FULL VIEWPORT." -ForegroundColor Yellow
     } else {
         Write-Host "Preview mode: current branch presentation."
     }
