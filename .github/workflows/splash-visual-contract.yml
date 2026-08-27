@@ -6,19 +6,23 @@ on:
       - agent/post-vq-local-web-acceptance
     paths:
       - processual_api/static/splash.html
+      - processual_api/static/splash_reference_board.svg
       - processual_api/static/splash_routes_*.svg
       - tests/test_static_console_smoke.py
       - tests/test_splash_side_card_attachment_alignment_a3.py
       - tests/browser_splash_acceptance.py
+      - scripts/show_splash_browser.ps1
       - .github/workflows/splash-visual-contract.yml
   pull_request:
     branches: [main]
     paths:
       - processual_api/static/splash.html
+      - processual_api/static/splash_reference_board.svg
       - processual_api/static/splash_routes_*.svg
       - tests/test_static_console_smoke.py
       - tests/test_splash_side_card_attachment_alignment_a3.py
       - tests/browser_splash_acceptance.py
+      - scripts/show_splash_browser.ps1
       - .github/workflows/splash-visual-contract.yml
 
 jobs:
