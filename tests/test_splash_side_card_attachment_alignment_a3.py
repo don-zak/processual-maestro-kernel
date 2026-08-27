@@ -2,11 +2,22 @@ from pathlib import Path
 import re
 
 
-SPLASH = Path("processual_api/static/splash.html")
+STATIC = Path("processual_api/static")
+SPLASH = STATIC / "splash.html"
+ROUTE_FILES = tuple(STATIC / f"splash_routes_{family}.svg" for family in ("cyan", "teal", "lime", "amber", "violet"))
 
 
 def _splash_html() -> str:
     return SPLASH.read_text(encoding="utf-8")
+
+
+def _canonical_route_points() -> list[tuple[int, int]]:
+    points: list[tuple[int, int]] = []
+    for route_file in ROUTE_FILES:
+        source = route_file.read_text(encoding="utf-8")
+        for x, y in re.findall(r"[ML](-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", source):
+            points.append((round(float(x)), round(float(y))))
+    return points
 
 
 def test_side_card_bounds_align_with_reference_attachment_zones() -> None:
@@ -44,6 +55,39 @@ def test_side_card_bounds_align_with_reference_attachment_zones() -> None:
     ]
     missing = [marker for marker in expected_vertical_markers if marker not in html]
     assert not missing, f"Missing reference vertical module bounds: {missing}"
+
+
+def test_every_side_module_has_canonical_route_support_near_its_inner_edge() -> None:
+    points = _canonical_route_points()
+    assert points, "Canonical route SVGs must expose route coordinates"
+
+    # Route geometry remains authoritative. This gate only proves that each visual
+    # module occupies a reference zone with nearby canonical support; it does not
+    # synthesize or extend a route into a card.
+    module_zones = {
+        "c1-governance": (415, 90, 230),
+        "c2-supervision": (415, 257, 397),
+        "c3-calibration": (415, 426, 566),
+        "c4-orchestration": (415, 598, 738),
+        "r1-routing": (1240, 90, 230),
+        "r2-policy-engine": (1240, 257, 397),
+        "r3-feedback-loop": (1240, 426, 566),
+        "r4-control-gates": (1240, 598, 738),
+    }
+
+    horizontal_tolerance = 35
+    vertical_tolerance = 25
+    unsupported: list[str] = []
+    for name, (edge_x, top, bottom) in module_zones.items():
+        supported = any(
+            abs(x - edge_x) <= horizontal_tolerance
+            and top - vertical_tolerance <= y <= bottom + vertical_tolerance
+            for x, y in points
+        )
+        if not supported:
+            unsupported.append(name)
+
+    assert not unsupported, f"Side modules without nearby canonical route support: {unsupported}"
 
 
 def test_side_card_alignment_does_not_replace_canonical_route_layers() -> None:
