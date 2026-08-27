@@ -9,6 +9,7 @@ param(
     [switch]$FurnishReview,
     [switch]$SurfaceRouteReview,
     [switch]$CanonicalNetworkReview,
+    [switch]$RouteMapV2Review,
     [switch]$FullViewport
 )
 
@@ -20,7 +21,7 @@ if (-not (Test-Path $splash)) {
     throw "Splash not found: $splash"
 }
 
-if ($SurfaceRouteReview -or $CanonicalNetworkReview) {
+if ($SurfaceRouteReview -or $CanonicalNetworkReview -or $RouteMapV2Review) {
     $FullViewport = $true
 }
 
@@ -71,7 +72,7 @@ try {
     $previewIndex = Join-Path $tempRoot "index.html"
     Copy-Item $splash $previewIndex
 
-    if ($VisualReset -or $FurnishReview -or $SurfaceRouteReview -or $CanonicalNetworkReview -or $FullViewport) {
+    if ($VisualReset -or $FurnishReview -or $SurfaceRouteReview -or $CanonicalNetworkReview -or $RouteMapV2Review -or $FullViewport) {
         $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
         $html = [System.IO.File]::ReadAllText($previewIndex, $utf8)
 
@@ -81,7 +82,6 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
 '@
         if ($VisualReset) {
             $previewCss += @'
-/* Preview-only reset: do not mutate canonical route assets. */
 #pcb-reference,
 .route-layer,
 .pulse-layer { display:none !important; }
@@ -101,7 +101,6 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         }
         if ($FurnishReview) {
             $previewCss += @'
-/* Review actual furnished production layout with legacy route assets isolated. */
 #pcb-reference,
 .route-layer,
 .pulse-layer { display:none !important; }
@@ -109,7 +108,6 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         }
         if ($SurfaceRouteReview) {
             $previewCss += @'
-/* Review the furnished layout with simplified surface routing only. */
 #pcb-reference,
 .route-layer,
 .pulse-layer { display:none !important; }
@@ -128,7 +126,6 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         }
         if ($CanonicalNetworkReview) {
             $previewCss += @'
-/* Directly render the original five-family route assets with edge-only SVG filters. */
 #pcb-reference,
 .pulse-layer,
 .surface-route-review-layer { display:none !important; }
@@ -147,22 +144,57 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     opacity:.86 !important;
     mix-blend-mode:screen !important;
 }
-.route-layer.cyan {
-    opacity:.72 !important;
-    filter:url(#canonical-route-edge-cyan) drop-shadow(0 0 .6px #16d9ff) !important;
+'@
+        }
+        if ($RouteMapV2Review) {
+            $previewCss += @'
+/* Approved Route Map v2 review: direct route assets, expanded card spacing, original MAESTRO logo. */
+#pcb-reference,
+.surface-route-review-layer { display:none !important; }
+.card.c1,.card.c2,.card.c3,.card.c4 { left:40px !important; }
+.card.r1,.card.r2,.card.r3,.card.r4 { right:49px !important; }
+.route-layer {
+    display:block !important;
+    position:absolute !important;
+    inset:0 !important;
+    width:1672px !important;
+    height:941px !important;
+    z-index:4 !important;
+    pointer-events:none !important;
+    user-select:none !important;
+    object-fit:contain !important;
+    opacity:.92 !important;
+    mix-blend-mode:screen !important;
 }
-.route-layer.teal {
-    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #18f5e9) !important;
+.route-layer.cyan { opacity:.90 !important; filter:drop-shadow(0 0 1.1px #16d9ff) !important; }
+.route-layer.teal { filter:drop-shadow(0 0 1.1px #18f5e9) !important; }
+.route-layer.lime { filter:drop-shadow(0 0 1.1px #a6ff43) !important; }
+.route-layer.amber { filter:drop-shadow(0 0 1.15px #ffad1f) !important; }
+.route-layer.violet { filter:drop-shadow(0 0 1.1px #d36cff) !important; }
+.brand { gap:10px !important; }
+.brand-mark {
+    width:34px !important;
+    height:34px !important;
+    border:1px solid rgba(255,173,31,.42) !important;
+    border-radius:6px !important;
+    clip-path:none !important;
+    display:grid !important;
+    place-items:center !important;
+    color:#f3f7ff !important;
+    background:linear-gradient(145deg,rgba(255,173,31,.08),rgba(4,14,28,.72)) !important;
+    filter:drop-shadow(0 0 7px rgba(255,173,31,.24)) !important;
 }
-.route-layer.lime {
-    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #a6ff43) !important;
+.brand-mark:before {
+    content:"♔" !important;
+    position:static !important;
+    inset:auto !important;
+    clip-path:none !important;
+    border:0 !important;
+    font:700 22px/1 Georgia,"Times New Roman",serif !important;
+    color:#f4f7fb !important;
+    text-shadow:0 0 6px rgba(255,255,255,.28) !important;
 }
-.route-layer.amber {
-    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #ffad1f) !important;
-}
-.route-layer.violet {
-    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #d36cff) !important;
-}
+.brand-mark:after,.brand-mark i { display:none !important; }
 '@
         }
         if ($FullViewport) {
@@ -180,27 +212,6 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
 <img class="surface-route-review-layer" src="/console/splash_surface_routes_review.svg" alt="" aria-hidden="true">
 '@
             $html = $html.Replace($coreShadowMarkup, $routeLayer + "`r`n" + $coreShadowMarkup)
-        }
-        if ($CanonicalNetworkReview) {
-            $filterDefs = @'
-<svg id="canonical-route-filter-defs" aria-hidden="true" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden">
-  <defs>
-    <filter id="canonical-route-edge" x="0" y="0" width="1672" height="941" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feMorphology in="SourceAlpha" operator="erode" radius="1.15" result="eroded"/>
-      <feComposite in="SourceGraphic" in2="eroded" operator="out" result="edge"/>
-      <feGaussianBlur in="edge" stdDeviation="0.2" result="soft"/>
-      <feMerge><feMergeNode in="soft"/><feMergeNode in="edge"/></feMerge>
-    </filter>
-    <filter id="canonical-route-edge-cyan" x="0" y="0" width="1672" height="941" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feMorphology in="SourceAlpha" operator="erode" radius="1.75" result="eroded"/>
-      <feComposite in="SourceGraphic" in2="eroded" operator="out" result="edge"/>
-      <feGaussianBlur in="edge" stdDeviation="0.16" result="soft"/>
-      <feMerge><feMergeNode in="soft"/><feMergeNode in="edge"/></feMerge>
-    </filter>
-  </defs>
-</svg>
-'@
-            $html = $html.Replace($coreShadowMarkup, $filterDefs + "`r`n" + $coreShadowMarkup)
         }
 
         if ($FullViewport) {
@@ -271,20 +282,21 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     Write-Host "URL: $url"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
-    if ($CanonicalNetworkReview) {
+    if ($RouteMapV2Review) {
+        Write-Host "Preview mode: ROUTE MAP V2 + FULL VIEWPORT." -ForegroundColor Yellow
+        Write-Host "Approved clean route network enabled; side cards expanded; original MAESTRO logo restored." -ForegroundColor Yellow
+    } elseif ($CanonicalNetworkReview) {
         Write-Host "Preview mode: CANONICAL NETWORK REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
-        Write-Host "Original five route SVGs are rendered directly; edge-only filtering suppresses filled blotches." -ForegroundColor Yellow
     } elseif ($SurfaceRouteReview) {
         Write-Host "Preview mode: SURFACE ROUTE REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
-        Write-Host "Side cards: expanded outward; legacy route layers: isolated; simplified surface routes: enabled." -ForegroundColor Yellow
     } elseif ($FurnishReview -and $FullViewport) {
         Write-Host "Preview mode: FURNISH REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
     } elseif ($FurnishReview) {
-        Write-Host "Preview mode: FURNISH REVIEW (legacy route layers hidden)." -ForegroundColor Yellow
+        Write-Host "Preview mode: FURNISH REVIEW." -ForegroundColor Yellow
     } elseif ($VisualReset -and $FullViewport) {
         Write-Host "Preview mode: VISUAL RESET + FULL VIEWPORT." -ForegroundColor Yellow
     } elseif ($VisualReset) {
-        Write-Host "Preview mode: VISUAL RESET (UTF-8 preserved; legacy route layers hidden)." -ForegroundColor Yellow
+        Write-Host "Preview mode: VISUAL RESET." -ForegroundColor Yellow
     } elseif ($FullViewport) {
         Write-Host "Preview mode: FULL VIEWPORT." -ForegroundColor Yellow
     } else {
