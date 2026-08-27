@@ -10,8 +10,10 @@ on:
       - processual_api/static/splash_routes_*.svg
       - tests/test_static_console_smoke.py
       - tests/test_splash_side_card_attachment_alignment_a3.py
+      - tests/test_build_splash_runtime_manifest_a3.py
       - tests/test_render_splash_canonical_pcb_a3.py
       - tests/browser_splash_acceptance.py
+      - scripts/build_splash_runtime_manifest.py
       - scripts/render_splash_canonical_pcb.py
       - scripts/show_splash_browser.ps1
       - .github/workflows/splash-visual-contract.yml
@@ -23,8 +25,10 @@ on:
       - processual_api/static/splash_routes_*.svg
       - tests/test_static_console_smoke.py
       - tests/test_splash_side_card_attachment_alignment_a3.py
+      - tests/test_build_splash_runtime_manifest_a3.py
       - tests/test_render_splash_canonical_pcb_a3.py
       - tests/browser_splash_acceptance.py
+      - scripts/build_splash_runtime_manifest.py
       - scripts/render_splash_canonical_pcb.py
       - scripts/show_splash_browser.ps1
       - .github/workflows/splash-visual-contract.yml
@@ -47,6 +51,7 @@ jobs:
           PYTHONPATH=. python -m pytest -q \
             tests/test_static_console_smoke.py \
             tests/test_splash_side_card_attachment_alignment_a3.py \
+            tests/test_build_splash_runtime_manifest_a3.py \
             tests/test_render_splash_canonical_pcb_a3.py
       - name: Run exact viewport Chromium acceptance
         run: PYTHONPATH=. python tests/browser_splash_acceptance.py
