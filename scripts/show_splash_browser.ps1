@@ -7,6 +7,7 @@ param(
     [switch]$Incognito,
     [switch]$VisualReset,
     [switch]$FurnishReview,
+    [switch]$SurfaceRouteReview,
     [switch]$FullViewport
 )
 
@@ -18,13 +19,18 @@ if (-not (Test-Path $splash)) {
     throw "Splash not found: $splash"
 }
 
+if ($SurfaceRouteReview) {
+    $FullViewport = $true
+}
+
 $visualAssets = @(
     "splash_reference_board.svg",
     "splash_routes_cyan.svg",
     "splash_routes_teal.svg",
     "splash_routes_lime.svg",
     "splash_routes_amber.svg",
-    "splash_routes_violet.svg"
+    "splash_routes_violet.svg",
+    "splash_surface_routes_review.svg"
 )
 foreach ($asset in $visualAssets) {
     $candidate = Join-Path $staticDir $asset
@@ -64,7 +70,7 @@ try {
     $previewIndex = Join-Path $tempRoot "index.html"
     Copy-Item $splash $previewIndex
 
-    if ($VisualReset -or $FurnishReview -or $FullViewport) {
+    if ($VisualReset -or $FurnishReview -or $SurfaceRouteReview -or $FullViewport) {
         $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
         $html = [System.IO.File]::ReadAllText($previewIndex, $utf8)
 
@@ -100,6 +106,25 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
 .pulse-layer { display:none !important; }
 '@
         }
+        if ($SurfaceRouteReview) {
+            $previewCss += @'
+/* Review the approved furnished layout with clean surface routing only. */
+#pcb-reference,
+.route-layer,
+.pulse-layer { display:none !important; }
+.card.c1,.card.c2,.card.c3,.card.c4 { left:40px !important; }
+.card.r1,.card.r2,.card.r3,.card.r4 { right:49px !important; }
+.surface-route-review-layer {
+    position:absolute !important;
+    inset:0 !important;
+    width:1672px !important;
+    height:941px !important;
+    z-index:4 !important;
+    pointer-events:none !important;
+    user-select:none !important;
+}
+'@
+        }
         if ($FullViewport) {
             $previewCss += @'
 .viewport { display:block !important; background:#020712 !important; }
@@ -108,6 +133,13 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         }
         $previewCss += "`r`n</style>"
         $html = $html.Replace('</head>', $previewCss + "`r`n</head>")
+
+        if ($SurfaceRouteReview) {
+            $routeLayer = @'
+<img class="surface-route-review-layer" src="/console/splash_surface_routes_review.svg" alt="" aria-hidden="true">
+'@
+            $html = $html.Replace('<div class="core-shadow"></div>', $routeLayer + "`r`n<div class="core-shadow"></div>")
+        }
 
         if ($FullViewport) {
             $fullViewportScript = @'
@@ -177,7 +209,10 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     Write-Host "URL: $url"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
-    if ($FurnishReview -and $FullViewport) {
+    if ($SurfaceRouteReview) {
+        Write-Host "Preview mode: SURFACE ROUTE REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
+        Write-Host "Side cards: expanded outward; legacy route layers: isolated; new surface routes: enabled." -ForegroundColor Yellow
+    } elseif ($FurnishReview -and $FullViewport) {
         Write-Host "Preview mode: FURNISH REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
     } elseif ($FurnishReview) {
         Write-Host "Preview mode: FURNISH REVIEW (legacy route layers hidden)." -ForegroundColor Yellow
