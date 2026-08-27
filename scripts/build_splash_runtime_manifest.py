@@ -17,7 +17,7 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 
 REFERENCE_SIZE = [1672, 941]
 REFERENCE_CORE_BOUNDS = [608, 224, 1041, 632]
@@ -25,6 +25,17 @@ EXPECTED_ROUTE_TREES = 125
 EXPECTED_EDGES = 5496
 REQUIRED_COLOR_FAMILIES = {"amber", "lime", "teal", "cyan", "violet"}
 REQUIRED_WIDTH_CLASSES = {"thin", "thick"}
+EXPECTED_COLOR_FAMILY_COUNTS = {
+    "cyan": 3888,
+    "teal": 81,
+    "lime": 107,
+    "violet": 501,
+    "amber": 919,
+}
+EXPECTED_WIDTH_CLASS_COUNTS = {
+    "thin": 3002,
+    "thick": 2494,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +63,22 @@ def iter_graph_edges(graph: dict[str, object]) -> Iterable[tuple[str, str, dict[
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise SystemExit(message)
+
+
+def require_reference_distribution(
+    colors: Mapping[str, int],
+    widths: Mapping[str, int],
+) -> None:
+    actual_colors = {family: int(colors.get(family, 0)) for family in REQUIRED_COLOR_FAMILIES}
+    actual_widths = {width_class: int(widths.get(width_class, 0)) for width_class in REQUIRED_WIDTH_CLASSES}
+    require(
+        actual_colors == EXPECTED_COLOR_FAMILY_COUNTS,
+        f"Canonical color-family distribution mismatch: expected {EXPECTED_COLOR_FAMILY_COUNTS}, got {actual_colors}",
+    )
+    require(
+        actual_widths == EXPECTED_WIDTH_CLASS_COUNTS,
+        f"Canonical width-class distribution mismatch: expected {EXPECTED_WIDTH_CLASS_COUNTS}, got {actual_widths}",
+    )
 
 
 def compile_manifest(graph: dict[str, object], semantics: dict[str, object]) -> dict[str, object]:
@@ -138,6 +165,7 @@ def compile_manifest(graph: dict[str, object], semantics: dict[str, object]) -> 
     widths = Counter(str(edge["width_class"]) for edge in compiled_edges)
     require(set(colors) == REQUIRED_COLOR_FAMILIES, "Runtime manifest is missing one or more required color families")
     require(set(widths) == REQUIRED_WIDTH_CLASSES, "Runtime manifest must contain exactly thin and thick width classes")
+    require_reference_distribution(colors, widths)
 
     route_trees = []
     for tree in graph.get("route_trees", []):
