@@ -15,17 +15,18 @@ if (-not (Test-Path $splash)) {
     throw "Splash not found: $splash"
 }
 
-$routeFiles = @(
+$visualAssets = @(
+    "splash_reference_board.svg",
     "splash_routes_cyan.svg",
     "splash_routes_teal.svg",
     "splash_routes_lime.svg",
     "splash_routes_amber.svg",
     "splash_routes_violet.svg"
 )
-foreach ($route in $routeFiles) {
-    $candidate = Join-Path $staticDir $route
+foreach ($asset in $visualAssets) {
+    $candidate = Join-Path $staticDir $asset
     if (-not (Test-Path $candidate)) {
-        throw "Missing canonical route layer: $candidate"
+        throw "Missing splash visual asset: $candidate"
     }
 }
 
@@ -58,8 +59,8 @@ New-Item -ItemType Directory -Force -Path $consoleDir | Out-Null
 $server = $null
 try {
     Copy-Item $splash (Join-Path $tempRoot "index.html")
-    foreach ($route in $routeFiles) {
-        Copy-Item (Join-Path $staticDir $route) (Join-Path $consoleDir $route)
+    foreach ($asset in $visualAssets) {
+        Copy-Item (Join-Path $staticDir $asset) (Join-Path $consoleDir $asset)
     }
 
     $serverArgs = @()
@@ -98,11 +99,12 @@ try {
 
     Start-Process -FilePath $BrowserPath -ArgumentList $browserArgs | Out-Null
 
-    Write-Host "MAESTRO splash preview is running." -ForegroundColor Green
+    Write-Host "MAESTRO living splash preview is running." -ForegroundColor Green
     Write-Host "URL: $url"
     Write-Host "Requested browser window: ${Width}x${Height}"
     Write-Host "Device scale factor: 1"
     Write-Host "Browser: $BrowserPath"
+    Write-Host "Authored PCB board + canonical route layers: loaded from current branch"
     Write-Host ""
     Write-Host "Keep this PowerShell window open while reviewing the splash." -ForegroundColor Cyan
     Write-Host "Press ENTER here when you are finished to stop the local server."
