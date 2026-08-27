@@ -31,8 +31,7 @@ $visualAssets = @(
     "splash_routes_lime.svg",
     "splash_routes_amber.svg",
     "splash_routes_violet.svg",
-    "splash_surface_routes_review.svg",
-    "splash_routes_network_review.svg"
+    "splash_surface_routes_review.svg"
 )
 foreach ($asset in $visualAssets) {
     $candidate = Join-Path $staticDir $asset
@@ -129,14 +128,14 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
         }
         if ($CanonicalNetworkReview) {
             $previewCss += @'
-/* Review the original five-family network through edge-only presentation. */
+/* Directly render the original five-family route assets with edge-only SVG filters. */
 #pcb-reference,
-.route-layer,
 .pulse-layer,
 .surface-route-review-layer { display:none !important; }
 .card.c1,.card.c2,.card.c3,.card.c4 { left:40px !important; }
 .card.r1,.card.r2,.card.r3,.card.r4 { right:49px !important; }
-.canonical-network-review-layer {
+.route-layer {
+    display:block !important;
     position:absolute !important;
     inset:0 !important;
     width:1672px !important;
@@ -144,9 +143,25 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     z-index:4 !important;
     pointer-events:none !important;
     user-select:none !important;
-    opacity:.92 !important;
+    object-fit:contain !important;
+    opacity:.86 !important;
     mix-blend-mode:screen !important;
-    filter:drop-shadow(0 0 1.2px rgba(65,210,255,.32)) !important;
+}
+.route-layer.cyan {
+    opacity:.72 !important;
+    filter:url(#canonical-route-edge-cyan) drop-shadow(0 0 .6px #16d9ff) !important;
+}
+.route-layer.teal {
+    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #18f5e9) !important;
+}
+.route-layer.lime {
+    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #a6ff43) !important;
+}
+.route-layer.amber {
+    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #ffad1f) !important;
+}
+.route-layer.violet {
+    filter:url(#canonical-route-edge) drop-shadow(0 0 .7px #d36cff) !important;
 }
 '@
         }
@@ -167,10 +182,25 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
             $html = $html.Replace($coreShadowMarkup, $routeLayer + "`r`n" + $coreShadowMarkup)
         }
         if ($CanonicalNetworkReview) {
-            $networkLayer = @'
-<img class="canonical-network-review-layer" src="/console/splash_routes_network_review.svg" alt="" aria-hidden="true">
+            $filterDefs = @'
+<svg id="canonical-route-filter-defs" aria-hidden="true" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <filter id="canonical-route-edge" x="0" y="0" width="1672" height="941" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feMorphology in="SourceAlpha" operator="erode" radius="1.15" result="eroded"/>
+      <feComposite in="SourceGraphic" in2="eroded" operator="out" result="edge"/>
+      <feGaussianBlur in="edge" stdDeviation="0.2" result="soft"/>
+      <feMerge><feMergeNode in="soft"/><feMergeNode in="edge"/></feMerge>
+    </filter>
+    <filter id="canonical-route-edge-cyan" x="0" y="0" width="1672" height="941" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feMorphology in="SourceAlpha" operator="erode" radius="1.75" result="eroded"/>
+      <feComposite in="SourceGraphic" in2="eroded" operator="out" result="edge"/>
+      <feGaussianBlur in="edge" stdDeviation="0.16" result="soft"/>
+      <feMerge><feMergeNode in="soft"/><feMergeNode in="edge"/></feMerge>
+    </filter>
+  </defs>
+</svg>
 '@
-            $html = $html.Replace($coreShadowMarkup, $networkLayer + "`r`n" + $coreShadowMarkup)
+            $html = $html.Replace($coreShadowMarkup, $filterDefs + "`r`n" + $coreShadowMarkup)
         }
 
         if ($FullViewport) {
@@ -243,7 +273,7 @@ html,body,.viewport { width:100% !important; height:100% !important; margin:0 !i
     Write-Host "Browser: $BrowserPath"
     if ($CanonicalNetworkReview) {
         Write-Host "Preview mode: CANONICAL NETWORK REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
-        Write-Host "Original five-family route network: edge-rendered; filled blotches suppressed; side cards expanded outward." -ForegroundColor Yellow
+        Write-Host "Original five route SVGs are rendered directly; edge-only filtering suppresses filled blotches." -ForegroundColor Yellow
     } elseif ($SurfaceRouteReview) {
         Write-Host "Preview mode: SURFACE ROUTE REVIEW + FULL VIEWPORT." -ForegroundColor Yellow
         Write-Host "Side cards: expanded outward; legacy route layers: isolated; simplified surface routes: enabled." -ForegroundColor Yellow
