@@ -4,7 +4,8 @@ param(
     [int]$Port = 8765,
     [int]$Width = 1672,
     [int]$Height = 941,
-    [string]$BrowserPath = ""
+    [string]$BrowserPath = "",
+    [bool]$OpenResult = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -139,11 +140,21 @@ try {
         throw "Unexpected screenshot dimensions: $($dimensions.Width)x$($dimensions.Height); expected ${Width}x${Height}."
     }
 
+    $resolvedOutputPath = (Resolve-Path $OutputPath).Path
     Write-Host "Splash visual acceptance capture complete." -ForegroundColor Green
     Write-Host "URL: $url"
     Write-Host "Viewport: ${Width}x${Height}"
-    Write-Host "Screenshot: $OutputPath"
+    Write-Host "Screenshot: $resolvedOutputPath"
     Write-Host "Next gate: compare this screenshot with the approved reference image."
+
+    if ($OpenResult) {
+        try {
+            Start-Process -FilePath $resolvedOutputPath | Out-Null
+            Write-Host "Opened screenshot with the Windows default image viewer." -ForegroundColor Cyan
+        } catch {
+            Write-Warning "Screenshot was created but could not be opened automatically: $($_.Exception.Message)"
+        }
+    }
 } finally {
     if ($server -and -not $server.HasExited) {
         Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
