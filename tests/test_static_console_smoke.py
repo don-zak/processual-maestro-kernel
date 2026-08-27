@@ -132,6 +132,52 @@ def test_static_login_and_splash_preserve_descent_gate_markers():
     assert not missing_login, f"Missing login entry mode markers: {missing_login}"
 
 
+def test_splash_preserves_canonical_route_assets_and_visual_semantics():
+    splash_source = read_text(STATIC_ROOT / "splash.html")
+
+    canonical_assets = [
+        "/console/splash_routes_cyan.svg",
+        "/console/splash_routes_teal.svg",
+        "/console/splash_routes_lime.svg",
+        "/console/splash_routes_amber.svg",
+        "/console/splash_routes_violet.svg",
+    ]
+    for asset in canonical_assets:
+        assert splash_source.count(asset) == 1, f"Canonical route asset must be referenced exactly once: {asset}"
+
+    required_markers = [
+        "--card-radius:16px",
+        "module-accent",
+        "pulse-layer",
+        "cloneNode(false)",
+        "prefers-reduced-motion: reduce",
+        "radial-gradient(circle at ${cx}px ${cy}px",
+        "stage.insertBefore(pulse,document.querySelector('.core-shadow'))",
+    ]
+    missing = [marker for marker in required_markers if marker not in splash_source]
+    assert not missing, f"Missing splash visual semantics markers: {missing}"
+
+    forbidden_markers = [
+        "Math.random(",
+        "createElementNS(",
+        "<path class=\"pulse",
+        "generateRoute",
+        "routePreset",
+    ]
+    forbidden = [marker for marker in forbidden_markers if marker in splash_source]
+    assert not forbidden, f"Forbidden procedural pulse/route markers found: {forbidden}"
+
+
+def test_splash_keeps_core_depth_above_side_module_depth():
+    splash_source = read_text(STATIC_ROOT / "splash.html")
+
+    assert "0 9px 0 #01040b" in splash_source
+    assert "0 15px 0 #020817" in splash_source
+    assert "0 29px 52px #000d" in splash_source
+    assert "transform:translateY(-10px)" in splash_source
+    assert "transform:translateY(-3px)" in splash_source
+
+
 def test_static_console_auth_uses_session_storage_for_ui_session():
     login_source = read_text(STATIC_ROOT / "login.html")
     auth_source = read_text(STATIC_ROOT / "js" / "auth.js")
