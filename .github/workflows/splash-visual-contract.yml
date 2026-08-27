@@ -13,10 +13,12 @@ on:
       - tests/test_splash_pulse_choreography_a3.py
       - tests/test_build_splash_runtime_manifest_a3.py
       - tests/test_render_splash_canonical_pcb_a3.py
+      - tests/test_splash_stroke_promotion_readiness_a3.py
       - tests/browser_splash_acceptance.py
       - tests/browser_splash_keyboard_acceptance.py
       - scripts/build_splash_runtime_manifest.py
       - scripts/render_splash_canonical_pcb.py
+      - scripts/check_splash_stroke_promotion_readiness.py
       - scripts/show_splash_browser.ps1
       - .github/workflows/splash-visual-contract.yml
   pull_request:
@@ -30,10 +32,12 @@ on:
       - tests/test_splash_pulse_choreography_a3.py
       - tests/test_build_splash_runtime_manifest_a3.py
       - tests/test_render_splash_canonical_pcb_a3.py
+      - tests/test_splash_stroke_promotion_readiness_a3.py
       - tests/browser_splash_acceptance.py
       - tests/browser_splash_keyboard_acceptance.py
       - scripts/build_splash_runtime_manifest.py
       - scripts/render_splash_canonical_pcb.py
+      - scripts/check_splash_stroke_promotion_readiness.py
       - scripts/show_splash_browser.ps1
       - .github/workflows/splash-visual-contract.yml
 
@@ -57,7 +61,8 @@ jobs:
             tests/test_splash_side_card_attachment_alignment_a3.py \
             tests/test_splash_pulse_choreography_a3.py \
             tests/test_build_splash_runtime_manifest_a3.py \
-            tests/test_render_splash_canonical_pcb_a3.py
+            tests/test_render_splash_canonical_pcb_a3.py \
+            tests/test_splash_stroke_promotion_readiness_a3.py
       - name: Run exact viewport Chromium acceptance
         run: PYTHONPATH=. python tests/browser_splash_acceptance.py
       - name: Run keyboard focus Chromium acceptance
