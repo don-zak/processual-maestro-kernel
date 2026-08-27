@@ -57,7 +57,11 @@ def test_public_entry_surfaces_do_not_deliver_ungranted_production_authority() -
     assert "Production Ready" not in splash.text
     assert "جاهز للإنتاج" not in splash.text
     assert "Qualification Build" in splash.text
-    assert "نسخة تأهيل" not in splash.text
+    # Localized qualification metadata is allowed in the source. What must stay
+    # absent is rendered Arabic production/qualification authority on the
+    # English-only public entry surface.
+    assert 'data-ar="نسخة تأهيل"' in splash.text
+    assert ">نسخة تأهيل<" not in splash.text
     assert 'id="lang-ar"' not in splash.text
     assert 'data-lang="ar"' not in splash.text
 
