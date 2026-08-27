@@ -46,32 +46,30 @@ class ExecutionFanoutPolicy:
     lease_seconds: int
     wait_ms: int
     retry_ms: int
-    operation_timeout_seconds: float
+    operation_timeout_seconds: float = 120.0
 
     @classmethod
     def from_env(cls) -> ExecutionFanoutPolicy:
-        global_limit = int(os.environ.get("EXECUTION_FANOUT_GLOBAL_LIMIT", "16"))
-        provider_limit = int(os.environ.get("EXECUTION_FANOUT_PROVIDER_LIMIT", "8"))
-        lease_seconds = int(os.environ.get("EXECUTION_FANOUT_LEASE_SECONDS", "180"))
-        wait_ms = int(os.environ.get("EXECUTION_FANOUT_WAIT_MS", "250"))
-        retry_ms = int(os.environ.get("EXECUTION_FANOUT_RETRY_MS", "25"))
-        operation_timeout_seconds = float(
-            os.environ.get("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS", "120")
+        # Preserve the established normalization contract for the individual
+        # limits so older callers/tests remain compatible. Safety-critical
+        # relationships are validated after normalization.
+        global_limit = max(int(os.environ.get("EXECUTION_FANOUT_GLOBAL_LIMIT", "16")), 1)
+        provider_limit = max(int(os.environ.get("EXECUTION_FANOUT_PROVIDER_LIMIT", "8")), 1)
+        lease_seconds = max(int(os.environ.get("EXECUTION_FANOUT_LEASE_SECONDS", "180")), 5)
+        wait_ms = max(int(os.environ.get("EXECUTION_FANOUT_WAIT_MS", "250")), 0)
+        retry_ms = max(int(os.environ.get("EXECUTION_FANOUT_RETRY_MS", "25")), 5)
+
+        configured_timeout = os.environ.get("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS")
+        operation_timeout_seconds = (
+            float(configured_timeout)
+            if configured_timeout is not None
+            else float(min(120, lease_seconds - 1))
         )
-        if global_limit < 1:
-            raise RuntimeError("EXECUTION_FANOUT_GLOBAL_LIMIT must be at least 1.")
-        if provider_limit < 1:
-            raise RuntimeError("EXECUTION_FANOUT_PROVIDER_LIMIT must be at least 1.")
+
         if provider_limit > global_limit:
             raise RuntimeError(
                 "EXECUTION_FANOUT_PROVIDER_LIMIT must not exceed EXECUTION_FANOUT_GLOBAL_LIMIT."
             )
-        if lease_seconds < 5:
-            raise RuntimeError("EXECUTION_FANOUT_LEASE_SECONDS must be at least 5.")
-        if wait_ms < 0:
-            raise RuntimeError("EXECUTION_FANOUT_WAIT_MS must be non-negative.")
-        if retry_ms < 1:
-            raise RuntimeError("EXECUTION_FANOUT_RETRY_MS must be at least 1.")
         if operation_timeout_seconds <= 0:
             raise RuntimeError("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS must be greater than 0.")
         if operation_timeout_seconds >= lease_seconds:
