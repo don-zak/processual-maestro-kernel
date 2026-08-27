@@ -54,45 +54,93 @@ class SplashHandler(BaseHTTPRequestHandler):
 def _assert_page_contract(page, *, pulse_expected: bool) -> dict[str, object]:
     page.wait_for_load_state("networkidle")
     metrics = page.evaluate(
-        """() => ({
-          innerWidth: window.innerWidth,
-          innerHeight: window.innerHeight,
-          devicePixelRatio: window.devicePixelRatio,
-          stage: (() => {
-            const r = document.querySelector('.stage').getBoundingClientRect();
-            return {x:r.x,y:r.y,width:r.width,height:r.height};
-          })(),
-          board: (() => {
-            const board = document.querySelector('#pcb-reference');
-            if (!board) return null;
-            const r = board.getBoundingClientRect();
-            return {
-              complete: board.complete,
-              width: r.width,
-              height: r.height,
-              opacity: Number.parseFloat(getComputedStyle(board).opacity),
-            };
-          })(),
-          cards: document.querySelectorAll('.card').length,
-          canonicalLayers: document.querySelectorAll('[data-canonical-route-layer]').length,
-          pulseHeads: document.querySelectorAll('.pulse-head').length,
-          pulseTails: document.querySelectorAll('.pulse-tail').length,
-          coreTransform: getComputedStyle(document.querySelector('.core')).transform,
-          firstCardTransform: getComputedStyle(document.querySelector('.card')).transform,
-        })"""
+        """() => {
+          const box = (node) => {
+            const r = node.getBoundingClientRect();
+            return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};
+          };
+          return {
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            devicePixelRatio: window.devicePixelRatio,
+            stage: box(document.querySelector('.stage')),
+            board: (() => {
+              const board = document.querySelector('#pcb-reference');
+              if (!board) return null;
+              return {
+                complete: board.complete,
+                ...box(board),
+                opacity: Number.parseFloat(getComputedStyle(board).opacity),
+              };
+            })(),
+            core: box(document.querySelector('.core')),
+            execution: box(document.querySelector('.execution')),
+            cardBoxes: [...document.querySelectorAll('.card')].map(card => ({
+              name: card.querySelector('h3')?.textContent?.trim() || '',
+              family: card.dataset.routeFamily || '',
+              ...box(card),
+            })),
+            cards: document.querySelectorAll('.card').length,
+            canonicalLayers: document.querySelectorAll('[data-canonical-route-layer]').length,
+            pulseHeads: document.querySelectorAll('.pulse-head').length,
+            pulseTails: document.querySelectorAll('.pulse-tail').length,
+            coreTransform: getComputedStyle(document.querySelector('.core')).transform,
+            firstCardTransform: getComputedStyle(document.querySelector('.card')).transform,
+          };
+        }"""
     )
     assert metrics["innerWidth"] == 1672
     assert metrics["innerHeight"] == 941
     assert metrics["devicePixelRatio"] == 1
+    assert metrics["stage"]["x"] == 0
+    assert metrics["stage"]["y"] == 0
     assert metrics["stage"]["width"] == 1672
     assert metrics["stage"]["height"] == 941
     assert metrics["board"] is not None
     assert metrics["board"]["complete"] is True
+    assert metrics["board"]["x"] == 0
+    assert metrics["board"]["y"] == 0
     assert metrics["board"]["width"] == 1672
     assert metrics["board"]["height"] == 941
     assert metrics["board"]["opacity"] >= 0.35
+    assert metrics["core"] == {
+        "x": 608,
+        "y": 214,
+        "width": 433,
+        "height": 408,
+        "right": 1041,
+        "bottom": 622,
+    }
+    assert metrics["execution"]["x"] == 758
+    assert metrics["execution"]["y"] == 665
+    assert metrics["execution"]["width"] == 156
+    assert metrics["execution"]["height"] == 112
     assert metrics["cards"] == 8
     assert metrics["canonicalLayers"] == 5
+
+    card_boxes = metrics["cardBoxes"]
+    assert [card["name"] for card in card_boxes] == [
+        "GOVERNANCE",
+        "SUPERVISION",
+        "CALIBRATION",
+        "ORCHESTRATION",
+        "ROUTING",
+        "POLICY ENGINE",
+        "FEEDBACK LOOP",
+        "CONTROL GATES",
+    ]
+    assert [card["y"] for card in card_boxes] == [87, 254, 423, 595, 87, 254, 423, 595]
+    assert [card["x"] for card in card_boxes[:4]] == [80, 80, 80, 80]
+    assert [card["right"] for card in card_boxes[:4]] == [415, 415, 415, 415]
+    assert [card["x"] for card in card_boxes[4:]] == [1240, 1240, 1240, 1240]
+    assert [card["right"] for card in card_boxes[4:]] == [1575, 1575, 1575, 1575]
+
+    core = metrics["core"]
+    for card in card_boxes:
+        horizontal_overlap = min(core["right"], card["right"]) - max(core["x"], card["x"])
+        vertical_overlap = min(core["bottom"], card["bottom"]) - max(core["y"], card["y"])
+        assert horizontal_overlap <= 0 or vertical_overlap <= 0, f"Core overlaps card: {card['name']}"
+
     if pulse_expected:
         assert metrics["pulseHeads"] == 5
         assert metrics["pulseTails"] == 5
