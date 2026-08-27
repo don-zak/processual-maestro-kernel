@@ -160,7 +160,7 @@ def test_splash_preserves_canonical_route_assets_and_visual_semantics():
 def test_splash_pulse_swelling_is_presentation_only():
     splash_source = read_text(STATIC_ROOT / "splash.html")
     assert splash_source.count('data-canonical-route-layer=') == 5
-    assert "const baseLayers=[...stage.querySelectorAll('.route-layer')]" in splash_source
+    assert "baseLayers=[...stage.querySelectorAll('.route-layer')]" in splash_source
     assert "tail=layer.cloneNode(false)" in splash_source
     assert "head=layer.cloneNode(false)" in splash_source
     assert "tail.removeAttribute('data-canonical-route-layer')" in splash_source
