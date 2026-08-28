@@ -1,0 +1,159 @@
+name: Portable Evaluation Bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'evaluation/**'
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - 'processual_api/**'
+      - 'processual_kernel/**'
+      - 'cgtlib/**'
+      - '.github/workflows/portable-evaluation-bundle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build public evaluation image
+        run: docker build --target public -t processual-maestro-evaluation:v1 .
+
+      - name: Pull portable dependencies
+        run: |
+          docker pull postgres:17-alpine
+          docker pull redis:7-alpine
+
+      - name: Prepare evaluation environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import base64, json, secrets
+
+          def hx(n=32): return secrets.token_hex(n)
+          def b64(n=32): return base64.b64encode(secrets.token_bytes(n)).decode()
+          values = {
+              'JWT_SECRET': hx(48),
+              'API_KEYS': 'pmk_eval_' + hx(32),
+              'PROCESSUAL_CRYPTO_KEY_B64': b64(),
+              'MAESTRO_ADMIN_PASSWORD': hx(24),
+              'GRAFANA_ADMIN_PASSWORD': hx(24),
+              'AUTH_TOKEN_PEPPER': hx(),
+              'AUTH_RATE_LIMIT_PEPPER': hx(),
+              'POSTGRES_PASSWORD': hx(24),
+              'REDIS_PASSWORD': hx(24),
+              'AUTH_DELIVERY_KEY': b64(),
+              'AUTH_MFA_KEY': b64(),
+              'PAYMENT_KEY': b64(),
+          }
+          lines = [
+              'ENVIRONMENT=development', 'APP_ENV=evaluation', 'API_HOST=0.0.0.0',
+              'API_PORT=8000', 'API_LOG_LEVEL=info', 'API_DEBUG=false',
+              f"JWT_SECRET={values['JWT_SECRET']}", f"API_KEYS={values['API_KEYS']}",
+              f"PROCESSUAL_CRYPTO_KEY_B64={values['PROCESSUAL_CRYPTO_KEY_B64']}",
+              'MAESTRO_ADMIN_EMAIL=evaluator@example.local',
+              f"MAESTRO_ADMIN_PASSWORD={values['MAESTRO_ADMIN_PASSWORD']}",
+              f"GRAFANA_ADMIN_PASSWORD={values['GRAFANA_ADMIN_PASSWORD']}",
+              f"AUTH_TOKEN_PEPPER={values['AUTH_TOKEN_PEPPER']}",
+              f"AUTH_RATE_LIMIT_PEPPER={values['AUTH_RATE_LIMIT_PEPPER']}",
+              'AUTH_DELIVERY_KEY_RING_JSON=' + json.dumps({'v1': values['AUTH_DELIVERY_KEY']}, separators=(',', ':')),
+              'AUTH_DELIVERY_CURRENT_KEY_VERSION=v1',
+              'AUTH_MFA_KEY_RING_JSON=' + json.dumps({'v1': values['AUTH_MFA_KEY']}, separators=(',', ':')),
+              'AUTH_MFA_CURRENT_KEY_VERSION=v1',
+              'ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON=' + json.dumps({'payment-v1': values['PAYMENT_KEY']}, separators=(',', ':')),
+              'ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION=payment-v1',
+              'POSTGRES_USER=processual', f"POSTGRES_PASSWORD={values['POSTGRES_PASSWORD']}",
+              'POSTGRES_DB=processual_eval', f"REDIS_PASSWORD={values['REDIS_PASSWORD']}",
+              'MAESTRO_EVAL_PORT=8000', 'MAESTRO_EVAL_IMAGE_TAG=v1',
+              'RATE_LIMIT_ENABLED=true', 'AUDIT_ENABLED=true', 'CAPACITY_GUARD_ENABLED=true',
+              'CAPACITY_GLOBAL_LIMIT_OCU=20', 'CAPACITY_ACTOR_LIMIT_OCU=8',
+              'MAESTRO_TOP_UP_PURCHASE_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false',
+              'LEMONSQUEEZY_API_KEY=', 'LEMONSQUEEZY_STORE_ID=', 'LEMONSQUEEZY_WEBHOOK_SECRET=',
+              'LLM_DEFAULT_PROVIDER=opencode', 'OPENCODE_API_URL=http://127.0.0.1:9/v1',
+              'OPENCODE_API_KEY=evaluation-disabled',
+          ]
+          Path('evaluation/.env.evaluation').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate compose configuration
+        run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml config --quiet
+
+      - name: Start evaluation stack
+        run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml up -d
+
+      - name: Wait for health and smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:8000/health/live >/dev/null; then
+              curl -fsS http://localhost:8000/health/live
+              curl -fsS http://localhost:8000/openapi.json >/dev/null
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml ps
+          docker logs maestro-eval-api --tail 200 || true
+          exit 1
+
+      - name: Assert evaluation safety switches
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^MAESTRO_TOP_UP_PURCHASE_ENABLED=false$' evaluation/.env.evaluation
+          grep -q '^MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false$' evaluation/.env.evaluation
+          grep -q '^MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false$' evaluation/.env.evaluation
+          grep -q '^OPENCODE_API_URL=http://127.0.0.1:9/v1$' evaluation/.env.evaluation
+
+      - name: Build standalone offline distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f evaluation/.env.evaluation
+          mkdir -p evaluation/images
+          docker save processual-maestro-evaluation:v1 -o evaluation/images/processual-maestro-evaluation-v1.tar
+          docker save postgres:17-alpine -o evaluation/images/postgres-17-alpine.tar
+          docker save redis:7-alpine -o evaluation/images/redis-7-alpine.tar
+          cat > evaluation/RELEASE_MANIFEST.json <<EOF
+          {
+            "product": "Processual Maestro",
+            "edition": "Portable Evaluation Runtime",
+            "source_sha": "${GITHUB_SHA}",
+            "api_image": "processual-maestro-evaluation:v1",
+            "postgres_image": "postgres:17-alpine",
+            "redis_image": "redis:7-alpine",
+            "production_use": false,
+            "external_billing_enabled": false,
+            "external_llm_enabled": false
+          }
+          EOF
+          chmod +x evaluation/start-maestro.sh
+          (cd evaluation && sha256sum images/*.tar RELEASE_MANIFEST.json > SHA256SUMS.txt)
+          cp -a evaluation Processual-Maestro-Portable-Evaluation
+          zip -r Processual-Maestro-Portable-Evaluation.zip Processual-Maestro-Portable-Evaluation
+          sha256sum Processual-Maestro-Portable-Evaluation.zip > Processual-Maestro-Portable-Evaluation.zip.sha256
+
+      - name: Upload portable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: processual-maestro-portable-evaluation-${{ github.sha }}
+          path: |
+            Processual-Maestro-Portable-Evaluation.zip
+            Processual-Maestro-Portable-Evaluation.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Shutdown
+        if: always()
+        run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml down -v || true
