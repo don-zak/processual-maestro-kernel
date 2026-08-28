@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM base AS private
 
 COPY pyproject.toml README.md ./
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY cgtlib ./cgtlib
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
@@ -44,6 +46,8 @@ CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-
 FROM base AS public
 
 COPY pyproject.toml README.md ./
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
 # Copy cgtlib/ but exclude cgtlib/private/ — stubs provide graceful fallback
