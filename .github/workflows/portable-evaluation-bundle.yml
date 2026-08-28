@@ -10,6 +10,9 @@ on:
       - 'processual_api/**'
       - 'processual_kernel/**'
       - 'cgtlib/**'
+      - 'alembic/**'
+      - 'alembic.ini'
+      - 'tests/test_portable_evaluation_bundle_contract.py'
       - '.github/workflows/portable-evaluation-bundle.yml'
 
 permissions:
@@ -21,6 +24,33 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+
+      - name: Static evaluation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          e = Path('evaluation')
+          required = {
+              'docker-compose.evaluation.yml', '.env.evaluation.example',
+              'START-MAESTRO.ps1', 'STOP-MAESTRO.ps1', 'CHECK-STATUS.ps1',
+              'RESET-DEMO.ps1', 'LOAD-OFFLINE-IMAGES.ps1', 'start-maestro.sh',
+              'README_START_HERE.md',
+          }
+          assert required <= {p.name for p in e.iterdir()}
+          env = (e / '.env.evaluation.example').read_text()
+          for line in (
+              'MAESTRO_TOP_UP_PURCHASE_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false',
+              'OPENCODE_API_URL=http://127.0.0.1:9/v1',
+          ):
+              assert line in env
+          compose = (e / 'docker-compose.evaluation.yml').read_text()
+          assert 'condition: service_completed_successfully' in compose
+          assert 'alembic' in compose
+          PY
 
       - name: Build public evaluation image
         run: docker build --target public -t processual-maestro-evaluation:v1 .
@@ -37,22 +67,15 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import base64, json, secrets
-
           def hx(n=32): return secrets.token_hex(n)
           def b64(n=32): return base64.b64encode(secrets.token_bytes(n)).decode()
           values = {
-              'JWT_SECRET': hx(48),
-              'API_KEYS': 'pmk_eval_' + hx(32),
-              'PROCESSUAL_CRYPTO_KEY_B64': b64(),
-              'MAESTRO_ADMIN_PASSWORD': hx(24),
-              'GRAFANA_ADMIN_PASSWORD': hx(24),
-              'AUTH_TOKEN_PEPPER': hx(),
-              'AUTH_RATE_LIMIT_PEPPER': hx(),
-              'POSTGRES_PASSWORD': hx(24),
-              'REDIS_PASSWORD': hx(24),
-              'AUTH_DELIVERY_KEY': b64(),
-              'AUTH_MFA_KEY': b64(),
-              'PAYMENT_KEY': b64(),
+              'JWT_SECRET': hx(48), 'API_KEYS': 'pmk_eval_' + hx(32),
+              'PROCESSUAL_CRYPTO_KEY_B64': b64(), 'MAESTRO_ADMIN_PASSWORD': hx(24),
+              'GRAFANA_ADMIN_PASSWORD': hx(24), 'AUTH_TOKEN_PEPPER': hx(),
+              'AUTH_RATE_LIMIT_PEPPER': hx(), 'POSTGRES_PASSWORD': hx(24),
+              'REDIS_PASSWORD': hx(24), 'AUTH_DELIVERY_KEY': b64(),
+              'AUTH_MFA_KEY': b64(), 'PAYMENT_KEY': b64(),
           }
           lines = [
               'ENVIRONMENT=development', 'APP_ENV=evaluation', 'API_HOST=0.0.0.0',
@@ -84,6 +107,7 @@ jobs:
           ]
           Path('evaluation/.env.evaluation').write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
+          cp evaluation/.env.evaluation /tmp/processual-evaluation-ci.env
 
       - name: Validate compose configuration
         run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml config --quiet
@@ -99,11 +123,13 @@ jobs:
             if curl -fsS http://localhost:8000/health/live >/dev/null; then
               curl -fsS http://localhost:8000/health/live
               curl -fsS http://localhost:8000/openapi.json >/dev/null
+              docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml run --rm migrate alembic -c /app/alembic.ini current | grep '(head)'
               exit 0
             fi
             sleep 2
           done
           docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml ps
+          docker logs maestro-eval-migrate --tail 200 || true
           docker logs maestro-eval-api --tail 200 || true
           exit 1
 
@@ -133,6 +159,7 @@ jobs:
             "api_image": "processual-maestro-evaluation:v1",
             "postgres_image": "postgres:17-alpine",
             "redis_image": "redis:7-alpine",
+            "database_migrations": "alembic upgrade head before API startup",
             "production_use": false,
             "external_billing_enabled": false,
             "external_llm_enabled": false
@@ -156,4 +183,4 @@ jobs:
 
       - name: Shutdown
         if: always()
-        run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml down -v || true
+        run: docker compose --env-file /tmp/processual-evaluation-ci.env -f evaluation/docker-compose.evaluation.yml down -v || true
