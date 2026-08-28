@@ -22,12 +22,23 @@ LOCAL_KEYS = (
     "MAESTRO_TUNISIA_FX_SOURCE",
     "MAESTRO_TUNISIA_FX_REFERENCE",
     "MAESTRO_TUNISIA_FX_TTL_SECONDS",
+    "MAESTRO_TUNISIA_FX_OBSERVED_AT",
 )
 
 
 def _clear(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (*LEMON_KEYS, *LOCAL_KEYS):
         monkeypatch.delenv(key, raising=False)
+
+
+def _set_complete_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED", "true")
+    monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED", "true")
+    monkeypatch.setenv("MAESTRO_TUNISIA_USD_TND_RATE", "3.1")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_SOURCE", "bank")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "rate-20260828")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "3600")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_OBSERVED_AT", "2026-08-28T09:00:00+00:00")
 
 
 def test_disabled_channels_are_activation_safe(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -71,8 +82,9 @@ def test_local_purchase_requires_admin_verification_surface(monkeypatch: pytest.
     monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED", "true")
     monkeypatch.setenv("MAESTRO_TUNISIA_USD_TND_RATE", "3.1")
     monkeypatch.setenv("MAESTRO_TUNISIA_FX_SOURCE", "bank")
-    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "rate-20260807")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "rate-20260828")
     monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "3600")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_OBSERVED_AT", "2026-08-28T09:00:00+00:00")
 
     readiness = evaluate_top_up_production_readiness()
 
@@ -81,13 +93,33 @@ def test_local_purchase_requires_admin_verification_surface(monkeypatch: pytest.
     assert "tunisia_admin_verification_disabled" in readiness.blockers
 
 
+def test_complete_local_configuration_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear(monkeypatch)
+    _set_complete_local(monkeypatch)
+
+    readiness = require_top_up_production_readiness()
+
+    assert readiness.activation_safe is True
+    assert readiness.local_ready is True
+    assert readiness.local_purchase_enabled is True
+    assert readiness.local_admin_enabled is True
+    assert readiness.blockers == ()
+
+
+def test_local_configuration_requires_observation_timestamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear(monkeypatch)
+    _set_complete_local(monkeypatch)
+    monkeypatch.delenv("MAESTRO_TUNISIA_FX_OBSERVED_AT")
+
+    readiness = evaluate_top_up_production_readiness()
+
+    assert readiness.activation_safe is False
+    assert "tunisia_fx_observed_at_invalid" in readiness.blockers
+
+
 def test_local_configuration_rejects_unbounded_fx_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear(monkeypatch)
-    monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED", "true")
-    monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED", "true")
-    monkeypatch.setenv("MAESTRO_TUNISIA_USD_TND_RATE", "3.1")
-    monkeypatch.setenv("MAESTRO_TUNISIA_FX_SOURCE", "bank")
-    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "rate-20260807")
+    _set_complete_local(monkeypatch)
     monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "999999")
 
     with pytest.raises(RuntimeError, match="production activation is blocked"):
