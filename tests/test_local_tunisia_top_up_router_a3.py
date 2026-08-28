@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -38,6 +38,7 @@ async def test_environment_fx_provider_rejects_missing_configuration(
         "MAESTRO_TUNISIA_FX_SOURCE",
         "MAESTRO_TUNISIA_FX_REFERENCE",
         "MAESTRO_TUNISIA_FX_TTL_SECONDS",
+        "MAESTRO_TUNISIA_FX_OBSERVED_AT",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -56,6 +57,8 @@ async def test_environment_fx_provider_builds_bounded_auditable_quote(
     monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "3600")
 
     requested_at = datetime(2026, 8, 7, 9, tzinfo=UTC)
+    observed_at = requested_at - timedelta(minutes=10)
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_OBSERVED_AT", observed_at.isoformat())
     quote = await EnvironmentTunisiaExchangeRateProvider().quote_usd_to_tnd(
         requested_at=requested_at
     )
@@ -63,8 +66,48 @@ async def test_environment_fx_provider_builds_bounded_auditable_quote(
     assert quote.rate == Decimal("3.125000")
     assert quote.source == "treasury_admin"
     assert quote.reference == "fx-2026-08-07-001"
-    assert quote.observed_at == requested_at
-    assert quote.expires_at > requested_at
+    assert quote.observed_at == observed_at
+    assert quote.expires_at == observed_at + timedelta(hours=1)
+
+
+@pytest.mark.asyncio
+async def test_environment_fx_provider_rejects_expired_quote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested_at = datetime(2026, 8, 7, 9, tzinfo=UTC)
+    monkeypatch.setenv("MAESTRO_TUNISIA_USD_TND_RATE", "3.125000")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_SOURCE", "treasury_admin")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "fx-stale")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "3600")
+    monkeypatch.setenv(
+        "MAESTRO_TUNISIA_FX_OBSERVED_AT",
+        (requested_at - timedelta(hours=2)).isoformat(),
+    )
+
+    with pytest.raises(RuntimeError, match="expired"):
+        await EnvironmentTunisiaExchangeRateProvider().quote_usd_to_tnd(
+            requested_at=requested_at
+        )
+
+
+@pytest.mark.asyncio
+async def test_environment_fx_provider_rejects_future_quote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested_at = datetime(2026, 8, 7, 9, tzinfo=UTC)
+    monkeypatch.setenv("MAESTRO_TUNISIA_USD_TND_RATE", "3.125000")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_SOURCE", "treasury_admin")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "fx-future")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "3600")
+    monkeypatch.setenv(
+        "MAESTRO_TUNISIA_FX_OBSERVED_AT",
+        (requested_at + timedelta(minutes=1)).isoformat(),
+    )
+
+    with pytest.raises(RuntimeError, match="future"):
+        await EnvironmentTunisiaExchangeRateProvider().quote_usd_to_tnd(
+            requested_at=requested_at
+        )
 
 
 @pytest.mark.asyncio
