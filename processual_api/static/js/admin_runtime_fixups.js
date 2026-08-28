@@ -452,11 +452,75 @@
     }
   }
 
+  function alignLocalPaymentActivationUi() {
+    const panel = document.querySelector('[data-am-panel="payment-destinations"]');
+    if (!panel) return;
+
+    const heading = panel.querySelector('.am-section-heading p');
+    if (heading) {
+      heading.textContent =
+        'Enter the Tunisian receiving-account data once. One protected activation action validates, activates, and publishes it as the default customer payment route.';
+    }
+
+    const button = document.getElementById('am-create-validate');
+    if (button && button.dataset.loading !== 'true') {
+      button.textContent = 'Activate payment route';
+    }
+
+    const note = panel.querySelector('.am-form-note');
+    if (note) {
+      note.textContent =
+        'One MFA-gated action encrypts the identifier, validates the account structure, activates the destination, and makes it the default route. Retries resume safely with the same idempotency key.';
+    }
+
+    const title = document.getElementById('am-confirm-title');
+    const message = document.getElementById('am-confirm-message');
+    const submit = document.getElementById('am-confirm-submit');
+    if (title && title.textContent === 'Create and validate destination?') {
+      title.textContent = 'Activate payment route?';
+      if (message) {
+        message.textContent =
+          'The identifier will be encrypted. This protected action validates, activates, and makes this destination the default customer-facing payment route.';
+      }
+      if (submit) submit.textContent = 'Activate';
+    }
+
+    const notice = document.getElementById('am-payment-notice');
+    if (
+      notice &&
+      notice.textContent === 'Payment destination created and validated. Activate it separately when ready.'
+    ) {
+      notice.textContent =
+        'Payment route is active, default, and ready for eligible Tunisian customers.';
+    }
+
+    if (panel.dataset.r3ActivationObserver !== 'true') {
+      const observer = new MutationObserver(() => alignLocalPaymentActivationUi());
+      const confirmDialog = document.getElementById('am-confirm-dialog');
+      if (confirmDialog) {
+        observer.observe(confirmDialog, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      }
+      if (notice) {
+        observer.observe(notice, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      }
+      panel.dataset.r3ActivationObserver = 'true';
+    }
+  }
+
   function fix() {
     ensureStyle();
     pruneAdminHome();
     refreshAuthCard();
     bindApiKeyButtons();
+    alignLocalPaymentActivationUi();
 
     if (window.PMK_ADMIN_LAYOUT && typeof PMK_ADMIN_LAYOUT.clean === 'function') {
       PMK_ADMIN_LAYOUT.clean();
@@ -469,6 +533,7 @@
     refreshAuthCard,
     generateProfiledApiKey,
     keyProfile,
+    alignLocalPaymentActivationUi,
   };
 
   window.addEventListener('pmk-api-key-category-changed', () => {
