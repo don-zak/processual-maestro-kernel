@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from processual_api.admin_marketplace.authority import (
+    AdminMarketplaceAuthorityContext,
+)
 from processual_api.admin_marketplace.errors import (
     PaymentDestinationConflictError,
 )
@@ -29,7 +32,7 @@ class ReadyPaymentDestinationAdministrationService(
     async def create_and_validate(
         self,
         *,
-        authority,
+        authority: AdminMarketplaceAuthorityContext,
         command: PaymentDestinationCreateContract,
         correlation_id: str,
         idempotency_key: str | None = None,
