@@ -24,6 +24,9 @@ from processual_api.admin_marketplace.identity_authority import (
 from processual_api.admin_marketplace.payment_destination_crypto import (
     PaymentDestinationCipher,
 )
+from processual_api.admin_marketplace.payment_destination_ready_service import (
+    ReadyPaymentDestinationAdministrationService,
+)
 from processual_api.admin_marketplace.payment_destination_service import (
     PaymentDestinationAdministrationService,
 )
@@ -134,7 +137,7 @@ async def build_admin_marketplace_runtime(
 
     payment_destination_service = None
     try:
-        payment_destination_service = PaymentDestinationAdministrationService(
+        payment_destination_service = ReadyPaymentDestinationAdministrationService(
             unit_of_work_factory=unit_of_work_factory,
             cipher=PaymentDestinationCipher(
                 current_key_version=(config.admin_marketplace_payment_destination_current_key_version or ""),
