@@ -1,0 +1,143 @@
+name: Pre-launch Operational Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/prelaunch-operational-evidence.yml
+      - alembic/**
+      - processual_api/db/**
+      - processual_api/settings.py
+      - tests/test_migration_0039_postgres_json_contract.py
+      - tests/test_production_env_release_contract.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-backup-restore-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: rehearsal-password
+          POSTGRES_DB: maestro_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro_source"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://maestro:rehearsal-password@127.0.0.1:5432/maestro_source
+      PGPASSWORD: rehearsal-password
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"
+
+      - name: Install application and database dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[api,security,database]'
+
+      - name: Verify migration PostgreSQL contracts
+        run: |
+          pip install -e '.[dev,api,security,database]'
+          PYTHONPATH=. python -m pytest -q tests/test_migration_0039_postgres_json_contract.py
+
+      - name: Upgrade source database to release head
+        run: |
+          alembic upgrade head
+          alembic current
+
+      - name: Resolve PostgreSQL 17 service container
+        id: postgres-container
+        run: |
+          POSTGRES_CONTAINER_ID="$(docker ps --filter ancestor=postgres:17 --format '{{.ID}}' | head -n 1)"
+          test -n "$POSTGRES_CONTAINER_ID"
+          docker exec "$POSTGRES_CONTAINER_ID" pg_dump --version
+          echo "container_id=$POSTGRES_CONTAINER_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Create immutable rehearsal backup artifact
+        env:
+          POSTGRES_CONTAINER_ID: ${{ steps.postgres-container.outputs.container_id }}
+        run: |
+          mkdir -p operational-evidence
+          docker exec \
+            -e PGPASSWORD="$PGPASSWORD" \
+            "$POSTGRES_CONTAINER_ID" \
+            pg_dump \
+              --username maestro \
+              --dbname maestro_source \
+              --format=custom \
+            > operational-evidence/maestro-source.dump
+          test -s operational-evidence/maestro-source.dump
+          sha256sum operational-evidence/maestro-source.dump \
+            | tee operational-evidence/maestro-source.dump.sha256
+
+      - name: Restore into isolated database
+        env:
+          POSTGRES_CONTAINER_ID: ${{ steps.postgres-container.outputs.container_id }}
+        run: |
+          docker exec \
+            -e PGPASSWORD="$PGPASSWORD" \
+            "$POSTGRES_CONTAINER_ID" \
+            createdb --username maestro maestro_restored
+          docker exec \
+            -i \
+            -e PGPASSWORD="$PGPASSWORD" \
+            "$POSTGRES_CONTAINER_ID" \
+            pg_restore \
+              --username maestro \
+              --dbname maestro_restored \
+            < operational-evidence/maestro-source.dump
+
+      - name: Verify restored migration authority
+        env:
+          DATABASE_URL: postgresql+asyncpg://maestro:rehearsal-password@127.0.0.1:5432/maestro_restored
+        run: |
+          alembic current | tee operational-evidence/restored-alembic-current.txt
+          alembic upgrade head
+          alembic current | tee operational-evidence/restored-alembic-current-after-upgrade.txt
+          python - <<'PY' | tee operational-evidence/restored-invariants.txt
+          import asyncio
+          import os
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          async def main() -> None:
+              engine = create_async_engine(os.environ['DATABASE_URL'])
+              async with engine.connect() as conn:
+                  revision = (await conn.execute(text('SELECT version_num FROM alembic_version'))).scalar_one()
+                  print(f'alembic_revision={revision}')
+                  assert revision
+              await engine.dispose()
+
+          asyncio.run(main())
+          PY
+
+      - name: Verify release environment contract tests
+        run: |
+          PYTHONPATH=. python -m pytest -q tests/test_production_env_release_contract.py
+
+      - name: Upload rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: prelaunch-postgres-backup-restore-evidence
+          path: operational-evidence/
+          if-no-files-found: warn
