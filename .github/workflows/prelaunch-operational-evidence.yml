@@ -8,6 +8,7 @@ on:
       - alembic/**
       - processual_api/db/**
       - processual_api/settings.py
+      - tests/test_migration_0039_postgres_json_contract.py
       - tests/test_production_env_release_contract.py
   workflow_dispatch:
 
@@ -52,6 +53,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e '.[api,security,database]'
+
+      - name: Verify migration PostgreSQL contracts
+        run: |
+          pip install -e '.[dev,api,security,database]'
+          PYTHONPATH=. python -m pytest -q tests/test_migration_0039_postgres_json_contract.py
 
       - name: Upgrade source database to release head
         run: |
@@ -107,7 +113,6 @@ jobs:
 
       - name: Verify release environment contract tests
         run: |
-          pip install -e '.[dev,api,security,database]'
           PYTHONPATH=. python -m pytest -q tests/test_production_env_release_contract.py
 
       - name: Upload rehearsal evidence
