@@ -64,28 +64,47 @@ jobs:
           alembic upgrade head
           alembic current
 
+      - name: Resolve PostgreSQL 17 service container
+        id: postgres-container
+        run: |
+          POSTGRES_CONTAINER_ID="$(docker ps --filter ancestor=postgres:17 --format '{{.ID}}' | head -n 1)"
+          test -n "$POSTGRES_CONTAINER_ID"
+          docker exec "$POSTGRES_CONTAINER_ID" pg_dump --version
+          echo "container_id=$POSTGRES_CONTAINER_ID" >> "$GITHUB_OUTPUT"
+
       - name: Create immutable rehearsal backup artifact
+        env:
+          POSTGRES_CONTAINER_ID: ${{ steps.postgres-container.outputs.container_id }}
         run: |
           mkdir -p operational-evidence
-          pg_dump \
-            --host 127.0.0.1 \
-            --username maestro \
-            --dbname maestro_source \
-            --format=custom \
-            --file operational-evidence/maestro-source.dump
+          docker exec \
+            -e PGPASSWORD="$PGPASSWORD" \
+            "$POSTGRES_CONTAINER_ID" \
+            pg_dump \
+              --username maestro \
+              --dbname maestro_source \
+              --format=custom \
+            > operational-evidence/maestro-source.dump
           test -s operational-evidence/maestro-source.dump
           sha256sum operational-evidence/maestro-source.dump \
             | tee operational-evidence/maestro-source.dump.sha256
 
       - name: Restore into isolated database
+        env:
+          POSTGRES_CONTAINER_ID: ${{ steps.postgres-container.outputs.container_id }}
         run: |
-          createdb --host 127.0.0.1 --username maestro maestro_restored
-          pg_restore \
-            --host 127.0.0.1 \
-            --username maestro \
-            --dbname maestro_restored \
-            --clean --if-exists \
-            operational-evidence/maestro-source.dump
+          docker exec \
+            -e PGPASSWORD="$PGPASSWORD" \
+            "$POSTGRES_CONTAINER_ID" \
+            createdb --username maestro maestro_restored
+          docker exec \
+            -i \
+            -e PGPASSWORD="$PGPASSWORD" \
+            "$POSTGRES_CONTAINER_ID" \
+            pg_restore \
+              --username maestro \
+              --dbname maestro_restored \
+            < operational-evidence/maestro-source.dump
 
       - name: Verify restored migration authority
         env:
