@@ -20,6 +20,7 @@ TOP_UP_KEYS = (
     "MAESTRO_TUNISIA_FX_SOURCE",
     "MAESTRO_TUNISIA_FX_REFERENCE",
     "MAESTRO_TUNISIA_FX_TTL_SECONDS",
+    "MAESTRO_TUNISIA_FX_OBSERVED_AT",
 )
 
 
@@ -72,5 +73,21 @@ def test_production_startup_accepts_complete_enabled_lemon_channel(
         "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
         "https://app.example.com/console",
     )
+
+    _enforce_production_readiness_on_import()
+
+
+def test_production_startup_accepts_complete_enabled_tunisia_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear(monkeypatch)
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED", "true")
+    monkeypatch.setenv("MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED", "true")
+    monkeypatch.setenv("MAESTRO_TUNISIA_USD_TND_RATE", "3.125")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_SOURCE", "treasury_admin")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_REFERENCE", "fx-20260828-0900")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_TTL_SECONDS", "3600")
+    monkeypatch.setenv("MAESTRO_TUNISIA_FX_OBSERVED_AT", "2026-08-28T09:00:00+00:00")
 
     _enforce_production_readiness_on_import()

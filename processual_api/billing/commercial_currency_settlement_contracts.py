@@ -21,7 +21,7 @@ from processual_api.billing.commercial_settings_top_up_checkout_contracts import
 )
 
 COMMERCIAL_CURRENCY_SETTLEMENT_VERSION: Final = "2026-07-group2-usd-tnd-settlement-v1"
-COMMERCIAL_CURRENCY_SETTLEMENT_STATUS: Final = "draft_review"
+COMMERCIAL_CURRENCY_SETTLEMENT_STATUS: Final = "qualified_fail_closed"
 
 AUTHORITATIVE_PRICING_CURRENCY: Final = "USD"
 LOCAL_TUNISIA_SETTLEMENT_CURRENCY: Final = "TND"
@@ -29,6 +29,9 @@ LOCAL_TUNISIA_SETTLEMENT_CURRENCY: Final = "TND"
 USD_QUANTUM: Final = Decimal("0.01")
 TND_QUANTUM: Final = Decimal("0.001")
 
+# These legacy metadata booleans intentionally remain False. Runtime activation
+# is governed by the production-readiness gate plus the explicit Tunisia-local
+# feature flags, not by importing this pure settlement contract.
 EXCHANGE_RATE_PROVIDER_RUNTIME_ENABLED: Final = False
 LOCAL_TUNISIA_SETTLEMENT_RUNTIME_ENABLED: Final = False
 

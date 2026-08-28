@@ -58,6 +58,7 @@ _RATE_ENV = "MAESTRO_TUNISIA_USD_TND_RATE"
 _RATE_SOURCE_ENV = "MAESTRO_TUNISIA_FX_SOURCE"
 _RATE_REFERENCE_ENV = "MAESTRO_TUNISIA_FX_REFERENCE"
 _RATE_TTL_ENV = "MAESTRO_TUNISIA_FX_TTL_SECONDS"
+_RATE_OBSERVED_AT_ENV = "MAESTRO_TUNISIA_FX_OBSERVED_AT"
 
 
 class LocalTunisiaTopUpPurchaseRequest(BaseModel):
@@ -130,20 +131,43 @@ class EnvironmentTunisiaExchangeRateProvider:
         source = os.environ.get(_RATE_SOURCE_ENV, "").strip()
         reference = os.environ.get(_RATE_REFERENCE_ENV, "").strip()
         ttl_raw = os.environ.get(_RATE_TTL_ENV, "").strip()
+        observed_raw = os.environ.get(_RATE_OBSERVED_AT_ENV, "").strip()
         try:
             rate = Decimal(rate_raw)
             ttl_seconds = int(ttl_raw)
+            observed_at = datetime.fromisoformat(observed_raw.replace("Z", "+00:00"))
         except (InvalidOperation, ValueError) as exc:
             raise SubscriptionTopUpOrderError(
                 "Tunisia-local exchange-rate configuration is invalid."
             ) from exc
-        if not rate.is_finite() or rate <= 0 or ttl_seconds <= 0 or ttl_seconds > 86_400:
+        if (
+            not rate.is_finite()
+            or rate <= 0
+            or ttl_seconds <= 0
+            or ttl_seconds > 86_400
+            or observed_at.tzinfo is None
+        ):
             raise SubscriptionTopUpOrderError(
                 "Tunisia-local exchange-rate configuration is invalid."
+            )
+        if requested_at.tzinfo is None:
+            raise SubscriptionTopUpOrderError(
+                "Tunisia-local exchange-rate request time is invalid."
             )
         if not source or not reference:
             raise SubscriptionTopUpOrderError(
                 "Tunisia-local exchange-rate configuration is incomplete."
+            )
+        observed_at = observed_at.astimezone(UTC)
+        requested_at = requested_at.astimezone(UTC)
+        expires_at = observed_at + timedelta(seconds=ttl_seconds)
+        if observed_at > requested_at:
+            raise SubscriptionTopUpOrderError(
+                "Tunisia-local exchange-rate observation is in the future."
+            )
+        if requested_at >= expires_at:
+            raise SubscriptionTopUpOrderError(
+                "Tunisia-local exchange-rate quote is expired."
             )
         return ExchangeRateQuote(
             base_currency="USD",
@@ -151,8 +175,8 @@ class EnvironmentTunisiaExchangeRateProvider:
             rate=rate,
             source=source,
             reference=reference,
-            observed_at=requested_at,
-            expires_at=requested_at + timedelta(seconds=ttl_seconds),
+            observed_at=observed_at,
+            expires_at=expires_at,
         )
 
 

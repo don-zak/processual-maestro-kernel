@@ -78,6 +78,9 @@ jobs:
             tests/test_production_env_release_contract.py \
             tests/test_payment_destination_ready_service_r3.py \
             tests/test_local_payment_one_action_ui_r3.py \
+            tests/test_local_tunisia_top_up_router_a3.py \
+            tests/test_top_up_production_readiness_a3.py \
+            tests/test_top_up_startup_guard_a3.py \
             tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
             tests/test_lemon_squeezy_inbox_event_identity_a3.py \
             tests/test_admin_marketplace_lemon_squeezy_inbox_ingestion_a3.py \
@@ -97,6 +100,8 @@ jobs:
             processual_api/auth/mfa_router.py \
             processual_api/routers/cgt_governor.py \
             processual_api/admin_marketplace/payment_destination_ready_service.py \
+            processual_api/admin_marketplace/local_tunisia_top_up_router.py \
+            processual_api/admin_marketplace/top_up_production_readiness.py \
             processual_api/admin_marketplace/lemon_squeezy_webhooks.py \
             processual_api/admin_marketplace/lemon_squeezy_inbox.py \
             processual_api/admin_marketplace/lemon_squeezy_inbox_lifecycle.py \
@@ -105,6 +110,9 @@ jobs:
             tests/test_production_env_release_contract.py \
             tests/test_payment_destination_ready_service_r3.py \
             tests/test_local_payment_one_action_ui_r3.py \
+            tests/test_local_tunisia_top_up_router_a3.py \
+            tests/test_top_up_production_readiness_a3.py \
+            tests/test_top_up_startup_guard_a3.py \
             tests/test_security_headers_hardening.py \
             tests/test_auth_rate_limit_r5a.py \
             tests/test_auth_router_fail_closed_hardening.py \
