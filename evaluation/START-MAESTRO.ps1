@@ -103,9 +103,33 @@ OPENCODE_API_KEY=evaluation-disabled
 "@ | Set-Content -Encoding utf8NoBOM $EnvFile
 }
 
-if ($Rebuild -or -not (docker image inspect 'processual-maestro-evaluation:v1' 2>$null)) {
-    Write-Step "Building the public evaluation image"
+$imageReady = $null -ne (docker image inspect 'processual-maestro-evaluation:v1' 2>$null)
+$offlineImages = Join-Path $Root 'images'
+$sourceDockerfile = Join-Path (Split-Path -Parent $Root) 'Dockerfile'
+
+if ($Rebuild) {
+    if (-not (Test-Path $sourceDockerfile)) {
+        throw '-Rebuild requires the source repository. Standalone bundles use the prebuilt image archives.'
+    }
+    Write-Step "Rebuilding the public evaluation image from source"
     docker build --target public -t processual-maestro-evaluation:v1 ..
+    $imageReady = $true
+}
+
+if (-not $imageReady) {
+    if (Test-Path $offlineImages) {
+        Write-Step "Loading bundled Docker images"
+        & (Join-Path $Root 'LOAD-OFFLINE-IMAGES.ps1')
+        $imageReady = $null -ne (docker image inspect 'processual-maestro-evaluation:v1' 2>$null)
+    } elseif (Test-Path $sourceDockerfile) {
+        Write-Step "Building the public evaluation image from source"
+        docker build --target public -t processual-maestro-evaluation:v1 ..
+        $imageReady = $true
+    }
+}
+
+if (-not $imageReady) {
+    throw 'Evaluation image is unavailable. Use the official portable bundle with images/ or run from the source repository.'
 }
 
 Write-Step "Starting PostgreSQL, Redis and Processual Maestro"
