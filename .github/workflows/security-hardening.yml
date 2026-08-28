@@ -77,6 +77,7 @@ jobs:
             tests/test_execution_fanout.py \
             tests/test_production_env_release_contract.py \
             tests/test_payment_destination_ready_service_r3.py \
+            tests/test_local_payment_one_action_ui_r3.py \
             tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
             tests/test_lemon_squeezy_inbox_event_identity_a3.py \
             tests/test_admin_marketplace_lemon_squeezy_inbox_ingestion_a3.py \
@@ -103,6 +104,7 @@ jobs:
             tests/test_execution_fanout.py \
             tests/test_production_env_release_contract.py \
             tests/test_payment_destination_ready_service_r3.py \
+            tests/test_local_payment_one_action_ui_r3.py \
             tests/test_security_headers_hardening.py \
             tests/test_auth_rate_limit_r5a.py \
             tests/test_auth_router_fail_closed_hardening.py \
