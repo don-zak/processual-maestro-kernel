@@ -1,0 +1,119 @@
+name: Pre-launch Operational Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/prelaunch-operational-evidence.yml
+      - alembic/**
+      - processual_api/db/**
+      - processual_api/settings.py
+      - tests/test_production_env_release_contract.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-backup-restore-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: rehearsal-password
+          POSTGRES_DB: maestro_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro_source"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://maestro:rehearsal-password@127.0.0.1:5432/maestro_source
+      PGPASSWORD: rehearsal-password
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"
+
+      - name: Install database dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[database]'
+
+      - name: Upgrade source database to release head
+        run: |
+          alembic upgrade head
+          alembic current
+
+      - name: Create immutable rehearsal backup artifact
+        run: |
+          mkdir -p operational-evidence
+          pg_dump \
+            --host 127.0.0.1 \
+            --username maestro \
+            --dbname maestro_source \
+            --format=custom \
+            --file operational-evidence/maestro-source.dump
+          test -s operational-evidence/maestro-source.dump
+          sha256sum operational-evidence/maestro-source.dump \
+            | tee operational-evidence/maestro-source.dump.sha256
+
+      - name: Restore into isolated database
+        run: |
+          createdb --host 127.0.0.1 --username maestro maestro_restored
+          pg_restore \
+            --host 127.0.0.1 \
+            --username maestro \
+            --dbname maestro_restored \
+            --clean --if-exists \
+            operational-evidence/maestro-source.dump
+
+      - name: Verify restored migration authority
+        env:
+          DATABASE_URL: postgresql+asyncpg://maestro:rehearsal-password@127.0.0.1:5432/maestro_restored
+        run: |
+          alembic current | tee operational-evidence/restored-alembic-current.txt
+          alembic upgrade head
+          alembic current | tee operational-evidence/restored-alembic-current-after-upgrade.txt
+          python - <<'PY' | tee operational-evidence/restored-invariants.txt
+          import asyncio
+          import os
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          async def main() -> None:
+              engine = create_async_engine(os.environ['DATABASE_URL'])
+              async with engine.connect() as conn:
+                  revision = (await conn.execute(text('SELECT version_num FROM alembic_version'))).scalar_one()
+                  print(f'alembic_revision={revision}')
+                  assert revision
+              await engine.dispose()
+
+          asyncio.run(main())
+          PY
+
+      - name: Verify release environment contract tests
+        run: |
+          pip install -e '.[dev,database]'
+          PYTHONPATH=. python -m pytest -q tests/test_production_env_release_contract.py
+
+      - name: Upload rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: prelaunch-postgres-backup-restore-evidence
+          path: operational-evidence/
+          if-no-files-found: warn
