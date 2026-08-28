@@ -36,3 +36,5 @@ def test_tunisia_local_top_up_remains_fail_closed_in_production_template() -> No
 
     assert "MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false" in text
     assert "MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false" in text
+    assert "MAESTRO_TUNISIA_FX_OBSERVED_AT=" in text
+    assert "authoritative FX source observation" in text
