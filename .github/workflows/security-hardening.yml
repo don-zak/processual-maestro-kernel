@@ -79,6 +79,7 @@ jobs:
             tests/test_payment_destination_ready_service_r3.py \
             tests/test_local_payment_one_action_ui_r3.py \
             tests/test_local_tunisia_top_up_router_a3.py \
+            tests/test_local_tunisia_top_up_e2e_a3.py \
             tests/test_top_up_production_readiness_a3.py \
             tests/test_top_up_startup_guard_a3.py \
             tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
@@ -111,6 +112,7 @@ jobs:
             tests/test_payment_destination_ready_service_r3.py \
             tests/test_local_payment_one_action_ui_r3.py \
             tests/test_local_tunisia_top_up_router_a3.py \
+            tests/test_local_tunisia_top_up_e2e_a3.py \
             tests/test_top_up_production_readiness_a3.py \
             tests/test_top_up_startup_guard_a3.py \
             tests/test_security_headers_hardening.py \
