@@ -34,7 +34,9 @@ def test_assessment_commercial_terms_migration_upgrade_and_empty_downgrade(tmp_p
     database_path = tmp_path / "assessment-commercial-terms.db"
     database_url = f"sqlite+aiosqlite:///{database_path.as_posix()}"
 
-    _run(database_url, "upgrade", "head")
+    # This test qualifies revision 0046 itself, not whichever migration happens
+    # to be the repository head after later release reconciliation work.
+    _run(database_url, "upgrade", HEAD)
     current = _run(database_url, "current")
     assert HEAD in f"{current.stdout}\n{current.stderr}"
 
