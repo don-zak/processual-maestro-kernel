@@ -153,12 +153,12 @@ def test_local_tunisia_rejects_wrong_fixed_amount() -> None:
         )
 
 
-def test_runtime_status_is_safe_and_disabled() -> None:
+def test_runtime_status_is_qualified_but_fail_closed() -> None:
     status = build_currency_settlement_status()
 
     assert status == {
         "contract_version": ("2026-07-group2-usd-tnd-settlement-v1"),
-        "status": "draft_review",
+        "status": "qualified_fail_closed",
         "authoritative_pricing_currency": "USD",
         "local_tunisia_settlement_currency": "TND",
         "exchange_rate_provider_runtime_enabled": False,
