@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
@@ -65,6 +66,17 @@ def _bounded_positive_int(name: str, *, maximum: int) -> bool:
     return 0 < parsed <= maximum
 
 
+def _aware_iso8601(name: str) -> bool:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
+
 def evaluate_top_up_production_readiness() -> TopUpProductionReadiness:
     lemon_enabled = _enabled("MAESTRO_TOP_UP_PURCHASE_ENABLED")
     local_enabled = _enabled("MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED")
@@ -91,6 +103,7 @@ def evaluate_top_up_production_readiness() -> TopUpProductionReadiness:
             "MAESTRO_TUNISIA_FX_TTL_SECONDS",
             maximum=_MAX_FX_TTL_SECONDS,
         ),
+        "tunisia_fx_observed_at_invalid": _aware_iso8601("MAESTRO_TUNISIA_FX_OBSERVED_AT"),
     }
     local_ready = all(local_requirements.values())
     if local_enabled or local_admin_enabled:
