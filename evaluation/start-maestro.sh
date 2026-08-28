@@ -10,6 +10,7 @@ b64() { od -An -N "$1" -tx1 /dev/urandom | tr -d ' \n' | xxd -r -p | base64 | tr
 need docker
 need od
 need xxd
+need curl
 
 docker version >/dev/null
 docker compose version >/dev/null
@@ -72,7 +73,22 @@ EOF
 fi
 
 if ! docker image inspect processual-maestro-evaluation:v1 >/dev/null 2>&1; then
-  docker build --target public -t processual-maestro-evaluation:v1 ..
+  if [ -d images ]; then
+    echo "Loading bundled Docker images..."
+    found=0
+    for archive in images/*.tar; do
+      [ -e "$archive" ] || continue
+      found=1
+      docker load -i "$archive"
+    done
+    [ "$found" -eq 1 ] || { echo "No Docker image archives found in images/." >&2; exit 1; }
+  elif [ -f ../Dockerfile ]; then
+    echo "Building public evaluation image from source..."
+    docker build --target public -t processual-maestro-evaluation:v1 ..
+  else
+    echo "Evaluation image unavailable. Use the official portable bundle with images/." >&2
+    exit 1
+  fi
 fi
 
 docker compose --env-file .env.evaluation -f docker-compose.evaluation.yml up -d
