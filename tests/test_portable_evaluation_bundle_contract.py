@@ -15,7 +15,9 @@ def test_portable_evaluation_files_exist() -> None:
         "RESET-DEMO.ps1",
         "LOAD-OFFLINE-IMAGES.ps1",
         "SHOW-EVALUATION-ACCESS.ps1",
+        "RUN-GUIDED-DEMO.ps1",
         "EVALUATION_HOME.html",
+        "RECORDED-GOVERNANCE-EVIDENCE.html",
         "GUIDED-DEMO.md",
         "start-maestro.sh",
         "README_START_HERE.md",
@@ -70,6 +72,7 @@ def test_reviewer_home_is_self_contained_and_points_to_local_runtime() -> None:
     assert "http://localhost:8000/console" in home
     assert "http://localhost:8000/admin" in home
     assert "http://localhost:8000/docs" in home
+    assert "RECORDED-GOVERNANCE-EVIDENCE.html" in home
     assert "Startup Tunisia Evaluation Edition" in home
     assert "fonts.googleapis.com" not in home
     assert "cdn.jsdelivr.net" not in home
@@ -81,3 +84,21 @@ def test_guided_demo_uses_synthetic_data_and_preserves_evidence_boundary() -> No
     assert "Use synthetic data only" in guide
     assert "Do not describe Mock/Sandbox evidence as Production" in guide
     assert "private CGT" in guide
+    assert "recorded evidence" in guide.lower()
+
+
+def test_recorded_governance_replay_is_explicitly_non_live_and_non_production() -> None:
+    replay = (EVAL / "RECORDED-GOVERNANCE-EVIDENCE.html").read_text(encoding="utf-8")
+    assert "multi_agent_v1_1780450078" in replay
+    assert "qwen3-critical" in replay
+    assert "1.5557" in replay
+    assert "Recorded evidence replay" in replay
+    assert "not a live provider call" in replay.lower()
+    assert "not" in replay.lower() and "production" in replay.lower()
+
+
+def test_guided_demo_launcher_checks_health_before_opening_replay() -> None:
+    launcher = (EVAL / "RUN-GUIDED-DEMO.ps1").read_text(encoding="utf-8")
+    assert "CHECK-STATUS.ps1" in launcher
+    assert "EVALUATION_HOME.html" in launcher
+    assert "RECORDED-GOVERNANCE-EVIDENCE.html" in launcher
