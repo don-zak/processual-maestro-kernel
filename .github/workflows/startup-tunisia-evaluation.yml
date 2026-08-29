@@ -1,0 +1,49 @@
+name: Startup Tunisia Evaluation Edition
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'evaluation/**'
+      - 'tests/test_portable_evaluation_bundle_contract.py'
+      - '.github/workflows/startup-tunisia-evaluation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  reviewer-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate reviewer package contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          e = Path('evaluation')
+          required = {
+              'START-MAESTRO.ps1', 'SHOW-EVALUATION-ACCESS.ps1',
+              'EVALUATION_HOME.html', 'GUIDED-DEMO.md',
+              'README_START_HERE.md', 'docker-compose.evaluation.yml',
+          }
+          missing = required - {p.name for p in e.iterdir()}
+          assert not missing, f'missing evaluation files: {sorted(missing)}'
+          home = (e / 'EVALUATION_HOME.html').read_text(encoding='utf-8')
+          assert 'http://localhost:8000/console' in home
+          assert 'http://localhost:8000/admin' in home
+          assert 'fonts.googleapis.com' not in home
+          assert 'cdn.jsdelivr.net' not in home
+          guide = (e / 'GUIDED-DEMO.md').read_text(encoding='utf-8')
+          assert 'Use synthetic data only' in guide
+          assert 'Do not describe Mock/Sandbox evidence as Production' in guide
+          helper = (e / 'SHOW-EVALUATION-ACCESS.ps1').read_text(encoding='utf-8')
+          assert '[switch]$ShowSecrets' in helper
+          assert 'Secrets are hidden by default' in helper
+          PY
+
+      - name: Run portable evaluation contract tests
+        run: python -m pytest -q tests/test_portable_evaluation_bundle_contract.py
