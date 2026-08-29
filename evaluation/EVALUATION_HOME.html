@@ -40,12 +40,17 @@
       <a class="button" href="http://localhost:8000/admin">Open Admin</a>
     </section>
     <section class="card">
-      <h2>3. API evidence</h2>
+      <h2>3. Governance evidence</h2>
+      <p>Replay a previously verified local Docker/Ollama governance run without requiring an external provider key.</p>
+      <a class="button" href="RECORDED-GOVERNANCE-EVIDENCE.html">Open Recorded Evidence</a>
+    </section>
+    <section class="card">
+      <h2>4. API evidence</h2>
       <p>Review the public API contract and live local runtime endpoints.</p>
       <a class="button" href="http://localhost:8000/docs">Open API Docs</a>
     </section>
     <section class="card">
-      <h2>4. Runtime health</h2>
+      <h2>5. Runtime health</h2>
       <p>Confirm the local API is healthy before beginning the guided walkthrough.</p>
       <a class="button" href="http://localhost:8000/health/live">Open Health</a>
     </section>
@@ -56,20 +61,21 @@
     <li>Confirm runtime health.</li>
     <li>Open the Console and identify the workflow / task execution surface.</li>
     <li>Observe how access, entitlement, quota and runtime controls constrain execution.</li>
-    <li>Inspect governance / CGT-facing evidence exposed by the public evaluation surface.</li>
+    <li>Open the recorded governance evidence and inspect rank, reward, policy and action semantics.</li>
     <li>Open Admin to review operational controls, auditability and commercial/runtime separation.</li>
     <li>Use API Docs only when deeper technical verification is useful.</li>
   </ol>
 
   <h2>Local access</h2>
   <p>Run <code>.\SHOW-EVALUATION-ACCESS.ps1</code> to view the local evaluator identity. Add <code>-ShowSecrets</code> only when you need to copy the generated local API key or admin password.</p>
+  <p>Run <code>.\RUN-GUIDED-DEMO.ps1</code> after startup to open the reviewer home and recorded governance evidence together.</p>
 
   <div class="warning">
-    <strong>Evaluation boundary.</strong> This package contains no production secrets, excludes private CGT implementation code, disables real billing and Tunisia top-up, and disables external LLM execution by default. It is a POC/evaluation runtime, not a Production deployment.
+    <strong>Evaluation boundary.</strong> This package contains no production secrets, excludes private CGT implementation code, disables real billing and Tunisia top-up, and disables external LLM execution by default. Recorded governance evidence is replayed from a previously verified local run and is not a live provider call or Production evidence.
   </div>
 
   <h2>Recommended demonstration</h2>
-  <p>Use the Enterprise Incident / Ticket Governance scenario described in <code>GUIDED-DEMO.md</code>. The narrative is: controlled input → authority and quota checks → governed processing → decision/evidence → human review → audit.</p>
+  <p>Use the Enterprise Incident / Ticket Governance scenario described in <code>GUIDED-DEMO.md</code>. The narrative is: controlled input → authority and quota checks → governed processing → recorded governance decision/evidence → human review → audit.</p>
 </main>
 </body>
 </html>
