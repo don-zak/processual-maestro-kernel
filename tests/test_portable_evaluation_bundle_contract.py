@@ -14,6 +14,9 @@ def test_portable_evaluation_files_exist() -> None:
         "CHECK-STATUS.ps1",
         "RESET-DEMO.ps1",
         "LOAD-OFFLINE-IMAGES.ps1",
+        "SHOW-EVALUATION-ACCESS.ps1",
+        "EVALUATION_HOME.html",
+        "GUIDED-DEMO.md",
         "start-maestro.sh",
         "README_START_HERE.md",
     }
@@ -45,3 +48,36 @@ def test_launchers_generate_secrets_instead_of_shipping_runtime_values() -> None
     assert ".env.evaluation" in powershell
     assert "/dev/urandom" in posix
     assert ".env.evaluation" in posix
+
+
+def test_windows_launcher_opens_reviewer_home_instead_of_api_docs() -> None:
+    powershell = (EVAL / "START-MAESTRO.ps1").read_text(encoding="utf-8")
+    assert "EVALUATION_HOME.html" in powershell
+    assert "SHOW-EVALUATION-ACCESS.ps1" in powershell
+    assert "Start-Process 'http://localhost:8000/docs'" not in powershell
+
+
+def test_evaluation_access_helper_hides_secrets_by_default() -> None:
+    helper = (EVAL / "SHOW-EVALUATION-ACCESS.ps1").read_text(encoding="utf-8")
+    assert "[switch]$ShowSecrets" in helper
+    assert "Secrets are hidden by default" in helper
+    assert "MAESTRO_ADMIN_PASSWORD" in helper
+    assert "API_KEYS" in helper
+
+
+def test_reviewer_home_is_self_contained_and_points_to_local_runtime() -> None:
+    home = (EVAL / "EVALUATION_HOME.html").read_text(encoding="utf-8")
+    assert "http://localhost:8000/console" in home
+    assert "http://localhost:8000/admin" in home
+    assert "http://localhost:8000/docs" in home
+    assert "Startup Tunisia Evaluation Edition" in home
+    assert "fonts.googleapis.com" not in home
+    assert "cdn.jsdelivr.net" not in home
+
+
+def test_guided_demo_uses_synthetic_data_and_preserves_evidence_boundary() -> None:
+    guide = (EVAL / "GUIDED-DEMO.md").read_text(encoding="utf-8")
+    assert "Enterprise Incident / Ticket Governance" in guide
+    assert "Use synthetic data only" in guide
+    assert "Do not describe Mock/Sandbox evidence as Production" in guide
+    assert "private CGT" in guide
