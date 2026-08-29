@@ -36,7 +36,7 @@ jobs:
               'docker-compose.evaluation.yml', '.env.evaluation.example',
               'START-MAESTRO.ps1', 'STOP-MAESTRO.ps1', 'CHECK-STATUS.ps1',
               'RESET-DEMO.ps1', 'LOAD-OFFLINE-IMAGES.ps1', 'start-maestro.sh',
-              'README_START_HERE.md',
+              'README_START_HERE.md', 'RELEASE_QUALIFICATION_STARTUP_TUNISIA.md',
           }
           assert required <= {p.name for p in e.iterdir()}
           env = (e / '.env.evaluation.example').read_text()
@@ -142,7 +142,7 @@ jobs:
           grep -q '^MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false$' evaluation/.env.evaluation
           grep -q '^OPENCODE_API_URL=http://127.0.0.1:9/v1$' evaluation/.env.evaluation
 
-      - name: Build standalone offline distribution
+      - name: Build standalone portable distribution
         shell: bash
         run: |
           set -euo pipefail
@@ -156,17 +156,66 @@ jobs:
             "product": "Processual Maestro",
             "edition": "Portable Evaluation Runtime",
             "source_sha": "${GITHUB_SHA}",
+            "workflow_run_id": "${GITHUB_RUN_ID}",
+            "workflow_run_number": "${GITHUB_RUN_NUMBER}",
             "api_image": "processual-maestro-evaluation:v1",
             "postgres_image": "postgres:17-alpine",
             "redis_image": "redis:7-alpine",
             "database_migrations": "alembic upgrade head before API startup",
             "production_use": false,
             "external_billing_enabled": false,
-            "external_llm_enabled": false
+            "external_llm_enabled": false,
+            "fully_offline_ui_claim": false
           }
           EOF
+          cat > evaluation/RELEASE_QUALIFICATION_STARTUP_TUNISIA.md <<EOF
+          # Processual Maestro — Startup Tunisia Evaluation Release Qualification
+
+          ## Build identity
+
+          - Source SHA: \`${GITHUB_SHA}\`
+          - Portable Evaluation Bundle workflow run: \`${GITHUB_RUN_ID}\` (run #${GITHUB_RUN_NUMBER})
+          - Repository: \`${GITHUB_REPOSITORY}\`
+          - Edition: **Portable Evaluation Runtime**
+
+          ## Qualification performed by this workflow
+
+          Before this archive was created, CI successfully:
+
+          - built the public evaluation Docker target;
+          - started PostgreSQL, Redis and Maestro with Docker Compose;
+          - waited for the live health endpoint;
+          - fetched the OpenAPI contract;
+          - confirmed Alembic is at head;
+          - asserted billing, Tunisia top-up and external LLM execution remain fail-closed;
+          - bundled the API, PostgreSQL and Redis images locally.
+
+          ## Reviewer flow
+
+          Use \`START-MAESTRO.ps1\` (Windows) or \`start-maestro.sh\` (Linux/macOS), then follow \`EVALUATION_HOME.html\`. A deterministic recorded governance replay is available in \`RECORDED-GOVERNANCE-EVIDENCE.html\` and is explicitly non-live.
+
+          ## Safety boundary
+
+          - no Production secrets are shipped;
+          - local secrets are generated at first start and hidden by default;
+          - private \`cgtlib/private\` implementation is excluded from the public image;
+          - external billing and real Tunisia top-up are disabled;
+          - external LLM execution is disabled by default;
+          - synthetic data is required for the guided scenario;
+          - Mock/Sandbox evidence must not be described as Production evidence.
+
+          ## Network-independence caveat
+
+          The runtime and Docker dependencies are portable and locally bundled. Some legacy presentation surfaces still reference network-loaded visual/documentation assets (for example Google Fonts, Chart.js and Swagger/ReDoc CDN assets). Therefore this package is intentionally described as a **Portable Evaluation Runtime**, not a fully network-independent UI distribution.
+
+          ## Publication decision
+
+          **Qualified for controlled evaluation / demo use.**
+
+          This file is generated during packaging so its build identity always matches the archive that contains it. No Production Authority claim is implied.
+          EOF
           chmod +x evaluation/start-maestro.sh
-          (cd evaluation && sha256sum images/*.tar RELEASE_MANIFEST.json > SHA256SUMS.txt)
+          (cd evaluation && sha256sum images/*.tar RELEASE_MANIFEST.json RELEASE_QUALIFICATION_STARTUP_TUNISIA.md > SHA256SUMS.txt)
           cp -a evaluation Processual-Maestro-Portable-Evaluation
           zip -r Processual-Maestro-Portable-Evaluation.zip Processual-Maestro-Portable-Evaluation
           sha256sum Processual-Maestro-Portable-Evaluation.zip > Processual-Maestro-Portable-Evaluation.zip.sha256

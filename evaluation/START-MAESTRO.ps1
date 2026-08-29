@@ -34,7 +34,7 @@ function Assert-Command([string]$Name) {
 
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Green
-Write-Host " Processual Maestro - Portable Evaluation Runtime" -ForegroundColor Green
+Write-Host " Processual Maestro - Startup Tunisia Evaluation" -ForegroundColor Green
 Write-Host "=======================================================" -ForegroundColor Green
 Write-Host ""
 
@@ -157,13 +157,22 @@ if (-not $ready) {
 }
 
 Write-Host ""
-Write-Host "READY - Processual Maestro Evaluation Runtime" -ForegroundColor Green
+Write-Host "READY - Processual Maestro Startup Tunisia Evaluation" -ForegroundColor Green
+Write-Host "Console:  http://localhost:8000/console" -ForegroundColor Green
+Write-Host "Admin:    http://localhost:8000/admin" -ForegroundColor Green
 Write-Host "API:      http://localhost:8000" -ForegroundColor Green
 Write-Host "Health:   http://localhost:8000/health/live" -ForegroundColor Green
 Write-Host "Docs:     http://localhost:8000/docs" -ForegroundColor Green
 Write-Host ""
+Write-Host "Local evaluator credentials are generated on this machine and hidden by default." -ForegroundColor Cyan
+Write-Host "Run .\SHOW-EVALUATION-ACCESS.ps1 when access details are needed." -ForegroundColor Cyan
 Write-Host "External billing, Tunisia top-up and external LLM execution are disabled in this evaluation bundle." -ForegroundColor Yellow
 
 if (-not $NoBrowser) {
-    Start-Process 'http://localhost:8000/docs'
+    $EvaluationHome = Join-Path $Root 'EVALUATION_HOME.html'
+    if (Test-Path $EvaluationHome) {
+        Start-Process $EvaluationHome
+    } else {
+        Start-Process 'http://localhost:8000/console'
+    }
 }

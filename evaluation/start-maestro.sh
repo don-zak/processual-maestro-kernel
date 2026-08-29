@@ -97,8 +97,15 @@ echo "Waiting for API health..."
 i=0
 while [ "$i" -lt 90 ]; do
   if curl -fsS http://localhost:8000/health/live >/dev/null 2>&1; then
-    echo "READY: http://localhost:8000"
-    echo "Docs:  http://localhost:8000/docs"
+    echo "READY - Processual Maestro Startup Tunisia Evaluation"
+    echo "Console: http://localhost:8000/console"
+    echo "Admin:   http://localhost:8000/admin"
+    echo "API:     http://localhost:8000"
+    echo "Health:  http://localhost:8000/health/live"
+    echo "Docs:    http://localhost:8000/docs"
+    echo ""
+    echo "Open EVALUATION_HOME.html for the guided reviewer flow."
+    echo "Local secrets remain in .env.evaluation and are not printed automatically."
     exit 0
   fi
   i=$((i+1))
