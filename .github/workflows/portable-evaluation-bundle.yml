@@ -1,0 +1,235 @@
+name: Portable Evaluation Bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'evaluation/**'
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - 'processual_api/**'
+      - 'processual_kernel/**'
+      - 'cgtlib/**'
+      - 'alembic/**'
+      - 'alembic.ini'
+      - 'tests/test_portable_evaluation_bundle_contract.py'
+      - '.github/workflows/portable-evaluation-bundle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Static evaluation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          e = Path('evaluation')
+          required = {
+              'docker-compose.evaluation.yml', '.env.evaluation.example',
+              'START-MAESTRO.ps1', 'STOP-MAESTRO.ps1', 'CHECK-STATUS.ps1',
+              'RESET-DEMO.ps1', 'LOAD-OFFLINE-IMAGES.ps1', 'start-maestro.sh',
+              'README_START_HERE.md', 'RELEASE_QUALIFICATION_STARTUP_TUNISIA.md',
+          }
+          assert required <= {p.name for p in e.iterdir()}
+          env = (e / '.env.evaluation.example').read_text()
+          for line in (
+              'MAESTRO_TOP_UP_PURCHASE_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false',
+              'OPENCODE_API_URL=http://127.0.0.1:9/v1',
+          ):
+              assert line in env
+          compose = (e / 'docker-compose.evaluation.yml').read_text()
+          assert 'condition: service_completed_successfully' in compose
+          assert 'alembic' in compose
+          PY
+
+      - name: Build public evaluation image
+        run: docker build --target public -t processual-maestro-evaluation:v1 .
+
+      - name: Pull portable dependencies
+        run: |
+          docker pull postgres:17-alpine
+          docker pull redis:7-alpine
+
+      - name: Prepare evaluation environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import base64, json, secrets
+          def hx(n=32): return secrets.token_hex(n)
+          def b64(n=32): return base64.b64encode(secrets.token_bytes(n)).decode()
+          values = {
+              'JWT_SECRET': hx(48), 'API_KEYS': 'pmk_eval_' + hx(32),
+              'PROCESSUAL_CRYPTO_KEY_B64': b64(), 'MAESTRO_ADMIN_PASSWORD': hx(24),
+              'GRAFANA_ADMIN_PASSWORD': hx(24), 'AUTH_TOKEN_PEPPER': hx(),
+              'AUTH_RATE_LIMIT_PEPPER': hx(), 'POSTGRES_PASSWORD': hx(24),
+              'REDIS_PASSWORD': hx(24), 'AUTH_DELIVERY_KEY': b64(),
+              'AUTH_MFA_KEY': b64(), 'PAYMENT_KEY': b64(),
+          }
+          lines = [
+              'ENVIRONMENT=development', 'APP_ENV=evaluation', 'API_HOST=0.0.0.0',
+              'API_PORT=8000', 'API_LOG_LEVEL=info', 'API_DEBUG=false',
+              f"JWT_SECRET={values['JWT_SECRET']}", f"API_KEYS={values['API_KEYS']}",
+              f"PROCESSUAL_CRYPTO_KEY_B64={values['PROCESSUAL_CRYPTO_KEY_B64']}",
+              'MAESTRO_ADMIN_EMAIL=evaluator@example.local',
+              f"MAESTRO_ADMIN_PASSWORD={values['MAESTRO_ADMIN_PASSWORD']}",
+              f"GRAFANA_ADMIN_PASSWORD={values['GRAFANA_ADMIN_PASSWORD']}",
+              f"AUTH_TOKEN_PEPPER={values['AUTH_TOKEN_PEPPER']}",
+              f"AUTH_RATE_LIMIT_PEPPER={values['AUTH_RATE_LIMIT_PEPPER']}",
+              'AUTH_DELIVERY_KEY_RING_JSON=' + json.dumps({'v1': values['AUTH_DELIVERY_KEY']}, separators=(',', ':')),
+              'AUTH_DELIVERY_CURRENT_KEY_VERSION=v1',
+              'AUTH_MFA_KEY_RING_JSON=' + json.dumps({'v1': values['AUTH_MFA_KEY']}, separators=(',', ':')),
+              'AUTH_MFA_CURRENT_KEY_VERSION=v1',
+              'ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON=' + json.dumps({'payment-v1': values['PAYMENT_KEY']}, separators=(',', ':')),
+              'ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION=payment-v1',
+              'POSTGRES_USER=processual', f"POSTGRES_PASSWORD={values['POSTGRES_PASSWORD']}",
+              'POSTGRES_DB=processual_eval', f"REDIS_PASSWORD={values['REDIS_PASSWORD']}",
+              'MAESTRO_EVAL_PORT=8000', 'MAESTRO_EVAL_IMAGE_TAG=v1',
+              'RATE_LIMIT_ENABLED=true', 'AUDIT_ENABLED=true', 'CAPACITY_GUARD_ENABLED=true',
+              'CAPACITY_GLOBAL_LIMIT_OCU=20', 'CAPACITY_ACTOR_LIMIT_OCU=8',
+              'MAESTRO_TOP_UP_PURCHASE_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false',
+              'MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false',
+              'LEMONSQUEEZY_API_KEY=', 'LEMONSQUEEZY_STORE_ID=', 'LEMONSQUEEZY_WEBHOOK_SECRET=',
+              'LLM_DEFAULT_PROVIDER=opencode', 'OPENCODE_API_URL=http://127.0.0.1:9/v1',
+              'OPENCODE_API_KEY=evaluation-disabled',
+          ]
+          Path('evaluation/.env.evaluation').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+          cp evaluation/.env.evaluation /tmp/processual-evaluation-ci.env
+
+      - name: Validate compose configuration
+        run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml config --quiet
+
+      - name: Start evaluation stack
+        run: docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml up -d
+
+      - name: Wait for health and smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:8000/health/live >/dev/null; then
+              curl -fsS http://localhost:8000/health/live
+              curl -fsS http://localhost:8000/openapi.json >/dev/null
+              docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml run --rm migrate alembic -c /app/alembic.ini current | grep '(head)'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file evaluation/.env.evaluation -f evaluation/docker-compose.evaluation.yml ps
+          docker logs maestro-eval-migrate --tail 200 || true
+          docker logs maestro-eval-api --tail 200 || true
+          exit 1
+
+      - name: Assert evaluation safety switches
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^MAESTRO_TOP_UP_PURCHASE_ENABLED=false$' evaluation/.env.evaluation
+          grep -q '^MAESTRO_LOCAL_TUNISIA_TOP_UP_ENABLED=false$' evaluation/.env.evaluation
+          grep -q '^MAESTRO_LOCAL_TUNISIA_TOP_UP_ADMIN_ENABLED=false$' evaluation/.env.evaluation
+          grep -q '^OPENCODE_API_URL=http://127.0.0.1:9/v1$' evaluation/.env.evaluation
+
+      - name: Build standalone portable distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f evaluation/.env.evaluation
+          mkdir -p evaluation/images
+          docker save processual-maestro-evaluation:v1 -o evaluation/images/processual-maestro-evaluation-v1.tar
+          docker save postgres:17-alpine -o evaluation/images/postgres-17-alpine.tar
+          docker save redis:7-alpine -o evaluation/images/redis-7-alpine.tar
+          cat > evaluation/RELEASE_MANIFEST.json <<EOF
+          {
+            "product": "Processual Maestro",
+            "edition": "Portable Evaluation Runtime",
+            "source_sha": "${GITHUB_SHA}",
+            "workflow_run_id": "${GITHUB_RUN_ID}",
+            "workflow_run_number": "${GITHUB_RUN_NUMBER}",
+            "api_image": "processual-maestro-evaluation:v1",
+            "postgres_image": "postgres:17-alpine",
+            "redis_image": "redis:7-alpine",
+            "database_migrations": "alembic upgrade head before API startup",
+            "production_use": false,
+            "external_billing_enabled": false,
+            "external_llm_enabled": false,
+            "fully_offline_ui_claim": false
+          }
+          EOF
+          cat > evaluation/RELEASE_QUALIFICATION_STARTUP_TUNISIA.md <<EOF
+          # Processual Maestro — Startup Tunisia Evaluation Release Qualification
+
+          ## Build identity
+
+          - Source SHA: \`${GITHUB_SHA}\`
+          - Portable Evaluation Bundle workflow run: \`${GITHUB_RUN_ID}\` (run #${GITHUB_RUN_NUMBER})
+          - Repository: \`${GITHUB_REPOSITORY}\`
+          - Edition: **Portable Evaluation Runtime**
+
+          ## Qualification performed by this workflow
+
+          Before this archive was created, CI successfully:
+
+          - built the public evaluation Docker target;
+          - started PostgreSQL, Redis and Maestro with Docker Compose;
+          - waited for the live health endpoint;
+          - fetched the OpenAPI contract;
+          - confirmed Alembic is at head;
+          - asserted billing, Tunisia top-up and external LLM execution remain fail-closed;
+          - bundled the API, PostgreSQL and Redis images locally.
+
+          ## Reviewer flow
+
+          Use \`START-MAESTRO.ps1\` (Windows) or \`start-maestro.sh\` (Linux/macOS), then follow \`EVALUATION_HOME.html\`. A deterministic recorded governance replay is available in \`RECORDED-GOVERNANCE-EVIDENCE.html\` and is explicitly non-live.
+
+          ## Safety boundary
+
+          - no Production secrets are shipped;
+          - local secrets are generated at first start and hidden by default;
+          - private \`cgtlib/private\` implementation is excluded from the public image;
+          - external billing and real Tunisia top-up are disabled;
+          - external LLM execution is disabled by default;
+          - synthetic data is required for the guided scenario;
+          - Mock/Sandbox evidence must not be described as Production evidence.
+
+          ## Network-independence caveat
+
+          The runtime and Docker dependencies are portable and locally bundled. Some legacy presentation surfaces still reference network-loaded visual/documentation assets (for example Google Fonts, Chart.js and Swagger/ReDoc CDN assets). Therefore this package is intentionally described as a **Portable Evaluation Runtime**, not a fully network-independent UI distribution.
+
+          ## Publication decision
+
+          **Qualified for controlled evaluation / demo use.**
+
+          This file is generated during packaging so its build identity always matches the archive that contains it. No Production Authority claim is implied.
+          EOF
+          chmod +x evaluation/start-maestro.sh
+          (cd evaluation && sha256sum images/*.tar RELEASE_MANIFEST.json RELEASE_QUALIFICATION_STARTUP_TUNISIA.md > SHA256SUMS.txt)
+          cp -a evaluation Processual-Maestro-Portable-Evaluation
+          zip -r Processual-Maestro-Portable-Evaluation.zip Processual-Maestro-Portable-Evaluation
+          sha256sum Processual-Maestro-Portable-Evaluation.zip > Processual-Maestro-Portable-Evaluation.zip.sha256
+
+      - name: Upload portable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: processual-maestro-portable-evaluation-${{ github.sha }}
+          path: |
+            Processual-Maestro-Portable-Evaluation.zip
+            Processual-Maestro-Portable-Evaluation.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Shutdown
+        if: always()
+        run: docker compose --env-file /tmp/processual-evaluation-ci.env -f evaluation/docker-compose.evaluation.yml down -v || true

@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM base AS private
 
 COPY pyproject.toml README.md ./
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY cgtlib ./cgtlib
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
@@ -44,10 +46,12 @@ CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-
 FROM base AS public
 
 COPY pyproject.toml README.md ./
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
-# Copy cgtlib/ but exclude cgtlib/private/ — stubs provide graceful fallback
-COPY cgtlib/__init__.py cgtlib/_fallback.py cgtlib/metadata.py cgtlib/types.py cgtlib/validation.py ./cgtlib/
+# Copy only the public/fallback CGT surface. _stable_api is required by _fallback.
+COPY cgtlib/__init__.py cgtlib/_fallback.py cgtlib/_stable_api.py cgtlib/metadata.py cgtlib/types.py cgtlib/validation.py ./cgtlib/
 COPY cgtlib/serialization.py cgtlib/api.py ./cgtlib/
 
 RUN pip install --no-cache-dir --upgrade pip \

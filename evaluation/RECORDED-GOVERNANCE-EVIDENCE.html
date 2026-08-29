@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maestro - Recorded Governance Evidence</title>
+  <style>
+    :root { font-family: Arial, Helvetica, sans-serif; color-scheme: dark; }
+    body { margin:0; background:#0b1220; color:#e5e7eb; }
+    main { max-width:980px; margin:0 auto; padding:40px 24px 64px; }
+    h1,h2 { color:#f8fafc; }
+    p,li { line-height:1.6; color:#cbd5e1; }
+    .badge { display:inline-block; border:1px solid #475569; border-radius:999px; padding:6px 10px; margin-right:6px; }
+    .panel { background:#111827; border:1px solid #334155; border-radius:14px; padding:18px; margin:16px 0; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th,td { border-bottom:1px solid #334155; padding:10px; text-align:left; }
+    code { background:#020617; padding:2px 6px; border-radius:6px; }
+    .warning { border-left:4px solid #f59e0b; padding:12px 14px; background:#1f2937; }
+  </style>
+</head>
+<body>
+<main>
+  <span class="badge">Recorded evidence replay</span>
+  <span class="badge">Synthetic reviewer package</span>
+  <span class="badge">Not a live provider call</span>
+  <h1>Maestro Gateway / CGT Governance Evidence</h1>
+  <p>This page replays a previously verified governance run so reviewers can inspect the decision semantics without requiring an external model key or the private CGT engine in the public evaluation bundle.</p>
+
+  <section class="panel">
+    <h2>Verified source run</h2>
+    <p><strong>Run ID:</strong> <code>multi_agent_v1_1780450078</code></p>
+    <p><strong>Model used in the verified run:</strong> <code>qwen3-coder:30b</code> through Ollama.</p>
+    <p><strong>Lifecycle:</strong> register → pending → activate → evaluate → persist → compare → select.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Governance outcome</h2>
+    <table>
+      <thead><tr><th>Agent</th><th>Rank</th><th>Reward</th><th>Policy</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>qwen3-planner</td><td>stable</td><td>1.3799</td><td>accept</td><td>pass</td></tr>
+        <tr><td>qwen3-concise</td><td>stable</td><td>1.4700</td><td>accept</td><td>pass</td></tr>
+        <tr><td>qwen3-critical</td><td>stable</td><td>1.5557</td><td>accept</td><td>pass</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Selected agent:</strong> qwen3-critical, because it produced the highest recorded reward while remaining stable/pass.</p>
+  </section>
+
+  <section class="panel">
+    <h2>What the evidence demonstrates</h2>
+    <ul>
+      <li>Pending agents are blocked from governed evaluation until explicitly activated.</li>
+      <li>Governance returns decision signals such as rank, reward, policy and action.</li>
+      <li>Evaluation history is persisted and can be compared across agents.</li>
+      <li>The governance layer can support pass, repair, clarification or blocking semantics depending on policy and evidence.</li>
+    </ul>
+  </section>
+
+  <div class="warning">
+    <strong>Evidence boundary.</strong> This is a deterministic replay of a previously verified local Docker/Ollama governance proof. It is not a live LLM call, does not expose private CGT formulas, and must not be described as Production evidence.
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Processual Maestro - Evaluation Home</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Arial, Helvetica, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; }
+    main { max-width: 980px; margin: 0 auto; padding: 48px 24px 64px; }
+    h1 { margin: 0 0 8px; font-size: 2.2rem; }
+    h2 { margin-top: 36px; font-size: 1.2rem; }
+    p { line-height: 1.6; color: #cbd5e1; }
+    .tag { display:inline-block; padding:6px 10px; border:1px solid #475569; border-radius:999px; margin: 4px 6px 4px 0; font-size:.9rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-top:20px; }
+    .card { border:1px solid #334155; border-radius:14px; padding:18px; background:#111827; }
+    a.button { display:inline-block; padding:10px 14px; margin-top:10px; border-radius:10px; text-decoration:none; background:#e2e8f0; color:#0f172a; font-weight:700; }
+    code { background:#020617; border:1px solid #334155; border-radius:6px; padding:2px 6px; }
+    ol { line-height:1.7; }
+    .warning { border-left:4px solid #f59e0b; padding:10px 14px; background:#1f2937; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="tag">Startup Tunisia Evaluation Edition</div>
+  <div class="tag">Local & isolated</div>
+  <div class="tag">Synthetic data only</div>
+  <h1>Processual Maestro</h1>
+  <p>Guided entry point for reviewers. Maestro is an agentic operations and governance control plane that connects identity, authority, entitlements, quotas, runtime governance, integrations and audit.</p>
+
+  <div class="grid">
+    <section class="card">
+      <h2>1. Product / Console</h2>
+      <p>Start with the evaluator-facing product surface and inspect the operational workflow.</p>
+      <a class="button" href="http://localhost:8000/console">Open Console</a>
+    </section>
+    <section class="card">
+      <h2>2. Admin workspace</h2>
+      <p>Inspect administration, governance, commercial controls and audit-oriented surfaces.</p>
+      <a class="button" href="http://localhost:8000/admin">Open Admin</a>
+    </section>
+    <section class="card">
+      <h2>3. Governance evidence</h2>
+      <p>Replay a previously verified local Docker/Ollama governance run without requiring an external provider key.</p>
+      <a class="button" href="RECORDED-GOVERNANCE-EVIDENCE.html">Open Recorded Evidence</a>
+    </section>
+    <section class="card">
+      <h2>4. API evidence</h2>
+      <p>Review the public API contract and live local runtime endpoints.</p>
+      <a class="button" href="http://localhost:8000/docs">Open API Docs</a>
+    </section>
+    <section class="card">
+      <h2>5. Runtime health</h2>
+      <p>Confirm the local API is healthy before beginning the guided walkthrough.</p>
+      <a class="button" href="http://localhost:8000/health/live">Open Health</a>
+    </section>
+  </div>
+
+  <h2>Guided review flow</h2>
+  <ol>
+    <li>Confirm runtime health.</li>
+    <li>Open the Console and identify the workflow / task execution surface.</li>
+    <li>Observe how access, entitlement, quota and runtime controls constrain execution.</li>
+    <li>Open the recorded governance evidence and inspect rank, reward, policy and action semantics.</li>
+    <li>Open Admin to review operational controls, auditability and commercial/runtime separation.</li>
+    <li>Use API Docs only when deeper technical verification is useful.</li>
+  </ol>
+
+  <h2>Local access</h2>
+  <p>Run <code>.\SHOW-EVALUATION-ACCESS.ps1</code> to view the local evaluator identity. Add <code>-ShowSecrets</code> only when you need to copy the generated local API key or admin password.</p>
+  <p>Run <code>.\RUN-GUIDED-DEMO.ps1</code> after startup to open the reviewer home and recorded governance evidence together.</p>
+
+  <div class="warning">
+    <strong>Evaluation boundary.</strong> This package contains no production secrets, excludes private CGT implementation code, disables real billing and Tunisia top-up, and disables external LLM execution by default. Recorded governance evidence is replayed from a previously verified local run and is not a live provider call or Production evidence.
+  </div>
+
+  <h2>Recommended demonstration</h2>
+  <p>Use the Enterprise Incident / Ticket Governance scenario described in <code>GUIDED-DEMO.md</code>. The narrative is: controlled input → authority and quota checks → governed processing → recorded governance decision/evidence → human review → audit.</p>
+</main>
+</body>
+</html>
