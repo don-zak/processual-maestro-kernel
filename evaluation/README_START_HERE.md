@@ -1,4 +1,4 @@
-# Processual Maestro — Portable Evaluation Runtime
+# Processual Maestro — Startup Tunisia Evaluation Edition
 
 This package is a self-contained evaluation edition intended for reviewers and technical demonstrations. It runs the public Processual Maestro image with local PostgreSQL and Redis through Docker Compose.
 
@@ -23,15 +23,19 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\START-MAESTRO.ps1
 ```
 
-The launcher creates `.env.evaluation` locally, builds the public evaluation image, starts PostgreSQL/Redis/API, waits for health, then opens the API documentation in the browser.
+The launcher creates `.env.evaluation` locally, starts PostgreSQL/Redis/API, waits for health, then opens `EVALUATION_HOME.html`, the guided reviewer entry point.
 
 Useful commands:
 
 ```powershell
+.\SHOW-EVALUATION-ACCESS.ps1
+.\SHOW-EVALUATION-ACCESS.ps1 -ShowSecrets
 .\CHECK-STATUS.ps1
 .\STOP-MAESTRO.ps1
 .\RESET-DEMO.ps1 -Force
 ```
+
+`SHOW-EVALUATION-ACCESS.ps1` hides generated local secrets by default. Use `-ShowSecrets` only on the evaluator machine when the local admin password or API key must be copied into the product UI.
 
 ## Linux / macOS
 
@@ -42,15 +46,28 @@ chmod +x start-maestro.sh
 ./start-maestro.sh
 ```
 
-## Endpoints
+## Reviewer entry points
 
+- Evaluation home: `EVALUATION_HOME.html`
+- Product / Console: http://localhost:8000/console
+- Admin workspace: http://localhost:8000/admin
 - Product/API root: http://localhost:8000
 - Health: http://localhost:8000/health/live
 - API docs: http://localhost:8000/docs
 
+## Recommended Startup Tunisia walkthrough
+
+Read `GUIDED-DEMO.md` and use the synthetic **Enterprise Incident / Ticket Governance** scenario. The intended story is:
+
+`controlled input -> identity/authority -> entitlement/quota -> runtime governance -> CGT/governance evidence -> human validation -> audit/evidence`
+
+The purpose is to demonstrate that Maestro is not merely an agent builder: authorization is separated from execution, commercial/runtime controls influence execution, governance participates in the lifecycle and important decisions remain auditable.
+
 ## What this proves
 
 The portable runtime lets a reviewer launch the product locally without access to production infrastructure or private repositories. It is a POC/evaluation distribution, not a production deployment and not evidence that production-only commercial gates are open.
+
+The evaluation edition deliberately separates what is demonstrable locally from what still requires a controlled client POC or Production qualification.
 
 ## Distribution integrity
 
