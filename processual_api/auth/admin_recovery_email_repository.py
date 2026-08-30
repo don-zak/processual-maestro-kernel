@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from processual_api.auth.models import (
@@ -104,7 +105,7 @@ class SqlAlchemyAdminRecoveryEmailUnitOfWork:
             raise RuntimeError("Recovery-email unit of work is not active.")
         try:
             await self._session.commit()
-        except Exception as exc:
+        except IntegrityError as exc:
             await self._session.rollback()
             raise AdminRecoveryEmailConflictError(
                 "Recovery email conflicts with an existing identity."
