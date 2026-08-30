@@ -12,6 +12,7 @@ on:
       - tools/check_check_constraint_names.py
       - tests/test_readiness_property_fuzz.py
       - tests/test_check_constraint_name_integrity.py
+      - tests/test_marketplace_check_constraint_reconciliation.py
       - .github/workflows/deep-integrity-audit.yml
       - pyproject.toml
   workflow_dispatch:
@@ -44,7 +45,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://maestro:deep-integrity-db-password@127.0.0.1:5432/maestro
       JWT_SECRET: deep-integrity-jwt-secret-with-more-than-thirty-two-bytes-2026
       API_KEYS: deep-integrity-api-key-with-more-than-thirty-two-bytes-2026
-      PROCESSUAL_CRYPTO_KEY_B64: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PROCESSUAL_CRYPTO_KEY_B64: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
       POSTGRES_PASSWORD: deep-integrity-db-password
       REDIS_PASSWORD: deep-integrity-redis-password-with-sufficient-length
       GRAFANA_ADMIN_PASSWORD: deep-integrity-grafana-password-with-sufficient-length
@@ -80,9 +81,11 @@ jobs:
         run: |
           python -m pytest -q tests/test_readiness_property_fuzz.py
 
-      - name: CHECK constraint name rendering regression
+      - name: CHECK constraint reconciliation regression
         run: |
-          python -m pytest -q tests/test_check_constraint_name_integrity.py
+          python -m pytest -q \
+            tests/test_check_constraint_name_integrity.py \
+            tests/test_marketplace_check_constraint_reconciliation.py
 
       - name: Resource leak qualification under Python dev mode
         env:
