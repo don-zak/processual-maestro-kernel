@@ -1,0 +1,57 @@
+name: Branch Protection CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  branch-protection:
+    name: branch-protection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Compile Python sources
+        shell: bash
+        run: |
+          python -m compileall -q processual_kernel processual_api cgtlib
+
+      - name: Validate package metadata
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+
+          pyproject = pathlib.Path('pyproject.toml')
+          if not pyproject.is_file():
+              raise SystemExit('pyproject.toml is missing')
+
+          data = tomllib.loads(pyproject.read_text(encoding='utf-8'))
+          project = data.get('project', {})
+          name = project.get('name')
+          requires_python = project.get('requires-python')
+
+          if name != 'processual-maestro-kernel':
+              raise SystemExit(f'unexpected project name: {name!r}')
+          if requires_python != '>=3.14':
+              raise SystemExit(f'unexpected requires-python: {requires_python!r}')
+
+          print('Repository metadata validated.')
+          PY
