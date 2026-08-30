@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 
 
-HEAD_REVISION = "20260809_0046"
-PREVIOUS_REVISION = "20260809_0045"
+HEAD_REVISION = "20260817_0048"
+PREVIOUS_REVISION = "20260817_0047"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 
 

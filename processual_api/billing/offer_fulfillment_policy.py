@@ -19,15 +19,10 @@ SELF_SERVICE_POLICY: dict[str, Any] = {
     "custom_quote_required": False,
 }
 
-
 PAID_TRIAL_REFUND_POLICY: dict[str, Any] = {
     "refund_review_available": True,
     "refund_basis": "operational_outcome_not_achieved",
-    "success_criteria": [
-        "program_runs",
-        "tasks_execute",
-        "results_are_obtained",
-    ],
+    "success_criteria": ["program_runs", "tasks_execute", "results_are_obtained"],
     "excluded_refund_reasons": [
         "customer_failed_to_connect_external_agents",
         "customer_provider_or_credential_issue",
@@ -71,15 +66,19 @@ ENTERPRISE_REVIEW_POLICY: dict[str, Any] = {
     "custom_quote_required": True,
 }
 
-
-PAID_TRIAL_OFFER_IDS = {
-    "starter_trial",
-}
-
+# Historical identifiers remain compatibility-only. They must not define new
+# commercial offers or pricing authority.
+PAID_TRIAL_OFFER_IDS = {"starter_trial"}
 
 ENTERPRISE_PLAN_IDS = {
-    "enterprise",
     "enterprise_integration_starter",
+    "enterprise_pilot",
+    "enterprise_core",
+    "enterprise_scale",
+    "enterprise_strategic",
+    # Compatibility-only aliases during legacy retirement.
+    "enterprise",
+    "enterprise_integration",
 }
 
 ENTERPRISE_OFFER_IDS = {
