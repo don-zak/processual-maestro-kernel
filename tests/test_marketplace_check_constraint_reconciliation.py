@@ -63,6 +63,35 @@ def test_reconciliation_targets_superseded_audit_vocabulary_only() -> None:
     ) is False
 
 
+def test_reconciliation_downgrade_restores_historical_logical_names() -> None:
+    migration = _load_reconciliation_migration()
+
+    assert str(
+        migration._historical_constraint_name(
+            migration.AUDIT_TABLE,
+            "ck_admin_market_audit_records_action_allowed",
+        )
+    ) == (
+        "ck_admin_market_audit_records_"
+        "ck_admin_market_audit_records_action_allowed"
+    )
+    assert str(
+        migration._historical_constraint_name(
+            migration.AUDIT_TABLE,
+            "ck_admin_market_audit_records_resource_type_allowed",
+        )
+    ) == (
+        "ck_admin_market_audit_records_"
+        "ck_admin_market_audit_records_resource_type_allowed"
+    )
+    assert str(
+        migration._historical_constraint_name(
+            migration.ORDER_TABLE,
+            "ck_admin_market_orders_status_allowed",
+        )
+    ) == "ck_admin_market_orders_ck_admin_market_orders_status_allowed"
+
+
 def test_runtime_metadata_preserves_stage_timestamp_invariants() -> None:
     checks = {
         str(constraint.sqltext)
