@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# One-shot guarded patch helper for PR #202.
+
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
