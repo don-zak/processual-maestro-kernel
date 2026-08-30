@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 
 
-HEAD_REVISION = "20260809_0046"
-PREVIOUS_REVISION = "20260809_0045"
+HEAD_REVISION = "20260818_0054"
+PREVIOUS_REVISION = "20260818_0053"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 
 
@@ -56,6 +56,21 @@ def _assert_partial_default_index(database_path: Path) -> None:
     assert "is_default = 1" in normalized, index_sql
 
 
+def _assert_governance_schema(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        invitation_columns = connection.execute(
+            "PRAGMA table_info(admin_governance_invitations)"
+        ).fetchall()
+        audit_columns = connection.execute(
+            "PRAGMA table_info(admin_governance_audit_events)"
+        ).fetchall()
+
+    invitation_names = {row[1] for row in invitation_columns}
+    assert "cancellation_reason" in invitation_names
+    subject = next(row for row in audit_columns if row[1] == "subject_user_id")
+    assert subject[3] == 0
+
+
 def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     database_path = tmp_path / "migration-chain.db"
@@ -64,6 +79,7 @@ def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
     _run_alembic(repo_root, database_url, "upgrade", "head")
     _assert_current_head(repo_root, database_url)
     _assert_partial_default_index(database_path)
+    _assert_governance_schema(database_path)
 
     _run_alembic(repo_root, database_url, "downgrade", "-1")
     downgraded = _run_alembic(repo_root, database_url, "current")
@@ -72,3 +88,4 @@ def test_fresh_sqlite_upgrade_downgrade_reupgrade(tmp_path: Path) -> None:
     _run_alembic(repo_root, database_url, "upgrade", "head")
     _assert_current_head(repo_root, database_url)
     _assert_partial_default_index(database_path)
+    _assert_governance_schema(database_path)
