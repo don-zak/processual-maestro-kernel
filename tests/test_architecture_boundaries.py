@@ -57,9 +57,9 @@ def test_cgtlib_does_not_depend_on_processual_api() -> None:
     assert _violations("cgtlib", "processual_api") == []
 
 
-def test_contract_candidate_surfaces_remain_stdlib_only() -> None:
+def test_contract_surfaces_remain_stdlib_only() -> None:
     candidates = (
-        REPO_ROOT / "processual_kernel" / "types.py",
+        REPO_ROOT / "processual_kernel" / "contracts" / "enums.py",
         REPO_ROOT / "cgtlib" / "types.py",
         REPO_ROOT / "cgtlib" / "errors.py",
     )
