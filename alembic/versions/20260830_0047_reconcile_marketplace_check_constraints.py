@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import context, op
+from sqlalchemy.sql.elements import conv
 
 revision: str = "20260830_0047"
 down_revision: str | None = "20260809_0046"
@@ -65,6 +66,18 @@ def _is_stale_order_status_check(sqltext: object) -> bool:
     )
 
 
+def _historical_constraint_name(table_name: str, name: str) -> conv:
+    """Return the logical identifier produced by the historical migrations.
+
+    The early marketplace migrations supplied names that already contained the
+    ``ck_<table>_`` prefix while the repository convention added the same
+    prefix again.  Mark the resulting double-prefixed identifier as converted
+    so later batch operations preserve that historical identity and only apply
+    normal dialect-level truncation.
+    """
+    return conv(f"ck_{table_name}_{name}")
+
+
 def _drop_stale_online() -> None:
     inspector = sa.inspect(op.get_bind())
     targets: list[tuple[str, str]] = []
@@ -77,9 +90,8 @@ def _drop_stale_online() -> None:
         if name and _is_stale_order_status_check(row.get("sqltext")):
             targets.append((ORDER_TABLE, str(name)))
 
-    # The names above are already the dialect-rendered identifiers reflected
-    # from the live database. Mark them as finalized with op.f() so Alembic's
-    # naming convention does not prefix/truncate them a second time.
+    # Reflected names are already dialect-rendered identifiers. Mark them final
+    # so Alembic does not reapply the naming convention before dropping them.
     for table_name, constraint_name in targets:
         with op.batch_alter_table(table_name) as batch:
             batch.drop_constraint(op.f(constraint_name), type_="check")
@@ -170,16 +182,23 @@ def downgrade() -> None:
     if not context.is_offline_mode():
         _assert_downgrade_safe()
 
-    # The current constraints remain present when stepping from 0047 back to
-    # 0046. Recreate the superseded definitions under distinct finalized names
-    # so downgrade is reversible without colliding with current authority.
+    # Recreate the exact historical logical identifiers expected by older
+    # migrations.  Distinct current constraints remain in place, while these
+    # historical definitions are restored so subsequent downgrades (notably
+    # 0018) can address the same objects they originally created.
     with op.batch_alter_table(AUDIT_TABLE) as batch:
         batch.create_check_constraint(
-            op.f("ck_admin_market_audit_records_legacy_platform_authority"),
+            _historical_constraint_name(
+                AUDIT_TABLE,
+                "ck_admin_market_audit_records_platform_authority_exact",
+            ),
             "platform_authority = 'platform_admin'",
         )
         batch.create_check_constraint(
-            op.f("ck_admin_market_audit_records_legacy_action_vocabulary"),
+            _historical_constraint_name(
+                AUDIT_TABLE,
+                "ck_admin_market_audit_records_action_allowed",
+            ),
             "action IN ('authority_checked','offer_decided','channel_eligibility_decided',"
             "'channel_selected','payment_verification_decided',"
             "'subscription_activation_decided','payment_destination_created',"
@@ -187,14 +206,20 @@ def downgrade() -> None:
             "'payment_destination_deactivated','payment_destination_default_set')",
         )
         batch.create_check_constraint(
-            op.f("ck_admin_market_audit_records_legacy_resource_vocabulary"),
+            _historical_constraint_name(
+                AUDIT_TABLE,
+                "ck_admin_market_audit_records_resource_type_allowed",
+            ),
             "resource_type IN ('offer','plan','order','payment_verification',"
             "'subscription','trial','sales_channel_eligibility','payment_destination')",
         )
 
     with op.batch_alter_table(ORDER_TABLE) as batch:
         batch.create_check_constraint(
-            op.f("ck_admin_market_orders_legacy_status_allowed"),
+            _historical_constraint_name(
+                ORDER_TABLE,
+                "ck_admin_market_orders_status_allowed",
+            ),
             "status IN ('draft','submitted','awaiting_payment_verification','approved',"
             "'rejected','cancelled','fulfilled')",
         )
