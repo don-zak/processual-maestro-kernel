@@ -131,7 +131,9 @@ def test_report_generation_keeps_encrypted_provider_key_decryption_path():
         "PROCESSUAL_CRYPTO_KEY_B64",
         "CryptoEnvelope",
         "decrypt_aes256_gcm",
-        'api_key = plaintext.decode("utf-8")',
+        "_decrypt_configured_llm_key",
+        'return plaintext.decode("utf-8")',
+        'detail="Configured LLM credential is unavailable"',
     ]
 
     missing = [marker for marker in required_markers if marker not in source]

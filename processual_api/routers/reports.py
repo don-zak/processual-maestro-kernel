@@ -28,6 +28,34 @@ class FateReportResponse(BaseModel):
     status: str
 
 
+def _decrypt_configured_llm_key(encrypted: str) -> str:
+    import os as _os
+
+    from processual_kernel.security.crypto import CryptoEnvelope, decrypt_aes256_gcm
+
+    key = _os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
+    if not key:
+        raise RuntimeError("configured LLM credential encryption key is unavailable")
+
+    data = json.loads(encrypted)
+    envelope = CryptoEnvelope(
+        **{
+            field: data[field]
+            for field in (
+                "algorithm",
+                "key_id",
+                "nonce_b64",
+                "aad_b64",
+                "ciphertext_b64",
+                "plaintext_sha3_256",
+                "ciphertext_sha3_256",
+            )
+        }
+    )
+    plaintext = decrypt_aes256_gcm(envelope, key)
+    return plaintext.decode("utf-8")
+
+
 @router.post("/fate", response_model=FateReportResponse)
 async def submit_fate_report(req: FateReportRequest, _user: str = Depends(get_current_user)):
     return FateReportResponse(
@@ -60,22 +88,12 @@ async def generate_llm_report(req: LLMReportRequest, _user: str = Depends(get_cu
                     encrypted = llm.get("encrypted_key", "")
                     if encrypted:
                         try:
-                            import os as _os
-
-                            from processual_kernel.security.crypto import CryptoEnvelope, decrypt_aes256_gcm
-                            key = _os.environ.get("PROCESSUAL_CRYPTO_KEY_B64", "")
-                            if key:
-                                data = json.loads(encrypted)
-                                envelope = CryptoEnvelope(**{
-                                    k: data[k] for k in (
-                                        "algorithm", "key_id", "nonce_b64", "aad_b64",
-                                        "ciphertext_b64", "plaintext_sha3_256", "ciphertext_sha3_256",
-                                    )
-                                })
-                                plaintext = decrypt_aes256_gcm(envelope, key)
-                                api_key = plaintext.decode("utf-8")
-                        except Exception:
-                            pass
+                            api_key = _decrypt_configured_llm_key(encrypted)
+                        except Exception as exc:
+                            raise HTTPException(
+                                status_code=503,
+                                detail="Configured LLM credential is unavailable",
+                            ) from exc
             except (json.JSONDecodeError, OSError):
                 pass
 
