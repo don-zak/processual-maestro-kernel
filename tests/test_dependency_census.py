@@ -23,7 +23,7 @@ def _run(fmt: str) -> str:
 def test_dependency_census_json_schema_and_current_packages() -> None:
     payload = json.loads(_run("json"))
 
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert list(payload["packages"]) == ["cgtlib", "processual_api", "processual_kernel"] or set(payload["packages"]) == {
         "processual_kernel",
         "cgtlib",
@@ -31,10 +31,14 @@ def test_dependency_census_json_schema_and_current_packages() -> None:
     }
     assert payload["totals"]["python_files"] > 0
     assert payload["totals"]["python_bytes"] > 0
+    assert isinstance(payload["import_modules"], list)
 
     for package in ("processual_kernel", "cgtlib", "processual_api"):
         assert payload["packages"][package]["python_files"] > 0
         assert payload["packages"][package]["python_bytes"] > 0
+
+    for file_record in payload["files"]:
+        assert isinstance(file_record["import_modules"], list)
 
 
 def test_dependency_census_output_is_deterministic() -> None:
