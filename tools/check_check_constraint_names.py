@@ -16,8 +16,8 @@ from processual_api.auth import models as identity_auth_models  # noqa: F401
 from processual_api.db.base import Base
 
 
-def _effective_constraint_name(dialect: Any, logical_name: str) -> str:
-    """Render the name exactly as SQLAlchemy will for the active dialect."""
+def _effective_constraint_name(dialect: Any, logical_name: Any) -> str:
+    """Render a SQLAlchemy constraint name exactly as the active dialect will."""
     preparer = dialect.identifier_preparer
     return preparer.truncate_and_render_constraint_name(
         logical_name,
@@ -36,7 +36,11 @@ def expected_check_constraint_names(dialect: Any) -> dict[str, set[str]]:
                 raise RuntimeError(
                     f"Unnamed CHECK constraint is not allowed on {table.fullname}"
                 )
-            names.add(_effective_constraint_name(dialect, str(constraint.name)))
+            # Keep SQLAlchemy's naming-convention name object intact. Converting it
+            # to str here discards the marker that tells the dialect the identifier
+            # may be deterministically truncated (for example PostgreSQL's 63-char
+            # identifier limit).
+            names.add(_effective_constraint_name(dialect, constraint.name))
         if names:
             expected[table.name] = names
     return expected
