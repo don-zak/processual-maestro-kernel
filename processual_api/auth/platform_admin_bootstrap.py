@@ -16,7 +16,7 @@ from processual_api.auth.platform_admin_bootstrap_service import (
     PlatformAdminBootstrapEmailConflictError,
     PlatformAdminBootstrapService,
 )
-from processual_api.db.session import get_session_factory
+from processual_api.db.session import close_db, get_session_factory, init_db
 
 SECRET_HASH_ENV = (
     "AUTH_PLATFORM_ADMIN_BOOTSTRAP_SECRET_SHA256"
@@ -70,10 +70,23 @@ async def _run() -> int:
         "One-time bootstrap secret: "
     )
 
+    try:
+        await init_db()
+        session_factory = get_session_factory()
+    except RuntimeError as exc:
+        print(
+            "Platform administrator bootstrap database is unavailable. "
+            "Set DATABASE_URL to the identity database before running bootstrap.",
+            file=sys.stderr,
+        )
+        print(str(exc), file=sys.stderr)
+        await close_db()
+        return 7
+
     service = PlatformAdminBootstrapService(
         unit_of_work_factory=lambda: (
             SqlAlchemyPlatformAdminBootstrapUnitOfWork(
-                get_session_factory()
+                session_factory
             )
         ),
         password_service=PasswordService(),
@@ -83,59 +96,62 @@ async def _run() -> int:
     )
 
     try:
-        receipt = await service.bootstrap(
-            PlatformAdminBootstrapCommand(
-                email=email,
-                display_name=display_name,
-                password=password,
-                bootstrap_secret=bootstrap_secret,
+        try:
+            receipt = await service.bootstrap(
+                PlatformAdminBootstrapCommand(
+                    email=email,
+                    display_name=display_name,
+                    password=password,
+                    bootstrap_secret=bootstrap_secret,
+                )
             )
-        )
-    except PlatformAdminBootstrapDeniedError:
-        print(
-            "Platform administrator bootstrap denied.",
-            file=sys.stderr,
-        )
-        return 3
-    except PlatformAdminAlreadyBootstrappedError:
-        print(
-            "Platform administrator bootstrap "
-            "is already closed.",
-            file=sys.stderr,
-        )
-        return 4
-    except PlatformAdminBootstrapEmailConflictError:
-        print(
-            "Bootstrap identity email is unavailable.",
-            file=sys.stderr,
-        )
-        return 5
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 6
+        except PlatformAdminBootstrapDeniedError:
+            print(
+                "Platform administrator bootstrap denied.",
+                file=sys.stderr,
+            )
+            return 3
+        except PlatformAdminAlreadyBootstrappedError:
+            print(
+                "Platform administrator bootstrap "
+                "is already closed.",
+                file=sys.stderr,
+            )
+            return 4
+        except PlatformAdminBootstrapEmailConflictError:
+            print(
+                "Bootstrap identity email is unavailable.",
+                file=sys.stderr,
+            )
+            return 5
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 6
 
-    print("PlatformAdminBootstrapCreated=True")
-    print(f"PlatformAdminUserId={receipt.user_id}")
-    print(
-        "PlatformAdminEmail="
-        f"{receipt.email_normalized}"
-    )
-    print(
-        "PlatformAdminAuthority="
-        f"{receipt.authority}"
-    )
-    print(
-        "PlatformAdminMfaRequired="
-        f"{receipt.mfa_required}"
-    )
-    print(
-        "PlatformAdminSessionIssued="
-        f"{receipt.session_issued}"
-    )
-    print(
-        "NextAction=login_and_complete_mfa"
-    )
-    return 0
+        print("PlatformAdminBootstrapCreated=True")
+        print(f"PlatformAdminUserId={receipt.user_id}")
+        print(
+            "PlatformAdminEmail="
+            f"{receipt.email_normalized}"
+        )
+        print(
+            "PlatformAdminAuthority="
+            f"{receipt.authority}"
+        )
+        print(
+            "PlatformAdminMfaRequired="
+            f"{receipt.mfa_required}"
+        )
+        print(
+            "PlatformAdminSessionIssued="
+            f"{receipt.session_issued}"
+        )
+        print(
+            "NextAction=login_and_complete_mfa"
+        )
+        return 0
+    finally:
+        await close_db()
 
 
 def main() -> int:

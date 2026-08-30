@@ -1,4 +1,3 @@
-
 (function () {
   function installStyle() {
     if (document.getElementById('admin-layout-cleanup-style')) return;
@@ -25,7 +24,19 @@
     });
   }
 
+  function pruneLegacyApiKeyPlaceholders() {
+    [
+      'admin-api-key-static-generate-btn',
+      'admin-api-key-static-refresh-btn',
+    ].forEach((id) => {
+      const control = document.getElementById(id);
+      control?.closest('.card')?.remove();
+    });
+  }
+
   function pruneLegacyPlaceholders() {
+    pruneLegacyApiKeyPlaceholders();
+
     const phrases = [
       'Checking admin session',
       'Protected Area',
@@ -73,6 +84,7 @@
     clean,
     markRuntimeGrids,
     pruneLegacyPlaceholders,
+    pruneLegacyApiKeyPlaceholders,
   };
 
   if (document.readyState === 'loading') {

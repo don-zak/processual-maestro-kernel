@@ -21,7 +21,14 @@ from processual_api.integrations.integration_readiness import (
     summarize_integration_readiness,
 )
 
-from ..auth.security import _pbkdf2_hash_api_key, generate_api_key, get_current_user, hash_api_key, require_scope
+from ..auth.security import (
+    _pbkdf2_hash_api_key,
+    generate_api_key,
+    get_current_user,
+    hash_api_key,
+    require_platform_admin_step_up,
+    require_scope,
+)
 from ..billing.usage_pricing import (
     BILLING_POLICY,
     ENTERPRISE_INTEGRATION_PLANS,
@@ -2844,7 +2851,7 @@ async def list_admin_audit_events(
 @router.post("/admin/supervisor-session-keys", response_model=dict, status_code=201)
 async def create_admin_supervisor_session_key(
     payload: SupervisorSessionKeyIssueRequest,
-    current_user: dict = Depends(require_scope(ADMIN_SETTINGS_SCOPE)),
+    current_user: dict = Depends(require_platform_admin_step_up()),
 ):
     issuer = _supervisor_session_key_actor(current_user)
     try:

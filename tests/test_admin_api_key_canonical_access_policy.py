@@ -1,5 +1,3 @@
-import asyncio
-
 from fastapi import FastAPI
 from starlette.requests import Request
 
@@ -12,9 +10,7 @@ from processual_api.integrations.api_key_operational_profiles import (
 from processual_api.integrations.api_key_platform_operational_profiles import (
     list_platform_api_key_operational_profiles,
 )
-from processual_api.routers.settings_admin_api_key_provisioning import (
-    admin_api_key_access_catalog,
-)
+from processual_api.routers.settings_admin_api_key_provisioning import _route_catalog
 
 
 def _catalog_app() -> FastAPI:
@@ -48,6 +44,10 @@ def _catalog_app() -> FastAPI:
     async def reports() -> dict:
         return {"status": "ok"}
 
+    @app.post("/evaluation/runtime/task-execute")
+    async def evaluation_task_execute() -> dict:
+        return {"status": "ok"}
+
     @app.get("/runtime/new-route")
     async def undeclared_runtime_route() -> dict:
         return {"status": "locked"}
@@ -69,6 +69,10 @@ def _request(app: FastAPI) -> Request:
             "app": app,
         }
     )
+
+
+def _catalog_rows() -> list[dict[str, object]]:
+    return _route_catalog(_request(_catalog_app()))
 
 
 def test_every_canonical_access_policy_is_complete_and_non_admin() -> None:
@@ -108,25 +112,35 @@ def test_policy_profiles_exist_and_allow_every_required_scope() -> None:
 
 
 def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
-    payload = asyncio.run(
-        admin_api_key_access_catalog(
-            _request(_catalog_app()),
-            {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
-        )
+    endpoints = _catalog_rows()
+    grantable = [endpoint for endpoint in endpoints if endpoint["grantable"]]
+    tasks = sorted(
+        {
+            str(endpoint["task_id"])
+            for endpoint in grantable
+            if endpoint.get("task_id")
+        }
+    )
+    profiles = sorted(
+        {
+            str(profile_id)
+            for endpoint in grantable
+            for profile_id in endpoint.get("operational_profile_ids", [])
+        }
     )
 
-    assert payload["policy_authority"] == "canonical_runtime_access_policy"
-    assert payload["grantable_endpoint_count"] == 7
-    assert payload["canonical_task_count"] == 7
-    assert payload["canonical_tasks"]
-    assert payload["operational_profile_ids"] == [
+    assert len(grantable) == 8
+    assert len(tasks) == 8
+    assert tasks
+    assert profiles == [
+        "platform_evaluation_runtime",
         "platform_governor_sandbox",
         "platform_runtime_observability",
     ]
 
     by_key = {
         (endpoint["method"], endpoint["path"]): endpoint
-        for endpoint in payload["endpoints"]
+        for endpoint in endpoints
     }
     govern = by_key[("POST", "/cgt/govern")]
     assert govern["required_scopes"] == ["run:govern"]
@@ -135,17 +149,21 @@ def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
     assert govern["operational_profile_ids"] == ["platform_governor_sandbox"]
     assert govern["selection_reason"] == "canonical_runtime_access_policy"
 
+    evaluation = by_key[("POST", "/evaluation/runtime/task-execute")]
+    assert evaluation["required_scopes"] == ["run:evaluation"]
+    assert evaluation["task_id"] == "platform.evaluation.task_execute"
+    assert evaluation["operation_class"] == "execute"
+    assert evaluation["operational_profile_ids"] == [
+        "platform_evaluation_runtime"
+    ]
+    assert evaluation["selection_reason"] == "canonical_runtime_access_policy"
+
 
 def test_undeclared_and_control_plane_routes_fail_closed() -> None:
-    payload = asyncio.run(
-        admin_api_key_access_catalog(
-            _request(_catalog_app()),
-            {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
-        )
-    )
+    endpoints = _catalog_rows()
     by_key = {
         (endpoint["method"], endpoint["path"]): endpoint
-        for endpoint in payload["endpoints"]
+        for endpoint in endpoints
     }
 
     undeclared = by_key[("GET", "/runtime/new-route")]
