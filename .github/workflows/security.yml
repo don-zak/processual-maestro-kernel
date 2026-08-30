@@ -5,6 +5,9 @@ on:
     - cron: "0 6 * * 1"
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   security:
@@ -23,7 +26,31 @@ jobs:
           pip install .[dev,security]
 
       - name: Bandit security scan
-        run: bandit -r cgtlib processual_kernel processual_api -f json -o bandit-report.json
+        id: bandit
+        continue-on-error: true
+        run: |
+          set +e
+          bandit -r cgtlib processual_kernel processual_api -f json -o bandit-report.json
+          status=$?
+          echo "bandit_exit_code=$status" >> "$GITHUB_OUTPUT"
+          echo "--- Bandit report ---"
+          cat bandit-report.json
+          exit "$status"
 
       - name: Pip audit
+        id: pip_audit
+        continue-on-error: true
         run: pip-audit
+
+      - name: Enforce security gate
+        if: always()
+        env:
+          BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
+          PIP_AUDIT_OUTCOME: ${{ steps.pip_audit.outcome }}
+        run: |
+          echo "Bandit outcome: $BANDIT_OUTCOME"
+          echo "pip-audit outcome: $PIP_AUDIT_OUTCOME"
+          if [ "$BANDIT_OUTCOME" != "success" ] || [ "$PIP_AUDIT_OUTCOME" != "success" ]; then
+            echo "Security gate failed. Review the Bandit report and pip-audit output above."
+            exit 1
+          fi
