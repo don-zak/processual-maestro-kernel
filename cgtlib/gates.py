@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cgtlib.private import compute as _compute
+from cgtlib._backend import compute as _compute
 
 
 def compute_transmissibility(gate_openness: float, carrying_capacity: float, fatigue: float, lam: float) -> float:
