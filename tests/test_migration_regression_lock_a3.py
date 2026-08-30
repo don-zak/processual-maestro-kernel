@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_REVISION = "20260809_0046"
+HEAD_REVISION = "20260817_0048"
 PARTIAL_DEFAULT_INDEX = "uq_admin_market_payment_destinations_active_default"
 POSTGRES_OFFLINE_URL = (
     "postgresql+asyncpg://offline:offline@localhost:5432/maestro"
@@ -91,6 +91,10 @@ def test_commercial_migrations_render_offline_without_runtime_database_access(
         ("downgrade", "20260809_0045:20260809_0044"),
         ("upgrade", "20260809_0045:20260809_0046"),
         ("downgrade", "20260809_0046:20260809_0045"),
+        ("upgrade", "20260809_0046:20260817_0047"),
+        ("downgrade", "20260817_0047:20260809_0046"),
+        ("upgrade", "20260817_0047:20260817_0048"),
+        ("downgrade", "20260817_0048:20260817_0047"),
     )
 
     for command, revision_range in ranges:
@@ -182,6 +186,14 @@ def test_online_downgrade_guards_remain_explicit_and_offline_safe() -> None:
         ),
         "20260809_0046_assessment_commercial_terms.py": (
             "Downgrade blocked: assessment commercial terms bindings exist",
+            "context.is_offline_mode()",
+        ),
+        "20260817_0047_commercial_offer_provenance.py": (
+            "Downgrade blocked: commercial offer provenance records exist",
+            "context.is_offline_mode()",
+        ),
+        "20260817_0048_commercial_offer_provider_binding.py": (
+            "Downgrade blocked: commercial offer provider bindings exist",
             "context.is_offline_mode()",
         ),
     }
