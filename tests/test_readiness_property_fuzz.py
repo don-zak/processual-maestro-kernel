@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from hypothesis import given, strategies as st
 
@@ -11,23 +13,24 @@ FORBIDDEN = st.sampled_from(["api_key", "secret", "token", "password"])
 JSON_SCALAR = st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=64))
 
 
-@given(field=FORBIDDEN, value=JSON_SCALAR)
-def test_any_top_level_plaintext_secret_field_fails_closed(tmp_path, field, value) -> None:
-    path = tmp_path / "adapter.json"
-    path.write_text(json.dumps({"provider": "test", field: value}), encoding="utf-8")
+def _check_payload(payload: object):
+    with TemporaryDirectory() as temp_dir:
+        path = Path(temp_dir) / "adapter.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return check_adapter_config_integrity(path)
 
-    result = check_adapter_config_integrity(path)
+
+@given(field=FORBIDDEN, value=JSON_SCALAR)
+def test_any_top_level_plaintext_secret_field_fails_closed(field, value) -> None:
+    result = _check_payload({"provider": "test", field: value})
 
     assert result.ok is False
     assert result.status == "plaintext_secret_field"
 
 
 @given(payload=st.one_of(st.lists(JSON_SCALAR, max_size=8), JSON_SCALAR))
-def test_non_object_adapter_config_never_becomes_ready(tmp_path, payload) -> None:
-    path = tmp_path / "adapter.json"
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    result = check_adapter_config_integrity(path)
+def test_non_object_adapter_config_never_becomes_ready(payload) -> None:
+    result = _check_payload(payload)
 
     assert result.ok is False
     assert result.status == "invalid_shape"
@@ -46,7 +49,7 @@ def test_non_object_adapter_config_never_becomes_ready(tmp_path, payload) -> Non
         ]
     )
 )
-def test_encrypted_envelope_missing_any_required_field_fails_closed(tmp_path, missing) -> None:
+def test_encrypted_envelope_missing_any_required_field_fails_closed(missing) -> None:
     envelope = {
         "algorithm": "AES-256-GCM",
         "key_id": "test",
@@ -57,13 +60,7 @@ def test_encrypted_envelope_missing_any_required_field_fails_closed(tmp_path, mi
         "schema_version": 1,
     }
     envelope.pop(missing)
-    path = tmp_path / "adapter.json"
-    path.write_text(
-        json.dumps({"provider": "test", "encrypted_key": json.dumps(envelope)}),
-        encoding="utf-8",
-    )
-
-    result = check_adapter_config_integrity(path)
+    result = _check_payload({"provider": "test", "encrypted_key": json.dumps(envelope)})
 
     assert result.ok is False
     assert result.status == "incomplete_envelope"
