@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import math
 
+from cgtlib._backend import compute as _compute
 from cgtlib.errors import ValidationError
-from cgtlib.private import compute as _compute
 
 
 def compute_phase_mass(probabilities: list[float]) -> float:
