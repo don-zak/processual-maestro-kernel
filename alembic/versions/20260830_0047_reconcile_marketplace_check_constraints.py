@@ -170,13 +170,16 @@ def downgrade() -> None:
     if not context.is_offline_mode():
         _assert_downgrade_safe()
 
+    # The current constraints remain present when stepping from 0047 back to
+    # 0046. Recreate the superseded definitions under distinct finalized names
+    # so downgrade is reversible without colliding with current authority.
     with op.batch_alter_table(AUDIT_TABLE) as batch:
         batch.create_check_constraint(
-            op.f("ck_admin_market_audit_records_platform_authority_exact"),
+            op.f("ck_admin_market_audit_records_legacy_platform_authority"),
             "platform_authority = 'platform_admin'",
         )
         batch.create_check_constraint(
-            op.f("ck_admin_market_audit_records_action_allowed"),
+            op.f("ck_admin_market_audit_records_legacy_action_vocabulary"),
             "action IN ('authority_checked','offer_decided','channel_eligibility_decided',"
             "'channel_selected','payment_verification_decided',"
             "'subscription_activation_decided','payment_destination_created',"
@@ -184,14 +187,14 @@ def downgrade() -> None:
             "'payment_destination_deactivated','payment_destination_default_set')",
         )
         batch.create_check_constraint(
-            op.f("ck_admin_market_audit_records_resource_type_allowed"),
+            op.f("ck_admin_market_audit_records_legacy_resource_vocabulary"),
             "resource_type IN ('offer','plan','order','payment_verification',"
             "'subscription','trial','sales_channel_eligibility','payment_destination')",
         )
 
     with op.batch_alter_table(ORDER_TABLE) as batch:
         batch.create_check_constraint(
-            op.f("ck_admin_market_orders_status_allowed"),
+            op.f("ck_admin_market_orders_legacy_status_allowed"),
             "status IN ('draft','submitted','awaiting_payment_verification','approved',"
             "'rejected','cancelled','fulfilled')",
         )
