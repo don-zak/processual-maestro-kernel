@@ -1,19 +1,35 @@
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 
 MIGRATION = Path("alembic/versions/20260807_0039_top_up_quota_grants.py")
 
 
-def test_entitlement_backfill_uses_explicit_json_casts():
+def _load_migration() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("migration_0039", MIGRATION)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_entitlement_backfill_uses_typed_json_for_postgresql():
+    migration = _load_migration()
+    predicate = migration._empty_entitlements_predicate("postgresql")
     source = MIGRATION.read_text(encoding="utf-8")
 
-    assert "SET entitlement_codes = CAST(:entitlements AS json)" in source
-    assert "entitlement_codes::jsonb = '[]'::jsonb" in source
-    assert "entitlement_codes::jsonb = 'null'::jsonb" in source
+    assert "entitlement_codes::jsonb = '[]'::jsonb" in predicate
+    assert "entitlement_codes::jsonb = 'null'::jsonb" in predicate
+    assert '"CAST(:entitlements AS json)"' in source
 
 
-def test_entitlement_backfill_does_not_compare_json_to_untyped_text():
+def test_entitlement_backfill_uses_sqlite_compatible_predicate():
+    migration = _load_migration()
+    predicate = migration._empty_entitlements_predicate("sqlite")
     source = MIGRATION.read_text(encoding="utf-8")
 
-    assert "OR entitlement_codes = '[]'" not in source
-    assert "OR entitlement_codes = 'null'" not in source
+    assert "::json" not in predicate
+    assert "entitlement_codes = '[]'" in predicate
+    assert "entitlement_codes = 'null'" in predicate
+    assert 'else ":entitlements"' in source
