@@ -3,31 +3,27 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any
 
-from .contracts import (
-    AgentCriticality,
-    AgentState,
-    MaestroAction,
-    StepState,
-    TaskEnvelope,
-    TaskResult,
-    WorkflowState,
-)
+from . import contracts as _contracts
+
+AgentCriticality = _contracts.AgentCriticality
+AgentRuntime = _contracts.AgentRuntime
+AgentSpec = _contracts.AgentSpec
+AgentState = _contracts.AgentState
+AuditSink = _contracts.AuditSink
+MaestroAction = _contracts.MaestroAction
+MaestroEvent = _contracts.MaestroEvent
+StepState = _contracts.StepState
+TaskEnvelope = _contracts.TaskEnvelope
+TaskResult = _contracts.TaskResult
+WorkflowPlan = _contracts.WorkflowPlan
+WorkflowState = _contracts.WorkflowState
+WorkflowStep = _contracts.WorkflowStep
 
 
 def _new_decision_id() -> str:
     return f"dec_{uuid.uuid4().hex}"
-
-
-@dataclass(frozen=True, slots=True)
-class AgentSpec:
-    agent_id: str
-    role: str
-    version: str = "0.2.0"
-    capabilities: tuple[str, ...] = ()
-    criticality: AgentCriticality = AgentCriticality.MEDIUM
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -118,27 +114,6 @@ class HandoffRecord:
     @property
     def edge_id(self) -> str:
         return f"{self.source_agent_id}->{self.target_agent_id}"
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowStep:
-    step_id: str
-    capability: str
-    instruction: str
-    depends_on: tuple[str, ...] = ()
-    preferred_agent_id: str | None = None
-    parallel_group: str | None = None
-    max_retries: int = 1
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowPlan:
-    workflow_id: str
-    goal: str
-    steps: tuple[WorkflowStep, ...]
-    priority: float = 0.5
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -237,21 +212,3 @@ class WorkflowDecision:
     policy_version: str = "unversioned"
     decision_id: str = field(default_factory=_new_decision_id)
     created_at: float = field(default_factory=time.time)
-
-
-@dataclass(frozen=True, slots=True)
-class MaestroEvent:
-    workflow_id: str | None
-    action: MaestroAction
-    subject: str
-    reason: str
-    payload: dict[str, Any] = field(default_factory=dict)
-    created_at: float = field(default_factory=time.time)
-
-
-class AgentRuntime(Protocol):
-    async def run(self, agent: AgentSpec, task: TaskEnvelope) -> TaskResult: ...
-
-
-class AuditSink(Protocol):
-    def write(self, event: Any) -> None: ...

@@ -15,6 +15,14 @@ ENUM_CONTRACT_NAMES = (
     "MaestroAction",
 )
 TASK_CONTRACT_NAMES = ("TaskEnvelope", "TaskResult")
+BOUNDARY_CONTRACT_NAMES = (
+    "AgentSpec",
+    "WorkflowStep",
+    "WorkflowPlan",
+    "MaestroEvent",
+    "AgentRuntime",
+    "AuditSink",
+)
 
 
 def test_enum_contracts_keep_legacy_and_public_object_identity() -> None:
@@ -78,3 +86,54 @@ def test_task_contract_defaults_are_unchanged() -> None:
     assert result.error is None
     assert result.latency_ms == 0.0
     assert result.cost == 0.0
+
+
+def test_boundary_contracts_keep_legacy_object_identity() -> None:
+    for name in BOUNDARY_CONTRACT_NAMES:
+        contract = getattr(contracts, name)
+        assert getattr(legacy_types, name) is contract
+
+    for name in ("AgentSpec", "WorkflowStep", "WorkflowPlan", "MaestroEvent"):
+        assert getattr(processual_kernel, name) is getattr(contracts, name)
+
+
+def test_boundary_dataclasses_keep_legacy_serialization_identity() -> None:
+    step = contracts.WorkflowStep(step_id="step-1", capability="analysis", instruction="inspect")
+    values = (
+        contracts.AgentSpec(agent_id="agent-1", role="reviewer"),
+        step,
+        contracts.WorkflowPlan(workflow_id="wf-1", goal="verify", steps=(step,)),
+        contracts.MaestroEvent(
+            workflow_id="wf-1",
+            action=contracts.MaestroAction.OBSERVE,
+            subject="wf-1",
+            reason="created",
+        ),
+    )
+    for value in values:
+        assert type(value).__module__ == "processual_kernel.types"
+        assert pickle.loads(pickle.dumps(value)) == value
+
+
+def test_boundary_contract_defaults_are_unchanged() -> None:
+    spec = legacy_types.AgentSpec(agent_id="agent-2", role="worker")
+    assert spec.version == "0.2.0"
+    assert spec.capabilities == ()
+    assert spec.criticality is legacy_types.AgentCriticality.MEDIUM
+    assert spec.metadata == {}
+
+    step = legacy_types.WorkflowStep(step_id="step-2", capability="routing", instruction="route")
+    assert step.depends_on == ()
+    assert step.preferred_agent_id is None
+    assert step.parallel_group is None
+    assert step.max_retries == 1
+    assert step.metadata == {}
+
+    plan = legacy_types.WorkflowPlan(workflow_id="wf-2", goal="route", steps=(step,))
+    assert plan.priority == 0.5
+    assert plan.metadata == {}
+
+
+def test_boundary_protocols_keep_legacy_module_identity() -> None:
+    assert contracts.AgentRuntime.__module__ == "processual_kernel.types"
+    assert contracts.AuditSink.__module__ == "processual_kernel.types"
