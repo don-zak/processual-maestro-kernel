@@ -5,28 +5,21 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from .contracts import (
-    AgentCriticality as _AgentCriticality,
-    AgentRuntime as _AgentRuntime,
-    AgentSpec,
-    AgentState,
-    AuditSink as _AuditSink,
-    MaestroAction,
-    MaestroEvent as _MaestroEvent,
-    StepState,
-    TaskEnvelope as _TaskEnvelope,
-    TaskResult as _TaskResult,
-    WorkflowPlan,
-    WorkflowState,
-    WorkflowStep,
-)
+from . import contracts as _contracts
 
-AgentCriticality = _AgentCriticality
-AgentRuntime = _AgentRuntime
-AuditSink = _AuditSink
-MaestroEvent = _MaestroEvent
-TaskEnvelope = _TaskEnvelope
-TaskResult = _TaskResult
+AgentCriticality = _contracts.AgentCriticality
+AgentRuntime = _contracts.AgentRuntime
+AgentSpec = _contracts.AgentSpec
+AgentState = _contracts.AgentState
+AuditSink = _contracts.AuditSink
+MaestroAction = _contracts.MaestroAction
+MaestroEvent = _contracts.MaestroEvent
+StepState = _contracts.StepState
+TaskEnvelope = _contracts.TaskEnvelope
+TaskResult = _contracts.TaskResult
+WorkflowPlan = _contracts.WorkflowPlan
+WorkflowState = _contracts.WorkflowState
+WorkflowStep = _contracts.WorkflowStep
 
 
 def _new_decision_id() -> str:
