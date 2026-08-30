@@ -49,6 +49,28 @@ def _non_stdlib_imports(path: Path) -> list[str]:
     return sorted(violations)
 
 
+def _boundary_external_imports(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    violations: set[str] = set()
+    allowed_relative = {".enums", ".tasks"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".", 1)[0]
+                if root not in sys.stdlib_module_names:
+                    violations.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                relative = f"{'.' * node.level}{node.module or ''}"
+                if relative not in allowed_relative:
+                    violations.add(relative)
+            elif node.module:
+                root = node.module.split(".", 1)[0]
+                if root not in sys.stdlib_module_names:
+                    violations.add(node.module)
+    return sorted(violations)
+
+
 def test_processual_kernel_does_not_depend_on_processual_api() -> None:
     assert _violations("processual_kernel", "processual_api") == []
 
@@ -70,3 +92,8 @@ def test_contract_surfaces_remain_stdlib_only() -> None:
         if _non_stdlib_imports(path)
     }
     assert violations == {}
+
+
+def test_boundary_contract_surface_depends_only_on_stdlib_and_sibling_contracts() -> None:
+    path = REPO_ROOT / "processual_kernel" / "contracts" / "boundary.py"
+    assert _boundary_external_imports(path) == []
