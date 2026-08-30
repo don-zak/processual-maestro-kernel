@@ -53,14 +53,24 @@ def _normalized_sqltext(value: Any) -> str:
     return text
 
 
-def _reflected_signatures(inspector: Any, table_name: str, *, schema: str | None = None) -> Counter[str]:
+def _reflected_signatures(
+    inspector: Any,
+    table_name: str,
+    *,
+    schema: str | None = None,
+) -> Counter[str]:
     return Counter(
         _normalized_sqltext(row.get("sqltext"))
         for row in inspector.get_check_constraints(table_name, schema=schema)
     )
 
 
-def _compare_reflected_checks(actual_inspector: Any, reference_inspector: Any, *, reference_schema: str | None = None) -> dict[str, Any]:
+def _compare_reflected_checks(
+    actual_inspector: Any,
+    reference_inspector: Any,
+    *,
+    reference_schema: str | None = None,
+) -> dict[str, Any]:
     mismatches: list[dict[str, Any]] = []
     tables_checked = 0
     expected_count = 0
