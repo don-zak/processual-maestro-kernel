@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 from sqlalchemy import CheckConstraint, Column, Integer, MetaData, Table
 from sqlalchemy.dialects import postgresql, sqlite
 
@@ -23,6 +26,20 @@ def _convention_constraint_name():
         item for item in table.constraints if isinstance(item, CheckConstraint)
     )
     return constraint.name
+
+
+def _load_payment_destination_audit_migration():
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "20260804_0018_payment_destination_audit_vocabulary.py"
+    )
+    spec = importlib.util.spec_from_file_location("payment_destination_audit_0018", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_postgresql_long_check_name_is_rendered_with_deterministic_truncation() -> None:
@@ -50,3 +67,37 @@ def test_naming_convention_produces_expected_logical_name_before_dialect_renderi
     assert str(logical_name) == (
         "ck_admin_market_assessment_commercial_terms_billing_interval_allowed"
     )
+
+
+def test_migration_0018_targets_historical_double_prefixed_audit_names() -> None:
+    migration = _load_payment_destination_audit_migration()
+
+    action_name = migration._historical_constraint_name(migration.ACTION_CONSTRAINT)
+    resource_name = migration._historical_constraint_name(migration.RESOURCE_CONSTRAINT)
+
+    assert str(action_name) == (
+        "ck_admin_market_audit_records_"
+        "ck_admin_market_audit_records_action_allowed"
+    )
+    assert str(resource_name) == (
+        "ck_admin_market_audit_records_"
+        "ck_admin_market_audit_records_resource_type_allowed"
+    )
+
+
+def test_migration_0018_historical_names_render_deterministically_on_postgresql() -> None:
+    migration = _load_payment_destination_audit_migration()
+    dialect = postgresql.dialect()
+
+    action_name = migration._historical_constraint_name(migration.ACTION_CONSTRAINT)
+    resource_name = migration._historical_constraint_name(migration.RESOURCE_CONSTRAINT)
+
+    rendered_action = _effective_constraint_name(dialect, action_name)
+    rendered_resource = _effective_constraint_name(dialect, resource_name)
+
+    assert len(rendered_action) <= dialect.max_identifier_length
+    assert len(rendered_resource) <= dialect.max_identifier_length
+    assert rendered_action == _effective_constraint_name(dialect, action_name)
+    assert rendered_resource == _effective_constraint_name(dialect, resource_name)
+    assert rendered_action != migration.ACTION_CONSTRAINT
+    assert rendered_resource != migration.RESOURCE_CONSTRAINT
