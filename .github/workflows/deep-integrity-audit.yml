@@ -1,0 +1,172 @@
+name: Deep Integrity Audit
+
+on:
+  pull_request:
+    paths:
+      - processual_api/**
+      - processual_kernel/**
+      - cgtlib/**
+      - alembic/**
+      - tools/deep_integrity_audit.py
+      - tools/openapi_integrity.py
+      - tests/test_readiness_property_fuzz.py
+      - .github/workflows/deep-integrity-audit.yml
+      - pyproject.toml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deep-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: deep-integrity-db-password
+          POSTGRES_DB: maestro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      ENVIRONMENT: development
+      PYTHONPATH: .
+      DATABASE_URL: postgresql+asyncpg://maestro:deep-integrity-db-password@127.0.0.1:5432/maestro
+      JWT_SECRET: deep-integrity-jwt-secret-with-more-than-thirty-two-bytes-2026
+      API_KEYS: deep-integrity-api-key-with-more-than-thirty-two-bytes-2026
+      PROCESSUAL_CRYPTO_KEY_B64: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      POSTGRES_PASSWORD: deep-integrity-db-password
+      REDIS_PASSWORD: deep-integrity-redis-password-with-sufficient-length
+      GRAFANA_ADMIN_PASSWORD: deep-integrity-grafana-password-with-sufficient-length
+      RATE_LIMIT_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install deep-audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[all,dev]'
+          mkdir -p deep-integrity-results
+
+      - name: Compile every public Python source
+        run: |
+          python -m compileall -q processual_kernel cgtlib processual_api alembic tools
+
+      - name: AST dangerous-pattern and exception audit
+        run: |
+          python tools/deep_integrity_audit.py --output deep-integrity-results/ast-integrity.json
+
+      - name: Real application OpenAPI integrity
+        run: |
+          python tools/openapi_integrity.py --output deep-integrity-results/openapi-integrity.json
+
+      - name: Property-based readiness fuzzing
+        run: |
+          python -m pytest -q tests/test_readiness_property_fuzz.py
+
+      - name: Resource leak qualification under Python dev mode
+        env:
+          PYTHONDEVMODE: "1"
+        run: |
+          python -m pytest -q -W error::ResourceWarning \
+            tests/test_api_production_readiness_gate_a3.py \
+            tests/test_auth_account_recovery_external_revocation_r9a.py \
+            tests/test_auth_delivery_repository_account_recovery_r9a.py \
+            tests/test_subscription_middleware_fail_closed_a3.py
+
+      - name: PostgreSQL full migration round trip
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+          python -m alembic check
+          python -m alembic current | tee deep-integrity-results/postgres-current.txt
+
+      - name: PostgreSQL offline migration SQL generation
+        env:
+          DATABASE_URL: postgresql://maestro:deep-integrity-db-password@127.0.0.1:5432/maestro
+        run: |
+          python -m alembic upgrade head --sql > deep-integrity-results/postgres-offline-upgrade.sql
+          test -s deep-integrity-results/postgres-offline-upgrade.sql
+
+      - name: SQLite migration and database integrity matrix
+        env:
+          DATABASE_URL: sqlite+aiosqlite:////tmp/maestro-deep-integrity.db
+        run: |
+          rm -f /tmp/maestro-deep-integrity.db
+          python -m alembic upgrade head
+          python - <<'PY'
+          import sqlite3
+          path = '/tmp/maestro-deep-integrity.db'
+          with sqlite3.connect(path) as connection:
+              integrity = connection.execute('PRAGMA integrity_check').fetchone()[0]
+              foreign = connection.execute('PRAGMA foreign_key_check').fetchall()
+          if integrity != 'ok':
+              raise SystemExit(f'SQLite integrity_check failed: {integrity}')
+          if foreign:
+              raise SystemExit(f'SQLite foreign_key_check failed: {foreign[:10]}')
+          PY
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+          python -m alembic check
+
+      - name: Build wheel for isolated install
+        run: |
+          rm -rf dist build
+          python -m build --wheel
+          ls -l dist/
+
+      - name: Install wheel outside repository and import every public module
+        run: |
+          python -m venv /tmp/maestro-wheel-venv
+          /tmp/maestro-wheel-venv/bin/python -m pip install --upgrade pip
+          WHEEL="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
+          /tmp/maestro-wheel-venv/bin/python -m pip install "${WHEEL}[all]"
+          /tmp/maestro-wheel-venv/bin/python -m pip check
+          cd /tmp
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python - <<'PY'
+          import importlib
+          import pkgutil
+
+          roots = ('processual_kernel', 'cgtlib', 'processual_api')
+          failures = []
+          imported = 0
+          for root_name in roots:
+              root = importlib.import_module(root_name)
+              imported += 1
+              if not hasattr(root, '__path__'):
+                  continue
+              for module in pkgutil.walk_packages(root.__path__, root.__name__ + '.'):
+                  try:
+                      importlib.import_module(module.name)
+                      imported += 1
+                  except Exception as exc:
+                      failures.append((module.name, type(exc).__name__, str(exc)))
+          print(f'imported_modules={imported}')
+          if failures:
+              for failure in failures[:30]:
+                  print('IMPORT_FAILURE', *failure)
+              raise SystemExit(f'{len(failures)} wheel module imports failed')
+          PY
+
+      - name: Upload deep-integrity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-integrity-evidence
+          path: deep-integrity-results/
