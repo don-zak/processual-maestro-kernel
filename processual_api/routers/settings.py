@@ -2125,8 +2125,14 @@ async def save_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
     raw = _load_raw(user_id)
 
     encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
+    if body.api_key and not encrypted:
+        raise HTTPException(
+            status_code=503,
+            detail="Provider secret encryption is unavailable",
+        )
+
     raw["llm_provider"] = {
-        "configured": bool(body.api_key and body.provider),
+        "configured": bool(encrypted and body.provider),
         "provider": body.provider,
         "model": body.model,
         "last_tested": raw.get("llm_provider", {}).get("last_tested"),
@@ -2141,7 +2147,7 @@ async def save_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
         "status": "saved",
         "provider": body.provider,
         "model": body.model or "",
-        "configured": bool(body.api_key and body.provider),
+        "configured": bool(encrypted and body.provider),
     }
 
 
