@@ -7,7 +7,6 @@ Revises: 20260722_0006
 from __future__ import annotations
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -29,8 +28,8 @@ def upgrade() -> None:
     )
     op.create_table(
         "identity_user_email_addresses",
-        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("email_normalized", sa.String(length=320), nullable=False),
         sa.Column("purpose", sa.String(length=24), server_default="recovery", nullable=False),
         sa.Column("status", sa.String(length=24), server_default="pending", nullable=False),
