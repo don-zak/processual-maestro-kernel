@@ -3,60 +3,13 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any, Protocol
+
+from .contracts import AgentCriticality, AgentState, MaestroAction, StepState, WorkflowState
 
 
 def _new_decision_id() -> str:
     return f"dec_{uuid.uuid4().hex}"
-
-
-class AgentState(StrEnum):
-    ACTIVE = "active"
-    TRANSITIONAL = "transitional"
-    ARCHIVED = "archived"
-    QUARANTINED = "quarantined"
-
-
-class AgentCriticality(StrEnum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-class WorkflowState(StrEnum):
-    DRAFT = "draft"
-    RUNNING = "running"
-    PAUSED = "paused"
-    DEGRADED = "degraded"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ESCALATED = "escalated"
-
-
-class StepState(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-
-
-class MaestroAction(StrEnum):
-    DELEGATE = "delegate"
-    HANDOFF = "handoff"
-    PARALLELIZE = "parallelize"
-    RETRY = "retry"
-    REROUTE = "reroute"
-    MERGE = "merge"
-    PAUSE = "pause"
-    QUARANTINE = "quarantine"
-    ARCHIVE = "archive"
-    REACTIVATE = "reactivate"
-    ESCALATE = "escalate"
-    FINALIZE = "finalize"
-    OBSERVE = "observe"
 
 
 @dataclass(frozen=True, slots=True)
