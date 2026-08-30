@@ -59,6 +59,28 @@ def _offline_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _dialect_name() -> str:
+    """Return the active Alembic dialect for online or offline migrations."""
+    bind = op.get_bind()
+    if bind is not None:
+        return bind.dialect.name
+    return context.get_context().dialect.name
+
+
+def _empty_entitlements_predicate(dialect: str) -> str:
+    if dialect == "postgresql":
+        return (
+            "entitlement_codes IS NULL "
+            "OR entitlement_codes::jsonb = '[]'::jsonb "
+            "OR entitlement_codes::jsonb = 'null'::jsonb"
+        )
+    return (
+        "entitlement_codes IS NULL "
+        "OR entitlement_codes = '[]' "
+        "OR entitlement_codes = 'null'"
+    )
+
+
 def upgrade() -> None:
     with op.batch_alter_table(CYCLE_TABLE) as batch:
         batch.add_column(
@@ -79,38 +101,41 @@ def upgrade() -> None:
         )
         batch.create_check_constraint("top_up_nonnegative", "top_up_units >= 0")
 
+    dialect = _dialect_name()
+    empty_predicate = _empty_entitlements_predicate(dialect)
+
     if context.is_offline_mode():
         for plan_code, entitlements_json in _ENTITLEMENTS_BY_PLAN.items():
+            entitlement_value = f"'{_offline_literal(entitlements_json)}'"
+            if dialect == "postgresql":
+                entitlement_value += "::json"
             op.execute(
                 sa.text(
                     f"""
                     UPDATE {CYCLE_TABLE}
-                    SET entitlement_codes = '{_offline_literal(entitlements_json)}'::json,
+                    SET entitlement_codes = {entitlement_value},
                         plan_catalog_version = '{_offline_literal(CATALOG_VERSION)}'
                     WHERE plan_code = '{_offline_literal(plan_code)}'
-                      AND (
-                          entitlement_codes IS NULL
-                          OR entitlement_codes::jsonb = '[]'::jsonb
-                          OR entitlement_codes::jsonb = 'null'::jsonb
-                      )
+                      AND ({empty_predicate})
                     """
                 )
             )
     else:
         connection = op.get_bind()
+        assignment = (
+            "CAST(:entitlements AS json)"
+            if dialect == "postgresql"
+            else ":entitlements"
+        )
         for plan_code, entitlements_json in _ENTITLEMENTS_BY_PLAN.items():
             connection.execute(
                 sa.text(
                     f"""
                     UPDATE {CYCLE_TABLE}
-                    SET entitlement_codes = CAST(:entitlements AS json),
+                    SET entitlement_codes = {assignment},
                         plan_catalog_version = :version
                     WHERE plan_code = :plan_code
-                      AND (
-                          entitlement_codes IS NULL
-                          OR entitlement_codes::jsonb = '[]'::jsonb
-                          OR entitlement_codes::jsonb = 'null'::jsonb
-                      )
+                      AND ({empty_predicate})
                     """
                 ),
                 {
@@ -125,9 +150,7 @@ def upgrade() -> None:
                 f"""
                 SELECT plan_code
                 FROM {CYCLE_TABLE}
-                WHERE entitlement_codes IS NULL
-                   OR entitlement_codes::jsonb = '[]'::jsonb
-                   OR entitlement_codes::jsonb = 'null'::jsonb
+                WHERE {empty_predicate}
                 LIMIT 1
                 """
             )
