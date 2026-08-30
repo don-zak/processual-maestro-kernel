@@ -5,7 +5,6 @@ import argparse
 import asyncio
 import json
 import os
-import re
 import uuid
 from collections import Counter
 from pathlib import Path
@@ -47,10 +46,65 @@ def expected_check_constraint_names(dialect: Any) -> dict[str, set[str]]:
 
 
 def _normalized_sqltext(value: Any) -> str:
-    """Normalize server-reflected CHECK SQL without using constraint names."""
-    text = str(value or "").strip().lower()
-    text = re.sub(r"\s+", " ", text)
-    return text
+    """Normalize non-semantic SQL formatting while preserving quoted content.
+
+    SQLite reflection can rewrite whitespace around parentheses and commas even
+    when the CHECK expression is unchanged.  Normalize only that presentation
+    noise plus repeated whitespace outside quoted strings/identifiers.  Quoted
+    content is retained byte-for-byte so literal or quoted-identifier changes
+    remain visible to the integrity comparison.
+    """
+    text = str(value or "").strip()
+    output: list[str] = []
+    pending_space = False
+    quote: str | None = None
+    index = 0
+
+    while index < len(text):
+        char = text[index]
+
+        if quote is not None:
+            output.append(char)
+            if char == quote:
+                # SQL escapes quote characters by doubling them. Preserve both
+                # and remain inside the quoted token until the real terminator.
+                if index + 1 < len(text) and text[index + 1] == quote:
+                    output.append(text[index + 1])
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+
+        if char in {"'", '"'}:
+            if pending_space and output and output[-1] not in {"(", ","}:
+                output.append(" ")
+            pending_space = False
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+
+        if char.isspace():
+            pending_space = True
+            index += 1
+            continue
+
+        if char in {"(", ")", ","}:
+            while output and output[-1] == " ":
+                output.pop()
+            output.append(char)
+            pending_space = False
+            index += 1
+            continue
+
+        if pending_space and output and output[-1] not in {"(", ","}:
+            output.append(" ")
+        pending_space = False
+        output.append(char.lower())
+        index += 1
+
+    return "".join(output).strip()
 
 
 def _reflected_signatures(
