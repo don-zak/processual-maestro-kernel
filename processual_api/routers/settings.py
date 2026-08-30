@@ -310,8 +310,8 @@ def _encrypt_api_key(api_key: str, user_id: str) -> str | None:
             "schema_version": envelope.schema_version,
             "created_at": envelope.created_at,
         })
-    except Exception:
-        return None
+    except Exception as exc:
+        raise RuntimeError("Provider secret encryption failed") from exc
 
 
 def _decrypt_api_key(stored: str) -> str | None:
@@ -2124,7 +2124,13 @@ async def save_llm_provider(body: LLMProviderConfig, current_user: dict = Depend
     user_id = current_user.get("sub", "default")
     raw = _load_raw(user_id)
 
-    encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
+    try:
+        encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Provider secret encryption failed",
+        ) from exc
     if body.api_key and not encrypted:
         raise HTTPException(
             status_code=503,

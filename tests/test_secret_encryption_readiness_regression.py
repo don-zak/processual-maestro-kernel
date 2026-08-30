@@ -88,6 +88,37 @@ def test_llm_provider_fails_closed_when_secret_encryption_is_unavailable(monkeyp
     assert not (tmp_path / "settings_fail_closed_user.json").exists()
 
 
+def test_llm_provider_fails_closed_when_encryption_raises(monkeypatch, tmp_path):
+    raw_secret = "sk-prod-provider-secret-encryption-failure"
+
+    monkeypatch.setattr(settings_router, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(settings_router, "_CRYPTO_KEY", crypto.generate_key_b64())
+    monkeypatch.setattr(settings_router, "_crypto_available", True)
+
+    def fail_encrypt(*args, **kwargs):
+        raise ValueError("simulated encryption failure")
+
+    monkeypatch.setattr(settings_router, "encrypt_aes256_gcm", fail_encrypt)
+
+    body = SimpleNamespace(
+        provider="openai",
+        api_key=raw_secret,
+        model="gpt-4o-mini",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(
+            settings_router.save_llm_provider(
+                body,
+                current_user={"sub": "encrypt_failure_user"},
+            )
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "Provider secret encryption failed"
+    assert not (tmp_path / "settings_encrypt_failure_user.json").exists()
+
+
 def test_adapter_config_api_key_is_encrypted_when_crypto_key_available(monkeypatch, tmp_path):
     key_b64 = crypto.generate_key_b64()
     raw_secret = "sk-prod-adapter-secret-do-not-store-plain"
