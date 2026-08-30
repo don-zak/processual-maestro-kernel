@@ -43,11 +43,17 @@ _PREVIOUS_RESOURCE_CHECK = """resource_type IN (
 
 
 def _replace_constraints(action_check: str, resource_check: str) -> None:
+    # These constants are already fully rendered historical identifiers. Mark
+    # them final so the repository naming convention does not prefix them again
+    # during batch-mode drop/create operations (notably SQLite rebuilds and
+    # PostgreSQL full downgrade qualification).
+    action_name = op.f(ACTION_CONSTRAINT)
+    resource_name = op.f(RESOURCE_CONSTRAINT)
     with op.batch_alter_table(TABLE) as batch_op:
-        batch_op.drop_constraint(ACTION_CONSTRAINT, type_="check")
-        batch_op.drop_constraint(RESOURCE_CONSTRAINT, type_="check")
-        batch_op.create_check_constraint(ACTION_CONSTRAINT, action_check)
-        batch_op.create_check_constraint(RESOURCE_CONSTRAINT, resource_check)
+        batch_op.drop_constraint(action_name, type_="check")
+        batch_op.drop_constraint(resource_name, type_="check")
+        batch_op.create_check_constraint(action_name, action_check)
+        batch_op.create_check_constraint(resource_name, resource_check)
 
 
 def upgrade() -> None:
