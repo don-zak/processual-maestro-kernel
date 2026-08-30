@@ -5,7 +5,15 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from .contracts import AgentCriticality, AgentState, MaestroAction, StepState, WorkflowState
+from .contracts import (
+    AgentCriticality,
+    AgentState,
+    MaestroAction,
+    StepState,
+    TaskEnvelope,
+    TaskResult,
+    WorkflowState,
+)
 
 
 def _new_decision_id() -> str:
@@ -239,25 +247,6 @@ class MaestroEvent:
     reason: str
     payload: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
-
-
-@dataclass(frozen=True, slots=True)
-class TaskEnvelope:
-    task_id: str
-    required_capability: str
-    payload: dict[str, Any] = field(default_factory=dict)
-    priority: float = 0.5
-
-
-@dataclass(frozen=True, slots=True)
-class TaskResult:
-    task_id: str
-    agent_id: str
-    ok: bool
-    output: Any = None
-    error: str | None = None
-    latency_ms: float = 0.0
-    cost: float = 0.0
 
 
 class AgentRuntime(Protocol):
