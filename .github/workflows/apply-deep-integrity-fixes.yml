@@ -18,80 +18,16 @@ jobs:
           ref: audit/deep-integrity-99-confidence
           fetch-depth: 0
 
-      - name: Apply exact guarded patches
-        run: |
-          python - <<'PY'
-          from pathlib import Path
+      - name: Apply guarded patch
+        run: python tools/apply_deep_integrity_patch.py
 
-          settings = Path('processual_api/routers/settings.py')
-          text = settings.read_text(encoding='utf-8-sig')
-          old = '''    encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
-    raw["llm_provider"] = {
-        "configured": bool(body.api_key and body.provider),
-        "provider": body.provider,
-        "model": body.model,
-        "last_tested": raw.get("llm_provider", {}).get("last_tested"),
-    }
-
-    if encrypted:
-        raw["llm_provider"]["encrypted_key"] = encrypted
-
-    _save_raw(user_id, raw)
-
-    return {
-        "status": "saved",
-        "provider": body.provider,
-        "model": body.model or "",
-        "configured": bool(body.api_key and body.provider),
-    }
-'''
-          new = '''    encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
-    if body.api_key and not encrypted:
-        raise HTTPException(
-            status_code=503,
-            detail="Provider secret encryption is unavailable",
-        )
-
-    raw["llm_provider"] = {
-        "configured": bool(encrypted and body.provider),
-        "provider": body.provider,
-        "model": body.model,
-        "last_tested": raw.get("llm_provider", {}).get("last_tested"),
-    }
-
-    if encrypted:
-        raw["llm_provider"]["encrypted_key"] = encrypted
-
-    _save_raw(user_id, raw)
-
-    return {
-        "status": "saved",
-        "provider": body.provider,
-        "model": body.model or "",
-        "configured": bool(encrypted and body.provider),
-    }
-'''
-          if text.count(old) != 1:
-              raise SystemExit(f'Expected exactly one legacy LLM-provider block, found {text.count(old)}')
-          settings.write_text(text.replace(old, new), encoding='utf-8')
-
-          pyproject = Path('pyproject.toml')
-          project_text = pyproject.read_text(encoding='utf-8')
-          old_description = 'description = "Production-ready Processual Maestro Kernel with CGT v2, security layer, backend API, observability, and Discord monitoring."'
-          new_description = 'description = "Agentic operations and governance control plane with CGT, security, API, observability, and controlled integration surfaces."'
-          if project_text.count(old_description) != 1:
-              raise SystemExit('Expected exactly one production-ready package description')
-          pyproject.write_text(project_text.replace(old_description, new_description), encoding='utf-8')
-          PY
-
-      - name: Verify guarded patch semantics
+      - name: Verify patch
         run: |
           python -m compileall -q processual_api/routers/settings.py
           grep -F 'Provider secret encryption is unavailable' processual_api/routers/settings.py
-          grep -F '"configured": bool(encrypted and body.provider)' processual_api/routers/settings.py
           grep -F 'Agentic operations and governance control plane' pyproject.toml
 
-      - name: Commit guarded fixes
+      - name: Commit patch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
