@@ -6,7 +6,10 @@ from pathlib import Path
 from sqlalchemy import CheckConstraint, Column, Integer, MetaData, Table
 from sqlalchemy.dialects import postgresql, sqlite
 
-from tools.check_check_constraint_names import _effective_constraint_name
+from tools.check_check_constraint_names import (
+    _effective_constraint_name,
+    _normalized_sqltext,
+)
 
 
 def _convention_constraint_name():
@@ -101,3 +104,24 @@ def test_migration_0018_historical_names_render_deterministically_on_postgresql(
     assert rendered_resource == _effective_constraint_name(dialect, resource_name)
     assert rendered_action != migration.ACTION_CONSTRAINT
     assert rendered_resource != migration.RESOURCE_CONSTRAINT
+
+
+def test_sqltext_normalization_ignores_only_formatting_noise() -> None:
+    compact = "status IN ('draft','active') AND (flag = 1 OR flag = 2)"
+    spaced = "status IN ( 'draft', 'active' ) AND ( flag = 1 OR flag = 2 )"
+
+    assert _normalized_sqltext(compact) == _normalized_sqltext(spaced)
+
+
+def test_sqltext_normalization_preserves_literal_semantics() -> None:
+    left = "status IN ('Draft','active')"
+    right = "status IN ('draft','active')"
+
+    assert _normalized_sqltext(left) != _normalized_sqltext(right)
+
+
+def test_sqltext_normalization_preserves_quoted_identifier_semantics() -> None:
+    left = '"Status" = \'active\''
+    right = '"status" = \'active\''
+
+    assert _normalized_sqltext(left) != _normalized_sqltext(right)
