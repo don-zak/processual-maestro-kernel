@@ -60,6 +60,7 @@ def test_cgtlib_does_not_depend_on_processual_api() -> None:
 def test_contract_surfaces_remain_stdlib_only() -> None:
     candidates = (
         REPO_ROOT / "processual_kernel" / "contracts" / "enums.py",
+        REPO_ROOT / "processual_kernel" / "contracts" / "tasks.py",
         REPO_ROOT / "cgtlib" / "types.py",
         REPO_ROOT / "cgtlib" / "errors.py",
     )

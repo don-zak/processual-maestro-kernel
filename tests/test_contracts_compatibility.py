@@ -14,6 +14,7 @@ ENUM_CONTRACT_NAMES = (
     "StepState",
     "MaestroAction",
 )
+TASK_CONTRACT_NAMES = ("TaskEnvelope", "TaskResult")
 
 
 def test_enum_contracts_keep_legacy_and_public_object_identity() -> None:
@@ -37,3 +38,43 @@ def test_enum_contract_values_are_unchanged() -> None:
     assert legacy_types.WorkflowState.ESCALATED == "escalated"
     assert legacy_types.StepState.SKIPPED == "skipped"
     assert legacy_types.MaestroAction.FINALIZE == "finalize"
+
+
+def test_task_contracts_keep_legacy_and_public_object_identity() -> None:
+    for name in TASK_CONTRACT_NAMES:
+        contract = getattr(contracts, name)
+        assert getattr(legacy_types, name) is contract
+        assert getattr(processual_kernel, name) is contract
+
+
+def test_task_contracts_keep_legacy_serialization_identity() -> None:
+    envelope = contracts.TaskEnvelope(
+        task_id="task-1",
+        required_capability="analysis",
+        payload={"value": 7},
+    )
+    result = contracts.TaskResult(
+        task_id="task-1",
+        agent_id="agent-1",
+        ok=True,
+        output={"accepted": True},
+    )
+
+    for contract, instance in (
+        (contracts.TaskEnvelope, envelope),
+        (contracts.TaskResult, result),
+    ):
+        assert contract.__module__ == "processual_kernel.types"
+        assert pickle.loads(pickle.dumps(instance)) == instance
+
+
+def test_task_contract_defaults_are_unchanged() -> None:
+    envelope = legacy_types.TaskEnvelope(task_id="task-2", required_capability="routing")
+    assert envelope.payload == {}
+    assert envelope.priority == 0.5
+
+    result = legacy_types.TaskResult(task_id="task-2", agent_id="agent-2", ok=False)
+    assert result.output is None
+    assert result.error is None
+    assert result.latency_ms == 0.0
+    assert result.cost == 0.0
