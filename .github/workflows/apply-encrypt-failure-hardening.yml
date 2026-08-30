@@ -1,6 +1,9 @@
 name: Apply Encrypt Failure Hardening
 
 on:
+  push:
+    branches:
+      - audit/deep-integrity-99-confidence
   workflow_dispatch:
 
 permissions:
@@ -8,6 +11,7 @@ permissions:
 
 jobs:
   patch:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
