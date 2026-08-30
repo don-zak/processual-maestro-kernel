@@ -1,0 +1,47 @@
+name: Dependency Census
+
+on:
+  pull_request:
+    paths:
+      - "processual_kernel/**"
+      - "cgtlib/**"
+      - "processual_api/**"
+      - "tools/dependency_census.py"
+      - ".github/workflows/dependency-census.yml"
+      - "docs/architecture/**"
+      - "tests/test_architecture_boundaries.py"
+      - "tests/test_dependency_census.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14"
+
+      - name: Generate dependency census
+        run: |
+          python tools/dependency_census.py --format json --output dependency-census.json
+          python tools/dependency_census.py --format markdown --output dependency-census.md
+
+      - name: Show census summary
+        run: cat dependency-census.md
+
+      - name: Upload dependency census
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-census
+          path: |
+            dependency-census.json
+            dependency-census.md
+          if-no-files-found: error
+          retention-days: 30
