@@ -31,15 +31,35 @@ def _get_database_url() -> str:
     return url
 
 
+def _validated_pool_config() -> tuple[int, int, float, int]:
+    pool_min = settings.database_pool_min
+    pool_max = settings.database_pool_max
+    pool_timeout = settings.database_pool_timeout_seconds
+    pool_recycle = settings.database_pool_recycle_seconds
+    if pool_min < 1:
+        raise RuntimeError("DATABASE_POOL_MIN must be at least 1.")
+    if pool_max < pool_min:
+        raise RuntimeError("DATABASE_POOL_MAX must be greater than or equal to DATABASE_POOL_MIN.")
+    if pool_timeout <= 0:
+        raise RuntimeError("DATABASE_POOL_TIMEOUT_SECONDS must be greater than 0.")
+    if pool_recycle <= 0:
+        raise RuntimeError("DATABASE_POOL_RECYCLE_SECONDS must be greater than 0.")
+    return pool_min, pool_max, pool_timeout, pool_recycle
+
+
 async def init_db():
     global _engine, _session_factory
     url = _get_database_url()
     if not url or create_async_engine is None:
         return
+    pool_min, pool_max, pool_timeout, pool_recycle = _validated_pool_config()
     _engine = create_async_engine(
         url,
-        pool_size=settings.database_pool_min,
-        max_overflow=settings.database_pool_max - settings.database_pool_min,
+        pool_size=pool_min,
+        max_overflow=pool_max - pool_min,
+        pool_pre_ping=True,
+        pool_timeout=pool_timeout,
+        pool_recycle=pool_recycle,
         echo=settings.debug,
     )
     _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)

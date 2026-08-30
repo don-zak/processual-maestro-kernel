@@ -7,6 +7,8 @@ import pytest
 import processual_api.cgt_governor.adapters.execution_fanout as fanout_module
 from processual_api.cgt_governor.adapters.base import BaseLLMAdapter
 from processual_api.cgt_governor.adapters.execution_fanout import (
+    ExecutionFanoutOperationTimeoutError,
+    ExecutionFanoutPolicy,
     ExecutionFanoutReservation,
     InMemoryExecutionFanoutBackend,
 )
@@ -90,6 +92,51 @@ async def test_execution_fanout_renewal_does_not_recreate_expired_lease(monkeypa
 
     now = 108.0
     assert await backend.renew(reservation, lease_seconds=5) is False
+
+
+def test_execution_fanout_policy_rejects_unsafe_bounds(monkeypatch) -> None:
+    monkeypatch.setenv("EXECUTION_FANOUT_GLOBAL_LIMIT", "4")
+    monkeypatch.setenv("EXECUTION_FANOUT_PROVIDER_LIMIT", "5")
+    with pytest.raises(RuntimeError, match="PROVIDER_LIMIT"):
+        ExecutionFanoutPolicy.from_env()
+
+    monkeypatch.setenv("EXECUTION_FANOUT_PROVIDER_LIMIT", "2")
+    monkeypatch.setenv("EXECUTION_FANOUT_LEASE_SECONDS", "10")
+    monkeypatch.setenv("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS", "10")
+    with pytest.raises(RuntimeError, match="OPERATION_TIMEOUT_SECONDS"):
+        ExecutionFanoutPolicy.from_env()
+
+
+@pytest.mark.asyncio
+async def test_execution_fanout_times_out_and_cancels_slow_provider(monkeypatch) -> None:
+    monkeypatch.setenv("EXECUTION_FANOUT_ENABLED", "true")
+    monkeypatch.setenv("EXECUTION_FANOUT_GLOBAL_LIMIT", "2")
+    monkeypatch.setenv("EXECUTION_FANOUT_PROVIDER_LIMIT", "1")
+    monkeypatch.setenv("EXECUTION_FANOUT_LEASE_SECONDS", "5")
+    monkeypatch.setenv("EXECUTION_FANOUT_WAIT_MS", "0")
+    monkeypatch.setenv("EXECUTION_FANOUT_RETRY_MS", "5")
+    monkeypatch.setenv("EXECUTION_FANOUT_OPERATION_TIMEOUT_SECONDS", "0.05")
+    monkeypatch.setattr(fanout_module, "get_redis", lambda: _none_redis())
+    monkeypatch.setattr(fanout_module.settings, "environment", "development")
+
+    cancelled = asyncio.Event()
+
+    async def slow_operation() -> str:
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        return "unexpected"
+
+    with pytest.raises(ExecutionFanoutOperationTimeoutError):
+        await fanout_module.run_with_execution_fanout("slow-provider", slow_operation)
+
+    assert cancelled.is_set()
+
+
+async def _none_redis():
+    return None
 
 
 class _FakeAdapter(BaseLLMAdapter):
