@@ -32,7 +32,7 @@ jobs:
           set +e
           bandit -r cgtlib processual_kernel processual_api -f json -o bandit-report.json
           status=$?
-          echo "bandit_exit_code=$status" >> "$GITHUB_OUTPUT"
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           echo "--- Bandit report ---"
           cat bandit-report.json
           exit "$status"
@@ -40,17 +40,37 @@ jobs:
       - name: Pip audit
         id: pip_audit
         continue-on-error: true
-        run: pip-audit
+        run: |
+          set +e
+          pip-audit --format=json --output=pip-audit-report.json
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          echo "--- pip-audit report ---"
+          cat pip-audit-report.json
+          exit "$status"
+
+      - name: Upload security diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-diagnostics
+          path: |
+            bandit-report.json
+            pip-audit-report.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Enforce security gate
         if: always()
         env:
           BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
+          BANDIT_EXIT_CODE: ${{ steps.bandit.outputs.exit_code }}
           PIP_AUDIT_OUTCOME: ${{ steps.pip_audit.outcome }}
+          PIP_AUDIT_EXIT_CODE: ${{ steps.pip_audit.outputs.exit_code }}
         run: |
-          echo "Bandit outcome: $BANDIT_OUTCOME"
-          echo "pip-audit outcome: $PIP_AUDIT_OUTCOME"
+          echo "Bandit outcome: $BANDIT_OUTCOME (exit $BANDIT_EXIT_CODE)"
+          echo "pip-audit outcome: $PIP_AUDIT_OUTCOME (exit $PIP_AUDIT_EXIT_CODE)"
           if [ "$BANDIT_OUTCOME" != "success" ] || [ "$PIP_AUDIT_OUTCOME" != "success" ]; then
-            echo "Security gate failed. Review the Bandit report and pip-audit output above."
+            echo "Security gate failed. Inspect the security-diagnostics artifact before changing runtime code."
             exit 1
           fi
