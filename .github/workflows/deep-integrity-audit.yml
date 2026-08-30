@@ -177,14 +177,31 @@ jobs:
       - name: Install wheel outside repository and import every public module
         run: |
           python -m venv /tmp/maestro-wheel-venv
-          /tmp/maestro-wheel-venv/bin/python -m pip install --upgrade pip
           WHEEL="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
-          /tmp/maestro-wheel-venv/bin/python -m pip install "${WHEEL}[all]"
-          /tmp/maestro-wheel-venv/bin/python -m pip check
-          /tmp/maestro-wheel-venv/bin/python -m pip show -f processual-maestro-kernel \
+          cd /tmp
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python -m pip install --upgrade pip
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python -m pip install "${WHEEL}[all]"
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python -m pip check
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python -m pip show -f processual-maestro-kernel \
             > "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-installed-files.txt" 2>&1
           cat "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-installed-files.txt"
-          cd /tmp
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python - <<'PY' \
+            > "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-location.txt" 2>&1
+          from importlib import metadata
+          from pathlib import Path
+          import sys
+
+          distribution = metadata.distribution('processual-maestro-kernel')
+          location = Path(distribution.locate_file('')).resolve()
+          prefix = Path(sys.prefix).resolve()
+          print(f'distribution_location={location}')
+          print(f'venv_prefix={prefix}')
+          if not location.is_relative_to(prefix):
+              raise SystemExit(
+                  f'Installed distribution escaped isolated venv: {location} not under {prefix}'
+              )
+          PY
+          cat "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-location.txt"
           set +e
           env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python - <<'PY' > "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-import.txt" 2>&1
           import importlib
