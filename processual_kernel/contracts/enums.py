@@ -6,6 +6,8 @@ from enum import StrEnum
 
 
 class AgentState(StrEnum):
+    __module__ = "processual_kernel.types"
+
     ACTIVE = "active"
     TRANSITIONAL = "transitional"
     ARCHIVED = "archived"
@@ -13,6 +15,8 @@ class AgentState(StrEnum):
 
 
 class AgentCriticality(StrEnum):
+    __module__ = "processual_kernel.types"
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -20,6 +24,8 @@ class AgentCriticality(StrEnum):
 
 
 class WorkflowState(StrEnum):
+    __module__ = "processual_kernel.types"
+
     DRAFT = "draft"
     RUNNING = "running"
     PAUSED = "paused"
@@ -30,6 +36,8 @@ class WorkflowState(StrEnum):
 
 
 class StepState(StrEnum):
+    __module__ = "processual_kernel.types"
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -38,6 +46,8 @@ class StepState(StrEnum):
 
 
 class MaestroAction(StrEnum):
+    __module__ = "processual_kernel.types"
+
     DELEGATE = "delegate"
     HANDOFF = "handoff"
     PARALLELIZE = "parallelize"
