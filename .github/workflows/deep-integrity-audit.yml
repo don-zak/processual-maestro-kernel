@@ -147,6 +147,32 @@ jobs:
           rm -rf dist build
           python -m build --wheel
           ls -l dist/
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          wheels = sorted(Path('dist').glob('*.whl'))
+          if len(wheels) != 1:
+              raise SystemExit(f'Expected exactly one wheel, found {len(wheels)}: {wheels}')
+          wheel = wheels[0]
+          with zipfile.ZipFile(wheel) as archive:
+              names = sorted(archive.namelist())
+          Path('deep-integrity-results/wheel-contents.txt').write_text(
+              '\n'.join(names) + '\n', encoding='utf-8'
+          )
+          required = (
+              'processual_kernel/__init__.py',
+              'cgtlib/__init__.py',
+              'processual_api/__init__.py',
+          )
+          missing = [name for name in required if name not in names]
+          print(f'wheel={wheel}')
+          print(f'wheel_entries={len(names)}')
+          print(f'required_package_roots={required}')
+          print(f'missing_package_roots={missing}')
+          if missing:
+              raise SystemExit(f'Wheel is missing required package roots: {missing}')
+          PY
 
       - name: Install wheel outside repository and import every public module
         run: |
@@ -155,6 +181,9 @@ jobs:
           WHEEL="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
           /tmp/maestro-wheel-venv/bin/python -m pip install "${WHEEL}[all]"
           /tmp/maestro-wheel-venv/bin/python -m pip check
+          /tmp/maestro-wheel-venv/bin/python -m pip show -f processual-maestro-kernel \
+            > "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-installed-files.txt" 2>&1
+          cat "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-installed-files.txt"
           cd /tmp
           set +e
           env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python - <<'PY' > "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-import.txt" 2>&1
