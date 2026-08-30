@@ -6,16 +6,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .contracts import (
-    AgentCriticality,
-    AgentRuntime,
+    AgentCriticality as AgentCriticality,
+    AgentRuntime as AgentRuntime,
     AgentSpec,
     AgentState,
-    AuditSink,
+    AuditSink as AuditSink,
     MaestroAction,
-    MaestroEvent,
+    MaestroEvent as MaestroEvent,
     StepState,
-    TaskEnvelope,
-    TaskResult,
+    TaskEnvelope as TaskEnvelope,
+    TaskResult as TaskResult,
     WorkflowPlan,
     WorkflowState,
     WorkflowStep,
