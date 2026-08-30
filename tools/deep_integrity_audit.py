@@ -15,11 +15,24 @@ from pathlib import Path
 
 ROOTS = ("processual_kernel", "cgtlib", "processual_api")
 
-# Capacity actor attribution deliberately accepts either authenticated subject
-# evidence or an API-key fingerprint. Authentication/authorization happens at
-# the request boundary; this helper only derives a capacity-accounting key.
+# Narrowly documented best-effort/fail-closed boundaries. These functions must
+# never grant authority or persist secrets when the guarded operation fails.
 SILENT_EXCEPTION_ALLOWLIST = {
+    # Capacity accounting attribution only; authentication occurs elsewhere.
     ("processual_api/middleware/runtime_capacity.py", "_request_actor_key"),
+    # Invalid JWT attribution fails closed to no subscription customer ref.
+    ("processual_api/middleware/subscription.py", "_extract_customer_ref"),
+    # Observability must never break the application it observes.
+    ("processual_kernel/observability/sentry.py", "capture_exception"),
+    ("processual_kernel/observability/sentry.py", "capture_message"),
+    # Best-effort cleanup of local diagnostic state.
+    ("processual_api/cgt_governor/data/storage.py", "clear"),
+    ("processual_api/cgt_governor/data/telemetry_storage.py", "clear"),
+    # Metrics are non-authoritative and must not break orchestration.
+    ("processual_api/cgt_governor/policy/orchestration_metrics.py", "record_orchestration"),
+    # Corrupt historical statement entries are skipped while listing; writes
+    # and authority decisions are not performed by this function.
+    ("processual_api/billing/customer_billing_statements.py", "list_statements"),
 }
 
 
@@ -101,9 +114,7 @@ class Auditor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         call_name = _name(node.func)
         if call_name in {"eval", "exec", "os.system", "pickle.loads", "marshal.loads"}:
-            self.findings.append(
-                Finding(self.path, node.lineno, "dangerous-call", call_name)
-            )
+            self.findings.append(Finding(self.path, node.lineno, "dangerous-call", call_name))
 
         if call_name.startswith("subprocess."):
             for keyword in node.keywords:
@@ -154,9 +165,14 @@ def audit(root: Path) -> list[Finding]:
         for path in sorted(package_root.rglob("*.py")):
             relative = path.relative_to(root).as_posix()
             try:
-                tree = ast.parse(path.read_text(encoding="utf-8"), filename=relative)
+                # utf-8-sig accepts both ordinary UTF-8 and legacy BOM-prefixed
+                # sources, matching Python's source-decoding behavior.
+                source = path.read_text(encoding="utf-8-sig")
+                tree = ast.parse(source, filename=relative)
             except (OSError, UnicodeError, SyntaxError) as exc:
-                findings.append(Finding(relative, 0, "parse-failure", type(exc).__name__))
+                line = getattr(exc, "lineno", 0) or 0
+                detail = f"{type(exc).__name__}: {exc}"
+                findings.append(Finding(relative, line, "parse-failure", detail))
                 continue
             auditor = Auditor(relative)
             auditor.visit(tree)
