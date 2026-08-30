@@ -56,24 +56,28 @@ def _adapter_config_path() -> Path:
 
 def _save_adapter_config(provider: str, api_key: str, model: str = "", base_url: str = "") -> None:
     config: dict[str, str] = {"provider": provider, "model": model, "base_url": base_url}
-    if _adapter_crypto_available and _ADAPTER_CRYPTO_KEY and api_key:
+    if api_key:
+        if not _adapter_crypto_available:
+            raise RuntimeError("Adapter credential encryption is unavailable")
+        if not _ADAPTER_CRYPTO_KEY:
+            raise RuntimeError("PROCESSUAL_CRYPTO_KEY_B64 is required to persist adapter credentials")
         try:
             envelope = encrypt_aes256_gcm(api_key.encode("utf-8"), _ADAPTER_CRYPTO_KEY, key_id=provider)
-            config["encrypted_key"] = json.dumps(
-                {
-                    "algorithm": envelope.algorithm,
-                    "key_id": envelope.key_id,
-                    "nonce_b64": envelope.nonce_b64,
-                    "aad_b64": envelope.aad_b64,
-                    "ciphertext_b64": envelope.ciphertext_b64,
-                    "plaintext_sha3_256": envelope.plaintext_sha3_256,
-                    "ciphertext_sha3_256": envelope.ciphertext_sha3_256,
-                    "schema_version": envelope.schema_version,
-                    "created_at": envelope.created_at,
-                }
-            )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise RuntimeError("Failed to encrypt adapter credential") from exc
+        config["encrypted_key"] = json.dumps(
+            {
+                "algorithm": envelope.algorithm,
+                "key_id": envelope.key_id,
+                "nonce_b64": envelope.nonce_b64,
+                "aad_b64": envelope.aad_b64,
+                "ciphertext_b64": envelope.ciphertext_b64,
+                "plaintext_sha3_256": envelope.plaintext_sha3_256,
+                "ciphertext_sha3_256": envelope.ciphertext_sha3_256,
+                "schema_version": envelope.schema_version,
+                "created_at": envelope.created_at,
+            }
+        )
     path = _adapter_config_path()
     path.write_text(json.dumps(config, indent=2, ensure_ascii=False), "utf-8")
 
