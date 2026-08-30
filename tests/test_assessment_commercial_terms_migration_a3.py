@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260809_0046"
+REVISION = "20260809_0046"
 PREVIOUS = "20260809_0045"
 TABLE = "admin_market_assessment_commercial_terms"
 
@@ -34,9 +34,9 @@ def test_assessment_commercial_terms_migration_upgrade_and_empty_downgrade(tmp_p
     database_path = tmp_path / "assessment-commercial-terms.db"
     database_url = f"sqlite+aiosqlite:///{database_path.as_posix()}"
 
-    _run(database_url, "upgrade", "head")
+    _run(database_url, "upgrade", REVISION)
     current = _run(database_url, "current")
-    assert HEAD in f"{current.stdout}\n{current.stderr}"
+    assert REVISION in f"{current.stdout}\n{current.stderr}"
 
     with sqlite3.connect(database_path) as connection:
         columns = {

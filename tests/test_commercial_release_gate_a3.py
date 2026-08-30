@@ -36,6 +36,7 @@ def _valid_environment() -> dict[str, str]:
             '{"v1":"payment-material"}'
         ),
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION": "v1",
+        "LEMONSQUEEZY_API_KEY": "lemon-api-key-" + "k" * 32,
         "LEMONSQUEEZY_STORE_ID": "12345",
         "LEMONSQUEEZY_WEBHOOK_SECRET": "w" * 48,
         "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL": (
@@ -75,6 +76,7 @@ def test_valid_staging_and_production_environment_passes() -> None:
     (
         ("ENVIRONMENT", "development"),
         ("JWT_SECRET", "short"),
+        ("LEMONSQUEEZY_API_KEY", "replace_with_lemon_api_key"),
         ("LEMONSQUEEZY_WEBHOOK_SECRET", "short"),
         ("LEMONSQUEEZY_STORE_ID", "0"),
         ("CORS_ORIGINS", "*"),
@@ -98,12 +100,20 @@ def test_unsafe_release_environment_fails_closed(name: str, value: str) -> None:
         evaluate_release_environment(environment)
 
 
-def test_missing_required_value_fails_without_echoing_secret() -> None:
+@pytest.mark.parametrize(
+    "name",
+    (
+        "LEMONSQUEEZY_API_KEY",
+        "LEMONSQUEEZY_WEBHOOK_SECRET",
+    ),
+)
+def test_missing_lemon_secret_fails_without_echoing_secret(name: str) -> None:
     environment = _valid_environment()
-    environment.pop("LEMONSQUEEZY_WEBHOOK_SECRET")
+    environment.pop(name)
     with pytest.raises(RuntimeError) as captured:
         evaluate_release_environment(environment)
-    assert "LEMONSQUEEZY_WEBHOOK_SECRET" in str(captured.value)
+    assert name in str(captured.value)
+    assert "lemon-api-key-" not in str(captured.value)
     assert "w" * 20 not in str(captured.value)
 
 
@@ -118,6 +128,7 @@ def test_release_workflow_requires_gates_before_publish() -> None:
     required = (
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
+        "LEMONSQUEEZY_API_KEY: ${{ secrets.LEMONSQUEEZY_API_KEY }}",
         "Verify migration head",
         "20260809_0046",
         "Commercial staging smoke gate",
