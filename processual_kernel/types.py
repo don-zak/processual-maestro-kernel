@@ -6,20 +6,27 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .contracts import (
-    AgentCriticality as AgentCriticality,
-    AgentRuntime as AgentRuntime,
+    AgentCriticality as _AgentCriticality,
+    AgentRuntime as _AgentRuntime,
     AgentSpec,
     AgentState,
-    AuditSink as AuditSink,
+    AuditSink as _AuditSink,
     MaestroAction,
-    MaestroEvent as MaestroEvent,
+    MaestroEvent as _MaestroEvent,
     StepState,
-    TaskEnvelope as TaskEnvelope,
-    TaskResult as TaskResult,
+    TaskEnvelope as _TaskEnvelope,
+    TaskResult as _TaskResult,
     WorkflowPlan,
     WorkflowState,
     WorkflowStep,
 )
+
+AgentCriticality = _AgentCriticality
+AgentRuntime = _AgentRuntime
+AuditSink = _AuditSink
+MaestroEvent = _MaestroEvent
+TaskEnvelope = _TaskEnvelope
+TaskResult = _TaskResult
 
 
 def _new_decision_id() -> str:
