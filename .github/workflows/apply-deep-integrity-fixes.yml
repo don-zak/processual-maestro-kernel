@@ -26,41 +26,54 @@ jobs:
           settings = Path('processual_api/routers/settings.py')
           text = settings.read_text(encoding='utf-8-sig')
           old = '''    encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
-          raw["llm_provider"] = {
-              "configured": bool(body.api_key and body.provider),
-              "provider": body.provider,
-              "model": body.model,
-              "last_tested": raw.get("llm_provider", {}).get("last_tested"),
-          }
-          '''
-          new = '''    encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
-          if body.api_key and not encrypted:
-              raise HTTPException(
-                  status_code=503,
-                  detail="Provider secret encryption is unavailable",
-              )
+    raw["llm_provider"] = {
+        "configured": bool(body.api_key and body.provider),
+        "provider": body.provider,
+        "model": body.model,
+        "last_tested": raw.get("llm_provider", {}).get("last_tested"),
+    }
 
-          raw["llm_provider"] = {
-              "configured": bool(encrypted and body.provider),
-              "provider": body.provider,
-              "model": body.model,
-              "last_tested": raw.get("llm_provider", {}).get("last_tested"),
-          }
-          '''
+    if encrypted:
+        raw["llm_provider"]["encrypted_key"] = encrypted
+
+    _save_raw(user_id, raw)
+
+    return {
+        "status": "saved",
+        "provider": body.provider,
+        "model": body.model or "",
+        "configured": bool(body.api_key and body.provider),
+    }
+'''
+          new = '''    encrypted = _encrypt_api_key(body.api_key, user_id) if body.api_key else None
+    if body.api_key and not encrypted:
+        raise HTTPException(
+            status_code=503,
+            detail="Provider secret encryption is unavailable",
+        )
+
+    raw["llm_provider"] = {
+        "configured": bool(encrypted and body.provider),
+        "provider": body.provider,
+        "model": body.model,
+        "last_tested": raw.get("llm_provider", {}).get("last_tested"),
+    }
+
+    if encrypted:
+        raw["llm_provider"]["encrypted_key"] = encrypted
+
+    _save_raw(user_id, raw)
+
+    return {
+        "status": "saved",
+        "provider": body.provider,
+        "model": body.model or "",
+        "configured": bool(encrypted and body.provider),
+    }
+'''
           if text.count(old) != 1:
               raise SystemExit(f'Expected exactly one legacy LLM-provider block, found {text.count(old)}')
-          text = text.replace(old, new)
-          old_return = '''        "configured": bool(body.api_key and body.provider),
-          '''
-          if text.count(old_return) < 1:
-              raise SystemExit('Expected legacy configured return marker')
-          # Replace only the occurrence after save_llm_provider by splitting at the route.
-          marker = '@router.put("/llm-provider", response_model=dict)'
-          before, after = text.split(marker, 1)
-          if after.count(old_return) < 1:
-              raise SystemExit('Expected configured return inside save_llm_provider')
-          after = after.replace(old_return, '        "configured": bool(encrypted and body.provider),\n', 1)
-          settings.write_text(before + marker + after, encoding='utf-8')
+          settings.write_text(text.replace(old, new), encoding='utf-8')
 
           pyproject = Path('pyproject.toml')
           project_text = pyproject.read_text(encoding='utf-8')
@@ -75,6 +88,7 @@ jobs:
         run: |
           python -m compileall -q processual_api/routers/settings.py
           grep -F 'Provider secret encryption is unavailable' processual_api/routers/settings.py
+          grep -F '"configured": bool(encrypted and body.provider)' processual_api/routers/settings.py
           grep -F 'Agentic operations and governance control plane' pyproject.toml
 
       - name: Commit guarded fixes
