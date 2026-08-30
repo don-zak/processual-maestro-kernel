@@ -156,9 +156,11 @@ jobs:
           /tmp/maestro-wheel-venv/bin/python -m pip install "${WHEEL}[all]"
           /tmp/maestro-wheel-venv/bin/python -m pip check
           cd /tmp
-          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python - <<'PY'
+          set +e
+          env -u PYTHONPATH /tmp/maestro-wheel-venv/bin/python - <<'PY' > "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-import.txt" 2>&1
           import importlib
           import pkgutil
+          import traceback
 
           roots = ('processual_kernel', 'cgtlib', 'processual_api')
           failures = []
@@ -173,13 +175,18 @@ jobs:
                       importlib.import_module(module.name)
                       imported += 1
                   except Exception as exc:
-                      failures.append((module.name, type(exc).__name__, str(exc)))
+                      failures.append((module.name, type(exc).__name__, str(exc), traceback.format_exc()))
           print(f'imported_modules={imported}')
           if failures:
-              for failure in failures[:30]:
-                  print('IMPORT_FAILURE', *failure)
+              for module_name, exc_name, message, trace in failures[:30]:
+                  print('IMPORT_FAILURE', module_name, exc_name, message)
+                  print(trace)
               raise SystemExit(f'{len(failures)} wheel module imports failed')
           PY
+          import_status=$?
+          set -e
+          cat "$GITHUB_WORKSPACE/deep-integrity-results/isolated-wheel-import.txt"
+          exit "$import_status"
 
       - name: Upload deep-integrity evidence
         if: always()
