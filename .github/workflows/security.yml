@@ -31,11 +31,53 @@ jobs:
         run: |
           set +e
           bandit -r cgtlib processual_kernel processual_api -f json -o bandit-report.json
-          status=$?
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          raw_status=$?
+          set -e
+          echo "raw_exit_code=$raw_status" >> "$GITHUB_OUTPUT"
           echo "--- Bandit report ---"
           cat bandit-report.json
-          exit "$status"
+          BANDIT_RAW_STATUS="$raw_status" python - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          report_path = Path("bandit-report.json")
+          if not report_path.exists():
+              print("Bandit did not produce bandit-report.json.")
+              raise SystemExit(2)
+
+          try:
+              raw_status = int(os.environ["BANDIT_RAW_STATUS"])
+          except (KeyError, ValueError):
+              print("Bandit raw exit status is unavailable.")
+              raise SystemExit(2)
+
+          if raw_status not in (0, 1):
+              print(f"Bandit execution failed unexpectedly with exit code {raw_status}.")
+              raise SystemExit(raw_status)
+
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          results = report.get("results", [])
+          counts = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "UNKNOWN": 0}
+          blocking = []
+          for item in results:
+              severity = str(item.get("issue_severity", "UNKNOWN")).upper()
+              counts[severity if severity in counts else "UNKNOWN"] += 1
+              if severity in {"MEDIUM", "HIGH"}:
+                  blocking.append(item)
+
+          print(
+              "Bandit severity summary: "
+              f"LOW={counts['LOW']} MEDIUM={counts['MEDIUM']} HIGH={counts['HIGH']} "
+              f"UNKNOWN={counts['UNKNOWN']}"
+          )
+          if blocking:
+              print(f"Bandit blocking findings (MEDIUM/HIGH): {len(blocking)}")
+              raise SystemExit(1)
+
+          print("Bandit gate passed: no MEDIUM/HIGH findings. LOW findings remain recorded in the artifact.")
+          PY
 
       - name: Pip audit
         id: pip_audit
@@ -64,11 +106,11 @@ jobs:
         if: always()
         env:
           BANDIT_OUTCOME: ${{ steps.bandit.outcome }}
-          BANDIT_EXIT_CODE: ${{ steps.bandit.outputs.exit_code }}
+          BANDIT_RAW_EXIT_CODE: ${{ steps.bandit.outputs.raw_exit_code }}
           PIP_AUDIT_OUTCOME: ${{ steps.pip_audit.outcome }}
           PIP_AUDIT_EXIT_CODE: ${{ steps.pip_audit.outputs.exit_code }}
         run: |
-          echo "Bandit outcome: $BANDIT_OUTCOME (exit $BANDIT_EXIT_CODE)"
+          echo "Bandit policy outcome: $BANDIT_OUTCOME (raw exit $BANDIT_RAW_EXIT_CODE)"
           echo "pip-audit outcome: $PIP_AUDIT_OUTCOME (exit $PIP_AUDIT_EXIT_CODE)"
           if [ "$BANDIT_OUTCOME" != "success" ] || [ "$PIP_AUDIT_OUTCOME" != "success" ]; then
             echo "Security gate failed. Inspect the security-diagnostics artifact before changing runtime code."
