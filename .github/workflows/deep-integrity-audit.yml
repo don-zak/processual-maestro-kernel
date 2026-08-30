@@ -9,7 +9,9 @@ on:
       - alembic/**
       - tools/deep_integrity_audit.py
       - tools/openapi_integrity.py
+      - tools/check_check_constraint_names.py
       - tests/test_readiness_property_fuzz.py
+      - tests/test_check_constraint_name_integrity.py
       - .github/workflows/deep-integrity-audit.yml
       - pyproject.toml
   workflow_dispatch:
@@ -78,6 +80,10 @@ jobs:
         run: |
           python -m pytest -q tests/test_readiness_property_fuzz.py
 
+      - name: CHECK constraint name rendering regression
+        run: |
+          python -m pytest -q tests/test_check_constraint_name_integrity.py
+
       - name: Resource leak qualification under Python dev mode
         env:
           PYTHONDEVMODE: "1"
@@ -91,9 +97,13 @@ jobs:
       - name: PostgreSQL full migration round trip
         run: |
           python -m alembic upgrade head
+          python tools/check_check_constraint_names.py \
+            --output deep-integrity-results/postgres-check-constraints-before-downgrade.json
           python -m alembic check
           python -m alembic downgrade base
           python -m alembic upgrade head
+          python tools/check_check_constraint_names.py \
+            --output deep-integrity-results/postgres-check-constraints-after-roundtrip.json
           python -m alembic check
           python -m alembic current | tee deep-integrity-results/postgres-current.txt
 
@@ -110,6 +120,8 @@ jobs:
         run: |
           rm -f /tmp/maestro-deep-integrity.db
           python -m alembic upgrade head
+          python tools/check_check_constraint_names.py \
+            --output deep-integrity-results/sqlite-check-constraints-before-downgrade.json
           python - <<'PY'
           import sqlite3
           path = '/tmp/maestro-deep-integrity.db'
@@ -123,6 +135,8 @@ jobs:
           PY
           python -m alembic downgrade base
           python -m alembic upgrade head
+          python tools/check_check_constraint_names.py \
+            --output deep-integrity-results/sqlite-check-constraints-after-roundtrip.json
           python -m alembic check
 
       - name: Build wheel for isolated install
