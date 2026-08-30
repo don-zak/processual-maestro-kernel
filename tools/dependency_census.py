@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import tokenize
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -34,7 +35,9 @@ def _module_root(name: str | None) -> str | None:
 
 
 def _imports(path: Path) -> tuple[str, ...]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    with tokenize.open(path) as handle:
+        source = handle.read()
+    tree = ast.parse(source, filename=str(path))
     roots: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
