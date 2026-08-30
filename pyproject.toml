@@ -108,6 +108,7 @@ exclude = ["tests*", "docs*", "scripts*", "build*", "dist*"]
 [tool.pytest.ini_options]
 addopts = "-p no:ddtrace"
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["cgtlib", "processual_kernel", "processual_api"]
