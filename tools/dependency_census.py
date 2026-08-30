@@ -2,7 +2,7 @@
 """Deterministic dependency census for Maestro's current Python package boundaries.
 
 This tool is intentionally stdlib-only and read-only. It inventories Python files,
-byte sizes, import roots, and internal package edges without importing project code.
+byte sizes, import roots/modules, and internal package edges without importing project code.
 """
 
 from __future__ import annotations
@@ -25,31 +25,37 @@ class FileRecord:
     package: str
     bytes: int
     imports: tuple[str, ...]
+    import_modules: tuple[str, ...]
     internal_edges: tuple[str, ...]
 
 
 def _module_root(name: str | None) -> str | None:
     if not name:
         return None
-    return name.split(".", 1)[0]
+    return name.lstrip(".").split(".", 1)[0] or None
 
 
-def _imports(path: Path) -> tuple[str, ...]:
+def _imports(path: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
     with tokenize.open(path) as handle:
         source = handle.read()
     tree = ast.parse(source, filename=str(path))
     roots: set[str] = set()
+    modules: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
+                modules.add(alias.name)
                 root = _module_root(alias.name)
                 if root:
                     roots.add(root)
         elif isinstance(node, ast.ImportFrom):
+            module = f"{'.' * node.level}{node.module or ''}"
+            if module:
+                modules.add(module)
             root = _module_root(node.module)
             if root:
                 roots.add(root)
-    return tuple(sorted(roots))
+    return tuple(sorted(roots)), tuple(sorted(modules))
 
 
 def _iter_python_files(repo_root: Path) -> Iterable[tuple[str, Path]]:
@@ -67,21 +73,23 @@ def census(repo_root: Path) -> dict[str, object]:
     package_bytes: Counter[str] = Counter()
     package_files: Counter[str] = Counter()
     import_roots: Counter[str] = Counter()
+    import_modules: Counter[str] = Counter()
     internal_edges: Counter[tuple[str, str]] = Counter()
 
     for package, path in _iter_python_files(repo_root):
-        roots = _imports(path)
+        roots, modules = _imports(path)
         edges = tuple(sorted(root for root in roots if root in PACKAGE_ROOTS and root != package))
         relative = path.relative_to(repo_root).as_posix()
         size = path.stat().st_size
-        records.append(FileRecord(relative, package, size, roots, edges))
+        records.append(FileRecord(relative, package, size, roots, modules, edges))
         package_bytes[package] += size
         package_files[package] += 1
         import_roots.update(roots)
+        import_modules.update(modules)
         internal_edges.update((package, target) for target in edges)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "packages": {
             package: {
                 "python_files": package_files[package],
@@ -101,12 +109,17 @@ def census(repo_root: Path) -> dict[str, object]:
             {"root": root, "files": count}
             for root, count in sorted(import_roots.items())
         ],
+        "import_modules": [
+            {"module": module, "files": count}
+            for module, count in sorted(import_modules.items())
+        ],
         "files": [
             {
                 "path": record.path,
                 "package": record.package,
                 "bytes": record.bytes,
                 "imports": list(record.imports),
+                "import_modules": list(record.import_modules),
                 "internal_edges": list(record.internal_edges),
             }
             for record in records
