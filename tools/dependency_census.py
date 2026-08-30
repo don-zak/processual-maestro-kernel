@@ -11,9 +11,9 @@ import argparse
 import ast
 import json
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 PACKAGE_ROOTS = ("processual_kernel", "cgtlib", "processual_api")
 
