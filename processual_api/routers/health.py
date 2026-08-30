@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from cgtlib import _HAS_PRIVATE as _CGT_PRIVATE
+from cgtlib._backend import HAS_PRIVATE_COMPUTE as _CGT_PRIVATE
 
 from ..readiness import check_adapter_config_integrity
 from ..settings import settings
