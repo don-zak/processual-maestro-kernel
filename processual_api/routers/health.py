@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter
 
 from cgtlib import _HAS_PRIVATE as _CGT_PRIVATE
 
+from ..readiness import check_adapter_config_integrity
 from ..settings import settings
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -44,8 +47,18 @@ async def health_ready():
             redis_ok = False
     deps["redis"] = redis_ok
 
+    adapter_config_path = Path(__file__).resolve().parent.parent / "data" / "adapter_config.json"
+    adapter_config = check_adapter_config_integrity(adapter_config_path)
+    deps["adapter_config"] = adapter_config.ok
+
     all_ok = all(deps.values())
     return {
         "status": "ready" if all_ok else "degraded",
         "dependencies": deps,
+        "readiness": {
+            "adapter_config": {
+                "status": adapter_config.status,
+                "detail": adapter_config.detail,
+            }
+        },
     }

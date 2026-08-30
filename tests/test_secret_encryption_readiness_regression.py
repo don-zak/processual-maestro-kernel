@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from processual_api.routers import cgt_governor
 from processual_api.routers import settings as settings_router
 from processual_kernel.security import crypto
@@ -96,31 +98,22 @@ def test_adapter_config_api_key_is_encrypted_when_crypto_key_available(monkeypat
     assert envelope["ciphertext_sha3_256"]
 
 
-def test_adapter_config_does_not_fallback_to_plaintext_when_crypto_is_unavailable(monkeypatch, tmp_path):
+def test_adapter_config_fails_closed_when_crypto_is_unavailable(monkeypatch, tmp_path):
     raw_secret = "sk-prod-adapter-secret-without-crypto"
 
     monkeypatch.setattr(cgt_governor, "_ADAPTER_DATA_DIR", tmp_path)
     monkeypatch.setattr(cgt_governor, "_ADAPTER_CRYPTO_KEY", "")
     monkeypatch.setattr(cgt_governor, "_adapter_crypto_available", False)
 
-    cgt_governor._save_adapter_config(
-        provider="openai",
-        api_key=raw_secret,
-        model="gpt-4o-mini",
-        base_url="",
-    )
+    with pytest.raises(RuntimeError, match="Adapter credential encryption is unavailable"):
+        cgt_governor._save_adapter_config(
+            provider="openai",
+            api_key=raw_secret,
+            model="gpt-4o-mini",
+            base_url="",
+        )
 
-    config_path = tmp_path / "adapter_config.json"
-    raw_text = config_path.read_text("utf-8")
-
-    assert raw_secret not in raw_text
-
-    stored = json.loads(raw_text)
-    assert stored == {
-        "provider": "openai",
-        "model": "gpt-4o-mini",
-        "base_url": "",
-    }
+    assert not (tmp_path / "adapter_config.json").exists()
 
 
 def test_report_generation_keeps_encrypted_provider_key_decryption_path():

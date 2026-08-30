@@ -1,0 +1,190 @@
+name: Pre-External Operational Readiness
+
+on:
+  pull_request:
+    paths:
+      - processual_api/**
+      - processual_kernel/**
+      - cgtlib/**
+      - alembic/**
+      - alembic.ini
+      - tests/test_adapter_config_persistence_fail_closed.py
+      - tests/test_readiness_adapter_config.py
+      - .github/workflows/preexternal-readiness.yml
+  push:
+    branches:
+      - main
+    paths:
+      - processual_api/**
+      - processual_kernel/**
+      - cgtlib/**
+      - alembic/**
+      - alembic.ini
+      - .github/workflows/preexternal-readiness.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preexternal-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maestro
+          POSTGRES_PASSWORD: preexternal-db-password
+          POSTGRES_DB: maestro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U maestro -d maestro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      ENVIRONMENT: development
+      PYTHONPATH: .
+      DATABASE_URL: postgresql+asyncpg://maestro:preexternal-db-password@127.0.0.1:5432/maestro
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: preexternal-readiness-jwt-secret-2026
+      API_KEYS: preexternal-readiness-api-key-2026
+      PROCESSUAL_CRYPTO_KEY_B64: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      POSTGRES_PASSWORD: preexternal-db-password
+      REDIS_PASSWORD: preexternal-redis-password
+      GRAFANA_ADMIN_PASSWORD: preexternal-grafana-password
+      RATE_LIMIT_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install readiness dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,security,database,cache,observability]'
+
+      - name: Create evidence directory
+        run: mkdir -p preexternal-results
+
+      - name: Verify migration graph has one head
+        run: |
+          python -m alembic heads | tee preexternal-results/alembic-heads.txt
+          python - <<'PY'
+          from pathlib import Path
+          lines = [line.strip() for line in Path('preexternal-results/alembic-heads.txt').read_text().splitlines() if line.strip()]
+          heads = [line for line in lines if '(head)' in line]
+          if len(heads) != 1:
+              raise SystemExit(f'expected exactly one Alembic head, found {len(heads)}: {heads}')
+          PY
+
+      - name: Bootstrap a clean database to head
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current | tee preexternal-results/alembic-current.txt
+
+      - name: Detect model-to-migration drift
+        run: python -m alembic check | tee preexternal-results/alembic-check.txt
+
+      - name: Run focused security and readiness regression tests
+        run: |
+          python -m pytest -q \
+            tests/test_adapter_config_persistence_fail_closed.py \
+            tests/test_readiness_adapter_config.py
+
+      - name: Start Maestro pre-external candidate
+        run: |
+          python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 1 > preexternal-results/server.log 2>&1 &
+          echo $! > preexternal-results/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/live > preexternal-results/health-live.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat preexternal-results/server.log
+          exit 1
+
+      - name: Verify internal runtime dependencies
+        run: |
+          curl --fail --silent http://127.0.0.1:8000/health/ready > preexternal-results/health-ready.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          live = json.loads(Path('preexternal-results/health-live.json').read_text())
+          ready = json.loads(Path('preexternal-results/health-ready.json').read_text())
+          if live.get('status') != 'alive':
+              raise SystemExit(f'liveness failed: {live}')
+          deps = ready.get('dependencies', {})
+          required = ('processual_kernel', 'cryptography', 'database', 'redis', 'adapter_config')
+          failed = [name for name in required if deps.get(name) is not True]
+          if failed:
+              raise SystemExit(f'internal readiness dependencies failed: {failed}; payload={ready}')
+          PY
+
+      - name: Write SHA-bound readiness evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          root = Path('preexternal-results')
+          def text(name):
+              path = root / name
+              return path.read_text(encoding='utf-8', errors='replace').strip() if path.exists() else None
+          def json_file(name):
+              raw = text(name)
+              if not raw:
+                  return None
+              try:
+                  return json.loads(raw)
+              except json.JSONDecodeError:
+                  return {'raw': raw}
+
+          evidence = {
+              'schema_version': 1,
+              'sha': os.environ.get('GITHUB_SHA', ''),
+              'generated_at': datetime.now(UTC).isoformat(),
+              'scope': 'pre-external-operational-readiness',
+              'migration_heads': text('alembic-heads.txt'),
+              'migration_current': text('alembic-current.txt'),
+              'migration_check': text('alembic-check.txt'),
+              'health_live': json_file('health-live.json'),
+              'health_ready': json_file('health-ready.json'),
+          }
+          (root / 'readiness-evidence.json').write_text(json.dumps(evidence, indent=2, sort_keys=True), encoding='utf-8')
+          PY
+
+      - name: Upload pre-external readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preexternal-readiness-evidence
+          path: preexternal-results/
+
+      - name: Stop candidate
+        if: always()
+        run: |
+          if [ -f preexternal-results/server.pid ]; then
+            kill "$(cat preexternal-results/server.pid)" 2>/dev/null || true
+          fi
