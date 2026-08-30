@@ -31,6 +31,8 @@ Observed cross-package edges:
 
 No `processual_kernel -> processual_api` or `cgtlib -> processual_api` reverse edge was observed.
 
+The census schema also records full imported module paths, including relative imports, so contract-consumer analysis can be reproduced from CI artifacts rather than code-search indexing.
+
 ## Exact cross-package edge files
 
 ### `processual_kernel -> cgtlib`
@@ -60,6 +62,38 @@ These two files are integration/governance seams, not contract extraction candid
 
 The direction of these edges is consistent with an inward dependency model: transport/adapters depend on kernel/governance, not the reverse.
 
+## Contract-consumer evidence
+
+`processual_kernel/types.py` is a strong contract surface, but it is not isolated enough to move wholesale without a compatibility layer.
+
+Observed consumers include:
+
+- 14 adaptive files importing `..types`;
+- direct kernel consumers including `processual_kernel/adaptive_types.py`, `processual_kernel/adaptive_toolkit.py`, `processual_kernel/cgt_bridge.py`, `processual_kernel/continuity.py`, `processual_kernel/governor.py`, and `processual_kernel/kernel.py`;
+- notification/runtime consumers such as `processual_kernel/notifications/discord.py`;
+- an external-package direct consumer: `processual_api/adapters/kernel_adapter.py` importing `processual_kernel.types`.
+
+The 14 adaptive consumers are:
+
+- `processual_kernel/adaptive/calibrator.py`
+- `processual_kernel/adaptive/checkpoints.py`
+- `processual_kernel/adaptive/contracts.py`
+- `processual_kernel/adaptive/handoff_advisor.py`
+- `processual_kernel/adaptive/history.py`
+- `processual_kernel/adaptive/metrics.py`
+- `processual_kernel/adaptive/policy_critic.py`
+- `processual_kernel/adaptive/policy_profiles.py`
+- `processual_kernel/adaptive/policy_selector.py`
+- `processual_kernel/adaptive/replay_lab.py`
+- `processual_kernel/adaptive/runtime_adapter.py`
+- `processual_kernel/adaptive/safety.py`
+- `processual_kernel/adaptive/strategy_bandit.py`
+- `processual_kernel/adaptive/task_profiler.py`
+
+This breadth means the first physical contract change should use compatibility re-exports and should not be a destructive move of the whole file.
+
+`cgtlib/types.py` also has broad governance usage: seven modules import it via `cgtlib.types` and many package-local modules use `.types`. It should remain in the governance boundary until the compatibility pattern is proven on the kernel contract surface.
+
 ## Evidence-backed classification
 
 ### Contracts
@@ -78,6 +112,8 @@ Strong first-class contract candidates:
   - owns the CGT exception contract.
 - `cgtlib/constants.py`
   - no imports; treat as governance contract/configuration surface pending semantic review.
+
+CI now locks the first three candidate surfaces to stdlib-only imports, preventing accidental FastAPI/SQLAlchemy/Redis/provider coupling while they remain candidates for later extraction.
 
 Contracts-adjacent, but **not** first extraction candidates:
 
@@ -137,18 +173,18 @@ This is a classification map, not yet a physical package plan. Feature packages 
 
 ## First safe extraction candidate
 
-The first physical extraction candidate is the semantic surface currently in `processual_kernel/types.py`, but **no move is approved in this PR stage**.
+The first physical extraction target remains the semantic surface currently in `processual_kernel/types.py`, but the census shows that a wholesale destructive move would touch too many consumers at once.
 
-Before extraction, the next gate is:
+The safer extraction pattern is therefore:
 
-1. enumerate every importer of `processual_kernel.types` and its exported symbols;
-2. separate stable contracts from stateful/internal records if consumers show different responsibilities;
-3. define compatibility imports so existing public imports remain valid;
-4. add architecture/contract tests before moving any symbol;
-5. run the full Public CI + security gates;
-6. move the smallest coherent contract slice only after the above stays green.
+1. split a smallest stable contract slice behind a new internal contract module/namespace;
+2. preserve `processual_kernel.types` as a compatibility re-export surface initially;
+3. update only a small consumer set in the first extraction PR;
+4. add identity/import compatibility tests so public symbols remain stable;
+5. keep the stdlib-only architecture lock in place;
+6. run full Public CI + Security Scan + Security Hardening + Branch Protection before widening migration.
 
-`cgtlib/types.py` and `cgtlib/errors.py` should remain inside the governance boundary until the kernel contract extraction proves the compatibility pattern safely.
+The first physical extraction should happen in a separate PR after this mapping PR is merged and green. `cgtlib/types.py` and `cgtlib/errors.py` remain inside the governance boundary until the kernel compatibility pattern is proven.
 
 ## Explicit non-goals for this stage
 
