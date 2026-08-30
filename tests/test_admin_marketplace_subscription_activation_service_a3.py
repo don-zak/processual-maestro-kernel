@@ -7,6 +7,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from processual_api.admin_marketplace.commercial_plan_projection import (
+    build_commercial_plan_projections,
+    build_subscription_quota_profiles,
+)
 from processual_api.admin_marketplace.errors import (
     SubscriptionActivationNotReadyError,
 )
@@ -22,6 +26,14 @@ SUBSCRIPTION_ID = uuid.UUID("40000000-0000-0000-0000-000000000001")
 ACTIVATION_ID = uuid.UUID("50000000-0000-0000-0000-000000000001")
 EVENT_ID = uuid.UUID("60000000-0000-0000-0000-000000000001")
 EVIDENCE_ID = uuid.UUID("70000000-0000-0000-0000-000000000001")
+STARTER_PLAN = next(
+    item for item in build_commercial_plan_projections() if item.plan_code == "starter"
+)
+STARTER_QUOTA = next(
+    item
+    for item in build_subscription_quota_profiles()
+    if item.profile_ref == STARTER_PLAN.quota_profile_ref
+)
 
 
 class SingleRepository:
@@ -84,6 +96,35 @@ class Activations(SingleRepository):
         )
 
 
+class SubscriptionRuntime(SingleRepository):
+    async def get_by_subscription_id(self, subscription_id, *, for_update=False):
+        return next(
+            (item for item in self.items if item.subscription_id == subscription_id),
+            None,
+        )
+
+
+class SubscriptionQuotas(SingleRepository):
+    async def get_current(
+        self,
+        *,
+        subscription_id,
+        metric_code,
+        occurred_at,
+        for_update=False,
+    ):
+        return next(
+            (
+                item
+                for item in self.items
+                if item.subscription_id == subscription_id
+                and item.metric_code == metric_code
+                and item.period_start <= occurred_at < item.period_end
+            ),
+            None,
+        )
+
+
 class Audit:
     def __init__(self) -> None:
         self.items = []
@@ -124,6 +165,8 @@ class Unit:
         self.entitlement_activations = Activations()
         self.offers = SingleRepository(offer())
         self.plans = SingleRepository(plan())
+        self.subscription_runtime = SubscriptionRuntime()
+        self.subscription_quotas = SubscriptionQuotas()
         self.commercial_audit = Audit()
         self.notification_outbox = NotificationOutbox()
         self.commit_calls = 0
@@ -219,9 +262,9 @@ def offer(**changes):
 def plan():
     return SimpleNamespace(
         id=PLAN_ID,
-        plan_code="starter",
-        entitlement_profile_ref="starter_entitlements_v1",
-        quota_profile_ref="starter_quotas_v1",
+        plan_code=STARTER_PLAN.plan_code,
+        entitlement_profile_ref=STARTER_PLAN.entitlement_profile_ref,
+        quota_profile_ref=STARTER_PLAN.quota_profile_ref,
     )
 
 
@@ -267,17 +310,19 @@ async def test_activation_creates_subscription_entitlement_and_audit_atomically(
     assert result.status == "activated"
     assert result.subscription_status == "active"
     assert result.order_status == "activated"
-    assert result.entitlement_profile_ref == "starter_entitlements_v1"
+    assert result.entitlement_profile_ref == STARTER_PLAN.entitlement_profile_ref
     assert unit.commit_calls == 1
     assert len(unit.subscriptions.items) == 1
     assert len(unit.entitlement_activations.items) == 1
+    assert len(unit.subscription_runtime.items) == 1
+    assert len(unit.subscription_quotas.items) == len(STARTER_QUOTA.metrics)
     activation = unit.entitlement_activations.items[0]
     assert activation.automatic_activation_allowed is True
     assert activation.order_id == ORDER_ID
     audit = unit.commercial_audit.items[0]
     assert audit.action == "subscription_activation_decided"
     assert audit.platform_authority == "system"
-    assert audit.metadata_json["quota_profile_ref"] == "starter_quotas_v1"
+    assert audit.metadata_json["quota_profile_ref"] == STARTER_PLAN.quota_profile_ref
 
 
 @pytest.mark.asyncio
@@ -291,6 +336,8 @@ async def test_activation_replay_does_not_duplicate_or_commit() -> None:
     assert replay.reason_code == "subscription_already_activated"
     assert unit.commit_calls == 1
     assert len(unit.subscriptions.items) == 1
+    assert len(unit.subscription_runtime.items) == 1
+    assert len(unit.subscription_quotas.items) == len(STARTER_QUOTA.metrics)
     assert len(unit.commercial_audit.items) == 1
 
 
