@@ -6,7 +6,7 @@ import pytest
 from fastapi.routing import APIRoute
 
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
-from processual_api.routers import cgt_governor, settings
+from processual_api.main import app
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     evaluation_endpoint_allowed,
@@ -124,17 +124,17 @@ def test_evaluation_endpoint_authority_fails_closed() -> None:
 
 
 def test_external_evaluation_routes_are_unique() -> None:
-    def count(router, path: str, method: str) -> int:
+    def count(path: str, method: str) -> int:
         return sum(
             1
-            for route in router.routes
+            for route in app.routes
             if isinstance(route, APIRoute)
             and route.path == path
             and method in (route.methods or set())
         )
 
-    assert count(cgt_governor.router, "/evaluation/runtime/task-execute", "POST") == 1
-    assert count(settings.router, "/settings/admin/evaluation-grants/authority", "GET") == 1
-    assert count(settings.router, "/settings/admin/evaluation-grants/access-catalog", "GET") == 1
-    assert count(settings.router, "/settings/admin/evaluation-grants", "POST") == 1
-    assert count(settings.router, "/settings/admin/evaluation-grants", "GET") == 1
+    assert count("/evaluation/runtime/task-execute", "POST") == 1
+    assert count("/settings/admin/evaluation-grants/authority", "GET") == 1
+    assert count("/settings/admin/evaluation-grants/access-catalog", "GET") == 1
+    assert count("/settings/admin/evaluation-grants", "POST") == 1
+    assert count("/settings/admin/evaluation-grants", "GET") == 1
