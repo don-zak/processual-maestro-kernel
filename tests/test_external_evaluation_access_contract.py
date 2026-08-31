@@ -146,41 +146,26 @@ import processual_api.routers
 wanted = __ROUTES__
 
 
-def describe_route(route):
-    data = {
-        "type": f"{type(route).__module__}.{type(route).__name__}",
-        "path": getattr(route, "path", None),
-        "name": getattr(route, "name", None),
-        "keys": sorted(getattr(route, "__dict__", {}).keys()),
-    }
-    for attr in ("routes", "router", "app"):
-        child = getattr(route, attr, None)
-        if child is None:
-            continue
-        data[f"{attr}_type"] = f"{type(child).__module__}.{type(child).__name__}"
-        child_routes = getattr(child, "routes", None)
-        if child_routes is not None:
-            data[f"{attr}_route_count"] = len(child_routes)
-            data[f"{attr}_evaluation_paths"] = sorted(
-                {
-                    getattr(item, "path", "")
-                    for item in child_routes
-                    if "evaluation" in str(getattr(item, "path", ""))
-                }
-            )
-    return data
-
-
-def iter_api_routes(route_collection):
+def iter_api_routes(route_collection, seen=None):
+    if seen is None:
+        seen = set()
+    collection_id = id(route_collection)
+    if collection_id in seen:
+        return
+    seen.add(collection_id)
     for route in route_collection:
         if isinstance(route, APIRoute):
             yield route
             continue
-        for attr in ("routes", "router", "app"):
-            child = getattr(route, attr, None)
-            nested = getattr(child, "routes", None) if child is not None else None
+        original_router = getattr(route, "original_router", None)
+        if original_router is not None:
+            nested = getattr(original_router, "routes", None)
             if nested is not None:
-                yield from iter_api_routes(nested)
+                yield from iter_api_routes(nested, seen)
+            continue
+        nested = getattr(route, "routes", None)
+        if nested is not None:
+            yield from iter_api_routes(nested, seen)
 
 
 resolved_routes = list(iter_api_routes(app.routes))
@@ -196,10 +181,8 @@ for method, path in wanted:
 print(json.dumps({
     "processual_api_file": processual_api.__file__,
     "routers_file": processual_api.routers.__file__,
-    "top_level_route_count": len(app.routes),
     "resolved_api_route_count": len(resolved_routes),
     "counts": counts,
-    "route_shapes": [describe_route(route) for route in app.routes],
 }, sort_keys=True))
 """.replace("__ROUTES__", repr(routes))
     env = dict(os.environ)
@@ -213,7 +196,6 @@ print(json.dumps({
         env=env,
     )
     payload = json.loads(completed.stdout.strip().splitlines()[-1])
-    print("EVALUATION_ROUTE_SHAPE_DIAGNOSTIC=" + json.dumps(payload, sort_keys=True))
     assert Path(payload["processual_api_file"]).resolve().is_relative_to(ROOT)
     assert Path(payload["routers_file"]).resolve().is_relative_to(ROOT)
     assert payload["counts"] == {f"{method} {path}": 1 for method, path in routes}, payload
