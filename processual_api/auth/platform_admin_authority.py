@@ -47,7 +47,10 @@ async def require_active_platform_admin(
     if role != "platform_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="External Evaluation Access administration is restricted to the persisted platform super administrator.",
+            detail=(
+                "External Evaluation Access administration is restricted to "
+                "the persisted platform super administrator."
+            ),
         )
     return current_user
 
