@@ -106,7 +106,7 @@ def test_idempotency_key_payload_mismatch_is_rejected(monkeypatch, tmp_path: Pat
     _claim()
 
     with pytest.raises(
-        delivery.EvaluationIdempotencyConflict,
+        delivery.EvaluationIdempotencyConflictError,
         match="evaluation_idempotency_key_payload_mismatch",
     ):
         _claim(fingerprint=_fingerprint({"customer_id": "different"}))
@@ -116,7 +116,10 @@ def test_inflight_replay_is_blocked(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(delivery, "_DATA_DIR", tmp_path)
     _claim()
 
-    with pytest.raises(delivery.EvaluationReplayBlocked, match="evaluation_replay_blocked_executing"):
+    with pytest.raises(
+        delivery.EvaluationReplayBlockedError,
+        match="evaluation_replay_blocked_executing",
+    ):
         _claim()
 
 
@@ -131,7 +134,10 @@ def test_failed_or_uncertain_execution_cannot_automatically_replay(
         failure_code="SandboxExecutionError",
     )
 
-    with pytest.raises(delivery.EvaluationReplayBlocked, match="evaluation_replay_blocked_failed"):
+    with pytest.raises(
+        delivery.EvaluationReplayBlockedError,
+        match="evaluation_replay_blocked_failed",
+    ):
         _claim()
 
 
@@ -143,7 +149,7 @@ def test_concurrent_duplicate_claim_allows_exactly_one_executor(
     def attempt() -> str:
         try:
             return str(_claim()["status"])
-        except delivery.EvaluationReplayBlocked:
+        except delivery.EvaluationReplayBlockedError:
             return "blocked"
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -170,7 +176,11 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
     monkeypatch.setattr(binding_runtime, "_find_binding", lambda _raw, _binding_id: spec)
     monkeypatch.setattr(binding_runtime, "_find_request_mapping", lambda _raw, _binding_id: None)
     monkeypatch.setattr(sandbox_runtime, "_content_contract", lambda _raw, _binding_id: {"ok": True})
-    monkeypatch.setattr(sandbox_runtime, "_secret_reference", lambda _raw, _binding_id: {"ref": "secret"})
+    monkeypatch.setattr(
+        sandbox_runtime,
+        "_secret_reference",
+        lambda _raw, _binding_id: {"ref": "secret"},
+    )
     monkeypatch.setattr(
         evaluation_runtime,
         "resolve_active_sandbox_execution_grant",
