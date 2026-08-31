@@ -1,5 +1,7 @@
 """API route handlers — all HTTP endpoints organized by domain."""
 
+from importlib import import_module
+
 # Register route extensions on settings_router.
 # Importing for side effects is intentional: main.py already includes settings_router.
 from . import cgt_governor_external_guard as _cgt_governor_external_guard  # noqa: F401,E402
@@ -36,8 +38,11 @@ from .telemetry import router as telemetry_router
 from .workflows import router as workflows_router
 
 # Finalize External Evaluation only after every Settings/CGT extension has loaded.
-# The registry is idempotent and replaces only its exact method/path pairs.
-from . import external_evaluation_route_registry as _external_evaluation_route_registry  # noqa: F401,E402
+# Use import_module here so import sorting cannot move this finalization earlier.
+_external_evaluation_route_registry = import_module(
+    ".external_evaluation_route_registry",
+    __name__,
+)
 
 __all__ = [
     "health_router",
