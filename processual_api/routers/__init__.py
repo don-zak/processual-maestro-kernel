@@ -15,9 +15,9 @@ from . import (  # noqa: F401,E402
 from . import (  # noqa: F401,E402
     settings_enterprise_endpoint_failure_review_runtime as _settings_enterprise_endpoint_failure_review_runtime,
 )
-from . import (
+from . import (  # noqa: F401,E402
     settings_enterprise_integration_runtime as _settings_enterprise_integration_runtime,
-)  # noqa: F401,E402
+)
 from . import (  # noqa: F401,E402
     settings_enterprise_sandbox_operational_runtime as _settings_enterprise_sandbox_operational_runtime,
 )
