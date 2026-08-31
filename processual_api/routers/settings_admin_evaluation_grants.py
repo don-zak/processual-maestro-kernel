@@ -20,6 +20,12 @@ from processual_api.integrations.api_key_access_policy import (
     get_api_key_access_policy,
     list_api_key_access_policies,
 )
+from processual_api.integrations.enterprise_endpoint_bindings import (
+    BINDING_STORAGE_KEY,
+    EndpointBindingError,
+    EnterpriseEndpointBindingSpec,
+    validate_endpoint_binding,
+)
 from processual_api.integrations.integration_task_catalog import (
     get_integration_task,
     task_catalog_payload,
@@ -27,6 +33,7 @@ from processual_api.integrations.integration_task_catalog import (
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     EVALUATION_GRANTS_STORAGE_KEY,
+    EVALUATION_TASK_EXECUTE_ENDPOINT,
     evaluation_grants,
     find_evaluation_grant,
     refresh_evaluation_grant_status,
@@ -58,6 +65,7 @@ class EvaluationGrantCreate(BaseModel):
     issued_to: str = Field(min_length=1, max_length=240)
     purpose: str = Field(min_length=10, max_length=500)
     allowed_task_ids: list[str] = Field(min_length=1, max_length=24)
+    allowed_binding_ids: list[str] = Field(default_factory=list, max_length=32)
     allowed_endpoints: list[EvaluationEndpointSelection] = Field(
         min_length=1,
         max_length=32,
@@ -202,6 +210,75 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
     return selected, task_scopes
 
 
+def _binding_selection(
+    raw: dict[str, Any],
+    binding_ids: list[str],
+    *,
+    task_ids: list[str],
+    endpoints: list[dict[str, str]],
+) -> list[str]:
+    runtime_task_granted = any(
+        (str(item.get("method") or "").upper(), str(item.get("path") or ""))
+        == EVALUATION_TASK_EXECUTE_ENDPOINT
+        for item in endpoints
+    )
+    selected: list[str] = []
+    seen: set[str] = set()
+    for raw_binding_id in binding_ids:
+        binding_id = str(raw_binding_id or "").strip()
+        if not binding_id or binding_id in seen:
+            continue
+        seen.add(binding_id)
+        selected.append(binding_id)
+
+    if not runtime_task_granted:
+        if selected:
+            raise HTTPException(
+                status_code=422,
+                detail="Evaluation binding selection requires the runtime task-execute endpoint.",
+            )
+        return []
+    if not selected:
+        raise HTTPException(
+            status_code=422,
+            detail="Evaluation runtime task execution requires at least one prepared binding.",
+        )
+
+    stored = raw.get(BINDING_STORAGE_KEY, [])
+    stored_items = [dict(item) for item in stored if isinstance(item, dict)] if isinstance(stored, list) else []
+    task_set = {str(task_id).strip().lower() for task_id in task_ids}
+
+    for binding_id in selected:
+        item = next(
+            (
+                candidate
+                for candidate in stored_items
+                if str(candidate.get("binding_id") or "") == binding_id
+            ),
+            None,
+        )
+        if item is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Prepared evaluation binding not found: {binding_id}",
+            )
+        try:
+            spec = EnterpriseEndpointBindingSpec(**item)
+            validate_endpoint_binding(spec)
+        except (ValueError, KeyError, EndpointBindingError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Prepared evaluation binding is invalid: {binding_id}",
+            ) from exc
+        if spec.task_id not in task_set:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Evaluation binding task is outside the grant task envelope: {binding_id}",
+            )
+
+    return selected
+
+
 def _linked_key_count(raw: dict[str, Any], grant_id: str) -> int:
     keys = raw.get("api_keys", [])
     if not isinstance(keys, list):
@@ -315,6 +392,12 @@ async def create_evaluation_grant(
     scopes = _safe_scopes(body.allowed_scopes)
     endpoints = _endpoint_selection(body.allowed_endpoints, scopes)
     task_ids, task_scope_ids = _task_selection(body.allowed_task_ids)
+    binding_ids = _binding_selection(
+        raw,
+        body.allowed_binding_ids,
+        task_ids=task_ids,
+        endpoints=endpoints,
+    )
 
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
@@ -325,6 +408,7 @@ async def create_evaluation_grant(
         "purpose": body.purpose.strip(),
         "allowed_task_ids": task_ids,
         "task_scope_ids": task_scope_ids,
+        "allowed_binding_ids": binding_ids,
         "allowed_endpoints": endpoints,
         "allowed_scopes": scopes,
         "max_requests": int(body.max_requests),
@@ -402,6 +486,7 @@ async def issue_evaluation_key(
     endpoints = list(grant.get("allowed_endpoints") or [])
     task_ids = list(grant.get("allowed_task_ids") or [])
     task_scope_ids = list(grant.get("task_scope_ids") or [])
+    binding_ids = list(grant.get("allowed_binding_ids") or [])
     client_id = str(grant.get("client_id") or "")
     max_requests = int(grant.get("max_requests", 0) or 0)
     try:
@@ -412,6 +497,7 @@ async def issue_evaluation_key(
             requested_scopes=scopes,
             requested_endpoints=endpoints,
             requested_task_ids=task_ids,
+            requested_binding_ids=binding_ids,
             quota_limit=max_requests,
         )
     except ValueError as exc:
@@ -436,6 +522,7 @@ async def issue_evaluation_key(
         "allowed_endpoints": endpoints,
         "allowed_task_ids": task_ids,
         "task_scope_ids": task_scope_ids,
+        "allowed_binding_ids": binding_ids,
         "task_authority_source": "integration_task_catalog",
         "endpoint_authority_source": "canonical_runtime_access_policy",
         "profile": "client",
@@ -484,6 +571,7 @@ async def issue_evaluation_key(
             "allowed_endpoints": endpoints,
             "allowed_task_ids": task_ids,
             "task_scope_ids": task_scope_ids,
+            "allowed_binding_ids": binding_ids,
             "execution_mode": EVALUATION_EXECUTION_MODE,
             "real_runtime_execution": True,
             "evaluation_request_limit": max_requests,
