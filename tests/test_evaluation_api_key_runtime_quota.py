@@ -19,6 +19,7 @@ GRANT_ID = "grant-runtime-quota"
 FUTURE = "2099-01-01T00:00:00+00:00"
 SCOPES = ["read:health", "run:analyze"]
 TASKS = ["analyze"]
+ENDPOINTS = [{"method": "GET", "path": "/health/live"}]
 
 
 def _pbkdf2_hash(api_key: str, *, iterations: int = 1_000) -> str:
@@ -48,8 +49,12 @@ def _governed_payload(
         "client_id": CLIENT_ID,
         "allowed_scopes": SCOPES,
         "allowed_task_ids": TASKS,
+        "allowed_endpoints": ENDPOINTS,
         "max_requests": grant_limit,
         "expires_at": FUTURE,
+        "execution_mode": "evaluation_runtime",
+        "real_runtime_execution": True,
+        "production_allowed": False,
     }
     key = {
         "id": "key-runtime-quota",
@@ -61,6 +66,7 @@ def _governed_payload(
         "client_id": CLIENT_ID,
         "scopes": SCOPES,
         "allowed_task_ids": TASKS,
+        "allowed_endpoints": ENDPOINTS,
         "quota_limit": key_limit,
         "usage_count": usage_count,
         "evaluation_grant_id": GRANT_ID,
@@ -120,6 +126,8 @@ def test_governed_evaluation_key_rejects_request_after_effective_cap(
         identity = api_key_store.verify_dynamic_api_key(API_KEY)
         assert identity is not None
         assert identity["evaluation_grant_id"] == GRANT_ID
+        assert identity["allowed_endpoints"] == ENDPOINTS
+        assert identity["execution_mode"] == "evaluation_runtime"
 
     assert api_key_store.verify_dynamic_api_key(API_KEY) is None
 
