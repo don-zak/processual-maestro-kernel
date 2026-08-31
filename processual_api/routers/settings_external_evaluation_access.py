@@ -1,10 +1,4 @@
-"""Authoritative External Evaluation Access administration.
-
-This replaces the legacy evaluation-grant registrations with the original
-standalone contract: platform-super-admin issuance, no signup/subscription or
-commercial-plan quota dependency, explicit endpoint/task authority, one-time
-credential disclosure, expiry/revocation, and production-disabled runtime use.
-"""
+"""Authoritative standalone External Evaluation Access administration."""
 
 from __future__ import annotations
 
@@ -42,7 +36,6 @@ from processual_api.services.evaluation_grants import (
 )
 
 from . import settings as settings_module
-from . import settings_admin_evaluation_grants as legacy_evaluation
 
 PILOT_DEFAULT_SCOPES = [
     "read:health",
@@ -52,6 +45,26 @@ PILOT_DEFAULT_SCOPES = [
     "run:govern",
     "read:reports",
     "run:evaluation",
+]
+
+_LEGACY_ROUTES = {
+    ("/settings/admin/evaluation-grants/task-catalog", "GET"),
+    ("/settings/admin/evaluation-grants", "POST"),
+    ("/settings/admin/evaluation-grants", "GET"),
+    ("/settings/admin/evaluation-grants/{grant_id}/issue-key", "POST"),
+    ("/settings/admin/evaluation-grants/{grant_id}", "DELETE"),
+}
+
+
+def _matches(route: Any, path: str, method: str) -> bool:
+    methods = getattr(route, "methods", set()) or set()
+    return isinstance(route, APIRoute) and route.path == path and method in methods
+
+
+settings_module.router.routes[:] = [
+    route
+    for route in settings_module.router.routes
+    if not any(_matches(route, path, method) for path, method in _LEGACY_ROUTES)
 ]
 
 
@@ -66,7 +79,10 @@ class EvaluationGrantCreate(BaseModel):
     issued_to: str = Field(min_length=1, max_length=240)
     purpose: str = Field(min_length=10, max_length=500)
     allowed_task_ids: list[str] = Field(min_length=1, max_length=24)
-    allowed_endpoints: list[EvaluationEndpointSelection] = Field(min_length=1, max_length=32)
+    allowed_endpoints: list[EvaluationEndpointSelection] = Field(
+        min_length=1,
+        max_length=32,
+    )
     allowed_scopes: list[str] = Field(
         default_factory=lambda: list(PILOT_DEFAULT_SCOPES),
         min_length=1,
@@ -118,7 +134,11 @@ def _safe_scopes(values: list[str]) -> list[str]:
         scope = str(value or "").strip().lower()
         if not scope or scope in seen:
             continue
-        if scope.startswith("admin:") or scope in {"*", "admin:*", "admin:dangerous"}:
+        if scope.startswith("admin:") or scope in {
+            "*",
+            "admin:*",
+            "admin:dangerous",
+        }:
             raise HTTPException(
                 status_code=422,
                 detail="Evaluation grants cannot include administrative scopes.",
@@ -126,7 +146,10 @@ def _safe_scopes(values: list[str]) -> list[str]:
         seen.add(scope)
         scopes.append(scope)
     if not scopes:
-        raise HTTPException(status_code=422, detail="At least one evaluation scope is required.")
+        raise HTTPException(
+            status_code=422,
+            detail="At least one evaluation scope is required.",
+        )
     return scopes
 
 
@@ -137,6 +160,7 @@ def _endpoint_selection(
     selected: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     scope_set = {str(scope).strip().lower() for scope in allowed_scopes}
+
     for value in values:
         method = value.method.strip().upper()
         path = value.path.strip()
@@ -147,21 +171,27 @@ def _endpoint_selection(
         if policy is None:
             raise HTTPException(
                 status_code=422,
-                detail=f"Endpoint is not eligible for evaluation access: {method} {path}",
+                detail=(
+                    "Endpoint is not eligible for evaluation access: "
+                    f"{method} {path}"
+                ),
             )
         if policy.production_allowed:
             raise HTTPException(
                 status_code=422,
-                detail=f"Production endpoint cannot enter evaluation access: {method} {path}",
+                detail=(
+                    "Production endpoint cannot enter evaluation access: "
+                    f"{method} {path}"
+                ),
             )
-        required_scopes = set(policy.required_scopes)
-        if not required_scopes.issubset(scope_set):
+        if not set(policy.required_scopes).issubset(scope_set):
             raise HTTPException(
                 status_code=422,
                 detail=f"Endpoint scope derivation mismatch: {method} {path}",
             )
         seen.add(key)
         selected.append({"method": method, "path": path})
+
     if not selected:
         raise HTTPException(
             status_code=422,
@@ -175,6 +205,7 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
     task_scopes: list[str] = []
     seen_tasks: set[str] = set()
     seen_scopes: set[str] = set()
+
     for raw_task_id in task_ids:
         task_id = str(raw_task_id or "").strip().lower()
         if not task_id or task_id in seen_tasks:
@@ -182,7 +213,10 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
         try:
             task = get_integration_task(task_id)
         except KeyError as exc:
-            raise HTTPException(status_code=422, detail=f"Unknown evaluation task: {task_id}") from exc
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown evaluation task: {task_id}",
+            ) from exc
         if not task.sandbox_allowed or task.auto_execute_production:
             raise HTTPException(
                 status_code=422,
@@ -194,6 +228,7 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
             if scope_id not in seen_scopes:
                 seen_scopes.add(scope_id)
                 task_scopes.append(scope_id)
+
     if not selected:
         raise HTTPException(
             status_code=422,
@@ -240,7 +275,10 @@ async def _require_platform_admin(
     await require_active_platform_admin(current_user, request)
 
 
-@settings_module.router.get("/admin/evaluation-grants/authority", response_model=dict)
+@settings_module.router.get(
+    "/admin/evaluation-grants/authority",
+    response_model=dict,
+)
 async def evaluation_grant_authority(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -251,11 +289,15 @@ async def evaluation_grant_authority(
         "authority": "platform_admin",
         "exclusive_super_administrator": True,
         "subscription_required": False,
+        "registration_required": False,
         "commercial_quota_required": False,
     }
 
 
-@settings_module.router.get("/admin/evaluation-grants/access-catalog", response_model=dict)
+@settings_module.router.get(
+    "/admin/evaluation-grants/access-catalog",
+    response_model=dict,
+)
 async def evaluation_access_catalog(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -275,7 +317,10 @@ async def evaluation_access_catalog(
     }
 
 
-@settings_module.router.get("/admin/evaluation-grants/task-catalog", response_model=dict)
+@settings_module.router.get(
+    "/admin/evaluation-grants/task-catalog",
+    response_model=dict,
+)
 async def evaluation_task_catalog(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -289,7 +334,11 @@ async def evaluation_task_catalog(
     }
 
 
-@settings_module.router.post("/admin/evaluation-grants", response_model=dict, status_code=201)
+@settings_module.router.post(
+    "/admin/evaluation-grants",
+    response_model=dict,
+    status_code=201,
+)
 async def create_evaluation_grant(
     body: EvaluationGrantCreate,
     request: Request,
@@ -304,6 +353,7 @@ async def create_evaluation_grant(
     scopes = _safe_scopes(body.allowed_scopes)
     endpoints = _endpoint_selection(body.allowed_endpoints, scopes)
     task_ids, task_scope_ids = _task_selection(body.allowed_task_ids)
+
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
         "status": "active",
@@ -384,7 +434,10 @@ async def issue_evaluation_key(
     raw = settings_module._load_raw(owner_user_id)
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:
-        raise HTTPException(status_code=404, detail="Evaluation grant not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Evaluation grant not found.",
+        )
 
     scopes = list(grant.get("allowed_scopes") or [])
     endpoints = list(grant.get("allowed_endpoints") or [])
@@ -483,12 +536,17 @@ async def issue_evaluation_key(
         },
         "onboarding_usage": {
             "header": "X-API-Key",
-            "example_endpoint": endpoints[0]["path"] if endpoints else "/health/live",
+            "example_endpoint": (
+                endpoints[0]["path"] if endpoints else "/health/live"
+            ),
         },
     }
 
 
-@settings_module.router.delete("/admin/evaluation-grants/{grant_id}", response_model=dict)
+@settings_module.router.delete(
+    "/admin/evaluation-grants/{grant_id}",
+    response_model=dict,
+)
 async def revoke_evaluation_grant(
     grant_id: str,
     request: Request,
@@ -499,25 +557,32 @@ async def revoke_evaluation_grant(
     raw = settings_module._load_raw(owner_user_id)
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:
-        raise HTTPException(status_code=404, detail="Evaluation grant not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Evaluation grant not found.",
+        )
+
     now = datetime.now(UTC).isoformat()
     grant["status"] = "revoked"
     grant["revoked_at"] = now
-    revoked_keys = 0
     keys = raw.get("api_keys", [])
     if not isinstance(keys, list):
         keys = []
+    revoked_keys = 0
     for key in keys:
         if not isinstance(key, dict):
             continue
         if str(key.get("evaluation_grant_id") or "") != grant_id:
             continue
-        if key.get("status") in {"revoked", "disabled", "expired"} or key.get("revoked_at"):
+        if key.get("status") in {"revoked", "disabled", "expired"}:
+            continue
+        if key.get("revoked_at"):
             continue
         key["status"] = "revoked"
         key["revoked_at"] = now
         key["revocation_reason"] = "evaluation_grant_revoked"
         revoked_keys += 1
+
     raw[EVALUATION_GRANTS_STORAGE_KEY] = evaluation_grants(raw)
     raw["api_keys"] = keys
     settings_module._save_raw(owner_user_id, raw)
@@ -527,43 +592,6 @@ async def revoke_evaluation_grant(
         "revoked_at": now,
         "revoked_key_count": revoked_keys,
     }
-
-
-def _matches(route: Any, path: str, method: str) -> bool:
-    methods = getattr(route, "methods", set()) or set()
-    return isinstance(route, APIRoute) and route.path == path and method in methods
-
-
-_REPLACED = {
-    ("/settings/admin/evaluation-grants/task-catalog", "GET"),
-    ("/settings/admin/evaluation-grants", "POST"),
-    ("/settings/admin/evaluation-grants", "GET"),
-    ("/settings/admin/evaluation-grants/{grant_id}/issue-key", "POST"),
-    ("/settings/admin/evaluation-grants/{grant_id}", "DELETE"),
-}
-
-_original_new_routes = [
-    route
-    for route in settings_module.router.routes
-    if isinstance(route, APIRoute)
-    and (
-        route.endpoint in {
-            evaluation_grant_authority,
-            evaluation_access_catalog,
-            evaluation_task_catalog,
-            create_evaluation_grant,
-            list_evaluation_grants,
-            issue_evaluation_key,
-            revoke_evaluation_grant,
-        }
-    )
-]
-settings_module.router.routes[:] = [
-    route
-    for route in settings_module.router.routes
-    if not any(_matches(route, path, method) for path, method in _REPLACED)
-]
-settings_module.router.routes.extend(_original_new_routes)
 
 
 __all__ = [
