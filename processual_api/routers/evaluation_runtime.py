@@ -38,6 +38,7 @@ from processual_api.services.evaluation_grants import (
     evaluation_binding_allowed,
     evaluation_task_allowed,
     find_evaluation_grant,
+    refresh_evaluation_grant_status,
 )
 from processual_api.services.evaluation_runtime_delivery import (
     EvaluationDeliveryError,
@@ -145,8 +146,11 @@ def _require_evaluation_credential(
             detail="Governed Evaluation Runtime credential required.",
         )
     grant = find_evaluation_grant(raw, str(current_user.get("evaluation_grant_id") or ""))
+    if grant is not None:
+        refresh_evaluation_grant_status(grant)
     if (
         grant is None
+        or grant.get("status") != "active"
         or grant.get("execution_mode") != EVALUATION_EXECUTION_MODE
         or grant.get("real_runtime_execution") is not True
         or grant.get("production_allowed") is not False
