@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from processual_api.routers import evaluation_runtime
+from processual_api.routers import settings as settings_router
+from processual_api.routers import settings_enterprise_endpoint_bindings_runtime as binding_runtime
+from processual_api.routers import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
 from processual_api.services import evaluation_runtime_delivery as delivery
+from processual_api.services.evaluation_grants import (
+    EVALUATION_EXECUTION_MODE,
+    EVALUATION_GRANTS_STORAGE_KEY,
+)
 
 
 def _fingerprint(task_input: dict | None = None) -> str:
@@ -28,6 +38,44 @@ def _claim(*, idempotency_key: str = "request-0001", fingerprint: str | None = N
         task_id="crm.customer_context",
         binding_id="binding-a",
     )
+
+
+def _runtime_identity() -> dict:
+    return {
+        "sub": "owner-a",
+        "user_id": "owner-a",
+        "client_id": "client-a",
+        "auth_method": "api_key",
+        "api_key_id": "key-a",
+        "entitlement_source": "admin_evaluation_grant",
+        "evaluation_grant_id": "grant-a",
+        "subscription_required": False,
+        "allowed_task_ids": ["crm.customer_context"],
+        "allowed_binding_ids": ["binding-a"],
+        "scopes": ["run:evaluation"],
+    }
+
+
+def _runtime_raw() -> dict:
+    return {
+        EVALUATION_GRANTS_STORAGE_KEY: [
+            {
+                "grant_id": "grant-a",
+                "status": "active",
+                "client_id": "client-a",
+                "allowed_scopes": ["run:evaluation"],
+                "allowed_endpoints": [
+                    {"method": "POST", "path": "/evaluation/runtime/task-execute"},
+                ],
+                "allowed_task_ids": ["crm.customer_context"],
+                "allowed_binding_ids": ["binding-a"],
+                "max_requests": 20,
+                "execution_mode": EVALUATION_EXECUTION_MODE,
+                "real_runtime_execution": True,
+                "production_allowed": False,
+            }
+        ]
+    }
 
 
 def test_completed_execution_replays_without_raw_input(monkeypatch, tmp_path: Path) -> None:
@@ -108,3 +156,55 @@ def test_fingerprint_is_canonical_for_equivalent_mapping_order() -> None:
     first = _fingerprint({"a": 1, "nested": {"x": 2, "y": 3}})
     second = _fingerprint({"nested": {"y": 3, "x": 2}, "a": 1})
     assert first == second
+
+
+def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -> None:
+    raw = _runtime_raw()
+    spec = SimpleNamespace(
+        binding_id="binding-a",
+        task_id="crm.customer_context",
+        method="GET",
+        adapter_contract_id="adapter-a",
+    )
+    monkeypatch.setattr(settings_router, "_load_raw", lambda _owner_id: raw)
+    monkeypatch.setattr(binding_runtime, "_find_binding", lambda _raw, _binding_id: spec)
+    monkeypatch.setattr(binding_runtime, "_find_request_mapping", lambda _raw, _binding_id: None)
+    monkeypatch.setattr(sandbox_runtime, "_content_contract", lambda _raw, _binding_id: {"ok": True})
+    monkeypatch.setattr(sandbox_runtime, "_secret_reference", lambda _raw, _binding_id: {"ref": "secret"})
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "resolve_active_sandbox_execution_grant",
+        lambda _raw, *, binding_id, task_id: {
+            "grant_id": "sandbox-grant-a",
+            "approved_operation_classes": ["read"],
+        },
+    )
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "claim_evaluation_execution",
+        lambda **_kwargs: {
+            "status": "replay",
+            "record": {"record_id": "record-a"},
+            "response": {"execution_id": "exec-1", "evaluation_runtime": True},
+        },
+    )
+
+    async def forbidden_execute(*_args, **_kwargs):
+        raise AssertionError("network execution must not run for a completed replay")
+
+    monkeypatch.setattr(evaluation_runtime, "execute_sandbox_binding", forbidden_execute)
+
+    result = asyncio.run(
+        evaluation_runtime.execute_evaluation_runtime_task(
+            body=evaluation_runtime.EvaluationRuntimeTaskExecuteRequest(
+                task_id="crm.customer_context",
+                binding_id="binding-a",
+                idempotency_key="request-replay-001",
+                task_input={"customer_id": "123"},
+            ),
+            current_user=_runtime_identity(),
+        )
+    )
+
+    assert result["execution_id"] == "exec-1"
+    assert result["idempotent_replay"] is True
