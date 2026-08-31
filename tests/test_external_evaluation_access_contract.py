@@ -205,6 +205,7 @@ print(json.dumps({
         env=env,
     )
     payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    print("EVALUATION_ROUTE_DIAGNOSTIC=" + json.dumps(payload, sort_keys=True))
     assert Path(payload["processual_api_file"]).resolve().is_relative_to(ROOT)
     assert Path(payload["routers_file"]).resolve().is_relative_to(ROOT)
     assert payload["app"] == {f"{method} {path}": 1 for method, path in routes}, payload
