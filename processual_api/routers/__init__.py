@@ -24,6 +24,9 @@ from . import (  # noqa: F401,E402
     settings_enterprise_sandbox_operational_runtime as _settings_enterprise_sandbox_operational_runtime,
 )
 from . import settings_external_evaluation_access as _settings_external_evaluation_access  # noqa: F401,E402
+from . import (  # noqa: F401,E402
+    settings_external_evaluation_route_cleanup as _settings_external_evaluation_route_cleanup,
+)
 from . import settings_provider_test_runtime as _settings_provider_test_runtime  # noqa: F401,E402
 from . import settings_subscription_runtime as _settings_subscription_runtime  # noqa: F401,E402
 from .applications import router as applications_router
