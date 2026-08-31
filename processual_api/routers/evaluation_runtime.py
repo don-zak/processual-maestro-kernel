@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from processual_api.auth.security import require_scope
 from processual_api.integrations.enterprise_endpoint_bindings import EndpointBindingError
@@ -58,6 +58,51 @@ router = APIRouter(prefix="/evaluation/runtime", tags=["evaluation-runtime"])
 
 EVALUATION_TASK_EVIDENCE_STORAGE_KEY = "evaluation_runtime_task_evidence_v1"
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+_SAFE_REPLAY_RESULT_KEYS = frozenset(
+    {
+        "status",
+        "execution_id",
+        "environment",
+        "binding_id",
+        "task_id",
+        "adapter_contract_id",
+        "operation_class",
+        "required_scope_ids",
+        "output_slot",
+        "canonical_input_sha256",
+        "task_injection_schema_version",
+        "task_injection_sha256",
+        "ready_for_task_consumption",
+        "request_body_sha256",
+        "request_body_included_in_evidence",
+        "http_status",
+        "content_type",
+        "destination_host",
+        "resolved_address_count",
+        "response_sha256",
+        "approval_reference",
+        "credential_source",
+        "credential_material_included",
+        "raw_response_included",
+        "redirects_followed",
+        "mapping_valid",
+        "network_request_executed",
+        "evidence_sha256",
+        "completed_at",
+        "production_allowed",
+        "runtime_connector_approved",
+        "raw_secret_visible",
+        "evaluation_runtime",
+        "evaluation_grant_id",
+        "task_authority_enforced",
+        "subscription_required",
+        "commercial_quota_required",
+        "evaluation_stage",
+        "maestro_task_completed",
+        "next_readiness_stage",
+        "raw_task_input_persisted",
+    }
+)
 
 
 class EvaluationRuntimeTaskExecuteRequest(BaseModel):
@@ -65,6 +110,14 @@ class EvaluationRuntimeTaskExecuteRequest(BaseModel):
     binding_id: str = Field(min_length=1, max_length=160)
     idempotency_key: str = Field(min_length=8, max_length=200)
     task_input: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def _normalize_idempotency_key(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 8:
+            raise ValueError("idempotency_key must contain at least 8 non-whitespace characters")
+        return normalized
 
 
 def _evaluation_owner_id(current_user: dict[str, Any]) -> str:
@@ -129,6 +182,19 @@ def _append_evidence(raw: dict[str, Any], evidence: dict[str, Any]) -> None:
         items = []
     items.append(evidence)
     raw[EVALUATION_TASK_EVIDENCE_STORAGE_KEY] = items[-100:]
+
+
+def _safe_replay_response(response: dict[str, Any]) -> dict[str, Any]:
+    safe = {
+        key: value
+        for key, value in response.items()
+        if key in _SAFE_REPLAY_RESULT_KEYS
+    }
+    safe["canonical_input_included"] = False
+    safe["raw_response_included"] = False
+    safe["raw_task_input_persisted"] = False
+    safe["raw_secret_visible"] = False
+    return safe
 
 
 def _delivery_http_error(exc: EvaluationDeliveryError) -> HTTPException:
@@ -313,7 +379,7 @@ async def execute_evaluation_runtime_task(
             owner_id=owner_id,
             record_id=record_id,
             evidence=evidence,
-            replay_response=response,
+            replay_response=_safe_replay_response(response),
         )
     except EvaluationDeliveryError as exc:
         logger.exception("External execution completed but durable evidence commit failed")
