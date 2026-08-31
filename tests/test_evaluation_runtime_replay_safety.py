@@ -1,12 +1,36 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from processual_api.routers import evaluation_runtime
 from processual_api.services import evaluation_runtime_delivery as delivery
+from processual_api.services.evaluation_grants import EVALUATION_GRANTS_STORAGE_KEY
+
+
+def _evaluation_identity() -> dict:
+    return {
+        "auth_method": "api_key",
+        "entitlement_source": "admin_evaluation_grant",
+        "subscription_required": False,
+        "evaluation_grant_id": "grant-a",
+    }
+
+
+def _grant(*, status_value: str = "active", expires_at: str | None = None) -> dict:
+    return {
+        "grant_id": "grant-a",
+        "status": status_value,
+        "expires_at": expires_at
+        or (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        "execution_mode": "evaluation_runtime",
+        "real_runtime_execution": True,
+        "production_allowed": False,
+    }
 
 
 def test_runtime_safe_replay_receipt_excludes_canonical_input() -> None:
@@ -75,3 +99,28 @@ def test_idempotency_key_is_trimmed_and_whitespace_only_is_rejected() -> None:
             idempotency_key="        ",
             task_input={},
         )
+
+
+def test_revoked_grant_is_revalidated_before_runtime_or_replay() -> None:
+    raw = {EVALUATION_GRANTS_STORAGE_KEY: [_grant(status_value="revoked")]}
+
+    with pytest.raises(HTTPException) as exc:
+        evaluation_runtime._require_evaluation_credential(_evaluation_identity(), raw)
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Evaluation runtime authority is unavailable."
+
+
+def test_expired_grant_is_revalidated_before_runtime_or_replay() -> None:
+    raw = {
+        EVALUATION_GRANTS_STORAGE_KEY: [
+            _grant(expires_at=(datetime.now(UTC) - timedelta(seconds=1)).isoformat())
+        ]
+    }
+
+    with pytest.raises(HTTPException) as exc:
+        evaluation_runtime._require_evaluation_credential(_evaluation_identity(), raw)
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Evaluation runtime authority is unavailable."
+    assert raw[EVALUATION_GRANTS_STORAGE_KEY][0]["status"] == "expired"
