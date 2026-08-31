@@ -26,6 +26,19 @@ EVALUATION_DELIVERY_STATE_EXECUTED = "executed"
 EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED = "evidence_persisted"
 EVALUATION_DELIVERY_STATE_FAILED = "failed"
 
+_FORBIDDEN_REPLAY_KEYS = frozenset(
+    {
+        "api_key",
+        "authorization",
+        "canonical_input",
+        "credentials",
+        "raw_response",
+        "request_body",
+        "response_body",
+        "secret",
+        "task_input",
+    }
+)
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
@@ -124,6 +137,24 @@ def _trim(ledger: dict[str, Any]) -> None:
         records.pop(oldest, None)
 
 
+def _contains_forbidden_replay_key(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if str(key).strip().lower() in _FORBIDDEN_REPLAY_KEYS:
+                return True
+            if _contains_forbidden_replay_key(nested):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_contains_forbidden_replay_key(item) for item in value)
+    return False
+
+
+def _validate_safe_replay_response(replay_response: dict[str, Any]) -> None:
+    if _contains_forbidden_replay_key(replay_response):
+        raise EvaluationDeliveryError("evaluation_replay_payload_contains_sensitive_material")
+
+
 def claim_evaluation_execution(
     *,
     owner_id: str,
@@ -195,6 +226,7 @@ def complete_evaluation_execution(
 ) -> dict[str, Any]:
     """Atomically persist executed/evidence states and the bounded replay payload."""
 
+    _validate_safe_replay_response(replay_response)
     path = _owner_ledger_path(owner_id)
     with file_lock(path):
         ledger = _load_locked(path)
