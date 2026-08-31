@@ -35,6 +35,12 @@ from .settings import router as settings_router
 from .telemetry import router as telemetry_router
 from .workflows import router as workflows_router
 
+# Attach the standalone Evaluation runtime bridge to the same application host
+# as the governed CGT runtime. Keep this registration centralized here so the
+# final router surface does not depend on import-order side effects inside the
+# execution module itself.
+cgt_governor_router.include_router(evaluation_runtime_router)
+
 __all__ = [
     "health_router",
     "cgt_router",
