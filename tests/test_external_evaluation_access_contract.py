@@ -139,12 +139,39 @@ def test_external_evaluation_routes_are_unique_in_clean_startup() -> None:
     script = """
 import json
 import processual_api
+from fastapi import FastAPI
 from fastapi.routing import APIRoute
-from processual_api.main import app
-import processual_api.routers
-from processual_api.routers import cgt_governor, evaluation_runtime, settings
 
 wanted = __ROUTES__
+include_snapshots = []
+original_include_router = FastAPI.include_router
+
+
+def evaluation_paths(route_collection):
+    return sorted(
+        {
+            route.path
+            for route in route_collection
+            if isinstance(route, APIRoute)
+            and ("evaluation" in route.path or "evaluation-grants" in route.path)
+        }
+    )
+
+
+def traced_include_router(self, router, *args, **kwargs):
+    include_snapshots.append({
+        "prefix": getattr(router, "prefix", ""),
+        "route_count": len(getattr(router, "routes", [])),
+        "evaluation_paths": evaluation_paths(getattr(router, "routes", [])),
+    })
+    return original_include_router(self, router, *args, **kwargs)
+
+
+FastAPI.include_router = traced_include_router
+from processual_api.main import app
+FastAPI.include_router = original_include_router
+import processual_api.routers
+from processual_api.routers import cgt_governor, evaluation_runtime, settings
 
 
 def count_routes(route_collection):
@@ -160,20 +187,6 @@ def count_routes(route_collection):
     return counts
 
 
-def evaluation_paths(route_collection):
-    return sorted(
-        {
-            route.path
-            for route in route_collection
-            if isinstance(route, APIRoute)
-            and (
-                "evaluation" in route.path
-                or "evaluation-grants" in route.path
-            )
-        }
-    )
-
-
 print(json.dumps({
     "processual_api_file": processual_api.__file__,
     "routers_file": processual_api.routers.__file__,
@@ -184,13 +197,8 @@ print(json.dumps({
     "cgt_router": count_routes(cgt_governor.router.routes),
     "settings_router": count_routes(settings.router.routes),
     "app": count_routes(app.routes),
-    "evaluation_route_count": len(evaluation_runtime.router.routes),
-    "cgt_route_count": len(cgt_governor.router.routes),
-    "settings_route_count": len(settings.router.routes),
+    "include_snapshots": include_snapshots,
     "app_route_count": len(app.routes),
-    "evaluation_router_paths": evaluation_paths(evaluation_runtime.router.routes),
-    "cgt_evaluation_paths": evaluation_paths(cgt_governor.router.routes),
-    "settings_evaluation_paths": evaluation_paths(settings.router.routes),
     "app_evaluation_paths": evaluation_paths(app.routes),
 }, sort_keys=True))
 """.replace("__ROUTES__", repr(routes))
