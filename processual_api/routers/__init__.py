@@ -1,7 +1,5 @@
 """API route handlers — all HTTP endpoints organized by domain."""
 
-from processual_api.auth import evaluation_access_extension as _evaluation_access_extension  # noqa: F401,E402
-
 # Register route extensions on settings_router.
 # Importing for side effects is intentional: main.py already includes settings_router.
 from . import cgt_governor_external_guard as _cgt_governor_external_guard  # noqa: F401,E402
@@ -17,9 +15,9 @@ from . import (  # noqa: F401,E402
 from . import (  # noqa: F401,E402
     settings_enterprise_endpoint_failure_review_runtime as _settings_enterprise_endpoint_failure_review_runtime,
 )
-from . import (  # noqa: F401,E402
+from . import (
     settings_enterprise_integration_runtime as _settings_enterprise_integration_runtime,
-)
+)  # noqa: F401,E402
 from . import (  # noqa: F401,E402
     settings_enterprise_sandbox_operational_runtime as _settings_enterprise_sandbox_operational_runtime,
 )
