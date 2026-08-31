@@ -139,73 +139,39 @@ def test_external_evaluation_routes_are_unique_in_clean_startup() -> None:
     script = """
 import json
 import processual_api
-from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from processual_api.main import app
+import processual_api.routers
 
 wanted = __ROUTES__
-include_snapshots = []
-original_include_router = FastAPI.include_router
 
 
-def evaluation_paths(route_collection):
-    return sorted(
-        {
-            route.path
-            for route in route_collection
-            if isinstance(route, APIRoute)
-            and ("evaluation" in route.path or "evaluation-grants" in route.path)
-        }
+def iter_api_routes(route_collection):
+    for route in route_collection:
+        if isinstance(route, APIRoute):
+            yield route
+            continue
+        nested = getattr(route, "routes", None)
+        if nested is not None:
+            yield from iter_api_routes(nested)
+
+
+resolved_routes = list(iter_api_routes(app.routes))
+counts = {}
+for method, path in wanted:
+    counts[f"{method} {path}"] = sum(
+        1
+        for route in resolved_routes
+        if route.path == path
+        and method in (route.methods or set())
     )
-
-
-def traced_include_router(self, router, *args, **kwargs):
-    snapshot = {
-        "prefix": getattr(router, "prefix", ""),
-        "route_count": len(getattr(router, "routes", [])),
-        "evaluation_paths": evaluation_paths(getattr(router, "routes", [])),
-        "app_route_count_before": len(self.routes),
-        "app_evaluation_paths_before": evaluation_paths(self.routes),
-    }
-    result = original_include_router(self, router, *args, **kwargs)
-    snapshot["app_route_count_after"] = len(self.routes)
-    snapshot["app_evaluation_paths_after"] = evaluation_paths(self.routes)
-    include_snapshots.append(snapshot)
-    return result
-
-
-FastAPI.include_router = traced_include_router
-from processual_api.main import app
-FastAPI.include_router = original_include_router
-import processual_api.routers
-from processual_api.routers import cgt_governor, evaluation_runtime, settings
-
-
-def count_routes(route_collection):
-    counts = {}
-    for method, path in wanted:
-        counts[f"{method} {path}"] = sum(
-            1
-            for route in route_collection
-            if isinstance(route, APIRoute)
-            and route.path == path
-            and method in (route.methods or set())
-        )
-    return counts
-
 
 print(json.dumps({
     "processual_api_file": processual_api.__file__,
     "routers_file": processual_api.routers.__file__,
-    "evaluation_runtime_file": evaluation_runtime.__file__,
-    "cgt_governor_file": cgt_governor.__file__,
-    "settings_file": settings.__file__,
-    "evaluation_router": count_routes(evaluation_runtime.router.routes),
-    "cgt_router": count_routes(cgt_governor.router.routes),
-    "settings_router": count_routes(settings.router.routes),
-    "app": count_routes(app.routes),
-    "include_snapshots": include_snapshots,
-    "app_route_count": len(app.routes),
-    "app_evaluation_paths": evaluation_paths(app.routes),
+    "top_level_route_count": len(app.routes),
+    "resolved_api_route_count": len(resolved_routes),
+    "counts": counts,
 }, sort_keys=True))
 """.replace("__ROUTES__", repr(routes))
     env = dict(os.environ)
@@ -219,7 +185,6 @@ print(json.dumps({
         env=env,
     )
     payload = json.loads(completed.stdout.strip().splitlines()[-1])
-    print("EVALUATION_ROUTE_DIAGNOSTIC=" + json.dumps(payload, sort_keys=True))
     assert Path(payload["processual_api_file"]).resolve().is_relative_to(ROOT)
     assert Path(payload["routers_file"]).resolve().is_relative_to(ROOT)
-    assert payload["app"] == {f"{method} {path}": 1 for method, path in routes}, payload
+    assert payload["counts"] == {f"{method} {path}": 1 for method, path in routes}, payload
