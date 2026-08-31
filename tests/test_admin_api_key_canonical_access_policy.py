@@ -5,6 +5,7 @@ from fastapi import APIRouter, FastAPI
 from starlette.requests import Request
 
 from processual_api.integrations.api_key_access_policy import (
+    get_api_key_access_policy,
     list_api_key_access_policies,
 )
 from processual_api.integrations.api_key_operational_profiles import (
@@ -94,6 +95,8 @@ def test_every_canonical_access_policy_is_complete_and_non_admin() -> None:
             for scope in policy.required_scopes
         )
 
+    assert get_api_key_access_policy("GET", "/cgt/govern/reports") is None
+
 
 def test_policy_profiles_exist_and_allow_every_required_scope() -> None:
     profiles = {
@@ -122,8 +125,8 @@ def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
     )
 
     assert payload["policy_authority"] == "canonical_runtime_access_policy"
-    assert payload["grantable_endpoint_count"] == 8
-    assert payload["canonical_task_count"] == 8
+    assert payload["grantable_endpoint_count"] == 7
+    assert payload["canonical_task_count"] == 7
     assert payload["canonical_tasks"]
     assert payload["operational_profile_ids"] == [
         "platform_evaluation_runtime",
@@ -146,6 +149,11 @@ def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
     assert evaluation["required_scopes"] == ["run:evaluation"]
     assert evaluation["operational_profile_ids"] == ["platform_evaluation_runtime"]
     assert evaluation["production_allowed"] is False
+
+    reports = by_key[("GET", "/cgt/govern/reports")]
+    assert reports["grantable"] is False
+    assert reports["task_id"] is None
+    assert reports["required_scopes"] == []
 
 
 def test_undeclared_and_control_plane_routes_fail_closed() -> None:
@@ -209,7 +217,7 @@ def test_real_application_matches_canonical_evaluation_surface_exactly() -> None
         for row in grantable_rows
     )
 
-    assert len(policy_keys) == 8
+    assert len(policy_keys) == 7
     assert grantable_keys == policy_keys
     assert counts == Counter({key: 1 for key in policy_keys})
 
@@ -218,6 +226,7 @@ def test_real_application_matches_canonical_evaluation_surface_exactly() -> None
         for row in rows
     }
     excluded = {
+        ("GET", "/cgt/govern/reports"),
         ("POST", "/cgt/govern/toggle"),
         ("POST", "/cgt/govern/auto-repair"),
         ("POST", "/cgt/govern/compare"),
