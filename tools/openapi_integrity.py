@@ -16,38 +16,49 @@ from processual_api.main import app
 
 def _iter_effective_api_routes(
     route_collection: Sequence[Any],
-    seen: set[int] | None = None,
+    seen_containers: set[int] | None = None,
 ) -> Iterator[Any]:
-    """Yield direct and included API routes with their effective FastAPI context.
+    """Yield direct and included API routes with effective FastAPI prefixes.
 
     FastAPI 0.141+ keeps included routers as route containers. Their
-    ``effective_route_contexts()`` API applies accumulated include prefixes, so
-    use it when available instead of inspecting only ``app.routes`` or walking
-    ``original_router.routes`` without include context.
+    ``effective_candidates()`` method applies accumulated include context and
+    produces effective route objects without requiring imports of private
+    ``_IncludedRouter`` types. Only containers are cycle-deduplicated so the
+    same underlying APIRoute included more than once is still counted twice.
     """
 
-    if seen is None:
-        seen = set()
-    collection_id = id(route_collection)
-    if collection_id in seen:
-        return
-    seen.add(collection_id)
+    if seen_containers is None:
+        seen_containers = set()
 
     for route in route_collection:
         if isinstance(route, APIRoute):
             yield route
             continue
 
-        effective_route_contexts = getattr(route, "effective_route_contexts", None)
-        if callable(effective_route_contexts):
-            for context in effective_route_contexts():
-                if isinstance(getattr(context, "original_route", None), APIRoute):
-                    yield context
+        effective_candidates = getattr(route, "effective_candidates", None)
+        if callable(effective_candidates):
+            container_id = id(route)
+            if container_id in seen_containers:
+                continue
+            seen_containers.add(container_id)
+            for candidate in effective_candidates():
+                original_route = getattr(candidate, "original_route", None)
+                if isinstance(original_route, APIRoute):
+                    yield candidate
+                    continue
+                yield from _iter_effective_api_routes(
+                    [candidate],
+                    seen_containers,
+                )
             continue
 
         nested = getattr(route, "routes", None)
         if isinstance(nested, Sequence):
-            yield from _iter_effective_api_routes(nested, seen)
+            container_id = id(route)
+            if container_id in seen_containers:
+                continue
+            seen_containers.add(container_id)
+            yield from _iter_effective_api_routes(nested, seen_containers)
 
 
 def audit() -> dict[str, object]:
