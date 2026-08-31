@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ._backend import HAS_PRIVATE_COMPUTE
 from .types import (
     AftermathState,
     CGTParameters,
@@ -25,6 +26,9 @@ _MISSING_PRIVATE_MSG = (
 
 
 try:
+    if not HAS_PRIVATE_COMPUTE:
+        raise ModuleNotFoundError(_MISSING_PRIVATE_MSG, name="cgtlib.private")
+
     from .aftermath import (
         compute_aftermath_balance,
         compute_collapse_indicator,
@@ -329,8 +333,6 @@ __all__ = [
     "evaluate_benchmark_surface",
     "evaluate_benchmark_surfaces",
     "summarize_benchmark_surface",
-    "evaluate_multi_axis_robustness",
-    "summarize_robustness_report",
     "list_canonical_robustness_profiles",
     "load_canonical_robustness_profile",
     "evaluate_canonical_robustness_profile",
