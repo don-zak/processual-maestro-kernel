@@ -159,12 +159,18 @@ def evaluation_paths(route_collection):
 
 
 def traced_include_router(self, router, *args, **kwargs):
-    include_snapshots.append({
+    snapshot = {
         "prefix": getattr(router, "prefix", ""),
         "route_count": len(getattr(router, "routes", [])),
         "evaluation_paths": evaluation_paths(getattr(router, "routes", [])),
-    })
-    return original_include_router(self, router, *args, **kwargs)
+        "app_route_count_before": len(self.routes),
+        "app_evaluation_paths_before": evaluation_paths(self.routes),
+    }
+    result = original_include_router(self, router, *args, **kwargs)
+    snapshot["app_route_count_after"] = len(self.routes)
+    snapshot["app_evaluation_paths_after"] = evaluation_paths(self.routes)
+    include_snapshots.append(snapshot)
+    return result
 
 
 FastAPI.include_router = traced_include_router
