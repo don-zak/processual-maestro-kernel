@@ -24,6 +24,7 @@ def _grant() -> dict:
         "purpose": "controlled external API qualification",
         "allowed_task_ids": ["crm.customer_context"],
         "task_scope_ids": ["crm.read"],
+        "allowed_binding_ids": ["binding_crm_eval"],
         "allowed_endpoints": [
             {"method": "GET", "path": "/health/live"},
             {"method": "POST", "path": "/evaluation/runtime/task-execute"},
@@ -60,6 +61,7 @@ def test_grant_validation_requires_exact_endpoint_envelope() -> None:
         requested_scopes=["read:health", "run:evaluation"],
         requested_endpoints=list(grant["allowed_endpoints"]),
         requested_task_ids=["crm.customer_context"],
+        requested_binding_ids=["binding_crm_eval"],
         quota_limit=25,
     ) is grant
 
@@ -71,6 +73,7 @@ def test_grant_validation_requires_exact_endpoint_envelope() -> None:
             requested_scopes=["read:health", "run:evaluation"],
             requested_endpoints=[{"method": "POST", "path": "/cgt/govern"}],
             requested_task_ids=["crm.customer_context"],
+            requested_binding_ids=[],
             quota_limit=25,
         )
 
@@ -87,6 +90,24 @@ def test_legacy_grant_without_endpoint_envelope_requires_reissue() -> None:
             requested_scopes=["read:health", "run:evaluation"],
             requested_endpoints=[{"method": "GET", "path": "/health/live"}],
             requested_task_ids=["crm.customer_context"],
+            requested_binding_ids=[],
+            quota_limit=25,
+        )
+
+
+def test_runtime_grant_without_binding_envelope_requires_reissue() -> None:
+    grant = _grant()
+    grant.pop("allowed_binding_ids")
+    raw = {"evaluation_grants_v1": [grant]}
+    with pytest.raises(ValueError, match="evaluation_grant_bindings_required"):
+        validate_evaluation_grant(
+            raw,
+            grant_id="eval_contract",
+            client_id="external-evaluator",
+            requested_scopes=["read:health", "run:evaluation"],
+            requested_endpoints=list(grant["allowed_endpoints"]),
+            requested_task_ids=["crm.customer_context"],
+            requested_binding_ids=[],
             quota_limit=25,
         )
 
