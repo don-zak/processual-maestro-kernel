@@ -90,4 +90,6 @@ def test_external_evaluation_grant_rejects_shared_governance_reports() -> None:
         )
 
     assert exc.value.status_code == 422
-    assert "not grantable" in str(exc.value.detail).lower()
+    detail = str(exc.value.detail).lower()
+    assert "not eligible for evaluation access" in detail
+    assert "get /cgt/govern/reports" in detail
