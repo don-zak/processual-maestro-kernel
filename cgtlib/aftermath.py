@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cgtlib.private import compute as _compute
+from cgtlib._backend import compute as _compute
 from cgtlib.types import AftermathState
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from alembic import op
+from sqlalchemy.sql.elements import conv
 
 revision: str = "20260804_0018"
 down_revision: str | None = "20260804_0017"
@@ -42,12 +43,27 @@ _PREVIOUS_RESOURCE_CHECK = """resource_type IN (
 )"""
 
 
+def _historical_constraint_name(name: str) -> conv:
+    """Return the identifier actually produced by migration 0011.
+
+    Migration 0011 supplied already-prefixed ``ck_<table>_...`` names while
+    the repository naming convention was ``ck_%(table_name)s_%(constraint_name)s``.
+    SQLAlchemy therefore produced a double-prefixed logical identifier.  Mark
+    that historical identifier as converted so later batch operations do not
+    apply the convention yet again; the dialect may still perform normal
+    deterministic identifier truncation (notably PostgreSQL's 63-byte limit).
+    """
+    return conv(f"ck_{TABLE}_{name}")
+
+
 def _replace_constraints(action_check: str, resource_check: str) -> None:
+    action_name = _historical_constraint_name(ACTION_CONSTRAINT)
+    resource_name = _historical_constraint_name(RESOURCE_CONSTRAINT)
     with op.batch_alter_table(TABLE) as batch_op:
-        batch_op.drop_constraint(ACTION_CONSTRAINT, type_="check")
-        batch_op.drop_constraint(RESOURCE_CONSTRAINT, type_="check")
-        batch_op.create_check_constraint(ACTION_CONSTRAINT, action_check)
-        batch_op.create_check_constraint(RESOURCE_CONSTRAINT, resource_check)
+        batch_op.drop_constraint(action_name, type_="check")
+        batch_op.drop_constraint(resource_name, type_="check")
+        batch_op.create_check_constraint(action_name, action_check)
+        batch_op.create_check_constraint(resource_name, resource_check)
 
 
 def upgrade() -> None:

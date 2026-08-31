@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Final
 
+from ._backend import HAS_PRIVATE_COMPUTE, require_private_module
+
 CGTLIB_VERSION: Final[str] = "1.0.0"
 CGTLIB_API_STAGE: Final[str] = "v1.0-final-standalone-formal-core"
 CGTLIB_BOUNDARY_STATUS: Final[str] = "standalone-finalized"
@@ -61,10 +63,10 @@ CGTLIB_PRIVATE_MODULES: Final[tuple[str, ...]] = (
 
 
 def build_cgtlib_manifest() -> dict[str, object]:
-    try:
-        from .private.version import CGT_EQUATIONS_VERSION as _eq_ver  # noqa: N811
-        eq_ver = _eq_ver
-    except ModuleNotFoundError:
+    if HAS_PRIVATE_COMPUTE:
+        version_module = require_private_module("version", "private CGT metadata")
+        eq_ver = version_module.CGT_EQUATIONS_VERSION
+    else:
         eq_ver = "private-not-available"
 
     return {

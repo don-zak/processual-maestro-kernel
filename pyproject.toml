@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "processual-maestro-kernel"
 version = "2.0.0"
-description = "Production-ready Processual Maestro Kernel with CGT v2, security layer, backend API, observability, and Discord monitoring."
+description = "Agentic operations and governance control plane with CGT, security, API, observability, and controlled integration surfaces."
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [{name = "Zakaria Essamit / ChatGPT implementation"}]
@@ -108,6 +108,7 @@ exclude = ["tests*", "docs*", "scripts*", "build*", "dist*"]
 [tool.pytest.ini_options]
 addopts = "-p no:ddtrace"
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["cgtlib", "processual_kernel", "processual_api"]

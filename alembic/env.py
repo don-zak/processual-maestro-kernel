@@ -22,6 +22,19 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Alembic 1.19 added name-only CHECK-constraint autogeneration. Our naming
+# convention intentionally produces descriptive logical names that SQLAlchemy
+# deterministically truncates for PostgreSQL's identifier limit. Reflection
+# sees the rendered/truncated name, while the new plugin compares it to the
+# logical metadata name and reports false drift. CHECK-name parity is therefore
+# verified independently by tools/check_check_constraint_names.py using the
+# active dialect's own identifier preparer instead of disabling the integrity
+# check outright.
+AUTOGENERATE_PLUGINS = [
+    "alembic.autogenerate.*",
+    "~alembic.autogenerate.checkconstraint_byname",
+]
+
 
 def _database_url() -> str:
     url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
@@ -37,6 +50,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        autogenerate_plugins=AUTOGENERATE_PLUGINS,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -52,6 +66,7 @@ def _run_sync_migrations(connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        autogenerate_plugins=AUTOGENERATE_PLUGINS,
     )
     with context.begin_transaction():
         context.run_migrations()

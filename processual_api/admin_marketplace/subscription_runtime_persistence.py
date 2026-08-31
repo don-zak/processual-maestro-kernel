@@ -15,6 +15,18 @@ class AdminMarketSubscriptionRuntime(Base):
     __table_args__ = (
         CheckConstraint("access_stage IN ('active','grace','suspended','terminated')", name="stage"),
         CheckConstraint("version >= 0", name="version"),
+        CheckConstraint(
+            "(access_stage != 'grace') OR grace_until IS NOT NULL",
+            name="grace_time",
+        ),
+        CheckConstraint(
+            "(access_stage != 'suspended') OR suspended_at IS NOT NULL",
+            name="suspended_time",
+        ),
+        CheckConstraint(
+            "(access_stage != 'terminated') OR terminated_at IS NOT NULL",
+            name="terminated_time",
+        ),
         UniqueConstraint("subscription_id", name="uq_admin_market_subscription_runtime_subscription"),
         Index("ix_admin_market_subscription_runtime_customer_stage", "customer_ref", "access_stage"),
     )
