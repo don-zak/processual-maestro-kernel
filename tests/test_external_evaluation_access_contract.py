@@ -133,6 +133,7 @@ def test_external_evaluation_routes_are_unique_in_clean_startup() -> None:
         ("POST", "/evaluation/runtime/task-execute"),
         ("GET", "/settings/admin/evaluation-grants/authority"),
         ("GET", "/settings/admin/evaluation-grants/access-catalog"),
+        ("GET", "/settings/admin/evaluation-grants/binding-catalog"),
         ("POST", "/settings/admin/evaluation-grants"),
         ("GET", "/settings/admin/evaluation-grants"),
     ]
