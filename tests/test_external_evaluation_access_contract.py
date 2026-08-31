@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi.routing import APIRoute
 
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
-from processual_api.main import app
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     evaluation_endpoint_allowed,
@@ -123,18 +124,36 @@ def test_evaluation_endpoint_authority_fails_closed() -> None:
     assert not evaluation_endpoint_allowed(identity, method="POST", path="/cgt/govern")
 
 
-def test_external_evaluation_routes_are_unique() -> None:
-    def count(path: str, method: str) -> int:
-        return sum(
-            1
-            for route in app.routes
-            if isinstance(route, APIRoute)
-            and route.path == path
-            and method in (route.methods or set())
-        )
+def test_external_evaluation_routes_are_unique_in_clean_startup() -> None:
+    routes = [
+        ("POST", "/evaluation/runtime/task-execute"),
+        ("GET", "/settings/admin/evaluation-grants/authority"),
+        ("GET", "/settings/admin/evaluation-grants/access-catalog"),
+        ("POST", "/settings/admin/evaluation-grants"),
+        ("GET", "/settings/admin/evaluation-grants"),
+    ]
+    script = """
+import json
+from fastapi.routing import APIRoute
+from processual_api.main import app
 
-    assert count("/evaluation/runtime/task-execute", "POST") == 1
-    assert count("/settings/admin/evaluation-grants/authority", "GET") == 1
-    assert count("/settings/admin/evaluation-grants/access-catalog", "GET") == 1
-    assert count("/settings/admin/evaluation-grants", "POST") == 1
-    assert count("/settings/admin/evaluation-grants", "GET") == 1
+wanted = %r
+counts = {}
+for method, path in wanted:
+    counts[f"{method} {path}"] = sum(
+        1
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        and route.path == path
+        and method in (route.methods or set())
+    )
+print(json.dumps(counts, sort_keys=True))
+""" % (routes,)
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    counts = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert counts == {f"{method} {path}": 1 for method, path in routes}
