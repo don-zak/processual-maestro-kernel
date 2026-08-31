@@ -124,6 +124,7 @@ def test_runtime_rejects_ungranted_binding_before_binding_lookup(monkeypatch) ->
                 body=evaluation_runtime.EvaluationRuntimeTaskExecuteRequest(
                     task_id="crm.customer_context",
                     binding_id="binding_eval_b",
+                    idempotency_key="binding-reject-001",
                     task_input={},
                 ),
                 current_user=_evaluation_identity(binding_id="binding_eval_a"),
