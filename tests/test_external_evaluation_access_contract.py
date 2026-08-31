@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +15,8 @@ from processual_api.services.evaluation_grants import (
     evaluation_endpoint_allowed,
     validate_evaluation_grant,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _grant() -> dict:
@@ -134,6 +138,8 @@ def test_external_evaluation_routes_are_unique_in_clean_startup() -> None:
     ]
     script = """
 import json
+import processual_api
+import processual_api.routers
 from fastapi.routing import APIRoute
 from processual_api.main import app
 
@@ -147,13 +153,23 @@ for method, path in wanted:
         and route.path == path
         and method in (route.methods or set())
     )
-print(json.dumps(counts, sort_keys=True))
+print(json.dumps({
+    "processual_api_file": processual_api.__file__,
+    "routers_file": processual_api.routers.__file__,
+    "counts": counts,
+}, sort_keys=True))
 """.replace("__ROUTES__", repr(routes))
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(ROOT)
     completed = subprocess.run(
         [sys.executable, "-c", script],
         check=True,
         capture_output=True,
         text=True,
+        cwd=ROOT,
+        env=env,
     )
-    counts = json.loads(completed.stdout.strip().splitlines()[-1])
-    assert counts == {f"{method} {path}": 1 for method, path in routes}
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert Path(payload["processual_api_file"]).resolve().is_relative_to(ROOT)
+    assert Path(payload["routers_file"]).resolve().is_relative_to(ROOT)
+    assert payload["counts"] == {f"{method} {path}": 1 for method, path in routes}
