@@ -75,6 +75,22 @@ def test_grant_validation_requires_exact_endpoint_envelope() -> None:
         )
 
 
+def test_legacy_grant_without_endpoint_envelope_requires_reissue() -> None:
+    grant = _grant()
+    grant.pop("allowed_endpoints")
+    raw = {"evaluation_grants_v1": [grant]}
+    with pytest.raises(ValueError, match="evaluation_grant_endpoints_required"):
+        validate_evaluation_grant(
+            raw,
+            grant_id="eval_contract",
+            client_id="external-evaluator",
+            requested_scopes=["read:health", "run:evaluation"],
+            requested_endpoints=[{"method": "GET", "path": "/health/live"}],
+            requested_task_ids=["crm.customer_context"],
+            quota_limit=25,
+        )
+
+
 def test_evaluation_endpoint_authority_fails_closed() -> None:
     identity = {
         "auth_method": "api_key",
