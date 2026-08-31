@@ -9,6 +9,7 @@ or modify it.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -38,11 +39,21 @@ from processual_api.services.evaluation_grants import (
     evaluation_task_allowed,
     find_evaluation_grant,
 )
+from processual_api.services.evaluation_runtime_delivery import (
+    EvaluationDeliveryError,
+    EvaluationIdempotencyConflict,
+    EvaluationReplayBlocked,
+    claim_evaluation_execution,
+    complete_evaluation_execution,
+    evaluation_request_fingerprint,
+    fail_evaluation_execution,
+)
 
 from . import settings as settings_router
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from . import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
 
+logger = logging.getLogger("processual_api.routers.evaluation_runtime")
 router = APIRouter(prefix="/evaluation/runtime", tags=["evaluation-runtime"])
 
 EVALUATION_TASK_EVIDENCE_STORAGE_KEY = "evaluation_runtime_task_evidence_v1"
@@ -52,6 +63,7 @@ _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 class EvaluationRuntimeTaskExecuteRequest(BaseModel):
     task_id: str = Field(min_length=1, max_length=160)
     binding_id: str = Field(min_length=1, max_length=160)
+    idempotency_key: str = Field(min_length=8, max_length=200)
     task_input: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -119,6 +131,26 @@ def _append_evidence(raw: dict[str, Any], evidence: dict[str, Any]) -> None:
     raw[EVALUATION_TASK_EVIDENCE_STORAGE_KEY] = items[-100:]
 
 
+def _delivery_http_error(exc: EvaluationDeliveryError) -> HTTPException:
+    if isinstance(exc, EvaluationIdempotencyConflict):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotency key was already used with a different evaluation request.",
+        )
+    if isinstance(exc, EvaluationReplayBlocked):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A prior execution with this idempotency key has an unresolved or failed "
+                "network outcome; automatic replay is blocked to prevent duplicate side effects."
+            ),
+        )
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Evaluation execution delivery ledger is unavailable.",
+    )
+
+
 @router.post("/task-execute", response_model=dict)
 async def execute_evaluation_runtime_task(
     body: EvaluationRuntimeTaskExecuteRequest,
@@ -170,6 +202,47 @@ async def execute_evaluation_runtime_task(
             if request_mapping is not None
             else None
         )
+    except (
+        ValueError,
+        KeyError,
+        EndpointBindingError,
+        EndpointRequestMappingError,
+        SandboxGrantError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    grant_id = str(current_user.get("evaluation_grant_id") or "")
+    api_key_id = str(current_user.get("api_key_id") or "")
+    request_fingerprint = evaluation_request_fingerprint(
+        grant_id=grant_id,
+        api_key_id=api_key_id,
+        task_id=task_id,
+        binding_id=spec.binding_id,
+        task_input=body.task_input,
+    )
+    try:
+        claim = claim_evaluation_execution(
+            owner_id=owner_id,
+            grant_id=grant_id,
+            api_key_id=api_key_id,
+            idempotency_key=body.idempotency_key,
+            request_fingerprint=request_fingerprint,
+            task_id=task_id,
+            binding_id=spec.binding_id,
+        )
+    except EvaluationDeliveryError as exc:
+        raise _delivery_http_error(exc) from exc
+
+    if claim["status"] == "replay":
+        replay_response = dict(claim["response"])
+        replay_response["idempotent_replay"] = True
+        return replay_response
+
+    record_id = str(claim["record"]["record_id"])
+    try:
         resolver = ReferenceSandboxCredentialResolver(secret_reference)
         transport = VerifiedPeerSandboxTransport()
         result = await execute_sandbox_binding(
@@ -185,14 +258,15 @@ async def execute_evaluation_runtime_task(
         )
         if not transport.last_verified_peer:
             raise SandboxExecutionError("evaluation_peer_address_unverified")
-    except (
-        ValueError,
-        KeyError,
-        EndpointBindingError,
-        EndpointRequestMappingError,
-        SandboxGrantError,
-        SandboxExecutionError,
-    ) as exc:
+    except (ValueError, KeyError, SandboxExecutionError) as exc:
+        try:
+            fail_evaluation_execution(
+                owner_id=owner_id,
+                record_id=record_id,
+                failure_code=type(exc).__name__,
+            )
+        except EvaluationDeliveryError:
+            logger.exception("Failed to persist evaluation execution failure state")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
@@ -200,8 +274,8 @@ async def execute_evaluation_runtime_task(
 
     evidence = {
         "execution_id": result.get("execution_id"),
-        "evaluation_grant_id": current_user.get("evaluation_grant_id"),
-        "api_key_id": current_user.get("api_key_id"),
+        "evaluation_grant_id": grant_id,
+        "api_key_id": api_key_id,
         "binding_id": spec.binding_id,
         "task_id": task_id,
         "adapter_contract_id": spec.adapter_contract_id,
@@ -219,13 +293,10 @@ async def execute_evaluation_runtime_task(
         "raw_task_input_persisted": False,
         "raw_secret_visible": False,
     }
-    _append_evidence(raw, evidence)
-    settings_router._save_raw(owner_id, raw)
-
-    return {
+    response = {
         **result,
         "evaluation_runtime": True,
-        "evaluation_grant_id": current_user.get("evaluation_grant_id"),
+        "evaluation_grant_id": grant_id,
         "task_authority_enforced": True,
         "subscription_required": False,
         "commercial_quota_required": False,
@@ -235,7 +306,32 @@ async def execute_evaluation_runtime_task(
         "next_readiness_stage": "maestro_task_consumption",
         "raw_task_input_persisted": False,
         "raw_secret_visible": False,
+        "idempotent_replay": False,
     }
+    try:
+        complete_evaluation_execution(
+            owner_id=owner_id,
+            record_id=record_id,
+            evidence=evidence,
+            replay_response=response,
+        )
+    except EvaluationDeliveryError as exc:
+        logger.exception("External execution completed but durable evidence commit failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "External execution outcome could not be durably finalized; replay is blocked "
+                "for this idempotency key pending operator reconciliation."
+            ),
+        ) from exc
+
+    try:
+        _append_evidence(raw, evidence)
+        settings_router._save_raw(owner_id, raw)
+    except (OSError, RuntimeError, ValueError):
+        logger.exception("Secondary evaluation settings evidence persistence failed")
+
+    return response
 
 
 __all__ = [
