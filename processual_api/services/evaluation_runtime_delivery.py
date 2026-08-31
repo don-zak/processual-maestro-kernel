@@ -46,11 +46,11 @@ class EvaluationDeliveryError(RuntimeError):
     """Base class for delivery-ledger failures."""
 
 
-class EvaluationIdempotencyConflict(EvaluationDeliveryError):
+class EvaluationIdempotencyConflictError(EvaluationDeliveryError):
     """The same idempotency key was reused for different authority/input."""
 
 
-class EvaluationReplayBlocked(EvaluationDeliveryError):
+class EvaluationReplayBlockedError(EvaluationDeliveryError):
     """A prior execution has a non-terminal or uncertain outcome."""
 
 
@@ -182,19 +182,31 @@ def claim_evaluation_execution(
         existing = records.get(record_id)
         if isinstance(existing, dict):
             if existing.get("request_fingerprint") != request_fingerprint:
-                raise EvaluationIdempotencyConflict("evaluation_idempotency_key_payload_mismatch")
+                raise EvaluationIdempotencyConflictError(
+                    "evaluation_idempotency_key_payload_mismatch"
+                )
             state = str(existing.get("state") or "")
             if state == EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
                 replay = existing.get("replay_response")
                 if isinstance(replay, dict):
-                    return {"status": "replay", "record": dict(existing), "response": dict(replay)}
-                raise EvaluationReplayBlocked("evaluation_replay_evidence_unavailable")
-            raise EvaluationReplayBlocked(f"evaluation_replay_blocked_{state or 'unknown'}")
+                    return {
+                        "status": "replay",
+                        "record": dict(existing),
+                        "response": dict(replay),
+                    }
+                raise EvaluationReplayBlockedError(
+                    "evaluation_replay_evidence_unavailable"
+                )
+            raise EvaluationReplayBlockedError(
+                f"evaluation_replay_blocked_{state or 'unknown'}"
+            )
 
         now = _now_iso()
         record = {
             "record_id": record_id,
-            "idempotency_key_sha256": hashlib.sha256(normalized_key.encode("utf-8")).hexdigest(),
+            "idempotency_key_sha256": hashlib.sha256(
+                normalized_key.encode("utf-8")
+            ).hexdigest(),
             "request_fingerprint": request_fingerprint,
             "evaluation_grant_id": str(grant_id or ""),
             "api_key_id": str(api_key_id or ""),
@@ -242,7 +254,9 @@ def complete_evaluation_execution(
             record["state_history"] = history
         history.append({"state": EVALUATION_DELIVERY_STATE_EXECUTED, "at": now})
         record["state"] = EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED
-        history.append({"state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED, "at": now})
+        history.append(
+            {"state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED, "at": now}
+        )
         record["executed_at"] = now
         record["evidence_persisted_at"] = now
         record["evidence"] = dict(evidence)
@@ -276,7 +290,9 @@ def fail_evaluation_execution(
             record["state_history"] = history
         record["state"] = EVALUATION_DELIVERY_STATE_FAILED
         record["failed_at"] = now
-        record["failure_code"] = str(failure_code or "evaluation_execution_failed")[:200]
+        record["failure_code"] = str(
+            failure_code or "evaluation_execution_failed"
+        )[:200]
         record["network_outcome"] = "unknown"
         history.append({"state": EVALUATION_DELIVERY_STATE_FAILED, "at": now})
         _save_locked(path, ledger)
@@ -287,8 +303,8 @@ __all__ = [
     "EVALUATION_DELIVERY_STATE_EXECUTING",
     "EVALUATION_DELIVERY_STATE_FAILED",
     "EvaluationDeliveryError",
-    "EvaluationIdempotencyConflict",
-    "EvaluationReplayBlocked",
+    "EvaluationIdempotencyConflictError",
+    "EvaluationReplayBlockedError",
     "claim_evaluation_execution",
     "complete_evaluation_execution",
     "evaluation_request_fingerprint",
