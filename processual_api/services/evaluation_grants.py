@@ -258,6 +258,8 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
             grant.get("approved_by_role") or ""
         ),
         "subscription_required": False,
+        "registration_required": False,
+        "commercial_quota_required": False,
         "execution_mode": str(
             grant.get("execution_mode") or EVALUATION_EXECUTION_MODE
         ),
