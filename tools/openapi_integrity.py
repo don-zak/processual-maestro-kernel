@@ -5,22 +5,60 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import Any
 
 from fastapi.routing import APIRoute
 
 from processual_api.main import app
 
 
+def _iter_effective_api_routes(
+    route_collection: Sequence[Any],
+    seen: set[int] | None = None,
+) -> Iterator[Any]:
+    """Yield direct and included API routes with their effective FastAPI context.
+
+    FastAPI 0.141+ keeps included routers as route containers. Their
+    ``effective_route_contexts()`` API applies accumulated include prefixes, so
+    use it when available instead of inspecting only ``app.routes`` or walking
+    ``original_router.routes`` without include context.
+    """
+
+    if seen is None:
+        seen = set()
+    collection_id = id(route_collection)
+    if collection_id in seen:
+        return
+    seen.add(collection_id)
+
+    for route in route_collection:
+        if isinstance(route, APIRoute):
+            yield route
+            continue
+
+        effective_route_contexts = getattr(route, "effective_route_contexts", None)
+        if callable(effective_route_contexts):
+            for context in effective_route_contexts():
+                if isinstance(getattr(context, "original_route", None), APIRoute):
+                    yield context
+            continue
+
+        nested = getattr(route, "routes", None)
+        if isinstance(nested, Sequence):
+            yield from _iter_effective_api_routes(nested, seen)
+
+
 def audit() -> dict[str, object]:
     route_pairs: list[tuple[str, str]] = []
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        for method in sorted(route.methods or set()):
+    for route in _iter_effective_api_routes(app.routes):
+        path = str(getattr(route, "path", "") or "")
+        methods = getattr(route, "methods", set()) or set()
+        for method in sorted(methods):
             if method in {"HEAD", "OPTIONS"}:
                 continue
-            route_pairs.append((method, route.path))
+            route_pairs.append((method, path))
 
     route_counts = Counter(route_pairs)
     duplicate_routes = sorted(
