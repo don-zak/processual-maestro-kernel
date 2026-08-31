@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime, timedelta
-
 import pytest
 from fastapi import HTTPException, Request
 
-from processual_api.auth import evaluation_access_extension
-from processual_api.services import api_key_store
+from processual_api.auth import security
 
 
 def _request(method: str, path: str) -> Request:
@@ -27,54 +23,87 @@ def _request(method: str, path: str) -> Request:
     )
 
 
-def _identity() -> dict:
+def _evaluation_identity() -> dict:
     return {
         "sub": "owner-user",
         "user_id": "owner-user",
         "client_id": "external-evaluator",
         "auth_method": "api_key",
+        "session_type": "api_key",
         "entitlement_source": "admin_evaluation_grant",
         "evaluation_grant_id": "eval_contract",
         "subscription_required": False,
-    }
-
-
-def _stored_grant() -> dict:
-    return {
-        "grant_id": "eval_contract",
-        "status": "active",
-        "client_id": "external-evaluator",
-        "allowed_endpoints": [{"method": "GET", "path": "/health/live"}],
-        "allowed_task_ids": ["crm.customer_context"],
-        "allowed_scopes": ["read:health"],
-        "max_requests": 25,
-        "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+        "registration_required": False,
+        "commercial_quota_required": False,
+        "evaluation_access": True,
         "execution_mode": "evaluation_runtime",
         "real_runtime_execution": True,
         "production_allowed": False,
+        "allowed_endpoints": [{"method": "GET", "path": "/health/live"}],
+        "scopes": ["read:health"],
     }
 
 
 @pytest.mark.asyncio
-async def test_persisted_endpoint_envelope_is_applied_before_runtime(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(api_key_store, "_DATA_DIR", tmp_path)
-    (tmp_path / "settings_owner-user.json").write_text(
-        json.dumps({"evaluation_grants_v1": [_stored_grant()]}),
-        encoding="utf-8",
+async def test_canonical_auth_allows_granted_evaluation_endpoint(monkeypatch) -> None:
+    monkeypatch.setattr(
+        security,
+        "verify_dynamic_api_key",
+        lambda raw_key: _evaluation_identity(),
     )
-
-    identity = await evaluation_access_extension.get_current_evaluation_guarded_user(
-        _request("GET", "/health/live"),
-        _identity(),
+    request = _request("GET", "/health/live")
+    identity = await security.get_current_user(
+        request,
+        bearer=None,
+        api_key="pmk_test",
+        supervisor_session_key=None,
     )
     assert identity["evaluation_access"] is True
     assert identity["execution_mode"] == "evaluation_runtime"
     assert identity["subscription_required"] is False
     assert identity["commercial_quota_required"] is False
+    assert request.state.current_user is identity
 
+
+@pytest.mark.asyncio
+async def test_canonical_auth_rejects_non_granted_evaluation_endpoint(monkeypatch) -> None:
+    monkeypatch.setattr(
+        security,
+        "verify_dynamic_api_key",
+        lambda raw_key: _evaluation_identity(),
+    )
+    request = _request("GET", "/settings")
     with pytest.raises(HTTPException) as exc_info:
-        await evaluation_access_extension.get_current_evaluation_guarded_user(
-            _request("GET", "/settings"),
-            _identity(),
+        await security.get_current_user(
+            request,
+            bearer=None,
+            api_key="pmk_test",
+            supervisor_session_key=None,
         )
     assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Evaluation API key is not allowed for this endpoint."
+
+
+@pytest.mark.asyncio
+async def test_non_evaluation_api_key_keeps_existing_authentication_path(monkeypatch) -> None:
+    ordinary_identity = {
+        "sub": "ordinary-user",
+        "user_id": "ordinary-user",
+        "auth_method": "api_key",
+        "session_type": "api_key",
+        "entitlement_source": "subscription",
+        "scopes": ["read:health"],
+    }
+    monkeypatch.setattr(
+        security,
+        "verify_dynamic_api_key",
+        lambda raw_key: ordinary_identity,
+    )
+    request = _request("GET", "/settings")
+    identity = await security.get_current_user(
+        request,
+        bearer=None,
+        api_key="pmk_test",
+        supervisor_session_key=None,
+    )
+    assert identity is ordinary_identity
