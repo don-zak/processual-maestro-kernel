@@ -10,6 +10,7 @@ EVALUATION_GRANT_ACTIVE = "active"
 EVALUATION_GRANT_REVOKED = "revoked"
 EVALUATION_GRANT_EXPIRED = "expired"
 EVALUATION_EXECUTION_MODE = "evaluation_runtime"
+EVALUATION_TASK_EXECUTE_ENDPOINT = ("POST", "/evaluation/runtime/task-execute")
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -30,6 +31,10 @@ def _normalize_endpoint(value: dict[str, Any]) -> tuple[str, str] | None:
     if not method or not path.startswith("/"):
         return None
     return method, path
+
+
+def _normalize_binding_id(value: Any) -> str:
+    return str(value or "").strip()
 
 
 def evaluation_grants(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -86,6 +91,7 @@ def validate_evaluation_grant(
     requested_scopes: list[str],
     requested_endpoints: list[dict[str, Any]] | None = None,
     requested_task_ids: list[str] | None = None,
+    requested_binding_ids: list[str] | None = None,
     quota_limit: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -149,6 +155,26 @@ def validate_evaluation_grant(
     if not requested_tasks or not requested_tasks.issubset(allowed_tasks):
         raise ValueError("evaluation_grant_task_mismatch")
 
+    allowed_bindings = {
+        _normalize_binding_id(binding_id)
+        for binding_id in grant.get("allowed_binding_ids") or []
+        if _normalize_binding_id(binding_id)
+    }
+    requested_bindings = {
+        _normalize_binding_id(binding_id)
+        for binding_id in requested_binding_ids or []
+        if _normalize_binding_id(binding_id)
+    }
+    runtime_task_granted = EVALUATION_TASK_EXECUTE_ENDPOINT in allowed_endpoint_set
+    if runtime_task_granted and not allowed_bindings:
+        raise ValueError("evaluation_grant_bindings_required")
+    if runtime_task_granted and (
+        not requested_bindings or not requested_bindings.issubset(allowed_bindings)
+    ):
+        raise ValueError("evaluation_grant_binding_mismatch")
+    if not runtime_task_granted and requested_bindings:
+        raise ValueError("evaluation_grant_binding_mismatch")
+
     max_requests = int(grant.get("max_requests", 0) or 0)
     if max_requests <= 0:
         raise ValueError("evaluation_grant_quota_invalid")
@@ -183,6 +209,7 @@ def key_evaluation_grant_state(
             requested_scopes=list(key.get("scopes") or []),
             requested_endpoints=list(key.get("allowed_endpoints") or []),
             requested_task_ids=list(key.get("allowed_task_ids") or []),
+            requested_binding_ids=list(key.get("allowed_binding_ids") or []),
             quota_limit=int(key.get("quota_limit", 0) or 0),
             now=now,
         )
@@ -205,6 +232,22 @@ def evaluation_task_allowed(
         if str(value).strip()
     }
     return str(task_id or "").strip().lower() in allowed
+
+
+def evaluation_binding_allowed(
+    current_user: dict[str, Any],
+    binding_id: str,
+) -> bool:
+    if current_user.get("auth_method") != "api_key":
+        return True
+    if current_user.get("entitlement_source") != "admin_evaluation_grant":
+        return True
+    allowed = {
+        _normalize_binding_id(value)
+        for value in current_user.get("allowed_binding_ids") or []
+        if _normalize_binding_id(value)
+    }
+    return _normalize_binding_id(binding_id) in allowed
 
 
 def evaluation_endpoint_allowed(
@@ -243,6 +286,7 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
             grant.get("task_authority_source")
             or "integration_task_catalog"
         ),
+        "allowed_binding_ids": list(grant.get("allowed_binding_ids") or []),
         "allowed_endpoints": list(grant.get("allowed_endpoints") or []),
         "endpoint_authority_source": str(
             grant.get("endpoint_authority_source")
@@ -273,6 +317,8 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
 __all__ = [
     "EVALUATION_EXECUTION_MODE",
     "EVALUATION_GRANTS_STORAGE_KEY",
+    "EVALUATION_TASK_EXECUTE_ENDPOINT",
+    "evaluation_binding_allowed",
     "evaluation_endpoint_allowed",
     "evaluation_grants",
     "evaluation_task_allowed",
