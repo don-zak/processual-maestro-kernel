@@ -38,7 +38,6 @@ from processual_api.services.evaluation_grants import (
     find_evaluation_grant,
 )
 
-from . import cgt_governor as runtime_host
 from . import settings as settings_router
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from . import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
@@ -231,9 +230,6 @@ async def execute_evaluation_runtime_task(
         "raw_task_input_persisted": False,
         "raw_secret_visible": False,
     }
-
-
-runtime_host.router.include_router(router)
 
 
 __all__ = [
