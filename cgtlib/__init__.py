@@ -333,6 +333,8 @@ __all__ = [
     "evaluate_benchmark_surface",
     "evaluate_benchmark_surfaces",
     "summarize_benchmark_surface",
+    "evaluate_multi_axis_robustness",
+    "summarize_robustness_report",
     "list_canonical_robustness_profiles",
     "load_canonical_robustness_profile",
     "evaluate_canonical_robustness_profile",
