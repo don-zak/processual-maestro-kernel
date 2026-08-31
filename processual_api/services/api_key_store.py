@@ -4,16 +4,39 @@ import base64
 import hashlib
 import hmac
 import json
+import sys
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
-from processual_api.services.evaluation_grants import key_evaluation_grant_state
+from processual_api.services.evaluation_grants import (
+    find_evaluation_grant,
+    key_evaluation_grant_state,
+)
 
 try:
     import bcrypt as _bcrypt_lib
 except ImportError:
     _bcrypt_lib = None
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _lock_fd(fd: int) -> None:
+        msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+
+    def _unlock_fd(fd: int) -> None:
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+else:
+    import fcntl
+
+    def _lock_fd(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+
+    def _unlock_fd(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
 
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -29,6 +52,24 @@ DEFAULT_CLIENT_SCOPES = [
     "read:reports",
     "create:reports",
 ]
+
+
+@contextmanager
+def _settings_file_lock(path: Path) -> Iterator[None]:
+    """Serialize API-key read/validate/update cycles across workers."""
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "w")
+    _lock_fd(handle.fileno())
+    try:
+        yield
+    finally:
+        _unlock_fd(handle.fileno())
+        handle.close()
+        try:
+            lock_path.unlink()
+        except OSError:
+            pass
 
 
 def _verify_pbkdf2_api_key(plain_key: str, hashed_key: str) -> bool:
@@ -134,6 +175,32 @@ def _public_identity(
     }
 
 
+def _governed_evaluation_usage_limit(
+    raw: dict[str, Any],
+    key: dict[str, Any],
+) -> int | None:
+    if str(key.get("category") or "") != "pilot_client":
+        return None
+
+    grant_id = str(key.get("evaluation_grant_id") or "").strip()
+    entitlement_source = str(key.get("entitlement_source") or "").strip()
+    if not grant_id and entitlement_source != "admin_evaluation_grant":
+        return None
+
+    grant = find_evaluation_grant(raw, grant_id)
+    if grant is None:
+        return 0
+
+    grant_limit = int(grant.get("max_requests", 0) or 0)
+    if grant_limit <= 0:
+        return 0
+
+    key_limit = int(key.get("quota_limit", 0) or 0)
+    if key_limit <= 0:
+        return grant_limit
+    return min(key_limit, grant_limit)
+
+
 def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
     if not api_key or not api_key.startswith("pmk_"):
         return None
@@ -144,60 +211,73 @@ def verify_dynamic_api_key(api_key: str) -> dict[str, Any] | None:
     now = datetime.now(UTC).isoformat()
 
     for path in _DATA_DIR.glob("settings_*.json"):
-        user_id = path.stem.replace("settings_", "", 1)
-        raw = _safe_load_json(path)
-        keys = raw.get("api_keys", [])
+        with _settings_file_lock(path):
+            user_id = path.stem.replace("settings_", "", 1)
+            raw = _safe_load_json(path)
+            keys = raw.get("api_keys", [])
 
-        if not isinstance(keys, list):
-            continue
-
-        changed = False
-
-        for key in keys:
-            if not isinstance(key, dict):
+            if not isinstance(keys, list):
                 continue
 
-            status = key.get("status", "enabled")
-            if status in {"revoked", "disabled", "expired"}:
-                continue
+            changed = False
 
-            if key.get("revoked_at"):
-                continue
+            for key in keys:
+                if not isinstance(key, dict):
+                    continue
 
-            if _is_expired(key.get("expires_at")):
-                key["status"] = "expired"
+                status = key.get("status", "enabled")
+                if status in {"revoked", "disabled", "expired"}:
+                    continue
+
+                if key.get("revoked_at"):
+                    continue
+
+                if _is_expired(key.get("expires_at")):
+                    key["status"] = "expired"
+                    changed = True
+                    continue
+
+                grant_allowed, grant_state = key_evaluation_grant_state(raw, key)
+                if not grant_allowed:
+                    key["evaluation_grant_state"] = grant_state
+                    changed = True
+                    continue
+                if key.get("category") == "pilot_client":
+                    key["evaluation_grant_state"] = grant_state
+                    changed = True
+
+                hashed = key.get("hashed") or key.get("hashed_key")
+                if not hashed:
+                    continue
+
+                if not _verify_stored_key(api_key, hashed):
+                    continue
+
+                usage_limit = _governed_evaluation_usage_limit(raw, key)
+                usage_count = int(key.get("usage_count", 0) or 0)
+                if usage_limit is not None and (
+                    usage_limit <= 0 or usage_count >= usage_limit
+                ):
+                    key["evaluation_grant_state"] = "quota_exhausted"
+                    key["quota_rejected_count"] = int(
+                        key.get("quota_rejected_count", 0) or 0
+                    ) + 1
+                    changed = True
+                    raw["api_keys"] = keys
+                    _safe_save_json(path, raw)
+                    return None
+
+                key["last_used_at"] = now
+                key["usage_count"] = usage_count + 1
                 changed = True
-                continue
 
-            grant_allowed, grant_state = key_evaluation_grant_state(raw, key)
-            if not grant_allowed:
-                key["evaluation_grant_state"] = grant_state
-                changed = True
-                continue
-            if key.get("category") == "pilot_client":
-                key["evaluation_grant_state"] = grant_state
-                changed = True
+                raw["api_keys"] = keys
+                _safe_save_json(path, raw)
 
-            hashed = key.get("hashed") or key.get("hashed_key")
-            if not hashed:
-                continue
+                return _public_identity(user_id, raw, key)
 
-            if not _verify_stored_key(api_key, hashed):
-                continue
-
-            key["last_used_at"] = now
-            key["usage_count"] = int(
-                key.get("usage_count", 0) or 0
-            ) + 1
-            changed = True
-
-            raw["api_keys"] = keys
-            _safe_save_json(path, raw)
-
-            return _public_identity(user_id, raw, key)
-
-        if changed:
-            raw["api_keys"] = keys
-            _safe_save_json(path, raw)
+            if changed:
+                raw["api_keys"] = keys
+                _safe_save_json(path, raw)
 
     return None
