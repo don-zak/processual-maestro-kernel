@@ -142,21 +142,56 @@ import processual_api
 from fastapi.routing import APIRoute
 from processual_api.main import app
 import processual_api.routers
+from processual_api.routers import cgt_governor, evaluation_runtime, settings
 
 wanted = __ROUTES__
-counts = {}
-for method, path in wanted:
-    counts[f"{method} {path}"] = sum(
-        1
-        for route in app.routes
-        if isinstance(route, APIRoute)
-        and route.path == path
-        and method in (route.methods or set())
+
+
+def count_routes(route_collection):
+    counts = {}
+    for method, path in wanted:
+        counts[f"{method} {path}"] = sum(
+            1
+            for route in route_collection
+            if isinstance(route, APIRoute)
+            and route.path == path
+            and method in (route.methods or set())
+        )
+    return counts
+
+
+def evaluation_paths(route_collection):
+    return sorted(
+        {
+            route.path
+            for route in route_collection
+            if isinstance(route, APIRoute)
+            and (
+                "evaluation" in route.path
+                or "evaluation-grants" in route.path
+            )
+        }
     )
+
+
 print(json.dumps({
     "processual_api_file": processual_api.__file__,
     "routers_file": processual_api.routers.__file__,
-    "counts": counts,
+    "evaluation_runtime_file": evaluation_runtime.__file__,
+    "cgt_governor_file": cgt_governor.__file__,
+    "settings_file": settings.__file__,
+    "evaluation_router": count_routes(evaluation_runtime.router.routes),
+    "cgt_router": count_routes(cgt_governor.router.routes),
+    "settings_router": count_routes(settings.router.routes),
+    "app": count_routes(app.routes),
+    "evaluation_route_count": len(evaluation_runtime.router.routes),
+    "cgt_route_count": len(cgt_governor.router.routes),
+    "settings_route_count": len(settings.router.routes),
+    "app_route_count": len(app.routes),
+    "evaluation_router_paths": evaluation_paths(evaluation_runtime.router.routes),
+    "cgt_evaluation_paths": evaluation_paths(cgt_governor.router.routes),
+    "settings_evaluation_paths": evaluation_paths(settings.router.routes),
+    "app_evaluation_paths": evaluation_paths(app.routes),
 }, sort_keys=True))
 """.replace("__ROUTES__", repr(routes))
     env = dict(os.environ)
@@ -172,4 +207,4 @@ print(json.dumps({
     payload = json.loads(completed.stdout.strip().splitlines()[-1])
     assert Path(payload["processual_api_file"]).resolve().is_relative_to(ROOT)
     assert Path(payload["routers_file"]).resolve().is_relative_to(ROOT)
-    assert payload["counts"] == {f"{method} {path}": 1 for method, path in routes}
+    assert payload["app"] == {f"{method} {path}": 1 for method, path in routes}, payload
