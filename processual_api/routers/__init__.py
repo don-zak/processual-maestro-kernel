@@ -2,6 +2,7 @@
 
 # Register route extensions on settings_router.
 # Importing for side effects is intentional: main.py already includes settings_router.
+from . import cgt_governor_external_guard as _cgt_governor_external_guard  # noqa: F401,E402
 from . import client_api_keys_18 as _client_api_keys_18  # noqa: F401,E402
 from . import client_provider_alias_18 as _client_provider_alias_18  # noqa: F401,E402
 from . import institution_cases_18 as _institution_cases_18  # noqa: F401,E402
@@ -24,7 +25,6 @@ from . import settings_subscription_runtime as _settings_subscription_runtime  #
 from .applications import router as applications_router
 from .cgt import router as cgt_router
 from .cgt_governor import router as cgt_governor_router
-from . import cgt_governor_external_guard as _cgt_governor_external_guard  # noqa: F401,E402
 from .discord import router as discord_router
 from .execution_observability import router as execution_observability_router
 from .governance import router as governance_router
