@@ -48,6 +48,10 @@ def _catalog_app() -> FastAPI:
     async def reports() -> dict:
         return {"status": "ok"}
 
+    @app.post("/evaluation/runtime/task-execute")
+    async def evaluation_task_execute() -> dict:
+        return {"status": "ok"}
+
     @app.get("/runtime/new-route")
     async def undeclared_runtime_route() -> dict:
         return {"status": "locked"}
@@ -116,10 +120,11 @@ def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
     )
 
     assert payload["policy_authority"] == "canonical_runtime_access_policy"
-    assert payload["grantable_endpoint_count"] == 7
-    assert payload["canonical_task_count"] == 7
+    assert payload["grantable_endpoint_count"] == 8
+    assert payload["canonical_task_count"] == 8
     assert payload["canonical_tasks"]
     assert payload["operational_profile_ids"] == [
+        "platform_evaluation_runtime",
         "platform_governor_sandbox",
         "platform_runtime_observability",
     ]
@@ -134,6 +139,11 @@ def test_access_catalog_exposes_method_path_scope_task_profile_chain() -> None:
     assert govern["operation_class"] == "execute"
     assert govern["operational_profile_ids"] == ["platform_governor_sandbox"]
     assert govern["selection_reason"] == "canonical_runtime_access_policy"
+
+    evaluation = by_key[("POST", "/evaluation/runtime/task-execute")]
+    assert evaluation["required_scopes"] == ["run:evaluation"]
+    assert evaluation["operational_profile_ids"] == ["platform_evaluation_runtime"]
+    assert evaluation["production_allowed"] is False
 
 
 def test_undeclared_and_control_plane_routes_fail_closed() -> None:
