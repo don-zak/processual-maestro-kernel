@@ -1,4 +1,4 @@
-"""Governed admin evaluation grants for subscription-independent pilot access."""
+"""Governed admin evaluation grants for subscription-independent runtime evaluation."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ EVALUATION_GRANTS_STORAGE_KEY = "evaluation_grants_v1"
 EVALUATION_GRANT_ACTIVE = "active"
 EVALUATION_GRANT_REVOKED = "revoked"
 EVALUATION_GRANT_EXPIRED = "expired"
+EVALUATION_EXECUTION_MODE = "evaluation_runtime"
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -21,6 +22,14 @@ def _parse_datetime(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _normalize_endpoint(value: dict[str, Any]) -> tuple[str, str] | None:
+    method = str(value.get("method") or "").strip().upper()
+    path = str(value.get("path") or "").strip()
+    if not method or not path.startswith("/"):
+        return None
+    return method, path
 
 
 def evaluation_grants(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -75,6 +84,7 @@ def validate_evaluation_grant(
     grant_id: str | None,
     client_id: str,
     requested_scopes: list[str],
+    requested_endpoints: list[dict[str, Any]] | None = None,
     requested_task_ids: list[str] | None = None,
     quota_limit: int | None = None,
     now: datetime | None = None,
@@ -104,6 +114,25 @@ def validate_evaluation_grant(
     }
     if not requested or not requested.issubset(allowed_scopes):
         raise ValueError("evaluation_grant_scope_mismatch")
+
+    allowed_endpoint_set = {
+        normalized
+        for item in grant.get("allowed_endpoints") or []
+        if isinstance(item, dict)
+        if (normalized := _normalize_endpoint(item)) is not None
+    }
+    requested_endpoint_set = {
+        normalized
+        for item in requested_endpoints or []
+        if isinstance(item, dict)
+        if (normalized := _normalize_endpoint(item)) is not None
+    }
+    if not allowed_endpoint_set:
+        raise ValueError("evaluation_grant_endpoints_required")
+    if not requested_endpoint_set or not requested_endpoint_set.issubset(
+        allowed_endpoint_set
+    ):
+        raise ValueError("evaluation_grant_endpoint_mismatch")
 
     allowed_tasks = {
         str(task_id).strip().lower()
@@ -152,6 +181,7 @@ def key_evaluation_grant_state(
             grant_id=grant_id,
             client_id=str(key.get("client_id") or ""),
             requested_scopes=list(key.get("scopes") or []),
+            requested_endpoints=list(key.get("allowed_endpoints") or []),
             requested_task_ids=list(key.get("allowed_task_ids") or []),
             quota_limit=int(key.get("quota_limit", 0) or 0),
             now=now,
@@ -177,6 +207,26 @@ def evaluation_task_allowed(
     return str(task_id or "").strip().lower() in allowed
 
 
+def evaluation_endpoint_allowed(
+    current_user: dict[str, Any],
+    *,
+    method: str,
+    path: str,
+) -> bool:
+    if current_user.get("auth_method") != "api_key":
+        return True
+    if current_user.get("entitlement_source") != "admin_evaluation_grant":
+        return True
+    requested = (str(method or "").strip().upper(), str(path or "").strip())
+    allowed = {
+        normalized
+        for item in current_user.get("allowed_endpoints") or []
+        if isinstance(item, dict)
+        if (normalized := _normalize_endpoint(item)) is not None
+    }
+    return requested in allowed
+
+
 def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
     return {
         "grant_id": str(grant.get("grant_id") or ""),
@@ -193,6 +243,11 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
             grant.get("task_authority_source")
             or "integration_task_catalog"
         ),
+        "allowed_endpoints": list(grant.get("allowed_endpoints") or []),
+        "endpoint_authority_source": str(
+            grant.get("endpoint_authority_source")
+            or "canonical_runtime_access_policy"
+        ),
         "allowed_scopes": list(grant.get("allowed_scopes") or []),
         "max_requests": int(grant.get("max_requests", 0) or 0),
         "created_at": str(grant.get("created_at") or ""),
@@ -203,12 +258,20 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
             grant.get("approved_by_role") or ""
         ),
         "subscription_required": False,
+        "execution_mode": str(
+            grant.get("execution_mode") or EVALUATION_EXECUTION_MODE
+        ),
+        "real_runtime_execution": bool(
+            grant.get("real_runtime_execution", True)
+        ),
         "production_allowed": False,
     }
 
 
 __all__ = [
+    "EVALUATION_EXECUTION_MODE",
     "EVALUATION_GRANTS_STORAGE_KEY",
+    "evaluation_endpoint_allowed",
     "evaluation_grants",
     "evaluation_task_allowed",
     "find_evaluation_grant",
