@@ -139,9 +139,9 @@ def test_external_evaluation_routes_are_unique_in_clean_startup() -> None:
     script = """
 import json
 import processual_api
-import processual_api.routers
 from fastapi.routing import APIRoute
 from processual_api.main import app
+import processual_api.routers
 
 wanted = __ROUTES__
 counts = {}
