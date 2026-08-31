@@ -41,8 +41,8 @@ from processual_api.services.evaluation_grants import (
 )
 from processual_api.services.evaluation_runtime_delivery import (
     EvaluationDeliveryError,
-    EvaluationIdempotencyConflict,
-    EvaluationReplayBlocked,
+    EvaluationIdempotencyConflictError,
+    EvaluationReplayBlockedError,
     claim_evaluation_execution,
     complete_evaluation_execution,
     evaluation_request_fingerprint,
@@ -116,7 +116,9 @@ class EvaluationRuntimeTaskExecuteRequest(BaseModel):
     def _normalize_idempotency_key(cls, value: str) -> str:
         normalized = value.strip()
         if len(normalized) < 8:
-            raise ValueError("idempotency_key must contain at least 8 non-whitespace characters")
+            raise ValueError(
+                "idempotency_key must contain at least 8 non-whitespace characters"
+            )
         return normalized
 
 
@@ -198,12 +200,12 @@ def _safe_replay_response(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def _delivery_http_error(exc: EvaluationDeliveryError) -> HTTPException:
-    if isinstance(exc, EvaluationIdempotencyConflict):
+    if isinstance(exc, EvaluationIdempotencyConflictError):
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Idempotency key was already used with a different evaluation request.",
         )
-    if isinstance(exc, EvaluationReplayBlocked):
+    if isinstance(exc, EvaluationReplayBlockedError):
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
