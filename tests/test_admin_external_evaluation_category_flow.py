@@ -90,9 +90,11 @@ def test_grant_creation_is_hard_blocked_until_every_plan_gate_is_ready() -> None
         "endpoints.length > 0",
         "scopes.length > 0",
         "tasks.length > 0",
+        "!runtimeSelected || bindings.length > 0",
+        "!runtimeSelected || bindingsPrepared",
         "purpose.length >= 10",
         "duration >= 1 && duration <= 90",
-        "quota >= 1 && quota <= 10000",
+        "requestLimit >= 1 && requestLimit <= 5000",
         "button.disabled = !readiness.ready",
         "if (!readiness.ready)",
         "Evaluation grant creation blocked by the lifecycle readiness contract.",
@@ -101,7 +103,7 @@ def test_grant_creation_is_hard_blocked_until_every_plan_gate_is_ready() -> None
         assert marker in source
 
 
-def test_grant_post_uses_only_readiness_contract_values() -> None:
+def test_grant_post_uses_complete_readiness_contract_values() -> None:
     source = _source(EVALUATION)
 
     create_start = source.index("async function createEvaluationGrant()")
@@ -114,12 +116,45 @@ def test_grant_post_uses_only_readiness_contract_values() -> None:
     assert "client_id: readiness.clientId" in create_source
     assert "issued_to: readiness.issuedTo" in create_source
     assert "allowed_task_ids: readiness.tasks" in create_source
+    assert "allowed_binding_ids: readiness.bindings" in create_source
+    assert "allowed_endpoints: readiness.endpoints" in create_source
     assert "const allowedScopes = readiness.scopes;" in create_source
     assert "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})" in create_source
     assert "expires_in_days: readiness.duration" in create_source
-    assert "max_requests: readiness.quota" in create_source
+    assert "max_requests: readiness.requestLimit" in create_source
     assert "selectedEvaluationScopes();" not in create_source
     assert "/settings/api-keys" not in create_source
+
+
+def test_runtime_task_execution_requires_prepared_evaluation_binding() -> None:
+    source = _source(EVALUATION)
+
+    required = [
+        "EVALUATION_BINDING_CATALOG_ENDPOINT",
+        "'/settings/admin/evaluation-grants/binding-catalog'",
+        "RUNTIME_TASK_ENDPOINT = '/evaluation/runtime/task-execute'",
+        "Prepared Evaluation Bindings",
+        "function runtimeTaskEndpointSelected",
+        "function selectedEvaluationBindings",
+        "function renderEvaluationBindingCatalog",
+        "item.selectable === true && taskAllowed",
+        "Runtime task execution requires at least one prepared Evaluation binding.",
+        "Every selected binding must be sandbox-ready and match a selected canonical task.",
+    ]
+    for marker in required:
+        assert marker in source
+
+
+def test_evaluation_request_limit_matches_backend_contract() -> None:
+    source = _source(EVALUATION)
+
+    assert 'id="admin-eval-max-requests" type="number" min="1" max="5000"' in source
+    assert "requestLimit >= 1 && requestLimit <= 5000" in source
+    assert "Evaluation request limit must be between 1 and 5000." in source
+    assert "key.evaluation_request_limit" in source
+    assert "key.quota_limit" not in source
+    assert "quota-bound" not in source
+    assert "<strong>Quota</strong>" not in source
 
 
 def test_standard_runtime_fixup_cannot_generate_an_external_evaluation_key() -> None:
@@ -145,6 +180,8 @@ def test_evaluation_issue_remains_one_time_and_never_persists_raw_secret() -> No
         "X-API-Key:",
         "Copy API Key",
         "Bound tasks:",
+        "Prepared bindings:",
+        "Evaluation request limit",
         "Subscription required",
         "Production",
     ]
