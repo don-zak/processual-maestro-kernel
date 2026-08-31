@@ -186,6 +186,7 @@ def _public_identity(
             identity.update(
                 {
                     "category": "pilot_client",
+                    "allowed_binding_ids": list(grant.get("allowed_binding_ids") or []),
                     "allowed_endpoints": list(grant.get("allowed_endpoints") or []),
                     "endpoint_authority_source": str(
                         grant.get("endpoint_authority_source")
