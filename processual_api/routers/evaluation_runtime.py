@@ -34,6 +34,7 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
 )
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
+    evaluation_binding_allowed,
     evaluation_task_allowed,
     find_evaluation_grant,
 )
@@ -128,6 +129,11 @@ async def execute_evaluation_runtime_task(
     owner_id = _evaluation_owner_id(current_user)
     raw = settings_router._load_raw(owner_id)
     _require_evaluation_credential(current_user, raw)
+    if not evaluation_binding_allowed(current_user, body.binding_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Evaluation grant does not allow this prepared binding.",
+        )
     spec = binding_runtime._find_binding(raw, body.binding_id)
     task_id = _authorize_task(
         current_user,
