@@ -5,10 +5,11 @@ import hashlib
 import hmac
 import json
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from processual_api.services.evaluation_grants import (
     find_evaluation_grant,
