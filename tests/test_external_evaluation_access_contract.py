@@ -137,7 +137,7 @@ import json
 from fastapi.routing import APIRoute
 from processual_api.main import app
 
-wanted = %r
+wanted = __ROUTES__
 counts = {}
 for method, path in wanted:
     counts[f"{method} {path}"] = sum(
@@ -148,7 +148,7 @@ for method, path in wanted:
         and method in (route.methods or set())
     )
 print(json.dumps(counts, sort_keys=True))
-""" % (routes,)
+""".replace("__ROUTES__", repr(routes))
     completed = subprocess.run(
         [sys.executable, "-c", script],
         check=True,
