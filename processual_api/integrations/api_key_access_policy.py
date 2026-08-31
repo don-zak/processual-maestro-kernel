@@ -129,6 +129,15 @@ _POLICIES = {
         ("read:reports",),
         ("platform_runtime_observability", "platform_governor_sandbox"),
     ),
+    ("POST", "/evaluation/runtime/task-execute"): _policy(
+        "POST",
+        "/evaluation/runtime/task-execute",
+        "platform.evaluation.task_execute",
+        "Bounded canonical task execution for Evaluation Runtime",
+        "execute",
+        ("run:evaluation",),
+        ("platform_evaluation_runtime",),
+    ),
 }
 
 API_KEY_ACCESS_POLICIES = MappingProxyType(_POLICIES)
