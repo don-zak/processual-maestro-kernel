@@ -15,6 +15,7 @@ from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBea
 
 from ..admin_audit_log import append_admin_audit_event
 from ..services.api_key_store import verify_dynamic_api_key
+from ..services.evaluation_grants import evaluation_endpoint_allowed
 from ..settings import settings
 from ..supervisor_session_keys import validate_supervisor_session_key
 
@@ -24,6 +25,7 @@ try:
 except ImportError:
     jwt: Any = None  # type: ignore[no-redef]
     PyJWTError: type[Exception] = Exception  # type: ignore[no-redef]
+
 
 class _PBKDF2CompatBcrypt:
     """Tiny bcrypt-compatible fallback for minimal local/test environments.
@@ -175,7 +177,6 @@ def _apply_supervisor_session_header(
     return _merge_supervisor_session_user(user, session)
 
 
-
 def _get_jwt_secret() -> str:
     return settings.jwt_secret
 
@@ -217,8 +218,6 @@ def create_access_token(
     if organization_id is not None:
         payload["organization_id"] = organization_id
     return jwt.encode(payload, _get_jwt_secret(), algorithm=_get_jwt_algorithm())
-
-
 
 
 def verify_access_token(token: str) -> dict:
@@ -429,6 +428,15 @@ async def get_current_user(
     if api_key:
         dynamic_user = verify_dynamic_api_key(api_key)
         if dynamic_user:
+            if dynamic_user.get("entitlement_source") == "admin_evaluation_grant" and not evaluation_endpoint_allowed(
+                dynamic_user,
+                method=request.method,
+                path=request.url.path,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Evaluation API key is not allowed for this endpoint.",
+                )
             request.state.current_user = dynamic_user
             return dynamic_user
 
@@ -439,7 +447,6 @@ async def get_current_user(
             and runtime_env not in {"production", "prod"}
             and not settings.is_production
         )
-
 
         if allow_env_fallback:
             for stored_key in settings.api_keys:
@@ -464,6 +471,7 @@ async def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required. Provide a Bearer token or X-API-Key header.",
     )
+
 
 def require_scope(required_scope: str):
     async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
@@ -527,6 +535,7 @@ def require_recent_mfa(max_age_seconds: int = 300):
         return current_user
 
     return _recent_mfa_dependency
+
 
 def require_platform_admin_step_up(
     max_age_seconds: int | None = None,
