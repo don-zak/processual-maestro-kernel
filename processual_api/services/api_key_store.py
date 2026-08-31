@@ -59,17 +59,18 @@ def _settings_file_lock(path: Path) -> Iterator[None]:
     """Serialize API-key read/validate/update cycles across workers."""
     lock_path = path.with_suffix(path.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = open(lock_path, "w")
-    _lock_fd(handle.fileno())
-    try:
-        yield
-    finally:
-        _unlock_fd(handle.fileno())
-        handle.close()
+    with open(lock_path, "a+b") as handle:
+        handle.seek(0, 2)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        _lock_fd(handle.fileno())
         try:
-            lock_path.unlink()
-        except OSError:
-            pass
+            yield
+        finally:
+            handle.seek(0)
+            _unlock_fd(handle.fileno())
 
 
 def _verify_pbkdf2_api_key(plain_key: str, hashed_key: str) -> bool:
