@@ -81,6 +81,25 @@ def _body() -> routes.EvaluationBindingProvisionRequest:
     )
 
 
+def _post_body_without_mapping() -> routes.EvaluationBindingProvisionRequest:
+    task = get_integration_task("crm.customer_update_draft")
+    body = _body()
+    body.binding = EnterpriseEndpointBindingSpec(
+        binding_id="evaluation.crm.customer",
+        display_name="Evaluation CRM customer update draft",
+        adapter_contract_id=task.adapter_contract_id,
+        task_id=task.task_id,
+        credential_profile_id="enterprise_core_api_reference",
+        base_url="https://sandbox.customer.example/api",
+        method="POST",
+        path="/customers/update-draft",
+        required_scope_ids=list(task.required_scope_ids),
+        field_mapping={field: f"$.{field}" for field in task.required_input_fields},
+    )
+    body.request_mapping = None
+    return body
+
+
 @pytest.fixture(autouse=True)
 def _allow_platform_admin(monkeypatch):
     async def allow(current_user: dict, request: Request | None = None) -> dict:
@@ -154,6 +173,8 @@ def test_provisioning_is_subscription_independent_and_persists_safe_authority(
     assert payload["runtime_connector_approved"] is False
     assert payload["raw_secret_visible"] is False
     assert payload["raw_payload_visible"] is False
+    assert payload["secret_reference"]["secret_reference"] == "acme/crm/sandbox-reader"
+    assert payload["secret_reference"]["value_included"] is False
 
     raw = settings_router._load_raw("evaluation-owner")
     assert raw[BINDING_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
@@ -162,8 +183,9 @@ def test_provisioning_is_subscription_independent_and_persists_safe_authority(
     assert raw[SANDBOX_GRANT_STORAGE_KEY][0]["grant_id"] == "segrant_eval_001"
 
     serialized = str(payload).lower()
-    assert "acme/crm/sandbox-reader" not in serialized
     assert "production_allowed': true" not in serialized
+    assert "raw_secret_visible': true" not in serialized
+    assert "value_included': true" not in serialized
 
 
 def test_provisioning_rejects_mismatched_binding_ids(monkeypatch, tmp_path) -> None:
@@ -187,8 +209,7 @@ def test_provisioning_rejects_mismatched_binding_ids(monkeypatch, tmp_path) -> N
 
 def test_post_binding_requires_request_mapping_before_persistence(monkeypatch, tmp_path) -> None:
     _patch_data_dir(monkeypatch, tmp_path)
-    body = _body()
-    body.binding.method = "POST"
+    body = _post_body_without_mapping()
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
