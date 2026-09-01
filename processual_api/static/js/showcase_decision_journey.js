@@ -18,7 +18,7 @@
       decisionClass: 'control',
       reason: 'Human approval required',
       description: 'A governed operational action is admissible, but it cannot cross the approval boundary automatically.',
-      stopAt: 'approval',
+      path: ['identity', 'authority', 'entitlement', 'quota', 'capacity', 'governance', 'approval'],
       finalLabel: 'Approval recorded → governed execution → evidence retained',
     },
     repair: {
@@ -27,7 +27,7 @@
       decisionClass: 'repair',
       reason: 'Qualified fallback available',
       description: 'The primary provider degrades. Maestro redirects through a prepared fallback without expanding authority.',
-      stopAt: 'evidence',
+      path: ['identity', 'authority', 'entitlement', 'quota', 'capacity', 'governance', 'execution', 'evidence'],
       finalLabel: 'Qualified fallback executed inside policy boundary → evidence retained',
     },
     stop: {
@@ -36,7 +36,7 @@
       decisionClass: 'stop',
       reason: 'Outside approved maintenance window',
       description: 'A required policy condition is not satisfied, so execution authority is denied before the external action.',
-      stopAt: 'governance',
+      path: ['identity', 'authority', 'entitlement', 'quota', 'capacity', 'governance'],
       finalLabel: 'Fail closed → no execution granted',
     },
   };
@@ -71,6 +71,7 @@
       .mdj-node.active .mdj-node-label{color:var(--bright)}
       .mdj-node.blocked .mdj-node-core{border-color:rgba(248,113,113,.48);color:var(--error);background:rgba(248,113,113,.08)}
       .mdj-node.blocked .mdj-node-label{color:var(--error)}
+      .mdj-node.skipped{opacity:.22}
       .mdj-pulse{position:absolute;top:20px;left:4%;height:5px;width:0;border-radius:999px;background:linear-gradient(90deg,var(--amber-dim),var(--amber));box-shadow:0 0 14px rgba(245,166,35,.42);z-index:0;transition:width .42s ease}
       .mdj-result{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(0,1.3fr);gap:10px;margin-top:16px}
       .mdj-decision,.mdj-reason{border:1px solid var(--rim);border-radius:10px;padding:12px;background:rgba(8,11,15,.44)}
@@ -150,11 +151,15 @@
     bindJourney(journey);
   }
 
+  function clearNodeState(journey) {
+    journey.querySelectorAll('.mdj-node').forEach((node) => {
+      node.classList.remove('done', 'active', 'blocked', 'skipped');
+    });
+  }
+
   function resetJourney(journey) {
     runToken += 1;
-    journey.querySelectorAll('.mdj-node').forEach((node) => {
-      node.classList.remove('done', 'active', 'blocked');
-    });
+    clearNodeState(journey);
     journey.querySelector('[data-mdj-pulse]').style.width = '0%';
     const decision = journey.querySelector('[data-mdj-decision]');
     decision.textContent = '—';
@@ -183,19 +188,27 @@
     const token = ++runToken;
     resetVisualStateForRun(journey);
     const scenario = SCENARIOS[activeScenario];
-    const stopIndex = STEPS.findIndex((step) => step.id === scenario.stopAt);
+    const path = scenario.path;
+    const admittedSteps = new Set(path);
 
-    for (let index = 0; index <= stopIndex; index += 1) {
+    journey.querySelectorAll('.mdj-node').forEach((node) => {
+      if (!admittedSteps.has(node.dataset.mdjStep)) node.classList.add('skipped');
+    });
+
+    for (let index = 0; index < path.length; index += 1) {
       if (token !== runToken) return;
-      const step = STEPS[index];
-      const node = journey.querySelector(`[data-mdj-step="${step.id}"]`);
+      const stepId = path[index];
+      const step = STEPS.find((candidate) => candidate.id === stepId);
+      const node = journey.querySelector(`[data-mdj-step="${stepId}"]`);
+      if (!step || !node) return;
       journey.querySelectorAll('.mdj-node.active').forEach((item) => item.classList.remove('active'));
       node.classList.add('active');
       journey.querySelector('[data-mdj-status]').textContent = step.detail;
-      journey.querySelector('[data-mdj-pulse]').style.width = `${Math.min(92, 6 + (index * 10.75))}%`;
-      await wait(index === stopIndex ? 620 : 430);
+      const denominator = Math.max(1, path.length - 1);
+      journey.querySelector('[data-mdj-pulse]').style.width = `${Math.min(92, 6 + ((index * 86) / denominator))}%`;
+      await wait(index === path.length - 1 ? 620 : 430);
       if (token !== runToken) return;
-      if (index < stopIndex) {
+      if (index < path.length - 1) {
         node.classList.remove('active');
         node.classList.add('done');
       }
@@ -224,9 +237,7 @@
   }
 
   function resetVisualStateForRun(journey) {
-    journey.querySelectorAll('.mdj-node').forEach((node) => {
-      node.classList.remove('done', 'active', 'blocked');
-    });
+    clearNodeState(journey);
     journey.querySelector('[data-mdj-pulse]').style.width = '0%';
     journey.querySelector('[data-mdj-approve]').style.display = 'none';
     const decision = journey.querySelector('[data-mdj-decision]');
@@ -243,6 +254,7 @@
     journey.querySelector('[data-mdj-status]').textContent = 'Human approval recorded. Governed execution admitted…';
 
     const execution = journey.querySelector('[data-mdj-step="execution"]');
+    execution.classList.remove('skipped');
     execution.classList.add('active');
     journey.querySelector('[data-mdj-pulse]').style.width = '88%';
     await wait(480);
@@ -251,6 +263,7 @@
     execution.classList.add('done');
 
     const evidence = journey.querySelector('[data-mdj-step="evidence"]');
+    evidence.classList.remove('skipped');
     evidence.classList.add('active');
     journey.querySelector('[data-mdj-status]').textContent = 'Governed execution completed. Finalizing auditable evidence…';
     journey.querySelector('[data-mdj-pulse]').style.width = '96%';
