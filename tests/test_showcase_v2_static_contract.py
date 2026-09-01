@@ -31,7 +31,6 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     assert "data-maestro-guided-flow" in auth
     assert "data-maestro-cinematic-transitions" in auth
     assert "script.async = false" in auth
-    # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
     assert 'id="page-simulation"' in index
@@ -130,11 +129,17 @@ def test_decision_journey_is_deterministic_governed_and_demo_safe() -> None:
     ):
         assert label in journey
 
-    assert "{ id: 'execution', label: 'Execution'" in journey
-    assert "data-mdj-step=\"execution\"" in journey
-    assert "stopAt: 'approval'" in journey
-    assert "stopAt: 'evidence'" in journey
-    assert journey.count("stopAt: 'governance'") == 1
+    control_path = "path: ['identity', 'authority', 'entitlement', 'quota', 'capacity', 'governance', 'approval']"
+    repair_path = "path: ['identity', 'authority', 'entitlement', 'quota', 'capacity', 'governance', 'execution', 'evidence']"
+    stop_path = "path: ['identity', 'authority', 'entitlement', 'quota', 'capacity', 'governance']"
+
+    assert control_path in journey
+    assert repair_path in journey
+    assert stop_path in journey
+    assert "const path = scenario.path" in journey
+    assert "new Set(path)" in journey
+    assert "node.classList.add('skipped')" in journey
+    assert "stopAt:" not in journey
     assert "data-mdj-approve" in journey
     assert "production-ready" not in journey.lower()
 
