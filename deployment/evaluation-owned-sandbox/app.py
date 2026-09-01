@@ -67,15 +67,23 @@ class EvaluationSandboxHandler(BaseHTTPRequestHandler):
             {"detail": "not_found", "production_allowed": False},
         )
 
-    def do_POST(self) -> None:  # noqa: N802 - explicit fail-closed mutation surface
+    def _reject_mutation(self) -> None:
         self._write_json(
             HTTPStatus.METHOD_NOT_ALLOWED,
             {"detail": "read_only_sandbox", "production_allowed": False},
         )
 
-    do_PUT = do_POST
-    do_PATCH = do_POST
-    do_DELETE = do_POST
+    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+        self._reject_mutation()
+
+    def do_PUT(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+        self._reject_mutation()
+
+    def do_PATCH(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+        self._reject_mutation()
+
+    def do_DELETE(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+        self._reject_mutation()
 
     def log_message(self, format: str, *args: object) -> None:
         # Avoid request payload/header logging. Cloud Run still captures the
