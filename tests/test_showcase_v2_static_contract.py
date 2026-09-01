@@ -28,10 +28,21 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     assert 'id="set-integration-readiness-card"' in index
 
 
-def test_showcase_p0_cues_are_explicit_and_fail_safe() -> None:
+def test_showcase_enterprise_narrative_is_explicit_and_fail_safe() -> None:
     showcase = (STATIC_ROOT / "js" / "showcase_v2.js").read_text(encoding="utf-8")
 
     for label in (
+        "Agentic Operations & Governance Control Plane",
+        "Capability is not",
+        "When an AI agent can perform a real operational action",
+        "DEMO UI",
+        "RECORDED EVIDENCE",
+        "TECHNICAL QUALIFICATION",
+        "deterministic synthetic interaction",
+        "qualified governance outcomes",
+        "CI and integrity gates",
+        "View governed outcomes",
+        "View qualification evidence",
         "Actor",
         "Authority",
         "Commercial Rights",
@@ -43,6 +54,9 @@ def test_showcase_p0_cues_are_explicit_and_fail_safe() -> None:
         "CONTROL",
         "REPAIR",
         "STOP",
+        "SLA incident governance",
+        "Provider degradation recovery",
+        "Sensitive configuration change",
         "RECORDED QUALIFICATION EVIDENCE",
         "Operational Admission Impact",
         "Quota used",
@@ -59,6 +73,8 @@ def test_showcase_p0_cues_are_explicit_and_fail_safe() -> None:
     ):
         assert label in showcase
 
+    assert "data-msv2-nav=\"governance\"" in showcase
+    assert "data-msv2-nav=\"reports\"" in showcase
     assert "set-usage-quota-used" in showcase
     assert "set-usage-quota-remaining" in showcase
     assert "set-usage-latest-status" in showcase
