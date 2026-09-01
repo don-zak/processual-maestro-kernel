@@ -21,7 +21,9 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
 
     assert "showcase_v2.js?v=showcase-v2-p1" in auth
     assert "showcase_decision_journey.js?v=decision-journey-p2" in auth
+    assert "showcase_decision_receipt.js?v=decision-receipt-p2" in auth
     assert "data-maestro-decision-journey" in auth
+    assert "data-maestro-decision-receipt" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
@@ -120,7 +122,33 @@ def test_decision_journey_is_deterministic_governed_and_demo_safe() -> None:
         assert label in journey
 
     assert "stopAt: 'approval'" in journey
-    assert "stopAt: 'governance'" in journey
+    assert journey.count("stopAt: 'governance'") == 2
     assert "data-mdj-approve" in journey
-    assert "data-mdj-step=\"evidence\"" not in journey
     assert "production-ready" not in journey.lower()
+
+
+def test_decision_receipt_makes_evidence_visible_without_claiming_production() -> None:
+    receipt = (STATIC_ROOT / "js" / "showcase_decision_receipt.js").read_text(
+        encoding="utf-8"
+    )
+
+    for label in (
+        "DECISION RECEIPT",
+        "DEMO RECEIPT · synthetic evidence view",
+        "Demo operator",
+        "Governed scope",
+        "Raw secret",
+        "Not included",
+        "Approval recorded",
+        "Evidence retained",
+        "Fallback governed",
+        "Execution denied",
+        "It is not a live production audit record",
+    ):
+        assert label in receipt
+
+    assert "MutationObserver" in receipt
+    assert "decision === 'CONTROL'" in receipt
+    assert "decision === 'REPAIR'" in receipt
+    assert "decision === 'STOP'" in receipt
+    assert "production-ready" not in receipt.lower()
