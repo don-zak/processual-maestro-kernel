@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from processual_api.release_gate import (
     EXPECTED_ALEMBIC_HEAD,
@@ -54,8 +56,8 @@ def _valid_environment() -> dict[str, str]:
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
-    assert staging.expected_alembic_head == "20260809_0046"
-    assert EXPECTED_ALEMBIC_HEAD == "20260809_0046"
+    assert staging.expected_alembic_head == "20260901_0049"
+    assert EXPECTED_ALEMBIC_HEAD == "20260901_0049"
     assert set(staging.checks) == {
         "required_values",
         "secret_strength",
@@ -68,6 +70,15 @@ def test_valid_staging_and_production_environment_passes() -> None:
     production = _valid_environment()
     production["ENVIRONMENT"] = "production"
     assert evaluate_release_environment(production).environment == "production"
+
+
+def test_release_gate_matches_actual_alembic_graph_head() -> None:
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    script = ScriptDirectory.from_config(config)
+    heads = script.get_heads()
+
+    assert heads == [EXPECTED_ALEMBIC_HEAD]
 
 
 @pytest.mark.parametrize(
@@ -119,7 +130,7 @@ def test_release_workflow_requires_gates_before_publish() -> None:
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
         "Verify migration head",
-        "20260809_0046",
+        "20260901_0049",
         "Commercial staging smoke gate",
         "python -m processual_api.staging_smoke",
         "Run commercial regression gate",
