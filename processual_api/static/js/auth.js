@@ -67,6 +67,7 @@ const AUTH = (() => {
   scripts.forEach(([attribute, src]) => {
     if (document.querySelector(`script[${attribute}]`)) return;
     const script = document.createElement('script');
+    script.async = false;
     script.src = src;
     script.setAttribute(attribute, 'true');
     document.body.appendChild(script);
