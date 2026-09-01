@@ -18,7 +18,7 @@ def test_shared_delivery_migration_extends_current_head() -> None:
     assert 'down_revision: str | None = "20260830_0047"' in source
     assert 'TABLE = "evaluation_runtime_delivery"' in source
     assert 'name="uq_evaluation_runtime_delivery_authority_key"' in source
-    assert 'name="ck_evaluation_runtime_delivery_state"' in source
+    assert 'op.f("ck_evaluation_runtime_delivery_state")' in source
     assert 'sa.Column("replay_response", sa.JSON(), nullable=True)' in source
     assert 'sa.Column("evidence", sa.JSON(), nullable=True)' in source
     assert "raw_task_input" not in source.replace("raw_task_input_persisted", "")
@@ -35,15 +35,29 @@ def test_runtime_uses_shared_postgres_delivery_authority() -> None:
     assert "from processual_api.services.evaluation_runtime_delivery import" not in source
 
 
-def test_postgres_store_claims_with_database_uniqueness() -> None:
+def test_postgres_store_uses_typed_transactional_authority() -> None:
     source = _read(
         "processual_api/services/evaluation_runtime_delivery_postgres.py"
     )
 
-    assert "INSERT INTO" in source
-    assert "ON CONFLICT DO NOTHING" in source
-    assert "FOR UPDATE" in source
-    assert "CAST(:replay_response AS JSONB)" in source
-    assert "CAST(:evidence AS JSONB)" in source
-    assert "raw_task_input_persisted = false" in source
-    assert "raw_secret_visible = false" in source
+    assert "from sqlalchemy.dialects.postgresql import insert as pg_insert" in source
+    assert "EvaluationRuntimeDelivery" in source
+    assert ".on_conflict_do_nothing()" in source
+    assert ".with_for_update()" in source
+    assert "text(" not in source
+    assert "INSERT INTO" not in source
+    assert "raw_task_input_persisted=False" in source
+    assert "raw_secret_visible=False" in source
+
+
+def test_delivery_model_is_registered_with_shared_metadata() -> None:
+    model_source = _read(
+        "processual_api/services/evaluation_runtime_delivery_models.py"
+    )
+    alembic_env = _read("alembic/env.py")
+
+    assert 'class EvaluationRuntimeDelivery(Base):' in model_source
+    assert '__tablename__ = "evaluation_runtime_delivery"' in model_source
+    assert 'name="uq_evaluation_runtime_delivery_authority_key"' in model_source
+    assert 'name="state"' in model_source
+    assert "evaluation_runtime_delivery_models" in alembic_env
