@@ -48,9 +48,11 @@ _PUBLIC_PATHS = {
     "/favicon.ico",
 }
 
-# Administrative authorization is resolved by the route's identity/scope authority.
-# It must not be coupled to a customer subscription lookup.
-_SUBSCRIPTION_EXEMPT_PREFIXES = {"/settings/admin/"}
+# Authentication and administrative authorization are resolved by their own
+# route-level identity/scope authority. They must never depend on customer
+# subscription lookup, including newly added /auth/* routes that are not yet
+# present in the explicit public-path allowlist above.
+_SUBSCRIPTION_EXEMPT_PREFIXES = {"/auth/", "/settings/admin/"}
 _SUSPENSION_ALLOWED_PREFIXES = {"/billing"}
 _READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
 _JWT_SECRET = None
