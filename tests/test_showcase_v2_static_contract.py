@@ -22,8 +22,10 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     assert "showcase_v2.js?v=showcase-v2-p1" in auth
     assert "showcase_decision_journey.js?v=decision-journey-p2" in auth
     assert "showcase_decision_receipt.js?v=decision-receipt-p2" in auth
+    assert "showcase_decision_motion.js?v=decision-motion-p2" in auth
     assert "data-maestro-decision-journey" in auth
     assert "data-maestro-decision-receipt" in auth
+    assert "data-maestro-decision-motion" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
@@ -152,3 +154,16 @@ def test_decision_receipt_makes_evidence_visible_without_claiming_production() -
     assert "decision === 'REPAIR'" in receipt
     assert "decision === 'STOP'" in receipt
     assert "production-ready" not in receipt.lower()
+
+
+def test_decision_motion_emphasizes_active_path_and_respects_reduced_motion() -> None:
+    motion = (STATIC_ROOT / "js" / "showcase_decision_motion.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert ".mdj-node.active .mdj-node-core::after" in motion
+    assert ".mdj-pulse::after" in motion
+    assert "height:6px!important" in motion
+    assert "@keyframes mdj-node-wave" in motion
+    assert "@keyframes mdj-pulse-head" in motion
+    assert "prefers-reduced-motion:reduce" in motion
