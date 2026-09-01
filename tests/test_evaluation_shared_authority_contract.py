@@ -33,7 +33,8 @@ def test_security_is_shared_first_and_production_fail_closed() -> None:
 
     assert "verify_evaluation_api_key" in security
     assert "await verify_evaluation_api_key(api_key)" in security
-    assert "Shared Evaluation authority is unavailable" in security
+    assert "except EvaluationAuthorityError" in security
+    assert "_legacy_get_current_user" in security
     assert "Evaluation API key is not present in shared authority" in security
 
 
