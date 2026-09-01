@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260901_0048"
+HEAD = "20260901_0049"
 PREVIOUS = "20260809_0045"
 TABLE = "admin_market_assessment_commercial_terms"
 
