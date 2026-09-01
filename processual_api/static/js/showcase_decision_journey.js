@@ -222,7 +222,6 @@
   }
 
   function resetVisualStateForRun(journey) {
-    runToken += 1;
     journey.querySelectorAll('.mdj-node').forEach((node) => {
       node.classList.remove('done', 'active', 'blocked');
     });
