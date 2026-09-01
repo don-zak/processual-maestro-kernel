@@ -107,6 +107,7 @@ def test_decision_journey_is_deterministic_governed_and_demo_safe() -> None:
         "Capacity",
         "Governance",
         "Human Approval",
+        "Execution",
         "Evidence",
         "SLA incident governance",
         "Provider degradation recovery",
@@ -117,18 +118,22 @@ def test_decision_journey_is_deterministic_governed_and_demo_safe() -> None:
         "Human approval required",
         "Qualified fallback available",
         "Outside approved maintenance window",
-        "Execution paused. Human approval is required before evidence finalization.",
-        "Human approval recorded. Finalizing auditable evidence",
-        "Approval recorded → evidence retained",
-        "Fallback selected inside policy boundary",
+        "Execution paused. Human approval is required before governed execution.",
+        "Human approval recorded. Governed execution admitted",
+        "Governed execution completed. Finalizing auditable evidence",
+        "Approval recorded → governed execution → evidence retained",
+        "Qualified fallback executed inside policy boundary → evidence retained",
         "Fail closed → no execution granted",
         "DEMO UI · deterministic sequence",
         "does not claim live production execution",
     ):
         assert label in journey
 
+    assert "{ id: 'execution', label: 'Execution'" in journey
+    assert "data-mdj-step=\"execution\"" in journey
     assert "stopAt: 'approval'" in journey
-    assert journey.count("stopAt: 'governance'") == 2
+    assert "stopAt: 'evidence'" in journey
+    assert journey.count("stopAt: 'governance'") == 1
     assert "data-mdj-approve" in journey
     assert "production-ready" not in journey.lower()
 
