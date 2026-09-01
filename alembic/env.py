@@ -4,10 +4,10 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from processual_api.admin_marketplace import models as admin_marketplace_models  # noqa: F401
 from processual_api.auth import models as identity_auth_models  # noqa: F401
 from processual_api.db.base import Base
@@ -15,8 +15,10 @@ from processual_api.db.sqlite_migration_recovery import (
     cleanup_orphaned_batch_tables,
     recover_uncommitted_head_version,
 )
-from processual_api.services import evaluation_authority_models  # noqa: F401
-from processual_api.services import evaluation_runtime_delivery_models  # noqa: F401
+from processual_api.services import (
+    evaluation_authority_models,
+    evaluation_runtime_delivery_models,
+)
 
 config = context.config
 if config.config_file_name is not None:
