@@ -40,7 +40,7 @@ from processual_api.services.evaluation_grants import (
     find_evaluation_grant,
     refresh_evaluation_grant_status,
 )
-from processual_api.services.evaluation_runtime_delivery import (
+from processual_api.services.evaluation_runtime_delivery_postgres import (
     EvaluationDeliveryError,
     EvaluationIdempotencyConflictError,
     EvaluationReplayBlockedError,
@@ -296,7 +296,7 @@ async def execute_evaluation_runtime_task(
         task_input=body.task_input,
     )
     try:
-        claim = claim_evaluation_execution(
+        claim = await claim_evaluation_execution(
             owner_id=owner_id,
             grant_id=grant_id,
             api_key_id=api_key_id,
@@ -332,7 +332,7 @@ async def execute_evaluation_runtime_task(
             raise SandboxExecutionError("evaluation_peer_address_unverified")
     except (ValueError, KeyError, SandboxExecutionError) as exc:
         try:
-            fail_evaluation_execution(
+            await fail_evaluation_execution(
                 owner_id=owner_id,
                 record_id=record_id,
                 failure_code=type(exc).__name__,
@@ -381,7 +381,7 @@ async def execute_evaluation_runtime_task(
         "idempotent_replay": False,
     }
     try:
-        complete_evaluation_execution(
+        await complete_evaluation_execution(
             owner_id=owner_id,
             record_id=record_id,
             evidence=evidence,
