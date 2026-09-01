@@ -54,10 +54,18 @@ const AUTH = (() => {
   return { init, login, logout, isLoggedIn, currentUser, me };
 })();
 
-(function loadShowcaseV2Enhancements() {
-  if (document.querySelector('script[data-maestro-showcase-v2]')) return;
-  const script = document.createElement('script');
-  script.src = 'js/showcase_v2.js?v=showcase-v2-p1';
-  script.dataset.maestroShowcaseV2 = 'true';
-  document.body.appendChild(script);
+(function loadShowcaseEnhancements() {
+  if (!document.querySelector('script[data-maestro-showcase-v2]')) {
+    const showcase = document.createElement('script');
+    showcase.src = 'js/showcase_v2.js?v=showcase-v2-p1';
+    showcase.dataset.maestroShowcaseV2 = 'true';
+    document.body.appendChild(showcase);
+  }
+
+  if (!document.querySelector('script[data-maestro-decision-journey]')) {
+    const journey = document.createElement('script');
+    journey.src = 'js/showcase_decision_journey.js?v=decision-journey-p2';
+    journey.dataset.maestroDecisionJourney = 'true';
+    document.body.appendChild(journey);
+  }
 })();
