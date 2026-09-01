@@ -68,4 +68,11 @@ const AUTH = (() => {
     journey.dataset.maestroDecisionJourney = 'true';
     document.body.appendChild(journey);
   }
+
+  if (!document.querySelector('script[data-maestro-decision-receipt]')) {
+    const receipt = document.createElement('script');
+    receipt.src = 'js/showcase_decision_receipt.js?v=decision-receipt-p2';
+    receipt.dataset.maestroDecisionReceipt = 'true';
+    document.body.appendChild(receipt);
+  }
 })();
