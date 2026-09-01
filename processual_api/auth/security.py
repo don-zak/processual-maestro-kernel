@@ -19,6 +19,12 @@ for _name in dir(_legacy):
     if not _name.startswith("__"):
         globals().setdefault(_name, getattr(_legacy, _name))
 
+# These helpers are imported by typed A5 administration code. Keep them
+# explicit so static analysis sees the same stable security surface as runtime.
+_pbkdf2_hash_api_key = _legacy._pbkdf2_hash_api_key
+generate_api_key = _legacy.generate_api_key
+hash_api_key = _legacy.hash_api_key
+
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 _supervisor_session_key_header = APIKeyHeader(name="X-Supervisor-Session-Key", auto_error=False)
 _bearer = HTTPBearer(auto_error=False)
