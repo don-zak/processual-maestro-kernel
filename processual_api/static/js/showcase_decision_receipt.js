@@ -24,10 +24,10 @@
 
   function receiptState(decision, status) {
     if (decision === 'CONTROL' && status.includes('Approval recorded')) {
-      return { approval: 'Recorded', approvalClass: 'ok', outcome: 'Evidence retained', outcomeClass: 'ok' };
+      return { approval: 'Recorded', approvalClass: 'ok', outcome: 'Governed execution · evidence retained', outcomeClass: 'ok' };
     }
-    if (decision === 'REPAIR' && status.includes('Fallback selected')) {
-      return { approval: 'Not required', approvalClass: '', outcome: 'Fallback governed', outcomeClass: 'warn' };
+    if (decision === 'REPAIR' && status.includes('Qualified fallback executed')) {
+      return { approval: 'Not required', approvalClass: '', outcome: 'Fallback executed · evidence retained', outcomeClass: 'warn' };
     }
     if (decision === 'STOP' && status.includes('Fail closed')) {
       return { approval: 'Not applicable', approvalClass: '', outcome: 'Execution denied', outcomeClass: 'stop' };
