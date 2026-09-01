@@ -1,4 +1,6 @@
 (function installMaestroCinematicTransitions() {
+  let observerInstalled = false;
+
   function addStyles() {
     if (document.getElementById('maestro-cinematic-transition-style')) return;
     const style = document.createElement('style');
@@ -59,6 +61,7 @@
   }
 
   function observeGuidedFlow() {
+    if (observerInstalled) return true;
     const label = addStageLabel();
     const panel = document.querySelector('.mgf-panel');
     if (!panel) return false;
@@ -72,6 +75,7 @@
       subtree: true,
       characterData: true,
     });
+    observerInstalled = true;
     return true;
   }
 
