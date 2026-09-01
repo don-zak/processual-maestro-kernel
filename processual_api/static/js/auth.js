@@ -75,4 +75,11 @@ const AUTH = (() => {
     receipt.dataset.maestroDecisionReceipt = 'true';
     document.body.appendChild(receipt);
   }
+
+  if (!document.querySelector('script[data-maestro-decision-motion]')) {
+    const motion = document.createElement('script');
+    motion.src = 'js/showcase_decision_motion.js?v=decision-motion-p2';
+    motion.dataset.maestroDecisionMotion = 'true';
+    document.body.appendChild(motion);
+  }
 })();
