@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -70,6 +71,7 @@ def _runtime_raw() -> dict:
                 "allowed_task_ids": ["crm.customer_context"],
                 "allowed_binding_ids": ["binding-a"],
                 "max_requests": 20,
+                "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
                 "execution_mode": EVALUATION_EXECUTION_MODE,
                 "real_runtime_execution": True,
                 "production_allowed": False,
