@@ -53,3 +53,11 @@ const AUTH = (() => {
 
   return { init, login, logout, isLoggedIn, currentUser, me };
 })();
+
+(function loadShowcaseV2Enhancements() {
+  if (document.querySelector('script[data-maestro-showcase-v2]')) return;
+  const script = document.createElement('script');
+  script.src = 'js/showcase_v2.js?v=showcase-v2-p0';
+  script.dataset.maestroShowcaseV2 = 'true';
+  document.body.appendChild(script);
+})();
