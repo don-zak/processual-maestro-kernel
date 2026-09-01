@@ -11,7 +11,7 @@
       id: 'decision',
       page: 'overview',
       title: '02 · Decision Journey',
-      copy: 'Run CONTROL first. The path must stop at Human Approval before Evidence.',
+      copy: 'Run CONTROL first. The path must stop at Human Approval, then cross governed Execution before Evidence.',
       target: '[data-mdj="journey"]',
     },
     {
