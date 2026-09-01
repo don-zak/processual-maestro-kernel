@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260830_0047"
+HEAD = "20260901_0048"
 PREVIOUS = "20260809_0045"
 TABLE = "admin_market_assessment_commercial_terms"
 
@@ -67,8 +67,8 @@ def test_assessment_commercial_terms_migration_upgrade_and_empty_downgrade(tmp_p
         assert "ix_admin_market_assessment_commercial_terms_customer" in index_names
         assert any(row[2] == 1 for row in indexes)
 
-    # 0047 is now above the commercial-terms migration. Downgrade explicitly
-    # through 0047 and 0046 so this test still verifies removal of the 0046 table.
+    # Newer migrations are now above the commercial-terms migration. Downgrade
+    # explicitly to 0045 so this test still verifies removal of the 0046 table.
     _run(database_url, "downgrade", PREVIOUS)
     current = _run(database_url, "current")
     assert PREVIOUS in f"{current.stdout}\n{current.stderr}"
