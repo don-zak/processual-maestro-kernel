@@ -23,9 +23,11 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     assert "showcase_decision_journey.js?v=decision-journey-p2" in auth
     assert "showcase_decision_receipt.js?v=decision-receipt-p2" in auth
     assert "showcase_decision_motion.js?v=decision-motion-p2" in auth
+    assert "showcase_guided_flow.js?v=guided-flow-p3" in auth
     assert "data-maestro-decision-journey" in auth
     assert "data-maestro-decision-receipt" in auth
     assert "data-maestro-decision-motion" in auth
+    assert "data-maestro-guided-flow" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
@@ -167,3 +169,37 @@ def test_decision_motion_emphasizes_active_path_and_respects_reduced_motion() ->
     assert "@keyframes mdj-node-wave" in motion
     assert "@keyframes mdj-pulse-head" in motion
     assert "prefers-reduced-motion:reduce" in motion
+
+
+def test_guided_showcase_keeps_presenter_in_control_and_follows_story_order() -> None:
+    guided = (STATIC_ROOT / "js" / "showcase_guided_flow.js").read_text(
+        encoding="utf-8"
+    )
+
+    for label in (
+        "Start guided showcase",
+        "Presenter guide · manual control",
+        "01 · Problem → Authority",
+        "02 · Decision Journey",
+        "03 · Governed Outcomes",
+        "04 · Qualification Evidence",
+        "Run CONTROL first",
+        "Human Approval before Evidence",
+        "CONTROL, REPAIR, and STOP",
+        "live owned HTTPS proof visibly separate",
+        "Next →",
+        "← Back",
+        "Exit",
+    ):
+        assert label in guided
+
+    assert "page: 'overview'" in guided
+    assert "page: 'governance'" in guided
+    assert "page: 'reports'" in guided
+    assert "[data-msv2=\"hero\"]" in guided
+    assert "[data-mdj=\"journey\"]" in guided
+    assert "[data-msv2=\"recorded-evidence\"]" in guided
+    assert "[data-msv2=\"qualification\"]" in guided
+    assert "setInterval(" not in guided
+    assert "autoplay" not in guided.lower()
+    assert "prefers-reduced-motion:reduce" in guided
