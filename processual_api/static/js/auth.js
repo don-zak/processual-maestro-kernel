@@ -61,6 +61,7 @@ const AUTH = (() => {
     ['data-maestro-decision-receipt', 'js/showcase_decision_receipt.js?v=decision-receipt-p2'],
     ['data-maestro-decision-motion', 'js/showcase_decision_motion.js?v=decision-motion-p2'],
     ['data-maestro-guided-flow', 'js/showcase_guided_flow.js?v=guided-flow-p3'],
+    ['data-maestro-cinematic-transitions', 'js/showcase_cinematic_transitions.js?v=cinematic-p4'],
   ];
 
   scripts.forEach(([attribute, src]) => {
