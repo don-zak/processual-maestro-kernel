@@ -66,6 +66,8 @@ body{background:var(--void);color:var(--text);font-family:var(--font-display);mi
 .lang-btn:hover:not(.active){color:var(--soft);border-color:var(--rim)}
 .footer{text-align:center;margin-top:20px;font-family:var(--font-data);font-size:9px;color:var(--muted);letter-spacing:1.5px}
 .footer .v{color:var(--ghost)}
+.footer .contact{display:block;margin-top:8px;color:var(--soft);text-decoration:none;letter-spacing:.5px}
+.footer .contact:hover{color:var(--amber)}
 [dir="rtl"] .status-item .si-status{margin-left:0;margin-right:auto}
 [dir="rtl"] #launch-btn .btn-arrow{transform:rotate(180deg)}
 [dir="rtl"] #launch-btn:hover .btn-arrow{transform:rotate(180deg) translateX(4px)}
@@ -117,7 +119,10 @@ body{background:var(--void);color:var(--text);font-family:var(--font-display);mi
       <button id="launch-btn"><span data-en="Enter Maestro" data-ar="الدخول إلى مايسترو">Enter Maestro</span><span class="btn-arrow">→</span></button>
     </div>
 
-    <div class="footer"><span class="v">v2.0.0</span> &nbsp;·&nbsp; <span data-en="Production Ready" data-ar="جاهز للإنتاج">Production Ready</span> &nbsp;·&nbsp; CGT v2</div>
+    <div class="footer">
+      <div><span class="v">v2.0.0</span> &nbsp;·&nbsp; <span data-en="Interactive Demo" data-ar="عرض تفاعلي">Interactive Demo</span> &nbsp;·&nbsp; CGT v2</div>
+      <a class="contact" href="mailto:contact@zaxam.net">contact@zaxam.net</a>
+    </div>
   </div>
 </div>
 
@@ -180,8 +185,8 @@ drawParticles();
 
 // --- Boot Sequence ---
 const taglines = {
-  en: ['Initializing Processual Maestro Kernel...','Loading Adaptive Governance Toolkit...','Calibrating CGT v2 Fate Vectors...','Establishing Secure Channels...','System Ready — Orchestration Online'],
-  ar: ['جاري تشغيل نواة المايسترو...','تحميل أدوات الحوكمة التكيفية...','معايرة متجهات CGT v2...','تأسيس القنوات الآمنة...','النظام جاهز — الأوركسترا عبر الإنترنت']
+  en: ['Initializing Processual Maestro Kernel...','Loading Adaptive Governance Toolkit...','Calibrating CGT v2 Fate Vectors...','Establishing Secure Channels...','Interactive demo ready'],
+  ar: ['جاري تشغيل نواة المايسترو...','تحميل أدوات الحوكمة التكيفية...','معايرة متجهات CGT v2...','تأسيس القنوات الآمنة...','العرض التفاعلي جاهز']
 };
 const statusOrder = ['sd-api','sd-db','sd-redis','sd-kernel'];
 const statusLabels = {en:['API Server','Database','Cache','Kernel'],ar:['خادم API','قاعدة البيانات','الذاكرة المؤقتة','النواة']};
@@ -233,7 +238,7 @@ function bootStep() {
         setTimeout(() => {
           statusOrder.forEach(id => setStatusItem(id, 'on'));
           progressFill.style.width = '100%';
-          progressText.textContent = lang === 'en' ? 'All systems operational.' : 'جميع الأنظمة جاهزة.';
+          progressText.textContent = lang === 'en' ? 'Interactive demo ready.' : 'العرض التفاعلي جاهز.';
           isComplete = true;
           launchBtn.classList.add('visible');
         }, 500);
@@ -276,7 +281,6 @@ launchBtn.addEventListener('click', () => {
   sessionStorage.setItem('maestro_descent_gate_seen_at', new Date().toISOString());
   window.location.href = '/login';
 });
-
 
 // --- Start ---
 setTimeout(() => { step = 0; bootStep(); }, 600);
