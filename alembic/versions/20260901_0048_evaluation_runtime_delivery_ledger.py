@@ -62,7 +62,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "state IN ('executing', 'evidence_persisted', 'failed')",
-            name="ck_evaluation_runtime_delivery_state",
+            name=op.f("ck_evaluation_runtime_delivery_state"),
         ),
     )
     op.create_index(
