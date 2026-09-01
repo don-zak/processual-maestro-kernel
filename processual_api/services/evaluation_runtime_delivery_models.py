@@ -9,11 +9,11 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    false,
     Index,
     JSON,
     String,
     UniqueConstraint,
-    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
