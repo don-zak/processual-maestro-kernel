@@ -9,11 +9,11 @@ the same evaluation idempotency authority.
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from processual_api.db.session import session_scope
 from processual_api.services.evaluation_runtime_delivery import (
@@ -25,8 +25,9 @@ from processual_api.services.evaluation_runtime_delivery import (
     _validate_safe_replay_response,
     evaluation_request_fingerprint,
 )
-
-_TABLE = "evaluation_runtime_delivery"
+from processual_api.services.evaluation_runtime_delivery_models import (
+    EvaluationRuntimeDelivery,
+)
 
 
 def _now() -> datetime:
@@ -48,19 +49,6 @@ def _record_id(
         (str(owner_id or ""), str(grant_id or ""), str(api_key_id or ""), idempotency_key)
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
-
-
-def _json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-
-
-def _decoded_json(value: Any) -> Any:
-    if isinstance(value, str):
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            return None
-    return value
 
 
 async def claim_evaluation_execution(
@@ -93,40 +81,28 @@ async def claim_evaluation_execution(
 
     try:
         async with session_scope() as session:
-            inserted = await session.execute(
-                text(
-                    f"""
-                    INSERT INTO {_TABLE} (
-                        record_id, owner_id_sha256, grant_id, api_key_id,
-                        idempotency_key_sha256, request_fingerprint, task_id,
-                        binding_id, state, state_history, accepted_at,
-                        execution_started_at, raw_task_input_persisted,
-                        raw_secret_visible
-                    ) VALUES (
-                        :record_id, :owner_id_sha256, :grant_id, :api_key_id,
-                        :idempotency_key_sha256, :request_fingerprint, :task_id,
-                        :binding_id, :state, CAST(:state_history AS JSONB),
-                        :accepted_at, :execution_started_at, false, false
-                    )
-                    ON CONFLICT DO NOTHING
-                    RETURNING record_id
-                    """
-                ),
-                {
-                    "record_id": record_id,
-                    "owner_id_sha256": _owner_digest(owner_id),
-                    "grant_id": str(grant_id or ""),
-                    "api_key_id": str(api_key_id or ""),
-                    "idempotency_key_sha256": _idempotency_digest(normalized_key),
-                    "request_fingerprint": request_fingerprint,
-                    "task_id": str(task_id or "").strip().lower(),
-                    "binding_id": str(binding_id or "").strip(),
-                    "state": EVALUATION_DELIVERY_STATE_EXECUTING,
-                    "state_history": _json(history),
-                    "accepted_at": now,
-                    "execution_started_at": now,
-                },
+            insert_statement = (
+                pg_insert(EvaluationRuntimeDelivery)
+                .values(
+                    record_id=record_id,
+                    owner_id_sha256=_owner_digest(owner_id),
+                    grant_id=str(grant_id or ""),
+                    api_key_id=str(api_key_id or ""),
+                    idempotency_key_sha256=_idempotency_digest(normalized_key),
+                    request_fingerprint=request_fingerprint,
+                    task_id=str(task_id or "").strip().lower(),
+                    binding_id=str(binding_id or "").strip(),
+                    state=EVALUATION_DELIVERY_STATE_EXECUTING,
+                    state_history=history,
+                    accepted_at=now,
+                    execution_started_at=now,
+                    raw_task_input_persisted=False,
+                    raw_secret_visible=False,
+                )
+                .on_conflict_do_nothing()
+                .returning(EvaluationRuntimeDelivery.record_id)
             )
+            inserted = await session.execute(insert_statement)
             if inserted.scalar_one_or_none() is not None:
                 return {
                     "status": "claimed",
@@ -139,38 +115,38 @@ async def claim_evaluation_execution(
                     },
                 }
 
-            result = await session.execute(
-                text(
-                    f"""
-                    SELECT record_id, request_fingerprint, state, replay_response,
-                           raw_task_input_persisted, raw_secret_visible
-                    FROM {_TABLE}
-                    WHERE record_id = :record_id
-                    """
-                ),
-                {"record_id": record_id},
+            existing_result = await session.execute(
+                select(EvaluationRuntimeDelivery).where(
+                    EvaluationRuntimeDelivery.record_id == record_id
+                )
             )
-            existing = result.mappings().one_or_none()
+            existing = existing_result.scalar_one_or_none()
             if existing is None:
                 raise EvaluationDeliveryError("evaluation_delivery_claim_conflict_unresolved")
-            if existing["request_fingerprint"] != request_fingerprint:
+            if existing.request_fingerprint != request_fingerprint:
                 raise EvaluationIdempotencyConflictError(
                     "evaluation_idempotency_key_payload_mismatch"
                 )
-            state = str(existing["state"] or "")
+            state = str(existing.state or "")
             if state != EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
                 raise EvaluationReplayBlockedError(
                     f"evaluation_replay_blocked_{state or 'unknown'}"
                 )
-            replay = _decoded_json(existing["replay_response"])
+            replay = existing.replay_response
             if not isinstance(replay, dict):
                 raise EvaluationReplayBlockedError("evaluation_replay_evidence_unavailable")
             return {
                 "status": "replay",
-                "record": dict(existing),
+                "record": {
+                    "record_id": existing.record_id,
+                    "request_fingerprint": existing.request_fingerprint,
+                    "state": existing.state,
+                    "raw_task_input_persisted": existing.raw_task_input_persisted,
+                    "raw_secret_visible": existing.raw_secret_visible,
+                },
                 "response": dict(replay),
             }
-    except (EvaluationDeliveryError, EvaluationIdempotencyConflictError, EvaluationReplayBlockedError):
+    except EvaluationDeliveryError:
         raise
     except Exception as exc:
         raise EvaluationDeliveryError("evaluation_delivery_database_unavailable") from exc
@@ -190,26 +166,18 @@ async def complete_evaluation_execution(
     try:
         async with session_scope() as session:
             selected = await session.execute(
-                text(
-                    f"""
-                    SELECT state, state_history
-                    FROM {_TABLE}
-                    WHERE record_id = :record_id
-                    FOR UPDATE
-                    """
-                ),
-                {"record_id": record_id},
+                select(EvaluationRuntimeDelivery)
+                .where(EvaluationRuntimeDelivery.record_id == record_id)
+                .with_for_update()
             )
-            row = selected.mappings().one_or_none()
+            row = selected.scalar_one_or_none()
             if row is None:
                 raise EvaluationDeliveryError("evaluation_delivery_claim_missing")
-            if row["state"] != EVALUATION_DELIVERY_STATE_EXECUTING:
+            if row.state != EVALUATION_DELIVERY_STATE_EXECUTING:
                 raise EvaluationDeliveryError("evaluation_delivery_state_invalid")
 
             now = _now()
-            history = _decoded_json(row["state_history"])
-            if not isinstance(history, list):
-                history = []
+            history = list(row.state_history) if isinstance(row.state_history, list) else []
             history.extend(
                 [
                     {"state": "executed", "at": now.isoformat()},
@@ -219,30 +187,15 @@ async def complete_evaluation_execution(
                     },
                 ]
             )
-            await session.execute(
-                text(
-                    f"""
-                    UPDATE {_TABLE}
-                    SET state = :state,
-                        state_history = CAST(:state_history AS JSONB),
-                        evidence = CAST(:evidence AS JSONB),
-                        replay_response = CAST(:replay_response AS JSONB),
-                        executed_at = :now,
-                        evidence_persisted_at = :now,
-                        raw_task_input_persisted = false,
-                        raw_secret_visible = false
-                    WHERE record_id = :record_id
-                    """
-                ),
-                {
-                    "state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED,
-                    "state_history": _json(history),
-                    "evidence": _json(evidence),
-                    "replay_response": _json(replay_response),
-                    "now": now,
-                    "record_id": record_id,
-                },
-            )
+            row.state = EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED
+            row.state_history = history
+            row.evidence = dict(evidence)
+            row.replay_response = dict(replay_response)
+            row.executed_at = now
+            row.evidence_persisted_at = now
+            row.raw_task_input_persisted = False
+            row.raw_secret_visible = False
+
             return {
                 "record_id": record_id,
                 "state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED,
@@ -266,43 +219,22 @@ async def fail_evaluation_execution(
     try:
         async with session_scope() as session:
             selected = await session.execute(
-                text(
-                    f"""
-                    SELECT state, state_history
-                    FROM {_TABLE}
-                    WHERE record_id = :record_id
-                    FOR UPDATE
-                    """
-                ),
-                {"record_id": record_id},
+                select(EvaluationRuntimeDelivery)
+                .where(EvaluationRuntimeDelivery.record_id == record_id)
+                .with_for_update()
             )
-            row = selected.mappings().one_or_none()
-            if row is None or row["state"] == EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
+            row = selected.scalar_one_or_none()
+            if row is None or row.state == EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
                 return
+
             now = _now()
-            history = _decoded_json(row["state_history"])
-            if not isinstance(history, list):
-                history = []
+            history = list(row.state_history) if isinstance(row.state_history, list) else []
             history.append({"state": "failed", "at": now.isoformat()})
-            await session.execute(
-                text(
-                    f"""
-                    UPDATE {_TABLE}
-                    SET state = 'failed',
-                        state_history = CAST(:state_history AS JSONB),
-                        failed_at = :failed_at,
-                        failure_code = :failure_code,
-                        network_outcome = 'unknown'
-                    WHERE record_id = :record_id
-                    """
-                ),
-                {
-                    "state_history": _json(history),
-                    "failed_at": now,
-                    "failure_code": str(failure_code or "evaluation_execution_failed")[:200],
-                    "record_id": record_id,
-                },
-            )
+            row.state = "failed"
+            row.state_history = history
+            row.failed_at = now
+            row.failure_code = str(failure_code or "evaluation_execution_failed")[:200]
+            row.network_outcome = "unknown"
     except EvaluationDeliveryError:
         raise
     except Exception as exc:
