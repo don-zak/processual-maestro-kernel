@@ -20,10 +20,10 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     index = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
 
     assert "showcase_v2.js?v=showcase-v2-p1" in auth
-    assert "showcase_decision_journey.js?v=decision-journey-p2" in auth
-    assert "showcase_decision_receipt.js?v=decision-receipt-p2" in auth
+    assert "showcase_decision_journey.js?v=decision-journey-p5" in auth
+    assert "showcase_decision_receipt.js?v=decision-receipt-p5" in auth
     assert "showcase_decision_motion.js?v=decision-motion-p2" in auth
-    assert "showcase_guided_flow.js?v=guided-flow-p3" in auth
+    assert "showcase_guided_flow.js?v=guided-flow-p5" in auth
     assert "showcase_cinematic_transitions.js?v=cinematic-p4" in auth
     assert "data-maestro-decision-journey" in auth
     assert "data-maestro-decision-receipt" in auth
@@ -151,8 +151,9 @@ def test_decision_receipt_makes_evidence_visible_without_claiming_production() -
         "Raw secret",
         "Not included",
         "Approval recorded",
-        "Evidence retained",
-        "Fallback governed",
+        "Governed execution · evidence retained",
+        "Qualified fallback executed",
+        "Fallback executed · evidence retained",
         "Execution denied",
         "It is not a live production audit record",
     ):
@@ -191,7 +192,7 @@ def test_guided_showcase_keeps_presenter_in_control_and_follows_story_order() ->
         "03 · Governed Outcomes",
         "04 · Qualification Evidence",
         "Run CONTROL first",
-        "Human Approval before Evidence",
+        "Human Approval, then cross governed Execution before Evidence",
         "CONTROL, REPAIR, and STOP",
         "live owned HTTPS proof visibly separate",
         "Next →",
