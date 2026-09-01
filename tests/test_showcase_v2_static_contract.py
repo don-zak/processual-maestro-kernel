@@ -30,6 +30,7 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     assert "data-maestro-decision-motion" in auth
     assert "data-maestro-guided-flow" in auth
     assert "data-maestro-cinematic-transitions" in auth
+    assert "script.async = false" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
@@ -232,6 +233,9 @@ def test_cinematic_transition_layer_is_visual_only_and_guided_flow_bound() -> No
     assert "document.querySelector('.mgf-panel')" in cinematic
     assert "panel.classList.contains('active')" in cinematic
     assert "MutationObserver" in cinematic
+    assert "let observerInstalled = false" in cinematic
+    assert "if (observerInstalled) return true" in cinematic
+    assert "observerInstalled = true" in cinematic
     assert "setInterval(" not in cinematic
     assert "autoplay" not in cinematic.lower()
     assert "data-page" not in cinematic
