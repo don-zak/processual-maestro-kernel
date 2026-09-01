@@ -5,13 +5,13 @@ import os
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
-from . import security_legacy as _legacy
-from ..services.evaluation_authority_postgres import (
+from processual_api.auth import security_legacy as _legacy
+from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
     verify_evaluation_api_key,
 )
-from ..services.evaluation_grants import evaluation_endpoint_allowed
-from ..settings import settings
+from processual_api.services.evaluation_grants import evaluation_endpoint_allowed
+from processual_api.settings import settings
 
 # Preserve the complete historical security surface while overriding only the
 # authentication dependencies that must consult shared Evaluation authority.
@@ -27,7 +27,11 @@ _bearer = HTTPBearer(auto_error=False)
 def _production_runtime() -> bool:
     app_env = os.environ.get("APP_ENV", settings.environment).lower()
     runtime_env = os.environ.get("ENVIRONMENT", settings.environment).lower()
-    return settings.is_production or app_env in {"production", "prod"} or runtime_env in {"production", "prod"}
+    return (
+        settings.is_production
+        or app_env in {"production", "prod"}
+        or runtime_env in {"production", "prod"}
+    )
 
 
 async def get_current_user(
