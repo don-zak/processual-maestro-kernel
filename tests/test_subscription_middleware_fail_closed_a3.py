@@ -38,6 +38,31 @@ def _client(monkeypatch, access):
     return TestClient(app)
 
 
+def test_auth_namespace_is_exempt_from_subscription_gating(monkeypatch) -> None:
+    async def auth_endpoint(request):
+        return JSONResponse({"auth": True})
+
+    async def resolve(customer_ref: str):
+        raise AssertionError("subscription lookup must not run for /auth/*")
+
+    monkeypatch.setattr(subscription_module, "resolve_subscription_access", resolve)
+    monkeypatch.setattr(
+        subscription_module,
+        "_extract_customer_ref",
+        lambda request: "customer-1",
+    )
+
+    app = Starlette(
+        routes=[Route("/auth/future-route", auth_endpoint, methods=["POST"])]
+    )
+    app.add_middleware(subscription_module.SubscriptionMiddleware)
+
+    response = TestClient(app).post("/auth/future-route")
+
+    assert response.status_code == 200
+    assert response.json() == {"auth": True}
+
+
 def test_missing_subscription_access_is_denied(monkeypatch) -> None:
     response = _client(monkeypatch, None).get("/protected")
 
