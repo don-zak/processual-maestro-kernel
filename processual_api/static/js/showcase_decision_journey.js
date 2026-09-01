@@ -7,7 +7,8 @@
     { id: 'capacity', label: 'Capacity', detail: 'Runtime capacity available' },
     { id: 'governance', label: 'Governance', detail: 'Policy requires an additional control' },
     { id: 'approval', label: 'Human Approval', detail: 'Execution pauses at the human boundary' },
-    { id: 'evidence', label: 'Evidence', detail: 'Decision and approval trail retained' },
+    { id: 'execution', label: 'Execution', detail: 'Governed execution proceeds inside the admitted boundary' },
+    { id: 'evidence', label: 'Evidence', detail: 'Decision, approval, and execution trail retained' },
   ];
 
   const SCENARIOS = {
@@ -18,7 +19,7 @@
       reason: 'Human approval required',
       description: 'A governed operational action is admissible, but it cannot cross the approval boundary automatically.',
       stopAt: 'approval',
-      finalLabel: 'Approval recorded → evidence retained',
+      finalLabel: 'Approval recorded → governed execution → evidence retained',
     },
     repair: {
       eyebrow: 'Scenario 02 · Provider degradation recovery',
@@ -26,8 +27,8 @@
       decisionClass: 'repair',
       reason: 'Qualified fallback available',
       description: 'The primary provider degrades. Maestro redirects through a prepared fallback without expanding authority.',
-      stopAt: 'governance',
-      finalLabel: 'Fallback selected inside policy boundary',
+      stopAt: 'evidence',
+      finalLabel: 'Qualified fallback executed inside policy boundary → evidence retained',
     },
     stop: {
       eyebrow: 'Scenario 03 · Sensitive configuration change',
@@ -58,7 +59,7 @@
       .mdj-scenario{border:1px solid var(--rim);border-radius:9px;padding:7px 9px;background:rgba(8,11,15,.44);color:var(--soft);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;transition:.18s ease}
       .mdj-scenario:hover{border-color:rgba(245,166,35,.34);color:var(--bright)}
       .mdj-scenario.active{border-color:rgba(245,166,35,.48);background:rgba(245,166,35,.08);color:var(--amber)}
-      .mdj-track{position:relative;display:grid;grid-template-columns:repeat(8,minmax(82px,1fr));gap:8px;margin-top:8px}
+      .mdj-track{position:relative;display:grid;grid-template-columns:repeat(9,minmax(76px,1fr));gap:8px;margin-top:8px}
       .mdj-track::before{content:'';position:absolute;left:5%;right:5%;top:22px;height:2px;background:var(--rim);z-index:0}
       .mdj-node{position:relative;z-index:1;min-width:0;padding-top:0;text-align:center}
       .mdj-node-core{width:44px;height:44px;margin:0 auto 8px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--rim);background:var(--surface-0);color:var(--ghost);font-family:'Space Mono',monospace;font-size:10px;font-weight:700;transition:.22s ease;box-shadow:0 0 0 0 rgba(245,166,35,0)}
@@ -84,7 +85,7 @@
       .mdj-approve{display:none;border:1px solid rgba(34,211,160,.4);background:rgba(34,211,160,.08);color:var(--ok)}
       .mdj-reset{border:1px solid var(--rim);background:transparent;color:var(--soft)}
       .mdj-note{margin-top:10px;color:var(--ghost);font-family:'DM Mono',monospace;font-size:8px;line-height:1.5}
-      @media(max-width:1050px){.mdj-track{grid-template-columns:repeat(4,1fr)}.mdj-track::before,.mdj-pulse{display:none}}
+      @media(max-width:1050px){.mdj-track{grid-template-columns:repeat(3,1fr)}.mdj-track::before,.mdj-pulse{display:none}}
       @media(max-width:650px){.mdj-track{grid-template-columns:repeat(2,1fr)}.mdj-result{grid-template-columns:1fr}.mdj-head{flex-direction:column}}
     `;
     document.head.appendChild(style);
@@ -191,7 +192,7 @@
       journey.querySelectorAll('.mdj-node.active').forEach((item) => item.classList.remove('active'));
       node.classList.add('active');
       journey.querySelector('[data-mdj-status]').textContent = step.detail;
-      journey.querySelector('[data-mdj-pulse]').style.width = `${Math.min(92, 6 + (index * 12.3))}%`;
+      journey.querySelector('[data-mdj-pulse]').style.width = `${Math.min(92, 6 + (index * 10.75))}%`;
       await wait(index === stopIndex ? 620 : 430);
       if (token !== runToken) return;
       if (index < stopIndex) {
@@ -206,12 +207,13 @@
     journey.querySelector('[data-mdj-reason]').textContent = scenario.reason;
 
     if (activeScenario === 'control') {
-      journey.querySelector('[data-mdj-status]').textContent = 'Execution paused. Human approval is required before evidence finalization.';
+      journey.querySelector('[data-mdj-status]').textContent = 'Execution paused. Human approval is required before governed execution.';
       journey.querySelector('[data-mdj-approve]').style.display = 'inline-block';
     } else if (activeScenario === 'repair') {
-      const governance = journey.querySelector('[data-mdj-step="governance"]');
-      governance.classList.remove('active');
-      governance.classList.add('done');
+      const evidence = journey.querySelector('[data-mdj-step="evidence"]');
+      evidence.classList.remove('active');
+      evidence.classList.add('done');
+      journey.querySelector('[data-mdj-pulse]').style.width = '100%';
       journey.querySelector('[data-mdj-status]').textContent = scenario.finalLabel;
     } else {
       const governance = journey.querySelector('[data-mdj-step="governance"]');
@@ -238,12 +240,20 @@
     const approval = journey.querySelector('[data-mdj-step="approval"]');
     approval.classList.remove('active');
     approval.classList.add('done');
-    journey.querySelector('[data-mdj-status]').textContent = 'Human approval recorded. Finalizing auditable evidence…';
-    journey.querySelector('[data-mdj-pulse]').style.width = '92%';
-    await wait(520);
+    journey.querySelector('[data-mdj-status]').textContent = 'Human approval recorded. Governed execution admitted…';
+
+    const execution = journey.querySelector('[data-mdj-step="execution"]');
+    execution.classList.add('active');
+    journey.querySelector('[data-mdj-pulse]').style.width = '88%';
+    await wait(480);
     if (token !== runToken) return;
+    execution.classList.remove('active');
+    execution.classList.add('done');
+
     const evidence = journey.querySelector('[data-mdj-step="evidence"]');
     evidence.classList.add('active');
+    journey.querySelector('[data-mdj-status]').textContent = 'Governed execution completed. Finalizing auditable evidence…';
+    journey.querySelector('[data-mdj-pulse]').style.width = '96%';
     await wait(430);
     if (token !== runToken) return;
     evidence.classList.remove('active');
