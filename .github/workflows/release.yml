@@ -58,7 +58,7 @@ jobs:
         run: python -m processual_api.release_gate
 
       - name: Verify migration head
-        run: python -m alembic heads | grep "20260809_0046 (head)"
+        run: python -m alembic heads | grep "20260901_0049 (head)"
 
       - name: Commercial staging smoke gate
         run: python -m processual_api.staging_smoke
