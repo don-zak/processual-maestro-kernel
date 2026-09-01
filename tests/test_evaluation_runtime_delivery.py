@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from processual_api.routers import evaluation_runtime
-from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from processual_api.routers import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
 from processual_api.services import evaluation_runtime_delivery as delivery
@@ -174,7 +173,15 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
         method="GET",
         adapter_contract_id="adapter-a",
     )
-    monkeypatch.setattr(settings_router, "_load_raw", lambda _owner_id: raw)
+
+    async def load_shared_authority(_owner_id: str) -> dict:
+        return raw
+
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "load_evaluation_authority_state",
+        load_shared_authority,
+    )
     monkeypatch.setattr(binding_runtime, "_find_binding", lambda _raw, _binding_id: spec)
     monkeypatch.setattr(binding_runtime, "_find_request_mapping", lambda _raw, _binding_id: None)
     monkeypatch.setattr(sandbox_runtime, "_content_contract", lambda _raw, _binding_id: {"ok": True})
