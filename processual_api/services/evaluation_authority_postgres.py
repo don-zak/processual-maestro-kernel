@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,18 +28,24 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 def _lookup_sha256(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
 def _parse_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
-        return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+        return _as_utc(value)
     text = str(value or "").strip()
     if not text:
         return None
     parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return _as_utc(parsed)
 
 
 def evaluation_authority_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
@@ -52,7 +59,7 @@ def evaluation_authority_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "enterprise_endpoint_sandbox_evidence_v1",
     )
     return {
-        key: raw.get(key, [])
+        key: deepcopy(raw.get(key, []))
         for key in allowed_keys
         if isinstance(raw.get(key), list)
     }
@@ -88,7 +95,7 @@ async def load_evaluation_authority_state(owner_id: str) -> dict[str, Any]:
             row = await session.get(EvaluationAuthorityState, owner_id)
             if row is None or not isinstance(row.authority, dict):
                 raise EvaluationAuthorityError("evaluation_authority_state_missing")
-            return dict(row.authority)
+            return deepcopy(row.authority)
     except EvaluationAuthorityError:
         raise
     except Exception as exc:
@@ -138,7 +145,11 @@ async def active_evaluation_key_count(owner_id: str, grant_id: str) -> int:
                 )
             ).scalars().all()
             now = _now()
-            return sum(1 for row in rows if row.expires_at is None or row.expires_at > now)
+            return sum(
+                1
+                for row in rows
+                if (expires_at := _as_utc(row.expires_at)) is None or expires_at > now
+            )
     except Exception as exc:
         raise EvaluationAuthorityError("evaluation_authority_key_count_failed") from exc
 
@@ -154,7 +165,7 @@ async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int
             state = state_result.scalar_one_or_none()
             if state is None or not isinstance(state.authority, dict):
                 raise EvaluationAuthorityError("evaluation_authority_state_missing")
-            raw = dict(state.authority)
+            raw = deepcopy(state.authority)
             grant = find_evaluation_grant(raw, grant_id)
             if grant is None:
                 raise EvaluationAuthorityError("evaluation_grant_not_found")
@@ -207,7 +218,8 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
             if key.status != "enabled" or key.revoked_at is not None:
                 return None
             now = _now()
-            if key.expires_at is not None and key.expires_at <= now:
+            expires_at = _as_utc(key.expires_at)
+            if expires_at is not None and expires_at <= now:
                 key.status = "expired"
                 return None
             if not _verify_stored_key(raw_key, key.hashed):
@@ -216,7 +228,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
             state = await session.get(EvaluationAuthorityState, key.owner_id)
             if state is None or not isinstance(state.authority, dict):
                 return None
-            raw = dict(state.authority)
+            raw = deepcopy(state.authority)
             grant = find_evaluation_grant(raw, key.grant_id)
             if grant is None:
                 return None
