@@ -55,31 +55,19 @@ const AUTH = (() => {
 })();
 
 (function loadShowcaseEnhancements() {
-  if (!document.querySelector('script[data-maestro-showcase-v2]')) {
-    const showcase = document.createElement('script');
-    showcase.src = 'js/showcase_v2.js?v=showcase-v2-p1';
-    showcase.dataset.maestroShowcaseV2 = 'true';
-    document.body.appendChild(showcase);
-  }
+  const scripts = [
+    ['data-maestro-showcase-v2', 'js/showcase_v2.js?v=showcase-v2-p1'],
+    ['data-maestro-decision-journey', 'js/showcase_decision_journey.js?v=decision-journey-p2'],
+    ['data-maestro-decision-receipt', 'js/showcase_decision_receipt.js?v=decision-receipt-p2'],
+    ['data-maestro-decision-motion', 'js/showcase_decision_motion.js?v=decision-motion-p2'],
+    ['data-maestro-guided-flow', 'js/showcase_guided_flow.js?v=guided-flow-p3'],
+  ];
 
-  if (!document.querySelector('script[data-maestro-decision-journey]')) {
-    const journey = document.createElement('script');
-    journey.src = 'js/showcase_decision_journey.js?v=decision-journey-p2';
-    journey.dataset.maestroDecisionJourney = 'true';
-    document.body.appendChild(journey);
-  }
-
-  if (!document.querySelector('script[data-maestro-decision-receipt]')) {
-    const receipt = document.createElement('script');
-    receipt.src = 'js/showcase_decision_receipt.js?v=decision-receipt-p2';
-    receipt.dataset.maestroDecisionReceipt = 'true';
-    document.body.appendChild(receipt);
-  }
-
-  if (!document.querySelector('script[data-maestro-decision-motion]')) {
-    const motion = document.createElement('script');
-    motion.src = 'js/showcase_decision_motion.js?v=decision-motion-p2';
-    motion.dataset.maestroDecisionMotion = 'true';
-    document.body.appendChild(motion);
-  }
+  scripts.forEach(([attribute, src]) => {
+    if (document.querySelector(`script[${attribute}]`)) return;
+    const script = document.createElement('script');
+    script.src = src;
+    script.setAttribute(attribute, 'true');
+    document.body.appendChild(script);
+  });
 })();
