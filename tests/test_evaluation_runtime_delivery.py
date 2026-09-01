@@ -191,14 +191,18 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
             "approved_operation_classes": ["read"],
         },
     )
-    monkeypatch.setattr(
-        evaluation_runtime,
-        "claim_evaluation_execution",
-        lambda **_kwargs: {
+
+    async def replay_claim(**_kwargs):
+        return {
             "status": "replay",
             "record": {"record_id": "record-a"},
             "response": {"execution_id": "exec-1", "evaluation_runtime": True},
-        },
+        }
+
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "claim_evaluation_execution",
+        replay_claim,
     )
 
     async def forbidden_execute(*_args, **_kwargs):
