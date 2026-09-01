@@ -24,10 +24,12 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     assert "showcase_decision_receipt.js?v=decision-receipt-p2" in auth
     assert "showcase_decision_motion.js?v=decision-motion-p2" in auth
     assert "showcase_guided_flow.js?v=guided-flow-p3" in auth
+    assert "showcase_cinematic_transitions.js?v=cinematic-p4" in auth
     assert "data-maestro-decision-journey" in auth
     assert "data-maestro-decision-receipt" in auth
     assert "data-maestro-decision-motion" in auth
     assert "data-maestro-guided-flow" in auth
+    assert "data-maestro-cinematic-transitions" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
@@ -203,3 +205,28 @@ def test_guided_showcase_keeps_presenter_in_control_and_follows_story_order() ->
     assert "setInterval(" not in guided
     assert "autoplay" not in guided.lower()
     assert "prefers-reduced-motion:reduce" in guided
+
+
+def test_cinematic_transition_layer_is_visual_only_and_guided_flow_bound() -> None:
+    cinematic = (STATIC_ROOT / "js" / "showcase_cinematic_transitions.js").read_text(
+        encoding="utf-8"
+    )
+
+    for label in (
+        "mct-guided-active",
+        "mct-stage-label",
+        "mct-page-enter",
+        "mct-hero-reveal",
+        "mct-stage-rise",
+        "mct-focus-breathe",
+        "prefers-reduced-motion:reduce",
+    ):
+        assert label in cinematic
+
+    assert "document.querySelector('.mgf-panel')" in cinematic
+    assert "panel.classList.contains('active')" in cinematic
+    assert "MutationObserver" in cinematic
+    assert "setInterval(" not in cinematic
+    assert "autoplay" not in cinematic.lower()
+    assert "data-page" not in cinematic
+    assert ".click()" not in cinematic
