@@ -6,7 +6,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from processual_api.auth.platform_admin_authority import require_active_platform_admin
@@ -29,6 +29,14 @@ from processual_api.integrations.enterprise_endpoint_bindings import (
 from processual_api.integrations.integration_task_catalog import (
     get_integration_task,
     task_catalog_payload,
+)
+from processual_api.services.evaluation_authority_postgres import (
+    EvaluationAuthorityError,
+    active_evaluation_key_count,
+    create_evaluation_authority_key,
+    load_evaluation_authority_state,
+    revoke_evaluation_authority_grant,
+    save_evaluation_authority_state,
 )
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
@@ -66,10 +74,7 @@ class EvaluationGrantCreate(BaseModel):
     purpose: str = Field(min_length=10, max_length=500)
     allowed_task_ids: list[str] = Field(min_length=1, max_length=24)
     allowed_binding_ids: list[str] = Field(default_factory=list, max_length=32)
-    allowed_endpoints: list[EvaluationEndpointSelection] = Field(
-        min_length=1,
-        max_length=32,
-    )
+    allowed_endpoints: list[EvaluationEndpointSelection] = Field(min_length=1, max_length=32)
     allowed_scopes: list[str] = Field(
         default_factory=lambda: list(PILOT_DEFAULT_SCOPES),
         min_length=1,
@@ -80,11 +85,7 @@ class EvaluationGrantCreate(BaseModel):
 
 
 class EvaluationKeyIssue(BaseModel):
-    label: str = Field(
-        default="External evaluation access",
-        min_length=1,
-        max_length=160,
-    )
+    label: str = Field(default="External evaluation access", min_length=1, max_length=160)
 
 
 def _owner_user_id(current_user: dict[str, Any]) -> str:
@@ -118,17 +119,11 @@ def _safe_scopes(values: list[str]) -> list[str]:
         if not scope or scope in seen:
             continue
         if scope.startswith("admin:") or scope in {"*", "admin:*", "admin:dangerous"}:
-            raise HTTPException(
-                status_code=422,
-                detail="Evaluation grants cannot include administrative scopes.",
-            )
+            raise HTTPException(status_code=422, detail="Evaluation grants cannot include administrative scopes.")
         seen.add(scope)
         scopes.append(scope)
     if not scopes:
-        raise HTTPException(
-            status_code=422,
-            detail="At least one evaluation scope is required.",
-        )
+        raise HTTPException(status_code=422, detail="At least one evaluation scope is required.")
     return scopes
 
 
@@ -139,7 +134,6 @@ def _endpoint_selection(
     selected: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     scope_set = {str(scope).strip().lower() for scope in allowed_scopes}
-
     for value in values:
         method = value.method.strip().upper()
         path = value.path.strip()
@@ -148,28 +142,15 @@ def _endpoint_selection(
             continue
         policy = get_api_key_access_policy(method, path)
         if policy is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Endpoint is not eligible for evaluation access: {method} {path}",
-            )
+            raise HTTPException(status_code=422, detail=f"Endpoint is not eligible for evaluation access: {method} {path}")
         if policy.production_allowed:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Production endpoint cannot enter evaluation access: {method} {path}",
-            )
+            raise HTTPException(status_code=422, detail=f"Production endpoint cannot enter evaluation access: {method} {path}")
         if not set(policy.required_scopes).issubset(scope_set):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Endpoint scope derivation mismatch: {method} {path}",
-            )
+            raise HTTPException(status_code=422, detail=f"Endpoint scope derivation mismatch: {method} {path}")
         seen.add(key)
         selected.append({"method": method, "path": path})
-
     if not selected:
-        raise HTTPException(
-            status_code=422,
-            detail="At least one eligible evaluation endpoint is required.",
-        )
+        raise HTTPException(status_code=422, detail="At least one eligible evaluation endpoint is required.")
     return selected
 
 
@@ -178,7 +159,6 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
     task_scopes: list[str] = []
     seen_tasks: set[str] = set()
     seen_scopes: set[str] = set()
-
     for raw_task_id in task_ids:
         task_id = str(raw_task_id or "").strip().lower()
         if not task_id or task_id in seen_tasks:
@@ -186,27 +166,17 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
         try:
             task = get_integration_task(task_id)
         except KeyError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Unknown evaluation task: {task_id}",
-            ) from exc
+            raise HTTPException(status_code=422, detail=f"Unknown evaluation task: {task_id}") from exc
         if not task.sandbox_allowed or task.auto_execute_production:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Task is not eligible for evaluation access: {task_id}",
-            )
+            raise HTTPException(status_code=422, detail=f"Task is not eligible for evaluation access: {task_id}")
         seen_tasks.add(task_id)
         selected.append(task_id)
         for scope_id in task.required_scope_ids:
             if scope_id not in seen_scopes:
                 seen_scopes.add(scope_id)
                 task_scopes.append(scope_id)
-
     if not selected:
-        raise HTTPException(
-            status_code=422,
-            detail="At least one canonical evaluation task is required.",
-        )
+        raise HTTPException(status_code=422, detail="At least one canonical evaluation task is required.")
     return selected, task_scopes
 
 
@@ -230,67 +200,28 @@ def _binding_selection(
             continue
         seen.add(binding_id)
         selected.append(binding_id)
-
     if not runtime_task_granted:
         if selected:
-            raise HTTPException(
-                status_code=422,
-                detail="Evaluation binding selection requires the runtime task-execute endpoint.",
-            )
+            raise HTTPException(status_code=422, detail="Evaluation binding selection requires the runtime task-execute endpoint.")
         return []
     if not selected:
-        raise HTTPException(
-            status_code=422,
-            detail="Evaluation runtime task execution requires at least one prepared binding.",
-        )
+        raise HTTPException(status_code=422, detail="Evaluation runtime task execution requires at least one prepared binding.")
 
     stored = raw.get(BINDING_STORAGE_KEY, [])
     stored_items = [dict(item) for item in stored if isinstance(item, dict)] if isinstance(stored, list) else []
     task_set = {str(task_id).strip().lower() for task_id in task_ids}
-
     for binding_id in selected:
-        item = next(
-            (
-                candidate
-                for candidate in stored_items
-                if str(candidate.get("binding_id") or "") == binding_id
-            ),
-            None,
-        )
+        item = next((candidate for candidate in stored_items if str(candidate.get("binding_id") or "") == binding_id), None)
         if item is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Prepared evaluation binding not found: {binding_id}",
-            )
+            raise HTTPException(status_code=422, detail=f"Prepared evaluation binding not found: {binding_id}")
         try:
             spec = EnterpriseEndpointBindingSpec(**item)
             validate_endpoint_binding(spec)
         except (ValueError, KeyError, EndpointBindingError) as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Prepared evaluation binding is invalid: {binding_id}",
-            ) from exc
+            raise HTTPException(status_code=422, detail=f"Prepared evaluation binding is invalid: {binding_id}") from exc
         if spec.task_id not in task_set:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Evaluation binding task is outside the grant task envelope: {binding_id}",
-            )
-
+            raise HTTPException(status_code=422, detail=f"Evaluation binding task is outside the grant task envelope: {binding_id}")
     return selected
-
-
-def _linked_key_count(raw: dict[str, Any], grant_id: str) -> int:
-    keys = raw.get("api_keys", [])
-    if not isinstance(keys, list):
-        return 0
-    return sum(
-        1
-        for key in keys
-        if isinstance(key, dict)
-        and str(key.get("evaluation_grant_id") or "") == grant_id
-        and key.get("status") not in {"revoked", "disabled", "expired"}
-        and not key.get("revoked_at")
-    )
 
 
 def _access_catalog_payload() -> list[dict[str, Any]]:
@@ -314,10 +245,16 @@ async def _require_platform_admin(request: Request, current_user: dict[str, Any]
     await require_active_platform_admin(current_user, request)
 
 
-@settings_module.router.get(
-    "/admin/evaluation-grants/authority",
-    response_model=dict,
-)
+def _authority_http_error(exc: EvaluationAuthorityError) -> HTTPException:
+    if str(exc) == "evaluation_grant_not_found":
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation grant not found.")
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Shared Evaluation authority is unavailable.",
+    )
+
+
+@settings_module.router.get("/admin/evaluation-grants/authority", response_model=dict)
 async def evaluation_grant_authority(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -327,16 +264,14 @@ async def evaluation_grant_authority(
         "authorized": True,
         "authority": "platform_admin",
         "exclusive_super_administrator": True,
+        "authority_store": "postgresql_shared",
         "subscription_required": False,
         "registration_required": False,
         "commercial_quota_required": False,
     }
 
 
-@settings_module.router.get(
-    "/admin/evaluation-grants/access-catalog",
-    response_model=dict,
-)
+@settings_module.router.get("/admin/evaluation-grants/access-catalog", response_model=dict)
 async def evaluation_access_catalog(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -356,10 +291,7 @@ async def evaluation_access_catalog(
     }
 
 
-@settings_module.router.get(
-    "/admin/evaluation-grants/task-catalog",
-    response_model=dict,
-)
+@settings_module.router.get("/admin/evaluation-grants/task-catalog", response_model=dict)
 async def evaluation_task_catalog(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -373,11 +305,7 @@ async def evaluation_task_catalog(
     }
 
 
-@settings_module.router.post(
-    "/admin/evaluation-grants",
-    response_model=dict,
-    status_code=201,
-)
+@settings_module.router.post("/admin/evaluation-grants", response_model=dict, status_code=201)
 async def create_evaluation_grant(
     body: EvaluationGrantCreate,
     request: Request,
@@ -385,20 +313,17 @@ async def create_evaluation_grant(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_user_id)
+    # Prepared Enterprise sandbox configuration is read once here, validated,
+    # then sealed into the shared Evaluation authority snapshot.
+    prepared_raw = settings_module._load_raw(owner_user_id)
+    raw = dict(prepared_raw)
     grants = evaluation_grants(raw)
     now = datetime.now(UTC)
     actor, role = _actor(current_user)
     scopes = _safe_scopes(body.allowed_scopes)
     endpoints = _endpoint_selection(body.allowed_endpoints, scopes)
     task_ids, task_scope_ids = _task_selection(body.allowed_task_ids)
-    binding_ids = _binding_selection(
-        raw,
-        body.allowed_binding_ids,
-        task_ids=task_ids,
-        endpoints=endpoints,
-    )
-
+    binding_ids = _binding_selection(raw, body.allowed_binding_ids, task_ids=task_ids, endpoints=endpoints)
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
         "status": "active",
@@ -429,7 +354,10 @@ async def create_evaluation_grant(
     }
     grants.append(grant)
     raw[EVALUATION_GRANTS_STORAGE_KEY] = grants[-500:]
-    settings_module._save_raw(owner_user_id, raw)
+    try:
+        await save_evaluation_authority_state(owner_user_id, raw)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
     return {"status": "created", "grant": safe_evaluation_grant(grant)}
 
 
@@ -440,24 +368,35 @@ async def list_evaluation_grants(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_user_id)
-    grants = evaluation_grants(raw)
-    changed = False
+    try:
+        raw = await load_evaluation_authority_state(owner_user_id)
+    except EvaluationAuthorityError as exc:
+        if str(exc) == "evaluation_authority_state_missing":
+            return {
+                "status": "ready",
+                "grants": [],
+                "grant_count": 0,
+                "authority_store": "postgresql_shared",
+                "subscription_required": False,
+                "registration_required": False,
+                "commercial_quota_required": False,
+            }
+        raise _authority_http_error(exc) from exc
+
     items: list[dict[str, Any]] = []
-    for grant in grants:
-        before = str(grant.get("status") or "")
+    for grant in evaluation_grants(raw):
         refresh_evaluation_grant_status(grant)
-        changed = changed or before != str(grant.get("status") or "")
         item = safe_evaluation_grant(grant)
-        item["active_key_count"] = _linked_key_count(raw, item["grant_id"])
+        try:
+            item["active_key_count"] = await active_evaluation_key_count(owner_user_id, item["grant_id"])
+        except EvaluationAuthorityError as exc:
+            raise _authority_http_error(exc) from exc
         items.append(item)
-    if changed:
-        raw[EVALUATION_GRANTS_STORAGE_KEY] = grants
-        settings_module._save_raw(owner_user_id, raw)
     return {
         "status": "ready",
         "grants": items,
         "grant_count": len(items),
+        "authority_store": "postgresql_shared",
         "subscription_required": False,
         "registration_required": False,
         "commercial_quota_required": False,
@@ -477,7 +416,10 @@ async def issue_evaluation_key(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_user_id)
+    try:
+        raw = await load_evaluation_authority_state(owner_user_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
     grant = find_evaluation_grant(raw, grant_id)
     if grant is None:
         raise HTTPException(status_code=404, detail="Evaluation grant not found.")
@@ -502,12 +444,11 @@ async def issue_evaluation_key(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    if _linked_key_count(raw, grant_id) >= 3:
-        raise HTTPException(
-            status_code=409,
-            detail="Maximum active evaluation keys reached for this grant.",
-        )
+    try:
+        if await active_evaluation_key_count(owner_user_id, grant_id) >= 3:
+            raise HTTPException(status_code=409, detail="Maximum active evaluation keys reached for this grant.")
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
 
     raw_key = generate_api_key()
     now = datetime.now(UTC).isoformat()
@@ -550,13 +491,10 @@ async def issue_evaluation_key(
         "revoked_at": None,
         "production_allowed": False,
     }
-    keys = raw.get("api_keys", [])
-    if not isinstance(keys, list):
-        keys = []
-    keys.append(entry)
-    raw["api_keys"] = keys
-    settings_module._save_raw(owner_user_id, raw)
-
+    try:
+        await create_evaluation_authority_key(owner_id=owner_user_id, raw_key=raw_key, entry=entry)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
     return {
         "status": "created",
         "api_key": raw_key,
@@ -588,10 +526,7 @@ async def issue_evaluation_key(
     }
 
 
-@settings_module.router.delete(
-    "/admin/evaluation-grants/{grant_id}",
-    response_model=dict,
-)
+@settings_module.router.delete("/admin/evaluation-grants/{grant_id}", response_model=dict)
 async def revoke_evaluation_grant(
     grant_id: str,
     request: Request,
@@ -599,40 +534,17 @@ async def revoke_evaluation_grant(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_user_id)
-    grant = find_evaluation_grant(raw, grant_id)
-    if grant is None:
-        raise HTTPException(status_code=404, detail="Evaluation grant not found.")
-
     now = datetime.now(UTC).isoformat()
-    grant["status"] = "revoked"
-    grant["revoked_at"] = now
-    keys = raw.get("api_keys", [])
-    if not isinstance(keys, list):
-        keys = []
-    revoked_keys = 0
-    for key in keys:
-        if not isinstance(key, dict):
-            continue
-        if str(key.get("evaluation_grant_id") or "") != grant_id:
-            continue
-        if key.get("status") in {"revoked", "disabled", "expired"}:
-            continue
-        if key.get("revoked_at"):
-            continue
-        key["status"] = "revoked"
-        key["revoked_at"] = now
-        key["revocation_reason"] = "evaluation_grant_revoked"
-        revoked_keys += 1
-
-    raw[EVALUATION_GRANTS_STORAGE_KEY] = evaluation_grants(raw)
-    raw["api_keys"] = keys
-    settings_module._save_raw(owner_user_id, raw)
+    try:
+        revoked_keys = await revoke_evaluation_authority_grant(owner_user_id, grant_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
     return {
         "status": "revoked",
         "grant_id": grant_id,
         "revoked_at": now,
         "revoked_key_count": revoked_keys,
+        "authority_store": "postgresql_shared",
     }
 
 
