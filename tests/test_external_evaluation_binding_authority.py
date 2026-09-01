@@ -7,7 +7,6 @@ import pytest
 from fastapi import HTTPException
 
 from processual_api.routers import evaluation_runtime
-from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_admin_evaluation_grants as grant_routes
 from processual_api.routers import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from processual_api.services import api_key_store
@@ -107,7 +106,15 @@ def test_public_identity_projects_binding_authority_from_canonical_grant() -> No
 def test_runtime_rejects_ungranted_binding_before_binding_lookup(monkeypatch) -> None:
     grant = _runtime_grant(binding_id="binding_eval_a")
     raw = {EVALUATION_GRANTS_STORAGE_KEY: [grant]}
-    monkeypatch.setattr(settings_router, "_load_raw", lambda _owner_id: raw)
+
+    async def load_shared_authority(_owner_id: str) -> dict:
+        return raw
+
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "load_evaluation_authority_state",
+        load_shared_authority,
+    )
 
     lookup_called = False
 
