@@ -119,11 +119,17 @@ def _safe_scopes(values: list[str]) -> list[str]:
         if not scope or scope in seen:
             continue
         if scope.startswith("admin:") or scope in {"*", "admin:*", "admin:dangerous"}:
-            raise HTTPException(status_code=422, detail="Evaluation grants cannot include administrative scopes.")
+            raise HTTPException(
+                status_code=422,
+                detail="Evaluation grants cannot include administrative scopes.",
+            )
         seen.add(scope)
         scopes.append(scope)
     if not scopes:
-        raise HTTPException(status_code=422, detail="At least one evaluation scope is required.")
+        raise HTTPException(
+            status_code=422,
+            detail="At least one evaluation scope is required.",
+        )
     return scopes
 
 
@@ -142,15 +148,27 @@ def _endpoint_selection(
             continue
         policy = get_api_key_access_policy(method, path)
         if policy is None:
-            raise HTTPException(status_code=422, detail=f"Endpoint is not eligible for evaluation access: {method} {path}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Endpoint is not eligible for evaluation access: {method} {path}",
+            )
         if policy.production_allowed:
-            raise HTTPException(status_code=422, detail=f"Production endpoint cannot enter evaluation access: {method} {path}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Production endpoint cannot enter evaluation access: {method} {path}",
+            )
         if not set(policy.required_scopes).issubset(scope_set):
-            raise HTTPException(status_code=422, detail=f"Endpoint scope derivation mismatch: {method} {path}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Endpoint scope derivation mismatch: {method} {path}",
+            )
         seen.add(key)
         selected.append({"method": method, "path": path})
     if not selected:
-        raise HTTPException(status_code=422, detail="At least one eligible evaluation endpoint is required.")
+        raise HTTPException(
+            status_code=422,
+            detail="At least one eligible evaluation endpoint is required.",
+        )
     return selected
 
 
@@ -166,9 +184,15 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
         try:
             task = get_integration_task(task_id)
         except KeyError as exc:
-            raise HTTPException(status_code=422, detail=f"Unknown evaluation task: {task_id}") from exc
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown evaluation task: {task_id}",
+            ) from exc
         if not task.sandbox_allowed or task.auto_execute_production:
-            raise HTTPException(status_code=422, detail=f"Task is not eligible for evaluation access: {task_id}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Task is not eligible for evaluation access: {task_id}",
+            )
         seen_tasks.add(task_id)
         selected.append(task_id)
         for scope_id in task.required_scope_ids:
@@ -176,7 +200,10 @@ def _task_selection(task_ids: list[str]) -> tuple[list[str], list[str]]:
                 seen_scopes.add(scope_id)
                 task_scopes.append(scope_id)
     if not selected:
-        raise HTTPException(status_code=422, detail="At least one canonical evaluation task is required.")
+        raise HTTPException(
+            status_code=422,
+            detail="At least one canonical evaluation task is required.",
+        )
     return selected, task_scopes
 
 
@@ -202,25 +229,60 @@ def _binding_selection(
         selected.append(binding_id)
     if not runtime_task_granted:
         if selected:
-            raise HTTPException(status_code=422, detail="Evaluation binding selection requires the runtime task-execute endpoint.")
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Evaluation binding selection requires the runtime "
+                    "task-execute endpoint."
+                ),
+            )
         return []
     if not selected:
-        raise HTTPException(status_code=422, detail="Evaluation runtime task execution requires at least one prepared binding.")
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Evaluation runtime task execution requires at least one "
+                "prepared binding."
+            ),
+        )
 
     stored = raw.get(BINDING_STORAGE_KEY, [])
-    stored_items = [dict(item) for item in stored if isinstance(item, dict)] if isinstance(stored, list) else []
+    stored_items = (
+        [dict(item) for item in stored if isinstance(item, dict)]
+        if isinstance(stored, list)
+        else []
+    )
     task_set = {str(task_id).strip().lower() for task_id in task_ids}
     for binding_id in selected:
-        item = next((candidate for candidate in stored_items if str(candidate.get("binding_id") or "") == binding_id), None)
+        item = next(
+            (
+                candidate
+                for candidate in stored_items
+                if str(candidate.get("binding_id") or "") == binding_id
+            ),
+            None,
+        )
         if item is None:
-            raise HTTPException(status_code=422, detail=f"Prepared evaluation binding not found: {binding_id}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Prepared evaluation binding not found: {binding_id}",
+            )
         try:
             spec = EnterpriseEndpointBindingSpec(**item)
             validate_endpoint_binding(spec)
         except (ValueError, KeyError, EndpointBindingError) as exc:
-            raise HTTPException(status_code=422, detail=f"Prepared evaluation binding is invalid: {binding_id}") from exc
+            raise HTTPException(
+                status_code=422,
+                detail=f"Prepared evaluation binding is invalid: {binding_id}",
+            ) from exc
         if spec.task_id not in task_set:
-            raise HTTPException(status_code=422, detail=f"Evaluation binding task is outside the grant task envelope: {binding_id}")
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Evaluation binding task is outside the grant task envelope: "
+                    f"{binding_id}"
+                ),
+            )
     return selected
 
 
@@ -247,7 +309,10 @@ async def _require_platform_admin(request: Request, current_user: dict[str, Any]
 
 def _authority_http_error(exc: EvaluationAuthorityError) -> HTTPException:
     if str(exc) == "evaluation_grant_not_found":
-        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation grant not found.")
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation grant not found.",
+        )
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Shared Evaluation authority is unavailable.",
@@ -323,7 +388,12 @@ async def create_evaluation_grant(
     scopes = _safe_scopes(body.allowed_scopes)
     endpoints = _endpoint_selection(body.allowed_endpoints, scopes)
     task_ids, task_scope_ids = _task_selection(body.allowed_task_ids)
-    binding_ids = _binding_selection(raw, body.allowed_binding_ids, task_ids=task_ids, endpoints=endpoints)
+    binding_ids = _binding_selection(
+        raw,
+        body.allowed_binding_ids,
+        task_ids=task_ids,
+        endpoints=endpoints,
+    )
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
         "status": "active",
@@ -388,7 +458,10 @@ async def list_evaluation_grants(
         refresh_evaluation_grant_status(grant)
         item = safe_evaluation_grant(grant)
         try:
-            item["active_key_count"] = await active_evaluation_key_count(owner_user_id, item["grant_id"])
+            item["active_key_count"] = await active_evaluation_key_count(
+                owner_user_id,
+                item["grant_id"],
+            )
         except EvaluationAuthorityError as exc:
             raise _authority_http_error(exc) from exc
         items.append(item)
@@ -446,7 +519,10 @@ async def issue_evaluation_key(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         if await active_evaluation_key_count(owner_user_id, grant_id) >= 3:
-            raise HTTPException(status_code=409, detail="Maximum active evaluation keys reached for this grant.")
+            raise HTTPException(
+                status_code=409,
+                detail="Maximum active evaluation keys reached for this grant.",
+            )
     except EvaluationAuthorityError as exc:
         raise _authority_http_error(exc) from exc
 
@@ -492,7 +568,11 @@ async def issue_evaluation_key(
         "production_allowed": False,
     }
     try:
-        await create_evaluation_authority_key(owner_id=owner_user_id, raw_key=raw_key, entry=entry)
+        await create_evaluation_authority_key(
+            owner_id=owner_user_id,
+            raw_key=raw_key,
+            entry=entry,
+        )
     except EvaluationAuthorityError as exc:
         raise _authority_http_error(exc) from exc
     return {
