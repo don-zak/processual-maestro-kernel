@@ -34,6 +34,7 @@ from processual_api.services.execution_observability import record_execution_obs
 
 MAX_SANDBOX_RESPONSE_BYTES = 1_048_576
 _ALLOWED_CREDENTIAL_HEADERS = frozenset({"authorization", "x-api-key"})
+_ANONYMOUS_CREDENTIAL_SOURCE = "anonymous_public_sandbox"
 _PROFILE_ENV_SAFE = re.compile(r"[^A-Z0-9]+")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 
@@ -162,7 +163,7 @@ def _safe_credential_headers(envelope: SandboxCredentialEnvelope) -> dict[str, s
         if not str(value or "").strip():
             raise SandboxExecutionError("sandbox_credential_value_empty")
         safe[key] = str(value)
-    if not safe:
+    if not safe and envelope.source != _ANONYMOUS_CREDENTIAL_SOURCE:
         raise SandboxExecutionError("sandbox_credential_reference_unresolved")
     return safe
 
