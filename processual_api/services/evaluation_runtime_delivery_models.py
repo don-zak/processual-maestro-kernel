@@ -5,9 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, JSON, String, UniqueConstraint, false
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    JSON,
+    String,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql.elements import conv
 
 from processual_api.db.base import Base
 
@@ -30,9 +38,14 @@ class EvaluationRuntimeDelivery(Base):
     evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     replay_response: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    execution_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    execution_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    evidence_persisted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    evidence_persisted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_code: Mapped[str | None] = mapped_column(String(200))
     network_outcome: Mapped[str | None] = mapped_column(String(40))
@@ -59,7 +72,7 @@ class EvaluationRuntimeDelivery(Base):
         ),
         CheckConstraint(
             "state IN ('executing', 'evidence_persisted', 'failed')",
-            name=conv("ck_evaluation_runtime_delivery_state"),
+            name="state",
         ),
         Index(
             "ix_evaluation_runtime_delivery_owner_state",
