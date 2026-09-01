@@ -19,7 +19,7 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     auth = (STATIC_ROOT / "js" / "auth.js").read_text(encoding="utf-8")
     index = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
 
-    assert "showcase_v2.js?v=showcase-v2-p0" in auth
+    assert "showcase_v2.js?v=showcase-v2-p1" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
