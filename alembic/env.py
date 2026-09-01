@@ -15,6 +15,7 @@ from processual_api.db.sqlite_migration_recovery import (
     cleanup_orphaned_batch_tables,
     recover_uncommitted_head_version,
 )
+from processual_api.services import evaluation_runtime_delivery_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
