@@ -1,10 +1,8 @@
-"""Bounded task execution bridge for governed Evaluation API keys.
+"""Bounded task execution bridge for governed External Evaluation API keys.
 
-This is deliberately a runtime surface, not a provisioning surface. Bindings,
-request mappings, customer-scoped secret references, content contracts, and
-short-lived execution grants must already exist in the Evaluation owner store.
-The Evaluation credential can consume that prepared authority but cannot create
-or modify it.
+All Evaluation execution authority is loaded from the shared PostgreSQL
+snapshot sealed when the platform administrator creates the grant. No runtime
+authority decision depends on replica-local settings files.
 """
 
 from __future__ import annotations
@@ -33,6 +31,10 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
     SandboxGrantError,
     resolve_active_sandbox_execution_grant,
 )
+from processual_api.services.evaluation_authority_postgres import (
+    EvaluationAuthorityError,
+    load_evaluation_authority_state,
+)
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     evaluation_binding_allowed,
@@ -50,7 +52,6 @@ from processual_api.services.evaluation_runtime_delivery_postgres import (
     fail_evaluation_execution,
 )
 
-from . import settings as settings_router
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from . import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
 
@@ -145,7 +146,10 @@ def _require_evaluation_credential(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Governed Evaluation Runtime credential required.",
         )
-    grant = find_evaluation_grant(raw, str(current_user.get("evaluation_grant_id") or ""))
+    grant = find_evaluation_grant(
+        raw,
+        str(current_user.get("evaluation_grant_id") or ""),
+    )
     if grant is not None:
         refresh_evaluation_grant_status(grant)
     if (
@@ -180,14 +184,6 @@ def _authorize_task(
             detail="Evaluation grant does not allow this canonical task.",
         )
     return requested
-
-
-def _append_evidence(raw: dict[str, Any], evidence: dict[str, Any]) -> None:
-    items = raw.get(EVALUATION_TASK_EVIDENCE_STORAGE_KEY, [])
-    if not isinstance(items, list):
-        items = []
-    items.append(evidence)
-    raw[EVALUATION_TASK_EVIDENCE_STORAGE_KEY] = items[-100:]
 
 
 def _safe_replay_response(response: dict[str, Any]) -> dict[str, Any]:
@@ -228,10 +224,15 @@ async def execute_evaluation_runtime_task(
     body: EvaluationRuntimeTaskExecuteRequest,
     current_user: dict = Depends(require_scope("run:evaluation")),
 ) -> dict[str, Any]:
-    """Execute one prepared external operation under evaluation-only authority."""
-
     owner_id = _evaluation_owner_id(current_user)
-    raw = settings_router._load_raw(owner_id)
+    try:
+        raw = await load_evaluation_authority_state(owner_id)
+    except EvaluationAuthorityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Shared Evaluation runtime authority is unavailable.",
+        ) from exc
+
     _require_evaluation_credential(current_user, raw)
     if not evaluation_binding_allowed(current_user, body.binding_id):
         raise HTTPException(
@@ -321,9 +322,7 @@ async def execute_evaluation_runtime_task(
             spec,
             task_input=body.task_input,
             request_body=request_body,
-            approved_operation_classes=set(
-                execution_grant["approved_operation_classes"]
-            ),
+            approved_operation_classes=set(execution_grant["approved_operation_classes"]),
             approval_reference=str(execution_grant["grant_id"]),
             credential_resolver=resolver,
             transport=transport,
@@ -396,12 +395,6 @@ async def execute_evaluation_runtime_task(
                 "for this idempotency key pending operator reconciliation."
             ),
         ) from exc
-
-    try:
-        _append_evidence(raw, evidence)
-        settings_router._save_raw(owner_id, raw)
-    except (OSError, RuntimeError, ValueError):
-        logger.exception("Secondary evaluation settings evidence persistence failed")
 
     return response
 
