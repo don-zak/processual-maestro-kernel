@@ -16,8 +16,8 @@ from processual_api.db.sqlite_migration_recovery import (
     recover_uncommitted_head_version,
 )
 from processual_api.services import (
-    evaluation_authority_models,
-    evaluation_runtime_delivery_models,
+    evaluation_authority_models,  # noqa: F401
+    evaluation_runtime_delivery_models,  # noqa: F401
 )
 
 config = context.config
