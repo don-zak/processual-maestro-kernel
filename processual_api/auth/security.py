@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
@@ -13,21 +14,22 @@ from processual_api.services.evaluation_authority_postgres import (
 from processual_api.services.evaluation_grants import evaluation_endpoint_allowed
 from processual_api.settings import settings
 
-# Preserve the complete historical security surface while overriding only the
-# authentication dependencies that must consult shared Evaluation authority.
-for _name in dir(_legacy):
-    if not _name.startswith("__"):
-        globals().setdefault(_name, getattr(_legacy, _name))
-
-# These helpers are imported by typed A5 administration code. Keep them
-# explicit so static analysis sees the same stable security surface as runtime.
+# Keep static analysis aware of the stable security surface. Runtime exposes the
+# legacy module object itself below, so monkeypatches continue to target the
+# globals used by the historical implementation rather than a proxy copy.
 _pbkdf2_hash_api_key = _legacy._pbkdf2_hash_api_key
+_verify_pbkdf2_api_key = _legacy._verify_pbkdf2_api_key
+_PBKDF2CompatBcrypt = _legacy._PBKDF2CompatBcrypt
 generate_api_key = _legacy.generate_api_key
 hash_api_key = _legacy.hash_api_key
+verify_api_key = _legacy.verify_api_key
+create_access_token = _legacy.create_access_token
+verify_access_token = _legacy.verify_access_token
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 _supervisor_session_key_header = APIKeyHeader(name="X-Supervisor-Session-Key", auto_error=False)
 _bearer = HTTPBearer(auto_error=False)
+_legacy_get_current_user = _legacy.get_current_user
 
 
 def _production_runtime() -> bool:
@@ -49,12 +51,9 @@ async def get_current_user(
     if api_key and not bearer:
         try:
             shared_user = await verify_evaluation_api_key(api_key)
-        except EvaluationAuthorityError as exc:
-            if _production_runtime():
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Shared Evaluation authority is unavailable.",
-                ) from exc
+        except EvaluationAuthorityError:
+            # Authentication remains fail-closed for an unverified Evaluation
+            # key, while unrelated dynamic API keys keep their own authority.
             shared_user = None
 
         if shared_user is not None:
@@ -70,7 +69,7 @@ async def get_current_user(
             request.state.current_user = shared_user
             return shared_user
 
-    user = await _legacy.get_current_user(
+    user = await _legacy_get_current_user(
         request,
         bearer=bearer,
         api_key=api_key,
@@ -88,51 +87,10 @@ async def get_current_user(
     return user
 
 
-def require_scope(required_scope: str):
-    async def _scope_dependency(current_user: dict = Depends(get_current_user)) -> dict:
-        scopes = current_user.get("scopes", [])
-        if "*" in scopes or required_scope in scopes:
-            return current_user
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Missing required scope: {required_scope}",
-        )
+# Dependency factories in the implementation module resolve get_current_user
+# from their module globals, so install the shared-first dependency there.
+_legacy.get_current_user = get_current_user
 
-    return _scope_dependency
-
-
-def require_recent_mfa(max_age_seconds: int = 300):
-    legacy_dependency = _legacy.require_recent_mfa(max_age_seconds)
-
-    async def _dependency(current_user: dict = Depends(get_current_user)) -> dict:
-        return await legacy_dependency(current_user)
-
-    return _dependency
-
-
-def require_platform_admin_step_up(max_age_seconds: int | None = None):
-    legacy_dependency = _legacy.require_platform_admin_step_up(max_age_seconds)
-
-    async def _dependency(current_user: dict = Depends(get_current_user)) -> dict:
-        return await legacy_dependency(current_user)
-
-    return _dependency
-
-
-def require_quota(quota_scope: str = "evaluation"):
-    legacy_dependency = _legacy.require_quota(quota_scope)
-
-    async def _dependency(
-        request: Request,
-        current_user: dict = Depends(get_current_user),
-    ) -> dict:
-        return await legacy_dependency(request, current_user)
-
-    return _dependency
-
-
-__all__ = [
-    name
-    for name in globals()
-    if not name.startswith("__") and name not in {"_legacy", "_name"}
-]
+# Return the implementation module itself instead of a copied proxy namespace.
+# This preserves historical monkeypatch and FastAPI dependency behavior.
+sys.modules[__name__] = _legacy
