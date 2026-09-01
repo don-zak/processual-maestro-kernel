@@ -14,7 +14,6 @@ from processual_api.services.evaluation_authority_models import (
 )
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
-    evaluation_grants,
     find_evaluation_grant,
     refresh_evaluation_grant_status,
 )
@@ -48,8 +47,8 @@ def evaluation_authority_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "enterprise_endpoint_bindings_v1",
         "enterprise_endpoint_request_mappings_v1",
         "enterprise_endpoint_sandbox_grants_v1",
-        "enterprise_endpoint_sandbox_secret_references_v1",
-        "enterprise_endpoint_sandbox_content_contracts_v1",
+        "enterprise_sandbox_secret_references_v1",
+        "enterprise_sandbox_content_contracts_v1",
         "enterprise_endpoint_sandbox_evidence_v1",
     )
     return {
@@ -147,7 +146,12 @@ async def active_evaluation_key_count(owner_id: str, grant_id: str) -> int:
 async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int:
     try:
         async with session_scope() as session:
-            state = await session.get(EvaluationAuthorityState, owner_id, with_for_update=True)
+            state_result = await session.execute(
+                select(EvaluationAuthorityState)
+                .where(EvaluationAuthorityState.owner_id == owner_id)
+                .with_for_update()
+            )
+            state = state_result.scalar_one_or_none()
             if state is None or not isinstance(state.authority, dict):
                 raise EvaluationAuthorityError("evaluation_authority_state_missing")
             raw = dict(state.authority)
@@ -263,13 +267,20 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
                 "task_scope_ids": list(grant.get("task_scope_ids") or []),
                 "allowed_binding_ids": list(grant.get("allowed_binding_ids") or []),
                 "allowed_endpoints": list(grant.get("allowed_endpoints") or []),
-                "task_authority_source": str(grant.get("task_authority_source") or "integration_task_catalog"),
-                "endpoint_authority_source": str(grant.get("endpoint_authority_source") or "canonical_runtime_access_policy"),
+                "task_authority_source": str(
+                    grant.get("task_authority_source") or "integration_task_catalog"
+                ),
+                "endpoint_authority_source": str(
+                    grant.get("endpoint_authority_source")
+                    or "canonical_runtime_access_policy"
+                ),
                 "execution_mode": EVALUATION_EXECUTION_MODE,
                 "real_runtime_execution": True,
                 "evaluation_access": True,
                 "production_allowed": False,
             }
+    except EvaluationAuthorityError:
+        raise
     except Exception as exc:
         raise EvaluationAuthorityError("evaluation_authority_database_unavailable") from exc
 
