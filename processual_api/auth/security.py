@@ -32,6 +32,20 @@ _bearer = HTTPBearer(auto_error=False)
 _legacy_get_current_user = _legacy.get_current_user
 
 
+def require_scope(required_scope: str):
+    """Expose the stable scope dependency factory to static consumers.
+
+    The delegated implementation raises ``Missing required scope`` when the
+    authenticated authority does not contain the requested scope.
+    """
+    return _legacy.require_scope(required_scope)
+
+
+def require_quota(quota_scope: str = "evaluation"):
+    """Expose the stable quota dependency factory to static consumers."""
+    return _legacy.require_quota(quota_scope)
+
+
 def _production_runtime() -> bool:
     app_env = os.environ.get("APP_ENV", settings.environment).lower()
     runtime_env = os.environ.get("ENVIRONMENT", settings.environment).lower()
