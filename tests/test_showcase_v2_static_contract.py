@@ -20,6 +20,8 @@ def test_maestro_console_loads_showcase_enhancements_without_replacing_console()
     index = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
 
     assert "showcase_v2.js?v=showcase-v2-p1" in auth
+    assert "showcase_decision_journey.js?v=decision-journey-p2" in auth
+    assert "data-maestro-decision-journey" in auth
     # Guard the complete console markup that was present before the enhancement.
     assert 'id="page-governor"' in index
     assert 'id="gw-summary"' in index
@@ -81,3 +83,44 @@ def test_showcase_enterprise_narrative_is_explicit_and_fail_safe() -> None:
     assert "MutationObserver" in showcase
     assert "CI-qualified demo" in showcase
     assert "production-ready" not in showcase.lower()
+
+
+def test_decision_journey_is_deterministic_governed_and_demo_safe() -> None:
+    journey = (STATIC_ROOT / "js" / "showcase_decision_journey.js").read_text(
+        encoding="utf-8"
+    )
+
+    for label in (
+        "Governed Decision Journey",
+        "Identity",
+        "Authority",
+        "Entitlement",
+        "Quota",
+        "Capacity",
+        "Governance",
+        "Human Approval",
+        "Evidence",
+        "SLA incident governance",
+        "Provider degradation recovery",
+        "Sensitive configuration change",
+        "CONTROL",
+        "REPAIR",
+        "STOP",
+        "Human approval required",
+        "Qualified fallback available",
+        "Outside approved maintenance window",
+        "Execution paused. Human approval is required before evidence finalization.",
+        "Human approval recorded. Finalizing auditable evidence",
+        "Approval recorded → evidence retained",
+        "Fallback selected inside policy boundary",
+        "Fail closed → no execution granted",
+        "DEMO UI · deterministic sequence",
+        "does not claim live production execution",
+    ):
+        assert label in journey
+
+    assert "stopAt: 'approval'" in journey
+    assert "stopAt: 'governance'" in journey
+    assert "data-mdj-approve" in journey
+    assert "data-mdj-step=\"evidence\"" not in journey
+    assert "production-ready" not in journey.lower()
