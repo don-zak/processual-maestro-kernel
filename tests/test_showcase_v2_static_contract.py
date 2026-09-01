@@ -44,6 +44,11 @@ def test_showcase_p0_cues_are_explicit_and_fail_safe() -> None:
         "REPAIR",
         "STOP",
         "RECORDED QUALIFICATION EVIDENCE",
+        "Operational Admission Impact",
+        "Quota used",
+        "Quota remaining",
+        "Latest admission status",
+        "auditable evidence",
         "Public CI",
         "Security",
         "Deep Integrity",
@@ -54,5 +59,9 @@ def test_showcase_p0_cues_are_explicit_and_fail_safe() -> None:
     ):
         assert label in showcase
 
+    assert "set-usage-quota-used" in showcase
+    assert "set-usage-quota-remaining" in showcase
+    assert "set-usage-latest-status" in showcase
+    assert "MutationObserver" in showcase
     assert "CI-qualified demo" in showcase
     assert "production-ready" not in showcase.lower()
