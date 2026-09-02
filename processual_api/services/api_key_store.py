@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from processual_api.services.evaluation_grants import (
+    EVALUATION_EXECUTION_MODE,
     find_evaluation_grant,
     key_evaluation_grant_state,
 )
@@ -158,7 +159,7 @@ def _public_identity(
     if not isinstance(scopes, list) or not scopes:
         scopes = DEFAULT_CLIENT_SCOPES
 
-    return {
+    identity = {
         "sub": user_id,
         "user_id": user_id,
         "client_id": client_id,
@@ -175,6 +176,34 @@ def _public_identity(
         "task_scope_ids": list(key.get("task_scope_ids") or []),
         "task_authority_source": key.get("task_authority_source"),
     }
+
+    if key.get("entitlement_source") == "admin_evaluation_grant":
+        grant = find_evaluation_grant(
+            raw,
+            str(key.get("evaluation_grant_id") or ""),
+        )
+        if grant is not None:
+            identity.update(
+                {
+                    "category": "pilot_client",
+                    "allowed_binding_ids": list(grant.get("allowed_binding_ids") or []),
+                    "allowed_endpoints": list(grant.get("allowed_endpoints") or []),
+                    "endpoint_authority_source": str(
+                        grant.get("endpoint_authority_source")
+                        or "canonical_runtime_access_policy"
+                    ),
+                    "execution_mode": str(
+                        grant.get("execution_mode") or EVALUATION_EXECUTION_MODE
+                    ),
+                    "real_runtime_execution": grant.get("real_runtime_execution") is True,
+                    "evaluation_access": True,
+                    "registration_required": False,
+                    "commercial_quota_required": False,
+                    "production_allowed": False,
+                }
+            )
+
+    return identity
 
 
 def _governed_evaluation_usage_limit(

@@ -16,7 +16,7 @@ def test_security_dependencies_use_pyjwt_without_python_ecdsa_backend():
 
 
 def test_auth_and_subscription_runtime_no_longer_import_python_jose():
-    auth_source = Path("processual_api/auth/security.py").read_text(encoding="utf-8")
+    auth_source = Path("processual_api/auth/security_legacy.py").read_text(encoding="utf-8")
     subscription_source = Path("processual_api/middleware/subscription.py").read_text(encoding="utf-8")
 
     assert "from jose" not in auth_source

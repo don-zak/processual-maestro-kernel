@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import os
+import threading
 import time
 from typing import Any
 
@@ -15,25 +17,35 @@ class DiscordService:
                 configured per-user via settings or env DISCORD_WEBHOOK_URL
     """
 
+    _rate_limit_lock = threading.Lock()
+    _last_send_by_target: dict[tuple[str, str], float] = {}
+
     def __init__(self, client_webhook: str | None = None):
         self._admin_webhook = (
             os.environ.get("DISCORD_ADMIN_WEBHOOK_URL")
             or os.environ.get("DISCORD_WEBHOOK_URL", "")
         )
         self._client_webhook = client_webhook or os.environ.get("DISCORD_WEBHOOK_URL", "")
-        self._last_send: dict[str, float] = {"admin": 0.0, "client": 0.0}
         self._min_interval = float(os.environ.get("DISCORD_RATE_LIMIT_SECONDS", "2"))
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _rate_limited(self, channel: str) -> bool:
+    @staticmethod
+    def _target_fingerprint(webhook_url: str) -> str:
+        if not webhook_url:
+            return "unconfigured"
+        return hashlib.sha256(webhook_url.encode("utf-8")).hexdigest()
+
+    def _rate_limited(self, channel: str, webhook_url: str) -> bool:
         now = time.monotonic()
-        last_send = self._last_send.get(channel, 0.0)
-        if last_send > 0.0 and now - last_send < self._min_interval:
-            return True
-        self._last_send[channel] = now
+        key = (channel, self._target_fingerprint(webhook_url))
+        with self._rate_limit_lock:
+            last_send = self._last_send_by_target.get(key, 0.0)
+            if last_send > 0.0 and now - last_send < self._min_interval:
+                return True
+            self._last_send_by_target[key] = now
         return False
 
     async def _post(self, webhook_url: str, payload: dict) -> bool:
@@ -52,9 +64,9 @@ class DiscordService:
     # ------------------------------------------------------------------
 
     async def send_raw(self, channel: str, message: str, embed: dict | None = None) -> bool:
-        if self._rate_limited(channel):
-            return False
         webhook = self._admin_webhook if channel == "admin" else self._client_webhook
+        if self._rate_limited(channel, webhook):
+            return False
         payload: dict[str, Any] = {"content": message}
         if embed:
             payload["embeds"] = [embed]
@@ -77,13 +89,13 @@ class DiscordService:
             "fields": [
                 {"name": "ID", "value": agent_id, "inline": True},
                 {"name": "State", "value": state, "inline": True},
-                {"name": "Reason", "value": reason or "\u2014", "inline": False},
+                {"name": "Reason", "value": reason or "—", "inline": False},
             ],
         }
-        return await self.send_client(f"**Agent Status:** {agent_name} \u2192 `{state}`", embed)
+        return await self.send_client(f"**Agent Status:** {agent_name} → `{state}`", embed)
 
     async def send_application_alert(self, app: dict, action: str = "submitted", reviewer: str = "") -> bool:
-        msg = f"**Application {action}** \u2014 {app.get('full_name', '?')} ({app.get('email', '?')})"
+        msg = f"**Application {action}** — {app.get('full_name', '?')} ({app.get('email', '?')})"
         embed: dict[str, Any] = {
             "title": f"Application {action.capitalize()}",
             "color": 5814783 if action in ("submitted", "approved") else 15158332,
@@ -96,7 +108,7 @@ class DiscordService:
         }
         if action == "submitted":
             embed["fields"].append({"name": "Use Case", "value": str(app.get("use_case", "?"))[:200], "inline": False})
-            embed["fields"].append({"name": "LinkedIn", "value": app.get("linkedin_url", "\u2014"), "inline": False})
+            embed["fields"].append({"name": "LinkedIn", "value": app.get("linkedin_url", "—"), "inline": False})
         if reviewer:
             embed["fields"].append({"name": "Reviewer", "value": reviewer, "inline": True})
         return await self.send_admin(msg, embed)

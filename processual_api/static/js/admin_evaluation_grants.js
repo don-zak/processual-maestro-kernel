@@ -2,9 +2,13 @@
   const EVALUATION_GRANTS_ENDPOINT = '/settings/admin/evaluation-grants';
   const EVALUATION_TASK_CATALOG_ENDPOINT =
     '/settings/admin/evaluation-grants/task-catalog';
+  const EVALUATION_BINDING_CATALOG_ENDPOINT =
+    '/settings/admin/evaluation-grants/binding-catalog';
+  const RUNTIME_TASK_ENDPOINT = '/evaluation/runtime/task-execute';
   const GRANT_HOST_ID = 'admin-evaluation-grants';
   const EXTERNAL_CATEGORY = 'external_evaluation';
   let evaluationTaskCatalog = [];
+  let evaluationBindingCatalog = [];
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -85,22 +89,27 @@
     return `
       <div class="sec-hdr">
         <div class="sh-title">Evaluation Grant Preparation</div>
-        <div class="sh-sub">identity, limits, canonical tasks, grant creation, one-time issue, and revoke</div>
+        <div class="sh-sub">identity, request safety limit, canonical tasks, prepared bindings, grant creation, one-time issue, and revoke</div>
       </div>
       <div class="admin-note">
-        Evaluation grants are temporary, quota-bound, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
+        Evaluation grants are temporary, request-limited, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
       </div>
       <div class="grid-3">
         <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
         <label>Issued to<input id="admin-eval-issued-to" type="text" placeholder="Company or evaluator"></label>
         <label>Duration days<input id="admin-eval-days" type="number" min="1" max="90" value="14"></label>
-        <label>Max requests<input id="admin-eval-max-requests" type="number" min="1" max="10000" value="100"></label>
+        <label>Evaluation request limit<input id="admin-eval-max-requests" type="number" min="1" max="5000" value="100"></label>
         <label style="grid-column:span 2">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation"></label>
       </div>
       <div style="margin-top:var(--s-3)">
         <strong>API key task content</strong>
         <div class="muted">Choose only the canonical tasks this evaluation key may represent.</div>
         <div id="admin-eval-task-list" style="margin-top:var(--s-2)">Loading canonical tasks...</div>
+      </div>
+      <div style="margin-top:var(--s-3)">
+        <strong>Prepared Evaluation Bindings</strong>
+        <div class="muted">Required only when <code>POST ${RUNTIME_TASK_ENDPOINT}</code> is selected. Only sandbox-ready bindings with an active short-lived sandbox grant are selectable.</div>
+        <div id="admin-eval-binding-list" style="margin-top:var(--s-2)">Loading prepared bindings...</div>
       </div>
       <div id="admin-eval-readiness" class="admin-note" style="margin-top:var(--s-3)">
         Evaluation grant creation is locked until the lifecycle readiness contract is complete.
@@ -146,7 +155,10 @@
       `)
       .join('');
     target.querySelectorAll('[data-eval-task]').forEach((input) => {
-      input.addEventListener('change', dispatchEvaluationSelectionChanged);
+      input.addEventListener('change', () => {
+        renderEvaluationBindingCatalog();
+        dispatchEvaluationSelectionChanged();
+      });
     });
     dispatchEvaluationSelectionChanged();
     updateEvaluationReadiness();
@@ -177,7 +189,72 @@
     const workspace = window.PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE;
     if (!workspace || typeof workspace.selectedEndpoints !== 'function') return [];
     const values = workspace.selectedEndpoints();
-    return Array.isArray(values) ? values : [];
+    if (!Array.isArray(values)) return [];
+    return values
+      .map((endpoint) => ({
+        method: text(endpoint?.method).toUpperCase(),
+        path: text(endpoint?.path),
+      }))
+      .filter((endpoint) => endpoint.method && endpoint.path);
+  }
+
+  function runtimeTaskEndpointSelected(endpoints = selectedEvaluationEndpoints()) {
+    return endpoints.some(
+      (endpoint) => endpoint.method === 'POST' && endpoint.path === RUNTIME_TASK_ENDPOINT
+    );
+  }
+
+  function selectedEvaluationBindings() {
+    return [...document.querySelectorAll('[data-eval-binding]:checked')]
+      .map((input) => text(input.value))
+      .filter(Boolean);
+  }
+
+  function renderEvaluationBindingCatalog() {
+    const target = document.getElementById('admin-eval-binding-list');
+    if (!target) return;
+    const runtimeSelected = runtimeTaskEndpointSelected();
+    if (!runtimeSelected) {
+      target.innerHTML = '<div class="muted">No binding is required for the selected endpoint envelope.</div>';
+      updateEvaluationReadiness();
+      return;
+    }
+    if (!evaluationBindingCatalog.length) {
+      target.innerHTML =
+        '<div class="admin-note danger">No prepared Evaluation bindings are available. Runtime task execution remains locked.</div>';
+      updateEvaluationReadiness();
+      return;
+    }
+    const selectedTasks = new Set(selectedEvaluationTasks());
+    target.innerHTML = evaluationBindingCatalog
+      .map((item) => {
+        const taskAllowed = selectedTasks.has(text(item.task_id));
+        const selectable = item.selectable === true && taskAllowed;
+        const blockers = Array.isArray(item.sandbox_readiness?.blocker_codes)
+          ? item.sandbox_readiness.blocker_codes
+          : [];
+        const status = text(item.sandbox_readiness?.status) || 'not_configured';
+        return `
+          <label class="card flat" style="display:block;margin-top:var(--s-2)">
+            <input type="checkbox" data-eval-binding value="${escapeHtml(item.binding_id)}" ${selectable ? '' : 'disabled'}>
+            <code>${escapeHtml(item.binding_id)}</code> — ${escapeHtml(item.display_name || item.task_id)}
+            <span class="muted"> · task ${escapeHtml(item.task_id)} · ${escapeHtml(status)} · ${selectable ? 'selectable' : 'locked'}</span>
+            ${blockers.length ? `<div class="muted">blockers: ${blockers.map(escapeHtml).join(', ')}</div>` : ''}
+            ${!taskAllowed ? '<div class="muted">Select the matching canonical task before using this binding.</div>' : ''}
+          </label>
+        `;
+      })
+      .join('');
+    target.querySelectorAll('[data-eval-binding]').forEach((input) => {
+      input.addEventListener('change', dispatchEvaluationSelectionChanged);
+    });
+    updateEvaluationReadiness();
+  }
+
+  async function loadEvaluationBindingCatalog() {
+    const payload = await request(EVALUATION_BINDING_CATALOG_ENDPOINT, 'GET');
+    evaluationBindingCatalog = Array.isArray(payload.bindings) ? payload.bindings : [];
+    renderEvaluationBindingCatalog();
   }
 
   function evaluationReadiness() {
@@ -187,10 +264,17 @@
     const issuedTo = text(document.getElementById('admin-eval-issued-to')?.value);
     const purpose = text(document.getElementById('admin-eval-purpose')?.value);
     const duration = Number.parseInt(document.getElementById('admin-eval-days')?.value || '0', 10);
-    const quota = Number.parseInt(document.getElementById('admin-eval-max-requests')?.value || '0', 10);
+    const requestLimit = Number.parseInt(document.getElementById('admin-eval-max-requests')?.value || '0', 10);
     const tasks = selectedEvaluationTasks();
     const scopes = selectedEvaluationScopes();
     const endpoints = selectedEvaluationEndpoints();
+    const bindings = selectedEvaluationBindings();
+    const runtimeSelected = runtimeTaskEndpointSelected(endpoints);
+    const bindingById = new Map(evaluationBindingCatalog.map((item) => [text(item.binding_id), item]));
+    const bindingsPrepared = bindings.every((bindingId) => {
+      const item = bindingById.get(bindingId);
+      return item?.selectable === true && tasks.includes(text(item.task_id));
+    });
     const grantAuthority = document.body.dataset.adminEvaluationGrants;
 
     const checks = [
@@ -201,11 +285,13 @@
       ['eligible_endpoint', endpoints.length > 0, 'Select at least one eligible API endpoint.'],
       ['derived_scope', scopes.length > 0, 'Selected endpoints must derive at least one runtime scope.'],
       ['canonical_task', tasks.length > 0, 'Select at least one canonical task.'],
+      ['prepared_binding', !runtimeSelected || bindings.length > 0, 'Runtime task execution requires at least one prepared Evaluation binding.'],
+      ['binding_task_envelope', !runtimeSelected || bindingsPrepared, 'Every selected binding must be sandbox-ready and match a selected canonical task.'],
       ['client_id', Boolean(clientId), 'Client ID is required.'],
       ['issued_to', Boolean(issuedTo), 'Issued to is required.'],
       ['purpose', purpose.length >= 10, 'Purpose must contain at least 10 characters.'],
       ['duration', Number.isInteger(duration) && duration >= 1 && duration <= 90, 'Duration must be between 1 and 90 days.'],
-      ['quota', Number.isInteger(quota) && quota >= 1 && quota <= 10000, 'Max requests must be between 1 and 10000.'],
+      ['request_limit', Number.isInteger(requestLimit) && requestLimit >= 1 && requestLimit <= 5000, 'Evaluation request limit must be between 1 and 5000.'],
     ];
     const missing = checks.filter(([, ok]) => !ok).map(([id, , message]) => ({ id, message }));
     return {
@@ -217,10 +303,11 @@
       issuedTo,
       purpose,
       duration,
-      quota,
+      requestLimit,
       tasks,
       scopes,
       endpoints,
+      bindings,
     };
   }
 
@@ -248,6 +335,7 @@
     const active = text(grant.status).toLowerCase() === 'active';
     const tasks = Array.isArray(grant.allowed_task_ids) ? grant.allowed_task_ids : [];
     const scopes = Array.isArray(grant.allowed_scopes) ? grant.allowed_scopes : [];
+    const bindings = Array.isArray(grant.allowed_binding_ids) ? grant.allowed_binding_ids : [];
     const actions = active
       ? `<button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
          <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke</button>`
@@ -255,9 +343,10 @@
     return `
       <div class="card flat" style="margin-top:var(--s-2)">
         <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)}</div>
-        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · quota ${escapeHtml(grant.max_requests)} · keys ${escapeHtml(grant.active_key_count || 0)}</div>
+        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · request limit ${escapeHtml(grant.max_requests)} · keys ${escapeHtml(grant.active_key_count || 0)}</div>
         <div class="muted">scopes: ${scopes.length ? scopes.map(escapeHtml).join(', ') : 'backend defaults'}</div>
         <div class="muted">tasks: ${tasks.length ? tasks.map(escapeHtml).join(', ') : 'none'} · authority ${escapeHtml(grant.task_authority_source || 'integration_task_catalog')}</div>
+        <div class="muted">bindings: ${bindings.length ? bindings.map(escapeHtml).join(', ') : 'not required'}</div>
         <div class="muted">expires ${escapeHtml(grant.expires_at)} · subscription required: no · production: disabled</div>
         <div style="margin-top:var(--s-2)">${actions}</div>
       </div>
@@ -305,16 +394,19 @@
         issued_to: readiness.issuedTo,
         purpose: readiness.purpose,
         allowed_task_ids: readiness.tasks,
+        allowed_binding_ids: readiness.bindings,
+        allowed_endpoints: readiness.endpoints,
         ...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {}),
         expires_in_days: readiness.duration,
-        max_requests: readiness.quota,
+        max_requests: readiness.requestLimit,
       });
       const grant = result.grant || {};
       setGrantResult(
         `Evaluation grant created: <strong>${escapeHtml(grant.grant_id || '')}</strong><br>` +
         `Tasks: ${(grant.allowed_task_ids || []).map(escapeHtml).join(', ')}<br>` +
+        `Bindings: ${(grant.allowed_binding_ids || []).map(escapeHtml).join(', ') || 'not required'}<br>` +
         `Scopes: ${(grant.allowed_scopes || []).map(escapeHtml).join(', ') || 'backend defaults'}<br>` +
-        `Quota: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
+        `Evaluation request limit: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
       );
       await refreshEvaluationGrants();
       dispatchEvaluationSelectionChanged();
@@ -338,6 +430,7 @@
       const tasks = Array.isArray(key.allowed_task_ids) ? key.allowed_task_ids : [];
       const scopes = Array.isArray(key.scopes) ? key.scopes : [];
       const taskScopes = Array.isArray(key.task_scope_ids) ? key.task_scope_ids : [];
+      const bindings = Array.isArray(key.allowed_binding_ids) ? key.allowed_binding_ids : [];
       const usage = result.onboarding_usage || {};
       const header = text(usage.header) || 'X-API-Key';
       const exampleEndpoint = text(usage.example_endpoint) || '/adapters/status';
@@ -352,7 +445,8 @@
         <strong>Scopes</strong>: ${escapeHtml(scopes.join(', ') || 'none')}<br>
         <strong>Task scope IDs</strong>: ${escapeHtml(taskScopes.join(', ') || 'none')}<br>
         <strong>Bound tasks:</strong> ${escapeHtml(tasks.join(', ') || 'none')}<br>
-        <strong>Quota</strong>: ${escapeHtml(key.quota_limit)}<br>
+        <strong>Prepared bindings:</strong> ${escapeHtml(bindings.join(', ') || 'not required')}<br>
+        <strong>Evaluation request limit</strong>: ${escapeHtml(key.evaluation_request_limit)}<br>
         <strong>Expires</strong>: ${escapeHtml(key.expires_at)}<br>
         <strong>Example endpoint</strong>: ${escapeHtml(exampleEndpoint)}<br>
         <strong>Subscription required</strong>: no · <strong>Production</strong>: disabled
@@ -422,8 +516,14 @@
       ?.addEventListener('click', refreshEvaluationGrants);
 
     window.addEventListener('pmk-admin-session-verified', updateEvaluationReadiness);
-    window.addEventListener('pmk-api-key-category-changed', updateEvaluationReadiness);
-    window.addEventListener('pmk-api-key-access-selection-changed', updateEvaluationReadiness);
+    window.addEventListener('pmk-api-key-category-changed', () => {
+      renderEvaluationBindingCatalog();
+      updateEvaluationReadiness();
+    });
+    window.addEventListener('pmk-api-key-access-selection-changed', () => {
+      renderEvaluationBindingCatalog();
+      updateEvaluationReadiness();
+    });
     window.addEventListener('pmk-evaluation-selection-changed', updateEvaluationReadiness);
 
     try {
@@ -433,6 +533,16 @@
       renderEvaluationTaskCatalog();
       setGrantResult(
         `Unable to load canonical task catalog: ${escapeHtml(error.message || error)}`,
+        true
+      );
+    }
+    try {
+      await loadEvaluationBindingCatalog();
+    } catch (error) {
+      evaluationBindingCatalog = [];
+      renderEvaluationBindingCatalog();
+      setGrantResult(
+        `Unable to load prepared Evaluation bindings: ${escapeHtml(error.message || error)}`,
         true
       );
     }

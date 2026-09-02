@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
+from typing import Any
+
 from fastapi import Depends, HTTPException, Request
 
 from processual_api.auth.security import get_current_user
@@ -61,9 +64,45 @@ def _string_values(value: object) -> list[str]:
     return [str(item) for item in value if item]
 
 
+def _iter_effective_routes(
+    route_collection: Sequence[Any],
+    seen_containers: set[int] | None = None,
+) -> Iterator[Any]:
+    """Yield direct and FastAPI-included routes with effective prefixes."""
+
+    if seen_containers is None:
+        seen_containers = set()
+
+    for route in route_collection:
+        effective_candidates = getattr(route, "effective_candidates", None)
+        if callable(effective_candidates):
+            container_id = id(route)
+            if container_id in seen_containers:
+                continue
+            seen_containers.add(container_id)
+            for candidate in effective_candidates():
+                nested_candidates = getattr(candidate, "effective_candidates", None)
+                if callable(nested_candidates):
+                    yield from _iter_effective_routes([candidate], seen_containers)
+                else:
+                    yield candidate
+            continue
+
+        nested = getattr(route, "routes", None)
+        if isinstance(nested, Sequence):
+            container_id = id(route)
+            if container_id in seen_containers:
+                continue
+            seen_containers.add(container_id)
+            yield from _iter_effective_routes(nested, seen_containers)
+            continue
+
+        yield route
+
+
 def _route_catalog(request: Request) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for route in request.app.routes:
+    for route in _iter_effective_routes(request.app.routes):
         path = str(getattr(route, "path", "") or "")
         if not path.startswith("/"):
             continue

@@ -35,7 +35,7 @@ def test_user_login_requires_mfa_completion_before_session_persistence() -> None
 
 
 def test_identity_session_authority_is_mfa_aware() -> None:
-    source = Path("processual_api/auth/security.py").read_text(encoding="utf-8")
+    source = Path("processual_api/auth/security_legacy.py").read_text(encoding="utf-8")
 
     assert "mfa_pending = mfa_required and auth_session.mfa_satisfied_at is None" in source
     assert '"scopes": ["auth:mfa"] if mfa_pending else ["evaluation"]' in source

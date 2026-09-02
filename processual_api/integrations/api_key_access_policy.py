@@ -120,14 +120,14 @@ _POLICIES = {
         ("run:govern",),
         ("platform_governor_sandbox",),
     ),
-    ("GET", "/cgt/govern/reports"): _policy(
-        "GET",
-        "/cgt/govern/reports",
-        "platform.governor.reports",
-        "Governance reports",
-        "read",
-        ("read:reports",),
-        ("platform_runtime_observability", "platform_governor_sandbox"),
+    ("POST", "/evaluation/runtime/task-execute"): _policy(
+        "POST",
+        "/evaluation/runtime/task-execute",
+        "platform.evaluation.task_execute",
+        "Bounded canonical task execution for Evaluation Runtime",
+        "execute",
+        ("run:evaluation",),
+        ("platform_evaluation_runtime",),
     ),
 }
 

@@ -53,3 +53,23 @@ const AUTH = (() => {
 
   return { init, login, logout, isLoggedIn, currentUser, me };
 })();
+
+(function loadShowcaseEnhancements() {
+  const scripts = [
+    ['data-maestro-showcase-v2', 'js/showcase_v2.js?v=showcase-v2-p1'],
+    ['data-maestro-decision-journey', 'js/showcase_decision_journey.js?v=decision-journey-p5'],
+    ['data-maestro-decision-receipt', 'js/showcase_decision_receipt.js?v=decision-receipt-p5'],
+    ['data-maestro-decision-motion', 'js/showcase_decision_motion.js?v=decision-motion-p2'],
+    ['data-maestro-guided-flow', 'js/showcase_guided_flow.js?v=guided-flow-p5'],
+    ['data-maestro-cinematic-transitions', 'js/showcase_cinematic_transitions.js?v=cinematic-p4'],
+  ];
+
+  scripts.forEach(([attribute, src]) => {
+    if (document.querySelector(`script[${attribute}]`)) return;
+    const script = document.createElement('script');
+    script.async = false;
+    script.src = src;
+    script.setAttribute(attribute, 'true');
+    document.body.appendChild(script);
+  });
+})();

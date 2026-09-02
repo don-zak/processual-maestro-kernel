@@ -2,6 +2,8 @@
 
 The settings surface stores references only. Providers resolve transient headers at
 execution time and may be replaced by a Vault/Secret Manager implementation.
+Public sandbox endpoints may opt into the explicit ``anonymous/public`` reference,
+which yields no credential material and is never inferred for other providers.
 """
 
 from __future__ import annotations
@@ -17,6 +19,9 @@ from processual_api.integrations.enterprise_sandbox_execution import (
 from processual_api.integrations.sandbox_operational_readiness import SandboxSecretReference
 
 _SAFE_ENV = re.compile(r"[^A-Z0-9]+")
+_ANONYMOUS_PROVIDER_ID = "anonymous"
+_ANONYMOUS_SECRET_REFERENCE = "public"
+_ANONYMOUS_SOURCE = "anonymous_public_sandbox"
 
 
 class SandboxSecretProvider(Protocol):
@@ -48,6 +53,14 @@ class EnvironmentReferenceSecretProvider:
         binding_id: str,
     ) -> SandboxCredentialEnvelope:
         del binding_id
+        normalized_provider = str(provider_id or "").strip().lower()
+        normalized_reference = str(secret_reference or "").strip().lower()
+        if (
+            normalized_provider == _ANONYMOUS_PROVIDER_ID
+            and normalized_reference == _ANONYMOUS_SECRET_REFERENCE
+        ):
+            return SandboxCredentialEnvelope(headers={}, source=_ANONYMOUS_SOURCE)
+
         suffix = self._suffix(provider_id, secret_reference)
         authorization = os.getenv(
             f"MAESTRO_SANDBOX_AUTHORIZATION_REF_{suffix}",

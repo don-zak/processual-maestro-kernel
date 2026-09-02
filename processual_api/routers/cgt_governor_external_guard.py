@@ -1,9 +1,9 @@
 """Route-level authorization hardening for CGT external evaluation access.
 
-The legacy CGT router contains several endpoints that authenticate callers but
-do not consistently enforce the advertised execution scope or Maestro-unit
-quota.  This module replaces only those weak route registrations while keeping
-the underlying handlers unchanged.
+Commercial callers keep the normal Maestro-unit quota path. Governed External
+Evaluation keys are already bounded atomically by their credential-use limit at
+authentication time, so they must not be charged a second time through the
+commercial quota store.
 """
 
 from __future__ import annotations
@@ -16,12 +16,22 @@ from ..auth.security import require_quota, require_scope
 from . import cgt_governor as cgt
 
 
+def _is_external_evaluation(current_user: dict[str, Any]) -> bool:
+    return (
+        current_user.get("auth_method") == "api_key"
+        and current_user.get("entitlement_source") == "admin_evaluation_grant"
+        and current_user.get("subscription_required") is False
+    )
+
+
 async def _consume_quota(
     request: Request,
     current_user: dict[str, Any],
     *,
     item_count: int | None = None,
 ) -> dict[str, Any]:
+    if _is_external_evaluation(current_user):
+        return current_user
     if item_count is not None:
         request.state.pricing_item_count = item_count
     quota_dependency = require_quota("evaluation")
@@ -170,4 +180,4 @@ async def guarded_gateway_agent_action(
     return await cgt.gateway_agent_action(agent_id, req, current_user)
 
 
-__all__ = ["_REPLACED_ROUTES"]
+__all__ = ["_REPLACED_ROUTES", "_is_external_evaluation"]
