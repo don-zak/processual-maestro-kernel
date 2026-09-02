@@ -29,7 +29,25 @@ def test_dockerfile_preserves_cloud_run_runtime_port_contract() -> None:
     assert "uvicorn processual_api.main:app" in text
     assert "--host 0.0.0.0" in text
     assert "--port ${PORT:-8000}" in text
-    assert "http://localhost:${PORT:-8000}/health/live" in text
+    assert "os.getenv('PORT', '8000')" in text
+    assert "/health/live" in text
+
+
+def test_dockerfile_hardens_runtime_and_dependency_installation() -> None:
+    text = read_text("Dockerfile")
+
+    assert text.count("USER app") == 2
+    assert "adduser --system --uid 1001" in text
+    assert "curl" not in text
+    assert text.count("pip check") == 2
+    assert "pip install --no-cache-dir --upgrade pip" not in text
+    assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in text
+
+    public_target = text.split("FROM base AS public", 1)[1]
+    assert "COPY cgtlib ./cgtlib" not in public_target
+    assert "cgtlib/private" not in "\n".join(
+        line for line in public_target.splitlines() if line.lstrip().startswith("COPY ")
+    )
 
 
 def test_readme_documents_explicit_cloud_run_deploy_contract() -> None:

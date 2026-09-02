@@ -7,7 +7,8 @@
 FROM python:3.14-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
@@ -15,7 +16,6 @@ RUN addgroup --system --gid 1001 app && \
     adduser --system --uid 1001 --ingroup app --no-create-home app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,8 +27,8 @@ COPY cgtlib ./cgtlib
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
 
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .[api,security,database,cache,observability,reports,llm]
+RUN pip install --no-cache-dir .[api,security,database,cache,observability,reports,llm] \
+    && pip check
 
 RUN chown -R app:app /app
 USER app
@@ -36,7 +36,7 @@ USER app
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health/live || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/health/live', timeout=2).read()" || exit 1
 
 CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
@@ -50,8 +50,8 @@ COPY processual_api ./processual_api
 COPY cgtlib/__init__.py cgtlib/_fallback.py cgtlib/metadata.py cgtlib/types.py cgtlib/validation.py ./cgtlib/
 COPY cgtlib/serialization.py cgtlib/api.py ./cgtlib/
 
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .[api,security,database,cache,observability,reports,llm]
+RUN pip install --no-cache-dir .[api,security,database,cache,observability,reports,llm] \
+    && pip check
 
 RUN chown -R app:app /app
 USER app
@@ -59,6 +59,6 @@ USER app
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health/live || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/health/live', timeout=2).read()" || exit 1
 
 CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
