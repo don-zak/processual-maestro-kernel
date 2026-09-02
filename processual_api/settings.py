@@ -64,6 +64,12 @@ class APISettings:
     database_url: str | None = field(default_factory=lambda: os.environ.get("DATABASE_URL"))
     database_pool_min: int = field(default_factory=lambda: int(os.environ.get("DATABASE_POOL_MIN", "2")))
     database_pool_max: int = field(default_factory=lambda: int(os.environ.get("DATABASE_POOL_MAX", "10")))
+    database_pool_timeout_seconds: float = field(
+        default_factory=lambda: float(os.environ.get("DATABASE_POOL_TIMEOUT_SECONDS", "30"))
+    )
+    database_pool_recycle_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("DATABASE_POOL_RECYCLE_SECONDS", "1800"))
+    )
 
     # --- Cache (Redis) ---
     redis_url: str | None = field(default_factory=lambda: os.environ.get("REDIS_URL"))
