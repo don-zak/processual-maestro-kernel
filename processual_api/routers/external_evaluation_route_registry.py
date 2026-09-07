@@ -1,8 +1,8 @@
 """Idempotent registration for the standalone External Evaluation surface.
 
-The application includes the long-lived Settings and CGT Governor routers.  The
+The application includes the long-lived Settings and CGT Governor routers. The
 External Evaluation handlers live in extension modules, so register their public
-surface explicitly after every router extension has been imported.  Replacing
+surface explicitly after every router extension has been imported. Replacing
 only the exact method/path pairs keeps startup deterministic without changing
 handler, dependency, request-model, or authority semantics.
 """
@@ -28,6 +28,7 @@ from .settings_admin_evaluation_grants import (
 from .settings_admin_evaluation_key_lifecycle import (
     acknowledge_evaluation_key_receipt,
     confirm_evaluation_key_delivery,
+    list_evaluation_audit_report_receipts,
     list_evaluation_keys,
     revoke_evaluation_key,
 )
@@ -126,6 +127,13 @@ def register_external_evaluation_routes() -> None:
             "/admin/evaluation-grants/{grant_id}/keys",
             "GET",
             list_evaluation_keys,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/audit-receipts",
+            "/admin/evaluation-grants/{grant_id}/audit-receipts",
+            "GET",
+            list_evaluation_audit_report_receipts,
             200,
         ),
         (
