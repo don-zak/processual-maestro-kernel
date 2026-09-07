@@ -12,8 +12,10 @@ from processual_api.auth.security import get_current_user
 from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
     list_evaluation_authority_keys,
+    load_evaluation_authority_state,
     update_evaluation_authority_key_lifecycle,
 )
+from processual_api.services.evaluation_grants import find_evaluation_grant
 from processual_api.services.evaluation_runtime_delivery_postgres import (
     EvaluationDeliveryError,
     list_evaluation_audit_receipts,
@@ -68,6 +70,76 @@ def _lifecycle_http_error(exc: EvaluationAuthorityError) -> HTTPException:
     )
 
 
+def _final_audit_summary(
+    *,
+    grant: dict[str, Any],
+    keys: list[dict[str, Any]],
+    receipts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    succeeded = sum(1 for item in receipts if item.get("status") == "succeeded")
+    failed = sum(1 for item in receipts if item.get("status") == "failed")
+    executing = sum(1 for item in receipts if item.get("status") == "executing")
+    evidence_persisted = sum(
+        1 for item in receipts if item.get("evidence_persisted_at")
+    )
+    quota_used = sum(max(0, int(item.get("usage_count", 0) or 0)) for item in keys)
+    quota_rejected = sum(
+        max(0, int(item.get("quota_rejected_count", 0) or 0)) for item in keys
+    )
+    quota_limit = max(0, int(grant.get("max_requests", 0) or 0))
+    task_ids = sorted(
+        {
+            str(item.get("task_id") or "")
+            for item in receipts
+            if str(item.get("task_id") or "")
+        }
+    )
+    binding_ids = sorted(
+        {
+            str(item.get("binding_id") or "")
+            for item in receipts
+            if str(item.get("binding_id") or "")
+        }
+    )
+    key_states: dict[str, int] = {}
+    for key in keys:
+        lifecycle = str(key.get("lifecycle_status") or key.get("status") or "unknown")
+        key_states[lifecycle] = key_states.get(lifecycle, 0) + 1
+
+    if failed > 0 or executing > 0:
+        verdict = "needs_review"
+    elif succeeded > 0 and succeeded == evidence_persisted:
+        verdict = "qualified"
+    else:
+        verdict = "not_evaluated"
+
+    return {
+        "report_type": "external_evaluation_final_summary",
+        "verdict": verdict,
+        "grant_status": str(grant.get("status") or "unknown"),
+        "quota": {
+            "limit": quota_limit,
+            "used": quota_used,
+            "remaining": max(0, quota_limit - quota_used),
+            "rejected": quota_rejected,
+            "semantics": "admitted_execution",
+        },
+        "executions": {
+            "total": len(receipts),
+            "succeeded": succeeded,
+            "failed": failed,
+            "executing": executing,
+            "evidence_persisted": evidence_persisted,
+        },
+        "tasks": task_ids,
+        "bindings": binding_ids,
+        "key_lifecycle": key_states,
+        "production_allowed": False,
+        "raw_task_input_persisted": False,
+        "raw_secret_visible": False,
+    }
+
+
 @settings_module.router.get(
     "/admin/evaluation-grants/{grant_id}/keys",
     response_model=dict,
@@ -102,14 +174,18 @@ async def list_evaluation_audit_report_receipts(
     limit: int = Query(default=50, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
 ):
-    """Return the administrator copy of safe execution audit receipts."""
+    """Return safe receipts plus a final aggregate audit summary."""
 
     await _require_platform_admin(request, current_user)
+    owner_id = _owner_user_id(current_user)
     try:
-        receipts = await list_evaluation_audit_receipts(
-            _owner_user_id(current_user), grant_id, limit=limit
-        )
-    except EvaluationDeliveryError as exc:
+        receipts = await list_evaluation_audit_receipts(owner_id, grant_id, limit=limit)
+        keys = await list_evaluation_authority_keys(owner_id, grant_id)
+        raw = await load_evaluation_authority_state(owner_id)
+        grant = find_evaluation_grant(raw, grant_id)
+        if grant is None:
+            raise EvaluationAuthorityError("evaluation_grant_not_found")
+    except (EvaluationDeliveryError, EvaluationAuthorityError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Evaluation audit report is unavailable.",
@@ -118,6 +194,7 @@ async def list_evaluation_audit_report_receipts(
         "status": "ready",
         "grant_id": grant_id,
         "report_type": "external_evaluation_admin_audit",
+        "summary": _final_audit_summary(grant=grant, keys=keys, receipts=receipts),
         "receipt_count": len(receipts),
         "receipts": receipts,
         "raw_task_input_persisted": False,
