@@ -65,6 +65,32 @@ def evaluation_authority_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _safe_key_summary(row: EvaluationAuthorityKey) -> dict[str, Any]:
+    payload = dict(row.payload or {})
+    return {
+        "key_id": row.key_id,
+        "grant_id": row.grant_id,
+        "prefix": row.prefix,
+        "status": row.status,
+        "lifecycle_status": str(payload.get("lifecycle_status") or "issued"),
+        "label": str(payload.get("label") or ""),
+        "issued_to": str(payload.get("issued_to") or ""),
+        "created_at": _as_utc(row.created_at).isoformat(),
+        "delivered_at": payload.get("delivered_at"),
+        "delivered_by": payload.get("delivered_by"),
+        "acknowledged_at": payload.get("acknowledged_at"),
+        "acknowledged_by": payload.get("acknowledged_by"),
+        "last_used_at": _as_utc(row.last_used_at).isoformat() if row.last_used_at else None,
+        "usage_count": row.usage_count,
+        "expires_at": _as_utc(row.expires_at).isoformat() if row.expires_at else None,
+        "revoked_at": _as_utc(row.revoked_at).isoformat() if row.revoked_at else None,
+        "revoked_by": payload.get("revoked_by"),
+        "revocation_reason": payload.get("revocation_reason"),
+        "production_allowed": False,
+        "raw_secret_visible": False,
+    }
+
+
 async def save_evaluation_authority_state(owner_id: str, raw: dict[str, Any]) -> None:
     snapshot = evaluation_authority_snapshot(raw)
     now = _now()
@@ -131,6 +157,97 @@ async def create_evaluation_authority_key(
         raise EvaluationAuthorityError("evaluation_authority_key_create_failed") from exc
 
 
+async def list_evaluation_authority_keys(owner_id: str, grant_id: str) -> list[dict[str, Any]]:
+    try:
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(EvaluationAuthorityKey)
+                    .where(
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.grant_id == grant_id,
+                    )
+                    .order_by(EvaluationAuthorityKey.created_at.desc())
+                )
+            ).scalars().all()
+            return [_safe_key_summary(row) for row in rows]
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_list_failed") from exc
+
+
+async def update_evaluation_authority_key_lifecycle(
+    owner_id: str,
+    grant_id: str,
+    key_id: str,
+    *,
+    action: str,
+    actor: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    if action not in {"confirm_delivery", "acknowledge", "revoke"}:
+        raise EvaluationAuthorityError("evaluation_authority_key_action_invalid")
+    try:
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    select(EvaluationAuthorityKey)
+                    .where(
+                        EvaluationAuthorityKey.key_id == key_id,
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.grant_id == grant_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+
+            now = _now()
+            payload = dict(row.payload or {})
+            current = str(payload.get("lifecycle_status") or "issued")
+
+            if action == "confirm_delivery":
+                if row.status != "enabled" or row.revoked_at is not None:
+                    raise EvaluationAuthorityError("evaluation_authority_key_revoked")
+                if current in {"delivery_confirmed", "acknowledged"}:
+                    return _safe_key_summary(row)
+                if current != "issued":
+                    raise EvaluationAuthorityError("evaluation_authority_key_transition_invalid")
+                payload["lifecycle_status"] = "delivery_confirmed"
+                payload["delivered_at"] = now.isoformat()
+                payload["delivered_by"] = actor
+
+            elif action == "acknowledge":
+                if row.status != "enabled" or row.revoked_at is not None:
+                    raise EvaluationAuthorityError("evaluation_authority_key_revoked")
+                if current == "acknowledged":
+                    return _safe_key_summary(row)
+                if current != "delivery_confirmed":
+                    raise EvaluationAuthorityError("evaluation_authority_key_delivery_required")
+                payload["lifecycle_status"] = "acknowledged"
+                payload["acknowledged_at"] = now.isoformat()
+                payload["acknowledged_by"] = actor
+
+            else:
+                if row.status == "revoked" or row.revoked_at is not None:
+                    return _safe_key_summary(row)
+                row.status = "revoked"
+                row.revoked_at = now
+                payload["status"] = "revoked"
+                payload["lifecycle_status"] = "revoked"
+                payload["revoked_at"] = now.isoformat()
+                payload["revoked_by"] = actor
+                payload["revocation_reason"] = (reason or "administrator_revoked").strip()[:500]
+
+            row.payload = payload
+            await session.flush()
+            return _safe_key_summary(row)
+    except EvaluationAuthorityError:
+        raise
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_update_failed") from exc
+
+
 async def active_evaluation_key_count(owner_id: str, grant_id: str) -> int:
     try:
         async with session_scope() as session:
@@ -191,6 +308,7 @@ async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int
                 key.revoked_at = now
                 payload = dict(key.payload or {})
                 payload["status"] = "revoked"
+                payload["lifecycle_status"] = "revoked"
                 payload["revoked_at"] = now.isoformat()
                 payload["revocation_reason"] = "evaluation_grant_revoked"
                 key.payload = payload
@@ -302,8 +420,10 @@ __all__ = [
     "active_evaluation_key_count",
     "create_evaluation_authority_key",
     "evaluation_authority_snapshot",
+    "list_evaluation_authority_keys",
     "load_evaluation_authority_state",
     "revoke_evaluation_authority_grant",
     "save_evaluation_authority_state",
+    "update_evaluation_authority_key_lifecycle",
     "verify_evaluation_api_key",
 ]
