@@ -18,13 +18,23 @@ def test_authentication_does_not_consume_evaluation_quota() -> None:
 
 def test_new_delivery_claim_consumes_quota_transactionally() -> None:
     source = _read("processual_api/services/evaluation_runtime_delivery_postgres.py")
-    assert "async def _consume_admission_quota" in source
+    assert "async def _lock_admission_authority" in source
+    assert "def _consume_admission_quota" in source
     assert ".with_for_update()" in source
     assert "key.usage_count += 1" in source
-    assert "usage_count = await _consume_admission_quota(" in source
+    assert "usage_count = _consume_admission_quota(key, now=now)" in source
+    assert "# Re-read after authority locks." in source
     assert '"status": "replay"' in source
     replay_section = source.split('"status": "replay"', 1)[1]
-    assert "_consume_admission_quota" not in replay_section
+    assert "_consume_admission_quota(key" not in replay_section
+
+
+def test_quota_rejection_commits_before_http_429_translation() -> None:
+    source = _read("processual_api/services/evaluation_runtime_delivery_postgres.py")
+    assert "_record_quota_rejection(key)" in source
+    assert "quota_exhausted = True" in source
+    assert "# Raise only after the session context has committed rejection telemetry." in source
+    assert 'raise EvaluationQuotaExceededError("evaluation_execution_quota_exhausted")' in source
 
 
 def test_quota_exhaustion_is_http_429() -> None:
