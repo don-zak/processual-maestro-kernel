@@ -33,6 +33,7 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
 )
 from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
+    evaluation_key_runtime_status,
     load_evaluation_authority_state,
 )
 from processual_api.services.evaluation_grants import (
@@ -51,6 +52,8 @@ from processual_api.services.evaluation_runtime_delivery_postgres import (
     complete_evaluation_execution,
     evaluation_request_fingerprint,
     fail_evaluation_execution,
+    get_evaluation_execution_status,
+    latest_evaluation_execution_status,
 )
 
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
@@ -104,6 +107,8 @@ _SAFE_REPLAY_RESULT_KEYS = frozenset(
         "maestro_task_completed",
         "next_readiness_stage",
         "raw_task_input_persisted",
+        "quota",
+        "execution_status",
     }
 )
 
@@ -133,6 +138,18 @@ def _evaluation_owner_id(current_user: dict[str, Any]) -> str:
             detail="Evaluation credential owner is unavailable.",
         )
     return owner_id
+
+
+def _evaluation_identity(current_user: dict[str, Any]) -> tuple[str, str, str]:
+    owner_id = _evaluation_owner_id(current_user)
+    grant_id = str(current_user.get("evaluation_grant_id") or "").strip()
+    api_key_id = str(current_user.get("api_key_id") or "").strip()
+    if not grant_id or not api_key_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Governed Evaluation Runtime credential required.",
+        )
+    return owner_id, grant_id, api_key_id
 
 
 def _require_evaluation_credential(
@@ -188,11 +205,7 @@ def _authorize_task(
 
 
 def _safe_replay_response(response: dict[str, Any]) -> dict[str, Any]:
-    safe = {
-        key: value
-        for key, value in response.items()
-        if key in _SAFE_REPLAY_RESULT_KEYS
-    }
+    safe = {key: value for key, value in response.items() if key in _SAFE_REPLAY_RESULT_KEYS}
     safe["canonical_input_included"] = False
     safe["raw_response_included"] = False
     safe["raw_task_input_persisted"] = False
@@ -223,6 +236,61 @@ def _delivery_http_error(exc: EvaluationDeliveryError) -> HTTPException:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Evaluation execution delivery ledger is unavailable.",
     )
+
+
+async def _customer_status_snapshot(current_user: dict[str, Any]) -> dict[str, Any]:
+    owner_id, grant_id, api_key_id = _evaluation_identity(current_user)
+    try:
+        credential = await evaluation_key_runtime_status(owner_id, grant_id, api_key_id)
+        latest = await latest_evaluation_execution_status(owner_id, grant_id, api_key_id)
+    except (EvaluationAuthorityError, EvaluationDeliveryError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Evaluation status is temporarily unavailable.",
+        ) from exc
+    return {
+        **credential,
+        "latest_execution": latest,
+        "status_endpoint_consumes_quota": False,
+        "raw_secret_visible": False,
+        "production_allowed": False,
+    }
+
+
+@router.get("/status", response_model=dict)
+async def evaluation_runtime_status(
+    current_user: dict = Depends(require_scope("run:evaluation")),
+) -> dict[str, Any]:
+    """Customer-facing credential, quota, and latest-execution status."""
+    return await _customer_status_snapshot(current_user)
+
+
+@router.get("/executions/{execution_id}", response_model=dict)
+async def evaluation_runtime_execution_status(
+    execution_id: str,
+    current_user: dict = Depends(require_scope("run:evaluation")),
+) -> dict[str, Any]:
+    owner_id, grant_id, api_key_id = _evaluation_identity(current_user)
+    try:
+        receipt = await get_evaluation_execution_status(
+            owner_id,
+            grant_id,
+            api_key_id,
+            execution_id,
+        )
+    except EvaluationDeliveryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Evaluation execution status is temporarily unavailable.",
+        ) from exc
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Evaluation execution not found.")
+    return {
+        "execution": receipt,
+        "status_endpoint_consumes_quota": False,
+        "raw_secret_visible": False,
+        "production_allowed": False,
+    }
 
 
 @router.post("/task-execute", response_model=dict)
@@ -318,6 +386,9 @@ async def execute_evaluation_runtime_task(
     if claim["status"] == "replay":
         replay_response = dict(claim["response"])
         replay_response["idempotent_replay"] = True
+        snapshot = await _customer_status_snapshot(current_user)
+        replay_response["quota"] = snapshot["quota"]
+        replay_response["execution_status"] = snapshot.get("latest_execution")
         return replay_response
 
     record_id = str(claim["record"]["record_id"])
@@ -402,12 +473,17 @@ async def execute_evaluation_runtime_task(
             ),
         ) from exc
 
+    snapshot = await _customer_status_snapshot(current_user)
+    response["quota"] = snapshot["quota"]
+    response["execution_status"] = snapshot.get("latest_execution")
     return response
 
 
 __all__ = [
     "EVALUATION_TASK_EVIDENCE_STORAGE_KEY",
     "EvaluationRuntimeTaskExecuteRequest",
+    "evaluation_runtime_execution_status",
+    "evaluation_runtime_status",
     "execute_evaluation_runtime_task",
     "router",
 ]
