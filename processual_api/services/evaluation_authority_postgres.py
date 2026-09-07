@@ -82,10 +82,12 @@ def _safe_key_summary(row: EvaluationAuthorityKey) -> dict[str, Any]:
         "acknowledged_by": payload.get("acknowledged_by"),
         "last_used_at": _as_utc(row.last_used_at).isoformat() if row.last_used_at else None,
         "usage_count": row.usage_count,
+        "quota_rejected_count": row.quota_rejected_count,
         "expires_at": _as_utc(row.expires_at).isoformat() if row.expires_at else None,
         "revoked_at": _as_utc(row.revoked_at).isoformat() if row.revoked_at else None,
         "revoked_by": payload.get("revoked_by"),
         "revocation_reason": payload.get("revocation_reason"),
+        "quota_semantics": "admitted_execution",
         "production_allowed": False,
         "raw_secret_visible": False,
     }
@@ -320,6 +322,13 @@ async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int
 
 
 async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
+    """Authenticate Evaluation authority without consuming execution quota.
+
+    Quota is consumed transactionally by the delivery claim when a new runtime
+    execution is admitted. Authentication, invalid task/binding requests, and
+    durable idempotent replays therefore do not increment ``usage_count``.
+    """
+
     if not raw_key.startswith("pmk_"):
         return None
     try:
@@ -359,25 +368,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
             ):
                 return None
 
-            grant_limit = int(grant.get("max_requests", 0) or 0)
-            key_limit = int((key.payload or {}).get("quota_limit", 0) or 0)
-            effective_limit = grant_limit if key_limit <= 0 else min(grant_limit, key_limit)
-            if effective_limit <= 0 or key.usage_count >= effective_limit:
-                key.quota_rejected_count += 1
-                payload = dict(key.payload or {})
-                payload["evaluation_grant_state"] = "quota_exhausted"
-                payload["quota_rejected_count"] = key.quota_rejected_count
-                key.payload = payload
-                return None
-
-            key.usage_count += 1
-            key.last_used_at = now
             payload = dict(key.payload or {})
-            payload["usage_count"] = key.usage_count
-            payload["last_used_at"] = now.isoformat()
-            payload["evaluation_grant_state"] = "active"
-            key.payload = payload
-
             return {
                 "sub": key.owner_id,
                 "user_id": str(payload.get("user_id") or key.owner_id),
@@ -407,6 +398,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
                 "execution_mode": EVALUATION_EXECUTION_MODE,
                 "real_runtime_execution": True,
                 "evaluation_access": True,
+                "quota_semantics": "admitted_execution",
                 "production_allowed": False,
             }
     except EvaluationAuthorityError:
