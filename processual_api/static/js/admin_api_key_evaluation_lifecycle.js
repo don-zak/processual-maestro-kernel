@@ -189,19 +189,22 @@
     if (!summary || typeof summary !== 'object') return '';
     const quota = summary.quota || {};
     const executions = summary.executions || {};
-    const verdict = text(summary.verdict || 'not_evaluated').replaceAll('_', ' ');
+    const auditOutcome = text(summary.audit_outcome || 'not_evaluated').replaceAll('_', ' ');
     const tasks = Array.isArray(summary.tasks) ? summary.tasks : [];
     const bindings = Array.isArray(summary.bindings) ? summary.bindings : [];
     return `
       <div class="card flat" style="margin-top:var(--s-2)" data-eval-final-summary="true">
         <div class="sec-hdr">
           <div class="sh-title">Final Evaluation Summary</div>
-          <div class="sh-sub">aggregate result from the authoritative delivery ledger and key authority</div>
+          <div class="sh-sub">aggregate audit status; qualification decision remains operator-controlled</div>
         </div>
         <div class="admin-api-key-metadata-card-grid">
-          <div class="admin-api-key-metadata-card-row"><strong>verdict</strong><span>${escapeHtml(verdict)}</span></div>
-          <div class="admin-api-key-metadata-card-row"><strong>quota</strong><span>${escapeHtml(quota.used ?? 0)} / ${escapeHtml(quota.limit ?? 0)} · remaining ${escapeHtml(quota.remaining ?? 0)}</span></div>
-          <div class="admin-api-key-metadata-card-row"><strong>quota rejected</strong><span>${escapeHtml(quota.rejected ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>audit outcome</strong><span>${escapeHtml(auditOutcome)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>qualification</strong><span>operator required</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>per-key quota limit</strong><span>${escapeHtml(quota.per_key_limit ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>used across keys</strong><span>${escapeHtml(quota.used_across_keys ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>quota rejected across keys</strong><span>${escapeHtml(quota.rejected_across_keys ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>issued keys</strong><span>${escapeHtml(quota.issued_key_count ?? 0)}</span></div>
           <div class="admin-api-key-metadata-card-row"><strong>succeeded</strong><span>${escapeHtml(executions.succeeded ?? 0)}</span></div>
           <div class="admin-api-key-metadata-card-row"><strong>failed</strong><span>${escapeHtml(executions.failed ?? 0)}</span></div>
           <div class="admin-api-key-metadata-card-row"><strong>executing</strong><span>${escapeHtml(executions.executing ?? 0)}</span></div>
@@ -209,7 +212,7 @@
           <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
         </div>
         <div class="muted" style="margin-top:var(--s-2)">tasks ${escapeHtml(tasks.join(', ') || 'none')} · bindings ${escapeHtml(bindings.join(', ') || 'none')}</div>
-        <div class="muted">quota semantics: admitted execution · raw secret: no · raw task input: no</div>
+        <div class="muted">quota semantics: admitted execution per key · raw secret: no · raw task input: no</div>
       </div>`;
   }
 
