@@ -1,4 +1,4 @@
-"""Shared transactional idempotency and quota authority for External Evaluation runtime."""
+"""Shared transactional idempotency, quota, and audit authority for External Evaluation runtime."""
 
 from __future__ import annotations
 
@@ -11,8 +11,15 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from processual_api.db.session import session_scope
-from processual_api.services.evaluation_authority_models import EvaluationAuthorityKey, EvaluationAuthorityState
-from processual_api.services.evaluation_grants import EVALUATION_EXECUTION_MODE, find_evaluation_grant, refresh_evaluation_grant_status
+from processual_api.services.evaluation_authority_models import (
+    EvaluationAuthorityKey,
+    EvaluationAuthorityState,
+)
+from processual_api.services.evaluation_grants import (
+    EVALUATION_EXECUTION_MODE,
+    find_evaluation_grant,
+    refresh_evaluation_grant_status,
+)
 from processual_api.services.evaluation_runtime_delivery import (
     EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED,
     EVALUATION_DELIVERY_STATE_EXECUTING,
@@ -22,11 +29,38 @@ from processual_api.services.evaluation_runtime_delivery import (
     _validate_safe_replay_response,
     evaluation_request_fingerprint,
 )
-from processual_api.services.evaluation_runtime_delivery_models import EvaluationRuntimeDelivery
+from processual_api.services.evaluation_runtime_delivery_models import (
+    EvaluationRuntimeDelivery,
+)
 
 
 class EvaluationQuotaExceededError(EvaluationDeliveryError):
     pass
+
+
+_AUDIT_EVIDENCE_KEYS = frozenset(
+    {
+        "execution_id",
+        "evaluation_grant_id",
+        "api_key_id",
+        "binding_id",
+        "task_id",
+        "adapter_contract_id",
+        "operation_class",
+        "http_status",
+        "network_request_executed",
+        "mapping_valid",
+        "ready_for_task_consumption",
+        "response_sha256",
+        "task_injection_sha256",
+        "evidence_sha256",
+        "completed_at",
+        "evaluation_stage",
+        "maestro_task_completed",
+        "raw_task_input_persisted",
+        "raw_secret_visible",
+    }
+)
 
 
 def _now() -> datetime:
@@ -39,6 +73,11 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
+def _iso(value: datetime | None) -> str | None:
+    parsed = _as_utc(value)
+    return parsed.isoformat() if parsed else None
+
+
 def _owner_digest(owner_id: str) -> str:
     return hashlib.sha256(str(owner_id or "").encode("utf-8")).hexdigest()
 
@@ -47,12 +86,92 @@ def _idempotency_digest(idempotency_key: str) -> str:
     return hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
 
 
-def _record_id(*, owner_id: str, grant_id: str, api_key_id: str, idempotency_key: str) -> str:
-    material = "\0".join((str(owner_id or ""), str(grant_id or ""), str(api_key_id or ""), idempotency_key))
+def _record_id(
+    *, owner_id: str, grant_id: str, api_key_id: str, idempotency_key: str
+) -> str:
+    material = "\0".join(
+        (str(owner_id or ""), str(grant_id or ""), str(api_key_id or ""), idempotency_key)
+    )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-async def _consume_admission_quota(session: Any, *, owner_id: str, grant_id: str, api_key_id: str, now: datetime) -> int:
+def _safe_audit_evidence(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    safe = {key: value[key] for key in _AUDIT_EVIDENCE_KEYS if key in value}
+    safe["raw_task_input_persisted"] = False
+    safe["raw_secret_visible"] = False
+    return safe
+
+
+def _audit_receipt(row: EvaluationRuntimeDelivery) -> dict[str, Any]:
+    state = str(row.state or "")
+    if state == EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
+        outcome = "succeeded"
+    elif state == "failed":
+        outcome = "failed"
+    else:
+        outcome = "executing"
+    return {
+        "audit_id": row.record_id,
+        "grant_id": row.grant_id,
+        "api_key_id": row.api_key_id,
+        "task_id": row.task_id,
+        "binding_id": row.binding_id,
+        "status": outcome,
+        "ledger_state": state,
+        "request_fingerprint": row.request_fingerprint,
+        "idempotency_key_sha256": row.idempotency_key_sha256,
+        "accepted_at": _iso(row.accepted_at),
+        "execution_started_at": _iso(row.execution_started_at),
+        "executed_at": _iso(row.executed_at),
+        "evidence_persisted_at": _iso(row.evidence_persisted_at),
+        "failed_at": _iso(row.failed_at),
+        "failure_code": row.failure_code,
+        "network_outcome": row.network_outcome,
+        "evidence": _safe_audit_evidence(row.evidence),
+        "audit_copy_for_admin": True,
+        "production_allowed": False,
+        "raw_task_input_persisted": False,
+        "raw_secret_visible": False,
+    }
+
+
+async def list_evaluation_audit_receipts(
+    owner_id: str,
+    grant_id: str,
+    *,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return bounded safe execution receipts for the owning platform administrator."""
+
+    bounded_limit = max(1, min(int(limit or 50), 100))
+    try:
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(EvaluationRuntimeDelivery)
+                    .where(
+                        EvaluationRuntimeDelivery.owner_id_sha256 == _owner_digest(owner_id),
+                        EvaluationRuntimeDelivery.grant_id == grant_id,
+                    )
+                    .order_by(EvaluationRuntimeDelivery.accepted_at.desc())
+                    .limit(bounded_limit)
+                )
+            ).scalars().all()
+            return [_audit_receipt(row) for row in rows]
+    except Exception as exc:
+        raise EvaluationDeliveryError("evaluation_audit_receipts_unavailable") from exc
+
+
+async def _consume_admission_quota(
+    session: Any,
+    *,
+    owner_id: str,
+    grant_id: str,
+    api_key_id: str,
+    now: datetime,
+) -> int:
     key = (
         await session.execute(
             select(EvaluationAuthorityKey)
@@ -116,16 +235,31 @@ async def _consume_admission_quota(session: Any, *, owner_id: str, grant_id: str
 
 
 async def claim_evaluation_execution(
-    *, owner_id: str, grant_id: str, api_key_id: str, idempotency_key: str,
-    request_fingerprint: str, task_id: str, binding_id: str,
+    *,
+    owner_id: str,
+    grant_id: str,
+    api_key_id: str,
+    idempotency_key: str,
+    request_fingerprint: str,
+    task_id: str,
+    binding_id: str,
 ) -> dict[str, Any]:
     """Claim one new execution and consume one unit, or return replay at zero cost."""
+
     normalized_key = str(idempotency_key or "").strip()
     if not normalized_key:
         raise EvaluationDeliveryError("evaluation_idempotency_key_required")
-    record_id = _record_id(owner_id=owner_id, grant_id=grant_id, api_key_id=api_key_id, idempotency_key=normalized_key)
+    record_id = _record_id(
+        owner_id=owner_id,
+        grant_id=grant_id,
+        api_key_id=api_key_id,
+        idempotency_key=normalized_key,
+    )
     now = _now()
-    history = [{"state": "accepted", "at": now.isoformat()}, {"state": EVALUATION_DELIVERY_STATE_EXECUTING, "at": now.isoformat()}]
+    history = [
+        {"state": "accepted", "at": now.isoformat()},
+        {"state": EVALUATION_DELIVERY_STATE_EXECUTING, "at": now.isoformat()},
+    ]
     try:
         async with session_scope() as session:
             insert_statement = (
@@ -133,13 +267,18 @@ async def claim_evaluation_execution(
                 .values(
                     record_id=record_id,
                     owner_id_sha256=_owner_digest(owner_id),
-                    grant_id=str(grant_id or ""), api_key_id=str(api_key_id or ""),
+                    grant_id=str(grant_id or ""),
+                    api_key_id=str(api_key_id or ""),
                     idempotency_key_sha256=_idempotency_digest(normalized_key),
                     request_fingerprint=request_fingerprint,
-                    task_id=str(task_id or "").strip().lower(), binding_id=str(binding_id or "").strip(),
-                    state=EVALUATION_DELIVERY_STATE_EXECUTING, state_history=history,
-                    accepted_at=now, execution_started_at=now,
-                    raw_task_input_persisted=False, raw_secret_visible=False,
+                    task_id=str(task_id or "").strip().lower(),
+                    binding_id=str(binding_id or "").strip(),
+                    state=EVALUATION_DELIVERY_STATE_EXECUTING,
+                    state_history=history,
+                    accepted_at=now,
+                    execution_started_at=now,
+                    raw_task_input_persisted=False,
+                    raw_secret_visible=False,
                 )
                 .on_conflict_do_nothing()
                 .returning(EvaluationRuntimeDelivery.record_id)
@@ -147,36 +286,53 @@ async def claim_evaluation_execution(
             inserted = await session.execute(insert_statement)
             if inserted.scalar_one_or_none() is not None:
                 usage_count = await _consume_admission_quota(
-                    session, owner_id=owner_id, grant_id=grant_id, api_key_id=api_key_id, now=now
+                    session,
+                    owner_id=owner_id,
+                    grant_id=grant_id,
+                    api_key_id=api_key_id,
+                    now=now,
                 )
                 return {
                     "status": "claimed",
                     "record": {
-                        "record_id": record_id, "request_fingerprint": request_fingerprint,
+                        "record_id": record_id,
+                        "request_fingerprint": request_fingerprint,
                         "state": EVALUATION_DELIVERY_STATE_EXECUTING,
-                        "usage_count": usage_count, "quota_semantics": "admitted_execution",
-                        "raw_task_input_persisted": False, "raw_secret_visible": False,
+                        "usage_count": usage_count,
+                        "quota_semantics": "admitted_execution",
+                        "raw_task_input_persisted": False,
+                        "raw_secret_visible": False,
                     },
                 }
 
             existing = (
-                await session.execute(select(EvaluationRuntimeDelivery).where(EvaluationRuntimeDelivery.record_id == record_id))
+                await session.execute(
+                    select(EvaluationRuntimeDelivery).where(
+                        EvaluationRuntimeDelivery.record_id == record_id
+                    )
+                )
             ).scalar_one_or_none()
             if existing is None:
                 raise EvaluationDeliveryError("evaluation_delivery_claim_conflict_unresolved")
             if existing.request_fingerprint != request_fingerprint:
-                raise EvaluationIdempotencyConflictError("evaluation_idempotency_key_payload_mismatch")
+                raise EvaluationIdempotencyConflictError(
+                    "evaluation_idempotency_key_payload_mismatch"
+                )
             state = str(existing.state or "")
             if state != EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
-                raise EvaluationReplayBlockedError(f"evaluation_replay_blocked_{state or 'unknown'}")
+                raise EvaluationReplayBlockedError(
+                    f"evaluation_replay_blocked_{state or 'unknown'}"
+                )
             replay = existing.replay_response
             if not isinstance(replay, dict):
                 raise EvaluationReplayBlockedError("evaluation_replay_evidence_unavailable")
             return {
                 "status": "replay",
                 "record": {
-                    "record_id": existing.record_id, "request_fingerprint": existing.request_fingerprint,
-                    "state": existing.state, "quota_semantics": "admitted_execution",
+                    "record_id": existing.record_id,
+                    "request_fingerprint": existing.request_fingerprint,
+                    "state": existing.state,
+                    "quota_semantics": "admitted_execution",
                     "raw_task_input_persisted": existing.raw_task_input_persisted,
                     "raw_secret_visible": existing.raw_secret_visible,
                 },
@@ -188,13 +344,23 @@ async def claim_evaluation_execution(
         raise EvaluationDeliveryError("evaluation_delivery_database_unavailable") from exc
 
 
-async def complete_evaluation_execution(*, owner_id: str, record_id: str, evidence: dict[str, Any], replay_response: dict[str, Any]) -> dict[str, Any]:
+async def complete_evaluation_execution(
+    *,
+    owner_id: str,
+    record_id: str,
+    evidence: dict[str, Any],
+    replay_response: dict[str, Any],
+) -> dict[str, Any]:
     del owner_id
     _validate_safe_replay_response(replay_response)
     try:
         async with session_scope() as session:
             row = (
-                await session.execute(select(EvaluationRuntimeDelivery).where(EvaluationRuntimeDelivery.record_id == record_id).with_for_update())
+                await session.execute(
+                    select(EvaluationRuntimeDelivery)
+                    .where(EvaluationRuntimeDelivery.record_id == record_id)
+                    .with_for_update()
+                )
             ).scalar_one_or_none()
             if row is None:
                 raise EvaluationDeliveryError("evaluation_delivery_claim_missing")
@@ -202,31 +368,58 @@ async def complete_evaluation_execution(*, owner_id: str, record_id: str, eviden
                 raise EvaluationDeliveryError("evaluation_delivery_state_invalid")
             now = _now()
             history = list(row.state_history) if isinstance(row.state_history, list) else []
-            history.extend([{"state": "executed", "at": now.isoformat()}, {"state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED, "at": now.isoformat()}])
+            history.extend(
+                [
+                    {"state": "executed", "at": now.isoformat()},
+                    {
+                        "state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED,
+                        "at": now.isoformat(),
+                    },
+                ]
+            )
             row.state = EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED
-            row.state_history = history; row.evidence = dict(evidence); row.replay_response = dict(replay_response)
-            row.executed_at = now; row.evidence_persisted_at = now
-            row.raw_task_input_persisted = False; row.raw_secret_visible = False
-            return {"record_id": record_id, "state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED, "evidence": dict(evidence), "replay_response": dict(replay_response), "raw_task_input_persisted": False, "raw_secret_visible": False}
+            row.state_history = history
+            row.evidence = dict(evidence)
+            row.replay_response = dict(replay_response)
+            row.executed_at = now
+            row.evidence_persisted_at = now
+            row.raw_task_input_persisted = False
+            row.raw_secret_visible = False
+            return {
+                "record_id": record_id,
+                "state": EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED,
+                "evidence": dict(evidence),
+                "replay_response": dict(replay_response),
+                "raw_task_input_persisted": False,
+                "raw_secret_visible": False,
+            }
     except EvaluationDeliveryError:
         raise
     except Exception as exc:
         raise EvaluationDeliveryError("evaluation_delivery_database_unavailable") from exc
 
 
-async def fail_evaluation_execution(*, owner_id: str, record_id: str, failure_code: str) -> None:
+async def fail_evaluation_execution(
+    *, owner_id: str, record_id: str, failure_code: str
+) -> None:
     del owner_id
     try:
         async with session_scope() as session:
             row = (
-                await session.execute(select(EvaluationRuntimeDelivery).where(EvaluationRuntimeDelivery.record_id == record_id).with_for_update())
+                await session.execute(
+                    select(EvaluationRuntimeDelivery)
+                    .where(EvaluationRuntimeDelivery.record_id == record_id)
+                    .with_for_update()
+                )
             ).scalar_one_or_none()
             if row is None or row.state == EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
                 return
             now = _now()
             history = list(row.state_history) if isinstance(row.state_history, list) else []
             history.append({"state": "failed", "at": now.isoformat()})
-            row.state = "failed"; row.state_history = history; row.failed_at = now
+            row.state = "failed"
+            row.state_history = history
+            row.failed_at = now
             row.failure_code = str(failure_code or "evaluation_execution_failed")[:200]
             row.network_outcome = "unknown"
     except EvaluationDeliveryError:
@@ -236,7 +429,13 @@ async def fail_evaluation_execution(*, owner_id: str, record_id: str, failure_co
 
 
 __all__ = [
-    "EvaluationDeliveryError", "EvaluationIdempotencyConflictError", "EvaluationQuotaExceededError",
-    "EvaluationReplayBlockedError", "claim_evaluation_execution", "complete_evaluation_execution",
-    "evaluation_request_fingerprint", "fail_evaluation_execution",
+    "EvaluationDeliveryError",
+    "EvaluationIdempotencyConflictError",
+    "EvaluationQuotaExceededError",
+    "EvaluationReplayBlockedError",
+    "claim_evaluation_execution",
+    "complete_evaluation_execution",
+    "evaluation_request_fingerprint",
+    "fail_evaluation_execution",
+    "list_evaluation_audit_receipts",
 ]
