@@ -39,9 +39,7 @@
 
   function authHeaders(extra = {}) {
     const auth = window.PMK_ADMIN_AUTH;
-    if (auth && typeof auth.headers === 'function') {
-      return auth.headers(extra);
-    }
+    if (auth && typeof auth.headers === 'function') return auth.headers(extra);
     return new Headers(extra);
   }
 
@@ -61,17 +59,12 @@
     const rawText = await response.text();
     let data = {};
     if (rawText) {
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = { message: rawText };
-      }
+      try { data = JSON.parse(rawText); } catch { data = { message: rawText }; }
     }
     if (!response.ok) {
-      const detail =
-        data && typeof data === 'object'
-          ? data.detail || data.message || `HTTP ${response.status}`
-          : `HTTP ${response.status}`;
+      const detail = data && typeof data === 'object'
+        ? data.detail || data.message || `HTTP ${response.status}`
+        : `HTTP ${response.status}`;
       throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
     }
     return data;
@@ -192,12 +185,41 @@
     bindKeyLifecycleActions(panel);
   }
 
-  function renderAuditPanel(panel, receipts) {
+  function renderFinalSummary(summary) {
+    if (!summary || typeof summary !== 'object') return '';
+    const quota = summary.quota || {};
+    const executions = summary.executions || {};
+    const verdict = text(summary.verdict || 'not_evaluated').replaceAll('_', ' ');
+    const tasks = Array.isArray(summary.tasks) ? summary.tasks : [];
+    const bindings = Array.isArray(summary.bindings) ? summary.bindings : [];
+    return `
+      <div class="card flat" style="margin-top:var(--s-2)" data-eval-final-summary="true">
+        <div class="sec-hdr">
+          <div class="sh-title">Final Evaluation Summary</div>
+          <div class="sh-sub">aggregate result from the authoritative delivery ledger and key authority</div>
+        </div>
+        <div class="admin-api-key-metadata-card-grid">
+          <div class="admin-api-key-metadata-card-row"><strong>verdict</strong><span>${escapeHtml(verdict)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>quota</strong><span>${escapeHtml(quota.used ?? 0)} / ${escapeHtml(quota.limit ?? 0)} · remaining ${escapeHtml(quota.remaining ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>quota rejected</strong><span>${escapeHtml(quota.rejected ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>succeeded</strong><span>${escapeHtml(executions.succeeded ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>failed</strong><span>${escapeHtml(executions.failed ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>executing</strong><span>${escapeHtml(executions.executing ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>evidence persisted</strong><span>${escapeHtml(executions.evidence_persisted ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
+        </div>
+        <div class="muted" style="margin-top:var(--s-2)">tasks ${escapeHtml(tasks.join(', ') || 'none')} · bindings ${escapeHtml(bindings.join(', ') || 'none')}</div>
+        <div class="muted">quota semantics: admitted execution · raw secret: no · raw task input: no</div>
+      </div>`;
+  }
+
+  function renderAuditPanel(panel, summary, receipts) {
     panel.innerHTML = `
       <div class="sec-hdr">
         <div class="sh-title">Execution Audit</div>
         <div class="sh-sub">safe final receipts mirrored from the authoritative execution ledger</div>
       </div>
+      ${renderFinalSummary(summary)}
       ${receipts.length ? receipts.slice(0, 10).map((receipt) => {
         const evidence = receipt.evidence || {};
         return `
@@ -229,8 +251,12 @@
   async function loadAuditPanel(panel, grantId) {
     panel.dataset.loading = 'true';
     try {
-      const payload = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/audit-receipts?limit=20`, 'GET');
-      renderAuditPanel(panel, Array.isArray(payload.receipts) ? payload.receipts : []);
+      const payload = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/audit-receipts?limit=100`, 'GET');
+      renderAuditPanel(
+        panel,
+        payload.summary || null,
+        Array.isArray(payload.receipts) ? payload.receipts : []
+      );
       panel.dataset.loaded = 'true';
     } catch (error) {
       panel.innerHTML = `<div class="admin-note danger">Unable to load Evaluation audit receipts: ${escapeHtml(error.message || error)}</div>`;
@@ -335,7 +361,7 @@
     const status = document.getElementById('admin-api-key-provisioning-mode-status');
     if (status && evaluationMode) {
       status.className = 'admin-note ok';
-      status.textContent = 'External Evaluation mode is active. Grant creation, one-time key issue, customer quota/status portal, delivery/receipt evidence, audit receipts, and individual revoke are embedded below.';
+      status.textContent = 'External Evaluation mode is active. Grant creation, one-time key issue, customer quota/status portal, delivery/receipt evidence, final audit summary, and individual revoke are embedded below.';
     }
     renderEvaluationPreview();
     decorateGrantKeyLifecycle();
