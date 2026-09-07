@@ -18,7 +18,6 @@ from . import cgt_governor as cgt_module
 from . import settings as settings_module
 from .evaluation_runtime import execute_evaluation_runtime_task
 from .settings_admin_evaluation_grants import (
-    create_evaluation_grant,
     evaluation_access_catalog,
     evaluation_grant_authority,
     evaluation_task_catalog,
@@ -31,6 +30,9 @@ from .settings_admin_evaluation_key_lifecycle import (
     confirm_evaluation_key_delivery,
     list_evaluation_keys,
     revoke_evaluation_key,
+)
+from .settings_admin_evaluation_quota_policy import (
+    create_quota_governed_evaluation_grant,
 )
 
 
@@ -102,7 +104,7 @@ def register_external_evaluation_routes() -> None:
             "/settings/admin/evaluation-grants",
             "/admin/evaluation-grants",
             "POST",
-            create_evaluation_grant,
+            create_quota_governed_evaluation_grant,
             201,
         ),
         (
