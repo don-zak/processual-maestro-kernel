@@ -8,6 +8,7 @@
   const MODE_ID = 'admin-api-key-provisioning-mode';
   const PREVIEW_ID = 'admin-api-key-evaluation-preview';
   const KEY_PANEL_ATTRIBUTE = 'data-eval-key-lifecycle-panel';
+  const AUDIT_PANEL_ATTRIBUTE = 'data-eval-audit-panel';
   const EVALUATION_GRANTS_ENDPOINT = '/settings/admin/evaluation-grants';
   const MAX_ATTACH_ATTEMPTS = 30;
   const ATTACH_RETRY_MS = 100;
@@ -108,11 +109,11 @@
     slot.hidden = true;
     slot.innerHTML = `
       <div class="sec-hdr">
-        <div class="sh-title">External Evaluation Lifecycle</div>
-        <div class="sh-sub">canonical tasks, grant creation, one-time key issue, delivery evidence, receipt acknowledgement, and revocation</div>
+        <div class="sh-title">Evaluation Access & Key Handoff</div>
+        <div class="sh-sub">canonical tasks, grant creation, one-time key issue, customer portal, audit evidence, receipt acknowledgement, and revocation</div>
       </div>
       <div class="admin-note">
-        This area reuses the existing evaluation grant authority. Standard /settings/api-keys generation remains disabled in External Evaluation mode. API key delivery state is audit metadata only; grant authority and revocation remain backend-authoritative.
+        Runtime authority remains backend-authoritative. Delivery and receipt are audit metadata only. The customer can use <strong>/console/evaluation.html</strong> to view quota and execution status without Admin access.
       </div>
       <div id="${PREVIEW_ID}" style="margin-top:var(--s-3)"></div>
       <div data-admin-evaluation-host-slot style="margin-top:var(--s-3)"></div>
@@ -140,7 +141,8 @@
         <div class="admin-api-key-metadata-card-row"><strong>client_id</strong><span>${escapeHtml(clientId)}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>issued_to</strong><span>${escapeHtml(issuedTo)}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>duration_days</strong><span>${escapeHtml(days)}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>quota</strong><span>${escapeHtml(quota)}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>admitted execution quota</strong><span>${escapeHtml(quota)}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>customer portal</strong><span>/console/evaluation.html</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>subscription</strong><span>not required</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
       </div>
@@ -157,105 +159,106 @@
     const encodedKey = escapeHtml(key.key_id);
     const actions = [];
     if (lifecycle === 'issued') {
-      actions.push(
-        `<button class="btn secondary" type="button" data-eval-key-delivered="${encodedKey}" data-eval-key-grant="${encodedGrant}">Confirm Key Sent</button>`
-      );
+      actions.push(`<button class="btn secondary" type="button" data-eval-key-delivered="${encodedKey}" data-eval-key-grant="${encodedGrant}">Confirm Key Sent</button>`);
     }
     if (lifecycle === 'delivery_confirmed') {
-      actions.push(
-        `<button class="btn secondary" type="button" data-eval-key-acknowledge="${encodedKey}" data-eval-key-grant="${encodedGrant}">Confirm Receipt</button>`
-      );
+      actions.push(`<button class="btn secondary" type="button" data-eval-key-acknowledge="${encodedKey}" data-eval-key-grant="${encodedGrant}">Confirm Receipt</button>`);
     }
-    actions.push(
-      `<button class="btn danger" type="button" data-eval-key-revoke="${encodedKey}" data-eval-key-grant="${encodedGrant}">Revoke API Key</button>`
-    );
+    actions.push(`<button class="btn danger" type="button" data-eval-key-revoke="${encodedKey}" data-eval-key-grant="${encodedGrant}">Revoke API Key</button>`);
     return actions.join(' ');
   }
 
   function renderKeyLifecyclePanel(panel, grantId, keys) {
     if (!keys.length) {
       panel.innerHTML = `
-        <div class="sec-hdr">
-          <div class="sh-title">Issued API Keys</div>
-          <div class="sh-sub">delivery evidence and individual revocation</div>
-        </div>
-        <div class="muted">No API keys have been issued for this grant.</div>
-      `;
+        <div class="sec-hdr"><div class="sh-title">Issued API Keys</div><div class="sh-sub">delivery evidence and individual revocation</div></div>
+        <div class="muted">No API keys have been issued for this grant.</div>`;
       return;
     }
     panel.innerHTML = `
-      <div class="sec-hdr">
-        <div class="sh-title">Issued API Keys</div>
-        <div class="sh-sub">confirm sent → confirm receipt → revoke when necessary</div>
-      </div>
-      ${keys
-        .map((key) => {
-          const lifecycle = text(key.lifecycle_status) || 'issued';
-          return `
-            <div class="card flat" style="margin-top:var(--s-2)" data-eval-key-id="${escapeHtml(key.key_id)}">
-              <div><strong>${escapeHtml(key.prefix || key.key_id)}</strong> · ${escapeHtml(lifecycle)}</div>
-              <div class="muted">${escapeHtml(key.key_id)} · status ${escapeHtml(key.status)} · usage ${escapeHtml(key.usage_count || 0)}</div>
-              <div class="muted">sent ${escapeHtml(key.delivered_at || 'not confirmed')} · receipt ${escapeHtml(key.acknowledged_at || 'not confirmed')}</div>
-              <div class="muted">expires ${escapeHtml(key.expires_at || 'not set')} · raw secret visible: no · production: disabled</div>
-              ${key.revoked_at ? `<div class="muted">revoked ${escapeHtml(key.revoked_at)} · by ${escapeHtml(key.revoked_by || 'administrator')}</div>` : ''}
-              <div style="margin-top:var(--s-2)">${keyLifecycleActions(grantId, key)}</div>
-            </div>
-          `;
-        })
-        .join('')}
-    `;
+      <div class="sec-hdr"><div class="sh-title">Issued API Keys</div><div class="sh-sub">confirm sent → confirm receipt → revoke when necessary</div></div>
+      ${keys.map((key) => {
+        const lifecycle = text(key.lifecycle_status) || 'issued';
+        return `
+          <div class="card flat" style="margin-top:var(--s-2)" data-eval-key-id="${escapeHtml(key.key_id)}">
+            <div><strong>${escapeHtml(key.prefix || key.key_id)}</strong> · ${escapeHtml(lifecycle)}</div>
+            <div class="muted">${escapeHtml(key.key_id)} · status ${escapeHtml(key.status)} · admitted executions used ${escapeHtml(key.usage_count || 0)}</div>
+            <div class="muted">sent ${escapeHtml(key.delivered_at || 'not confirmed')} · receipt ${escapeHtml(key.acknowledged_at || 'not confirmed')}</div>
+            <div class="muted">expires ${escapeHtml(key.expires_at || 'not set')} · raw secret visible: no · production: disabled</div>
+            ${key.revoked_at ? `<div class="muted">revoked ${escapeHtml(key.revoked_at)} · by ${escapeHtml(key.revoked_by || 'administrator')}</div>` : ''}
+            <div style="margin-top:var(--s-2)">${keyLifecycleActions(grantId, key)}</div>
+          </div>`;
+      }).join('')}`;
     bindKeyLifecycleActions(panel);
+  }
+
+  function renderAuditPanel(panel, receipts) {
+    panel.innerHTML = `
+      <div class="sec-hdr">
+        <div class="sh-title">Execution Audit</div>
+        <div class="sh-sub">safe final receipts mirrored from the authoritative execution ledger</div>
+      </div>
+      ${receipts.length ? receipts.slice(0, 10).map((receipt) => {
+        const evidence = receipt.evidence || {};
+        return `
+          <div class="card flat" style="margin-top:var(--s-2)">
+            <div><strong>${escapeHtml(receipt.status || 'unknown')}</strong> · ${escapeHtml(receipt.task_id || '')}</div>
+            <div class="muted">${escapeHtml(receipt.binding_id || '')} · key ${escapeHtml(receipt.api_key_id || '')}</div>
+            <div class="muted">accepted ${escapeHtml(receipt.accepted_at || 'n/a')} · evidence ${escapeHtml(receipt.evidence_persisted_at || 'pending')}</div>
+            <div class="muted">HTTP ${escapeHtml(evidence.http_status ?? 'n/a')} · network executed ${evidence.network_request_executed === true ? 'yes' : 'no'} · raw secret: no · raw task input: no</div>
+            ${evidence.evidence_sha256 ? `<div class="muted">evidence sha256 ${escapeHtml(evidence.evidence_sha256)}</div>` : ''}
+            ${receipt.failure_code ? `<div class="admin-note danger" style="margin-top:var(--s-2)">failure ${escapeHtml(receipt.failure_code)}</div>` : ''}
+          </div>`;
+      }).join('') : '<div class="muted">No execution audit receipts yet.</div>'}
+    `;
   }
 
   async function loadKeyLifecyclePanel(panel, grantId) {
     panel.dataset.loading = 'true';
     try {
-      const payload = await request(
-        `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys`,
-        'GET'
-      );
+      const payload = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys`, 'GET');
       renderKeyLifecyclePanel(panel, grantId, Array.isArray(payload.keys) ? payload.keys : []);
       panel.dataset.loaded = 'true';
-      panel.dataset.loading = 'false';
     } catch (error) {
-      panel.dataset.loading = 'false';
       panel.innerHTML = `<div class="admin-note danger">Unable to load issued Evaluation API keys: ${escapeHtml(error.message || error)}</div>`;
+    } finally {
+      panel.dataset.loading = 'false';
+    }
+  }
+
+  async function loadAuditPanel(panel, grantId) {
+    panel.dataset.loading = 'true';
+    try {
+      const payload = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/audit-receipts?limit=20`, 'GET');
+      renderAuditPanel(panel, Array.isArray(payload.receipts) ? payload.receipts : []);
+      panel.dataset.loaded = 'true';
+    } catch (error) {
+      panel.innerHTML = `<div class="admin-note danger">Unable to load Evaluation audit receipts: ${escapeHtml(error.message || error)}</div>`;
+    } finally {
+      panel.dataset.loading = 'false';
     }
   }
 
   async function mutateEvaluationKey(button, action) {
     const grantId = text(button.dataset.evalKeyGrant);
-    const keyId = text(
-      button.dataset.evalKeyDelivered ||
-        button.dataset.evalKeyAcknowledge ||
-        button.dataset.evalKeyRevoke
-    );
+    const keyId = text(button.dataset.evalKeyDelivered || button.dataset.evalKeyAcknowledge || button.dataset.evalKeyRevoke);
     if (!grantId || !keyId) return;
     if (action === 'revoke') {
-      const confirmed = window.confirm(
-        'Revoke this Evaluation API key now? The key will be rejected immediately by the runtime.'
-      );
+      const confirmed = window.confirm('Revoke this Evaluation API key now? The key will be rejected immediately by the runtime.');
       if (!confirmed) return;
     }
     button.disabled = true;
-    const suffix =
-      action === 'confirm_delivery'
-        ? 'confirm-delivery'
-        : action === 'acknowledge'
-          ? 'acknowledge'
-          : '';
-    const path =
-      action === 'revoke'
-        ? `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}`
-        : `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}/${suffix}`;
+    const suffix = action === 'confirm_delivery' ? 'confirm-delivery' : action === 'acknowledge' ? 'acknowledge' : '';
+    const path = action === 'revoke'
+      ? `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}`
+      : `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}/${suffix}`;
     try {
-      await request(
-        path,
-        action === 'revoke' ? 'DELETE' : 'POST',
-        action === 'revoke' ? { reason: 'administrator_revoked_from_external_evaluation_ui' } : undefined
-      );
+      await request(path, action === 'revoke' ? 'DELETE' : 'POST', action === 'revoke' ? { reason: 'administrator_revoked_from_external_evaluation_ui' } : undefined);
+      const card = button.closest('.card.flat')?.parentElement?.closest('.card.flat') || button.closest('.card.flat');
       const panel = button.closest(`[${KEY_PANEL_ATTRIBUTE}]`);
       if (panel) await loadKeyLifecyclePanel(panel, grantId);
+      const auditPanel = card?.querySelector?.(`[${AUDIT_PANEL_ATTRIBUTE}]`);
+      if (auditPanel) await loadAuditPanel(auditPanel, grantId);
       window.dispatchEvent(new CustomEvent('pmk-evaluation-key-lifecycle-updated'));
     } catch (error) {
       button.disabled = false;
@@ -264,15 +267,9 @@
   }
 
   function bindKeyLifecycleActions(panel) {
-    panel.querySelectorAll('[data-eval-key-delivered]').forEach((button) => {
-      button.addEventListener('click', () => mutateEvaluationKey(button, 'confirm_delivery'));
-    });
-    panel.querySelectorAll('[data-eval-key-acknowledge]').forEach((button) => {
-      button.addEventListener('click', () => mutateEvaluationKey(button, 'acknowledge'));
-    });
-    panel.querySelectorAll('[data-eval-key-revoke]').forEach((button) => {
-      button.addEventListener('click', () => mutateEvaluationKey(button, 'revoke'));
-    });
+    panel.querySelectorAll('[data-eval-key-delivered]').forEach((button) => button.addEventListener('click', () => mutateEvaluationKey(button, 'confirm_delivery')));
+    panel.querySelectorAll('[data-eval-key-acknowledge]').forEach((button) => button.addEventListener('click', () => mutateEvaluationKey(button, 'acknowledge')));
+    panel.querySelectorAll('[data-eval-key-revoke]').forEach((button) => button.addEventListener('click', () => mutateEvaluationKey(button, 'revoke')));
   }
 
   function decorateGrantKeyLifecycle() {
@@ -282,19 +279,30 @@
       const grantId = text(issueButton.dataset.evalIssue);
       const card = issueButton.closest('.card.flat');
       if (!grantId || !card) return;
-      let panel = card.querySelector(`[${KEY_PANEL_ATTRIBUTE}]`);
-      if (!panel) {
-        panel = document.createElement('section');
-        panel.setAttribute(KEY_PANEL_ATTRIBUTE, 'true');
-        panel.dataset.grantId = grantId;
-        panel.className = 'card flat';
-        panel.style.marginTop = 'var(--s-3)';
-        panel.innerHTML = '<div class="muted">Loading issued Evaluation API keys...</div>';
-        card.appendChild(panel);
+
+      let keyPanel = card.querySelector(`[${KEY_PANEL_ATTRIBUTE}]`);
+      if (!keyPanel) {
+        keyPanel = document.createElement('section');
+        keyPanel.setAttribute(KEY_PANEL_ATTRIBUTE, 'true');
+        keyPanel.dataset.grantId = grantId;
+        keyPanel.className = 'card flat';
+        keyPanel.style.marginTop = 'var(--s-3)';
+        keyPanel.innerHTML = '<div class="muted">Loading issued Evaluation API keys...</div>';
+        card.appendChild(keyPanel);
       }
-      if (panel.dataset.loaded !== 'true' && panel.dataset.loading !== 'true') {
-        loadKeyLifecyclePanel(panel, grantId);
+      if (keyPanel.dataset.loaded !== 'true' && keyPanel.dataset.loading !== 'true') loadKeyLifecyclePanel(keyPanel, grantId);
+
+      let auditPanel = card.querySelector(`[${AUDIT_PANEL_ATTRIBUTE}]`);
+      if (!auditPanel) {
+        auditPanel = document.createElement('section');
+        auditPanel.setAttribute(AUDIT_PANEL_ATTRIBUTE, 'true');
+        auditPanel.dataset.grantId = grantId;
+        auditPanel.className = 'card flat';
+        auditPanel.style.marginTop = 'var(--s-3)';
+        auditPanel.innerHTML = '<div class="muted">Loading Evaluation audit receipts...</div>';
+        card.appendChild(auditPanel);
       }
+      if (auditPanel.dataset.loaded !== 'true' && auditPanel.dataset.loading !== 'true') loadAuditPanel(auditPanel, grantId);
     });
   }
 
@@ -313,25 +321,21 @@
     const slot = ensureSlot();
     if (!card || !externalCard || !externalBody || !slot) return;
     const evaluationMode = mode() === 'external_evaluation';
-
     slot.hidden = !evaluationMode;
     if (evaluationMode) {
       externalCard.dataset.activated = 'true';
       externalBody.hidden = false;
     }
-
     const standardGrid = directStandardGrid(card);
     const scopesLabel = standardScopesLabel();
     const actions = standardActions();
     if (standardGrid) standardGrid.hidden = evaluationMode;
     if (scopesLabel) scopesLabel.hidden = evaluationMode;
     if (actions) actions.hidden = evaluationMode;
-
     const status = document.getElementById('admin-api-key-provisioning-mode-status');
     if (status && evaluationMode) {
       status.className = 'admin-note ok';
-      status.textContent =
-        'External Evaluation mode is active. Grant creation, task binding, one-time key issue, delivery/receipt evidence, and individual revoke are embedded inside the External Evaluation Access card below.';
+      status.textContent = 'External Evaluation mode is active. Grant creation, one-time key issue, customer quota/status portal, delivery/receipt evidence, audit receipts, and individual revoke are embedded below.';
     }
     renderEvaluationPreview();
     decorateGrantKeyLifecycle();
@@ -349,18 +353,12 @@
     const host = document.getElementById(EVALUATION_HOST_ID);
     if (!slot || !host) {
       attachAttempts += 1;
-      if (attachAttempts < MAX_ATTACH_ATTEMPTS) {
-        window.setTimeout(attachEvaluationHost, ATTACH_RETRY_MS);
-      } else {
-        document.body.dataset.adminApiKeyEvaluationLifecycle = 'attach-timeout';
-      }
+      if (attachAttempts < MAX_ATTACH_ATTEMPTS) window.setTimeout(attachEvaluationHost, ATTACH_RETRY_MS);
+      else document.body.dataset.adminApiKeyEvaluationLifecycle = 'attach-timeout';
       return;
     }
-
     const hostSlot = slot.querySelector('[data-admin-evaluation-host-slot]');
-    if (hostSlot && host.parentElement !== hostSlot) {
-      hostSlot.appendChild(host);
-    }
+    if (hostSlot && host.parentElement !== hostSlot) hostSlot.appendChild(host);
     host.classList.add('flat');
     host.style.marginTop = '0';
     host.dataset.lifecycleEmbedded = 'true';
@@ -376,12 +374,9 @@
     const externalBody = document.getElementById(EXTERNAL_BODY_ID);
     if (!workspace || !modeSelect || !externalBody) {
       attachAttempts += 1;
-      if (attachAttempts < MAX_ATTACH_ATTEMPTS) {
-        window.setTimeout(initialize, ATTACH_RETRY_MS);
-      }
+      if (attachAttempts < MAX_ATTACH_ATTEMPTS) window.setTimeout(initialize, ATTACH_RETRY_MS);
       return;
     }
-
     ensureSlot();
     if (modeSelect.dataset.evaluationLifecycleBound !== 'true') {
       modeSelect.dataset.evaluationLifecycleBound = 'true';
@@ -392,6 +387,7 @@
       renderEvaluationPreview();
       decorateGrantKeyLifecycle();
     });
+    window.addEventListener('pmk-evaluation-execution-updated', decorateGrantKeyLifecycle);
     updateModeVisibility();
     attachEvaluationHost();
   }
