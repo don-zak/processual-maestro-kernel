@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR =
     'script[data-admin-api-key-evaluation-lifecycle]';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SRC =
-    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation02-lifecycle-final';
+    '/console/js/admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation03-final-summary';
   const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card';
   const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card';
   const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body';
