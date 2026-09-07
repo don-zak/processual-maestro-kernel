@@ -103,7 +103,7 @@ def test_evaluation_lifecycle_keeps_grant_host_inside_external_evaluation_card()
         assert marker in source
 
     assert "workspace.appendChild(slot)" not in source
-    assert "/settings/admin/evaluation-grants" not in source
+    assert "/settings/admin/evaluation-grants" in source
 
 
 def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_surfaces() -> None:
@@ -115,7 +115,7 @@ def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_s
     assert "actions.hidden = evaluationMode" in source
     assert "slot.hidden = !evaluationMode" in source
     assert "externalBody.hidden = false" in source
-    assert "Grant creation, task binding, one-time key issue, and revoke" in source
+    assert "delivery/receipt evidence" in source
     assert "evaluation grant authority" in source
 
 
@@ -161,15 +161,44 @@ def test_evaluation_lifecycle_preview_uses_real_grant_inputs_and_tasks() -> None
         assert marker in source
 
 
-def test_evaluation_lifecycle_attachment_is_bounded_without_dom_observer() -> None:
+def test_evaluation_lifecycle_attachment_is_bounded_and_observes_grant_refreshes() -> None:
     source = _source(LIFECYCLE)
 
     assert "const MAX_ATTACH_ATTEMPTS = 30" in source
     assert "const ATTACH_RETRY_MS = 100" in source
     assert "attachAttempts < MAX_ATTACH_ATTEMPTS" in source
     assert "window.setTimeout" in source
-    assert "MutationObserver" not in source
+    assert "new MutationObserver" in source
+    assert "grantObserver.observe(host, { childList: true, subtree: true })" in source
     assert "while (" not in source
+
+
+def test_evaluation_key_delivery_receipt_and_revoke_controls_are_explicit() -> None:
+    source = _source(LIFECYCLE)
+
+    required = [
+        "Confirm Key Sent",
+        "Confirm Receipt",
+        "Revoke API Key",
+        "confirm-delivery",
+        "acknowledge",
+        "data-eval-key-revoke",
+        "administrator_revoked_from_external_evaluation_ui",
+        "The key will be rejected immediately by the runtime.",
+        "raw secret visible: no",
+        "production: disabled",
+    ]
+    for marker in required:
+        assert marker in source
+
+
+def test_evaluation_key_lifecycle_never_persists_or_rehydrates_raw_secret() -> None:
+    source = _source(LIFECYCLE)
+
+    assert "localStorage.setItem" not in source
+    assert "sessionStorage.setItem" not in source
+    assert "api_key" not in source.lower()
+    assert "raw secret visible: no" in source
 
 
 def test_session_loads_provisioning_and_issue_controls_only_after_verified_admin_authority() -> None:
