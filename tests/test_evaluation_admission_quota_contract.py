@@ -22,11 +22,17 @@ def test_new_delivery_claim_consumes_quota_transactionally() -> None:
     assert "def _consume_admission_quota" in source
     assert ".with_for_update()" in source
     assert "key.usage_count += 1" in source
-    assert "usage_count = _consume_admission_quota(key, now=now)" in source
-    assert "# Re-read after authority locks." in source
-    assert '"status": "replay"' in source
-    replay_section = source.split('"status": "replay"', 1)[1]
-    assert "_consume_admission_quota(key" not in replay_section
+
+    claim = source.split("async def claim_evaluation_execution", 1)[1].split(
+        "async def complete_evaluation_execution", 1
+    )[0]
+    quota_call = "usage_count = _consume_admission_quota(key, now=now)"
+    assert quota_call in claim
+    assert "# Re-read after authority locks." in claim
+    before_quota = claim.split(quota_call, 1)[0]
+    assert before_quota.count("if existing is not None:") >= 2
+    assert before_quota.count("return _resolve_existing_claim(") >= 2
+    assert '"status": "claimed"' in claim
 
 
 def test_quota_rejection_commits_before_http_429_translation() -> None:
