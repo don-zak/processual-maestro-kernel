@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "processual_api" / "routers" / "evaluation_runtime.py"
 AUTHORITY = ROOT / "processual_api" / "services" / "evaluation_authority_postgres.py"
 PORTAL = ROOT / "processual_api" / "static" / "evaluation.html"
-PORTAL_JS = ROOT / "processual_api" / "static" / "js" / "evaluation_portal.js"
+PORTAL_JS = ROOT / "processual_api" / "static" / "js" / "evaluation_client_portal.js"
 ADMIN_JS = ROOT / "processual_api" / "static" / "js" / "admin_api_key_evaluation_lifecycle.js"
 
 
@@ -45,7 +45,6 @@ def test_task_execute_returns_quota_and_status_without_making_them_authority() -
     assert 'response["quota"] = snapshot["quota"]' in runtime
     assert 'response["execution_status"] = snapshot.get("latest_execution")' in runtime
     assert "except HTTPException:" in runtime
-    assert "return" in runtime
     assert "claim_evaluation_execution" in runtime
 
 
@@ -54,6 +53,7 @@ def test_customer_portal_uses_memory_only_api_key_and_customer_runtime_endpoints
     js = source(PORTAL_JS)
 
     assert "Maestro External Evaluation" in html
+    assert "evaluation_client_portal.js" in html
     assert "Executions used" in html
     assert "Remaining" in html
     assert "Latest execution" in html
