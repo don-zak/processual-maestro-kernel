@@ -45,6 +45,7 @@ from processual_api.services.evaluation_grants import (
 from processual_api.services.evaluation_runtime_delivery_postgres import (
     EvaluationDeliveryError,
     EvaluationIdempotencyConflictError,
+    EvaluationQuotaExceededError,
     EvaluationReplayBlockedError,
     claim_evaluation_execution,
     complete_evaluation_execution,
@@ -200,6 +201,11 @@ def _safe_replay_response(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def _delivery_http_error(exc: EvaluationDeliveryError) -> HTTPException:
+    if isinstance(exc, EvaluationQuotaExceededError):
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Evaluation execution quota is exhausted.",
+        )
     if isinstance(exc, EvaluationIdempotencyConflictError):
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
