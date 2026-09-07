@@ -16,7 +16,11 @@ from fastapi import APIRouter
 
 from . import cgt_governor as cgt_module
 from . import settings as settings_module
-from .evaluation_runtime import execute_evaluation_runtime_task
+from .evaluation_runtime import (
+    evaluation_runtime_execution_status,
+    evaluation_runtime_status,
+    execute_evaluation_runtime_task,
+)
 from .settings_admin_evaluation_grants import (
     evaluation_access_catalog,
     evaluation_grant_authority,
@@ -70,14 +74,39 @@ def _replace_route(
 def register_external_evaluation_routes() -> None:
     """Register the complete External Evaluation lifecycle exactly once."""
 
-    _replace_route(
-        cgt_module.router,
-        registered_path="/evaluation/runtime/task-execute",
-        add_path="/evaluation/runtime/task-execute",
-        method="POST",
-        endpoint=execute_evaluation_runtime_task,
-        tags=["evaluation-runtime"],
+    runtime_routes = (
+        (
+            "/evaluation/runtime/status",
+            "/evaluation/runtime/status",
+            "GET",
+            evaluation_runtime_status,
+            200,
+        ),
+        (
+            "/evaluation/runtime/executions/{execution_id}",
+            "/evaluation/runtime/executions/{execution_id}",
+            "GET",
+            evaluation_runtime_execution_status,
+            200,
+        ),
+        (
+            "/evaluation/runtime/task-execute",
+            "/evaluation/runtime/task-execute",
+            "POST",
+            execute_evaluation_runtime_task,
+            200,
+        ),
     )
+    for registered_path, add_path, method, endpoint, status_code in runtime_routes:
+        _replace_route(
+            cgt_module.router,
+            registered_path=registered_path,
+            add_path=add_path,
+            method=method,
+            endpoint=endpoint,
+            status_code=status_code,
+            tags=["evaluation-runtime"],
+        )
 
     admin_routes = (
         (
