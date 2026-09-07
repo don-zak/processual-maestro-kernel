@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from processual_api.auth.platform_admin_authority import require_active_platform_admin
@@ -13,6 +13,10 @@ from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
     list_evaluation_authority_keys,
     update_evaluation_authority_key_lifecycle,
+)
+from processual_api.services.evaluation_runtime_delivery_postgres import (
+    EvaluationDeliveryError,
+    list_evaluation_audit_receipts,
 )
 
 from . import settings as settings_module
@@ -54,7 +58,10 @@ def _lifecycle_http_error(exc: EvaluationAuthorityError) -> HTTPException:
         "evaluation_authority_key_transition_invalid",
         "evaluation_authority_key_action_invalid",
     }:
-        return HTTPException(status_code=409, detail="Invalid Evaluation API key lifecycle transition.")
+        return HTTPException(
+            status_code=409,
+            detail="Invalid Evaluation API key lifecycle transition.",
+        )
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Shared Evaluation authority is unavailable.",
@@ -80,6 +87,40 @@ async def list_evaluation_keys(
         "grant_id": grant_id,
         "key_count": len(keys),
         "keys": keys,
+        "raw_secret_visible": False,
+        "production_allowed": False,
+    }
+
+
+@settings_module.router.get(
+    "/admin/evaluation-grants/{grant_id}/audit-receipts",
+    response_model=dict,
+)
+async def list_evaluation_audit_report_receipts(
+    grant_id: str,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the administrator copy of safe execution audit receipts."""
+
+    await _require_platform_admin(request, current_user)
+    try:
+        receipts = await list_evaluation_audit_receipts(
+            _owner_user_id(current_user), grant_id, limit=limit
+        )
+    except EvaluationDeliveryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Evaluation audit report is unavailable.",
+        ) from exc
+    return {
+        "status": "ready",
+        "grant_id": grant_id,
+        "report_type": "external_evaluation_admin_audit",
+        "receipt_count": len(receipts),
+        "receipts": receipts,
+        "raw_task_input_persisted": False,
         "raw_secret_visible": False,
         "production_allowed": False,
     }
@@ -163,6 +204,7 @@ __all__ = [
     "EvaluationKeyRevoke",
     "acknowledge_evaluation_key_receipt",
     "confirm_evaluation_key_delivery",
+    "list_evaluation_audit_report_receipts",
     "list_evaluation_keys",
     "revoke_evaluation_key",
 ]
