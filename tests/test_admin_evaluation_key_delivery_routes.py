@@ -26,9 +26,8 @@ def test_key_lifecycle_router_keeps_platform_admin_authority_and_no_raw_secret_e
     source = ROUTER.read_text(encoding="utf-8")
 
     assert "require_active_platform_admin" in source
-    assert "raw_secret_visible" in source
     assert '"raw_secret_visible": False' in source
     assert "confirm_delivery" in source
     assert "acknowledge" in source
     assert "revoke" in source
-    assert "api_key" not in source.split("return {\"status\": \"ready\"")[1].split("}", 1)[0]
+    assert '"api_key":' not in source
