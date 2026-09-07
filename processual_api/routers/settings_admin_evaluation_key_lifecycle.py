@@ -86,7 +86,7 @@ def _final_audit_summary(
     quota_rejected = sum(
         max(0, int(item.get("quota_rejected_count", 0) or 0)) for item in keys
     )
-    quota_limit = max(0, int(grant.get("max_requests", 0) or 0))
+    per_key_limit = max(0, int(grant.get("max_requests", 0) or 0))
     task_ids = sorted(
         {
             str(item.get("task_id") or "")
@@ -107,21 +107,22 @@ def _final_audit_summary(
         key_states[lifecycle] = key_states.get(lifecycle, 0) + 1
 
     if failed > 0 or executing > 0:
-        verdict = "needs_review"
+        audit_outcome = "needs_review"
     elif succeeded > 0 and succeeded == evidence_persisted:
-        verdict = "qualified"
+        audit_outcome = "complete"
     else:
-        verdict = "not_evaluated"
+        audit_outcome = "not_evaluated"
 
     return {
         "report_type": "external_evaluation_final_summary",
-        "verdict": verdict,
+        "audit_outcome": audit_outcome,
+        "qualification_decision": "operator_required",
         "grant_status": str(grant.get("status") or "unknown"),
         "quota": {
-            "limit": quota_limit,
-            "used": quota_used,
-            "remaining": max(0, quota_limit - quota_used),
-            "rejected": quota_rejected,
+            "per_key_limit": per_key_limit,
+            "used_across_keys": quota_used,
+            "rejected_across_keys": quota_rejected,
+            "issued_key_count": len(keys),
             "semantics": "admitted_execution",
         },
         "executions": {
