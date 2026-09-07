@@ -218,6 +218,8 @@ async def test_same_key_race_claims_once_then_replays_and_consumes_one_unit(monk
             authority_key = await inspect.get(EvaluationAuthorityKey, api_key_id)
             assert authority_key is not None
             assert authority_key.usage_count == 1
+            assert authority_key.quota_rejected_count == 1
+            assert authority_key.payload["evaluation_grant_state"] == "quota_exhausted"
 
         conflicting_fingerprint = delivery.evaluation_request_fingerprint(
             grant_id=grant_id,
