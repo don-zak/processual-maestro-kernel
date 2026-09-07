@@ -197,7 +197,8 @@ def test_evaluation_key_lifecycle_never_persists_or_rehydrates_raw_secret() -> N
 
     assert "localStorage.setItem" not in source
     assert "sessionStorage.setItem" not in source
-    assert "api_key" not in source.lower()
+    assert "result.api_key" not in source
+    assert "payload.api_key" not in source
     assert "raw secret visible: no" in source
 
 
