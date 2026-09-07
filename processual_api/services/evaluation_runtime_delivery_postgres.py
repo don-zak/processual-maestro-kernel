@@ -104,22 +104,51 @@ def _safe_audit_evidence(value: Any) -> dict[str, Any]:
     return safe
 
 
-def _audit_receipt(row: EvaluationRuntimeDelivery) -> dict[str, Any]:
+def _execution_status(row: EvaluationRuntimeDelivery) -> str:
     state = str(row.state or "")
     if state == EVALUATION_DELIVERY_STATE_EVIDENCE_PERSISTED:
-        outcome = "succeeded"
-    elif state == "failed":
-        outcome = "failed"
-    else:
-        outcome = "executing"
+        return "succeeded"
+    if state == "failed":
+        return "failed"
+    return "executing"
+
+
+def _customer_execution_receipt(row: EvaluationRuntimeDelivery) -> dict[str, Any]:
+    evidence = _safe_audit_evidence(row.evidence)
+    return {
+        "execution_id": str(evidence.get("execution_id") or row.record_id),
+        "record_id": row.record_id,
+        "status": _execution_status(row),
+        "ledger_state": str(row.state or ""),
+        "task_id": row.task_id,
+        "binding_id": row.binding_id,
+        "accepted_at": _iso(row.accepted_at),
+        "execution_started_at": _iso(row.execution_started_at),
+        "executed_at": _iso(row.executed_at),
+        "evidence_persisted_at": _iso(row.evidence_persisted_at),
+        "failed_at": _iso(row.failed_at),
+        "failure_code": row.failure_code,
+        "network_outcome": row.network_outcome,
+        "http_status": evidence.get("http_status"),
+        "network_request_executed": evidence.get("network_request_executed") is True,
+        "mapping_valid": evidence.get("mapping_valid") is True,
+        "evidence_sha256": evidence.get("evidence_sha256"),
+        "evidence_persisted": row.evidence_persisted_at is not None,
+        "production_allowed": False,
+        "raw_task_input_persisted": False,
+        "raw_secret_visible": False,
+    }
+
+
+def _audit_receipt(row: EvaluationRuntimeDelivery) -> dict[str, Any]:
     return {
         "audit_id": row.record_id,
         "grant_id": row.grant_id,
         "api_key_id": row.api_key_id,
         "task_id": row.task_id,
         "binding_id": row.binding_id,
-        "status": outcome,
-        "ledger_state": state,
+        "status": _execution_status(row),
+        "ledger_state": str(row.state or ""),
         "request_fingerprint": row.request_fingerprint,
         "idempotency_key_sha256": row.idempotency_key_sha256,
         "accepted_at": _iso(row.accepted_at),
@@ -137,14 +166,68 @@ def _audit_receipt(row: EvaluationRuntimeDelivery) -> dict[str, Any]:
     }
 
 
+async def latest_evaluation_execution_status(
+    owner_id: str,
+    grant_id: str,
+    api_key_id: str,
+) -> dict[str, Any] | None:
+    try:
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    select(EvaluationRuntimeDelivery)
+                    .where(
+                        EvaluationRuntimeDelivery.owner_id_sha256 == _owner_digest(owner_id),
+                        EvaluationRuntimeDelivery.grant_id == grant_id,
+                        EvaluationRuntimeDelivery.api_key_id == api_key_id,
+                    )
+                    .order_by(EvaluationRuntimeDelivery.accepted_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            return _customer_execution_receipt(row) if row is not None else None
+    except Exception as exc:
+        raise EvaluationDeliveryError("evaluation_execution_status_unavailable") from exc
+
+
+async def get_evaluation_execution_status(
+    owner_id: str,
+    grant_id: str,
+    api_key_id: str,
+    execution_id: str,
+) -> dict[str, Any] | None:
+    """Resolve a safe execution receipt by public execution id or internal record id."""
+    try:
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(EvaluationRuntimeDelivery)
+                    .where(
+                        EvaluationRuntimeDelivery.owner_id_sha256 == _owner_digest(owner_id),
+                        EvaluationRuntimeDelivery.grant_id == grant_id,
+                        EvaluationRuntimeDelivery.api_key_id == api_key_id,
+                    )
+                    .order_by(EvaluationRuntimeDelivery.accepted_at.desc())
+                    .limit(100)
+                )
+            ).scalars().all()
+            wanted = str(execution_id or "").strip()
+            for row in rows:
+                evidence = row.evidence if isinstance(row.evidence, dict) else {}
+                public_id = str(evidence.get("execution_id") or "")
+                if row.record_id == wanted or public_id == wanted:
+                    return _customer_execution_receipt(row)
+            return None
+    except Exception as exc:
+        raise EvaluationDeliveryError("evaluation_execution_status_unavailable") from exc
+
+
 async def list_evaluation_audit_receipts(
     owner_id: str,
     grant_id: str,
     *,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
-    """Return bounded safe execution receipts for the owning platform administrator."""
-
     bounded_limit = max(1, min(int(limit or 50), 100))
     try:
         async with session_scope() as session:
@@ -244,8 +327,6 @@ async def claim_evaluation_execution(
     task_id: str,
     binding_id: str,
 ) -> dict[str, Any]:
-    """Claim one new execution and consume one unit, or return replay at zero cost."""
-
     normalized_key = str(idempotency_key or "").strip()
     if not normalized_key:
         raise EvaluationDeliveryError("evaluation_idempotency_key_required")
@@ -437,5 +518,7 @@ __all__ = [
     "complete_evaluation_execution",
     "evaluation_request_fingerprint",
     "fail_evaluation_execution",
+    "get_evaluation_execution_status",
+    "latest_evaluation_execution_status",
     "list_evaluation_audit_receipts",
 ]
