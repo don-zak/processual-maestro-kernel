@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maestro External Evaluation</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin:0; background:#0b1020; color:#eef2ff; }
+    main { max-width:1000px; margin:0 auto; padding:32px 20px 64px; }
+    h1 { margin:0 0 6px; font-size:28px; }
+    .muted { color:#aab4d0; }
+    .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); margin-top:22px; }
+    .card { background:#141b31; border:1px solid #28324f; border-radius:14px; padding:18px; }
+    .label { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#aab4d0; }
+    .value { font-size:24px; font-weight:700; margin-top:6px; }
+    .ok { color:#78e6ae; } .warn { color:#ffd479; } .bad { color:#ff8f9b; }
+    label { display:block; font-size:13px; margin:12px 0 5px; color:#c8d0e8; }
+    input, textarea { width:100%; box-sizing:border-box; padding:11px 12px; border-radius:9px; border:1px solid #35415f; background:#0c1327; color:#eef2ff; }
+    textarea { min-height:120px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+    button { margin-top:12px; padding:10px 14px; border:0; border-radius:9px; background:#6675ff; color:white; font-weight:700; cursor:pointer; }
+    button.secondary { background:#303a59; } button:disabled { opacity:.55; cursor:not-allowed; }
+    .progress { height:12px; background:#28324f; border-radius:999px; overflow:hidden; margin-top:12px; }
+    .progress > div { height:100%; width:0; background:#6675ff; transition:width .2s ease; }
+    pre { overflow:auto; white-space:pre-wrap; word-break:break-word; background:#0c1327; padding:12px; border-radius:9px; border:1px solid #28324f; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .row button { flex:0 0 auto; }
+    .notice { margin-top:16px; padding:12px 14px; border-radius:10px; background:#1b2541; color:#cdd5ee; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>External Evaluation</h1>
+  <div class="muted">Customer-safe sandbox portal. Your API key is kept in page memory only and is never stored by this page.</div>
+
+  <section class="card" style="margin-top:22px">
+    <label for="api-key">Evaluation API key</label>
+    <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="pmk_…" />
+    <div class="row">
+      <button id="connect">Connect / Refresh</button>
+      <button id="disconnect" class="secondary" type="button">Forget key</button>
+    </div>
+    <div id="message" class="notice">Enter the Evaluation API key issued by Maestro.</div>
+  </section>
+
+  <section class="grid">
+    <div class="card"><div class="label">Credential</div><div id="credential" class="value">—</div></div>
+    <div class="card"><div class="label">Evaluation type</div><div id="type" class="value">—</div></div>
+    <div class="card"><div class="label">Executions used</div><div id="quota-used" class="value">—</div></div>
+    <div class="card"><div class="label">Remaining</div><div id="quota-remaining" class="value">—</div></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <div class="label">Evaluation quota</div>
+    <div class="progress"><div id="quota-bar"></div></div>
+    <div id="quota-caption" class="muted" style="margin-top:8px">Status checks and idempotent replays do not consume quota.</div>
+  </section>
+
+  <section class="grid">
+    <div class="card"><div class="label">Latest execution</div><div id="execution-state" class="value">—</div><div id="execution-meta" class="muted"></div></div>
+    <div class="card"><div class="label">Evidence</div><div id="evidence-state" class="value">—</div><div id="evidence-meta" class="muted"></div></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2 style="margin-top:0">Execute a sandbox task</h2>
+    <label for="task-id">Task ID</label><input id="task-id" placeholder="crm.customer_context" />
+    <label for="binding-id">Binding ID</label><input id="binding-id" placeholder="evaluation.crm.integration" />
+    <label for="idempotency-key">Idempotency key</label><input id="idempotency-key" autocomplete="off" />
+    <label for="task-input">Task input (JSON)</label><textarea id="task-input">{"customer_id":"demo-customer-001"}</textarea>
+    <button id="execute" disabled>Execute</button>
+    <pre id="result">No execution yet.</pre>
+  </section>
+</main>
+<script src="/console/js/evaluation_client_portal.js?v=eval-client-status-01"></script>
+</body>
+</html>
