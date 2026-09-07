@@ -26,6 +26,12 @@ from .settings_admin_evaluation_grants import (
     list_evaluation_grants,
     revoke_evaluation_grant,
 )
+from .settings_admin_evaluation_key_lifecycle import (
+    acknowledge_evaluation_key_receipt,
+    confirm_evaluation_key_delivery,
+    list_evaluation_keys,
+    revoke_evaluation_key,
+)
 
 
 def _route_matches(route: Any, path: str, method: str) -> bool:
@@ -112,6 +118,34 @@ def register_external_evaluation_routes() -> None:
             "POST",
             issue_evaluation_key,
             201,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys",
+            "/admin/evaluation-grants/{grant_id}/keys",
+            "GET",
+            list_evaluation_keys,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys/{key_id}/confirm-delivery",
+            "/admin/evaluation-grants/{grant_id}/keys/{key_id}/confirm-delivery",
+            "POST",
+            confirm_evaluation_key_delivery,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys/{key_id}/acknowledge",
+            "/admin/evaluation-grants/{grant_id}/keys/{key_id}/acknowledge",
+            "POST",
+            acknowledge_evaluation_key_receipt,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys/{key_id}",
+            "/admin/evaluation-grants/{grant_id}/keys/{key_id}",
+            "DELETE",
+            revoke_evaluation_key,
+            200,
         ),
         (
             "/settings/admin/evaluation-grants/{grant_id}",
