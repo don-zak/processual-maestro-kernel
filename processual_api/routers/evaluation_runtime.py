@@ -258,6 +258,19 @@ async def _customer_status_snapshot(current_user: dict[str, Any]) -> dict[str, A
     }
 
 
+async def _decorate_execution_with_status(
+    response: dict[str, Any], current_user: dict[str, Any]
+) -> None:
+    """Attach fresh status when available without invalidating a durable result."""
+
+    try:
+        snapshot = await _customer_status_snapshot(current_user)
+    except HTTPException:
+        return
+    response["quota"] = snapshot["quota"]
+    response["execution_status"] = snapshot.get("latest_execution")
+
+
 @router.get("/status", response_model=dict)
 async def evaluation_runtime_status(
     current_user: dict = Depends(get_current_user),
@@ -387,9 +400,7 @@ async def execute_evaluation_runtime_task(
     if claim["status"] == "replay":
         replay_response = dict(claim["response"])
         replay_response["idempotent_replay"] = True
-        snapshot = await _customer_status_snapshot(current_user)
-        replay_response["quota"] = snapshot["quota"]
-        replay_response["execution_status"] = snapshot.get("latest_execution")
+        await _decorate_execution_with_status(replay_response, current_user)
         return replay_response
 
     record_id = str(claim["record"]["record_id"])
@@ -474,9 +485,7 @@ async def execute_evaluation_runtime_task(
             ),
         ) from exc
 
-    snapshot = await _customer_status_snapshot(current_user)
-    response["quota"] = snapshot["quota"]
-    response["execution_status"] = snapshot.get("latest_execution")
+    await _decorate_execution_with_status(response, current_user)
     return response
 
 
