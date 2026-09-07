@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
-from processual_api.auth.security import require_scope
+from processual_api.auth.security import get_current_user, require_scope
 from processual_api.integrations.enterprise_endpoint_bindings import EndpointBindingError
 from processual_api.integrations.enterprise_endpoint_request_mapping import (
     EndpointRequestMappingError,
@@ -141,20 +141,6 @@ def _evaluation_owner_id(current_user: dict[str, Any]) -> str:
 
 
 def _evaluation_identity(current_user: dict[str, Any]) -> tuple[str, str, str]:
-    owner_id = _evaluation_owner_id(current_user)
-    grant_id = str(current_user.get("evaluation_grant_id") or "").strip()
-    api_key_id = str(current_user.get("api_key_id") or "").strip()
-    if not grant_id or not api_key_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Governed Evaluation Runtime credential required.",
-        )
-    return owner_id, grant_id, api_key_id
-
-
-def _require_evaluation_credential(
-    current_user: dict[str, Any], raw: dict[str, Any]
-) -> None:
     if (
         current_user.get("auth_method") != "api_key"
         or current_user.get("entitlement_source") != "admin_evaluation_grant"
@@ -162,8 +148,23 @@ def _require_evaluation_credential(
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Governed Evaluation Runtime credential required.",
+            detail="Governed Evaluation credential required.",
         )
+    owner_id = _evaluation_owner_id(current_user)
+    grant_id = str(current_user.get("evaluation_grant_id") or "").strip()
+    api_key_id = str(current_user.get("api_key_id") or "").strip()
+    if not grant_id or not api_key_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Governed Evaluation credential required.",
+        )
+    return owner_id, grant_id, api_key_id
+
+
+def _require_evaluation_credential(
+    current_user: dict[str, Any], raw: dict[str, Any]
+) -> None:
+    _evaluation_identity(current_user)
     grant = find_evaluation_grant(
         raw,
         str(current_user.get("evaluation_grant_id") or ""),
@@ -259,7 +260,7 @@ async def _customer_status_snapshot(current_user: dict[str, Any]) -> dict[str, A
 
 @router.get("/status", response_model=dict)
 async def evaluation_runtime_status(
-    current_user: dict = Depends(require_scope("run:evaluation")),
+    current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Customer-facing credential, quota, and latest-execution status."""
     return await _customer_status_snapshot(current_user)
@@ -268,7 +269,7 @@ async def evaluation_runtime_status(
 @router.get("/executions/{execution_id}", response_model=dict)
 async def evaluation_runtime_execution_status(
     execution_id: str,
-    current_user: dict = Depends(require_scope("run:evaluation")),
+    current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     owner_id, grant_id, api_key_id = _evaluation_identity(current_user)
     try:
