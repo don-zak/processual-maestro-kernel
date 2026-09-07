@@ -97,7 +97,7 @@ def test_evaluation_lifecycle_keeps_grant_host_inside_external_evaluation_card()
         "externalBody.appendChild(slot)",
         "hostSlot.appendChild(host)",
         "host.dataset.lifecycleEmbedded = 'true'",
-        "External Evaluation Lifecycle",
+        "Evaluation Access & Key Handoff",
     ]
     for marker in required:
         assert marker in source
@@ -116,7 +116,7 @@ def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_s
     assert "slot.hidden = !evaluationMode" in source
     assert "externalBody.hidden = false" in source
     assert "delivery/receipt evidence" in source
-    assert "evaluation grant authority" in source
+    assert "backend-authoritative" in source
 
 
 def test_runtime_fixups_cannot_reintroduce_standard_key_generation_in_external_evaluation() -> None:
@@ -207,7 +207,7 @@ def test_session_loads_provisioning_and_issue_controls_only_after_verified_admin
 
     required = [
         "API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR",
-        "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation02-lifecycle-final",
+        "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation03-final-summary",
         "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final",
         "admin_evaluation_grants.js?v=adminevaltasks06-lifecycle-final",
         "function loadApiKeyEvaluationLifecycle()",
