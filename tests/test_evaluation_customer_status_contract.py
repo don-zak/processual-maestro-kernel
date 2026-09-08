@@ -38,14 +38,20 @@ def test_customer_execution_status_is_scoped_and_zero_quota() -> None:
     assert '"production_allowed": False' in runtime
 
 
-def test_task_execute_returns_quota_and_status_without_making_them_authority() -> None:
+def test_task_execute_returns_quota_and_exact_execution_status() -> None:
     runtime = source(RUNTIME)
+    decorator = runtime.split("async def _decorate_execution_with_status", 1)[1].split(
+        '@router.get("/status"', 1
+    )[0]
+    task_execute = runtime.split('@router.post("/task-execute"', 1)[1]
 
-    assert "_decorate_execution_with_status" in runtime
-    assert 'response["quota"] = snapshot["quota"]' in runtime
-    assert 'response["execution_status"] = snapshot.get("latest_execution")' in runtime
-    assert "except HTTPException:" in runtime
-    assert "claim_evaluation_execution" in runtime
+    assert "get_evaluation_execution_status" in decorator
+    assert 'response["quota"] = credential["quota"]' in decorator
+    assert 'response["execution_status"] = receipt' in decorator
+    assert 'snapshot.get("latest_execution")' not in decorator
+    assert 'record_id = str(claim["record"]["record_id"])' in task_execute
+    assert task_execute.count("execution_id=record_id") >= 2
+    assert "claim_evaluation_execution" in task_execute
 
 
 def test_customer_portal_uses_memory_only_api_key_and_customer_runtime_endpoints() -> None:
@@ -66,6 +72,19 @@ def test_customer_portal_uses_memory_only_api_key_and_customer_runtime_endpoints
     assert "5000" in js
     assert "localStorage" not in js
     assert "sessionStorage" not in js
+
+
+def test_customer_portal_execute_button_tracks_runtime_authority_and_quota() -> None:
+    js = source(PORTAL_JS)
+
+    assert "let runtimeState" in js
+    assert "runtimeState.credentialStatus === 'active'" in js
+    assert "Number(runtimeState.quotaRemaining) > 0" in js
+    assert "!runtimeState.executing" in js
+    assert "syncExecuteButton" in js
+    assert "runtimeState.credentialStatus = 'unavailable'" in js
+    assert "runtimeState.quotaRemaining = 0" in js
+    assert "button.disabled = !apiKey" not in js
 
 
 def test_admin_external_evaluation_shows_safe_audit_receipts_and_portal_location() -> None:
