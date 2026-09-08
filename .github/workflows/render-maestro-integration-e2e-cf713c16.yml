@@ -1,0 +1,97 @@
+name: Render Maestro Final-Head Integration E2E
+
+on:
+  push:
+    branches:
+      - ops/render-e2e-cf713c16
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: cf713c16165f8c780c782261a5f995451330e474
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.14'
+      - name: Install package
+        run: python -m pip install -e '.[api,observability]'
+      - name: Execute governed Maestro binding against live Render
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import asyncio
+
+          from processual_api.integrations.enterprise_endpoint_bindings import EnterpriseEndpointBindingSpec
+          from processual_api.integrations.enterprise_sandbox_execution import (
+              SandboxCredentialEnvelope,
+              execute_sandbox_binding,
+          )
+          from processual_api.integrations.sandbox_verified_transport import VerifiedPeerSandboxTransport
+
+          class AnonymousResolver:
+              async def resolve(self, *, credential_profile_id: str, binding_id: str):
+                  assert credential_profile_id == 'enterprise_core_api_reference'
+                  assert binding_id == 'render.crm.customer_context'
+                  return SandboxCredentialEnvelope(headers={}, source='anonymous_public_sandbox')
+
+          async def main():
+              spec = EnterpriseEndpointBindingSpec(
+                  binding_id='render.crm.customer_context',
+                  display_name='Render CRM customer context final-head E2E',
+                  adapter_contract_id='crm',
+                  task_id='crm.customer_context',
+                  credential_profile_id='enterprise_core_api_reference',
+                  environment='sandbox',
+                  base_url='https://processual-maestro-kernel.onrender.com',
+                  method='GET',
+                  path='/users/{customer_id}',
+                  required_scope_ids=['crm:read'],
+                  path_parameters={'customer_id': '$task.customer_id'},
+                  field_mapping={'customer_id': '$.id', 'customer_name': '$.name'},
+                  success_codes=[200],
+                  timeout_seconds=30,
+              )
+              transport = VerifiedPeerSandboxTransport()
+              result = await execute_sandbox_binding(
+                  spec,
+                  task_input={'customer_id': 1},
+                  approved_operation_classes={'read'},
+                  approval_reference='render-final-head-cf713c16',
+                  credential_resolver=AnonymousResolver(),
+                  transport=transport,
+              )
+              assert result['status'] == 'sandbox_proof_passed', result
+              assert result['http_status'] == 200, result
+              assert result['destination_host'] == 'processual-maestro-kernel.onrender.com', result
+              assert result['network_request_executed'] is True, result
+              assert result['mapping_valid'] is True, result
+              assert result['ready_for_task_consumption'] is True, result
+              assert result['canonical_input']['customer_id'] == 1, result
+              assert result['canonical_input']['customer_name'] == 'Evaluation Sandbox Customer', result
+              assert result['credential_source'] == 'anonymous_public_sandbox', result
+              assert result['credential_material_included'] is False, result
+              assert result['raw_response_included'] is False, result
+              assert result['raw_secret_visible'] is False, result
+              assert result['production_allowed'] is False, result
+              assert result['evidence_sha256'], result
+              assert result['response_sha256'], result
+              assert result['task_injection_sha256'], result
+              assert transport.last_verified_peer, result
+              print('MAESTRO_RENDER_FINAL_HEAD_E2E_PASS')
+              print('deployed_sha=cf713c16165f8c780c782261a5f995451330e474')
+              print('execution_id=', result['execution_id'])
+              print('destination_host=', result['destination_host'])
+              print('verified_peer=', transport.last_verified_peer)
+              print('http_status=', result['http_status'])
+              print('canonical_input=', result['canonical_input'])
+              print('evidence_sha256=', result['evidence_sha256'])
+
+          asyncio.run(main())
+          PY
