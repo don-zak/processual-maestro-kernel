@@ -259,16 +259,26 @@ async def _customer_status_snapshot(current_user: dict[str, Any]) -> dict[str, A
 
 
 async def _decorate_execution_with_status(
-    response: dict[str, Any], current_user: dict[str, Any]
+    response: dict[str, Any],
+    current_user: dict[str, Any],
+    *,
+    execution_id: str,
 ) -> None:
-    """Attach fresh status when available without invalidating a durable result."""
+    """Attach fresh quota and the receipt for this exact admitted execution."""
 
+    owner_id, grant_id, api_key_id = _evaluation_identity(current_user)
     try:
-        snapshot = await _customer_status_snapshot(current_user)
-    except HTTPException:
+        credential = await evaluation_key_runtime_status(owner_id, grant_id, api_key_id)
+        receipt = await get_evaluation_execution_status(
+            owner_id,
+            grant_id,
+            api_key_id,
+            execution_id,
+        )
+    except (EvaluationAuthorityError, EvaluationDeliveryError):
         return
-    response["quota"] = snapshot["quota"]
-    response["execution_status"] = snapshot.get("latest_execution")
+    response["quota"] = credential["quota"]
+    response["execution_status"] = receipt
 
 
 @router.get("/status", response_model=dict)
@@ -397,13 +407,17 @@ async def execute_evaluation_runtime_task(
     except EvaluationDeliveryError as exc:
         raise _delivery_http_error(exc) from exc
 
+    record_id = str(claim["record"]["record_id"])
     if claim["status"] == "replay":
         replay_response = dict(claim["response"])
         replay_response["idempotent_replay"] = True
-        await _decorate_execution_with_status(replay_response, current_user)
+        await _decorate_execution_with_status(
+            replay_response,
+            current_user,
+            execution_id=record_id,
+        )
         return replay_response
 
-    record_id = str(claim["record"]["record_id"])
     try:
         resolver = ReferenceSandboxCredentialResolver(secret_reference)
         transport = VerifiedPeerSandboxTransport()
@@ -485,7 +499,11 @@ async def execute_evaluation_runtime_task(
             ),
         ) from exc
 
-    await _decorate_execution_with_status(response, current_user)
+    await _decorate_execution_with_status(
+        response,
+        current_user,
+        execution_id=record_id,
+    )
     return response
 
 
