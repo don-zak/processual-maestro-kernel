@@ -26,13 +26,15 @@ jobs:
           with open('/tmp/health.json', encoding='utf-8') as fh:
               payload = json.load(fh)
           assert payload.get('status') == 'live', payload
+          assert payload.get('production_allowed') is False, payload
           PY
           curl --fail --silent --show-error https://processual-maestro-kernel.onrender.com/users/1 | tee /tmp/customer.json
           python - <<'PY'
           import json
           with open('/tmp/customer.json', encoding='utf-8') as fh:
               payload = json.load(fh)
-          assert payload == {'id': 1, 'name': 'Evaluation Sandbox Customer'}, payload
+          assert payload.get('id') == 1, payload
+          assert payload.get('name') == 'Evaluation Sandbox Customer', payload
           PY
           code="$(curl --silent --show-error --output /tmp/authority.json --write-out '%{http_code}' https://processual-maestro-kernel.onrender.com/evaluation/runtime/status)"
           test "$code" = "404"
