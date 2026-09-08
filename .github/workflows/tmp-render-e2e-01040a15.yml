@@ -59,7 +59,7 @@ jobs:
               binding_id='evaluation.render.customer',
               display_name='Evaluation Render customer',
               adapter_contract_id='crm',
-              task_id='evaluation.customer_context',
+              task_id='crm.customer_context',
               credential_profile_id='anonymous_public_sandbox',
               environment='sandbox',
               base_url='https://processual-maestro-kernel.onrender.com',
