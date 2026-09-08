@@ -2,24 +2,34 @@ from __future__ import annotations
 
 from pathlib import Path
 
-BLUEPRINT = Path("render.yaml")
+SANDBOX_BLUEPRINT = Path("render.yaml")
+AUTHORITY_BLUEPRINT = Path("deployment/external-evaluation-authority/render.yaml")
 
 
-def _text() -> str:
-    return BLUEPRINT.read_text(encoding="utf-8")
+def _sandbox_text() -> str:
+    return SANDBOX_BLUEPRINT.read_text(encoding="utf-8")
+
+
+def _authority_text() -> str:
+    return AUTHORITY_BLUEPRINT.read_text(encoding="utf-8")
 
 
 def test_render_keeps_sandbox_and_external_evaluation_authority_separate() -> None:
-    text = _text()
+    sandbox = _sandbox_text()
+    authority = _authority_text()
 
-    assert "name: processual-maestro-evaluation-sandbox" in text
-    assert "dockerContext: ./deployment/evaluation-owned-sandbox" in text
-    assert "name: processual-maestro-external-evaluation-authority" in text
-    assert text.count("healthCheckPath: /health/live") == 2
+    assert "name: processual-maestro-evaluation-sandbox" in sandbox
+    assert "dockerContext: ./deployment/evaluation-owned-sandbox" in sandbox
+    assert "processual-maestro-external-evaluation-authority" not in sandbox
+
+    assert "name: processual-maestro-external-evaluation-authority" in authority
+    assert "processual-maestro-evaluation-sandbox" not in authority
+    assert "healthCheckPath: /health/live" in sandbox
+    assert "healthCheckPath: /health/live" in authority
 
 
 def test_render_authority_uses_shared_postgres_and_redis_resources() -> None:
-    text = _text()
+    text = _authority_text()
 
     assert "name: processual-external-evaluation-authority-db" in text
     assert "property: connectionString" in text
@@ -30,7 +40,7 @@ def test_render_authority_uses_shared_postgres_and_redis_resources() -> None:
 
 
 def test_render_authority_migrates_then_bootstraps_before_http_start() -> None:
-    text = _text()
+    text = _authority_text()
 
     migration = text.index("alembic upgrade head")
     bootstrap = text.index("python -m processual_api.auth.platform_admin_bootstrap_env")
@@ -42,7 +52,7 @@ def test_render_authority_migrates_then_bootstraps_before_http_start() -> None:
 
 
 def test_render_authority_keeps_structured_secrets_out_of_git() -> None:
-    text = _text()
+    text = _authority_text()
 
     required_manual_secrets = (
         "AUTH_MFA_KEY_RING_JSON",
