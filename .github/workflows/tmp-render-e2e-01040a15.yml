@@ -51,7 +51,7 @@ jobs:
 
           class AnonymousResolver:
               async def resolve(self, *, credential_profile_id: str, binding_id: str):
-                  assert credential_profile_id == 'anonymous_public_sandbox'
+                  assert credential_profile_id == 'enterprise_core_api_reference'
                   assert binding_id == 'evaluation.render.customer'
                   return SandboxCredentialEnvelope(headers={}, source='anonymous_public_sandbox')
 
@@ -60,7 +60,7 @@ jobs:
               display_name='Evaluation Render customer',
               adapter_contract_id='crm',
               task_id='crm.customer_context',
-              credential_profile_id='anonymous_public_sandbox',
+              credential_profile_id='enterprise_core_api_reference',
               environment='sandbox',
               base_url='https://processual-maestro-kernel.onrender.com',
               method='GET',
