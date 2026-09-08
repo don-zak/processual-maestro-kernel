@@ -16,7 +16,7 @@ from processual_api.auth.platform_admin_bootstrap_service import (
     PlatformAdminBootstrapEmailConflictError,
     PlatformAdminBootstrapService,
 )
-from processual_api.db.session import get_session_factory
+from processual_api.db.session import close_db, get_session_factory, init_db
 
 SECRET_HASH_ENV = "AUTH_PLATFORM_ADMIN_BOOTSTRAP_SECRET_SHA256"
 SECRET_ENV = "AUTH_PLATFORM_ADMIN_BOOTSTRAP_SECRET"
@@ -83,32 +83,37 @@ async def _bootstrap(environment: BootstrapEnvironment) -> None:
 
 async def _run() -> int:
     try:
-        if await _platform_admin_authority_exists():
+        await init_db()
+
+        try:
+            if await _platform_admin_authority_exists():
+                print("PlatformAdminBootstrapClosed=True")
+                return 0
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+
+        try:
+            environment = _load_environment()
+            await _bootstrap(environment)
+        except PlatformAdminAlreadyBootstrappedError:
             print("PlatformAdminBootstrapClosed=True")
             return 0
-    except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+        except PlatformAdminBootstrapDeniedError:
+            print("Platform administrator bootstrap denied.", file=sys.stderr)
+            return 3
+        except PlatformAdminBootstrapEmailConflictError:
+            print("Bootstrap identity email is unavailable.", file=sys.stderr)
+            return 4
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 5
 
-    try:
-        environment = _load_environment()
-        await _bootstrap(environment)
-    except PlatformAdminAlreadyBootstrappedError:
-        print("PlatformAdminBootstrapClosed=True")
+        print("PlatformAdminBootstrapCreated=True")
+        print("NextAction=login_and_complete_mfa")
         return 0
-    except PlatformAdminBootstrapDeniedError:
-        print("Platform administrator bootstrap denied.", file=sys.stderr)
-        return 3
-    except PlatformAdminBootstrapEmailConflictError:
-        print("Bootstrap identity email is unavailable.", file=sys.stderr)
-        return 4
-    except (RuntimeError, ValueError) as exc:
-        print(str(exc), file=sys.stderr)
-        return 5
-
-    print("PlatformAdminBootstrapCreated=True")
-    print("NextAction=login_and_complete_mfa")
-    return 0
+    finally:
+        await close_db()
 
 
 def main() -> int:
