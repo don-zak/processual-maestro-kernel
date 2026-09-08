@@ -1,6 +1,11 @@
 (function () {
   let apiKey = '';
   let pollTimer = null;
+  let runtimeState = {
+    credentialStatus: 'disconnected',
+    quotaRemaining: 0,
+    executing: false,
+  };
 
   const $ = (id) => document.getElementById(id);
   const text = (value) => String(value ?? '');
@@ -27,6 +32,19 @@
     return 'value';
   }
 
+  function canExecute() {
+    return Boolean(
+      apiKey
+      && runtimeState.credentialStatus === 'active'
+      && Number(runtimeState.quotaRemaining) > 0
+      && !runtimeState.executing
+    );
+  }
+
+  function syncExecuteButton() {
+    $('execute').disabled = !canExecute();
+  }
+
   async function request(path, options = {}) {
     if (!apiKey) throw new Error('Evaluation API key is required.');
     const response = await fetch(path, {
@@ -49,6 +67,8 @@
   function renderStatus(payload) {
     const quota = payload.quota || {};
     const latest = payload.latest_execution || null;
+    runtimeState.credentialStatus = text(payload.credential_status || 'unknown');
+    runtimeState.quotaRemaining = Number(quota.remaining ?? 0);
     $('credential').textContent = text(payload.credential_status || 'unknown');
     $('credential').className = statusClass(payload.credential_status);
     $('type').textContent = text(payload.evaluation_type || '—');
@@ -78,7 +98,7 @@
       $('evidence-state').className = 'value';
       $('evidence-meta').textContent = '';
     }
-    $('execute').disabled = payload.credential_status !== 'active';
+    syncExecuteButton();
   }
 
   async function refreshStatus() {
@@ -88,7 +108,9 @@
       setMessage('Connected. Status is read-only and does not consume evaluation quota.', 'ok');
       return payload;
     } catch (error) {
-      $('execute').disabled = true;
+      runtimeState.credentialStatus = 'unavailable';
+      runtimeState.quotaRemaining = 0;
+      syncExecuteButton();
       setMessage(`Unable to read evaluation status: ${error.message || error}`, 'bad');
       throw error;
     }
@@ -101,14 +123,15 @@
   }
 
   async function executeTask() {
-    const button = $('execute');
-    button.disabled = true;
+    runtimeState.executing = true;
+    syncExecuteButton();
     let input;
     try {
       input = JSON.parse($('task-input').value || '{}');
     } catch {
       setMessage('Task input must be valid JSON.', 'bad');
-      button.disabled = false;
+      runtimeState.executing = false;
+      syncExecuteButton();
       return;
     }
     const body = {
@@ -141,7 +164,8 @@
       setMessage(`Execution failed: ${error.message || error}`, 'bad');
       try { await refreshStatus(); } catch {}
     } finally {
-      button.disabled = !apiKey;
+      runtimeState.executing = false;
+      syncExecuteButton();
     }
   }
 
@@ -165,6 +189,9 @@
       setMessage('Enter the Evaluation API key first.', 'bad');
       return;
     }
+    runtimeState.credentialStatus = 'connecting';
+    runtimeState.quotaRemaining = 0;
+    syncExecuteButton();
     try {
       await refreshStatus();
       startPolling();
@@ -174,7 +201,12 @@
   $('disconnect').addEventListener('click', () => {
     apiKey = '';
     $('api-key').value = '';
-    $('execute').disabled = true;
+    runtimeState = {
+      credentialStatus: 'disconnected',
+      quotaRemaining: 0,
+      executing: false,
+    };
+    syncExecuteButton();
     stopPolling();
     setMessage('Evaluation key forgotten from this page memory.');
   });
