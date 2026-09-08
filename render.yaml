@@ -5,3 +5,52 @@ services:
     dockerfilePath: ./deployment/evaluation-owned-sandbox/Dockerfile
     dockerContext: ./deployment/evaluation-owned-sandbox
     healthCheckPath: /health/live
+
+  - type: web
+    name: processual-maestro-external-evaluation-authority
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: feat/evaluation-key-delivery-lifecycle
+    buildCommand: pip install -e '.[api,security,database,cache,observability]'
+    startCommand: >-
+      alembic upgrade head &&
+      python -m processual_api.auth.platform_admin_bootstrap_env &&
+      exec uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-10000}
+    healthCheckPath: /health/live
+    envVars:
+      - key: ENVIRONMENT
+        value: evaluation
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: processual-external-evaluation-authority-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: processual-external-evaluation-authority-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUTH_TOKEN_PEPPER
+        generateValue: true
+      - key: AUTH_RATE_LIMIT_PEPPER
+        generateValue: true
+      - key: AUTH_MFA_CURRENT_KEY_VERSION
+        value: v1
+      - key: AUTH_MFA_KEY_RING_JSON
+        sync: false
+      - key: PROCESSUAL_CRYPTO_KEY_B64
+        sync: false
+      - key: MAESTRO_ADMIN_EMAIL
+        sync: false
+      - key: MAESTRO_ADMIN_PASSWORD
+        sync: false
+      - key: MAESTRO_ADMIN_DISPLAY_NAME
+        value: Processual Maestro Platform Admin
+      - key: AUTH_PLATFORM_ADMIN_BOOTSTRAP_SECRET
+        sync: false
+      - key: AUTH_PLATFORM_ADMIN_BOOTSTRAP_SECRET_SHA256
+        sync: false
