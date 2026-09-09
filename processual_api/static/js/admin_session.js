@@ -46,10 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const supervisorPanel = document.getElementById('admin-supervisor-session-key-panel');
     const supervisorAudit = document.getElementById('admin-supervisor-audit-summary');
     const lifecycleSummary = document.getElementById('admin-api-key-lifecycle-summary');
-    const page = document.getElementById('page-admin-api-keys');
-    const staticStandardBlock = page?.firstElementChild;
+    const staticStandardGrid = document
+      .getElementById('admin-api-key-static-generate-btn')
+      ?.closest('.grid-2-eq');
 
-    [supervisorPanel, supervisorAudit, lifecycleSummary, staticStandardBlock].forEach((node) => {
+    [supervisorPanel, supervisorAudit, lifecycleSummary, staticStandardGrid].forEach((node) => {
       if (!node) return;
       if (node.dataset.externalEvaluationPreviousDisplay === undefined) {
         node.dataset.externalEvaluationPreviousDisplay = node.style.display || '';
