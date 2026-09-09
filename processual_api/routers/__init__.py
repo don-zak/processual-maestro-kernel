@@ -16,6 +16,7 @@ from . import (  # noqa: F401,E402
     settings_admin_evaluation_binding_provisioning as _settings_admin_evaluation_binding_provisioning,
 )
 from . import settings_admin_evaluation_grants as _settings_admin_evaluation_grants  # noqa: F401,E402
+from . import settings_supervisor_session_keys_authority as _settings_supervisor_session_keys_authority  # noqa: F401,E402
 from . import (  # noqa: F401,E402
     settings_enterprise_endpoint_bindings_runtime as _settings_enterprise_endpoint_bindings_runtime,
 )
