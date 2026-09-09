@@ -89,8 +89,6 @@
     window.PMK_LOGIN_TOKEN_CAPTURE_INSTALLED = true;
   }
 
-  const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
-  const message = (en, ar) => currentLanguage() === 'ar' ? ar : en;
   const isUserMode = () => document.getElementById('tab-user')?.classList.contains('active') === true;
 
   function showError(text) {
@@ -105,7 +103,7 @@
     if (error) error.style.display = 'none';
   }
 
-  function syncMfaChallengeLanguage() {
+  function syncMfaChallengeCopy() {
     const label = document.getElementById('identity-mfa-label');
     const hint = document.getElementById('identity-mfa-hint');
     const verify = document.getElementById('identity-mfa-verify');
@@ -113,19 +111,19 @@
     const input = document.getElementById('identity-mfa-code');
     if (!label || !hint || !verify || !toggle || !input) return;
     if (recoveryMode) {
-      label.textContent = message('Recovery code', 'رمز الاسترداد');
-      hint.textContent = message('Enter one unused recovery code.', 'أدخل رمز استرداد غير مستخدم.');
-      toggle.textContent = message('Use authenticator code instead', 'استخدم رمز تطبيق المصادقة');
+      label.textContent = 'Recovery code';
+      hint.textContent = 'Enter one unused recovery code.';
+      toggle.textContent = 'Use authenticator code instead';
       input.placeholder = 'XXXX-XXXX';
       input.inputMode = 'text';
     } else {
-      label.textContent = message('Authenticator code', 'رمز تطبيق المصادقة');
-      hint.textContent = message('Enter the code from your authenticator app.', 'أدخل الرمز من تطبيق المصادقة.');
-      toggle.textContent = message('Use a recovery code instead', 'استخدم رمز الاسترداد بدلًا من ذلك');
+      label.textContent = 'Authenticator code';
+      hint.textContent = 'Enter the code from your authenticator app.';
+      toggle.textContent = 'Use a recovery code instead';
       input.placeholder = '123456';
       input.inputMode = 'numeric';
     }
-    verify.textContent = message('Verify', 'تحقق');
+    verify.textContent = 'Verify';
   }
 
   function buildMfaChallenge() {
@@ -140,12 +138,12 @@
     document.getElementById('identity-mfa-verify')?.addEventListener('click', verifyMfaChallenge);
     document.getElementById('identity-mfa-recovery-toggle')?.addEventListener('click', () => {
       recoveryMode = !recoveryMode;
-      syncMfaChallengeLanguage();
+      syncMfaChallengeCopy();
       const input = document.getElementById('identity-mfa-code');
       if (input) { input.value = ''; input.focus(); }
     });
     document.getElementById('identity-mfa-code')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') verifyMfaChallenge(); });
-    syncMfaChallengeLanguage();
+    syncMfaChallengeCopy();
   }
 
   function showMfaChallenge() {
@@ -158,7 +156,7 @@
     if (fields) fields.hidden = true;
     if (loginButton) loginButton.hidden = true;
     if (tabs) tabs.hidden = true;
-    syncMfaChallengeLanguage();
+    syncMfaChallengeCopy();
     document.getElementById('identity-mfa-code')?.focus();
   }
 
@@ -182,52 +180,52 @@
     const email = document.getElementById('login-username')?.value?.trim() || '';
     const password = document.getElementById('login-password')?.value || '';
     const button = document.getElementById('login-btn');
-    if (!email || !password) { showError(message('Enter email and password', 'أدخل البريد الإلكتروني وكلمة المرور')); return; }
+    if (!email || !password) { showError('Enter email and password'); return; }
     clearError();
-    if (button) { button.disabled = true; button.textContent = message('Signing in...', 'جار تسجيل الدخول...'); }
+    if (button) { button.disabled = true; button.textContent = 'Signing in...'; }
     try {
       const response = await fetch('/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || message('Invalid credentials', 'بيانات الدخول غير صحيحة'));
+      if (!response.ok) throw new Error(data.detail || 'Invalid credentials');
       if (data.mfa_required === true) {
         pendingMfaToken = normalizeToken(data.access_token);
         pendingCsrfToken = String(data.csrf_token || '');
-        if (!pendingMfaToken || !pendingCsrfToken) throw new Error(message('MFA session could not be established.', 'تعذر إنشاء جلسة المصادقة متعددة العوامل.'));
+        if (!pendingMfaToken || !pendingCsrfToken) throw new Error('MFA session could not be established.');
         clearRestrictedTokenCopies();
         showMfaChallenge();
         return;
       }
       const token = normalizeToken(data.access_token);
-      if (!token) throw new Error(message('Login response did not contain a valid token.', 'استجابة الدخول لا تحتوي على رمز صالح.'));
+      if (!token) throw new Error('Login response did not contain a valid token.');
       persistUserSession(token);
       window.location.href = '/console';
-    } catch (error) { showError(error?.message || message('Login failed', 'فشل تسجيل الدخول')); }
-    finally { if (button) { button.disabled = false; button.textContent = message('Sign In', 'تسجيل الدخول'); } }
+    } catch (error) { showError(error?.message || 'Login failed'); }
+    finally { if (button) { button.disabled = false; button.textContent = 'Sign In'; } }
   }
 
   async function verifyMfaChallenge() {
     const input = document.getElementById('identity-mfa-code');
     const button = document.getElementById('identity-mfa-verify');
     const credential = input?.value?.trim() || '';
-    if (!credential || !pendingMfaToken || !pendingCsrfToken) { showError(message('Enter your MFA credential.', 'أدخل رمز المصادقة متعددة العوامل.')); return; }
+    if (!credential || !pendingMfaToken || !pendingCsrfToken) { showError('Enter your MFA credential.'); return; }
     clearError();
-    if (button) { button.disabled = true; button.textContent = message('Verifying...', 'جار التحقق...'); }
+    if (button) { button.disabled = true; button.textContent = 'Verifying...'; }
     try {
       const verification = await fetch('/auth/mfa/verify', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pendingMfaToken}` }, body: JSON.stringify(recoveryMode ? { recovery_code: credential } : { code: credential }) });
       const verificationData = await verification.json().catch(() => ({}));
-      if (!verification.ok) throw new Error(verificationData.detail || message('Invalid MFA credential.', 'رمز المصادقة غير صالح.'));
+      if (!verification.ok) throw new Error(verificationData.detail || 'Invalid MFA credential.');
       const refreshed = await fetch('/auth/session/refresh', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': pendingCsrfToken } });
       const refreshedData = await refreshed.json().catch(() => ({}));
-      if (!refreshed.ok) throw new Error(refreshedData.detail || message('Unable to complete MFA login.', 'تعذر إكمال تسجيل الدخول بالمصادقة متعددة العوامل.'));
-      if (refreshedData.mfa_required === true) throw new Error(message('MFA verification is still required.', 'لا يزال التحقق متعدد العوامل مطلوبًا.'));
+      if (!refreshed.ok) throw new Error(refreshedData.detail || 'Unable to complete MFA login.');
+      if (refreshedData.mfa_required === true) throw new Error('MFA verification is still required.');
       const token = normalizeToken(refreshedData.access_token);
-      if (!token) throw new Error(message('MFA completion did not return a valid token.', 'إكمال المصادقة لم يُرجع رمز دخول صالحًا.'));
+      if (!token) throw new Error('MFA completion did not return a valid token.');
       persistUserSession(token);
       pendingMfaToken = '';
       pendingCsrfToken = '';
       window.location.href = '/console';
-    } catch (error) { showError(error?.message || message('MFA verification failed', 'فشل التحقق متعدد العوامل')); }
-    finally { if (button) { button.disabled = false; button.textContent = message('Verify', 'تحقق'); } }
+    } catch (error) { showError(error?.message || 'MFA verification failed'); }
+    finally { if (button) { button.disabled = false; button.textContent = 'Verify'; } }
   }
 
   function installIdentityMfaLogin() {
@@ -241,8 +239,6 @@
     password?.addEventListener('keydown', (event) => { if (event.key !== 'Enter' || !isUserMode()) return; event.preventDefault(); event.stopImmediatePropagation(); identityLogin(); }, true);
     userTab?.addEventListener('click', () => { resetMfaChallenge(); if (username) username.placeholder = 'email@example.com'; });
     adminTab?.addEventListener('click', resetMfaChallenge);
-    document.getElementById('lang-en')?.addEventListener('click', syncMfaChallengeLanguage);
-    document.getElementById('lang-ar')?.addEventListener('click', syncMfaChallengeLanguage);
     if (isUserMode() && username) username.placeholder = 'email@example.com';
   }
 
