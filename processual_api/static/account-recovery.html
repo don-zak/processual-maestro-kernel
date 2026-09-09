@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Maestro Kernel - Recover Access</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080b0f;color:#c8d8f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:24px}.card{width:min(100%,460px);background:#111620;border:1px solid #2a3650;border-radius:16px;padding:28px;box-shadow:0 18px 60px rgba(0,0,0,.45)}h1{margin:0 0 8px;color:#e8f0fc;font-size:22px}.lead,.status,.note{color:#8aa3c8;line-height:1.55}.step{margin-top:22px}.field{margin:14px 0}.field label{display:block;margin-bottom:6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#8aa3c8}.input-wrap{position:relative}.input{width:100%;border:1px solid #2a3650;border-radius:8px;background:#0b1018;color:#e8f0fc;padding:11px 12px;font:inherit;outline:none}.input.password{padding-right:70px}.input:focus{border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,.08)}.toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:1px solid #2a3650;border-radius:6px;background:#111620;color:#8aa3c8;padding:6px 8px;cursor:pointer}.btn{width:100%;border:0;border-radius:8px;background:#f5a623;color:#080b0f;font-weight:700;padding:11px 14px;cursor:pointer}.btn:disabled{opacity:.55;cursor:not-allowed}.secondary{display:block;text-align:center;margin-top:16px;color:#f5a623;text-decoration:none}.error{color:#f87171;margin-top:12px}.success{color:#22d3a0}.security{margin-top:18px;padding:14px;border:1px solid #2a3650;border-radius:10px;background:#0b1018;font-size:13px;line-height:1.55}.security ul{padding-left:20px;margin:8px 0 0}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="card" aria-live="polite">
+  <h1>Recover access</h1>
+  <p class="lead">Use the recovery address already verified for your account. Recovery does not create a session or grant authority.</p>
+
+  <section id="start-step" class="step">
+    <div class="field"><label for="recovery-login">Email or account login</label><input id="recovery-login" class="input" autocomplete="username" maxlength="320"></div>
+    <button id="start-button" class="btn" type="button">Send recovery link</button>
+    <p id="start-status" class="status" hidden></p>
+  </section>
+
+  <section id="verify-step" class="step" hidden>
+    <p id="verify-status" class="status">Verifying the recovery link…</p>
+  </section>
+
+  <section id="complete-step" class="step" hidden>
+    <p class="status">The recovery link is verified. Set a new password to invalidate prior access.</p>
+    <div class="field"><label for="new-password">New password</label><div class="input-wrap"><input id="new-password" class="input password" type="password" autocomplete="new-password" minlength="12" maxlength="1024"><button class="toggle" type="button" data-toggle="new-password" aria-pressed="false">Show</button></div></div>
+    <div class="field"><label for="confirm-password">Confirm new password</label><div class="input-wrap"><input id="confirm-password" class="input password" type="password" autocomplete="new-password" minlength="12" maxlength="1024"><button class="toggle" type="button" data-toggle="confirm-password" aria-pressed="false">Show</button></div></div>
+    <button id="complete-button" class="btn" type="button">Complete recovery</button>
+    <p id="complete-error" class="error" hidden></p>
+  </section>
+
+  <section id="done-step" class="step" hidden>
+    <p class="success"><strong>Access recovery completed.</strong></p>
+    <div class="security">For security, recovery does not sign you in automatically.<ul><li>Your password was changed.</li><li>Existing sessions and renewable credentials were revoked.</li><li>Existing API keys were revoked.</li><li>MFA re-enrollment is required before normal access resumes.</li></ul></div>
+    <a class="secondary" href="/login">Return to sign in</a>
+  </section>
+
+  <p id="global-error" class="error" hidden></p>
+  <a class="secondary" href="/login" id="cancel-link">Cancel and return to sign in</a>
+</main>
+<script>
+(() => {
+  'use strict';
+  let requestId = '';
+  let verificationToken = '';
+  let completionToken = '';
+
+  const el = (id) => document.getElementById(id);
+  const setHidden = (id, hidden) => { el(id).hidden = hidden; };
+  const setError = (message) => { const node=el('global-error'); node.textContent=message || 'Recovery could not be completed.'; node.hidden=false; };
+  const clearError = () => { const node=el('global-error'); node.textContent=''; node.hidden=true; };
+  const genericStartMessage = 'If the account is eligible, a recovery link has been sent to its verified recovery address.';
+
+  function extractLinkAuthority() {
+    const query = new URLSearchParams(window.location.search);
+    let fragment = new URLSearchParams(window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash);
+    requestId = query.get('request_id') || fragment.get('request_id') || '';
+    verificationToken = query.get('token') || fragment.get('token') || '';
+    if (requestId || verificationToken || window.location.search || window.location.hash) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }
+
+  async function startRecovery() {
+    clearError();
+    const login = el('recovery-login').value.trim();
+    if (!login) { setError('Enter your email or account login.'); return; }
+    const button = el('start-button'); button.disabled=true;
+    try {
+      const response = await fetch('/auth/account-recovery/start', {
+        method:'POST', credentials:'same-origin', cache:'no-store',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({login})
+      });
+      if (response.status === 429) throw new Error('Too many recovery attempts. Try again later.');
+      if (!response.ok && response.status !== 202) throw new Error('Account recovery is temporarily unavailable.');
+      el('recovery-login').value='';
+      const status=el('start-status'); status.textContent=genericStartMessage; status.hidden=false;
+    } catch (error) { setError(error?.message || 'Account recovery is temporarily unavailable.'); }
+    finally { button.disabled=false; }
+  }
+
+  async function verifyRecoveryLink() {
+    if (!requestId || !verificationToken) return;
+    setHidden('start-step', true); setHidden('verify-step', false); clearError();
+    const tokenForRequest = verificationToken;
+    verificationToken = '';
+    try {
+      const response = await fetch('/auth/account-recovery/verify', {
+        method:'POST', credentials:'same-origin', cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({request_id:requestId,token:tokenForRequest})
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.completion_token) throw new Error('This recovery link is invalid, expired, or unavailable.');
+      completionToken = String(data.completion_token);
+      setHidden('verify-step', true); setHidden('complete-step', false);
+      el('new-password').focus();
+    } catch (error) {
+      requestId=''; completionToken=''; setHidden('verify-step', true); setHidden('start-step', false);
+      setError(error?.message || 'This recovery link is invalid, expired, or unavailable.');
+    }
+  }
+
+  async function completeRecovery() {
+    clearError();
+    const password=el('new-password').value;
+    const confirm=el('confirm-password').value;
+    const localError=el('complete-error'); localError.hidden=true; localError.textContent='';
+    if (password.length < 12) { localError.textContent='Use at least 12 characters.'; localError.hidden=false; return; }
+    if (password !== confirm) { localError.textContent='Password confirmation does not match.'; localError.hidden=false; return; }
+    if (!requestId || !completionToken) { setError('The verified recovery session is no longer available. Request a new recovery link.'); return; }
+    const button=el('complete-button'); button.disabled=true;
+    const tokenForRequest=completionToken;
+    try {
+      const response=await fetch('/auth/account-recovery/complete', {
+        method:'POST', credentials:'same-origin', cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({request_id:requestId,completion_token:tokenForRequest,new_password:password,confirm_password:confirm})
+      });
+      if (!response.ok) throw new Error('Recovery completion was denied or is no longer available.');
+      requestId=''; completionToken='';
+      el('new-password').value=''; el('confirm-password').value='';
+      setHidden('complete-step', true); setHidden('done-step', false); el('cancel-link').hidden=true;
+    } catch (error) { setError(error?.message || 'Recovery completion was denied or is no longer available.'); }
+    finally { button.disabled=false; }
+  }
+
+  document.querySelectorAll('[data-toggle]').forEach((button) => button.addEventListener('click', () => {
+    const input=el(button.dataset.toggle); const showing=input.type==='text'; input.type=showing?'password':'text'; button.textContent=showing?'Show':'Hide'; button.setAttribute('aria-pressed', String(!showing));
+  }));
+  el('start-button').addEventListener('click', startRecovery);
+  el('recovery-login').addEventListener('keydown', (event) => { if(event.key==='Enter') startRecovery(); });
+  el('complete-button').addEventListener('click', completeRecovery);
+  extractLinkAuthority();
+  verifyRecoveryLink();
+})();
+</script>
+</body>
+</html>
