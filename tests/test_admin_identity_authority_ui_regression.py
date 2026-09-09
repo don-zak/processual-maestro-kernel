@@ -49,3 +49,30 @@ def test_expired_admin_identity_session_fails_closed() -> None:
     assert "clearIdentitySession" in source
     assert "Protected controls are locked" in source
     assert "auth-expired" in source
+
+
+def test_verified_platform_admin_enters_external_evaluation_by_default() -> None:
+    source = ADMIN_SESSION.read_text(encoding="utf-8")
+
+    assert "function activateExternalEvaluationEntry()" in source
+    assert "option[value=\"${EXTERNAL_CATEGORY}\"]" in source
+    assert "select.value = EXTERNAL_CATEGORY" in source
+    assert "select.dispatchEvent(new Event('change', { bubbles: true }))" in source
+    assert "loadProtectedEvaluationControls();" in source
+    assert "window.setTimeout(activateExternalEvaluationEntry, 0);" in source
+    assert "document.body.dataset.adminExternalEvaluationEntry = 'active'" in source
+    assert ".click()" not in source
+
+
+def test_external_evaluation_hides_standard_and_supervisor_surfaces_but_can_restore_them() -> None:
+    source = ADMIN_SESSION.read_text(encoding="utf-8")
+
+    assert "function setExternalEvaluationSurfaceVisibility(selected)" in source
+    assert "admin-supervisor-session-key-panel" in source
+    assert "admin-supervisor-audit-summary" in source
+    assert "admin-api-key-lifecycle-summary" in source
+    assert "node.hidden = true" in source
+    assert "node.style.display = 'none'" in source
+    assert "node.hidden = node.dataset.externalEvaluationPreviousHidden === 'true'" in source
+    assert "node.style.display = node.dataset.externalEvaluationPreviousDisplay || ''" in source
+    assert "setExternalEvaluationSurfaceVisibility(selected);" in source
