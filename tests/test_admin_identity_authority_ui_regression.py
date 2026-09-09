@@ -64,13 +64,16 @@ def test_verified_platform_admin_enters_external_evaluation_by_default() -> None
     assert ".click()" not in source
 
 
-def test_external_evaluation_hides_standard_and_supervisor_surfaces_but_can_restore_them() -> None:
+def test_external_evaluation_hides_only_legacy_surfaces_and_preserves_lifecycle_container() -> None:
     source = ADMIN_SESSION.read_text(encoding="utf-8")
 
     assert "function setExternalEvaluationSurfaceVisibility(selected)" in source
     assert "admin-supervisor-session-key-panel" in source
     assert "admin-supervisor-audit-summary" in source
     assert "admin-api-key-lifecycle-summary" in source
+    assert "admin-api-key-static-generate-btn" in source
+    assert ".closest('.grid-2-eq')" in source
+    assert "page?.firstElementChild" not in source
     assert "node.hidden = true" in source
     assert "node.style.display = 'none'" in source
     assert "node.hidden = node.dataset.externalEvaluationPreviousHidden === 'true'" in source
