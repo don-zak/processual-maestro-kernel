@@ -8,7 +8,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080b0f;color:#c8d8f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:22px}.wrap{width:min(100%,420px)}.card{background:#111620;border:1px solid #2a3650;border-radius:16px;padding:32px;box-shadow:0 18px 60px rgba(0,0,0,.48)}.brand{text-align:center;margin-bottom:22px}.brand-mark{width:48px;height:48px;margin:0 auto 8px}.brand-title{font-weight:800;letter-spacing:.16em;color:#e8f0fc}.brand-sub{font-size:10px;color:#5a7299;letter-spacing:.2em;margin-top:4px}.back{display:block;text-align:center;color:#8aa3c8;text-decoration:none;font-size:12px;margin-bottom:18px}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}.tab{border:1px solid #2a3650;border-radius:8px;background:transparent;color:#8aa3c8;padding:9px;cursor:pointer;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.tab.active{background:#f5a623;color:#080b0f;border-color:#f5a623}.field{margin:14px 0}.field label{display:block;margin-bottom:6px;color:#8aa3c8;font-size:11px;text-transform:uppercase;letter-spacing:.06em}.input-wrap{position:relative}.input{width:100%;border:1px solid #2a3650;border-radius:8px;background:#0b1018;color:#e8f0fc;padding:11px 12px;font:inherit;outline:none}.input.password{padding-right:72px}.input:focus{border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,.08)}.visibility{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:1px solid #2a3650;border-radius:6px;background:#111620;color:#8aa3c8;padding:6px 8px;cursor:pointer}.primary{width:100%;border:0;border-radius:8px;background:#f5a623;color:#080b0f;padding:11px;font-weight:800;cursor:pointer}.primary:disabled{opacity:.55}.error{display:none;color:#f87171;text-align:center;font-size:12px;margin-top:12px}.secondary-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.secondary{display:flex;align-items:center;justify-content:center;min-height:46px;border:1px solid #2a3650;border-radius:10px;background:#0b1018;color:#8aa3c8;text-decoration:none;font-size:12px;font-weight:700;text-align:center;padding:8px}.secondary:hover,.secondary:focus-visible{border-color:#f5a623;color:#e8f0fc}.footer{text-align:center;color:#3d5070;font-size:10px;margin-top:14px;letter-spacing:.08em}.btn-text{display:block;text-align:center;margin-top:14px;color:#f5a623}.inp-group{margin:14px 0}.inp-label{display:block;margin-bottom:6px;color:#8aa3c8;font-size:11px;text-transform:uppercase}.inp{width:100%;border:1px solid #2a3650;border-radius:8px;background:#0b1018;color:#e8f0fc;padding:11px 12px}.btn{width:100%;border:0;border-radius:8px;background:#f5a623;color:#080b0f;padding:11px;font-weight:800}[hidden]{display:none!important}@media(max-width:480px){.secondary-actions{grid-template-columns:1fr}}
 </style>
-<script src="/console/js/login_token_capture.js?v=adminauth02"></script>
+<script src="/console/js/login_token_capture.js?v=adminauth03"></script>
 </head>
 <body>
 <div class="wrap">
@@ -38,7 +38,7 @@
 <script>
 (() => {
   'use strict';
-  let role='admin';
+  let currentRole='admin';
   const admin=document.getElementById('tab-admin');
   const user=document.getElementById('tab-user');
   const username=document.getElementById('login-username');
@@ -48,8 +48,8 @@
   const visibility=document.getElementById('login-password-visibility');
 
   function activate(next){
-    role=next;
-    const isAdmin=role==='admin';
+    currentRole=next;
+    const isAdmin=currentRole==='admin';
     admin.classList.toggle('active',isAdmin); user.classList.toggle('active',!isAdmin);
     admin.setAttribute('aria-selected',String(isAdmin)); user.setAttribute('aria-selected',String(!isAdmin));
     username.placeholder=isAdmin?'admin':'email@example.com';
@@ -57,12 +57,12 @@
   }
   function showError(message){error.textContent=message || 'Sign in failed.';error.style.display='block';}
   async function adminLogin(){
-    if(role!=='admin') return;
+    if(currentRole!=='admin') return;
     const name=username.value.trim(), pass=password.value;
     if(!name || !pass){showError('Enter username and password.');return;}
     error.style.display='none'; button.disabled=true; button.textContent='Signing in...';
     try{
-      const response=await fetch('/auth/token',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:name,password:pass,role:'admin'})});
+      const response=await fetch('/auth/token',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:name,password:pass,role: currentRole})});
       const data=await response.json().catch(()=>({}));
       if(!response.ok || !data.access_token) throw new Error(data.detail || 'Invalid credentials.');
       window.PMK_LOGIN_TOKEN_CAPTURE?.persistAuthPayload?.({...data,role:'admin'});
@@ -74,7 +74,7 @@
   admin.addEventListener('click',()=>activate('admin'));
   user.addEventListener('click',()=>activate('user'));
   button.addEventListener('click',adminLogin);
-  password.addEventListener('keydown',(event)=>{if(event.key==='Enter' && role==='admin'){event.preventDefault();adminLogin();}});
+  password.addEventListener('keydown',(event)=>{if(event.key==='Enter' && currentRole==='admin'){event.preventDefault();adminLogin();}});
   visibility.addEventListener('click',()=>{const showing=password.type==='text';password.type=showing?'password':'text';visibility.textContent=showing?'Show':'Hide';visibility.setAttribute('aria-pressed',String(!showing));visibility.setAttribute('aria-label',showing?'Show password':'Hide password');});
   activate('admin');
 })();
