@@ -65,6 +65,19 @@ def test_platform_admin_identity_token_is_session_scoped_not_local_admin_token()
     assert "admin_token" not in identity_block
 
 
+def test_legacy_capture_is_exactly_scoped_to_auth_token() -> None:
+    source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
+    capture_block = source.split("function shouldCapture", 1)[1].split(
+        "function installFetchCapture", 1
+    )[0]
+
+    assert "target.pathname === '/auth/token'" in capture_block
+    assert "/auth/login" not in capture_block
+    assert "/auth/session/refresh" not in capture_block
+    assert "endsWith('/login')" not in capture_block
+    assert "includes('/token')" not in capture_block
+
+
 def test_mfa_enrollment_material_and_recovery_codes_are_not_persisted() -> None:
     source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
 
