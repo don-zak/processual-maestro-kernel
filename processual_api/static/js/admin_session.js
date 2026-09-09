@@ -15,7 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const SESSION_REFRESH_ENDPOINT = '/auth/session/refresh';
   const CSRF_COOKIE = 'pmk_csrf_token';
   const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500];
+  const EXTERNAL_ENTRY_RETRY_MS = 100;
+  const EXTERNAL_ENTRY_MAX_ATTEMPTS = 80;
   let refreshInFlight = null;
+  let externalEntryAttempts = 0;
+  let externalEntryActivated = false;
 
   function externalEvaluationSelected() {
     return document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY;
@@ -36,6 +40,29 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter(Boolean)
       .map((part) => part.startsWith(prefix) ? decodeURIComponent(part.slice(prefix.length)) : '')
       .find(Boolean) || '';
+  }
+
+  function setExternalEvaluationSurfaceVisibility(selected) {
+    const supervisorPanel = document.getElementById('admin-supervisor-session-key-panel');
+    const supervisorAudit = document.getElementById('admin-supervisor-audit-summary');
+    const lifecycleSummary = document.getElementById('admin-api-key-lifecycle-summary');
+    const page = document.getElementById('page-admin-api-keys');
+    const staticStandardBlock = page?.firstElementChild;
+
+    [supervisorPanel, supervisorAudit, lifecycleSummary, staticStandardBlock].forEach((node) => {
+      if (!node) return;
+      if (node.dataset.externalEvaluationPreviousDisplay === undefined) {
+        node.dataset.externalEvaluationPreviousDisplay = node.style.display || '';
+        node.dataset.externalEvaluationPreviousHidden = node.hidden ? 'true' : 'false';
+      }
+      if (selected) {
+        node.hidden = true;
+        node.style.display = 'none';
+      } else {
+        node.hidden = node.dataset.externalEvaluationPreviousHidden === 'true';
+        node.style.display = node.dataset.externalEvaluationPreviousDisplay || '';
+      }
+    });
   }
 
   function placeEvaluationWorkspaceInsideCard() {
@@ -88,8 +115,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const selected = externalEvaluationSelected();
     card.hidden = !selected;
     body.hidden = !selected;
+    card.style.display = selected ? '' : 'none';
+    body.style.display = selected ? '' : 'none';
     card.dataset.activated = selected ? 'true' : 'false';
+    setExternalEvaluationSurfaceVisibility(selected);
     if (selected) placeEvaluationWorkspaceInsideCard();
+  }
+
+  function activateExternalEvaluationEntry() {
+    if (externalEntryActivated) return true;
+    const select = document.getElementById('admin-api-key-category');
+    const option = select?.querySelector(`option[value="${EXTERNAL_CATEGORY}"]`);
+    if (!select || !option) {
+      externalEntryAttempts += 1;
+      if (externalEntryAttempts < EXTERNAL_ENTRY_MAX_ATTEMPTS) {
+        window.setTimeout(activateExternalEvaluationEntry, EXTERNAL_ENTRY_RETRY_MS);
+      }
+      return false;
+    }
+
+    externalEntryAttempts = 0;
+    externalEntryActivated = true;
+    if (select.value !== EXTERNAL_CATEGORY) {
+      select.value = EXTERNAL_CATEGORY;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    syncEvaluationSelectionState();
+    window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.apply?.();
+    placeEvaluationWorkspaceInsideCard();
+    document.body.dataset.adminExternalEvaluationEntry = 'active';
+    return true;
   }
 
   function setEvaluationAccessStatus(message, danger = false, ok = false) {
@@ -155,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'adminApiKeyEvaluationLifecycle',
       () => window.setTimeout(placeEvaluationWorkspaceInsideCard, 0)
     );
+    window.setTimeout(activateExternalEvaluationEntry, 0);
   }
 
   async function verifyAuthorityOnce() {
@@ -261,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setEvaluationAccessStatus('Platform Administrator verified from PostgreSQL-backed authority. Loading governed Evaluation controls…', false, true);
       loadProtectedEvaluationControls();
       dispatchAdminSessionVerified(authority);
+      window.setTimeout(activateExternalEvaluationEntry, 0);
       return true;
     } catch (error) {
       document.body.dataset.adminSession = 'error';
@@ -273,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.PMK_ADMIN_SESSION = {
     check: checkAdminSession,
     syncEvaluationSelectionState,
+    activateExternalEvaluationEntry,
     authorityEndpoint: AUTHORITY_ENDPOINT,
     refreshEndpoint: SESSION_REFRESH_ENDPOINT,
   };
