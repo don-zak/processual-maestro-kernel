@@ -159,9 +159,6 @@
 
   const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
     'pmk_supervisor_session_key',
-    'admin_supervisor_session_key',
-    'supervisor_session_key',
-    'pmk_sup_session_key',
   ];
 
   const adminSupervisorSessionState = {
@@ -174,22 +171,17 @@
   };
 
   function readStorageValue(keys) {
-    for (const key of keys) {
-      try {
-        const localValue = localStorage.getItem(key);
-        if (localValue) return localValue;
-      } catch {}
-
-      try {
-        const sessionValue = sessionStorage.getItem(key);
-        if (sessionValue) return sessionValue;
-      } catch {}
-    }
-
-    return '';
+  for (const key of keys) {
+    try {
+      const sessionValue = sessionStorage.getItem(key);
+      if (sessionValue) return sessionValue;
+    } catch {}
   }
 
-  function getAdminSupervisorSessionKey() {
+  return '';
+}
+
+function getAdminSupervisorSessionKey() {
     return readStorageValue(SUPERVISOR_SESSION_KEY_STORAGE_KEYS);
   }
 
@@ -227,8 +219,8 @@
   function supervisorSessionLabel() {
     if (!adminSupervisorSessionState.loaded) return 'checking';
     if (adminSupervisorSessionState.validated) return 'validated';
-    if (adminSupervisorSessionState.level) return 'legacy-compatible';
-    return 'legacy admin fallback';
+    if (adminSupervisorSessionState.level) return 'identity-scoped';
+    return 'not validated';
   }
 
   function renderAdminSupervisorSessionSummary() {
@@ -241,12 +233,12 @@
     }
     if (level) {
       level.textContent =
-        'Level: ' + (adminSupervisorSessionState.level || 'owner-compatible legacy admin');
+        'Level: ' + (adminSupervisorSessionState.level || 'identity authority pending');
     }
     if (scopes) {
       const listed = adminSupervisorSessionState.scopes.length
         ? adminSupervisorSessionState.scopes.join(', ')
-        : 'backend fallback only';
+        : 'backend authority only';
       scopes.textContent = 'Scopes: ' + listed;
     }
   }
@@ -339,31 +331,15 @@
   }
 
   function authHeaders(extra) {
-    const auth = window.PMK_ADMIN_AUTH;
-    if (auth && typeof auth.headers === 'function') {
-      return { ...auth.headers(), ...(extra || {}) };
-    }
-
-    const token =
-      localStorage.getItem('access_token') ||
-      localStorage.getItem('auth_token') ||
-      localStorage.getItem('admin_token') ||
-      sessionStorage.getItem('access_token') ||
-      sessionStorage.getItem('auth_token') ||
-      sessionStorage.getItem('admin_token');
-
-    const supervisorSessionKey = getAdminSupervisorSessionKey();
-
-    return {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(supervisorSessionKey
-        ? { 'X-Supervisor-Session-Key': supervisorSessionKey }
-        : {}),
-      ...(extra || {}),
-    };
+  const auth = window.PMK_ADMIN_AUTH;
+  if (auth && typeof auth.headers === 'function') {
+    return { ...auth.headers(), ...(extra || {}) };
   }
 
-  async function request(path) {
+  return { ...(extra || {}) };
+}
+
+async function request(path) {
     const response = await fetch(path, {
       method: 'GET',
       credentials: 'include',
@@ -2881,8 +2857,7 @@
 
     try {
       const session =
-        window.localStorage?.getItem("pmk_admin_supervisor_session") ||
-        window.sessionStorage?.getItem("pmk_admin_supervisor_session");
+        window.sessionStorage?.getItem("pmk_supervisor_session_key");
       if (session && !headers["X-Admin-Supervisor-Session"]) {
         headers["X-Admin-Supervisor-Session"] = session;
       }
