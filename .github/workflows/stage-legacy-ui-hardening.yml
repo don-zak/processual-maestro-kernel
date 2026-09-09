@@ -23,6 +23,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
 
           index = Path('processual_api/static/index.html')
           text = index.read_text(encoding='utf-8')
@@ -34,34 +35,19 @@ jobs:
           client = Path('processual_api/static/js/admin_client_requests.js')
           source = client.read_text(encoding='utf-8')
 
-          old_keys = """  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
-            'pmk_supervisor_session_key',
-            'admin_supervisor_session_key',
-            'supervisor_session_key',
-            'pmk_sup_session_key',
-          ];"""
-          new_keys = """  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
-            'pmk_supervisor_session_key',
-          ];"""
-          assert source.count(old_keys) == 1
-          source = source.replace(old_keys, new_keys)
+          source, count = re.subn(
+              r"  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = \[\n(?:\s+'[^']+',\n)+\s+\];",
+              "  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [\n    'pmk_supervisor_session_key',\n  ];",
+              source,
+              count=1,
+          )
+          assert count == 1, f'canonical supervisor key list match count={count}'
 
-          old_reader = """  function readStorageValue(keys) {
-            for (const key of keys) {
-              try {
-                const localValue = localStorage.getItem(key);
-                if (localValue) return localValue;
-              } catch {}
-
-              try {
-                const sessionValue = sessionStorage.getItem(key);
-                if (sessionValue) return sessionValue;
-              } catch {}
-            }
-
-            return '';
-          }"""
-          new_reader = """  function readStorageValue(keys) {
+          reader_pattern = re.compile(
+              r"  function readStorageValue\(keys\) \{.*?\n  \}\n\n  function getAdminSupervisorSessionKey\(\)",
+              re.S,
+          )
+          reader_replacement = """  function readStorageValue(keys) {
             for (const key of keys) {
               try {
                 const sessionValue = sessionStorage.getItem(key);
@@ -70,57 +56,48 @@ jobs:
             }
 
             return '';
-          }"""
-          assert source.count(old_reader) == 1
-          source = source.replace(old_reader, new_reader)
+          }
 
-          old_headers = """  function authHeaders(extra) {
-            const auth = window.PMK_ADMIN_AUTH;
-            if (auth && typeof auth.headers === 'function') {
-              return { ...auth.headers(), ...(extra || {}) };
-            }
+          function getAdminSupervisorSessionKey()"""
+          source, count = reader_pattern.subn(reader_replacement, source, count=1)
+          assert count == 1, f'storage reader match count={count}'
 
-            const token =
-              localStorage.getItem('access_token') ||
-              localStorage.getItem('auth_token') ||
-              localStorage.getItem('admin_token') ||
-              sessionStorage.getItem('access_token') ||
-              sessionStorage.getItem('auth_token') ||
-              sessionStorage.getItem('admin_token');
-
-            const supervisorSessionKey = getAdminSupervisorSessionKey();
-
-            return {
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              ...(supervisorSessionKey
-                ? { 'X-Supervisor-Session-Key': supervisorSessionKey }
-                : {}),
-              ...(extra || {}),
-            };
-          }"""
-          new_headers = """  function authHeaders(extra) {
+          headers_pattern = re.compile(
+              r"  function authHeaders\(extra\) \{.*?\n  \}\n\n  async function request\(path\)",
+              re.S,
+          )
+          headers_replacement = """  function authHeaders(extra) {
             const auth = window.PMK_ADMIN_AUTH;
             if (auth && typeof auth.headers === 'function') {
               return { ...auth.headers(), ...(extra || {}) };
             }
 
             return { ...(extra || {}) };
-          }"""
-          assert source.count(old_headers) == 1
-          source = source.replace(old_headers, new_headers)
+          }
 
-          old_13a = """      const session =
-                window.localStorage?.getItem(\"pmk_admin_supervisor_session\") ||
-                window.sessionStorage?.getItem(\"pmk_admin_supervisor_session\");"""
-          new_13a = """      const session =
-                window.sessionStorage?.getItem(\"pmk_supervisor_session_key\");"""
-          assert source.count(old_13a) == 1
-          source = source.replace(old_13a, new_13a)
+          async function request(path)"""
+          source, count = headers_pattern.subn(headers_replacement, source, count=1)
+          assert count == 1, f'authHeaders match count={count}'
 
-          source = source.replace("return 'legacy-compatible';", "return 'identity-scoped';")
-          source = source.replace("return 'legacy admin fallback';", "return 'not validated';")
-          source = source.replace("'owner-compatible legacy admin'", "'identity authority pending'")
-          source = source.replace("'backend fallback only'", "'backend authority only'")
+          legacy_13a = re.compile(
+              r"      const session =\n\s+window\.localStorage\?\.getItem\(\"pmk_admin_supervisor_session\"\) \|\|\n\s+window\.sessionStorage\?\.getItem\(\"pmk_admin_supervisor_session\"\);"
+          )
+          source, count = legacy_13a.subn(
+              '      const session =\n        window.sessionStorage?.getItem("pmk_supervisor_session_key");',
+              source,
+              count=1,
+          )
+          assert count == 1, f'13A supervisor storage match count={count}'
+
+          replacements = {
+              "return 'legacy-compatible';": "return 'identity-scoped';",
+              "return 'legacy admin fallback';": "return 'not validated';",
+              "'owner-compatible legacy admin'": "'identity authority pending'",
+              "'backend fallback only'": "'backend authority only'",
+          }
+          for old_text, new_text in replacements.items():
+              assert old_text in source, old_text
+              source = source.replace(old_text, new_text)
 
           forbidden = [
               "localStorage.getItem('access_token')",
