@@ -12,7 +12,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
   const EXTERNAL_CATEGORY = 'external_evaluation';
   const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority';
+  const SESSION_REFRESH_ENDPOINT = '/auth/session/refresh';
+  const CSRF_COOKIE = 'pmk_csrf_token';
   const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500];
+  let refreshInFlight = null;
 
   function externalEvaluationSelected() {
     return document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY;
@@ -23,6 +26,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return window.PMK_ADMIN_AUTH.headers({ Accept: 'application/json' });
     }
     return new Headers({ Accept: 'application/json' });
+  }
+
+  function cookieValue(name) {
+    const prefix = `${encodeURIComponent(name)}=`;
+    return document.cookie
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => part.startsWith(prefix) ? decodeURIComponent(part.slice(prefix.length)) : '')
+      .find(Boolean) || '';
   }
 
   function placeEvaluationWorkspaceInsideCard() {
@@ -165,6 +178,36 @@ document.addEventListener('DOMContentLoaded', () => {
     return response;
   }
 
+  async function refreshIdentitySession() {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
+      const csrf = cookieValue(CSRF_COOKIE);
+      if (!csrf) return false;
+      const response = await fetch(SESSION_REFRESH_ENDPOINT, {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+          'X-CSRF-Token': csrf,
+        },
+      });
+      if (!response.ok) return false;
+      const payload = await response.json().catch(() => ({}));
+      if (payload?.mfa_required === true) return false;
+      const token = String(payload?.access_token || '').trim();
+      if (!token) return false;
+      sessionStorage.setItem('maestro_token', token);
+      sessionStorage.setItem('maestro_ui_session_refreshed_at', new Date().toISOString());
+      return true;
+    })();
+    try {
+      return await refreshInFlight;
+    } finally {
+      refreshInFlight = null;
+    }
+  }
+
   function dispatchAdminSessionVerified(authority) {
     window.dispatchEvent(new CustomEvent('pmk-admin-session-verified', {
       detail: {
@@ -186,7 +229,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const response = await verifyPlatformAdminAuthority();
+      let response = await verifyPlatformAdminAuthority();
+      if (response.status === 401) {
+        document.body.dataset.adminSession = 'refreshing';
+        setEvaluationAccessStatus('Administrator access token expired. Refreshing the same MFA-backed Identity session…');
+        const refreshed = await refreshIdentitySession();
+        if (refreshed) response = await verifyPlatformAdminAuthority();
+      }
       if (response.status === 401 || response.status === 403) {
         markSessionExpired(response.status);
         return false;
@@ -225,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     check: checkAdminSession,
     syncEvaluationSelectionState,
     authorityEndpoint: AUTHORITY_ENDPOINT,
+    refreshEndpoint: SESSION_REFRESH_ENDPOINT,
   };
 
   window.addEventListener('pmk-api-key-category-changed', async () => {
