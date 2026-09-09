@@ -1,18 +1,25 @@
 from pathlib import Path
+import re
 
 from processual_api.auth.account_recovery_router import router
 
 
 STATIC = Path("processual_api/static")
+ARABIC = re.compile(r"[\u0600-\u06ff]")
 
 
 def test_login_is_english_only_and_lost_access_enters_real_recovery_flow() -> None:
     html = (STATIC / "login.html").read_text(encoding="utf-8")
+    login_js = (STATIC / "js" / "login_token_capture.js").read_text(encoding="utf-8")
 
     assert '<html lang="en" dir="ltr">' in html
     assert "lang-bar" not in html
     assert "data-ar" not in html
     assert 'data-lang="ar"' not in html
+    assert "lang-ar" not in login_js
+    assert "currentLanguage" not in login_js
+    assert ARABIC.search(html) is None
+    assert ARABIC.search(login_js) is None
     assert "login-password-visibility" in html
     assert 'href="/console/account-recovery.html"' in html
     assert "Lost Access?" in html
@@ -34,13 +41,6 @@ def test_recovery_page_uses_hardened_three_step_contract_without_browser_storage
 
 
 def test_email_recovery_link_has_a_get_browser_handoff_alongside_post_verification() -> None:
-    methods_by_path = {
-        route.path: route.methods
-        for route in router.routes
-        if getattr(route, "methods", None)
-    }
-
-    # FastAPI stores GET and POST as separate routes at the same path.
     matching = [
         route.methods
         for route in router.routes
