@@ -23,9 +23,8 @@ def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle_without
         "if (!lifecycleCard) return null",
         "const lifecycleForm = lifecycleCard.querySelector('.admin-grid')",
         "lifecycleCard.insertBefore(card, lifecycleForm)",
-        "External Evaluation Lifecycle",
-        "This lifecycle is selected only from API Key Category.",
-        "Administrator Verification",
+        "External Evaluation Authority",
+        "PostgreSQL-backed Evaluation authority is authoritative",
     ]
     for marker in required:
         assert marker in source
@@ -67,22 +66,29 @@ def test_external_evaluation_moves_provisioning_workspace_inside_selected_lifecy
         "const body = document.getElementById(EVALUATION_BODY_ID)",
         "const host = document.getElementById(EVALUATION_HOST_ID)",
         "const workspace = document.getElementById(PROVISIONING_WORKSPACE_ID)",
-        "if (workspace.parentElement === body) return",
-        "body.insertBefore(workspace, host || body.firstChild)",
+        "if (!body || !workspace) return",
+        "if (workspace.parentElement !== body) body.insertBefore(workspace, host || body.firstChild)",
     ]
     for marker in required:
         assert marker in source
 
 
-def test_local_development_credential_is_scoped_to_external_evaluation_selection() -> None:
+def test_admin_session_requires_identity_and_platform_admin_authority() -> None:
     source = _source(SESSION)
 
-    assert "Local development credential" in source
-    assert "sessionStorage.setItem('api_key', value)" in source
-    assert "Verify & Load Controls" in source
-    assert "if (!externalEvaluationSelected()) return" in source
-    assert "renderDevelopmentAuthBootstrap();" in source
-    assert "localStorage.setItem('api_key'" not in source
+    required = [
+        "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'",
+        "const token = window.PMK_ADMIN_AUTH?.bearer?.() || ''",
+        "Active administrator Identity session required",
+        "authority?.authorized !== true",
+        "authority?.authority !== 'platform_admin'",
+        "Authenticated identity does not hold active Platform Administrator authority.",
+    ]
+    for marker in required:
+        assert marker in source
+
+    assert "isAdminSession" not in source
+    assert "canManageEvaluationGrants" not in source
 
 
 def test_evaluation_lifecycle_keeps_grant_host_inside_external_evaluation_card() -> None:
@@ -202,31 +208,44 @@ def test_evaluation_key_lifecycle_never_persists_or_rehydrates_raw_secret() -> N
     assert "raw secret visible: no" in source
 
 
-def test_session_loads_provisioning_and_issue_controls_only_after_verified_admin_authority() -> None:
+def test_session_loads_evaluation_controls_only_after_verified_platform_admin_authority() -> None:
     source = _source(SESSION)
 
     required = [
         "API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR",
-        "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation03-final-summary",
-        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace03-lifecycle-final",
-        "admin_evaluation_grants.js?v=adminevaltasks06-lifecycle-final",
-        "function loadApiKeyEvaluationLifecycle()",
-        "script.dataset.adminApiKeyEvaluationLifecycle = 'true'",
+        "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation-authority-v2",
+        "admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace-authority-v2",
+        "admin_evaluation_grants.js?v=admineval-authority-v2",
+        "function loadProtectedEvaluationControls()",
         "document.body.dataset.adminSession = 'ok'",
-        "if (canManageEvaluationGrants(me))",
-        "loadApiKeyProvisioningWorkspace();",
-        "loadEvaluationGrantControls();",
-        "loadApiKeyEvaluationLifecycle();",
+        "document.body.dataset.adminEvaluationGrants = 'authorized'",
+        "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'",
+        "authority?.authorized !== true",
+        "authority?.authority !== 'platform_admin'",
     ]
     for marker in required:
         assert marker in source
 
     assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
-        "loadApiKeyProvisioningWorkspace();"
+        "loadProtectedEvaluationControls();"
     )
-    assert source.index("if (canManageEvaluationGrants(me))") < source.index(
-        "loadEvaluationGrantControls();"
-    )
+    assert "canManageEvaluationGrants" not in source
+    assert "EVALUATION_ADMIN_ROLES" not in source
+
+
+def test_session_refresh_preserves_mfa_and_csrf_fail_closed_boundary() -> None:
+    source = _source(SESSION)
+
+    for marker in (
+        "const SESSION_REFRESH_ENDPOINT = '/auth/session/refresh'",
+        "const CSRF_COOKIE = 'pmk_csrf_token'",
+        "if (refreshInFlight) return refreshInFlight",
+        "'X-CSRF-Token': csrf",
+        "if (payload?.mfa_required === true) return false",
+        "sessionStorage.setItem('maestro_token', token)",
+        "markSessionExpired(response.status)",
+    ):
+        assert marker in source
 
 
 def test_evaluation_key_issue_result_is_complete_and_copyable_once() -> None:

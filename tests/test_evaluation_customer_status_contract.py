@@ -54,16 +54,17 @@ def test_task_execute_returns_quota_and_exact_execution_status() -> None:
     assert "claim_evaluation_execution" in task_execute
 
 
-def test_customer_portal_uses_memory_only_api_key_and_customer_runtime_endpoints() -> None:
+def test_customer_portal_uses_memory_only_api_key_and_runtime_endpoints() -> None:
     html = source(PORTAL)
     js = source(PORTAL_JS)
 
-    assert "Maestro External Evaluation" in html
-    assert "evaluation_client_portal.js" in html
-    assert "Executions used" in html
-    assert "Remaining" in html
+    assert "Processual Maestro — External Evaluation" in html
+    assert "External Evaluation Workspace" in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v2" in html
+    assert "Admitted executions" in html
+    assert "Remaining quota" in html
     assert "Latest execution" in html
-    assert "Evidence" in html
+    assert "Persisted evidence" in html
     assert "/evaluation/runtime/status" in js
     assert "/evaluation/runtime/task-execute" in js
     assert "X-API-Key" in js
