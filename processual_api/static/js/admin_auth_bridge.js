@@ -3,6 +3,48 @@
   const SUPERVISOR_SESSION_KEY = 'pmk_supervisor_session_key';
   const LOCAL_DEV_API_KEY = 'api_key';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+  const LEGACY_AUTH_KEYS = [
+    'access_token',
+    'auth_token',
+    'admin_token',
+    'admin_access_token',
+    'maestro_auth_token',
+    'processual_auth_token',
+    'processual_session',
+    'admin_session',
+    'pmk_token',
+    'pmkToken',
+    'pmk_auth_token',
+    'pmkAuthToken',
+    'maestroToken',
+    'processualToken',
+  ];
+  const LEGACY_SUPERVISOR_KEYS = [
+    'admin_supervisor_session_key',
+    'supervisor_session_key',
+    'pmk_sup_session_key',
+    'pmk_admin_supervisor_session',
+  ];
+
+  function removeStorageKey(storage, key) {
+    try {
+      storage.removeItem(key);
+    } catch (error) {}
+  }
+
+  function purgeLegacyCredentialStorage() {
+    LEGACY_AUTH_KEYS.forEach((key) => {
+      removeStorageKey(localStorage, key);
+      removeStorageKey(sessionStorage, key);
+    });
+    LEGACY_SUPERVISOR_KEYS.forEach((key) => {
+      removeStorageKey(localStorage, key);
+      removeStorageKey(sessionStorage, key);
+    });
+    removeStorageKey(localStorage, IDENTITY_TOKEN_KEY);
+    removeStorageKey(localStorage, 'maestro_role');
+    removeStorageKey(localStorage, SUPERVISOR_SESSION_KEY);
+  }
 
   function sessionValue(key) {
     try {
@@ -55,6 +97,7 @@
       sessionStorage.removeItem(IDENTITY_TOKEN_KEY);
       sessionStorage.removeItem('maestro_role');
       sessionStorage.removeItem('maestro_ui_session_started_at');
+      sessionStorage.removeItem('maestro_ui_session_refreshed_at');
     } catch (error) {}
   }
 
@@ -66,6 +109,7 @@
       supervisorSessionKeyFound: Boolean(supervisorSessionKey()),
       localDevelopmentApiKeyFound: Boolean(apiKey()),
       legacyStorageScanEnabled: false,
+      legacyCredentialStoragePurged: true,
       localStorageUsedForAuth: false,
     };
   }
@@ -111,6 +155,8 @@
     window.PMK_ADMIN_AUTH_FETCH_BRIDGED = true;
   }
 
+  purgeLegacyCredentialStorage();
+
   window.PMK_ADMIN_AUTH = {
     mode: 'identity_session_v2',
     bearer,
@@ -120,6 +166,7 @@
     headers,
     diagnostic,
     clearIdentitySession,
+    purgeLegacyCredentialStorage,
     installFetchBridge,
   };
 
