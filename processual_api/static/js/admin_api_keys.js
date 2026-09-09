@@ -207,18 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return { ...auth.headers(), ...extra };
     }
 
-    const token =
-      localStorage.getItem('access_token') ||
-      localStorage.getItem('auth_token') ||
-      localStorage.getItem('admin_token') ||
-      sessionStorage.getItem('access_token') ||
-      sessionStorage.getItem('auth_token') ||
-      sessionStorage.getItem('admin_token');
-
-    return {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...extra,
-    };
+    return { ...extra };
   }
 
   async function request(method, path, payload) {
@@ -257,7 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
   }
-
   function scopesText(value) {
     if (Array.isArray(value)) return value.join(', ');
     return String(value || '');
