@@ -3,6 +3,7 @@ from pathlib import Path
 
 ADMIN_AUTH_BRIDGE = Path("processual_api/static/js/admin_auth_bridge.js")
 ADMIN_SESSION = Path("processual_api/static/js/admin_session.js")
+ADMIN_API_KEYS = Path("processual_api/static/js/admin_api_keys.js")
 
 
 def test_admin_auth_bridge_uses_only_canonical_identity_session_token() -> None:
@@ -15,6 +16,18 @@ def test_admin_auth_bridge_uses_only_canonical_identity_session_token() -> None:
     assert "preferredKeys" not in source
     assert "legacyStorageScanEnabled: false" in source
     assert "localStorageUsedForAuth: false" in source
+
+
+def test_admin_api_keys_has_no_legacy_auth_token_fallback() -> None:
+    source = ADMIN_API_KEYS.read_text(encoding="utf-8")
+
+    assert "window.PMK_ADMIN_AUTH" in source
+    assert "localStorage.getItem('access_token')" not in source
+    assert "localStorage.getItem('auth_token')" not in source
+    assert "localStorage.getItem('admin_token')" not in source
+    assert "sessionStorage.getItem('access_token')" not in source
+    assert "sessionStorage.getItem('auth_token')" not in source
+    assert "sessionStorage.getItem('admin_token')" not in source
 
 
 def test_admin_evaluation_authority_is_backend_platform_admin_authority() -> None:
