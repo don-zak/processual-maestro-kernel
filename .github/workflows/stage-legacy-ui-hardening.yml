@@ -1,0 +1,208 @@
+name: Stage source-level legacy UI hardening
+
+on:
+  push:
+    branches:
+      - staging/hardening-legacy-ui-00d683c6
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Apply surgical source cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          index = Path('processual_api/static/index.html')
+          text = index.read_text(encoding='utf-8')
+          old = '<span id="demo-badge">Demo Mode</span>'
+          new = '<span id="demo-badge">Readiness pending</span>'
+          assert text.count(old) == 1, f'unexpected Demo Mode marker count: {text.count(old)}'
+          index.write_text(text.replace(old, new), encoding='utf-8')
+
+          client = Path('processual_api/static/js/admin_client_requests.js')
+          source = client.read_text(encoding='utf-8')
+
+          old_keys = """  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
+            'pmk_supervisor_session_key',
+            'admin_supervisor_session_key',
+            'supervisor_session_key',
+            'pmk_sup_session_key',
+          ];"""
+          new_keys = """  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
+            'pmk_supervisor_session_key',
+          ];"""
+          assert source.count(old_keys) == 1
+          source = source.replace(old_keys, new_keys)
+
+          old_reader = """  function readStorageValue(keys) {
+            for (const key of keys) {
+              try {
+                const localValue = localStorage.getItem(key);
+                if (localValue) return localValue;
+              } catch {}
+
+              try {
+                const sessionValue = sessionStorage.getItem(key);
+                if (sessionValue) return sessionValue;
+              } catch {}
+            }
+
+            return '';
+          }"""
+          new_reader = """  function readStorageValue(keys) {
+            for (const key of keys) {
+              try {
+                const sessionValue = sessionStorage.getItem(key);
+                if (sessionValue) return sessionValue;
+              } catch {}
+            }
+
+            return '';
+          }"""
+          assert source.count(old_reader) == 1
+          source = source.replace(old_reader, new_reader)
+
+          old_headers = """  function authHeaders(extra) {
+            const auth = window.PMK_ADMIN_AUTH;
+            if (auth && typeof auth.headers === 'function') {
+              return { ...auth.headers(), ...(extra || {}) };
+            }
+
+            const token =
+              localStorage.getItem('access_token') ||
+              localStorage.getItem('auth_token') ||
+              localStorage.getItem('admin_token') ||
+              sessionStorage.getItem('access_token') ||
+              sessionStorage.getItem('auth_token') ||
+              sessionStorage.getItem('admin_token');
+
+            const supervisorSessionKey = getAdminSupervisorSessionKey();
+
+            return {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              ...(supervisorSessionKey
+                ? { 'X-Supervisor-Session-Key': supervisorSessionKey }
+                : {}),
+              ...(extra || {}),
+            };
+          }"""
+          new_headers = """  function authHeaders(extra) {
+            const auth = window.PMK_ADMIN_AUTH;
+            if (auth && typeof auth.headers === 'function') {
+              return { ...auth.headers(), ...(extra || {}) };
+            }
+
+            return { ...(extra || {}) };
+          }"""
+          assert source.count(old_headers) == 1
+          source = source.replace(old_headers, new_headers)
+
+          old_13a = """      const session =
+                window.localStorage?.getItem(\"pmk_admin_supervisor_session\") ||
+                window.sessionStorage?.getItem(\"pmk_admin_supervisor_session\");"""
+          new_13a = """      const session =
+                window.sessionStorage?.getItem(\"pmk_supervisor_session_key\");"""
+          assert source.count(old_13a) == 1
+          source = source.replace(old_13a, new_13a)
+
+          source = source.replace("return 'legacy-compatible';", "return 'identity-scoped';")
+          source = source.replace("return 'legacy admin fallback';", "return 'not validated';")
+          source = source.replace("'owner-compatible legacy admin'", "'identity authority pending'")
+          source = source.replace("'backend fallback only'", "'backend authority only'")
+
+          forbidden = [
+              "localStorage.getItem('access_token')",
+              "localStorage.getItem('auth_token')",
+              "localStorage.getItem('admin_token')",
+              "sessionStorage.getItem('access_token')",
+              "sessionStorage.getItem('auth_token')",
+              "sessionStorage.getItem('admin_token')",
+              'window.localStorage?.getItem("pmk_admin_supervisor_session")',
+              'window.sessionStorage?.getItem("pmk_admin_supervisor_session")',
+              "'admin_supervisor_session_key'",
+              "'supervisor_session_key'",
+              "'pmk_sup_session_key'",
+          ]
+          for marker in forbidden:
+              assert marker not in source, marker
+
+          client.write_text(source, encoding='utf-8')
+          PY
+
+          cat > tests/test_admin_source_legacy_cleanup.py <<'PY'
+          from pathlib import Path
+
+          INDEX = Path("processual_api/static/index.html")
+          CLIENT_REQUESTS = Path("processual_api/static/js/admin_client_requests.js")
+
+
+          def test_client_console_source_has_no_demo_mode_literal() -> None:
+              source = INDEX.read_text(encoding="utf-8")
+              assert '<span id="demo-badge">Readiness pending</span>' in source
+              assert '<span id="demo-badge">Demo Mode</span>' not in source
+
+
+          def test_admin_client_requests_no_longer_reads_legacy_bearer_storage() -> None:
+              source = CLIENT_REQUESTS.read_text(encoding="utf-8")
+              for marker in (
+                  "localStorage.getItem('access_token')",
+                  "localStorage.getItem('auth_token')",
+                  "localStorage.getItem('admin_token')",
+                  "sessionStorage.getItem('access_token')",
+                  "sessionStorage.getItem('auth_token')",
+                  "sessionStorage.getItem('admin_token')",
+              ):
+                  assert marker not in source
+              assert "function authHeaders(extra)" in source
+              assert "window.PMK_ADMIN_AUTH" in source
+              assert "return { ...(extra || {}) };" in source
+
+
+          def test_admin_client_requests_uses_only_canonical_supervisor_storage_key() -> None:
+              source = CLIENT_REQUESTS.read_text(encoding="utf-8")
+              assert "'pmk_supervisor_session_key'" in source
+              assert "'admin_supervisor_session_key'" not in source
+              assert "'supervisor_session_key'" not in source
+              assert "'pmk_sup_session_key'" not in source
+              assert 'window.localStorage?.getItem("pmk_admin_supervisor_session")' not in source
+              assert 'window.sessionStorage?.getItem("pmk_admin_supervisor_session")' not in source
+              assert 'window.sessionStorage?.getItem("pmk_supervisor_session_key")' in source
+          PY
+
+          rm -f .github/workflows/stage-legacy-ui-hardening.yml
+
+      - name: Verify isolated diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          printf '%s\n' \
+            processual_api/static/index.html \
+            processual_api/static/js/admin_client_requests.js \
+            tests/test_admin_source_legacy_cleanup.py \
+            .github/workflows/stage-legacy-ui-hardening.yml > /tmp/allowed
+          while IFS= read -r changed; do
+            grep -Fxq "$changed" /tmp/allowed || { echo "Unexpected change: $changed"; exit 1; }
+          done < <(git status --short | sed 's/^...//')
+
+      - name: Commit hardened staging tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "processual-maestro-hardening"
+          git config user.email "hardening@users.noreply.github.com"
+          git add -A
+          git commit -m "hardening(ui): remove source-level legacy auth and demo markers"
+          git push origin HEAD:staging/hardening-legacy-ui-00d683c6
