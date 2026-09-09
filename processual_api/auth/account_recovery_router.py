@@ -102,6 +102,10 @@ async def get_account_recovery_runtime() -> AccountRecoveryRuntime:
     try:
         return await build_account_recovery_runtime()
     except AccountRecoveryRuntimeUnavailableError as exc:
+        logger.error(
+            "identity_account_recovery_runtime_unavailable reason=%s",
+            str(exc),
+        )
         raise HTTPException(
             status_code=503,
             detail=GENERIC_UNAVAILABLE,
