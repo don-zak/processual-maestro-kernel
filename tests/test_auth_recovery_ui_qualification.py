@@ -21,11 +21,16 @@ def test_login_is_english_only_and_lost_access_enters_real_recovery_flow() -> No
     assert ARABIC.search(html) is None
     assert ARABIC.search(login_js) is None
     assert "login-password-visibility" in html
+    assert "aria-pressed" in html
+    assert "aria-selected" in html
+    assert "aria-live=\"assertive\"" in html
+    assert "prefers-reduced-motion" in html
     assert "fetch('/auth/token'" in html
     assert "role: currentRole" in html
     assert 'href="/console/account-recovery.html"' in html
     assert "Lost Access?" in html
     assert "Contact your administrator or support contact" not in html
+    assert "overflow:hidden" not in html
 
 
 def test_recovery_page_uses_hardened_three_step_contract_without_browser_storage() -> None:
@@ -34,12 +39,21 @@ def test_recovery_page_uses_hardened_three_step_contract_without_browser_storage
     assert "fetch('/auth/account-recovery/start'" in html
     assert "fetch('/auth/account-recovery/verify'" in html
     assert "fetch('/auth/account-recovery/complete'" in html
-    assert "history.replaceState(null, '', window.location.pathname)" in html
+    assert "history.replaceState(null,'',window.location.pathname)" in html
     assert "localStorage" not in html
     assert "sessionStorage" not in html
     assert 'autocomplete="new-password"' in html
     assert "MFA re-enrollment is required" in html
-    assert "Recovery does not create a session or grant authority" in html
+    assert "does not sign you in or grant new authority" in html
+    assert "1. Request" in html
+    assert "2. Verify" in html
+    assert "3. Reset" in html
+    assert "overflow-y:auto" in html
+    assert "aria-live=\"polite\"" in html
+    assert "aria-live=\"assertive\"" in html
+    assert "prefers-reduced-motion" in html
+    assert "fragment.get('token')||query.get('token')" in html
+    assert "fragment.get('request_id')||query.get('request_id')" in html
 
 
 def test_email_recovery_link_has_a_get_browser_handoff_alongside_post_verification() -> None:
