@@ -21,6 +21,8 @@ def test_login_is_english_only_and_lost_access_enters_real_recovery_flow() -> No
     assert ARABIC.search(html) is None
     assert ARABIC.search(login_js) is None
     assert "login-password-visibility" in html
+    assert "fetch('/auth/token'" in html
+    assert "role: currentRole" in html
     assert 'href="/console/account-recovery.html"' in html
     assert "Lost Access?" in html
     assert "Contact your administrator or support contact" not in html
