@@ -23,15 +23,19 @@ def test_admin_home_exposes_supervisor_session_summary_panel() -> None:
     assert "Backend enforcement remains authoritative" in html
 
 
-def test_admin_client_request_fetches_send_supervisor_session_header() -> None:
+def test_admin_client_requests_uses_canonical_auth_bridge_without_legacy_header_fallback() -> None:
     script = _client_requests_js()
 
     assert "SUPERVISOR_SESSION_KEY_STORAGE_KEYS" in script
     assert "getAdminSupervisorSessionKey" in script
-    assert "X-Supervisor-Session-Key" in script
     assert "pmk_supervisor_session_key" in script
-    assert "admin_supervisor_session_key" in script
     assert "authHeaders" in script
+    assert "window.PMK_ADMIN_AUTH" in script
+    assert "return { ...(extra || {}) };" in script
+    assert "X-Supervisor-Session-Key" not in script
+    assert "admin_supervisor_session_key" not in script
+    assert "localStorage.getItem('access_token')" not in script
+    assert "sessionStorage.getItem('access_token')" not in script
 
 
 def test_admin_client_request_ui_defines_supervisor_scope_model() -> None:
