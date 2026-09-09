@@ -3,74 +3,118 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Maestro External Evaluation</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Processual Maestro — External Evaluation</title>
   <style>
-    :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-    body { margin:0; background:#0b1020; color:#eef2ff; }
-    main { max-width:1000px; margin:0 auto; padding:32px 20px 64px; }
-    h1 { margin:0 0 6px; font-size:28px; }
-    .muted { color:#aab4d0; }
-    .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); margin-top:22px; }
-    .card { background:#141b31; border:1px solid #28324f; border-radius:14px; padding:18px; }
-    .label { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#aab4d0; }
-    .value { font-size:24px; font-weight:700; margin-top:6px; }
-    .ok { color:#78e6ae; } .warn { color:#ffd479; } .bad { color:#ff8f9b; }
-    label { display:block; font-size:13px; margin:12px 0 5px; color:#c8d0e8; }
-    input, textarea { width:100%; box-sizing:border-box; padding:11px 12px; border-radius:9px; border:1px solid #35415f; background:#0c1327; color:#eef2ff; }
-    textarea { min-height:120px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
-    button { margin-top:12px; padding:10px 14px; border:0; border-radius:9px; background:#6675ff; color:white; font-weight:700; cursor:pointer; }
-    button.secondary { background:#303a59; } button:disabled { opacity:.55; cursor:not-allowed; }
-    .progress { height:12px; background:#28324f; border-radius:999px; overflow:hidden; margin-top:12px; }
-    .progress > div { height:100%; width:0; background:#6675ff; transition:width .2s ease; }
-    pre { overflow:auto; white-space:pre-wrap; word-break:break-word; background:#0c1327; padding:12px; border-radius:9px; border:1px solid #28324f; }
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg:#08101e; --panel:#101a2d; --panel2:#0c1526; --line:#263553;
+      --text:#edf3ff; --muted:#9facc8; --accent:#7f8cff; --ok:#71dfaa;
+      --warn:#ffd06e; --bad:#ff8996;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:linear-gradient(180deg,#08101e 0%,#0a1222 100%); color:var(--text); }
+    main { max-width:1120px; margin:0 auto; padding:34px 20px 72px; }
+    header { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+    h1 { margin:0; font-size:30px; letter-spacing:-.02em; }
+    h2 { margin:0 0 8px; font-size:19px; }
+    .eyebrow { font-size:12px; letter-spacing:.11em; text-transform:uppercase; color:var(--accent); font-weight:800; }
+    .muted { color:var(--muted); }
+    .status-pill { border:1px solid var(--line); border-radius:999px; padding:7px 11px; color:var(--muted); background:var(--panel2); font-size:12px; }
+    .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); margin-top:16px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:0 14px 40px rgba(0,0,0,.14); }
+    .card.inset { background:var(--panel2); }
+    .label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+    .value { font-size:23px; font-weight:750; margin-top:6px; overflow-wrap:anywhere; }
+    .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+    label { display:block; font-size:13px; margin:13px 0 6px; color:#cad4ea; }
+    input, textarea { width:100%; padding:11px 12px; border-radius:9px; border:1px solid #354769; background:#091426; color:var(--text); }
+    textarea { min-height:124px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    button { margin-top:12px; padding:10px 14px; border:1px solid transparent; border-radius:9px; background:var(--accent); color:white; font-weight:760; cursor:pointer; }
+    button.secondary { background:#273653; border-color:#354769; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
     .row { display:flex; gap:10px; flex-wrap:wrap; }
-    .row button { flex:0 0 auto; }
-    .notice { margin-top:16px; padding:12px 14px; border-radius:10px; background:#1b2541; color:#cdd5ee; }
+    .notice { margin-top:14px; padding:12px 14px; border-radius:10px; background:#182641; color:#d0daf0; border:1px solid #2a3b60; }
+    .progress { height:11px; background:#25324d; border-radius:999px; overflow:hidden; margin-top:12px; }
+    .progress > div { height:100%; width:0; background:var(--accent); transition:width .2s ease; }
+    pre { overflow:auto; white-space:pre-wrap; word-break:break-word; background:#081223; padding:13px; border-radius:9px; border:1px solid var(--line); min-height:54px; }
+    .contract { margin-top:22px; display:grid; gap:10px; }
+    .contract div { display:flex; gap:10px; align-items:flex-start; color:var(--muted); font-size:13px; }
+    .contract strong { color:var(--text); min-width:155px; }
+    @media (max-width:620px) { .contract div { display:block; } .contract strong { display:block; margin-bottom:2px; } }
   </style>
 </head>
 <body>
 <main>
-  <h1>External Evaluation</h1>
-  <div class="muted">Customer-safe sandbox portal. Your API key is kept in page memory only and is never stored by this page.</div>
+  <header>
+    <div>
+      <div class="eyebrow">Processual Maestro Kernel</div>
+      <h1>External Evaluation Workspace</h1>
+      <div class="muted" style="margin-top:7px;max-width:760px">
+        Governed sandbox access for an issued Evaluation API key. Authority, quota admission, execution status,
+        and evidence remain backend-authoritative.
+      </div>
+    </div>
+    <div class="status-pill">Production execution: disabled</div>
+  </header>
 
   <section class="card" style="margin-top:22px">
+    <h2>Connect evaluation credential</h2>
+    <div class="muted">The raw API key stays in this page's memory only. This page does not persist it in browser storage.</div>
     <label for="api-key">Evaluation API key</label>
-    <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="pmk_…" />
+    <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the one-time issued pmk_… key" />
     <div class="row">
-      <button id="connect">Connect / Refresh</button>
+      <button id="connect" type="button">Connect / Refresh</button>
       <button id="disconnect" class="secondary" type="button">Forget key</button>
     </div>
-    <div id="message" class="notice">Enter the Evaluation API key issued by Maestro.</div>
+    <div id="message" class="notice">Enter the Evaluation API key issued by the Platform Administrator.</div>
   </section>
 
   <section class="grid">
-    <div class="card"><div class="label">Credential</div><div id="credential" class="value">—</div></div>
+    <div class="card"><div class="label">Credential status</div><div id="credential" class="value">—</div></div>
     <div class="card"><div class="label">Evaluation type</div><div id="type" class="value">—</div></div>
-    <div class="card"><div class="label">Executions used</div><div id="quota-used" class="value">—</div></div>
-    <div class="card"><div class="label">Remaining</div><div id="quota-remaining" class="value">—</div></div>
+    <div class="card"><div class="label">Admitted executions</div><div id="quota-used" class="value">—</div></div>
+    <div class="card"><div class="label">Remaining quota</div><div id="quota-remaining" class="value">—</div></div>
   </section>
 
-  <section class="card" style="margin-top:16px">
-    <div class="label">Evaluation quota</div>
+  <section class="card" style="margin-top:14px">
+    <div class="label">Authoritative Evaluation quota</div>
     <div class="progress"><div id="quota-bar"></div></div>
-    <div id="quota-caption" class="muted" style="margin-top:8px">Status checks and idempotent replays do not consume quota.</div>
+    <div id="quota-caption" class="muted" style="margin-top:8px">Status reads and idempotent replays consume zero admitted-execution units.</div>
   </section>
 
   <section class="grid">
     <div class="card"><div class="label">Latest execution</div><div id="execution-state" class="value">—</div><div id="execution-meta" class="muted"></div></div>
-    <div class="card"><div class="label">Evidence</div><div id="evidence-state" class="value">—</div><div id="evidence-meta" class="muted"></div></div>
+    <div class="card"><div class="label">Persisted evidence</div><div id="evidence-state" class="value">—</div><div id="evidence-meta" class="muted"></div></div>
   </section>
 
-  <section class="card" style="margin-top:16px">
-    <h2 style="margin-top:0">Execute a sandbox task</h2>
-    <label for="task-id">Task ID</label><input id="task-id" placeholder="crm.customer_context" />
-    <label for="binding-id">Binding ID</label><input id="binding-id" placeholder="evaluation.crm.integration" />
-    <label for="idempotency-key">Idempotency key</label><input id="idempotency-key" autocomplete="off" />
-    <label for="task-input">Task input (JSON)</label><textarea id="task-input">{"customer_id":"demo-customer-001"}</textarea>
-    <button id="execute" disabled>Execute</button>
-    <pre id="result">No execution yet.</pre>
+  <section class="card" style="margin-top:14px">
+    <h2>Execute an authorized sandbox task</h2>
+    <div class="muted">Only tasks and bindings sealed into this Evaluation grant are admissible. The server rejects anything outside the grant envelope.</div>
+    <label for="task-id">Canonical task ID</label>
+    <input id="task-id" autocomplete="off" placeholder="Enter the task ID included in your grant" />
+    <label for="binding-id">Prepared binding ID</label>
+    <input id="binding-id" autocomplete="off" placeholder="Enter the prepared sandbox binding included in your grant" />
+    <label for="idempotency-key">Idempotency key</label>
+    <input id="idempotency-key" autocomplete="off" />
+    <label for="task-input">Task input (JSON)</label>
+    <textarea id="task-input" spellcheck="false">{}</textarea>
+    <button id="execute" type="button" disabled>Execute admitted sandbox task</button>
+    <pre id="result">No execution submitted.</pre>
+  </section>
+
+  <section class="card inset" style="margin-top:14px">
+    <h2>Evaluation contract</h2>
+    <div class="contract">
+      <div><strong>Authority</strong><span>Evaluation grant and key authority is server-side and PostgreSQL-backed.</span></div>
+      <div><strong>Quota</strong><span>Only admitted executions consume quota; status reads and idempotent replays do not.</span></div>
+      <div><strong>Secrets</strong><span>Raw Evaluation keys are shown once at issue and are never included in evidence.</span></div>
+      <div><strong>Evidence</strong><span>Execution state and safe evidence are independent from client-supplied claims.</span></div>
+      <div><strong>Production</strong><span>External Evaluation remains sandbox-only and cannot authorize production execution.</span></div>
+    </div>
   </section>
 </main>
-<script src="/console/js/evaluation_client_portal.js?v=eval-client-status-01"></script>
+<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v2"></script>
 </body>
 </html>
