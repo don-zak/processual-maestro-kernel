@@ -79,7 +79,7 @@
     if (method !== 'POST') return false;
     try {
       const target = new URL(url, window.location.href);
-      return target.pathname.includes('/auth/login') || target.pathname.includes('/auth/session/refresh') || target.pathname.endsWith('/login') || target.pathname.includes('/token');
+      return target.pathname === '/auth/token';
     } catch (error) { return false; }
   }
 
