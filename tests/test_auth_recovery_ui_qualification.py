@@ -6,6 +6,7 @@ from processual_api.auth.account_recovery_router import router
 
 STATIC = Path("processual_api/static")
 ARABIC = re.compile(r"[\u0600-\u06ff]")
+ROOT_OVERFLOW_HIDDEN = re.compile(r"(?:html|body)\s*\{[^}]*overflow\s*:\s*hidden", re.IGNORECASE | re.DOTALL)
 
 
 def test_login_is_english_only_and_lost_access_enters_real_recovery_flow() -> None:
@@ -30,7 +31,7 @@ def test_login_is_english_only_and_lost_access_enters_real_recovery_flow() -> No
     assert 'href="/console/account-recovery.html"' in html
     assert "Lost Access?" in html
     assert "Contact your administrator or support contact" not in html
-    assert "overflow:hidden" not in html
+    assert ROOT_OVERFLOW_HIDDEN.search(html) is None
 
 
 def test_recovery_page_uses_hardened_three_step_contract_without_browser_storage() -> None:
@@ -49,6 +50,7 @@ def test_recovery_page_uses_hardened_three_step_contract_without_browser_storage
     assert "2. Verify" in html
     assert "3. Reset" in html
     assert "overflow-y:auto" in html
+    assert ROOT_OVERFLOW_HIDDEN.search(html) is None
     assert "aria-live=\"polite\"" in html
     assert "aria-live=\"assertive\"" in html
     assert "prefers-reduced-motion" in html
