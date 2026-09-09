@@ -210,8 +210,11 @@ def test_account_recovery_dispatch_uses_recovery_authority_and_template():
 
     assert call["template"] == ("account_recovery_verification")
     assert call["recipient"] == ("recovery@example.com")
-    assert call["verification_url"].startswith("https://accounts.example.test/auth/account-recovery/verify?token=")
-    assert "raw-account-recovery-token" in (call["verification_url"])
+    recovery_url = call["verification_url"]
+    assert recovery_url.startswith("https://accounts.example.test/auth/account-recovery/verify#token=")
+    assert "?token=" not in recovery_url
+    assert "request_id=" in recovery_url
+    assert "raw-account-recovery-token" in recovery_url
     assert repository.delivered[0]["claim_id"] == (claim.claim_id)
 
 
