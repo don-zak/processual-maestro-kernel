@@ -18,7 +18,7 @@ def test_identity_login_router_exposes_completion_material() -> None:
     assert source.count("csrf_token=issued.csrf_token") >= 2
 
 
-def test_user_login_requires_mfa_completion_before_session_persistence() -> None:
+def test_identity_login_requires_mfa_completion_before_session_persistence() -> None:
     source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
     login_html = Path("processual_api/static/login.html").read_text(encoding="utf-8")
 
@@ -29,9 +29,57 @@ def test_user_login_requires_mfa_completion_before_session_persistence() -> None
     assert "'X-CSRF-Token': pendingCsrfToken" in source
     assert "if (refreshedData.mfa_required === true)" in source
     assert "persistUserSession(token)" in source
+    assert "persistIdentitySession(token, pendingEntryMode)" in source
 
+    # The legacy route remains present for backward compatibility, but the
+    # capture-phase identity handler intercepts the UI submit for both modes.
     assert "fetch('/auth/token'" in login_html
     assert "role: currentRole" in login_html
+    assert "event.stopImmediatePropagation(); identityLogin();" in source
+
+
+def test_platform_admin_login_uses_identity_session_and_mfa_onboarding() -> None:
+    source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
+
+    assert "const currentEntryMode = () => isUserMode() ? 'user' : 'admin';" in source
+    assert "pendingEntryMode = currentEntryMode();" in source
+    assert "fetch('/auth/mfa/status'" in source
+    assert "fetch('/auth/mfa/totp/enroll'" in source
+    assert "fetch('/auth/mfa/totp/confirm'" in source
+    assert "status.enabled === true" in source
+    assert "status.pending_enrollment === true" in source
+    assert "Maestro Platform Admin" in source
+    assert "window.location.href = pendingEntryMode === 'admin' ? '/admin' : '/console';" in source
+
+
+def test_platform_admin_identity_token_is_session_scoped_not_local_admin_token() -> None:
+    source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
+    identity_block = source.split("function persistIdentitySession", 1)[1].split(
+        "function persistUserSession", 1
+    )[0]
+
+    assert "sessionStorage.setItem('maestro_token', token);" in identity_block
+    assert "sessionStorage.setItem('maestro_role', entryMode === 'admin' ? 'admin' : 'user');" in identity_block
+    assert "localStorage.setItem" not in identity_block
+    assert "admin_access_token" not in identity_block
+    assert "admin_token" not in identity_block
+
+
+def test_mfa_enrollment_material_and_recovery_codes_are_not_persisted() -> None:
+    source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
+
+    assert "data.secret" in source
+    assert "data.provisioning_uri" in source
+    assert "codes.join('\\n')" in source
+    assert "secret.value = '';" in source
+    assert "uri.value = '';" in source
+
+    persistence_block = source.split("function persistIdentitySession", 1)[1].split(
+        "function shouldCapture", 1
+    )[0]
+    assert "recovery_codes" not in persistence_block
+    assert "provisioning_uri" not in persistence_block
+    assert "identity-mfa-secret" not in persistence_block
 
 
 def test_identity_session_authority_is_mfa_aware() -> None:
