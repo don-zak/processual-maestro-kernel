@@ -181,13 +181,14 @@ class DeliveryDispatcher:
         profile: DeliveryEventProfile,
         claim: DeliveryClaim,
     ) -> str:
-        query_values = {"token": raw_token}
+        values = {"token": raw_token}
 
         if claim.account_recovery_request_id is not None:
-            query_values["request_id"] = str(claim.account_recovery_request_id)
+            values["request_id"] = str(claim.account_recovery_request_id)
+            fragment = urlencode(values)
+            return f"{self._config.public_base_url}{profile.verification_path}#{fragment}"
 
-        query = urlencode(query_values)
-
+        query = urlencode(values)
         return f"{self._config.public_base_url}{profile.verification_path}?{query}"
 
     @staticmethod
