@@ -26,8 +26,12 @@ def test_login_is_english_only_and_lost_access_enters_real_recovery_flow() -> No
     assert "aria-selected" in html
     assert "aria-live=\"assertive\"" in html
     assert "prefers-reduced-motion" in html
-    assert "fetch('/auth/token'" in html
-    assert "role: currentRole" in html
+    assert "fetch('/auth/token'" not in html
+    assert "role: currentRole" not in html
+    assert "fetch('/auth/login'" in login_js
+    assert "fetch('/auth/mfa/status'" in login_js
+    assert "fetch('/auth/session/refresh'" in login_js
+    assert "persistIdentitySession" in login_js
     assert 'href="/console/account-recovery.html"' in html
     assert "Lost Access?" in html
     assert "Contact your administrator or support contact" not in html
