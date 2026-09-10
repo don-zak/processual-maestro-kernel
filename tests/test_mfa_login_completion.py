@@ -20,22 +20,18 @@ def test_identity_login_router_exposes_completion_material() -> None:
 
 def test_identity_login_requires_mfa_completion_before_session_persistence() -> None:
     source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
-    login_html = Path("processual_api/static/login.html").read_text(encoding="utf-8")
 
-    assert "if (payload?.mfa_required === true) return false" in source
     assert "fetch('/auth/login'" in source
     assert "fetch('/auth/mfa/verify'" in source
     assert "fetch('/auth/session/refresh'" in source
     assert "'X-CSRF-Token': pendingCsrfToken" in source
     assert "if (refreshedData.mfa_required === true)" in source
-    assert "persistUserSession(token)" in source
     assert "persistIdentitySession(token, pendingEntryMode)" in source
+    assert "event.stopImmediatePropagation();" in source
 
-    # The legacy route remains present for backward compatibility, but the
-    # capture-phase identity handler intercepts the UI submit for both modes.
-    assert "fetch('/auth/token'" in login_html
-    assert "role: currentRole" in login_html
-    assert "event.stopImmediatePropagation(); identityLogin();" in source
+    assert "persistAuthPayload" not in source
+    assert "loginTokenCapturingFetch" not in source
+    assert "installFetchCapture" not in source
 
 
 def test_platform_admin_login_uses_identity_session_and_mfa_onboarding() -> None:
@@ -55,7 +51,7 @@ def test_platform_admin_login_uses_identity_session_and_mfa_onboarding() -> None
 def test_platform_admin_identity_token_is_session_scoped_not_local_admin_token() -> None:
     source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
     identity_block = source.split("function persistIdentitySession", 1)[1].split(
-        "function persistUserSession", 1
+        "const isUserMode", 1
     )[0]
 
     assert "sessionStorage.setItem('maestro_token', token);" in identity_block
@@ -65,17 +61,18 @@ def test_platform_admin_identity_token_is_session_scoped_not_local_admin_token()
     assert "admin_token" not in identity_block
 
 
-def test_legacy_capture_is_exactly_scoped_to_auth_token() -> None:
+def test_legacy_fetch_capture_is_fully_neutralized() -> None:
     source = Path("processual_api/static/js/login_token_capture.js").read_text(encoding="utf-8")
-    capture_block = source.split("function shouldCapture", 1)[1].split(
-        "function installFetchCapture", 1
-    )[0]
 
-    assert "target.pathname === '/auth/token'" in capture_block
-    assert "/auth/login" not in capture_block
-    assert "/auth/session/refresh" not in capture_block
-    assert "endsWith('/login')" not in capture_block
-    assert "includes('/token')" not in capture_block
+    for marker in (
+        "function shouldCapture",
+        "function installFetchCapture",
+        "loginTokenCapturingFetch",
+        "PMK_LOGIN_TOKEN_CAPTURE_INSTALLED",
+        "persistAuthPayload",
+        "window.fetch =",
+    ):
+        assert marker not in source
 
 
 def test_mfa_enrollment_material_and_recovery_codes_are_not_persisted() -> None:
@@ -88,7 +85,7 @@ def test_mfa_enrollment_material_and_recovery_codes_are_not_persisted() -> None:
     assert "uri.value = '';" in source
 
     persistence_block = source.split("function persistIdentitySession", 1)[1].split(
-        "function shouldCapture", 1
+        "const isUserMode", 1
     )[0]
     assert "recovery_codes" not in persistence_block
     assert "provisioning_uri" not in persistence_block
