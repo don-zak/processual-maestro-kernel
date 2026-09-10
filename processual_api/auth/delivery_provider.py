@@ -234,6 +234,10 @@ class GmailApiDeliveryProvider:
         verification_url: str,
         idempotency_key: str,
     ) -> str:
+        text = _verification_text(
+            template=template,
+            verification_url=verification_url,
+        )
         message = EmailMessage()
         message["From"] = self._sender_email
         message["To"] = recipient
@@ -242,12 +246,7 @@ class GmailApiDeliveryProvider:
         message["X-Auto-Response-Suppress"] = "All"
         stable_digest = hashlib.sha256(idempotency_key.encode()).hexdigest()
         message["Message-ID"] = f"<{stable_digest}@delivery.processual-maestro.invalid>"
-        message.set_content(
-            _verification_text(
-                template=template,
-                verification_url=verification_url,
-            )
-        )
+        message.set_content(text)
         return base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip("=")
 
     @staticmethod
