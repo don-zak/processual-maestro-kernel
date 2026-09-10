@@ -73,12 +73,15 @@ def test_delivery_worker_passes_provider_specific_authorities_to_runtime():
         "AUTH_GMAIL_CLIENT_SECRET",
         "AUTH_GMAIL_REFRESH_TOKEN",
         "AUTH_GMAIL_SENDER_EMAIL",
+        "AUTH_RESEND_API_KEY",
+        "AUTH_RESEND_SENDER_EMAIL",
     )
     for authority in optional_provider_values:
         assert f"${{{authority}:-}}" in block, authority
 
     assert "AUTH_DELIVERY_PROVIDER_URL=${AUTH_DELIVERY_PROVIDER_URL:?" not in block
     assert "AUTH_GMAIL_REFRESH_TOKEN=${AUTH_GMAIL_REFRESH_TOKEN:?" not in block
+    assert "AUTH_RESEND_API_KEY=${AUTH_RESEND_API_KEY:?" not in block
 
 
 def test_delivery_worker_has_bounded_runtime_controls():
