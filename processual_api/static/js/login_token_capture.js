@@ -1,4 +1,6 @@
 (function () {
+  'use strict';
+
   let pendingMfaToken = '';
   let pendingCsrfToken = '';
   let pendingEntryMode = 'user';
@@ -7,11 +9,9 @@
   function firstTokenFromObject(value) {
     if (!value || typeof value !== 'object') return '';
     return (
-      value.access_token || value.accessToken || value.token || value.auth_token || value.authToken ||
-      value.jwt || value.bearer || value.admin_token || value.adminToken || value.admin_access_token ||
-      value.adminAccessToken || value?.data?.access_token || value?.data?.accessToken || value?.data?.token ||
-      value?.session?.access_token || value?.session?.accessToken || value?.session?.token ||
-      value?.user?.access_token || value?.user?.accessToken || value?.user?.token || ''
+      value.access_token || value.accessToken || value.token ||
+      value?.data?.access_token || value?.data?.accessToken || value?.data?.token ||
+      value?.session?.access_token || value?.session?.accessToken || value?.session?.token || ''
     );
   }
 
@@ -29,37 +29,14 @@
     return '';
   }
 
-  function roleFromPayload(payload) {
-    return payload?.role || payload?.user_role || payload?.account_role || payload?.data?.role || payload?.user?.role || '';
-  }
-
-  function persistAuthPayload(payload) {
-    if (payload?.mfa_required === true) return false;
-    const token = normalizeToken(payload);
-    if (!token) return false;
-    const role = roleFromPayload(payload);
-    const isAdmin = role === 'admin' || role === 'administrator' || window.location.search.includes('mode=admin');
-    const authRecord = { access_token: token, token, role: role || (isAdmin ? 'admin' : 'user'), saved_at: new Date().toISOString(), source: 'login_token_capture' };
-    localStorage.setItem('access_token', token);
-    localStorage.setItem('auth_token', token);
-    localStorage.setItem('maestro_auth_token', token);
-    localStorage.setItem('processual_auth_token', token);
-    localStorage.setItem('processual_session', JSON.stringify(authRecord));
-    if (isAdmin) {
-      localStorage.setItem('admin_access_token', token);
-      localStorage.setItem('admin_token', token);
-      localStorage.setItem('admin_session', JSON.stringify(authRecord));
-    }
-    return true;
-  }
-
   function clearRestrictedTokenCopies() {
     [
-      'access_token','auth_token','maestro_auth_token','processual_auth_token','processual_session',
-      'admin_access_token','admin_token','admin_session','maestro_token','maestro_role'
+      'access_token', 'auth_token', 'maestro_auth_token', 'processual_auth_token',
+      'processual_session', 'admin_access_token', 'admin_token', 'admin_session',
+      'maestro_token', 'maestro_role'
     ].forEach((key) => {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
+      try { localStorage.removeItem(key); } catch (error) {}
+      try { sessionStorage.removeItem(key); } catch (error) {}
     });
   }
 
@@ -68,33 +45,6 @@
     sessionStorage.setItem('maestro_token', token);
     sessionStorage.setItem('maestro_role', entryMode === 'admin' ? 'admin' : 'user');
     sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
-  }
-
-  function persistUserSession(token) {
-    persistIdentitySession(token, 'user');
-  }
-
-  function shouldCapture(url, init) {
-    const method = String(init?.method || 'GET').toUpperCase();
-    if (method !== 'POST') return false;
-    try {
-      const target = new URL(url, window.location.href);
-      return target.pathname === '/auth/token';
-    } catch (error) { return false; }
-  }
-
-  function installFetchCapture() {
-    if (window.PMK_LOGIN_TOKEN_CAPTURE_INSTALLED) return;
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async function loginTokenCapturingFetch(input, init) {
-      const url = typeof input === 'string' ? input : input?.url || '';
-      const response = await originalFetch(input, init);
-      if (shouldCapture(url, init)) {
-        try { persistAuthPayload(await response.clone().json()); } catch (error) {}
-      }
-      return response;
-    };
-    window.PMK_LOGIN_TOKEN_CAPTURE_INSTALLED = true;
   }
 
   const isUserMode = () => document.getElementById('tab-user')?.classList.contains('active') === true;
@@ -109,7 +59,10 @@
 
   function clearError() {
     const error = document.getElementById('login-error');
-    if (error) { error.textContent = ''; error.style.display = 'none'; }
+    if (error) {
+      error.textContent = '';
+      error.style.display = 'none';
+    }
   }
 
   function authorizationHeaders(extra) {
@@ -153,9 +106,14 @@
       recoveryMode = !recoveryMode;
       syncMfaChallengeCopy();
       const input = document.getElementById('identity-mfa-code');
-      if (input) { input.value = ''; input.focus(); }
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
     });
-    document.getElementById('identity-mfa-code')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') verifyMfaChallenge(); });
+    document.getElementById('identity-mfa-code')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') verifyMfaChallenge();
+    });
     syncMfaChallengeCopy();
   }
 
@@ -169,7 +127,9 @@
     panel.innerHTML = '<div class="inp-group"><label class="inp-label">Set up authenticator</label><div class="inp-hint">Add the account to your authenticator using the provisioning URI or secret below. These values are shown only for setup and are not stored by this page.</div></div><div class="inp-group"><label class="inp-label" for="identity-mfa-provisioning-uri">Provisioning URI</label><textarea id="identity-mfa-provisioning-uri" class="inp" rows="3" readonly spellcheck="false"></textarea></div><div class="inp-group"><label class="inp-label" for="identity-mfa-secret">Secret</label><input id="identity-mfa-secret" class="inp" type="text" readonly autocomplete="off" spellcheck="false"></div><div class="inp-group"><label class="inp-label" for="identity-mfa-enrollment-code">Authenticator code</label><input id="identity-mfa-enrollment-code" class="inp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"><div class="inp-hint">Enter a current code to confirm enrollment.</div></div><button id="identity-mfa-enrollment-confirm" class="btn primary" type="button">Confirm MFA</button>';
     loginButton.insertAdjacentElement('beforebegin', panel);
     document.getElementById('identity-mfa-enrollment-confirm')?.addEventListener('click', confirmMfaEnrollment);
-    document.getElementById('identity-mfa-enrollment-code')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') confirmMfaEnrollment(); });
+    document.getElementById('identity-mfa-enrollment-code')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') confirmMfaEnrollment();
+    });
   }
 
   function buildRecoveryCodesPanel() {
@@ -195,7 +155,7 @@
 
   function showOnlyMfaPanel(panelId) {
     hideBaseLoginForMfa();
-    ['identity-mfa-challenge','identity-mfa-enrollment','identity-mfa-recovery-codes'].forEach((id) => {
+    ['identity-mfa-challenge', 'identity-mfa-enrollment', 'identity-mfa-recovery-codes'].forEach((id) => {
       const panel = document.getElementById(id);
       if (panel) panel.hidden = id !== panelId;
     });
@@ -215,7 +175,7 @@
     pendingCsrfToken = '';
     pendingEntryMode = currentEntryMode();
     recoveryMode = false;
-    ['identity-mfa-challenge','identity-mfa-enrollment','identity-mfa-recovery-codes'].forEach((id) => {
+    ['identity-mfa-challenge', 'identity-mfa-enrollment', 'identity-mfa-recovery-codes'].forEach((id) => {
       const panel = document.getElementById(id);
       if (panel) panel.hidden = true;
     });
@@ -279,12 +239,23 @@
     const email = document.getElementById('login-username')?.value?.trim() || '';
     const password = document.getElementById('login-password')?.value || '';
     const button = document.getElementById('login-btn');
-    if (!email || !password) { showError('Enter email and password'); return; }
+    if (!email || !password) {
+      showError('Enter email and password');
+      return;
+    }
     pendingEntryMode = currentEntryMode();
     clearError();
-    if (button) { button.disabled = true; button.textContent = 'Signing in...'; }
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Signing in...';
+    }
     try {
-      const response = await fetch('/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const response = await fetch('/auth/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Invalid credentials');
       if (data.mfa_required === true) {
@@ -299,8 +270,14 @@
       if (!token) throw new Error('Login response did not contain a valid token.');
       persistIdentitySession(token, pendingEntryMode);
       window.location.href = pendingEntryMode === 'admin' ? '/admin' : '/console';
-    } catch (error) { showError(error?.message || 'Login failed'); }
-    finally { if (button) { button.disabled = false; button.textContent = 'Sign In'; } }
+    } catch (error) {
+      showError(error?.message || 'Login failed');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Sign In';
+      }
+    }
   }
 
   async function completeMfaSession() {
@@ -324,9 +301,15 @@
     const input = document.getElementById('identity-mfa-enrollment-code');
     const button = document.getElementById('identity-mfa-enrollment-confirm');
     const code = input?.value?.trim() || '';
-    if (!code || !pendingMfaToken || !pendingCsrfToken) { showError('Enter the authenticator code to confirm MFA.'); return; }
+    if (!code || !pendingMfaToken || !pendingCsrfToken) {
+      showError('Enter the authenticator code to confirm MFA.');
+      return;
+    }
     clearError();
-    if (button) { button.disabled = true; button.textContent = 'Confirming...'; }
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Confirming...';
+    }
     try {
       const response = await fetch('/auth/mfa/totp/confirm', {
         method: 'POST',
@@ -347,24 +330,47 @@
       if (uri) uri.value = '';
       showOnlyMfaPanel('identity-mfa-recovery-codes');
       document.getElementById('identity-mfa-recovery-continue')?.focus();
-    } catch (error) { showError(error?.message || 'MFA enrollment confirmation failed'); }
-    finally { if (button) { button.disabled = false; button.textContent = 'Confirm MFA'; } }
+    } catch (error) {
+      showError(error?.message || 'MFA enrollment confirmation failed');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Confirm MFA';
+      }
+    }
   }
 
   async function verifyMfaChallenge() {
     const input = document.getElementById('identity-mfa-code');
     const button = document.getElementById('identity-mfa-verify');
     const credential = input?.value?.trim() || '';
-    if (!credential || !pendingMfaToken || !pendingCsrfToken) { showError('Enter your MFA credential.'); return; }
+    if (!credential || !pendingMfaToken || !pendingCsrfToken) {
+      showError('Enter your MFA credential.');
+      return;
+    }
     clearError();
-    if (button) { button.disabled = true; button.textContent = 'Verifying...'; }
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Verifying...';
+    }
     try {
-      const verification = await fetch('/auth/mfa/verify', { method: 'POST', credentials: 'same-origin', headers: authorizationHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(recoveryMode ? { recovery_code: credential } : { code: credential }) });
+      const verification = await fetch('/auth/mfa/verify', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: authorizationHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(recoveryMode ? { recovery_code: credential } : { code: credential }),
+      });
       const verificationData = await verification.json().catch(() => ({}));
       if (!verification.ok) throw new Error(verificationData.detail || 'Invalid MFA credential.');
       await completeMfaSession();
-    } catch (error) { showError(error?.message || 'MFA verification failed'); }
-    finally { if (button) { button.disabled = false; button.textContent = 'Verify'; } }
+    } catch (error) {
+      showError(error?.message || 'MFA verification failed');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Verify';
+      }
+    }
   }
 
   function installIdentityMfaLogin() {
@@ -376,15 +382,34 @@
     const userTab = document.getElementById('tab-user');
     const adminTab = document.getElementById('tab-admin');
     const username = document.getElementById('login-username');
-    loginButton?.addEventListener('click', (event) => { event.preventDefault(); event.stopImmediatePropagation(); identityLogin(); }, true);
-    password?.addEventListener('keydown', (event) => { if (event.key !== 'Enter') return; event.preventDefault(); event.stopImmediatePropagation(); identityLogin(); }, true);
-    userTab?.addEventListener('click', () => { resetMfaChallenge(); if (username) username.placeholder = 'email@example.com'; });
-    adminTab?.addEventListener('click', () => { resetMfaChallenge(); if (username) username.placeholder = 'admin@example.com'; });
-    if (username) username.placeholder = currentEntryMode() === 'admin' ? 'admin@example.com' : 'email@example.com';
+    loginButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      identityLogin();
+    }, true);
+    password?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      identityLogin();
+    }, true);
+    userTab?.addEventListener('click', () => {
+      resetMfaChallenge();
+      if (username) username.placeholder = 'email@example.com';
+    });
+    adminTab?.addEventListener('click', () => {
+      resetMfaChallenge();
+      if (username) username.placeholder = 'admin@example.com';
+    });
+    if (username) {
+      username.placeholder = currentEntryMode() === 'admin' ? 'admin@example.com' : 'email@example.com';
+    }
   }
 
-  window.PMK_LOGIN_TOKEN_CAPTURE = { persistAuthPayload, normalizeToken, installFetchCapture, installIdentityMfaLogin };
-  installFetchCapture();
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installIdentityMfaLogin, { once: true });
-  else installIdentityMfaLogin();
+  window.PMK_LOGIN_IDENTITY = { normalizeToken, installIdentityMfaLogin };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installIdentityMfaLogin, { once: true });
+  } else {
+    installIdentityMfaLogin();
+  }
 })();
