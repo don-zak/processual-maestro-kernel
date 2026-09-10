@@ -14,7 +14,6 @@ def _source(path: Path) -> str:
 
 def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle_without_legacy_button() -> None:
     source = _source(SESSION)
-
     required = [
         "const API_KEY_LIFECYCLE_CARD_ID = 'admin-api-key-lifecycle-card'",
         "const EVALUATION_CARD_ID = 'admin-api-key-external-evaluation-card'",
@@ -28,7 +27,6 @@ def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle_without
     ]
     for marker in required:
         assert marker in source
-
     assert "EVALUATION_ACTIVATE_ID" not in source
     assert "Activate External Evaluation" not in source
     assert "External Evaluation Active" not in source
@@ -38,7 +36,6 @@ def test_external_evaluation_card_is_embedded_in_admin_api_key_lifecycle_without
 
 def test_category_selection_directly_controls_evaluation_visibility_and_verification() -> None:
     source = _source(SESSION)
-
     required = [
         "function externalEvaluationSelected()",
         "document.getElementById('admin-api-key-category')?.value === EXTERNAL_CATEGORY",
@@ -51,14 +48,12 @@ def test_category_selection_directly_controls_evaluation_visibility_and_verifica
     ]
     for marker in required:
         assert marker in source
-
     assert ".click()" not in source
     assert "applyExternalEvaluationActivation" not in source
 
 
 def test_external_evaluation_moves_provisioning_workspace_inside_selected_lifecycle() -> None:
     source = _source(SESSION)
-
     required = [
         "const PROVISIONING_WORKSPACE_ID = 'admin-api-key-provisioning-workspace'",
         "function placeEvaluationWorkspaceInsideCard()",
@@ -75,7 +70,6 @@ def test_external_evaluation_moves_provisioning_workspace_inside_selected_lifecy
 
 def test_admin_session_requires_identity_and_platform_admin_authority() -> None:
     source = _source(SESSION)
-
     required = [
         "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'",
         "const token = window.PMK_ADMIN_AUTH?.bearer?.() || ''",
@@ -86,14 +80,12 @@ def test_admin_session_requires_identity_and_platform_admin_authority() -> None:
     ]
     for marker in required:
         assert marker in source
-
     assert "isAdminSession" not in source
     assert "canManageEvaluationGrants" not in source
 
 
 def test_evaluation_lifecycle_keeps_grant_host_inside_external_evaluation_card() -> None:
     source = _source(LIFECYCLE)
-
     required = [
         "admin-api-key-provisioning-workspace",
         "admin-api-key-external-evaluation-card",
@@ -107,14 +99,12 @@ def test_evaluation_lifecycle_keeps_grant_host_inside_external_evaluation_card()
     ]
     for marker in required:
         assert marker in source
-
     assert "workspace.appendChild(slot)" not in source
     assert "/settings/admin/evaluation-grants" in source
 
 
 def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_surfaces() -> None:
     source = _source(LIFECYCLE)
-
     assert "mode() === 'external_evaluation'" in source
     assert "standardGrid.hidden = evaluationMode" in source
     assert "scopesLabel.hidden = evaluationMode" in source
@@ -122,12 +112,11 @@ def test_external_evaluation_mode_hides_standard_key_form_and_shows_evaluation_s
     assert "slot.hidden = !evaluationMode" in source
     assert "externalBody.hidden = false" in source
     assert "delivery/receipt evidence" in source
-    assert "backend-authoritative" in source
+    assert "grant/PostgreSQL-authoritative" in source
 
 
 def test_runtime_fixups_cannot_reintroduce_standard_key_generation_in_external_evaluation() -> None:
     source = _source(RUNTIME_FIXUPS)
-
     required = [
         "const EXTERNAL_CATEGORY = 'external_evaluation'",
         "function externalEvaluationSelected()",
@@ -139,7 +128,6 @@ def test_runtime_fixups_cannot_reintroduce_standard_key_generation_in_external_e
     ]
     for marker in required:
         assert marker in source
-
     generation_start = source.index("async function generateProfiledApiKey()")
     request_start = source.index("const profileName", generation_start)
     guard_source = source[generation_start:request_start]
@@ -148,28 +136,30 @@ def test_runtime_fixups_cannot_reintroduce_standard_key_generation_in_external_e
     assert "request('POST', '/settings/api-keys'" not in guard_source
 
 
-def test_evaluation_lifecycle_preview_uses_real_grant_inputs_and_tasks() -> None:
+def test_evaluation_lifecycle_preview_uses_real_grant_inputs_type_and_fixed_quota() -> None:
     source = _source(LIFECYCLE)
-
     required = [
         "admin-eval-client-id",
         "admin-eval-issued-to",
         "admin-eval-days",
-        "admin-eval-max-requests",
+        "admin-eval-type",
         "admin-eval-purpose",
         "[data-eval-task]:checked",
         "Evaluation Access Preview",
+        "evaluation type",
+        "fixed admitted-execution quota",
+        "derived from grant type; not manually overridable",
         "Bound canonical tasks",
         "subscription",
         "production",
     ]
     for marker in required:
         assert marker in source
+    assert "admin-eval-max-requests" not in source
 
 
 def test_evaluation_lifecycle_attachment_is_bounded_and_observes_grant_refreshes() -> None:
     source = _source(LIFECYCLE)
-
     assert "const MAX_ATTACH_ATTEMPTS = 30" in source
     assert "const ATTACH_RETRY_MS = 100" in source
     assert "attachAttempts < MAX_ATTACH_ATTEMPTS" in source
@@ -181,7 +171,6 @@ def test_evaluation_lifecycle_attachment_is_bounded_and_observes_grant_refreshes
 
 def test_evaluation_key_delivery_receipt_and_revoke_controls_are_explicit() -> None:
     source = _source(LIFECYCLE)
-
     required = [
         "Confirm Key Sent",
         "Confirm Receipt",
@@ -200,7 +189,6 @@ def test_evaluation_key_delivery_receipt_and_revoke_controls_are_explicit() -> N
 
 def test_evaluation_key_lifecycle_never_persists_or_rehydrates_raw_secret() -> None:
     source = _source(LIFECYCLE)
-
     assert "localStorage.setItem" not in source
     assert "sessionStorage.setItem" not in source
     assert "result.api_key" not in source
@@ -210,7 +198,6 @@ def test_evaluation_key_lifecycle_never_persists_or_rehydrates_raw_secret() -> N
 
 def test_session_loads_evaluation_controls_only_after_verified_platform_admin_authority() -> None:
     source = _source(SESSION)
-
     required = [
         "API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR",
         "admin_api_key_evaluation_lifecycle.js?v=adminapikevaluation-authority-v2",
@@ -225,17 +212,13 @@ def test_session_loads_evaluation_controls_only_after_verified_platform_admin_au
     ]
     for marker in required:
         assert marker in source
-
-    assert source.index("document.body.dataset.adminSession = 'ok'") < source.index(
-        "loadProtectedEvaluationControls();"
-    )
+    assert source.index("document.body.dataset.adminSession = 'ok'") < source.index("loadProtectedEvaluationControls();")
     assert "canManageEvaluationGrants" not in source
     assert "EVALUATION_ADMIN_ROLES" not in source
 
 
 def test_session_refresh_preserves_mfa_and_csrf_fail_closed_boundary() -> None:
     source = _source(SESSION)
-
     for marker in (
         "const SESSION_REFRESH_ENDPOINT = '/auth/session/refresh'",
         "const CSRF_COOKIE = 'pmk_csrf_token'",
@@ -248,48 +231,52 @@ def test_session_refresh_preserves_mfa_and_csrf_fail_closed_boundary() -> None:
         assert marker in source
 
 
-def test_evaluation_key_issue_result_is_complete_and_copyable_once() -> None:
+def test_evaluation_key_issue_result_separates_secret_from_safe_handoff() -> None:
     source = _source(EVALUATION)
-
     required = [
-        "One-time evaluation API key created.",
+        "One-time Evaluation API key created.",
         "admin-eval-copy-issued-key",
         "navigator.clipboard.writeText(secret)",
-        "key.scopes",
-        "key.task_scope_ids",
+        "Safe customer handoff",
+        "admin-eval-customer-handoff",
+        "admin-eval-copy-handoff",
+        "navigator.clipboard.writeText(safeHandoff)",
+        "Processual Maestro — External Evaluation Access",
+        "Authentication header: X-API-Key",
+        "Evaluation type:",
+        "Admitted-execution quota:",
+        "Execution stages: admitted -> executing -> succeeded/failed -> evidence persisted.",
+        "Subscription/registration/commercial quota: not required.",
+        "Production execution: disabled.",
         "key.allowed_task_ids",
         "key.allowed_binding_ids",
         "key.evaluation_request_limit",
         "key.expires_at",
         "usage.example_endpoint",
-        "Subscription required",
-        "Production",
     ]
     for marker in required:
         assert marker in source
-
-    assert "key.quota_limit" not in source
     assert "sessionStorage.setItem" not in source
     assert "localStorage.setItem" not in source
 
 
 def test_evaluation_module_emits_selection_events_for_live_preview() -> None:
     source = _source(EVALUATION)
-
     assert "pmk-evaluation-selection-changed" in source
     assert "dispatchEvaluationSelectionChanged" in source
     assert "host.addEventListener('input', dispatchEvaluationSelectionChanged)" in source
     assert "host.addEventListener('change', dispatchEvaluationSelectionChanged)" in source
 
 
-def test_evaluation_grant_cards_show_scopes_tasks_request_limit_and_expiry() -> None:
+def test_evaluation_grant_cards_show_type_tasks_fixed_quota_and_expiry() -> None:
     source = _source(EVALUATION)
-
     assert "grant.allowed_scopes" in source
     assert "grant.allowed_task_ids" in source
     assert "grant.allowed_binding_ids" in source
     assert "grant.max_requests" in source
-    assert "request limit" in source
+    assert "inferredGrantType(grant)" in source
+    assert "admitted-execution quota" in source
     assert "grant.expires_at" in source
     assert "subscription required: no" in source
     assert "production: disabled" in source
+    assert "admin-eval-max-requests" not in source
