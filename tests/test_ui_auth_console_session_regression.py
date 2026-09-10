@@ -10,12 +10,12 @@ def _read_static(relative_path: str) -> str:
 
 
 def test_login_payload_uses_defined_form_values() -> None:
-    html = _read_static("processual_api/static/login.html")
+    js = _read_static("processual_api/static/js/login_token_capture.js")
 
-    assert "const user = document.getElementById('login-username').value;" in html
-    assert "const pass = document.getElementById('login-password').value;" in html
-    assert "body: JSON.stringify({ username: user, password: pass, role: currentRole })," in html
-    assert "body: JSON.stringify({ username, password, role: currentRole })," not in html
+    assert "const email = document.getElementById('login-username')?.value?.trim() || '';" in js
+    assert "const password = document.getElementById('login-password')?.value || '';" in js
+    assert "body: JSON.stringify({ email, password })," in js
+    assert "role: currentRole" not in js
 
 
 def test_auth_login_preserves_session_token() -> None:
