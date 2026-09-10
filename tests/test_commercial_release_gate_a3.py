@@ -179,6 +179,11 @@ def test_release_workflow_requires_gates_before_publish() -> None:
     required = (
         "Commercial release environment gate",
         "python -m processual_api.release_gate",
+        "AUTH_DELIVERY_PROVIDER_KIND",
+        "AUTH_GMAIL_CLIENT_ID",
+        "AUTH_GMAIL_CLIENT_SECRET",
+        "AUTH_GMAIL_REFRESH_TOKEN",
+        "AUTH_GMAIL_SENDER_EMAIL",
         "Verify migration head",
         "20260901_0049",
         "Commercial staging smoke gate",
