@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 EXPECTED_ALEMBIC_HEAD = "20260901_0049"
 ALLOWED_RELEASE_ENVIRONMENTS = {"staging", "production"}
-ALLOWED_AUTH_DELIVERY_PROVIDER_KINDS = {"http", "gmail_api"}
+ALLOWED_AUTH_DELIVERY_PROVIDER_KINDS = {"http", "gmail_api", "resend"}
 _PLACEHOLDER_MARKERS = (
     "replace_with",
     "change_me",
@@ -74,7 +74,7 @@ def _delivery_provider_kind(values: Mapping[str, str]) -> str:
     return kind
 
 
-def _validate_sender_email(value: str) -> None:
+def _validate_sender_email(value: str, name: str) -> None:
     if (
         len(value) > 320
         or value.count("@") != 1
@@ -82,7 +82,7 @@ def _validate_sender_email(value: str) -> None:
         or value.endswith("@")
         or any(character.isspace() for character in value)
     ):
-        raise RuntimeError("release gate: AUTH_GMAIL_SENDER_EMAIL is invalid")
+        raise RuntimeError(f"release gate: {name} is invalid")
 
 
 def _validate_delivery_provider(values: Mapping[str, str], kind: str) -> None:
@@ -92,18 +92,26 @@ def _validate_delivery_provider(values: Mapping[str, str], kind: str) -> None:
         _require_https(provider_url, "AUTH_DELIVERY_PROVIDER_URL")
         return
 
-    client_id = _required(values, "AUTH_GMAIL_CLIENT_ID")
-    client_secret = _required(values, "AUTH_GMAIL_CLIENT_SECRET")
-    refresh_token = _required(values, "AUTH_GMAIL_REFRESH_TOKEN")
-    sender_email = _required(values, "AUTH_GMAIL_SENDER_EMAIL")
+    if kind == "gmail_api":
+        client_id = _required(values, "AUTH_GMAIL_CLIENT_ID")
+        client_secret = _required(values, "AUTH_GMAIL_CLIENT_SECRET")
+        refresh_token = _required(values, "AUTH_GMAIL_REFRESH_TOKEN")
+        sender_email = _required(values, "AUTH_GMAIL_SENDER_EMAIL")
 
-    if len(client_id) < 10:
-        raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_ID is invalid")
-    if len(client_secret) < 16:
-        raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_SECRET is too short")
-    if len(refresh_token) < 32:
-        raise RuntimeError("release gate: AUTH_GMAIL_REFRESH_TOKEN is too short")
-    _validate_sender_email(sender_email)
+        if len(client_id) < 10:
+            raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_ID is invalid")
+        if len(client_secret) < 16:
+            raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_SECRET is too short")
+        if len(refresh_token) < 32:
+            raise RuntimeError("release gate: AUTH_GMAIL_REFRESH_TOKEN is too short")
+        _validate_sender_email(sender_email, "AUTH_GMAIL_SENDER_EMAIL")
+        return
+
+    api_key = _required(values, "AUTH_RESEND_API_KEY")
+    sender_email = _required(values, "AUTH_RESEND_SENDER_EMAIL")
+    if len(api_key) < 20:
+        raise RuntimeError("release gate: AUTH_RESEND_API_KEY is too short")
+    _validate_sender_email(sender_email, "AUTH_RESEND_SENDER_EMAIL")
 
 
 def evaluate_release_environment(
