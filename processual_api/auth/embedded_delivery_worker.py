@@ -10,7 +10,10 @@ from fastapi import FastAPI
 
 from processual_api.auth.delivery_runtime import DeliveryRuntime, build_delivery_runtime
 
-logger = logging.getLogger(__name__)
+# Route lifecycle records through Uvicorn's operational logger so INFO-level
+# worker evidence is visible in hosted service logs without changing dispatch
+# behavior or serializing provider/customer payloads.
+logger = logging.getLogger("uvicorn.error")
 
 _ENABLED_VALUES = frozenset({"1", "true", "yes", "on"})
 _DEFAULT_POLL_INTERVAL_SECONDS = 1.0
