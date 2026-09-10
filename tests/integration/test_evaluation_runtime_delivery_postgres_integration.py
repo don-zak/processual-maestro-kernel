@@ -110,6 +110,10 @@ async def test_same_key_race_claims_once_then_replays_and_consumes_one_unit(monk
                 raw_secret_visible=False,
             )
         )
+        # The key row has a real FK to its authority owner. Flush the parent
+        # explicitly so this integration fixture exercises runtime concurrency,
+        # rather than depending on ORM insert ordering without a relationship.
+        await setup.flush()
         setup.add(
             EvaluationAuthorityKey(
                 key_id=api_key_id,
