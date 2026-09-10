@@ -2,6 +2,7 @@ from pathlib import Path
 
 MAIN_PY = Path("processual_api/main.py")
 LOGIN_HTML = Path("processual_api/static/login.html")
+LOGIN_CAPTURE_JS = Path("processual_api/static/js/login_token_capture.js")
 ADMIN_HTML = Path("processual_api/static/admin.html")
 
 
@@ -15,10 +16,13 @@ def test_admin_route_is_served_separately_from_console() -> None:
 
 
 def test_login_routes_admin_to_admin_and_user_to_console() -> None:
-    source = LOGIN_HTML.read_text(encoding="utf-8")
+    html = LOGIN_HTML.read_text(encoding="utf-8")
+    capture = LOGIN_CAPTURE_JS.read_text(encoding="utf-8")
 
-    assert "currentRole === 'admin' ? '/admin' : '/console'" in source
-    assert "JSON.stringify({ username: user, password: pass, role: currentRole })" in source
+    assert "/console/js/login_token_capture.js" in html
+    assert "body: JSON.stringify({ email, password })" in capture
+    assert "pendingEntryMode === 'admin' ? '/admin' : '/console'" in capture
+    assert "role: currentRole" not in capture
 
 
 def test_admin_shell_exists_and_uses_platform_admin_authority() -> None:
