@@ -70,6 +70,20 @@ def _gmail_environment() -> dict[str, str]:
     return environment
 
 
+def _resend_environment() -> dict[str, str]:
+    environment = _valid_environment()
+    environment["AUTH_DELIVERY_PROVIDER_KIND"] = "resend"
+    environment.pop("AUTH_DELIVERY_PROVIDER_URL")
+    environment.pop("AUTH_DELIVERY_PROVIDER_TOKEN")
+    environment.update(
+        {
+            "AUTH_RESEND_API_KEY": "resend-key-" + "r" * 32,
+            "AUTH_RESEND_SENDER_EMAIL": "recovery@maestro.invalid",
+        }
+    )
+    return environment
+
+
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
@@ -96,6 +110,12 @@ def test_valid_gmail_delivery_environment_passes_without_http_provider_secrets()
     assert "delivery_provider" in result.checks
 
 
+def test_valid_resend_delivery_environment_passes_without_http_provider_secrets() -> None:
+    result = evaluate_release_environment(_resend_environment())
+    assert result.environment == "staging"
+    assert "delivery_provider" in result.checks
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     (
@@ -110,6 +130,23 @@ def test_gmail_delivery_environment_fails_closed_when_authority_is_invalid(
     value: str,
 ) -> None:
     environment = _gmail_environment()
+    environment[name] = value
+    with pytest.raises(RuntimeError, match="release gate"):
+        evaluate_release_environment(environment)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    (
+        ("AUTH_RESEND_API_KEY", "short"),
+        ("AUTH_RESEND_SENDER_EMAIL", "invalid sender"),
+    ),
+)
+def test_resend_delivery_environment_fails_closed_when_authority_is_invalid(
+    name: str,
+    value: str,
+) -> None:
+    environment = _resend_environment()
     environment[name] = value
     with pytest.raises(RuntimeError, match="release gate"):
         evaluate_release_environment(environment)
@@ -184,6 +221,8 @@ def test_release_workflow_requires_gates_before_publish() -> None:
         "AUTH_GMAIL_CLIENT_SECRET",
         "AUTH_GMAIL_REFRESH_TOKEN",
         "AUTH_GMAIL_SENDER_EMAIL",
+        "AUTH_RESEND_API_KEY",
+        "AUTH_RESEND_SENDER_EMAIL",
         "Verify migration head",
         "20260901_0049",
         "Commercial staging smoke gate",
