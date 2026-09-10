@@ -2,17 +2,33 @@
 
 This file is the authoritative pre-launch checklist for Processual Maestro. A task is not complete because code exists; it is complete only when its acceptance evidence is recorded and the relevant CI/runtime qualification is green.
 
-## P0 — Account Recovery Hardening
+## Qualification Phase Policy
 
-- [ ] Require a second independent recovery factor before password reset completion.
+Two qualification phases are intentionally separated:
+
+1. **Current Closed Qualification** — the current Render/External Evaluation environment is closed and operator-controlled. Continue the already-qualified recovery contract without escalating recovery requirements. The purpose is to prove the current delivery/runtime chain, password reset, revocation behavior, MFA reenrollment, Admin authority restoration, and External Evaluation E2E.
+2. **Final Launch Qualification** — before public/final launch, apply the complete Account Recovery Hardening contract below for customer and Platform Admin flows. This includes a second independent factor, verified phone/OTP where selected, stronger Admin policy, downgrade protection, abuse controls, and the corresponding UI/operator behavior.
+
+The final-launch hardening requirements below are **not a blocker for completing the current closed-environment qualification**, but they remain mandatory before the final release gate can be closed.
+
+## P0 — Final Launch Account Recovery Hardening
+
+> Scope: **Final Launch Qualification only.** Do not interrupt or replace the current closed-environment recovery E2E with these requirements while the present qualification sequence is in progress.
+
+- [ ] Require a second independent recovery factor before password reset completion for final-launch customer recovery.
   - Preferred launch contract: verified recovery email link/token **plus** one additional factor that was enrolled before the recovery attempt.
   - Supported second factors should be ordered by strength: passkey/security key or recovery code first; verified phone OTP may be supported as an additional fallback.
   - SMS/phone OTP must never become the sole recovery authority because of SIM-swap/number-reassignment risk.
   - The existing password must **not** be mandatory in the Lost Access flow; if the user still knows the current password, use the normal password-change/step-up flow instead of account recovery.
-  - For Platform Admin accounts, require the stronger available second factor and fail closed if no qualified factor exists.
-- [ ] Add verified phone-number enrollment and change controls.
+- [ ] Define a separate stronger Platform Admin recovery policy for final launch.
+  - Require the strongest qualified enrolled second factor available under policy.
+  - Fail closed when the required privileged recovery factor is unavailable.
+  - Do not let customer recovery policy silently downgrade Platform Admin recovery authority.
+  - Require explicit privileged reauthentication/MFA reenrollment before restoring Platform Admin authority.
+- [ ] Add verified phone-number enrollment and change controls where phone recovery is enabled.
   - Phone number must be verified before it can be used for recovery.
-  - Changing/removing a recovery phone requires an authenticated step-up and must invalidate or cool down recovery use of the new number according to policy.
+  - Changing/removing a recovery phone requires authenticated step-up.
+  - New/replaced phone factors must respect a cooling-off policy before becoming recovery authority.
   - Never expose whether a phone/email/account exists through recovery responses.
 - [ ] Add short-lived single-use OTP confirmation for phone recovery.
   - Bind OTP to recovery request + account + intended action.
@@ -20,11 +36,20 @@ This file is the authoritative pre-launch checklist for Processual Maestro. A ta
   - Store only a one-way verifier; never log raw OTP values.
 - [ ] Add recovery factor downgrade protection.
   - An attacker controlling one factor must not be able to replace the second factor and immediately use it to recover the account.
-  - Introduce a cooling-off / notification policy for sensitive recovery-factor changes.
-- [ ] Keep the existing post-recovery revocation contract.
+  - Introduce cooling-off and notification policy for sensitive recovery-factor changes.
+- [ ] Preserve the post-recovery revocation contract.
   - Revoke refresh tokens, active sessions, action tokens, external supervisor/API keys, and existing MFA factors as required by policy.
   - Require MFA reenrollment before restoring privileged authority.
   - Do not auto-login or auto-restore Platform Admin authority after recovery.
+- [ ] Complete customer-facing final-launch recovery UX.
+  - Explain which verification step is required without revealing hidden account state.
+  - Provide safe resend/expiry/error states.
+  - Keep tokens/OTP values memory-only where applicable and out of logs/storage.
+  - Do not expose internal authority, provider, or delivery details to the customer.
+- [ ] Complete Platform Admin/operator recovery controls.
+  - Provide safe status/audit visibility without exposing recovery tokens, OTP values, recipient secrets, or raw provider responses.
+  - Record factor changes, recovery initiation/completion, revocations, and authority restoration as auditable security events.
+  - Keep qualification/final readiness decision operator-controlled.
 - [ ] Add full tests for recovery abuse cases.
   - Wrong/expired/replayed OTP.
   - Rate-limit exhaustion.
@@ -33,25 +58,28 @@ This file is the authoritative pre-launch checklist for Processual Maestro. A ta
   - No secret/token/OTP/recipient leakage in logs or evidence.
   - Concurrent recovery requests cannot create multiple valid completion authorities.
 
-## P1 — Recovery Delivery Runtime / Resend
+## P1 — Current Closed Recovery Delivery Qualification / Resend
 
-- [ ] Qualify the embedded delivery worker on the exact release SHA.
+> Scope: **Current Closed Qualification.** Continue the existing recovery contract as currently implemented. Do not add the final-launch second-factor requirement to this phase.
+
+- [ ] Qualify the embedded delivery worker on the exact qualification SHA.
   - `AUTH_DELIVERY_EMBEDDED_WORKER_ENABLED=true`.
   - Poll interval explicitly configured.
   - Hosted logs show `identity_delivery_embedded_worker_started`.
   - Hosted logs show safe `identity_delivery_embedded_worker_batch_completed` evidence.
   - No secret-bearing exception text in logs.
-- [ ] Perform exactly controlled Lost Access E2E qualification.
+- [ ] Perform one controlled Lost Access E2E qualification using the current recovery flow.
   - Recovery start returns 202 without account enumeration.
   - Outbox item is claimed once.
   - Resend accepts the delivery.
   - Delivery reaches the intended physical inbox.
   - Recovery link/token never appears in server request logs.
-  - Password reset completes.
+  - Password reset completes using the current closed-environment contract.
   - Old sessions/tokens/API keys are revoked.
   - MFA reenrollment completes.
-  - Fresh login restores valid authority only after required authentication factors.
+  - Fresh login restores valid authority only after required current authentication factors.
 - [ ] Qualify dead-letter/retry behavior and stale recovery-message finalization.
+- [ ] Record this phase as **closed-environment qualification evidence only**; it must not be reused as proof that final-launch P0 recovery hardening is complete.
 
 ## P2 — External Evaluation Qualification
 
@@ -165,7 +193,9 @@ This file is the authoritative pre-launch checklist for Processual Maestro. A ta
 - [ ] All required GitHub CI/security gates green on that SHA.
 - [ ] Authority service Live on that SHA.
 - [ ] Required health/readiness checks green.
-- [ ] Account Recovery E2E green with second-factor hardening.
+- [ ] Current closed-environment recovery qualification evidence is complete.
+- [ ] Final-launch Account Recovery P0 is implemented and qualified for customer and Platform Admin flows.
+- [ ] Final-launch Account Recovery E2E is green with second-factor hardening.
 - [ ] External Evaluation E2E green.
 - [ ] Required billing/provider smoke tests green or explicitly waived as non-launch scope.
 - [ ] Private overlay/supply-chain qualification green if private production components are part of launch.
