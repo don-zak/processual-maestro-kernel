@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from types import SimpleNamespace
 
 from starlette.requests import Request
 
+from processual_api.routers import settings_admin_evaluation_grants as grant_routes
 from processual_api.routers import settings_admin_evaluation_quota_policy as quota_routes
 from processual_api.services.evaluation_key_quota_policy import (
     CRM_EVALUATION_KEY_QUOTA,
@@ -102,40 +104,26 @@ def test_legacy_payload_without_type_can_infer_integration_runtime() -> None:
     )
 
 
-def test_quota_governed_route_ignores_arbitrary_client_quota_and_persists_type(
+def test_quota_governed_route_ignores_client_quota_and_passes_type_to_canonical_write(
     monkeypatch,
 ) -> None:
-    captured = {}
-    authority = {
-        "evaluation_grants_v1": [
-            {
-                "grant_id": "eval_test",
-                "max_requests": 1,
-            }
-        ]
-    }
-    saved = []
+    captured: list[tuple[str | None, int]] = []
 
     async def fake_create(*, body, request, current_user):
         del request, current_user
-        captured["max_requests"] = body.max_requests
-        authority["evaluation_grants_v1"][0]["max_requests"] = body.max_requests
+        captured.append((body.evaluation_type, body.max_requests))
         return {
             "status": "created",
-            "grant": {"grant_id": "eval_test", "max_requests": body.max_requests},
+            "grant": {
+                "grant_id": "eval_test",
+                "evaluation_type": body.evaluation_type,
+                "max_requests": body.max_requests,
+                "quota_unit": "admitted_execution",
+                "quota_policy": "integration_equals_2x_crm",
+            },
         }
 
-    async def fake_load(owner_id):
-        assert owner_id == "admin"
-        return authority
-
-    async def fake_save(owner_id, raw):
-        assert owner_id == "admin"
-        saved.append(raw)
-
     monkeypatch.setattr(quota_routes, "create_evaluation_grant", fake_create)
-    monkeypatch.setattr(quota_routes, "load_evaluation_authority_state", fake_load)
-    monkeypatch.setattr(quota_routes, "save_evaluation_authority_state", fake_save)
 
     crm = asyncio.run(
         quota_routes.create_quota_governed_evaluation_grant(
@@ -151,14 +139,11 @@ def test_quota_governed_route_ignores_arbitrary_client_quota_and_persists_type(
             current_user={"sub": "admin"},
         )
     )
-    assert captured["max_requests"] == CRM_EVALUATION_KEY_QUOTA
+    assert captured[-1] == (EVALUATION_KEY_TYPE_CRM, CRM_EVALUATION_KEY_QUOTA)
     assert crm["grant"]["max_requests"] == CRM_EVALUATION_KEY_QUOTA
     assert crm["grant"]["evaluation_type"] == EVALUATION_KEY_TYPE_CRM
+    assert crm["grant"]["quota_unit"] == "admitted_execution"
     assert crm["grant"]["quota_policy"] == "integration_equals_2x_crm"
-    assert authority["evaluation_grants_v1"][0]["evaluation_type"] == EVALUATION_KEY_TYPE_CRM
-    assert authority["evaluation_grants_v1"][0]["max_requests"] == CRM_EVALUATION_KEY_QUOTA
-    assert authority["evaluation_grants_v1"][0]["quota_unit"] == "admitted_execution"
-    assert saved
 
     integration = asyncio.run(
         quota_routes.create_quota_governed_evaluation_grant(
@@ -171,8 +156,27 @@ def test_quota_governed_route_ignores_arbitrary_client_quota_and_persists_type(
             current_user={"sub": "admin"},
         )
     )
-    assert captured["max_requests"] == INTEGRATION_EVALUATION_KEY_QUOTA
+    assert captured[-1] == (
+        EVALUATION_KEY_TYPE_INTEGRATION,
+        INTEGRATION_EVALUATION_KEY_QUOTA,
+    )
     assert integration["grant"]["max_requests"] == CRM_EVALUATION_KEY_QUOTA * 2
     assert integration["grant"]["evaluation_type"] == EVALUATION_KEY_TYPE_INTEGRATION
-    assert authority["evaluation_grants_v1"][0]["evaluation_type"] == EVALUATION_KEY_TYPE_INTEGRATION
-    assert authority["evaluation_grants_v1"][0]["max_requests"] == INTEGRATION_EVALUATION_KEY_QUOTA
+
+
+def test_quota_wrapper_has_no_secondary_authority_load_or_save() -> None:
+    source = inspect.getsource(quota_routes.create_quota_governed_evaluation_grant)
+    assert "load_evaluation_authority_state" not in source
+    assert "save_evaluation_authority_state" not in source
+    assert "evaluation_type=resolved_type" in source
+
+
+def test_canonical_grant_creation_seals_quota_metadata_before_single_save() -> None:
+    source = inspect.getsource(grant_routes.create_evaluation_grant)
+    assert source.count("save_evaluation_authority_state(") == 1
+    assert '"evaluation_type": evaluation_type' in source
+    assert '"quota_unit": "admitted_execution" if evaluation_type else ""' in source
+    assert '"quota_policy": "integration_equals_2x_crm" if evaluation_type else ""' in source
+    assert source.index('"evaluation_type": evaluation_type') < source.index(
+        "save_evaluation_authority_state("
+    )
