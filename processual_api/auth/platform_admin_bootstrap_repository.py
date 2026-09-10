@@ -78,7 +78,7 @@ class SqlAlchemyPlatformAdminBootstrapRepository:
                     == "active",
                     IdentityUser.status == "active",
                 )
-                .with_for_update()
+                .with_for_update(of=IdentityUser)
                 .limit(1)
             )
         ).one_or_none()
