@@ -42,7 +42,7 @@ def test_evaluation_grant_ui_selects_from_canonical_task_catalog() -> None:
         "data-eval-task",
         "selectedEvaluationTasks",
         "allowed_task_ids",
-        "Bound tasks:",
+        "Tasks:",
         "task_authority_source",
     ):
         assert marker in source
@@ -53,7 +53,11 @@ def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> N
     assert "window.PMK_ADMIN_AUTH" in source
     assert "credentials: 'include'" in source
     assert "X-API-Key:" in source
-    assert "Copy it now; it will not be displayed again." in source
+    assert "One-time evaluation API key created." in source
+    assert "Safe customer handoff" in source
+    assert "Copy Customer Handoff" in source
+    assert "navigator.clipboard.writeText(secret)" in source
+    assert "navigator.clipboard.writeText(handoff)" in source
     assert "key_hash" not in source
     assert "provider_secret" not in source
 
