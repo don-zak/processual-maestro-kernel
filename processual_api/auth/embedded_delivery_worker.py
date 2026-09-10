@@ -11,8 +11,9 @@ from fastapi import FastAPI
 from processual_api.auth.delivery_runtime import DeliveryRuntime, build_delivery_runtime
 
 # Route lifecycle records through Uvicorn's operational logger so INFO-level
-# worker evidence is visible in hosted service logs without changing dispatch
-# behavior or serializing provider/customer payloads.
+# worker evidence is visible in hosted service logs without serializing
+# provider/customer payloads. Safe aggregate counters are embedded in the
+# message because hosted text formatters may discard LogRecord.extra fields.
 logger = logging.getLogger("uvicorn.error")
 
 _ENABLED_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -55,14 +56,14 @@ async def run_embedded_delivery_loop(
         runtime = runtime_factory()
     except Exception as exc:
         logger.error(
-            "identity_delivery_embedded_worker_runtime_unavailable",
-            extra={"exception_type": type(exc).__name__},
+            "identity_delivery_embedded_worker_runtime_unavailable exception_type=%s",
+            type(exc).__name__,
         )
         return
 
     logger.info(
-        "identity_delivery_embedded_worker_started",
-        extra={"poll_interval_seconds": poll_interval_seconds},
+        "identity_delivery_embedded_worker_started poll_interval_seconds=%s",
+        poll_interval_seconds,
     )
 
     batches = 0
@@ -74,24 +75,20 @@ async def run_embedded_delivery_loop(
                 raise
             except Exception as exc:
                 logger.error(
-                    "identity_delivery_embedded_worker_batch_failed",
-                    extra={
-                        "exception_type": type(exc).__name__,
-                        "completed_batches": batches,
-                    },
+                    "identity_delivery_embedded_worker_batch_failed exception_type=%s completed_batches=%s",
+                    type(exc).__name__,
+                    batches,
                 )
             else:
                 batches += 1
                 logger.info(
-                    "identity_delivery_embedded_worker_batch_completed",
-                    extra={
-                        "batch_number": batches,
-                        "batch_claimed": result.claimed,
-                        "batch_delivered": result.delivered,
-                        "batch_retry_scheduled": result.retry_scheduled,
-                        "batch_dead_lettered": result.dead_lettered,
-                        "batch_stale_finalization": result.stale_finalization,
-                    },
+                    "identity_delivery_embedded_worker_batch_completed batch_number=%s claimed=%s delivered=%s retry_scheduled=%s dead_lettered=%s stale_finalization=%s",
+                    batches,
+                    result.claimed,
+                    result.delivered,
+                    result.retry_scheduled,
+                    result.dead_lettered,
+                    result.stale_finalization,
                 )
 
             if stop_event.is_set():
@@ -105,8 +102,8 @@ async def run_embedded_delivery_loop(
                 pass
     finally:
         logger.info(
-            "identity_delivery_embedded_worker_stopped",
-            extra={"completed_batches": batches},
+            "identity_delivery_embedded_worker_stopped completed_batches=%s",
+            batches,
         )
 
 
@@ -120,8 +117,8 @@ async def delivery_router_lifespan(app: FastAPI) -> AsyncIterator[None]:
         poll_interval_seconds = embedded_delivery_worker_poll_interval()
     except ValueError as exc:
         logger.error(
-            "identity_delivery_embedded_worker_configuration_invalid",
-            extra={"exception_type": type(exc).__name__},
+            "identity_delivery_embedded_worker_configuration_invalid exception_type=%s",
+            type(exc).__name__,
         )
         yield
         return
