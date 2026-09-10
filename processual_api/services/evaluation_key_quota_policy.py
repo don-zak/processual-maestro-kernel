@@ -24,17 +24,20 @@ def normalized_evaluation_key_type(
     allowed_binding_ids: list[str] | None = None,
     allowed_endpoints: list[object] | None = None,
 ) -> str:
-    """Resolve evaluation key class, failing safely to the CRM baseline.
+    """Resolve the grant-selected External Evaluation class.
 
-    Integration runtime execution is also inferred from prepared bindings or the
-    canonical task-execute endpoint, so older Admin UI payloads cannot
-    accidentally receive the smaller CRM quota when they request Integration
-    execution.
+    An explicit CRM or Integration selection is authoritative. Runtime inference
+    exists only for legacy payloads that predate the explicit evaluation_type
+    field, so prepared bindings or task-execute cannot silently widen an
+    explicitly CRM grant into Integration authority.
     """
 
     requested = str(requested_type or "").strip().lower()
     if requested == EVALUATION_KEY_TYPE_INTEGRATION:
         return EVALUATION_KEY_TYPE_INTEGRATION
+    if requested in {EVALUATION_KEY_TYPE_CRM, EVALUATION_KEY_TYPE_STANDARD}:
+        return EVALUATION_KEY_TYPE_CRM
+
     if allowed_binding_ids:
         return EVALUATION_KEY_TYPE_INTEGRATION
     for endpoint in allowed_endpoints or []:
