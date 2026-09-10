@@ -195,11 +195,12 @@ def test_workspace_initialization_is_bounded_and_does_not_observe_dom_forever() 
     assert "while (" not in source
 
 
-def test_workspace_updates_local_usage_examples_to_current_dev_port() -> None:
+def test_workspace_has_no_superseded_localhost_usage_rewrite() -> None:
     source = _workspace_source()
-    assert "127.0.0.1:8000" in source
-    assert "127.0.0.1:18080" in source
-    assert "replaceAll('127.0.0.1:8000', '127.0.0.1:18080')" in source
+    assert "fixLocalUsageExamples" not in source
+    assert "127.0.0.1:8000" not in source
+    assert "127.0.0.1:18080" not in source
+    assert "replaceAll('127.0.0.1:8000', '127.0.0.1:18080')" not in source
 
 
 def test_workspace_script_loads_only_after_verified_platform_admin_authority() -> None:
