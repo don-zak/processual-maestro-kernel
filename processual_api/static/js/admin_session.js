@@ -15,9 +15,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const SESSION_REFRESH_ENDPOINT = '/auth/session/refresh';
   const CSRF_COOKIE = 'pmk_csrf_token';
   const SESSION_RETRY_DELAYS_MS = [400, 1200, 2500];
+  const AUTHORITY_VERIFICATION_TTL_MS = 1500;
   const EXTERNAL_ENTRY_RETRY_MS = 100;
   const EXTERNAL_ENTRY_MAX_ATTEMPTS = 80;
   let refreshInFlight = null;
+  let authorityCheckInFlight = null;
+  let lastVerifiedBearer = '';
+  let lastAuthorityVerifiedAt = 0;
   let externalEntryAttempts = 0;
   let externalEntryActivated = false;
 
@@ -156,7 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
     target.textContent = message;
   }
 
+  function resetAuthorityVerificationCache() {
+    lastVerifiedBearer = '';
+    lastAuthorityVerifiedAt = 0;
+  }
+
   function markSessionExpired(status) {
+    resetAuthorityVerificationCache();
     document.body.dataset.adminSession = `expired-${status}`;
     document.body.dataset.adminEvaluationGrants = 'auth-expired';
     window.PMK_ADMIN_AUTH?.clearIdentitySession?.();
@@ -256,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!token) return false;
       sessionStorage.setItem('maestro_token', token);
       sessionStorage.setItem('maestro_ui_session_refreshed_at', new Date().toISOString());
+      resetAuthorityVerificationCache();
       return true;
     })();
     try {
@@ -274,17 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
   }
 
-  async function checkAdminSession() {
-    ensureEvaluationGrantPlaceholder();
-    syncEvaluationSelectionState();
-    const token = window.PMK_ADMIN_AUTH?.bearer?.() || '';
-    if (!token) {
-      document.body.dataset.adminSession = 'auth-missing';
-      document.body.dataset.adminEvaluationGrants = 'auth-missing';
-      setEvaluationAccessStatus('Active administrator Identity session required. Sign in and complete MFA.', true);
-      return false;
-    }
-
+  async function runAdminSessionCheck(token) {
     try {
       let response = await verifyPlatformAdminAuthority();
       if (response.status === 401) {
@@ -298,6 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
       }
       if (!response.ok) {
+        resetAuthorityVerificationCache();
         document.body.dataset.adminSession = `error-${response.status}`;
         document.body.dataset.adminEvaluationGrants = 'authority-unavailable';
         setEvaluationAccessStatus(`Platform Administrator authority unavailable: HTTP ${response.status}. Protected controls remain locked.`, true);
@@ -306,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const authority = await response.json();
       if (authority?.authorized !== true || authority?.authority !== 'platform_admin') {
+        resetAuthorityVerificationCache();
         document.body.dataset.adminSession = 'authority-denied';
         document.body.dataset.adminEvaluationGrants = 'not-authorized';
         setEvaluationAccessStatus('Authenticated identity does not hold active Platform Administrator authority.', true);
@@ -315,16 +318,51 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('admin-session-expired-banner')?.remove();
       document.body.dataset.adminSession = 'ok';
       document.body.dataset.adminEvaluationGrants = 'authorized';
+      lastVerifiedBearer = token;
+      lastAuthorityVerifiedAt = Date.now();
       setEvaluationAccessStatus('Platform Administrator verified from PostgreSQL-backed authority. Loading governed Evaluation controls…', false, true);
       loadProtectedEvaluationControls();
       dispatchAdminSessionVerified(authority);
       window.setTimeout(activateExternalEvaluationEntry, 0);
       return true;
     } catch (error) {
+      resetAuthorityVerificationCache();
       document.body.dataset.adminSession = 'error';
       document.body.dataset.adminEvaluationGrants = 'authority-unavailable';
       setEvaluationAccessStatus(`Administrator authority check failed safely: ${error.message || error}`, true);
       return false;
+    }
+  }
+
+  async function checkAdminSession() {
+    ensureEvaluationGrantPlaceholder();
+    syncEvaluationSelectionState();
+    const token = window.PMK_ADMIN_AUTH?.bearer?.() || '';
+    if (!token) {
+      resetAuthorityVerificationCache();
+      document.body.dataset.adminSession = 'auth-missing';
+      document.body.dataset.adminEvaluationGrants = 'auth-missing';
+      setEvaluationAccessStatus('Active administrator Identity session required. Sign in and complete MFA.', true);
+      return false;
+    }
+
+    const cacheFresh = (
+      token === lastVerifiedBearer
+      && Date.now() - lastAuthorityVerifiedAt < AUTHORITY_VERIFICATION_TTL_MS
+      && document.body.dataset.adminSession === 'ok'
+    );
+    if (cacheFresh) {
+      syncEvaluationSelectionState();
+      loadProtectedEvaluationControls();
+      return true;
+    }
+    if (authorityCheckInFlight) return authorityCheckInFlight;
+
+    authorityCheckInFlight = runAdminSessionCheck(token);
+    try {
+      return await authorityCheckInFlight;
+    } finally {
+      authorityCheckInFlight = null;
     }
   }
 
