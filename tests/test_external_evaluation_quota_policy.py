@@ -63,14 +63,37 @@ def test_standard_alias_fails_safe_to_crm_baseline() -> None:
     assert evaluation_key_quota("standard") == CRM_EVALUATION_KEY_QUOTA
 
 
-def test_runtime_binding_or_task_execute_endpoint_infers_integration() -> None:
+def test_explicit_grant_type_is_authoritative_over_runtime_shape() -> None:
+    task_execute = [
+        SimpleNamespace(method="POST", path="/evaluation/runtime/task-execute")
+    ]
+
+    assert (
+        normalized_evaluation_key_type(
+            "crm",
+            allowed_binding_ids=["binding_1"],
+            allowed_endpoints=task_execute,
+        )
+        == EVALUATION_KEY_TYPE_CRM
+    )
+    assert (
+        normalized_evaluation_key_type(
+            "integration",
+            allowed_binding_ids=[],
+            allowed_endpoints=[],
+        )
+        == EVALUATION_KEY_TYPE_INTEGRATION
+    )
+
+
+def test_legacy_payload_without_type_can_infer_integration_runtime() -> None:
     assert (
         normalized_evaluation_key_type(None, allowed_binding_ids=["binding_1"])
         == EVALUATION_KEY_TYPE_INTEGRATION
     )
     assert (
         normalized_evaluation_key_type(
-            "crm",
+            None,
             allowed_endpoints=[
                 SimpleNamespace(method="POST", path="/evaluation/runtime/task-execute")
             ],
@@ -116,7 +139,14 @@ def test_quota_governed_route_ignores_arbitrary_client_quota_and_persists_type(
 
     crm = asyncio.run(
         quota_routes.create_quota_governed_evaluation_grant(
-            body=_body(evaluation_type="crm", max_requests=4999),
+            body=_body(
+                evaluation_type="crm",
+                max_requests=4999,
+                allowed_binding_ids=["binding_1"],
+                allowed_endpoints=[
+                    {"method": "POST", "path": "/evaluation/runtime/task-execute"}
+                ],
+            ),
             request=_request(),
             current_user={"sub": "admin"},
         )
