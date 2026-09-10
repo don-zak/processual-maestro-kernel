@@ -103,10 +103,10 @@
     slot.innerHTML = `
       <div class="sec-hdr">
         <div class="sh-title">Evaluation Access & Key Handoff</div>
-        <div class="sh-sub">canonical tasks, grant creation, one-time key issue, customer portal, audit evidence, receipt acknowledgement, and revocation</div>
+        <div class="sh-sub">grant-first CRM/Integration authority, one-time key handoff, customer dashboard, audit evidence, receipt acknowledgement, and revocation</div>
       </div>
       <div class="admin-note">
-        Runtime authority remains backend-authoritative. Delivery and receipt are audit metadata only. The customer can use <strong>/console/evaluation.html</strong> to view quota and execution status without Admin access.
+        External Evaluation is subscription-free. Runtime authority and fixed quota remain grant/PostgreSQL-authoritative. The customer can use <strong>/console/evaluation.html</strong> to view their bounded scope, quota, progress, and safe receipt without Admin access.
       </div>
       <div id="${PREVIEW_ID}" style="margin-top:var(--s-3)"></div>
       <div data-admin-evaluation-host-slot style="margin-top:var(--s-3)"></div>
@@ -122,19 +122,24 @@
     const clientId = value('admin-eval-client-id', 'not set');
     const issuedTo = value('admin-eval-issued-to', 'not set');
     const days = value('admin-eval-days', '14');
-    const quota = value('admin-eval-max-requests', '100');
+    const evaluationType = value('admin-eval-type', 'crm').toLowerCase() === 'integration'
+      ? 'integration'
+      : 'crm';
+    const quota = evaluationType === 'integration' ? 200 : 100;
     const purpose = value('admin-eval-purpose', 'not set');
 
     target.innerHTML = `
       <div class="sec-hdr">
         <div class="sh-title">Evaluation Access Preview</div>
-        <div class="sh-sub">safe pre-issue summary - backend validation remains authoritative</div>
+        <div class="sh-sub">safe pre-issue grant summary — backend validation remains authoritative</div>
       </div>
       <div class="admin-api-key-metadata-card-grid">
         <div class="admin-api-key-metadata-card-row"><strong>client_id</strong><span>${escapeHtml(clientId)}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>issued_to</strong><span>${escapeHtml(issuedTo)}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>evaluation type</strong><span>${escapeHtml(evaluationType.toUpperCase())}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>duration_days</strong><span>${escapeHtml(days)}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>admitted execution quota</strong><span>${escapeHtml(quota)}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>fixed admitted-execution quota</strong><span>${quota}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>quota authority</strong><span>derived from grant type; not manually overridable</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>customer portal</strong><span>/console/evaluation.html</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>subscription</strong><span>not required</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
@@ -255,11 +260,7 @@
     panel.dataset.loading = 'true';
     try {
       const payload = await request(`${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/audit-receipts?limit=100`, 'GET');
-      renderAuditPanel(
-        panel,
-        payload.summary || null,
-        Array.isArray(payload.receipts) ? payload.receipts : []
-      );
+      renderAuditPanel(panel, payload.summary || null, Array.isArray(payload.receipts) ? payload.receipts : []);
       panel.dataset.loaded = 'true';
     } catch (error) {
       panel.innerHTML = `<div class="admin-note danger">Unable to load Evaluation audit receipts: ${escapeHtml(error.message || error)}</div>`;
@@ -364,7 +365,7 @@
     const status = document.getElementById('admin-api-key-provisioning-mode-status');
     if (status && evaluationMode) {
       status.className = 'admin-note ok';
-      status.textContent = 'External Evaluation mode is active. Grant creation, one-time key issue, customer quota/status portal, delivery/receipt evidence, final audit summary, and individual revoke are embedded below.';
+      status.textContent = 'External Evaluation mode is active. CRM/Integration grant authority, fixed quota, one-time key + safe handoff, customer dashboard, delivery/receipt evidence, Admin audit summary, and revocation are embedded below.';
     }
     renderEvaluationPreview();
     decorateGrantKeyLifecycle();
