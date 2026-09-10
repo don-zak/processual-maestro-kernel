@@ -82,7 +82,12 @@ async def run_embedded_delivery_loop(
             else:
                 batches += 1
                 logger.info(
-                    "identity_delivery_embedded_worker_batch_completed batch_number=%s claimed=%s delivered=%s retry_scheduled=%s dead_lettered=%s stale_finalization=%s",
+                    (
+                        "identity_delivery_embedded_worker_batch_completed "
+                        "batch_number=%s claimed=%s delivered=%s "
+                        "retry_scheduled=%s dead_lettered=%s "
+                        "stale_finalization=%s"
+                    ),
                     batches,
                     result.claimed,
                     result.delivered,
