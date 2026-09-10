@@ -5,6 +5,7 @@
     credentialStatus: 'disconnected',
     quotaRemaining: 0,
     executing: false,
+    lastQuotaUsed: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -27,7 +28,7 @@
   function statusClass(status) {
     const value = text(status).toLowerCase();
     if (['active', 'succeeded', 'persisted'].includes(value)) return 'value ok';
-    if (['executing', 'low'].includes(value)) return 'value warn';
+    if (['executing', 'low', 'pending'].includes(value)) return 'value warn';
     if (['failed', 'revoked', 'expired', 'quota_exhausted', 'exhausted'].includes(value)) return 'value bad';
     return 'value';
   }
@@ -64,17 +65,98 @@
     return data;
   }
 
+  function renderChips(id, values, emptyText) {
+    const target = $(id);
+    const safeValues = Array.isArray(values) ? values.filter(Boolean) : [];
+    target.innerHTML = '';
+    if (!safeValues.length) {
+      const chip = document.createElement('span');
+      chip.className = 'scope-chip';
+      chip.textContent = emptyText;
+      target.appendChild(chip);
+      return;
+    }
+    safeValues.forEach((value) => {
+      const chip = document.createElement('span');
+      chip.className = 'scope-chip';
+      chip.textContent = text(value);
+      target.appendChild(chip);
+    });
+  }
+
+  function resetStages() {
+    ['stage-admitted', 'stage-executing', 'stage-outcome', 'stage-evidence'].forEach((id) => {
+      $(id).className = 'stage';
+    });
+  }
+
+  function renderStages(latest) {
+    resetStages();
+    if (!latest) return;
+    $('stage-admitted').className = 'stage done';
+    if (latest.status === 'executing') {
+      $('stage-executing').className = 'stage current';
+      return;
+    }
+    $('stage-executing').className = 'stage done';
+    if (latest.status === 'succeeded' || latest.status === 'failed') {
+      $('stage-outcome').className = latest.status === 'failed' ? 'stage current' : 'stage done';
+    }
+    if (latest.evidence_persisted) {
+      $('stage-evidence').className = 'stage done';
+    } else if (latest.status === 'succeeded') {
+      $('stage-evidence').className = 'stage current';
+    }
+  }
+
+  function buildCustomerReport(payload) {
+    const quota = payload.quota || {};
+    const latest = payload.latest_execution || null;
+    return {
+      report_type: 'external_evaluation_customer_receipt',
+      credential_status: payload.credential_status || 'unknown',
+      evaluation_type: payload.evaluation_type || null,
+      grant_id: payload.grant_id || null,
+      api_key_id: payload.api_key_id || null,
+      api_key_prefix: payload.api_key_prefix || null,
+      expires_at: payload.expires_at || null,
+      quota: {
+        semantics: 'admitted_execution',
+        limit: quota.limit ?? 0,
+        used: quota.used ?? 0,
+        remaining: quota.remaining ?? 0,
+        status_reads_consume: 0,
+        idempotent_replays_consume: 0,
+      },
+      allowed_task_ids: Array.isArray(payload.allowed_task_ids) ? payload.allowed_task_ids : [],
+      allowed_binding_ids: Array.isArray(payload.allowed_binding_ids) ? payload.allowed_binding_ids : [],
+      latest_execution: latest,
+      subscription_required: false,
+      production_allowed: false,
+      raw_api_key_included: false,
+      raw_task_input_included: false,
+      qualification_decision: 'operator_controlled',
+    };
+  }
+
   function renderStatus(payload) {
     const quota = payload.quota || {};
     const latest = payload.latest_execution || null;
     runtimeState.credentialStatus = text(payload.credential_status || 'unknown');
     runtimeState.quotaRemaining = Number(quota.remaining ?? 0);
+
     $('credential').textContent = text(payload.credential_status || 'unknown');
     $('credential').className = statusClass(payload.credential_status);
-    $('type').textContent = text(payload.evaluation_type || '—');
+    $('type').textContent = text(payload.evaluation_type || '—').toUpperCase();
     $('quota-used').textContent = `${text(quota.used ?? 0)} / ${text(quota.limit ?? 0)}`;
     $('quota-remaining').textContent = text(quota.remaining ?? 0);
     $('quota-remaining').className = statusClass(quota.warning);
+    $('grant-id').textContent = text(payload.grant_id || '—');
+    $('key-id').textContent = [payload.api_key_id, payload.api_key_prefix].filter(Boolean).join(' · ') || '—';
+    $('expires-at').textContent = text(payload.expires_at || '—');
+
+    renderChips('allowed-tasks', payload.allowed_task_ids, 'No canonical tasks exposed by this grant.');
+    renderChips('allowed-bindings', payload.allowed_binding_ids, 'No prepared binding required by this grant.');
 
     const limit = Number(quota.limit || 0);
     const used = Number(quota.used || 0);
@@ -82,14 +164,15 @@
     $('quota-bar').style.width = `${pct}%`;
     $('quota-caption').textContent = `${used} of ${limit} admitted executions used · ${quota.remaining ?? 0} remaining · status checks and idempotent replays consume 0 units.`;
 
+    renderStages(latest);
     if (latest) {
       $('execution-state').textContent = text(latest.status || 'unknown');
       $('execution-state').className = statusClass(latest.status);
-      $('execution-meta').textContent = `${text(latest.task_id || '')} · ${text(latest.binding_id || '')} · ${text(latest.execution_id || latest.record_id || '')}`;
+      $('execution-meta').textContent = `${text(latest.task_id || '')} · ${text(latest.binding_id || '')} · ${text(latest.execution_id || latest.record_id || '')} · accepted ${text(latest.accepted_at || 'n/a')}`;
       const evidenceState = latest.evidence_persisted ? 'persisted' : latest.status === 'failed' ? 'failed' : 'pending';
       $('evidence-state').textContent = evidenceState;
       $('evidence-state').className = statusClass(evidenceState);
-      $('evidence-meta').textContent = latest.evidence_sha256 ? `sha256 ${latest.evidence_sha256}` : text(latest.failure_code || '');
+      $('evidence-meta').textContent = latest.evidence_sha256 ? `sha256 ${latest.evidence_sha256}` : text(latest.failure_code || 'Awaiting durable evidence.');
     } else {
       $('execution-state').textContent = 'none';
       $('execution-state').className = 'value';
@@ -98,14 +181,25 @@
       $('evidence-state').className = 'value';
       $('evidence-meta').textContent = '';
     }
+
+    if (runtimeState.lastQuotaUsed === null) {
+      $('quota-effect').textContent = '0';
+      $('quota-effect-meta').textContent = 'Status connection/read only: +0 quota.';
+    }
+    runtimeState.lastQuotaUsed = used;
+    $('customer-report').textContent = JSON.stringify(buildCustomerReport(payload), null, 2);
     syncExecuteButton();
   }
 
-  async function refreshStatus() {
+  async function refreshStatus({ preserveQuotaEffect = false } = {}) {
     try {
       const payload = await request('/evaluation/runtime/status');
       renderStatus(payload);
-      setMessage('Connected. Status is read-only and does not consume evaluation quota.', 'ok');
+      if (!preserveQuotaEffect && !runtimeState.executing) {
+        $('quota-effect').textContent = '0';
+        $('quota-effect-meta').textContent = 'Status refresh: +0 quota.';
+      }
+      setMessage('Connected. This bounded dashboard is read-only until you submit an authorized task; status reads consume +0 quota.', 'ok');
       return payload;
     } catch (error) {
       runtimeState.credentialStatus = 'unavailable';
@@ -141,28 +235,31 @@
       task_input: input,
     };
     $('idempotency-key').value = body.idempotency_key;
-    $('result').textContent = 'Executing…';
-    $('execution-state').textContent = 'executing';
+    $('result').textContent = 'Submitting for admission…';
+    $('stage-admitted').className = 'stage current';
+    $('execution-state').textContent = 'submitting';
     $('execution-state').className = statusClass('executing');
+    const beforeUsed = Number(runtimeState.lastQuotaUsed ?? 0);
     try {
       const payload = await request('/evaluation/runtime/task-execute', {
         method: 'POST',
         body: JSON.stringify(body),
       });
       $('result').textContent = JSON.stringify(payload, null, 2);
-      if (payload.quota) {
-        renderStatus({
-          credential_status: payload.quota.remaining > 0 ? 'active' : 'quota_exhausted',
-          evaluation_type: $('type').textContent,
-          quota: payload.quota,
-          latest_execution: payload.execution_status || null,
-        });
-      }
-      await refreshStatus();
+      const afterUsed = Number(payload.quota?.used ?? beforeUsed);
+      const replay = payload.idempotent_replay === true;
+      const delta = Math.max(0, afterUsed - beforeUsed);
+      $('quota-effect').textContent = replay ? '+0 replay' : `+${delta || 1}`;
+      $('quota-effect').className = replay ? 'value ok' : 'value warn';
+      $('quota-effect-meta').textContent = replay
+        ? 'Durable idempotent replay; no additional admitted-execution unit consumed.'
+        : 'New execution admitted; one evaluation quota unit consumed.';
+      if (payload.quota) runtimeState.lastQuotaUsed = afterUsed;
+      await refreshStatus({ preserveQuotaEffect: true });
     } catch (error) {
       $('result').textContent = text(error.message || error);
       setMessage(`Execution failed: ${error.message || error}`, 'bad');
-      try { await refreshStatus(); } catch {}
+      try { await refreshStatus({ preserveQuotaEffect: true }); } catch {}
     } finally {
       runtimeState.executing = false;
       syncExecuteButton();
@@ -178,7 +275,7 @@
     stopPolling();
     pollTimer = window.setInterval(() => {
       if (apiKey && document.visibilityState === 'visible') {
-        refreshStatus().catch(() => {});
+        refreshStatus({ preserveQuotaEffect: true }).catch(() => {});
       }
     }, 5000);
   }
@@ -191,9 +288,14 @@
     }
     runtimeState.credentialStatus = 'connecting';
     runtimeState.quotaRemaining = 0;
+    runtimeState.lastQuotaUsed = null;
     syncExecuteButton();
     try {
-      await refreshStatus();
+      const payload = await refreshStatus();
+      const tasks = Array.isArray(payload.allowed_task_ids) ? payload.allowed_task_ids : [];
+      const bindings = Array.isArray(payload.allowed_binding_ids) ? payload.allowed_binding_ids : [];
+      if (!$('task-id').value && tasks.length === 1) $('task-id').value = tasks[0];
+      if (!$('binding-id').value && bindings.length === 1) $('binding-id').value = bindings[0];
       startPolling();
     } catch {}
   });
@@ -205,9 +307,12 @@
       credentialStatus: 'disconnected',
       quotaRemaining: 0,
       executing: false,
+      lastQuotaUsed: null,
     };
     syncExecuteButton();
     stopPolling();
+    resetStages();
+    $('customer-report').textContent = 'Connect an Evaluation API key to load the current safe report.';
     setMessage('Evaluation key forgotten from this page memory.');
   });
 
