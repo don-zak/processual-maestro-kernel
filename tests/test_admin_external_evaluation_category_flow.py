@@ -68,29 +68,31 @@ def test_grant_creation_is_hard_blocked_until_every_plan_gate_is_ready() -> None
         "function evaluationReadiness()", "category === EXTERNAL_CATEGORY",
         "document.body.dataset.adminSession === 'ok'",
         "grantAuthority === 'authorized' || grantAuthority === 'loaded'",
-        "Boolean(profile)", "endpoints.length > 0", "scopes.length > 0",
-        "tasks.length > 0", "!runtimeSelected || bindings.length > 0",
-        "!runtimeSelected || bindingsPrepared", "purpose.length >= 10",
-        "duration >= 1 && duration <= 90", "requestLimit >= 1 && requestLimit <= 5000",
+        "Boolean(profile)", "['crm', 'integration'].includes(evaluationType)",
+        "endpoints.length > 0", "scopes.length > 0", "tasks.length > 0",
+        "!runtimeSelected || bindings.length > 0", "!runtimeSelected || bindingsPrepared",
+        "purpose.length >= 10", "duration >= 1 && duration <= 90",
         "button.disabled = !readiness.ready", "if (!readiness.ready)",
         "Evaluation grant creation blocked by the lifecycle readiness contract.",
     ):
         assert marker in source
+    assert "requestLimit" not in source
+    assert "admin-eval-max-requests" not in source
 
 
 def test_grant_post_uses_complete_readiness_contract_values() -> None:
     source = _source(EVALUATION)
     create_start = source.index("async function createEvaluationGrant()")
-    issue_start = source.index("async function issueEvaluationKey", create_start)
+    issue_start = source.index("function handoffText", create_start)
     create_source = source[create_start:issue_start]
     for marker in (
         "const readiness = updateEvaluationReadiness();", "if (!readiness.ready)",
         "EVALUATION_GRANTS_ENDPOINT, 'POST'", "client_id: readiness.clientId",
-        "issued_to: readiness.issuedTo", "allowed_task_ids: readiness.tasks",
-        "allowed_binding_ids: readiness.bindings", "allowed_endpoints: readiness.endpoints",
-        "const allowedScopes = readiness.scopes;",
-        "...(allowedScopes.length ? { allowed_scopes: allowedScopes } : {})",
-        "expires_in_days: readiness.duration", "max_requests: readiness.requestLimit",
+        "issued_to: readiness.issuedTo", "evaluation_type: readiness.evaluationType",
+        "allowed_task_ids: readiness.tasks", "allowed_binding_ids: readiness.bindings",
+        "allowed_endpoints: readiness.endpoints",
+        "...(readiness.scopes.length ? { allowed_scopes: readiness.scopes } : {})",
+        "expires_in_days: readiness.duration", "max_requests: readiness.derivedQuota",
     ):
         assert marker in create_source
     assert "selectedEvaluationScopes();" not in create_source
@@ -112,15 +114,19 @@ def test_runtime_task_execution_requires_prepared_evaluation_binding() -> None:
         assert marker in source
 
 
-def test_evaluation_request_limit_matches_backend_contract() -> None:
+def test_evaluation_quota_is_type_driven_and_not_manually_overridable() -> None:
     source = _source(EVALUATION)
-    assert 'id="admin-eval-max-requests" type="number" min="1" max="5000"' in source
-    assert "requestLimit >= 1 && requestLimit <= 5000" in source
-    assert "Evaluation request limit must be between 1 and 5000." in source
-    assert "key.evaluation_request_limit" in source
-    assert "key.quota_limit" not in source
-    assert "quota-bound" not in source
-    assert "<strong>Quota</strong>" not in source
+    assert 'id="admin-eval-type"' in source
+    assert 'value="crm">CRM — 100 admitted executions' in source
+    assert 'value="integration">Integration — 200 admitted executions' in source
+    assert "const CRM_QUOTA = 100" in source
+    assert "const INTEGRATION_QUOTA = 200" in source
+    assert "function evaluationQuota" in source
+    assert "Not a commercial plan and not manually overridable." in source
+    assert "evaluation_type: readiness.evaluationType" in source
+    assert "max_requests: readiness.derivedQuota" in source
+    assert "admin-eval-max-requests" not in source
+    assert "requestLimit" not in source
 
 
 def test_standard_runtime_fixup_cannot_generate_an_external_evaluation_key() -> None:
@@ -135,12 +141,18 @@ def test_standard_runtime_fixup_cannot_generate_an_external_evaluation_key() -> 
     assert "request('POST', '/settings/api-keys'" not in guard
 
 
-def test_evaluation_issue_remains_one_time_and_never_persists_raw_secret() -> None:
+def test_evaluation_issue_remains_one_time_and_adds_safe_handoff() -> None:
     source = _source(EVALUATION)
     for marker in (
-        "One-time evaluation API key created.", "Copy it now; it will not be displayed again.",
-        "X-API-Key:", "Copy API Key", "Bound tasks:", "Prepared bindings:",
-        "Evaluation request limit", "Subscription required", "Production",
+        "One-time Evaluation API key created.",
+        "Copy the secret now; it will not be displayed again.",
+        "X-API-Key:", "Copy one-time API key", "Safe customer handoff",
+        "Copy customer handoff", "Processual Maestro — External Evaluation Access",
+        "Evaluation type:", "Admitted-execution quota:",
+        "Allowed canonical tasks:", "Prepared bindings:", "Allowed endpoints:",
+        "Status/dashboard reads consume +0 quota.",
+        "Subscription/registration/commercial quota: not required.",
+        "Production execution: disabled.",
     ):
         assert marker in source
     assert "sessionStorage.setItem" not in source
