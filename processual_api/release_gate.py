@@ -74,6 +74,17 @@ def _delivery_provider_kind(values: Mapping[str, str]) -> str:
     return kind
 
 
+def _validate_sender_email(value: str) -> None:
+    if (
+        len(value) > 320
+        or value.count("@") != 1
+        or value.startswith("@")
+        or value.endswith("@")
+        or any(character.isspace() for character in value)
+    ):
+        raise RuntimeError("release gate: AUTH_GMAIL_SENDER_EMAIL is invalid")
+
+
 def _validate_delivery_provider(values: Mapping[str, str], kind: str) -> None:
     if kind == "http":
         provider_url = _required(values, "AUTH_DELIVERY_PROVIDER_URL")
@@ -84,6 +95,7 @@ def _validate_delivery_provider(values: Mapping[str, str], kind: str) -> None:
     client_id = _required(values, "AUTH_GMAIL_CLIENT_ID")
     client_secret = _required(values, "AUTH_GMAIL_CLIENT_SECRET")
     refresh_token = _required(values, "AUTH_GMAIL_REFRESH_TOKEN")
+    sender_email = _required(values, "AUTH_GMAIL_SENDER_EMAIL")
 
     if len(client_id) < 10:
         raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_ID is invalid")
@@ -91,6 +103,7 @@ def _validate_delivery_provider(values: Mapping[str, str], kind: str) -> None:
         raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_SECRET is too short")
     if len(refresh_token) < 32:
         raise RuntimeError("release gate: AUTH_GMAIL_REFRESH_TOKEN is too short")
+    _validate_sender_email(sender_email)
 
 
 def evaluate_release_environment(
