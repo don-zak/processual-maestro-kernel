@@ -11,7 +11,7 @@
 :root{--bg:#070a0f;--panel:#101722;--line:#26344d;--line-strong:#3b4d6d;--text:#e8f0fc;--body:#c5d3e8;--muted:#8ba0bf;--dim:#536986;--accent:#f5a623;--accent-2:#ffbf57;--danger:#fb7185;--success:#34d399;--shadow:0 24px 80px rgba(0,0,0,.48);--focus:0 0 0 3px rgba(245,166,35,.16)}
 *,*::before,*::after{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;padding:28px 18px;background:radial-gradient(circle at 50% 18%,rgba(245,166,35,.08),transparent 34%),linear-gradient(180deg,#090d14 0%,var(--bg) 72%);color:var(--body);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;overflow-y:auto}body::before{content:"";position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);background-size:32px 32px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.7),transparent 78%)}a,button,input{font:inherit}button,a{-webkit-tap-highlight-color:transparent}.shell{position:relative;width:min(100%,460px);margin:0 auto}.back{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px 4px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:650}.back:hover{color:var(--text)}.back:focus-visible{outline:0;box-shadow:var(--focus);border-radius:7px}.card{position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(17,24,36,.97),rgba(13,19,29,.98));border:1px solid rgba(59,77,109,.58);border-radius:18px;padding:30px;box-shadow:var(--shadow)}.card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;background:linear-gradient(90deg,transparent,rgba(245,166,35,.7),transparent)}.brand{display:flex;align-items:center;gap:13px;margin-bottom:24px}.brand-mark{width:46px;height:46px;flex:none;filter:drop-shadow(0 0 18px rgba(245,166,35,.12))}.brand-title{font-size:17px;font-weight:850;letter-spacing:.17em;color:var(--text);line-height:1}.brand-sub{font-size:9px;color:var(--dim);letter-spacing:.19em;margin-top:6px}.environment{margin-left:auto;align-self:flex-start;border:1px solid rgba(59,77,109,.72);border-radius:999px;padding:5px 8px;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;background:rgba(8,13,21,.72)}.heading{margin:0;color:var(--text);font-size:23px;line-height:1.2;letter-spacing:-.025em}.intro{margin:8px 0 18px;color:var(--muted);font-size:13px;line-height:1.55}.gate-note{display:flex;gap:9px;align-items:flex-start;margin:-4px 0 18px;padding:10px 11px;border:1px solid rgba(59,77,109,.35);border-radius:10px;background:rgba(7,12,19,.48);color:var(--dim);font-size:11px;line-height:1.5}.gate-dot{width:7px;height:7px;flex:none;margin-top:5px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px rgba(52,211,153,.08)}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;margin-bottom:20px;border:1px solid rgba(59,77,109,.46);border-radius:12px;background:rgba(5,10,17,.55)}.tab{min-height:40px;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.045em}.tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,.025)}.tab.active{background:linear-gradient(180deg,var(--accent-2),var(--accent));color:#171006;box-shadow:0 6px 20px rgba(245,166,35,.16)}.tab:focus-visible{outline:0;box-shadow:var(--focus)}.field{margin:0 0 16px}.field label{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;color:#9eb0c9;font-size:11px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}.input-wrap{position:relative}.input,.inp{width:100%;min-height:46px;border:1px solid var(--line);border-radius:10px;background:rgba(7,12,19,.88);color:var(--text);padding:11px 13px;outline:none}.input:hover,.inp:hover{border-color:var(--line-strong)}.input:focus,.inp:focus{border-color:var(--accent);box-shadow:var(--focus);background:#090f18}.input::placeholder{color:#4f627f}.input.password{padding-right:74px}.visibility{position:absolute;right:7px;top:50%;transform:translateY(-50%);min-width:58px;border:1px solid var(--line);border-radius:7px;background:#111925;color:var(--muted);padding:6px 8px;cursor:pointer;font-size:11px;font-weight:750}.visibility:hover{border-color:var(--line-strong);color:var(--text)}.visibility:focus-visible{outline:0;box-shadow:var(--focus)}.primary,.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;border:0;border-radius:10px;background:linear-gradient(180deg,var(--accent-2),var(--accent));color:#161005;padding:11px 14px;font-weight:850;cursor:pointer;box-shadow:0 8px 24px rgba(245,166,35,.14)}.primary:hover:not(:disabled),.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 11px 28px rgba(245,166,35,.2)}.primary:disabled,.btn:disabled{opacity:.58;cursor:wait}.primary:focus-visible,.btn:focus-visible{outline:0;box-shadow:var(--focus)}.error{display:none;margin:12px 0 0;padding:10px 12px;border:1px solid rgba(251,113,133,.28);border-radius:9px;background:rgba(251,113,133,.065);color:#fda4af;font-size:12px;line-height:1.45}.secondary-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid rgba(59,77,109,.34)}.secondary{display:flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--line);border-radius:10px;background:rgba(7,12,19,.58);color:var(--muted);text-decoration:none;font-size:12px;font-weight:750;text-align:center;padding:9px 11px}.secondary:hover{border-color:#52698e;color:var(--text);background:rgba(15,23,35,.9)}.secondary:focus-visible{outline:0;box-shadow:var(--focus)}.request-access{grid-column:1/-1;border-color:rgba(245,166,35,.35);color:#e8bf77}.categories{margin-top:16px;padding:12px;border:1px solid rgba(59,77,109,.32);border-radius:10px;background:rgba(7,12,19,.42)}.categories-title{margin:0 0 8px;color:#91a5c3;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.category-list{display:flex;flex-wrap:wrap;gap:6px}.category{border:1px solid rgba(59,77,109,.42);border-radius:999px;padding:5px 8px;color:var(--dim);font-size:10px}.footer{text-align:center;color:#425673;font-size:10px;margin-top:15px;letter-spacing:.07em}.session-reset{display:block;margin:11px auto 0;border:0;background:transparent;color:var(--dim);font-size:10px;cursor:pointer}.session-reset:hover{color:var(--muted)}.inp-group{margin:14px 0}.inp-label{display:block;margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase}.inp-hint{font-size:10px;color:var(--dim);margin-top:5px}.btn-text{display:block;text-align:center;margin-top:14px;color:var(--accent);background:transparent;border:0}[hidden]{display:none!important}@media (max-width: 520px){body{padding:18px 12px}.card{padding:24px 20px}.environment{display:none}.secondary-actions{grid-template-columns: 1fr}.request-access{grid-column:auto}.heading{font-size:21px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
-<script src="/console/js/login_token_capture.js?v=adminauth04"></script>
+<script src="/console/js/login_token_capture.js?v=identity-mfa-v1"></script>
 </head>
 <body>
 <div class="shell" id="login-descent-gate" data-descent-gate-key="maestro_descent_gate_seen">
@@ -66,7 +66,6 @@
   const username=document.getElementById('login-username');
   const password=document.getElementById('login-password');
   const form=document.getElementById('login-form');
-  const button=document.getElementById('login-btn');
   const error=document.getElementById('login-error');
   const visibility=document.getElementById('login-password-visibility');
   const identityLabel=document.getElementById('identity-label');
@@ -86,37 +85,10 @@
     roleHelp.textContent=currentRole==='admin'?'Use your platform administrator credentials.':'Use your verified Maestro account email.';
     clearError();
   }
-  function showError(message){error.textContent=message||'Sign in failed.';error.style.display='block';}
-
-  async function doLogin(){
-    if(currentRole==='user') return;
-    const user = document.getElementById('login-username').value;
-    const pass = document.getElementById('login-password').value;
-    if(!user||!pass){showError('Enter credentials');(!user?username:password).focus();return;}
-    clearError();button.disabled=true;button.textContent='Signing in...';button.setAttribute('aria-busy','true');
-    try{
-      const res = await fetch('/auth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user, password: pass, role: currentRole }),
-      });
-      const data=await res.json().catch(()=>({}));
-      if(!res.ok||!data.access_token) throw new Error(data.detail||'Invalid credentials');
-      sessionStorage.setItem('maestro_token', data.access_token);
-      sessionStorage.setItem('maestro_role', currentRole);
-      sessionStorage.setItem('maestro_ui_session_started_at', new Date().toISOString());
-      localStorage.removeItem('maestro_token');
-      localStorage.removeItem('maestro_role');
-      window.PMK_LOGIN_TOKEN_CAPTURE?.persistAuthPayload?.({...data,role:currentRole});
-      password.value='';
-      window.location.href = currentRole === 'admin' ? '/admin' : '/console';
-    }catch(exc){showError(exc?.message||'Sign in failed.');}
-    finally{button.disabled=false;button.textContent='Sign In';button.removeAttribute('aria-busy');}
-  }
 
   document.getElementById('tab-admin').addEventListener('click', () => activateRole('admin'));
   document.getElementById('tab-user').addEventListener('click', () => activateRole('user'));
-  form.addEventListener('submit',(event)=>{event.preventDefault();doLogin();});
+  form.addEventListener('submit',(event)=>event.preventDefault());
   visibility.addEventListener('click',()=>{const showing=password.type==='text';password.type=showing?'password':'text';visibility.textContent=showing?'Show':'Hide';visibility.setAttribute('aria-pressed',String(!showing));visibility.setAttribute('aria-label',showing?'Show password':'Hide password');password.focus();});
   document.getElementById('login-lost-access-button').addEventListener('click',(event)=>{event.preventDefault();window.location.assign(ACCOUNT_RECOVERY_PATH);});
   document.getElementById('login-request-access-button').setAttribute('href',REQUEST_ACCESS_PATH);
