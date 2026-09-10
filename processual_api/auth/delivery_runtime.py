@@ -63,6 +63,7 @@ def _build_provider(config: APISettings):
             client_id=config.auth_gmail_client_id or "",
             client_secret=config.auth_gmail_client_secret or "",
             refresh_token=config.auth_gmail_refresh_token or "",
+            sender_email=config.auth_gmail_sender_email or "",
             timeout_seconds=config.auth_delivery_request_timeout_seconds,
         )
 
