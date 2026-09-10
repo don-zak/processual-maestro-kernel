@@ -94,6 +94,8 @@ services:
       - AUTH_GMAIL_CLIENT_SECRET=${AUTH_GMAIL_CLIENT_SECRET:-}
       - AUTH_GMAIL_REFRESH_TOKEN=${AUTH_GMAIL_REFRESH_TOKEN:-}
       - AUTH_GMAIL_SENDER_EMAIL=${AUTH_GMAIL_SENDER_EMAIL:-}
+      - AUTH_RESEND_API_KEY=${AUTH_RESEND_API_KEY:-}
+      - AUTH_RESEND_SENDER_EMAIL=${AUTH_RESEND_SENDER_EMAIL:-}
       - AUTH_PUBLIC_BASE_URL=${AUTH_PUBLIC_BASE_URL:?AUTH_PUBLIC_BASE_URL is required}
       - AUTH_DELIVERY_BATCH_SIZE=${AUTH_DELIVERY_BATCH_SIZE:-25}
       - AUTH_DELIVERY_LEASE_SECONDS=${AUTH_DELIVERY_LEASE_SECONDS:-300}
@@ -225,7 +227,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
     volumes:
       - ./ops/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./ops/grafana/provisioning/dashboards:/var/lib/grafana/dashboards
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards
       - ./ops/grafana/dashboards:/var/lib/grafana/dashboards
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
