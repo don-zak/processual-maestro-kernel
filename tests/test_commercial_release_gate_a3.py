@@ -29,6 +29,7 @@ def _valid_environment() -> dict[str, str]:
         "AUTH_RATE_LIMIT_PEPPER": "l" * 40,
         "AUTH_DELIVERY_KEY_RING_JSON": '{"v1":"key-material"}',
         "AUTH_DELIVERY_CURRENT_KEY_VERSION": "v1",
+        "AUTH_DELIVERY_PROVIDER_KIND": "http",
         "AUTH_DELIVERY_PROVIDER_URL": "https://mail.maestro.invalid/send",
         "AUTH_DELIVERY_PROVIDER_TOKEN": "d" * 40,
         "AUTH_PUBLIC_BASE_URL": "https://accounts.maestro.invalid",
@@ -53,6 +54,22 @@ def _valid_environment() -> dict[str, str]:
     }
 
 
+def _gmail_environment() -> dict[str, str]:
+    environment = _valid_environment()
+    environment["AUTH_DELIVERY_PROVIDER_KIND"] = "gmail_api"
+    environment.pop("AUTH_DELIVERY_PROVIDER_URL")
+    environment.pop("AUTH_DELIVERY_PROVIDER_TOKEN")
+    environment.update(
+        {
+            "AUTH_GMAIL_CLIENT_ID": "gmail-client-id.apps.googleusercontent.com",
+            "AUTH_GMAIL_CLIENT_SECRET": "gmail-client-secret-value",
+            "AUTH_GMAIL_REFRESH_TOKEN": "refresh-token-" + "r" * 40,
+            "AUTH_GMAIL_SENDER_EMAIL": "maestro.sender@gmail.com",
+        }
+    )
+    return environment
+
+
 def test_valid_staging_and_production_environment_passes() -> None:
     staging = evaluate_release_environment(_valid_environment())
     assert staging.environment == "staging"
@@ -61,6 +78,7 @@ def test_valid_staging_and_production_environment_passes() -> None:
     assert set(staging.checks) == {
         "required_values",
         "secret_strength",
+        "delivery_provider",
         "cors",
         "public_urls",
         "datastores",
@@ -70,6 +88,38 @@ def test_valid_staging_and_production_environment_passes() -> None:
     production = _valid_environment()
     production["ENVIRONMENT"] = "production"
     assert evaluate_release_environment(production).environment == "production"
+
+
+def test_valid_gmail_delivery_environment_passes_without_http_provider_secrets() -> None:
+    result = evaluate_release_environment(_gmail_environment())
+    assert result.environment == "staging"
+    assert "delivery_provider" in result.checks
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    (
+        ("AUTH_GMAIL_CLIENT_ID", "short"),
+        ("AUTH_GMAIL_CLIENT_SECRET", "short"),
+        ("AUTH_GMAIL_REFRESH_TOKEN", "short"),
+        ("AUTH_GMAIL_SENDER_EMAIL", "invalid sender"),
+    ),
+)
+def test_gmail_delivery_environment_fails_closed_when_authority_is_invalid(
+    name: str,
+    value: str,
+) -> None:
+    environment = _gmail_environment()
+    environment[name] = value
+    with pytest.raises(RuntimeError, match="release gate"):
+        evaluate_release_environment(environment)
+
+
+def test_unknown_delivery_provider_kind_fails_closed() -> None:
+    environment = _valid_environment()
+    environment["AUTH_DELIVERY_PROVIDER_KIND"] = "unknown"
+    with pytest.raises(RuntimeError, match="release gate"):
+        evaluate_release_environment(environment)
 
 
 def test_release_gate_matches_actual_alembic_graph_head() -> None:
