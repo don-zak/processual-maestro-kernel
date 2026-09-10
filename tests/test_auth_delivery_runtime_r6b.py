@@ -10,6 +10,7 @@ import processual_api.auth.delivery_runtime as runtime_module
 from processual_api.auth.delivery_provider import (
     GmailApiDeliveryProvider,
     HttpEmailDeliveryProvider,
+    ResendDeliveryProvider,
 )
 from processual_api.auth.delivery_runtime import (
     DeliveryRuntimeUnavailableError,
@@ -30,6 +31,8 @@ def _config(**updates):
         "auth_gmail_client_secret": "gmail-client-secret-value",
         "auth_gmail_refresh_token": "refresh-token-" + "r" * 40,
         "auth_gmail_sender_email": "maestro.sender@gmail.com",
+        "auth_resend_api_key": "resend-key-" + "r" * 32,
+        "auth_resend_sender_email": "recovery@maestro.example",
         "auth_public_base_url": "https://accounts.example.test",
         "auth_delivery_batch_size": 25,
         "auth_delivery_lease_seconds": 300,
@@ -60,6 +63,15 @@ def test_delivery_runtime_wires_gmail_provider(monkeypatch):
 
     assert runtime.dispatcher is not None
     assert isinstance(runtime.dispatcher._provider, GmailApiDeliveryProvider)
+
+
+def test_delivery_runtime_wires_resend_provider(monkeypatch):
+    monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
+
+    runtime = build_delivery_runtime(_config(auth_delivery_provider_kind="resend"))
+
+    assert runtime.dispatcher is not None
+    assert isinstance(runtime.dispatcher._provider, ResendDeliveryProvider)
 
 
 @pytest.mark.parametrize(
@@ -101,3 +113,17 @@ def test_delivery_runtime_rejects_incomplete_gmail_authority(monkeypatch, update
         build_delivery_runtime(
             _config(auth_delivery_provider_kind="gmail_api", **updates)
         )
+
+
+@pytest.mark.parametrize(
+    "updates",
+    (
+        {"auth_resend_api_key": "short"},
+        {"auth_resend_sender_email": "invalid sender"},
+    ),
+)
+def test_delivery_runtime_rejects_incomplete_resend_authority(monkeypatch, updates):
+    monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
+
+    with pytest.raises(DeliveryRuntimeUnavailableError):
+        build_delivery_runtime(_config(auth_delivery_provider_kind="resend", **updates))
