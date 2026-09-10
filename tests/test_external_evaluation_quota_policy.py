@@ -79,15 +79,40 @@ def test_runtime_binding_or_task_execute_endpoint_infers_integration() -> None:
     )
 
 
-def test_quota_governed_route_ignores_arbitrary_client_quota(monkeypatch) -> None:
+def test_quota_governed_route_ignores_arbitrary_client_quota_and_persists_type(
+    monkeypatch,
+) -> None:
     captured = {}
+    authority = {
+        "evaluation_grants_v1": [
+            {
+                "grant_id": "eval_test",
+                "max_requests": 1,
+            }
+        ]
+    }
+    saved = []
 
     async def fake_create(*, body, request, current_user):
         del request, current_user
         captured["max_requests"] = body.max_requests
-        return {"status": "created", "grant": {"grant_id": "eval_test", "max_requests": body.max_requests}}
+        authority["evaluation_grants_v1"][0]["max_requests"] = body.max_requests
+        return {
+            "status": "created",
+            "grant": {"grant_id": "eval_test", "max_requests": body.max_requests},
+        }
+
+    async def fake_load(owner_id):
+        assert owner_id == "admin"
+        return authority
+
+    async def fake_save(owner_id, raw):
+        assert owner_id == "admin"
+        saved.append(raw)
 
     monkeypatch.setattr(quota_routes, "create_evaluation_grant", fake_create)
+    monkeypatch.setattr(quota_routes, "load_evaluation_authority_state", fake_load)
+    monkeypatch.setattr(quota_routes, "save_evaluation_authority_state", fake_save)
 
     crm = asyncio.run(
         quota_routes.create_quota_governed_evaluation_grant(
@@ -98,7 +123,12 @@ def test_quota_governed_route_ignores_arbitrary_client_quota(monkeypatch) -> Non
     )
     assert captured["max_requests"] == CRM_EVALUATION_KEY_QUOTA
     assert crm["grant"]["max_requests"] == CRM_EVALUATION_KEY_QUOTA
+    assert crm["grant"]["evaluation_type"] == EVALUATION_KEY_TYPE_CRM
     assert crm["grant"]["quota_policy"] == "integration_equals_2x_crm"
+    assert authority["evaluation_grants_v1"][0]["evaluation_type"] == EVALUATION_KEY_TYPE_CRM
+    assert authority["evaluation_grants_v1"][0]["max_requests"] == CRM_EVALUATION_KEY_QUOTA
+    assert authority["evaluation_grants_v1"][0]["quota_unit"] == "admitted_execution"
+    assert saved
 
     integration = asyncio.run(
         quota_routes.create_quota_governed_evaluation_grant(
@@ -113,3 +143,6 @@ def test_quota_governed_route_ignores_arbitrary_client_quota(monkeypatch) -> Non
     )
     assert captured["max_requests"] == INTEGRATION_EVALUATION_KEY_QUOTA
     assert integration["grant"]["max_requests"] == CRM_EVALUATION_KEY_QUOTA * 2
+    assert integration["grant"]["evaluation_type"] == EVALUATION_KEY_TYPE_INTEGRATION
+    assert authority["evaluation_grants_v1"][0]["evaluation_type"] == EVALUATION_KEY_TYPE_INTEGRATION
+    assert authority["evaluation_grants_v1"][0]["max_requests"] == INTEGRATION_EVALUATION_KEY_QUOTA
