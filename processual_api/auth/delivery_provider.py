@@ -18,6 +18,7 @@ ALLOWED_VERIFICATION_TEMPLATES = frozenset(
 
 GMAIL_OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GMAIL_SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+RESEND_SEND_ENDPOINT = "https://api.resend.com/emails"
 
 _TEMPLATE_SUBJECTS = {
     "verify_email": "Verify your Processual Maestro email",
@@ -80,7 +81,7 @@ def validate_https_endpoint(
     return normalized
 
 
-def _validate_sender_email(value: str) -> str:
+def _validate_sender_email(value: str, *, label: str) -> str:
     normalized = value.strip()
     if (
         len(normalized) > 320
@@ -89,8 +90,18 @@ def _validate_sender_email(value: str) -> str:
         or normalized.endswith("@")
         or any(character.isspace() for character in normalized)
     ):
-        raise ValueError("Gmail sender email is unavailable.")
+        raise ValueError(f"{label} is unavailable.")
     return normalized
+
+
+def _verification_text(*, template: str, verification_url: str) -> str:
+    if template not in ALLOWED_VERIFICATION_TEMPLATES:
+        raise ValueError("Delivery verification template is invalid.")
+    return (
+        f"{_TEMPLATE_INTRO[template]}\n\n"
+        f"{verification_url}\n\n"
+        "If you did not request this action, you can ignore this message."
+    )
 
 
 class HttpEmailDeliveryProvider:
@@ -209,7 +220,10 @@ class GmailApiDeliveryProvider:
         self._client_id = normalized_client_id
         self._client_secret = normalized_client_secret
         self._refresh_token = normalized_refresh_token
-        self._sender_email = _validate_sender_email(sender_email)
+        self._sender_email = _validate_sender_email(
+            sender_email,
+            label="Gmail sender email",
+        )
         self._timeout_seconds = timeout_seconds
 
     def _raw_message(
@@ -220,9 +234,6 @@ class GmailApiDeliveryProvider:
         verification_url: str,
         idempotency_key: str,
     ) -> str:
-        if template not in ALLOWED_VERIFICATION_TEMPLATES:
-            raise ValueError("Delivery verification template is invalid.")
-
         message = EmailMessage()
         message["From"] = self._sender_email
         message["To"] = recipient
@@ -232,9 +243,10 @@ class GmailApiDeliveryProvider:
         stable_digest = hashlib.sha256(idempotency_key.encode()).hexdigest()
         message["Message-ID"] = f"<{stable_digest}@delivery.processual-maestro.invalid>"
         message.set_content(
-            f"{_TEMPLATE_INTRO[template]}\n\n"
-            f"{verification_url}\n\n"
-            "If you did not request this action, you can ignore this message."
+            _verification_text(
+                template=template,
+                verification_url=verification_url,
+            )
         )
         return base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip("=")
 
@@ -321,6 +333,77 @@ class GmailApiDeliveryProvider:
         self._raise_for_send_response(send_response)
 
 
+class ResendDeliveryProvider:
+    """Send authentication emails through Resend's HTTPS transactional API."""
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        sender_email: str,
+        timeout_seconds: float,
+    ) -> None:
+        normalized_api_key = api_key.strip()
+        if len(normalized_api_key) < 20:
+            raise ValueError("Resend API key is unavailable.")
+        if timeout_seconds <= 0 or timeout_seconds > 60:
+            raise ValueError("Delivery provider timeout is outside its safe range.")
+
+        self._api_key = normalized_api_key
+        self._sender_email = _validate_sender_email(
+            sender_email,
+            label="Resend sender email",
+        )
+        self._timeout_seconds = timeout_seconds
+
+    async def send_verification_email(
+        self,
+        *,
+        template: str,
+        recipient: str,
+        verification_url: str,
+        idempotency_key: str,
+    ) -> None:
+        text = _verification_text(
+            template=template,
+            verification_url=verification_url,
+        )
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout_seconds,
+                follow_redirects=False,
+            ) as client:
+                response = await client.post(
+                    RESEND_SEND_ENDPOINT,
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Accept": "application/json",
+                        "Idempotency-Key": idempotency_key,
+                    },
+                    json={
+                        "from": self._sender_email,
+                        "to": [recipient],
+                        "subject": _TEMPLATE_SUBJECTS[template],
+                        "text": text,
+                    },
+                )
+        except httpx.TimeoutException as exc:
+            raise DeliveryProviderError("provider_timeout", retryable=True) from exc
+        except httpx.RequestError as exc:
+            raise DeliveryProviderError("provider_network", retryable=True) from exc
+
+        if 200 <= response.status_code < 300:
+            return
+        if response.status_code == 408:
+            raise DeliveryProviderError("provider_timeout", retryable=True)
+        if response.status_code == 429:
+            raise DeliveryProviderError("provider_rate_limited", retryable=True)
+        if response.status_code >= 500:
+            raise DeliveryProviderError("provider_5xx", retryable=True)
+        raise DeliveryProviderError("provider_4xx", retryable=False)
+
+
 __all__ = [
     "ALLOWED_VERIFICATION_TEMPLATES",
     "DeliveryProvider",
@@ -329,5 +412,7 @@ __all__ = [
     "GMAIL_SEND_ENDPOINT",
     "GmailApiDeliveryProvider",
     "HttpEmailDeliveryProvider",
+    "RESEND_SEND_ENDPOINT",
+    "ResendDeliveryProvider",
     "validate_https_endpoint",
 ]
