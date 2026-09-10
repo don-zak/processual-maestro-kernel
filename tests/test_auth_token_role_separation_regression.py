@@ -69,9 +69,12 @@ def test_auth_token_rejects_unknown_login_role(monkeypatch):
     assert response.json()["detail"] == "Invalid login role"
 
 
-def test_login_page_sends_selected_role_to_auth_token():
+def test_login_page_does_not_delegate_identity_authority_to_auth_token_role() -> None:
     source = (ROOT / "processual_api" / "static" / "login.html").read_text(
         encoding="utf-8"
     )
 
-    assert "role: currentRole" in source
+    assert "role: currentRole" not in source
+    assert "fetch('/auth/token'" not in source
+    assert "PMK_LOGIN_TOKEN_CAPTURE" not in source
+    assert "/console/js/login_token_capture.js?v=identity-mfa-v1" in source
