@@ -5,14 +5,25 @@ import asyncio
 from processual_api.auth import platform_admin_bootstrap_env as bootstrap_env
 
 
-def test_startup_bootstrap_is_noop_after_authority_exists(monkeypatch, capsys):
+def test_startup_bootstrap_checks_recovery_email_after_authority_exists(
+    monkeypatch,
+    capsys,
+):
     async def authority_exists() -> bool:
         return True
+
+    async def ensure_recovery_email() -> bool:
+        return False
 
     monkeypatch.setattr(
         bootstrap_env,
         "_platform_admin_authority_exists",
         authority_exists,
+    )
+    monkeypatch.setattr(
+        bootstrap_env,
+        "_ensure_platform_admin_recovery_email",
+        ensure_recovery_email,
     )
     monkeypatch.delenv(bootstrap_env.SECRET_ENV, raising=False)
     monkeypatch.delenv(bootstrap_env.SECRET_HASH_ENV, raising=False)
@@ -20,6 +31,32 @@ def test_startup_bootstrap_is_noop_after_authority_exists(monkeypatch, capsys):
     assert asyncio.run(bootstrap_env._run()) == 0
     output = capsys.readouterr()
     assert "PlatformAdminBootstrapClosed=True" in output.out
+    assert "PlatformAdminRecoveryEmailBackfilled=False" in output.out
+    assert output.err == ""
+
+
+def test_startup_bootstrap_reports_recovery_email_backfill(monkeypatch, capsys):
+    async def authority_exists() -> bool:
+        return True
+
+    async def ensure_recovery_email() -> bool:
+        return True
+
+    monkeypatch.setattr(
+        bootstrap_env,
+        "_platform_admin_authority_exists",
+        authority_exists,
+    )
+    monkeypatch.setattr(
+        bootstrap_env,
+        "_ensure_platform_admin_recovery_email",
+        ensure_recovery_email,
+    )
+
+    assert asyncio.run(bootstrap_env._run()) == 0
+    output = capsys.readouterr()
+    assert "PlatformAdminBootstrapClosed=True" in output.out
+    assert "PlatformAdminRecoveryEmailBackfilled=True" in output.out
     assert output.err == ""
 
 
