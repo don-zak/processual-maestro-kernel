@@ -6,8 +6,23 @@ STATIC_DIR = Path(__file__).resolve().parents[1] / "processual_api" / "static"
 def test_login_loads_identity_mfa_bridge_early() -> None:
     html = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
 
-    assert "/console/js/login_token_capture.js" in html
+    assert "/console/js/login_token_capture.js?v=identity-mfa-v1" in html
     assert html.index("login_token_capture.js") < html.index("</head>")
+
+
+def test_login_shell_has_no_superseded_inline_auth_authority() -> None:
+    html = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+
+    for forbidden in (
+        "fetch('/auth/token'",
+        "async function doLogin",
+        "PMK_LOGIN_TOKEN_CAPTURE",
+        "persistAuthPayload",
+        "sessionStorage.setItem('maestro_token'",
+        "sessionStorage.setItem('maestro_role'",
+    ):
+        assert forbidden not in html
+    assert "form.addEventListener('submit',(event)=>event.preventDefault());" in html
 
 
 def test_login_bridge_persists_only_canonical_identity_session() -> None:
