@@ -12,6 +12,7 @@ def test_external_evaluation_portal_has_no_demo_task_defaults() -> None:
     assert "External Evaluation Workspace" in source
     assert "PostgreSQL-backed" in source
     assert "Production execution: disabled" in source
+    assert "Subscription-free, grant-bounded sandbox evaluation" in source
     assert "demo-customer" not in source
     assert "evaluation.crm.integration" not in source
     assert '<textarea id="task-input" spellcheck="false">{}</textarea>' in source
@@ -28,18 +29,30 @@ def test_external_evaluation_portal_preserves_runtime_contract_ids() -> None:
         "type",
         "quota-used",
         "quota-remaining",
+        "grant-id",
+        "key-id",
+        "expires-at",
         "quota-bar",
         "quota-caption",
+        "allowed-tasks",
+        "allowed-bindings",
+        "stage-admitted",
+        "stage-executing",
+        "stage-outcome",
+        "stage-evidence",
         "execution-state",
         "execution-meta",
         "evidence-state",
         "evidence-meta",
+        "quota-effect",
+        "quota-effect-meta",
         "task-id",
         "binding-id",
         "idempotency-key",
         "task-input",
         "execute",
         "result",
+        "customer-report",
     }
     for element_id in required_ids:
         assert f'id="{element_id}"' in source
@@ -48,6 +61,50 @@ def test_external_evaluation_portal_preserves_runtime_contract_ids() -> None:
     assert "sessionStorage" not in portal_js
     assert "localStorage" not in portal_js
     assert "let apiKey = ''" in portal_js
+
+
+def test_external_evaluation_portal_exposes_safe_authoritative_scope_and_progress() -> None:
+    html = PORTAL.read_text(encoding="utf-8")
+    js = PORTAL_JS.read_text(encoding="utf-8")
+
+    for marker in (
+        "Evaluation identity",
+        "Authorized scope",
+        "Execution progress",
+        "Customer evaluation receipt",
+        "Admitted",
+        "Executing",
+        "Evidence persisted",
+        "Subscription</strong><span>No subscription",
+    ):
+        assert marker in html
+
+    for marker in (
+        "payload.grant_id",
+        "payload.api_key_id",
+        "payload.api_key_prefix",
+        "payload.expires_at",
+        "payload.allowed_task_ids",
+        "payload.allowed_binding_ids",
+        "external_evaluation_customer_receipt",
+        "idempotent_replay",
+        "Status refresh: +0 quota.",
+        "New execution admitted; one evaluation quota unit consumed.",
+        "raw_api_key_included: false",
+        "raw_task_input_included: false",
+        "qualification_decision: 'operator_controlled'",
+    ):
+        assert marker in js
+
+
+def test_external_evaluation_portal_never_persists_or_reports_raw_key() -> None:
+    js = PORTAL_JS.read_text(encoding="utf-8")
+
+    assert "sessionStorage" not in js
+    assert "localStorage" not in js
+    assert "raw_api_key_included: false" in js
+    assert "raw_task_input_included: false" in js
+    assert "raw_secret" not in js.lower()
 
 
 def test_client_console_badge_is_readiness_derived_not_demo_state() -> None:
