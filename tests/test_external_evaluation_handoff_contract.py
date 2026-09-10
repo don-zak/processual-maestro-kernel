@@ -84,10 +84,10 @@ def test_customer_portal_matches_the_handoff_execution_story() -> None:
     for marker in (
         "External Evaluation Workspace",
         "Production execution: disabled",
-        "Admitted executions",
-        "Remaining quota",
+        "Quota used",
+        "Quota remaining",
         "Latest execution",
-        "Persisted evidence",
+        "Safe evidence",
     ):
         assert marker in html
 
