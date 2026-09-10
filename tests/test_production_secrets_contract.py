@@ -27,6 +27,7 @@ def test_settings_exposes_canonical_production_secret_contract() -> None:
         "AUTH_DELIVERY_PROVIDER_TOKEN",
         "AUTH_GMAIL_CLIENT_SECRET",
         "AUTH_GMAIL_REFRESH_TOKEN",
+        "AUTH_RESEND_API_KEY",
         "AUTH_MFA_KEY_RING_JSON",
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
     }
@@ -45,6 +46,7 @@ def test_cloud_run_readme_maps_default_http_provider_secrets_through_secret_mana
     provider_specific = {
         "AUTH_GMAIL_CLIENT_SECRET",
         "AUTH_GMAIL_REFRESH_TOKEN",
+        "AUTH_RESEND_API_KEY",
     }
     for name in PRODUCTION_SECRET_ENV_VARS:
         if name in provider_specific:
