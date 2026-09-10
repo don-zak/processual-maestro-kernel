@@ -63,6 +63,19 @@ async def _platform_admin_authority_exists() -> bool:
         return await repository.platform_admin_authority_exists()
 
 
+async def _ensure_platform_admin_recovery_email() -> bool:
+    async with SqlAlchemyPlatformAdminBootstrapUnitOfWork(
+        get_session_factory()
+    ) as unit:
+        repository = unit.repository
+        if repository is None:
+            raise RuntimeError("Platform-admin bootstrap repository is unavailable.")
+        created = await repository.ensure_active_platform_admin_recovery_email()
+        if created:
+            await unit.commit()
+        return created
+
+
 async def _bootstrap(environment: BootstrapEnvironment) -> None:
     service = PlatformAdminBootstrapService(
         unit_of_work_factory=lambda: SqlAlchemyPlatformAdminBootstrapUnitOfWork(
@@ -87,7 +100,9 @@ async def _run() -> int:
 
         try:
             if await _platform_admin_authority_exists():
+                backfilled = await _ensure_platform_admin_recovery_email()
                 print("PlatformAdminBootstrapClosed=True")
+                print(f"PlatformAdminRecoveryEmailBackfilled={backfilled}")
                 return 0
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
@@ -97,7 +112,13 @@ async def _run() -> int:
             environment = _load_environment()
             await _bootstrap(environment)
         except PlatformAdminAlreadyBootstrappedError:
+            try:
+                backfilled = await _ensure_platform_admin_recovery_email()
+            except RuntimeError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
             print("PlatformAdminBootstrapClosed=True")
+            print(f"PlatformAdminRecoveryEmailBackfilled={backfilled}")
             return 0
         except PlatformAdminBootstrapDeniedError:
             print("Platform administrator bootstrap denied.", file=sys.stderr)
@@ -110,6 +131,7 @@ async def _run() -> int:
             return 5
 
         print("PlatformAdminBootstrapCreated=True")
+        print("PlatformAdminRecoveryEmailBackfilled=False")
         print("NextAction=login_and_complete_mfa")
         return 0
     finally:
