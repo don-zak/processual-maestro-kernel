@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
-from typing import Any, AsyncIterator
 
 from fastapi import FastAPI
 
