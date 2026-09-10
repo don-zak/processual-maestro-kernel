@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-import os
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -72,10 +71,8 @@ def _build_provider(config: APISettings) -> DeliveryProvider:
 
     if provider_kind == "resend":
         return ResendDeliveryProvider(
-            api_key=getattr(config, "auth_resend_api_key", None)
-            or os.environ.get("AUTH_RESEND_API_KEY", ""),
-            sender_email=getattr(config, "auth_resend_sender_email", None)
-            or os.environ.get("AUTH_RESEND_SENDER_EMAIL", ""),
+            api_key=config.auth_resend_api_key or "",
+            sender_email=config.auth_resend_sender_email or "",
             timeout_seconds=config.auth_delivery_request_timeout_seconds,
         )
 
