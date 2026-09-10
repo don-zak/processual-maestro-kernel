@@ -280,6 +280,7 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
         "user_id": str(grant.get("user_id") or ""),
         "issued_to": str(grant.get("issued_to") or ""),
         "purpose": str(grant.get("purpose") or ""),
+        "evaluation_type": str(grant.get("evaluation_type") or ""),
         "allowed_task_ids": list(grant.get("allowed_task_ids") or []),
         "task_scope_ids": list(grant.get("task_scope_ids") or []),
         "task_authority_source": str(
@@ -294,6 +295,8 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
         ),
         "allowed_scopes": list(grant.get("allowed_scopes") or []),
         "max_requests": int(grant.get("max_requests", 0) or 0),
+        "quota_unit": str(grant.get("quota_unit") or ""),
+        "quota_policy": str(grant.get("quota_policy") or ""),
         "created_at": str(grant.get("created_at") or ""),
         "expires_at": str(grant.get("expires_at") or ""),
         "revoked_at": grant.get("revoked_at"),
