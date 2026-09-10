@@ -217,7 +217,7 @@ async def evaluation_key_runtime_status(
             quota_used = max(0, int(key.usage_count or 0))
             quota_remaining = max(0, quota_limit - quota_used)
             evaluation_type = normalized_evaluation_key_type(
-                str(payload.get("evaluation_type") or grant.get("evaluation_type") or ""),
+                str(grant.get("evaluation_type") or payload.get("evaluation_type") or ""),
                 allowed_binding_ids=list(grant.get("allowed_binding_ids") or []),
                 allowed_endpoints=list(grant.get("allowed_endpoints") or []),
             )
