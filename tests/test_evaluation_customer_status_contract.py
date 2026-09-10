@@ -62,10 +62,16 @@ def test_customer_portal_uses_memory_only_api_key_and_runtime_endpoints() -> Non
     assert "External Evaluation Workspace" in html
     assert "evaluation_client_portal.js?v=eval-client-authority-v3" in html
     assert "evaluation_client_portal.js?v=eval-client-authority-v2" not in html
-    assert "Admitted executions" in html
-    assert "Remaining quota" in html
-    assert "Latest execution" in html
-    assert "Persisted evidence" in html
+    for marker in (
+        'id="quota-used"',
+        'id="quota-remaining"',
+        "Authoritative Evaluation quota",
+        'id="execution-state"',
+        'id="evidence-state"',
+        'id="quota-effect"',
+        "New admitted execution: +1 · durable replay: +0",
+    ):
+        assert marker in html
     assert "/evaluation/runtime/status" in js
     assert "/evaluation/runtime/task-execute" in js
     assert "X-API-Key" in js
