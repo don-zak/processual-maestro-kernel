@@ -168,6 +168,24 @@ def test_admin_session_refresh_is_single_flight_and_mfa_fail_closed() -> None:
         assert marker in source
 
 
+def test_admin_authority_verification_is_single_flight_and_short_lived_cached() -> None:
+    source = _session_source()
+    for marker in (
+        "const AUTHORITY_VERIFICATION_TTL_MS = 1500",
+        "let authorityCheckInFlight = null",
+        "let lastVerifiedBearer = ''",
+        "let lastAuthorityVerifiedAt = 0",
+        "if (authorityCheckInFlight) return authorityCheckInFlight",
+        "authorityCheckInFlight = runAdminSessionCheck(token)",
+        "token === lastVerifiedBearer",
+        "Date.now() - lastAuthorityVerifiedAt < AUTHORITY_VERIFICATION_TTL_MS",
+        "lastVerifiedBearer = token",
+        "lastAuthorityVerifiedAt = Date.now()",
+        "resetAuthorityVerificationCache();",
+    ):
+        assert marker in source
+
+
 def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() -> None:
     source = _session_source()
     assert "function loadScript(selector, src, datasetKey, onLoad)" in source
