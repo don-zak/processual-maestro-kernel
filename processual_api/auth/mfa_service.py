@@ -106,20 +106,34 @@ class MfaService:
             if not account_name:
                 raise MfaAuthorityUnavailableError("MFA identity authority is unavailable.")
             await repository.disable_pending_factors(user_id, disabled_at=now)
-            factor_id = uuid.uuid4()
+            existing_factor = await repository.factor_for_label_for_update(
+                user_id,
+                label=label,
+            )
+            if existing_factor is not None and existing_factor.status != "disabled":
+                raise MfaConflictError("MFA enrollment is already in progress.")
+            factor_id = existing_factor.id if existing_factor is not None else uuid.uuid4()
             secret = generate_totp_secret()
             encrypted = self._cipher.encrypt(
                 secret,
                 factor_id=str(factor_id),
                 user_id=str(user_id),
             )
-            repository.add_pending_factor(
-                factor_id=factor_id,
-                user_id=user_id,
-                label=label,
-                ciphertext=encrypted.ciphertext,
-                key_version=encrypted.key_version,
-            )
+            if existing_factor is None:
+                repository.add_pending_factor(
+                    factor_id=factor_id,
+                    user_id=user_id,
+                    label=label,
+                    ciphertext=encrypted.ciphertext,
+                    key_version=encrypted.key_version,
+                )
+            else:
+                repository.reactivate_factor_for_enrollment(
+                    existing_factor,
+                    ciphertext=encrypted.ciphertext,
+                    key_version=encrypted.key_version,
+                    updated_at=now,
+                )
             await uow.commit()
         return MfaEnrollment(
             secret=encode_totp_secret(secret),
