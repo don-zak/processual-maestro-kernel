@@ -13,6 +13,11 @@ from fastapi import Depends, Request
 from pydantic import Field
 
 from processual_api.auth.security import get_current_user
+from processual_api.services.evaluation_authority_postgres import (
+    load_evaluation_authority_state,
+    save_evaluation_authority_state,
+)
+from processual_api.services.evaluation_grants import find_evaluation_grant
 from processual_api.services.evaluation_key_quota_policy import (
     CRM_EVALUATION_KEY_QUOTA,
     INTEGRATION_EVALUATION_KEY_QUOTA,
@@ -61,13 +66,28 @@ async def create_quota_governed_evaluation_grant(
         request=request,
         current_user=current_user,
     )
-    grant = dict(result.get("grant") or {})
-    grant["evaluation_type"] = resolved_type
-    grant["quota_unit"] = "maestro_units"
-    grant["crm_key_quota"] = CRM_EVALUATION_KEY_QUOTA
-    grant["integration_key_quota"] = INTEGRATION_EVALUATION_KEY_QUOTA
-    grant["quota_policy"] = "integration_equals_2x_crm"
-    result["grant"] = grant
+
+    # The Evaluation type is grant authority, not presentation metadata. Persist
+    # it into the shared PostgreSQL-backed grant snapshot before returning.
+    owner_id = str(current_user.get("sub") or current_user.get("user_id") or "default")
+    raw = await load_evaluation_authority_state(owner_id)
+    created = dict(result.get("grant") or {})
+    grant_id = str(created.get("grant_id") or "")
+    grant = find_evaluation_grant(raw, grant_id)
+    if grant is not None:
+        grant["evaluation_type"] = resolved_type
+        grant["max_requests"] = quota
+        grant["quota_unit"] = "admitted_execution"
+        grant["quota_policy"] = "integration_equals_2x_crm"
+        await save_evaluation_authority_state(owner_id, raw)
+
+    created["evaluation_type"] = resolved_type
+    created["max_requests"] = quota
+    created["quota_unit"] = "admitted_execution"
+    created["crm_key_quota"] = CRM_EVALUATION_KEY_QUOTA
+    created["integration_key_quota"] = INTEGRATION_EVALUATION_KEY_QUOTA
+    created["quota_policy"] = "integration_equals_2x_crm"
+    result["grant"] = created
     return result
 
 
