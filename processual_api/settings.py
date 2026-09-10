@@ -21,6 +21,7 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "AUTH_DELIVERY_PROVIDER_TOKEN",
     "AUTH_GMAIL_CLIENT_SECRET",
     "AUTH_GMAIL_REFRESH_TOKEN",
+    "AUTH_RESEND_API_KEY",
     "AUTH_MFA_KEY_RING_JSON",
     "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
 )
@@ -111,6 +112,12 @@ class APISettings:
     )
     auth_gmail_sender_email: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_GMAIL_SENDER_EMAIL")
+    )
+    auth_resend_api_key: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_RESEND_API_KEY")
+    )
+    auth_resend_sender_email: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_RESEND_SENDER_EMAIL")
     )
     auth_public_base_url: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_PUBLIC_BASE_URL")
