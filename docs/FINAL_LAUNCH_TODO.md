@@ -86,8 +86,13 @@ The final-launch hardening requirements below are **not a blocker for completing
 - [ ] Platform Admin authority endpoint returns authorized state only for a valid active Platform Admin session.
 - [ ] Create External Evaluation grant.
 - [ ] Issue Evaluation API key; raw key is shown once only and is never persisted/redisplayed/logged.
+- [ ] External Evaluation API key requires no subscription, registration, or commercial quota authority; all allowed tasks, bindings, endpoints, expiry, evaluation type, and admitted-execution quota are derived from the authoritative grant.
+- [ ] Grant explicitly classifies the key as CRM or Integration and applies the corresponding fixed evaluation quota policy rather than a client/UI-selected commercial plan.
+- [ ] Generate a customer handoff text beside the one-time API key containing only safe technical/operational details needed to complete the evaluation: portal/base URL, header name, grant/key identifiers or prefix, evaluation type, expiry, quota, allowed tasks/bindings/endpoints, idempotency guidance, production-disabled statement, and support/next-step guidance. It must contain no additional secret material beyond the separately displayed one-time key.
 - [ ] Confirm key delivery and customer receipt acknowledgment.
-- [ ] Customer runtime status displays credential state, evaluation type, quota limit, admitted usage, remaining quota, latest execution, persisted evidence, and `production_execution=false`.
+- [ ] Customer runtime dashboard displays grant/key safe metadata, credential state, CRM/Integration type, quota limit, admitted usage, remaining quota, authorized scope, current execution stage, latest safe receipt/evidence, and `production_execution=false` without Admin access.
+- [ ] Customer execution UX clearly communicates the progression `admitted -> executing -> succeeded/failed -> evidence persisted` and whether the operation consumed `+1` or was an idempotent replay at `+0`.
+- [ ] Provide the customer a safe execution report/receipt for their own evaluation key while preserving the Admin copy and keeping the final qualification decision operator-controlled.
 - [ ] Prove quota semantics.
   - CRM quota = 100.
   - Integration quota = 200.
@@ -168,6 +173,9 @@ The final-launch hardening requirements below are **not a blocker for completing
 - [ ] Update PR #210 description/current qualified head before final review.
 - [ ] Keep PR #211 isolated until #210 qualification is complete; do not merge/rebase it casually.
 - [ ] Keep public `main` untouched until explicit merge authorization and final launch gate review.
+- [ ] Perform a full Admin-space and whole-program UI/UX value review before final release. Every API-key/Admin control, metric, note, example, table, badge, and action must have a real operational purpose, derive from authoritative state where applicable, and avoid demo/placeholder/duplicated or misleading content.
+- [ ] Perform a deliberate repository and static-asset deprecation sweep after the functional/UI review: identify files, routes, scripts, styles, pages, compatibility bridges, tests, deployment fragments, and documentation that were replaced, superseded, or are no longer loaded/referenced. Prove non-use with imports/routes/asset references/tests before deletion; then remove confirmed dead artifacts rather than leaving parallel legacy paths indefinitely.
+- [ ] Re-run a second dead-code/dead-asset sweep after deletions to catch transitive leftovers, duplicate implementations, stale comments/markers, obsolete compatibility aliases, and unused dependencies. Record what was removed and why, and keep anything uncertain until its consumers are proven absent.
 
 ## P10 — Private Overlay / Supply Chain
 
