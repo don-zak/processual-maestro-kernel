@@ -97,9 +97,10 @@ def test_customer_portal_matches_the_handoff_execution_story() -> None:
         "X-API-Key",
         "external_evaluation_customer_receipt",
         "qualification_decision",
-        "operator_required",
+        "operator_controlled",
     ):
         assert marker in js
 
+    assert "operator_required" not in js
     assert "localStorage" not in js
     assert "sessionStorage" not in js
