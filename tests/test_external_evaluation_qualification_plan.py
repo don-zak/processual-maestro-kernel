@@ -6,6 +6,7 @@ POSTGRES_INTEGRATION = (
     ROOT / "tests" / "integration" / "test_evaluation_runtime_delivery_postgres_integration.py"
 )
 QUOTA_POLICY = ROOT / "processual_api" / "services" / "evaluation_key_quota_policy.py"
+AUTHORITY = ROOT / "processual_api" / "services" / "evaluation_authority_postgres.py"
 FINAL_AUDIT = (
     ROOT / "processual_api" / "routers" / "settings_admin_evaluation_key_lifecycle.py"
 )
@@ -61,6 +62,15 @@ def test_destructive_quota_proof_is_backed_by_postgres_integration_test() -> Non
     assert "with pytest.raises(delivery.EvaluationQuotaExceededError)" in integration
     assert "with pytest.raises(delivery.EvaluationIdempotencyConflictError)" in integration
     assert "assert authority_key.quota_rejected_count == 1" in integration
+
+
+def test_runtime_status_keeps_grant_type_authoritative() -> None:
+    authority = _read(AUTHORITY)
+
+    grant_first = 'grant.get("evaluation_type") or payload.get("evaluation_type")'
+    payload_first = 'payload.get("evaluation_type") or grant.get("evaluation_type")'
+    assert grant_first in authority
+    assert payload_first not in authority
 
 
 def test_qualification_plan_matches_authoritative_quota_and_final_audit_code() -> None:
