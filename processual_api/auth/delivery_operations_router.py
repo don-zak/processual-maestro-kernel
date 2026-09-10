@@ -23,6 +23,7 @@ from processual_api.auth.delivery_operations_runtime import (
 from processual_api.auth.delivery_operations_service import (
     DeliveryRedriveUnavailableError,
 )
+from processual_api.auth.embedded_delivery_worker import delivery_router_lifespan
 from processual_api.auth.security import (
     require_platform_admin_step_up,
 )
@@ -40,6 +41,7 @@ platform_admin_step_up_dependency = (
 router = APIRouter(
     prefix="/auth/delivery-operations",
     tags=["identity-delivery-operations"],
+    lifespan=delivery_router_lifespan,
 )
 
 
@@ -127,8 +129,6 @@ async def redrive_dead_letter_delivery(
             outbox_id=outbox_id,
         )
     except DeliveryRedriveUnavailableError:
-        # Deliberately preserve non-enumerability of
-        # dead-letter row existence and eligibility.
         return JSONResponse(
             status_code=202,
             content=(
