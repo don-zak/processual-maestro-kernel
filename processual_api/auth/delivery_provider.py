@@ -80,6 +80,19 @@ def validate_https_endpoint(
     return normalized
 
 
+def _validate_sender_email(value: str) -> str:
+    normalized = value.strip()
+    if (
+        len(normalized) > 320
+        or normalized.count("@") != 1
+        or normalized.startswith("@")
+        or normalized.endswith("@")
+        or any(character.isspace() for character in normalized)
+    ):
+        raise ValueError("Gmail sender email is unavailable.")
+    return normalized
+
+
 class HttpEmailDeliveryProvider:
     def __init__(
         self,
@@ -169,12 +182,7 @@ class HttpEmailDeliveryProvider:
 
 
 class GmailApiDeliveryProvider:
-    """Send auth delivery messages through Gmail API using OAuth refresh authority.
-
-    Runtime credentials remain server-side. The provider requests a short-lived
-    access token for each bounded delivery call and never returns or logs OAuth
-    material, recipients, or verification URLs.
-    """
+    """Send authentication emails through Gmail API using OAuth refresh authority."""
 
     def __init__(
         self,
@@ -182,6 +190,7 @@ class GmailApiDeliveryProvider:
         client_id: str,
         client_secret: str,
         refresh_token: str,
+        sender_email: str,
         timeout_seconds: float,
     ) -> None:
         normalized_client_id = client_id.strip()
@@ -200,10 +209,11 @@ class GmailApiDeliveryProvider:
         self._client_id = normalized_client_id
         self._client_secret = normalized_client_secret
         self._refresh_token = normalized_refresh_token
+        self._sender_email = _validate_sender_email(sender_email)
         self._timeout_seconds = timeout_seconds
 
-    @staticmethod
     def _raw_message(
+        self,
         *,
         template: str,
         recipient: str,
@@ -214,6 +224,7 @@ class GmailApiDeliveryProvider:
             raise ValueError("Delivery verification template is invalid.")
 
         message = EmailMessage()
+        message["From"] = self._sender_email
         message["To"] = recipient
         message["Subject"] = _TEMPLATE_SUBJECTS[template]
         message["Auto-Submitted"] = "auto-generated"
