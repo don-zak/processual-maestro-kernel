@@ -78,10 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-
   const KEY_CATEGORIES = [
     ['client_api', 'Client API - normal client access'],
-    ['pilot_client', 'Pilot Client - introductory access / pilot access'],
+    ['pilot_client', 'Pilot Client - time-bounded scoped access'],
     ['external_partner', 'External Partner - scoped partner access'],
     ['service_integration', 'Service Integration - server-to-server access'],
     ['billing_service', 'Billing Service - Lemon Squeezy or billing sync'],
@@ -102,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pilot_client: {
       role: 'client',
       scopes: ['read:health', 'read:governor', 'run:analyze', 'run:govern', 'read:reports'],
-      purpose: 'Introductory access for pilot access and practical onboarding path',
+      purpose: 'Time-bounded scoped client access',
     },
     external_partner: {
       role: 'partner',
@@ -154,10 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
       purpose: 'Emergency bootstrap access',
     },
   };
-
-  // Backward-compatible regression markers for the existing admin API key area tests.
-  // CLIENT.get('/settings/api-keys')
-  // CLIENT.post('/settings/api-keys'
 
   const SUPERVISOR_SESSION_KEY_FIELDS = [
     'session_key_id',
@@ -726,6 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
       root.prepend(card);
     }
 
+    const exampleOrigin = window.location.origin;
     card.innerHTML = `
       <h2>Admin API Key Lifecycle</h2>
       <div class="admin-note">
@@ -734,9 +730,14 @@ document.addEventListener('DOMContentLoaded', () => {
         not an authentication bypass.
       </div>
       <div class="admin-note">
-        Tunisia introductory access positioning: use API keys as introductory access,
-        pilot access, and a practical onboarding path for early spread and demos.
-        This is not the primary sales model; it is a controlled adoption tool with revocable access.
+        Credential safety: grant the least privilege required, set an explicit expiry where appropriate,
+        and revoke access when its operational purpose ends. A raw API key is displayed once only;
+        backend scope, status, usage, and revocation records remain authoritative.
+      </div>
+      <div class="admin-note">
+        External Evaluation is governed separately by Platform Administrator Evaluation Grant authority,
+        with fixed admitted-execution quota and production disabled. Do not use standard key generation
+        to bypass the Evaluation grant lifecycle.
       </div>
       <div class="admin-note">
         Permission behavior: <strong>owner_admin</strong> and <strong>security_admin</strong>
@@ -760,7 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <input id="admin-api-key-expires-at" placeholder="2026-12-31T00:00:00+00:00" />
         </label>
         <label>Label
-          <input id="admin-api-key-label" placeholder="Pilot client key" />
+          <input id="admin-api-key-label" placeholder="Scoped client key" />
         </label>
         <label>Client ID
           <input id="admin-api-key-client-id" placeholder="client_id" />
@@ -787,10 +788,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div id="admin-api-key-create-result"></div>
 
-      <h3>External usage examples</h3>
-      <div class="mono-block" style="white-space:pre-wrap">curl.exe -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" http://127.0.0.1:8000/adapters/status
+      <h3>Usage examples for this host</h3>
+      <div class="mono-block" style="white-space:pre-wrap">curl.exe -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" ${escapeHtml(exampleOrigin)}/adapters/status
 
-curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" -d "{}" http://127.0.0.1:8000/cgt/govern</div>
+curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_WITH_CREATED_KEY" -d "{}" ${escapeHtml(exampleOrigin)}/cgt/govern</div>
 
       <h3>Safe metadata cards</h3>
       <div class="admin-note">
@@ -837,8 +838,7 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
   }
 });
 
-
-// ADMIN-INTEGRATION-KEYS-11F pending bridge begin
+// Integration request bridge
 (function () {
   const bridgeStorageKey = 'pmk_admin_integration_key_bridge';
 
@@ -915,4 +915,3 @@ curl.exe -X POST -H "Content-Type: application/json" -H "X-API-Key: pmk_REPLACE_
     setTimeout(applyStoredBridgePayload, 0);
   }
 })();
-// ADMIN-INTEGRATION-KEYS-11F pending bridge end
