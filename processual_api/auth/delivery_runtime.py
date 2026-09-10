@@ -12,6 +12,7 @@ from processual_api.auth.delivery_dispatcher import (
     DeliveryDispatcherConfig,
 )
 from processual_api.auth.delivery_provider import (
+    DeliveryProvider,
     GmailApiDeliveryProvider,
     HttpEmailDeliveryProvider,
 )
@@ -48,7 +49,7 @@ def _delivery_keys(raw_json: str | None) -> dict[str, bytes]:
     return keys
 
 
-def _build_provider(config: APISettings):
+def _build_provider(config: APISettings) -> DeliveryProvider:
     provider_kind = (config.auth_delivery_provider_kind or "http").strip().casefold()
 
     if provider_kind == "http":
