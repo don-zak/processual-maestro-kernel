@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import os
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -15,6 +16,7 @@ from processual_api.auth.delivery_provider import (
     DeliveryProvider,
     GmailApiDeliveryProvider,
     HttpEmailDeliveryProvider,
+    ResendDeliveryProvider,
 )
 from processual_api.auth.delivery_repository import SqlAlchemyDeliveryRepository
 from processual_api.db.session import get_session_factory
@@ -65,6 +67,15 @@ def _build_provider(config: APISettings) -> DeliveryProvider:
             client_secret=config.auth_gmail_client_secret or "",
             refresh_token=config.auth_gmail_refresh_token or "",
             sender_email=config.auth_gmail_sender_email or "",
+            timeout_seconds=config.auth_delivery_request_timeout_seconds,
+        )
+
+    if provider_kind == "resend":
+        return ResendDeliveryProvider(
+            api_key=getattr(config, "auth_resend_api_key", None)
+            or os.environ.get("AUTH_RESEND_API_KEY", ""),
+            sender_email=getattr(config, "auth_resend_sender_email", None)
+            or os.environ.get("AUTH_RESEND_SENDER_EMAIL", ""),
             timeout_seconds=config.auth_delivery_request_timeout_seconds,
         )
 
