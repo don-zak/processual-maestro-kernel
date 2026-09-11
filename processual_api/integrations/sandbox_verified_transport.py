@@ -11,6 +11,13 @@ from processual_api.integrations.enterprise_sandbox_execution import (
     resolve_public_addresses,
 )
 
+_SAFE_DIAGNOSTIC_HEADERS = (
+    "retry-after",
+    "server",
+    "via",
+    "x-request-id",
+)
+
 
 class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
     """Fail closed unless the connected peer is a pre-resolved public address."""
@@ -18,6 +25,7 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
     def __init__(self, inner: httpx.AsyncBaseTransport | None = None) -> None:
         self._inner = inner or httpx.AsyncHTTPTransport()
         self.last_verified_peer: str | None = None
+        self.last_response_diagnostics: dict[str, Any] | None = None
 
     @staticmethod
     def _peer_address(response: httpx.Response) -> str:
@@ -32,6 +40,21 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
             return peer.strip().split("%", 1)[0]
         raise SandboxExecutionError("sandbox_peer_address_unavailable")
 
+    @staticmethod
+    def _safe_response_diagnostics(response: httpx.Response, peer: str) -> dict[str, Any]:
+        headers = {
+            name: response.headers[name]
+            for name in _SAFE_DIAGNOSTIC_HEADERS
+            if name in response.headers
+        }
+        return {
+            "status_code": int(response.status_code),
+            "verified_peer": peer,
+            "headers": headers,
+            "body_included": False,
+            "credential_material_included": False,
+        }
+
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         hostname = request.url.host
         if not hostname:
@@ -44,6 +67,7 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
             await response.aclose()
             raise SandboxExecutionError("sandbox_peer_address_mismatch")
         self.last_verified_peer = peer
+        self.last_response_diagnostics = self._safe_response_diagnostics(response, peer)
         response.extensions["sandbox_peer_verified"] = True
         response.extensions["sandbox_peer_address"] = peer
         return response
