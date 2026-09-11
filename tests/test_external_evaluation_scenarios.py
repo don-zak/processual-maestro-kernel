@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from hashlib import sha256
+from json import dumps
+
 import pytest
 
 from processual_api.integrations.sandbox_operational_readiness import (
     SandboxContentContract,
+    SandboxSecretReference,
     safe_content_projection,
+    sandbox_provisioning_fingerprint,
 )
 from processual_api.routers import evaluation_runtime_scenarios as scenarios_runtime
 from processual_api.services.evaluation_scenarios import customer_evaluation_scenarios
@@ -118,6 +123,59 @@ def test_sandbox_content_requires_exactly_one_owned_source() -> None:
             customer_owned=False,
             project_owned=False,
         )
+
+
+def test_customer_owned_sandbox_preserves_legacy_provisioning_fingerprint() -> None:
+    binding = {
+        "binding_id": "evaluation.crm.customer",
+        "task_id": "crm.customer_context",
+        "method": "GET",
+        "path": "/users/1",
+    }
+    secret_reference = SandboxSecretReference(
+        binding_id="evaluation.crm.customer",
+        provider_id="anonymous",
+        secret_reference="public",
+    )
+    content = SandboxContentContract(
+        binding_id="evaluation.crm.customer",
+        dataset_reference="customer-evaluation-dataset",
+        fixture_profile_reference="crm-context-v1",
+        required_record_types=("crm_customer",),
+        acceptance_criteria_references=("CRM-CONTEXT-01",),
+    )
+
+    legacy_content = content.model_dump(mode="json")
+    legacy_content.pop("project_owned")
+    legacy = {
+        "binding": binding,
+        "request_mapping": None,
+        "secret_reference": {
+            "binding_id": secret_reference.binding_id,
+            "provider_id": secret_reference.provider_id,
+            "secret_reference": secret_reference.secret_reference,
+        },
+        "content_contract": legacy_content,
+    }
+    expected = sha256(
+        dumps(
+            legacy,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    assert (
+        sandbox_provisioning_fingerprint(
+            binding=binding,
+            request_mapping=None,
+            secret_reference=secret_reference,
+            content_contract=content,
+        )
+        == expected
+    )
 
 
 @pytest.mark.asyncio
