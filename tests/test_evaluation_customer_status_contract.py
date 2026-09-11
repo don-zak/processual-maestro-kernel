@@ -4,6 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "processual_api" / "routers" / "evaluation_runtime.py"
+RUNTIME_SCENARIOS = ROOT / "processual_api" / "routers" / "evaluation_runtime_scenarios.py"
+ROUTE_REGISTRY = ROOT / "processual_api" / "routers" / "external_evaluation_route_registry.py"
 AUTHORITY = ROOT / "processual_api" / "services" / "evaluation_authority_postgres.py"
 PORTAL = ROOT / "processual_api" / "static" / "evaluation.html"
 PORTAL_JS = ROOT / "processual_api" / "static" / "js" / "evaluation_client_portal.js"
@@ -26,6 +28,18 @@ def test_customer_status_endpoint_is_zero_quota_and_safe() -> None:
     )[1].split("async def update_evaluation_authority_key_lifecycle", 1)[0]
     assert '"raw_secret_visible": False' in authority
     assert '"production_allowed": False' in authority
+
+
+def test_customer_status_scenarios_are_derived_from_sealed_backend_authority() -> None:
+    scenarios = source(RUNTIME_SCENARIOS)
+    registry = source(ROUTE_REGISTRY)
+
+    assert "customer_evaluation_scenarios(raw, grant)" in scenarios
+    assert '"guided_scenarios": scenarios' in scenarios
+    assert '"scenario_catalog_source": "sealed_evaluation_grant"' in scenarios
+    assert '"scenario_status_reads_consume_quota": False' in scenarios
+    assert '"raw_scenario_input_persisted": False' in scenarios
+    assert "evaluation_runtime_status_with_scenarios" in registry
 
 
 def test_customer_execution_status_is_scoped_and_zero_quota() -> None:
@@ -60,8 +74,8 @@ def test_customer_portal_uses_memory_only_api_key_and_runtime_endpoints() -> Non
 
     assert "Processual Maestro — External Evaluation" in html
     assert "External Evaluation Workspace" in html
-    assert "evaluation_client_portal.js?v=eval-client-authority-v4" in html
-    assert "evaluation_client_portal.js?v=eval-client-authority-v3" not in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v5" in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v4" not in html
     for marker in (
         'id="quota-used"',
         'id="quota-remaining"',
@@ -100,17 +114,17 @@ def test_customer_portal_execute_button_tracks_runtime_authority_quota_and_bindi
     assert "button.disabled = !apiKey" not in js
 
 
-def test_customer_portal_scenarios_never_add_grant_authority() -> None:
+def test_customer_portal_scenarios_use_backend_authority_only() -> None:
     js = source(PORTAL_JS)
 
-    assert "CRM-CONTEXT-01" in js
-    assert "CRM-SUMMARY-01" in js
-    assert "CRM-DRAFT-01" in js
-    assert "scenarioCandidates()" in js
-    assert "runtimeState.allowedTasks" in js
-    assert "runtimeState.allowedBindings" in js
-    assert "Selected scenario is outside the grant task authority." in js
-    assert "No authority was added; server-side grant checks remain authoritative." in js
+    assert "const SCENARIOS" not in js
+    assert "runtimeState.guidedScenarios" in js
+    assert "payload.guided_scenarios" in js
+    assert "scenario.runnable === true" in js
+    assert "scenario.binding_ids" in js
+    assert "scenario.sample_input" in js
+    assert "scenario.task_id" in js
+    assert "sealed grant authority" in js
     assert "allowedEndpoints.push" not in js
     assert "allowedTasks.push" not in js
     assert "allowedBindings.push" not in js
