@@ -187,7 +187,7 @@ class APISettings:
     )
     rate_limit_default: str = field(default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "100/minute"))
     rate_limit_authenticated: str = field(
-        default_factory=lambda: os.environ.get("RATE_LIMIT_AUTHENTICATED", "500/minute"))
+        default_factory=lambda: os.environ.get("RATE_LIMIT_AUTHENTICATED", "500/minute")
     )
 
     # --- Audit ---
