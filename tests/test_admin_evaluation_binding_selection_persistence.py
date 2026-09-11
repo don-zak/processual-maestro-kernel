@@ -28,7 +28,7 @@ def test_binding_selection_persistence_remains_memory_only_and_fail_closed() -> 
     assert "localStorage" not in source
     assert "sessionStorage" not in source
     assert "selectedBindingIds.delete(bindingId)" in source
-    assert "if (target.disabled) return" in source
+    assert "if (!target || target.disabled) return" in source
     assert "if (input.disabled)" in source
 
 
