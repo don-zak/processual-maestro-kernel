@@ -3,8 +3,8 @@
   const SUPERVISOR_SESSION_KEY = 'pmk_supervisor_session_key';
   const LOCAL_DEV_API_KEY = 'api_key';
   const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
-  const READ_COALESCE_TTL_MS = 750;
-  const READ_COALESCE_MAX_ENTRIES = 128;
+  const READ_COALESCE_TTL_MS = 5000;
+  const READ_COALESCE_MAX_ENTRIES = 256;
   const LEGACY_AUTH_KEYS = [
     'access_token',
     'auth_token',
