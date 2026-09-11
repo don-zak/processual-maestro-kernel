@@ -73,7 +73,8 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
         self.last_response_diagnostics = self._safe_response_diagnostics(response, peer)
         if response.status_code >= 400:
             logger.warning(
-                "sandbox_verified_peer_http_failure host=%s status=%s peer=%s safe_headers=%s body_included=false credential_material_included=false",
+                "sandbox_verified_peer_http_failure host=%s status=%s peer=%s "
+                "safe_headers=%s body_included=false credential_material_included=false",
                 hostname,
                 response.status_code,
                 peer,
