@@ -5,6 +5,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
 
+import processual_api.routers.settings_admin_api_key_provisioning as provisioning_module
 from processual_api.routers.settings_admin_api_key_provisioning import (
     _require_api_key_provisioning_admin,
     admin_api_key_access_catalog,
@@ -64,18 +65,32 @@ def _request(app: FastAPI | None = None) -> Request:
     })
 
 
-def test_admin_operational_profile_catalog_requires_admin_authority() -> None:
-    _require_api_key_provisioning_admin({"role": "security_admin", "scopes": []})
-    _require_api_key_provisioning_admin({"role": "client", "scopes": ["admin:api_keys:read"]})
+def test_admin_operational_profile_catalog_requires_admin_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    asyncio.run(_require_api_key_provisioning_admin(
+        _request(),
+        {"role": "security_admin", "scopes": []},
+    ))
+    asyncio.run(_require_api_key_provisioning_admin(
+        _request(),
+        {"role": "client", "scopes": ["admin:api_keys:read"]},
+    ))
 
+    async def deny_platform_admin(current_user: dict, request: Request) -> None:
+        raise HTTPException(status_code=403, detail="Platform Administrator authority required")
+
+    monkeypatch.setattr(provisioning_module, "require_active_platform_admin", deny_platform_admin)
     with pytest.raises(HTTPException) as exc_info:
-        _require_api_key_provisioning_admin({"role": "client", "scopes": ["read:health"]})
+        asyncio.run(_require_api_key_provisioning_admin(
+            _request(),
+            {"role": "client", "scopes": ["read:health"]},
+        ))
     assert exc_info.value.status_code == 403
 
 
 def test_admin_operational_profile_catalog_is_safe_and_non_production() -> None:
     payload = asyncio.run(admin_api_key_operational_profiles(
-        {"role": "security_admin", "scopes": ["admin:api_keys:write"]}
+        _request(),
+        {"role": "security_admin", "scopes": ["admin:api_keys:write"]},
     ))
     assert payload["admin_provisioning_catalog"] is True
     assert payload["selection_authority"] == "api_key_operational_profiles"
