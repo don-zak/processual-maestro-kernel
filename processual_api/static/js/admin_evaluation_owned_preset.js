@@ -1,6 +1,6 @@
 (function () {
   const PRESET_ENDPOINT = '/settings/admin/evaluation-grants/bindings/presets/crm-context-owned';
-  const DEFAULT_BASE_URL = 'https://processual-maestro-kernel.onrender.com';
+  const DEFAULT_BASE_URL = 'https://processual-maestro-evaluation-sandbox.zaksam2030.workers.dev';
   const HOST_ID = 'admin-evaluation-owned-crm-preset';
   const EXTERNAL_CATEGORY = 'external_evaluation';
 
