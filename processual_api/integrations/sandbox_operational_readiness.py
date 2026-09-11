@@ -1,4 +1,4 @@
-"""Operational provisioning and readiness contracts for customer sandboxes."""
+"""Operational provisioning and readiness contracts for customer and project sandboxes."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from hashlib import sha256
 from json import dumps
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SANDBOX_CONTENT_STORAGE_KEY = "enterprise_sandbox_content_contracts_v1"
 SANDBOX_SECRET_REFERENCE_STORAGE_KEY = "enterprise_sandbox_secret_references_v1"
@@ -77,7 +77,7 @@ class SandboxSecretReference(BaseModel):
 
 
 class SandboxContentContract(BaseModel):
-    """References describing customer-owned sandbox test content, never raw data."""
+    """References describing owned sandbox test content, never raw data."""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -87,6 +87,7 @@ class SandboxContentContract(BaseModel):
     required_record_types: tuple[str, ...] = Field(min_length=1, max_length=32)
     acceptance_criteria_references: tuple[str, ...] = Field(min_length=1, max_length=32)
     customer_owned: bool = True
+    project_owned: bool = False
     synthetic_or_nonproduction: bool = True
     secrets_included: bool = False
     raw_payloads_included: bool = False
@@ -107,11 +108,11 @@ class SandboxContentContract(BaseModel):
             raise ValueError("sandbox content references must be unique")
         return tuple(_validate_reference(value) for value in values)
 
-    @field_validator("customer_owned", "synthetic_or_nonproduction")
+    @field_validator("synthetic_or_nonproduction")
     @classmethod
-    def _required_true(cls, value: bool) -> bool:
+    def _nonproduction_required(cls, value: bool) -> bool:
         if value is not True:
-            raise ValueError("sandbox content must remain customer-owned non-production content")
+            raise ValueError("sandbox content must remain synthetic or non-production")
         return value
 
     @field_validator("secrets_included", "raw_payloads_included")
@@ -121,10 +122,19 @@ class SandboxContentContract(BaseModel):
             raise ValueError("sandbox content contract cannot contain secrets or raw payloads")
         return value
 
+    @model_validator(mode="after")
+    def _exactly_one_owned_source(self) -> SandboxContentContract:
+        if self.customer_owned == self.project_owned:
+            raise ValueError(
+                "sandbox content must be owned by exactly one of customer or project"
+            )
+        return self
+
 
 def safe_content_projection(contract: SandboxContentContract) -> dict[str, Any]:
     return {
         **contract.model_dump(),
+        "content_owner": "customer" if contract.customer_owned else "project",
         "configured": True,
         "production_allowed": False,
         "runtime_connector_approved": False,
