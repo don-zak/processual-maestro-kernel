@@ -22,6 +22,7 @@ on:
       - tests/test_evaluation_final_audit_summary_contract.py
       - tests/test_external_evaluation_qualification_plan.py
       - tests/test_external_evaluation_handoff_contract.py
+      - tests/test_external_evaluation_scenarios.py
       - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
       - .github/workflows/preexternal-readiness.yml
   push:
@@ -44,6 +45,7 @@ on:
       - tests/test_evaluation_final_audit_summary_contract.py
       - tests/test_external_evaluation_qualification_plan.py
       - tests/test_external_evaluation_handoff_contract.py
+      - tests/test_external_evaluation_scenarios.py
       - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
       - .github/workflows/preexternal-readiness.yml
   workflow_dispatch:
@@ -144,6 +146,7 @@ jobs:
             tests/test_evaluation_final_audit_summary_contract.py \
             tests/test_external_evaluation_qualification_plan.py \
             tests/test_external_evaluation_handoff_contract.py \
+            tests/test_external_evaluation_scenarios.py \
             tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
 
       - name: Start Maestro pre-external candidate
