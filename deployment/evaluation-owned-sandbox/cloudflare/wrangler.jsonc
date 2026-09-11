@@ -1,0 +1,11 @@
+{
+  "name": "processual-maestro-evaluation-sandbox",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-11",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
