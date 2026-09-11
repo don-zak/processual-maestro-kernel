@@ -31,7 +31,7 @@
     .compact-value { font-size:14px; font-weight:700; margin-top:6px; overflow-wrap:anywhere; }
     .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
     label { display:block; font-size:13px; margin:13px 0 6px; color:#cad4ea; }
-    input, textarea { width:100%; padding:11px 12px; border-radius:9px; border:1px solid #354769; background:#091426; color:var(--text); }
+    input, textarea, select { width:100%; padding:11px 12px; border-radius:9px; border:1px solid #354769; background:#091426; color:var(--text); }
     textarea { min-height:124px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
     button { margin-top:12px; padding:10px 14px; border:1px solid transparent; border-radius:9px; background:var(--accent); color:white; font-weight:760; cursor:pointer; }
     button.secondary { background:#273653; border-color:#354769; }
@@ -46,6 +46,12 @@
     .stage.done { border-color:var(--ok); color:var(--ok); }
     .scope-list { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
     .scope-chip { border:1px solid var(--line); border-radius:999px; padding:6px 9px; background:#0b1628; color:#c9d5ee; font-size:12px; overflow-wrap:anywhere; }
+    .scenario-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:14px; }
+    .scenario-card { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel2); }
+    .scenario-card.ready { border-color:rgba(113,223,170,.55); }
+    .scenario-card.locked { opacity:.72; }
+    .scenario-title { font-weight:800; margin-bottom:6px; }
+    .scenario-meta { font-size:12px; color:var(--muted); margin-top:6px; }
     pre { overflow:auto; white-space:pre-wrap; word-break:break-word; background:#081223; padding:13px; border-radius:9px; border:1px solid var(--line); min-height:54px; }
     .contract { margin-top:22px; display:grid; gap:10px; }
     .contract div { display:flex; gap:10px; align-items:flex-start; color:var(--muted); font-size:13px; }
@@ -112,6 +118,16 @@
   </section>
 
   <section class="card" style="margin-top:14px">
+    <h2>Guided proof-of-value scenarios</h2>
+    <div class="muted">Choose a business-facing scenario instead of manually assembling task identifiers. A scenario never expands grant authority: it can run only when its task and prepared binding are already sealed into this credential.</div>
+    <div id="scenario-summary" class="notice">Connect a key to discover scenarios available to this grant.</div>
+    <div id="scenario-grid" class="scenario-grid"></div>
+    <label for="scenario-select">Selected scenario</label>
+    <select id="scenario-select" disabled><option value="">No runnable scenario available</option></select>
+    <button id="prepare-scenario" type="button" disabled>Prepare selected scenario</button>
+  </section>
+
+  <section class="card" style="margin-top:14px">
     <h2>Execution progress</h2>
     <div class="stage-track" aria-label="Execution lifecycle">
       <div id="stage-admitted" class="stage">1 · Admitted</div>
@@ -128,11 +144,11 @@
 
   <section class="card" style="margin-top:14px">
     <h2>Execute an authorized sandbox task</h2>
-    <div class="muted">Only tasks and bindings sealed into this Evaluation grant are admissible. The server rejects anything outside the grant envelope.</div>
+    <div class="muted">The guided scenario prepares these fields from the authority already sealed into the grant. The server still rejects any task or binding outside the grant envelope.</div>
     <label for="task-id">Canonical task ID</label>
-    <input id="task-id" autocomplete="off" placeholder="Enter the task ID included in your grant" />
+    <input id="task-id" autocomplete="off" placeholder="Prepared automatically by the selected scenario" />
     <label for="binding-id">Prepared binding ID</label>
-    <input id="binding-id" autocomplete="off" placeholder="Enter the prepared sandbox binding included in your grant" />
+    <input id="binding-id" autocomplete="off" placeholder="Prepared automatically when this grant contains a runnable binding" />
     <label for="idempotency-key">Idempotency key</label>
     <input id="idempotency-key" autocomplete="off" />
     <div class="muted" style="margin-top:6px">Reuse the same idempotency key only when retrying the same logical operation. A durable replay consumes +0 quota.</div>
@@ -152,6 +168,7 @@
     <h2>Evaluation contract</h2>
     <div class="contract">
       <div><strong>Authority</strong><span>Evaluation grant and key authority is server-side and PostgreSQL-backed.</span></div>
+      <div><strong>Scenarios</strong><span>Proof-of-value scenarios are guidance only and can never add tasks, bindings, endpoints, or quota authority.</span></div>
       <div><strong>Subscription</strong><span>No subscription, registration, or commercial quota authority is required for this Evaluation key.</span></div>
       <div><strong>Quota</strong><span>Only admitted executions consume quota; status reads and idempotent replays do not.</span></div>
       <div><strong>Secrets</strong><span>Raw Evaluation keys are shown once at issue and are never included in evidence or reports.</span></div>
@@ -160,6 +177,6 @@
     </div>
   </section>
 </main>
-<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v3"></script>
+<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v4"></script>
 </body>
 </html>
