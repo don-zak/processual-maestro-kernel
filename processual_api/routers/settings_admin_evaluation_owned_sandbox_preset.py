@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
@@ -29,8 +28,6 @@ from .settings_admin_evaluation_binding_provisioning import (
 
 _PRESET_ID = "CRM-CONTEXT-01"
 _DEFAULT_BINDING_ID = "evaluation.crm.customer_context.owned"
-_TRANSIENT_PROOF_DETAIL = "sandbox_http_status_not_allowed:429"
-_PROOF_MAX_ATTEMPTS = 3
 
 
 class OwnedCrmContextPresetRequest(BaseModel):
@@ -89,29 +86,21 @@ def _reference(binding_id: str) -> SandboxSecretReference:
     )
 
 
-async def _execute_owned_proof_with_retry(
+async def _execute_owned_proof_once(
     *,
     binding_id: str,
     body: binding_runtime.EndpointSandboxExecuteRequest,
     request: Request,
     current_user: dict[str, Any],
 ) -> dict[str, Any]:
-    """Retry only transient 429s for this fixed idempotent GET proof."""
+    """Execute exactly one outbound proof request and preserve fail-closed semantics."""
 
-    for attempt in range(1, _PROOF_MAX_ATTEMPTS + 1):
-        try:
-            return await execute_evaluation_sandbox_operational_proof(
-                binding_id=binding_id,
-                body=body,
-                request=request,
-                current_user=current_user,
-            )
-        except HTTPException as exc:
-            detail = str(exc.detail or "").strip()
-            if detail != _TRANSIENT_PROOF_DETAIL or attempt >= _PROOF_MAX_ATTEMPTS:
-                raise
-            await asyncio.sleep(float(attempt))
-    raise RuntimeError("unreachable")
+    return await execute_evaluation_sandbox_operational_proof(
+        binding_id=binding_id,
+        body=body,
+        request=request,
+        current_user=current_user,
+    )
 
 
 @settings_module.router.post(
@@ -139,7 +128,7 @@ async def prepare_owned_crm_context_preset(
         request=request,
         current_user=current_user,
     )
-    proof = await _execute_owned_proof_with_retry(
+    proof = await _execute_owned_proof_once(
         binding_id=binding.binding_id,
         body=binding_runtime.EndpointSandboxExecuteRequest(
             task_input={"customer_id": "sandbox-customer-001"}
