@@ -356,7 +356,7 @@
     const bindings = Array.isArray(grant.allowed_binding_ids) ? grant.allowed_binding_ids : [];
     const type = inferredGrantType(grant);
     const actions = active
-      ? `<button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
+      ? `<button class="btn primary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
          <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke Grant</button>`
       : '';
     return `
@@ -389,7 +389,6 @@
       list.innerHTML = grants.length
         ? grants.map(grantRow).join('')
         : '<div class="muted">No evaluation grants have been issued.</div>';
-      bindGrantActions();
     } catch (error) {
       list.innerHTML = `<div class="admin-note danger">Unable to load evaluation grants: ${escapeHtml(error.message || error)}</div>`;
     }
@@ -525,12 +524,25 @@
     }
   }
 
-  function bindGrantActions() {
-    document.querySelectorAll('[data-eval-issue]').forEach((button) => {
-      button.addEventListener('click', () => issueEvaluationKey(button.dataset.evalIssue));
-    });
-    document.querySelectorAll('[data-eval-revoke]').forEach((button) => {
-      button.addEventListener('click', () => revokeEvaluationGrant(button.dataset.evalRevoke));
+  function bindGrantActionDelegation(host) {
+    if (!host || host.dataset.evaluationGrantActionsBound === 'true') return;
+    host.dataset.evaluationGrantActionsBound = 'true';
+    host.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      const issueButton = target.closest('[data-eval-issue]');
+      if (issueButton && host.contains(issueButton)) {
+        event.preventDefault();
+        event.stopPropagation();
+        issueEvaluationKey(issueButton.dataset.evalIssue);
+        return;
+      }
+      const revokeButton = target.closest('[data-eval-revoke]');
+      if (revokeButton && host.contains(revokeButton)) {
+        event.preventDefault();
+        event.stopPropagation();
+        revokeEvaluationGrant(revokeButton.dataset.evalRevoke);
+      }
     });
   }
 
@@ -538,6 +550,7 @@
     const host = ensureGrantHost();
     if (!host) return;
     host.innerHTML = grantForm();
+    bindGrantActionDelegation(host);
     host.addEventListener('input', dispatchEvaluationSelectionChanged);
     host.addEventListener('change', dispatchEvaluationSelectionChanged);
     host.addEventListener('input', updateEvaluationReadiness);
@@ -580,6 +593,8 @@
   window.PMK_ADMIN_EVALUATION_GRANTS = {
     readiness: evaluationReadiness,
     updateReadiness: updateEvaluationReadiness,
+    issueKey: issueEvaluationKey,
+    refresh: refreshEvaluationGrants,
   };
 
   initializeEvaluationGrants();
