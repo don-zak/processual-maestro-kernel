@@ -48,6 +48,9 @@ from processual_api.services.evaluation_grants import (
     safe_evaluation_grant,
     validate_evaluation_grant,
 )
+from processual_api.services.evaluation_prepared_authority import (
+    load_prepared_evaluation_authority,
+)
 
 from . import settings as settings_module
 
@@ -382,10 +385,10 @@ async def create_evaluation_grant(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    # Prepared Enterprise sandbox configuration is read once here, validated,
-    # then sealed into the shared Evaluation authority snapshot.
-    prepared_raw = settings_module._load_raw(owner_user_id)
-    raw = dict(prepared_raw)
+    try:
+        raw = await load_prepared_evaluation_authority(owner_user_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
     grants = evaluation_grants(raw)
     now = datetime.now(UTC)
     actor, role = _actor(current_user)
