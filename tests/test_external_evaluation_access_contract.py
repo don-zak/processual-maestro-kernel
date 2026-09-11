@@ -117,13 +117,19 @@ def test_runtime_grant_without_binding_envelope_requires_reissue() -> None:
         )
 
 
-def test_evaluation_endpoint_authority_fails_closed() -> None:
+def test_evaluation_endpoint_authority_fails_closed_but_status_is_intrinsic() -> None:
     identity = {
         "auth_method": "api_key",
         "entitlement_source": "admin_evaluation_grant",
         "allowed_endpoints": [{"method": "GET", "path": "/health/live"}],
     }
     assert evaluation_endpoint_allowed(identity, method="GET", path="/health/live")
+    assert evaluation_endpoint_allowed(
+        identity,
+        method="GET",
+        path="/evaluation/runtime/status",
+    )
+    assert not evaluation_endpoint_allowed(identity, method="POST", path="/evaluation/runtime/status")
     assert not evaluation_endpoint_allowed(identity, method="GET", path="/settings")
     assert not evaluation_endpoint_allowed(identity, method="POST", path="/cgt/govern")
 
