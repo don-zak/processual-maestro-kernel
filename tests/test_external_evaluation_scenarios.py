@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from processual_api.integrations.sandbox_operational_readiness import (
+    SandboxContentContract,
+    safe_content_projection,
+)
 from processual_api.routers import evaluation_runtime_scenarios as scenarios_runtime
 from processual_api.services.evaluation_scenarios import customer_evaluation_scenarios
 
@@ -66,6 +70,54 @@ def test_scenario_catalog_exposes_only_tasks_sealed_into_grant() -> None:
     assert [item["task_id"] for item in scenarios] == ["crm.customer_state_summary"]
     assert all("api_key" not in item for item in scenarios)
     assert all("secret" not in item for item in scenarios)
+
+
+def test_project_owned_sandbox_content_is_explicit_and_customer_safe() -> None:
+    contract = SandboxContentContract(
+        binding_id="evaluation.crm.public",
+        dataset_reference="project-evaluation-sandbox-customer-v1",
+        fixture_profile_reference="crm-context-read-only-v1",
+        required_record_types=("crm_customer",),
+        acceptance_criteria_references=("CRM-CONTEXT-01",),
+        customer_owned=False,
+        project_owned=True,
+        synthetic_or_nonproduction=True,
+        secrets_included=False,
+        raw_payloads_included=False,
+    )
+
+    safe = safe_content_projection(contract)
+    assert safe["customer_owned"] is False
+    assert safe["project_owned"] is True
+    assert safe["content_owner"] == "project"
+    assert safe["synthetic_or_nonproduction"] is True
+    assert safe["secrets_included"] is False
+    assert safe["raw_payloads_included"] is False
+    assert safe["production_allowed"] is False
+
+
+def test_sandbox_content_requires_exactly_one_owned_source() -> None:
+    common = {
+        "binding_id": "evaluation.crm.public",
+        "dataset_reference": "evaluation-dataset",
+        "fixture_profile_reference": "evaluation-fixture",
+        "required_record_types": ("crm_customer",),
+        "acceptance_criteria_references": ("CRM-CONTEXT-01",),
+    }
+
+    with pytest.raises(ValueError, match="exactly one"):
+        SandboxContentContract(
+            **common,
+            customer_owned=True,
+            project_owned=True,
+        )
+
+    with pytest.raises(ValueError, match="exactly one"):
+        SandboxContentContract(
+            **common,
+            customer_owned=False,
+            project_owned=False,
+        )
 
 
 @pytest.mark.asyncio
