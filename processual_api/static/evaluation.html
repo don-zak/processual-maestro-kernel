@@ -119,7 +119,7 @@
 
   <section class="card" style="margin-top:14px">
     <h2>Guided proof-of-value scenarios</h2>
-    <div class="muted">Choose a business-facing scenario instead of manually assembling task identifiers. A scenario never expands grant authority: it can run only when its task and prepared binding are already sealed into this credential.</div>
+    <div class="muted">Choose a business-facing scenario instead of manually assembling task identifiers. Scenarios and readiness are derived from the sealed backend grant authority.</div>
     <div id="scenario-summary" class="notice">Connect a key to discover scenarios available to this grant.</div>
     <div id="scenario-grid" class="scenario-grid"></div>
     <label for="scenario-select">Selected scenario</label>
@@ -168,7 +168,7 @@
     <h2>Evaluation contract</h2>
     <div class="contract">
       <div><strong>Authority</strong><span>Evaluation grant and key authority is server-side and PostgreSQL-backed.</span></div>
-      <div><strong>Scenarios</strong><span>Proof-of-value scenarios are guidance only and can never add tasks, bindings, endpoints, or quota authority.</span></div>
+      <div><strong>Scenarios</strong><span>Proof-of-value scenarios are derived from sealed grant authority and can never add tasks, bindings, endpoints, or quota authority.</span></div>
       <div><strong>Subscription</strong><span>No subscription, registration, or commercial quota authority is required for this Evaluation key.</span></div>
       <div><strong>Quota</strong><span>Only admitted executions consume quota; status reads and idempotent replays do not.</span></div>
       <div><strong>Secrets</strong><span>Raw Evaluation keys are shown once at issue and are never included in evidence or reports.</span></div>
@@ -177,6 +177,6 @@
     </div>
   </section>
 </main>
-<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v4"></script>
+<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v5"></script>
 </body>
 </html>
