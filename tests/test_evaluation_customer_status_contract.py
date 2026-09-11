@@ -60,12 +60,15 @@ def test_customer_portal_uses_memory_only_api_key_and_runtime_endpoints() -> Non
 
     assert "Processual Maestro — External Evaluation" in html
     assert "External Evaluation Workspace" in html
-    assert "evaluation_client_portal.js?v=eval-client-authority-v3" in html
-    assert "evaluation_client_portal.js?v=eval-client-authority-v2" not in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v4" in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v3" not in html
     for marker in (
         'id="quota-used"',
         'id="quota-remaining"',
         "Authoritative Evaluation quota",
+        "Guided proof-of-value scenarios",
+        'id="scenario-select"',
+        'id="prepare-scenario"',
         'id="execution-state"',
         'id="evidence-state"',
         'id="quota-effect"',
@@ -82,17 +85,43 @@ def test_customer_portal_uses_memory_only_api_key_and_runtime_endpoints() -> Non
     assert "sessionStorage" not in js
 
 
-def test_customer_portal_execute_button_tracks_runtime_authority_and_quota() -> None:
+def test_customer_portal_execute_button_tracks_runtime_authority_quota_and_binding() -> None:
     js = source(PORTAL_JS)
 
     assert "let runtimeState" in js
     assert "runtimeState.credentialStatus === 'active'" in js
     assert "Number(runtimeState.quotaRemaining) > 0" in js
     assert "!runtimeState.executing" in js
+    assert "$('task-id').value.trim()" in js
+    assert "$('binding-id').value.trim()" in js
     assert "syncExecuteButton" in js
     assert "runtimeState.credentialStatus = 'unavailable'" in js
     assert "runtimeState.quotaRemaining = 0" in js
     assert "button.disabled = !apiKey" not in js
+
+
+def test_customer_portal_scenarios_never_add_grant_authority() -> None:
+    js = source(PORTAL_JS)
+
+    assert "CRM-CONTEXT-01" in js
+    assert "CRM-SUMMARY-01" in js
+    assert "CRM-DRAFT-01" in js
+    assert "scenarioCandidates()" in js
+    assert "runtimeState.allowedTasks" in js
+    assert "runtimeState.allowedBindings" in js
+    assert "Selected scenario is outside the grant task authority." in js
+    assert "No authority was added; server-side grant checks remain authoritative." in js
+    assert "allowedEndpoints.push" not in js
+    assert "allowedTasks.push" not in js
+    assert "allowedBindings.push" not in js
+
+
+def test_customer_portal_reports_quota_effect_after_failed_execution() -> None:
+    js = source(PORTAL_JS)
+
+    assert "Execution failed after admission; the admitted-execution unit remains consumed." in js
+    assert "Request failed before admission; no evaluation quota unit was consumed." in js
+    assert "const afterUsed = Number(statusPayload?.quota?.used ?? beforeUsed)" in js
 
 
 def test_admin_external_evaluation_shows_safe_audit_receipts_and_portal_location() -> None:
