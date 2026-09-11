@@ -4,6 +4,8 @@ import asyncio
 import inspect
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
 from starlette.requests import Request
 
 from processual_api.routers import settings_admin_evaluation_grants as grant_routes
@@ -50,6 +52,20 @@ def _body(**overrides):
     }
     values.update(overrides)
     return quota_routes.QuotaGovernedEvaluationGrantCreate(**values)
+
+
+async def _selectable_catalog(*, request, current_user):
+    del request, current_user
+    return {
+        "bindings": [
+            {
+                "binding_id": "binding_1",
+                "task_id": "crm.customer_context",
+                "selectable": True,
+                "sandbox_readiness": {"sandbox_ready": True},
+            }
+        ]
+    }
 
 
 def test_integration_quota_is_derived_as_exactly_twice_crm() -> None:
@@ -124,6 +140,7 @@ def test_quota_governed_route_ignores_client_quota_and_passes_type_to_canonical_
         }
 
     monkeypatch.setattr(quota_routes, "create_evaluation_grant", fake_create)
+    monkeypatch.setattr(quota_routes, "evaluation_binding_catalog", _selectable_catalog)
 
     crm = asyncio.run(
         quota_routes.create_quota_governed_evaluation_grant(
@@ -162,6 +179,94 @@ def test_quota_governed_route_ignores_client_quota_and_passes_type_to_canonical_
     )
     assert integration["grant"]["max_requests"] == CRM_EVALUATION_KEY_QUOTA * 2
     assert integration["grant"]["evaluation_type"] == EVALUATION_KEY_TYPE_INTEGRATION
+
+
+def test_runtime_grant_rejects_binding_that_is_not_sandbox_ready(monkeypatch) -> None:
+    called = False
+
+    async def blocked_catalog(*, request, current_user):
+        del request, current_user
+        return {
+            "bindings": [
+                {
+                    "binding_id": "binding_1",
+                    "task_id": "crm.customer_context",
+                    "selectable": False,
+                    "sandbox_readiness": {
+                        "sandbox_ready": False,
+                        "blocker_codes": ["hardened_live_sandbox_proof_required"],
+                    },
+                }
+            ]
+        }
+
+    async def fake_create(*, body, request, current_user):
+        nonlocal called
+        del body, request, current_user
+        called = True
+        return {"status": "created", "grant": {}}
+
+    monkeypatch.setattr(quota_routes, "evaluation_binding_catalog", blocked_catalog)
+    monkeypatch.setattr(quota_routes, "create_evaluation_grant", fake_create)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            quota_routes.create_quota_governed_evaluation_grant(
+                body=_body(
+                    evaluation_type="crm",
+                    allowed_binding_ids=["binding_1"],
+                    allowed_endpoints=[
+                        {
+                            "method": "POST",
+                            "path": "/evaluation/runtime/task-execute",
+                        }
+                    ],
+                ),
+                request=_request(),
+                current_user={"sub": "admin"},
+            )
+        )
+
+    assert exc_info.value.status_code == 422
+    assert "sandbox-ready" in str(exc_info.value.detail)
+    assert called is False
+
+
+def test_runtime_grant_rejects_selectable_binding_outside_task_envelope(monkeypatch) -> None:
+    async def wrong_task_catalog(*, request, current_user):
+        del request, current_user
+        return {
+            "bindings": [
+                {
+                    "binding_id": "binding_1",
+                    "task_id": "billing.account_context",
+                    "selectable": True,
+                }
+            ]
+        }
+
+    monkeypatch.setattr(quota_routes, "evaluation_binding_catalog", wrong_task_catalog)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            quota_routes.create_quota_governed_evaluation_grant(
+                body=_body(
+                    evaluation_type="crm",
+                    allowed_binding_ids=["binding_1"],
+                    allowed_endpoints=[
+                        {
+                            "method": "POST",
+                            "path": "/evaluation/runtime/task-execute",
+                        }
+                    ],
+                ),
+                request=_request(),
+                current_user={"sub": "admin"},
+            )
+        )
+
+    assert exc_info.value.status_code == 422
+    assert "outside the grant task envelope" in str(exc_info.value.detail)
 
 
 def test_quota_wrapper_has_no_secondary_authority_load_or_save() -> None:
