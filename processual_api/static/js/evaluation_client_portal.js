@@ -8,40 +8,8 @@
     lastQuotaUsed: null,
     allowedTasks: [],
     allowedBindings: [],
+    guidedScenarios: [],
   };
-
-  const SCENARIOS = [
-    {
-      id: 'CRM-CONTEXT-01',
-      title: 'CRM Customer Context Review',
-      taskId: 'crm.customer_context',
-      kind: 'Safe read',
-      value: 'Read and normalize a sandbox customer context through a governed Maestro task.',
-      success: 'Task admitted, sandbox execution completed, and durable evidence persisted.',
-      sampleInput: { customer_id: 'sandbox-customer-001' },
-    },
-    {
-      id: 'CRM-SUMMARY-01',
-      title: 'CRM Customer State Summary',
-      taskId: 'crm.customer_state_summary',
-      kind: 'Safe read',
-      value: 'Summarize a sandbox customer state without production access.',
-      success: 'Bounded summary execution completed with persisted safe evidence.',
-      sampleInput: { customer_id: 'sandbox-customer-001' },
-    },
-    {
-      id: 'CRM-DRAFT-01',
-      title: 'Draft Customer Update',
-      taskId: 'crm.customer_update_draft',
-      kind: 'Governed draft',
-      value: 'Prepare a supervisor-reviewable CRM update draft without applying it to production.',
-      success: 'Draft produced inside the sandbox boundary and recorded as evaluation evidence.',
-      sampleInput: {
-        customer_id: 'sandbox-customer-001',
-        requested_change: 'Prepare a synthetic customer update for evaluation only',
-      },
-    },
-  ];
 
   const $ = (id) => document.getElementById(id);
   const text = (value) => String(value ?? '');
@@ -122,8 +90,9 @@
   }
 
   function scenarioCandidates() {
-    const allowed = new Set(runtimeState.allowedTasks.map((value) => text(value).toLowerCase()));
-    return SCENARIOS.filter((scenario) => allowed.has(scenario.taskId));
+    return Array.isArray(runtimeState.guidedScenarios)
+      ? runtimeState.guidedScenarios.filter((scenario) => scenario && scenario.scenario_id)
+      : [];
   }
 
   function renderScenarios() {
@@ -131,13 +100,13 @@
     const select = $('scenario-select');
     const summary = $('scenario-summary');
     const candidates = scenarioCandidates();
-    const executionReady = runtimeState.allowedBindings.length > 0;
+    const runnable = candidates.filter((scenario) => scenario.runnable === true);
 
     grid.innerHTML = '';
     select.innerHTML = '';
 
     if (!candidates.length) {
-      summary.textContent = 'This grant does not contain a guided scenario task yet. Status, quota, and receipt remain available.';
+      summary.textContent = 'This grant does not contain a backend-authorized guided scenario yet. Status, quota, and receipt remain available.';
       select.innerHTML = '<option value="">No guided scenario available</option>';
       select.disabled = true;
       $('prepare-scenario').disabled = true;
@@ -145,59 +114,67 @@
     }
 
     candidates.forEach((scenario) => {
+      const ready = scenario.runnable === true;
       const card = document.createElement('div');
-      card.className = `scenario-card ${executionReady ? 'ready' : 'locked'}`;
+      card.className = `scenario-card ${ready ? 'ready' : 'locked'}`;
       const title = document.createElement('div');
       title.className = 'scenario-title';
-      title.textContent = scenario.title;
+      title.textContent = text(scenario.title || scenario.scenario_id);
       const value = document.createElement('div');
       value.className = 'muted';
-      value.textContent = scenario.value;
+      value.textContent = text(scenario.customer_value || 'Governed External Evaluation scenario.');
       const meta = document.createElement('div');
       meta.className = 'scenario-meta';
-      meta.textContent = `${scenario.id} · ${scenario.kind} · ${executionReady ? 'ready for prepared sandbox execution' : 'requires an E2E grant with a prepared binding'}`;
+      const readiness = text(scenario.readiness || (ready ? 'ready' : 'locked'));
+      meta.textContent = `${text(scenario.scenario_id)} · ${text(scenario.kind || 'scenario')} · ${readiness}`;
       card.append(title, value, meta);
       grid.appendChild(card);
 
-      if (executionReady) {
+      if (ready) {
         const option = document.createElement('option');
-        option.value = scenario.id;
-        option.textContent = `${scenario.title} — ${scenario.id}`;
+        option.value = text(scenario.scenario_id);
+        option.textContent = `${text(scenario.title || scenario.scenario_id)} — ${text(scenario.scenario_id)}`;
         select.appendChild(option);
       }
     });
 
-    if (executionReady) {
-      summary.textContent = `${candidates.length} proof-of-value scenario(s) are authorized by this grant. Preparing one fills only authority already sealed into the credential.`;
+    if (runnable.length) {
+      summary.textContent = `${runnable.length} of ${candidates.length} proof-of-value scenario(s) are runnable under the sealed backend grant authority.`;
       select.disabled = false;
       $('prepare-scenario').disabled = false;
     } else {
-      summary.textContent = `${candidates.length} scenario(s) match the authorized tasks, but this credential has no prepared binding. Create an E2E grant with task-execute + a sandbox-ready binding to run them.`;
-      select.innerHTML = '<option value="">Prepared binding required for execution</option>';
+      summary.textContent = `${candidates.length} scenario(s) are authorized for visibility, but none is runnable yet. The backend requires task-execute plus a matching prepared sandbox binding.`;
+      select.innerHTML = '<option value="">Prepared runtime authority required</option>';
       select.disabled = true;
       $('prepare-scenario').disabled = true;
     }
   }
 
   function prepareSelectedScenario() {
-    const scenario = SCENARIOS.find((item) => item.id === $('scenario-select').value);
+    const scenario = scenarioCandidates().find(
+      (item) => text(item.scenario_id) === $('scenario-select').value
+    );
     if (!scenario) return;
-    if (!runtimeState.allowedTasks.map((value) => text(value).toLowerCase()).includes(scenario.taskId)) {
-      setMessage('Selected scenario is outside the grant task authority.', 'bad');
+    if (scenario.runnable !== true) {
+      setMessage(`Scenario ${text(scenario.scenario_id)} is not runnable under the current sealed grant.`, 'bad');
       return;
     }
-    if (!runtimeState.allowedBindings.length) {
-      setMessage('This scenario requires a prepared binding sealed into an E2E Evaluation grant.', 'bad');
+    const bindings = Array.isArray(scenario.binding_ids) ? scenario.binding_ids.filter(Boolean) : [];
+    if (!bindings.length) {
+      setMessage('This backend-authorized scenario has no prepared binding available.', 'bad');
       return;
     }
-    $('task-id').value = scenario.taskId;
-    $('binding-id').value = runtimeState.allowedBindings.length === 1 ? runtimeState.allowedBindings[0] : '';
-    $('task-input').value = JSON.stringify(scenario.sampleInput, null, 2);
+    $('task-id').value = text(scenario.task_id);
+    $('binding-id').value = bindings.length === 1 ? text(bindings[0]) : '';
+    $('task-input').value = JSON.stringify(scenario.sample_input || {}, null, 2);
     $('idempotency-key').value = nextIdempotencyKey();
-    $('result').textContent = runtimeState.allowedBindings.length === 1
-      ? `Scenario ${scenario.id} prepared. Review the synthetic input, then execute.`
-      : `Scenario ${scenario.id} prepared. Select the matching prepared binding before execution.`;
-    setMessage(`Prepared ${scenario.title}. No authority was added; server-side grant checks remain authoritative.`, 'ok');
+    $('result').textContent = bindings.length === 1
+      ? `Scenario ${text(scenario.scenario_id)} prepared from backend authority. Review the synthetic input, then execute.`
+      : `Scenario ${text(scenario.scenario_id)} prepared. Select one matching backend-authorized binding before execution.`;
+    setMessage(
+      `Prepared ${text(scenario.title || scenario.scenario_id)} from sealed grant authority. No client-side capability was added.`,
+      'ok'
+    );
     syncExecuteButton();
   }
 
@@ -247,7 +224,8 @@
       },
       allowed_task_ids: Array.isArray(payload.allowed_task_ids) ? payload.allowed_task_ids : [],
       allowed_binding_ids: Array.isArray(payload.allowed_binding_ids) ? payload.allowed_binding_ids : [],
-      guided_scenario_ids: scenarioCandidates().map((item) => item.id),
+      guided_scenario_ids: scenarioCandidates().map((item) => item.scenario_id),
+      scenario_catalog_source: payload.scenario_catalog_source || null,
       latest_execution: latest,
       subscription_required: false,
       production_allowed: false,
@@ -264,6 +242,9 @@
     runtimeState.quotaRemaining = Number(quota.remaining ?? 0);
     runtimeState.allowedTasks = Array.isArray(payload.allowed_task_ids) ? payload.allowed_task_ids : [];
     runtimeState.allowedBindings = Array.isArray(payload.allowed_binding_ids) ? payload.allowed_binding_ids : [];
+    runtimeState.guidedScenarios = Array.isArray(payload.guided_scenarios)
+      ? payload.guided_scenarios
+      : [];
 
     $('credential').textContent = text(payload.credential_status || 'unknown');
     $('credential').className = statusClass(payload.credential_status);
@@ -320,13 +301,14 @@
         $('quota-effect').textContent = '0';
         $('quota-effect-meta').textContent = 'Status refresh: +0 quota.';
       }
-      setMessage('Connected. Choose a guided scenario when this grant contains a prepared E2E binding; status reads consume +0 quota.', 'ok');
+      setMessage('Connected. Guided scenarios are derived from sealed backend grant authority; status reads consume +0 quota.', 'ok');
       return payload;
     } catch (error) {
       runtimeState.credentialStatus = 'unavailable';
       runtimeState.quotaRemaining = 0;
       runtimeState.allowedTasks = [];
       runtimeState.allowedBindings = [];
+      runtimeState.guidedScenarios = [];
       renderScenarios();
       syncExecuteButton();
       setMessage(`Unable to read evaluation status: ${error.message || error}`, 'bad');
@@ -428,6 +410,7 @@
     runtimeState.lastQuotaUsed = null;
     runtimeState.allowedTasks = [];
     runtimeState.allowedBindings = [];
+    runtimeState.guidedScenarios = [];
     syncExecuteButton();
     try {
       await refreshStatus();
@@ -445,6 +428,7 @@
       lastQuotaUsed: null,
       allowedTasks: [],
       allowedBindings: [],
+      guidedScenarios: [],
     };
     $('task-id').value = '';
     $('binding-id').value = '';
