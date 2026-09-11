@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const EVALUATION_SCRIPT_SELECTOR = 'script[data-admin-evaluation-grants]';
   const EVALUATION_SCRIPT_SRC = '/console/js/admin_evaluation_grants.js?v=admineval-authority-v2';
+  const OWNED_PRESET_SCRIPT_SELECTOR = 'script[data-admin-evaluation-owned-preset]';
+  const OWNED_PRESET_SCRIPT_SRC = '/console/js/admin_evaluation_owned_preset.js?v=admineval-owned-preset-v1';
   const API_KEY_WORKSPACE_SCRIPT_SELECTOR = 'script[data-admin-api-key-provisioning-workspace]';
   const API_KEY_WORKSPACE_SCRIPT_SRC = '/console/js/admin_api_key_provisioning_workspace.js?v=adminapikeyworkspace-authority-v2';
   const API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR = 'script[data-admin-api-key-evaluation-lifecycle]';
@@ -214,6 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.dataset.adminEvaluationGrants = 'loaded';
         window.PMK_ADMIN_EXTERNAL_EVALUATION_CATEGORY_FLOW?.renderContract?.();
       }
+    );
+    loadScript(
+      OWNED_PRESET_SCRIPT_SELECTOR,
+      OWNED_PRESET_SCRIPT_SRC,
+      'adminEvaluationOwnedPreset',
+      () => window.setTimeout(placeEvaluationWorkspaceInsideCard, 0)
     );
     loadScript(
       API_KEY_EVALUATION_LIFECYCLE_SCRIPT_SELECTOR,
