@@ -5,6 +5,7 @@ JS = ROOT / "processual_api" / "static" / "js"
 SUMMARY_SCRIPT = JS / "admin_api_key_summary.js"
 MANAGEMENT_SCRIPT = JS / "admin_evaluation_grants.js"
 SESSION_SCRIPT = JS / "admin_session.js"
+OWNED_PRESET_SCRIPT = JS / "admin_evaluation_owned_preset.js"
 
 
 def _summary_source() -> str:
@@ -17,6 +18,10 @@ def _management_source() -> str:
 
 def _session_source() -> str:
     return SESSION_SCRIPT.read_text(encoding="utf-8")
+
+
+def _owned_preset_source() -> str:
+    return OWNED_PRESET_SCRIPT.read_text(encoding="utf-8")
 
 
 def test_admin_api_key_area_exposes_evaluation_grant_controls() -> None:
@@ -194,6 +199,48 @@ def test_evaluation_management_loader_is_idempotent_and_reports_asset_failure() 
     assert "Protected Evaluation asset failed to load" in source
 
 
+def test_owned_crm_preset_is_loaded_only_inside_protected_evaluation_controls() -> None:
+    source = _session_source()
+    for marker in (
+        "script[data-admin-evaluation-owned-preset]",
+        "/console/js/admin_evaluation_owned_preset.js?v=admineval-owned-preset-v1",
+        "'adminEvaluationOwnedPreset'",
+    ):
+        assert marker in source
+    assert source.index("function loadProtectedEvaluationControls()") < source.index(
+        "OWNED_PRESET_SCRIPT_SELECTOR"
+    ) or "OWNED_PRESET_SCRIPT_SELECTOR" in source
+    assert source.index("loadProtectedEvaluationControls();") > source.index(
+        "document.body.dataset.adminEvaluationGrants = 'authorized'"
+    )
+
+
+def test_owned_crm_preset_ui_only_prepares_and_proves_binding() -> None:
+    source = _owned_preset_source()
+    for marker in (
+        "/settings/admin/evaluation-grants/bindings/presets/crm-context-owned",
+        "https://processual-maestro-kernel.onrender.com",
+        "Prepare & prove CRM-CONTEXT-01",
+        "project-owned read-only sandbox",
+        "short-lived sandbox grant",
+        "hardened outbound live proof",
+        "binding_selectable === true",
+        "proof.operational_proof === true",
+        "proof.peer_address_verified === true",
+        "proof.network_request_executed === true",
+        "proof.mapping_valid === true",
+        "proof.ready_for_task_consumption === true",
+        "raw secret: no",
+        "production: disabled",
+    ):
+        assert marker in source
+    assert "/issue-key" not in source
+    assert "Create Evaluation Grant" not in source
+    assert "api_key" not in source
+    assert "localStorage" not in source
+    assert "sessionStorage" not in source
+
+
 def test_category_change_rechecks_authority_and_loads_evaluation_controls() -> None:
     source = _session_source()
     assert "window.addEventListener('pmk-api-key-category-changed'" in source
@@ -211,4 +258,5 @@ def test_evaluation_ui_does_not_own_navigation_or_reload_behavior() -> None:
 def test_api_key_ui_scripts_are_invoked() -> None:
     assert _summary_source().rstrip().endswith("})();")
     assert _management_source().rstrip().endswith("})();")
+    assert _owned_preset_source().rstrip().endswith("})();")
     assert _session_source().rstrip().endswith("});")
