@@ -9,9 +9,11 @@ from processual_api.integrations.sandbox_operational_readiness import (
     SandboxContentContract,
     SandboxSecretReference,
     safe_content_projection,
+    safe_secret_reference_projection,
     sandbox_provisioning_fingerprint,
 )
 from processual_api.routers import evaluation_runtime_scenarios as scenarios_runtime
+from processual_api.routers import settings_admin_evaluation_owned_sandbox_preset as owned_preset
 from processual_api.services.evaluation_scenarios import customer_evaluation_scenarios
 
 
@@ -101,6 +103,24 @@ def test_project_owned_sandbox_content_is_explicit_and_customer_safe() -> None:
     assert safe["production_allowed"] is False
 
 
+def test_project_owned_anonymous_reference_is_explicit_and_secret_free() -> None:
+    reference = SandboxSecretReference(
+        binding_id="evaluation.crm.public",
+        provider_id="anonymous",
+        secret_reference="public",
+        customer_scoped=False,
+        project_scoped=True,
+        value_included=False,
+    )
+
+    safe = safe_secret_reference_projection(reference)
+    assert safe["customer_scoped"] is False
+    assert safe["project_scoped"] is True
+    assert safe["reference_scope"] == "project"
+    assert safe["value_included"] is False
+    assert safe["raw_secret_visible"] if "raw_secret_visible" in safe else True
+
+
 def test_sandbox_content_requires_exactly_one_owned_source() -> None:
     common = {
         "binding_id": "evaluation.crm.public",
@@ -122,6 +142,26 @@ def test_sandbox_content_requires_exactly_one_owned_source() -> None:
             **common,
             customer_owned=False,
             project_owned=False,
+        )
+
+
+def test_sandbox_reference_requires_exactly_one_scope() -> None:
+    common = {
+        "binding_id": "evaluation.crm.public",
+        "provider_id": "anonymous",
+        "secret_reference": "public",
+    }
+    with pytest.raises(ValueError, match="exactly one"):
+        SandboxSecretReference(
+            **common,
+            customer_scoped=True,
+            project_scoped=True,
+        )
+    with pytest.raises(ValueError, match="exactly one"):
+        SandboxSecretReference(
+            **common,
+            customer_scoped=False,
+            project_scoped=False,
         )
 
 
@@ -176,6 +216,107 @@ def test_customer_owned_sandbox_preserves_legacy_provisioning_fingerprint() -> N
         )
         == expected
     )
+
+
+def test_owned_crm_preset_builds_only_read_only_project_sandbox_authority() -> None:
+    body = owned_preset.OwnedCrmContextPresetRequest(
+        base_url="https://processual-maestro-kernel.onrender.com"
+    )
+    binding = owned_preset._binding(body)
+    content = owned_preset._content(binding.binding_id)
+    reference = owned_preset._reference(binding.binding_id)
+
+    assert binding.task_id == "crm.customer_context"
+    assert binding.adapter_contract_id == "crm"
+    assert binding.method == "GET"
+    assert binding.path == "/users/1"
+    assert binding.required_scope_ids == ["crm:read"]
+    assert binding.field_mapping["customer_id"] == "$.id"
+    assert content.customer_owned is False
+    assert content.project_owned is True
+    assert content.synthetic_or_nonproduction is True
+    assert reference.provider_id == "anonymous"
+    assert reference.secret_reference == "public"
+    assert reference.customer_scoped is False
+    assert reference.project_scoped is True
+    assert reference.value_included is False
+
+
+@pytest.mark.asyncio
+async def test_owned_crm_preset_reaches_ready_only_after_catalog_selectable(monkeypatch) -> None:
+    async def allow(current_user, request):
+        del request
+        return current_user
+
+    async def fake_provision(*, binding_id, body, request, current_user):
+        del request, current_user
+        assert binding_id == "evaluation.crm.customer_context.owned"
+        assert body.binding.method == "GET"
+        assert body.content_contract.project_owned is True
+        assert body.secret_reference.project_scoped is True
+        return {"persisted": True}
+
+    async def fake_proof(*, binding_id, body, request, current_user):
+        del request, current_user
+        assert binding_id == "evaluation.crm.customer_context.owned"
+        assert body.task_input == {"customer_id": "sandbox-customer-001"}
+        return {
+            "operational_proof": True,
+            "peer_address_verified": True,
+            "network_request_executed": True,
+            "mapping_valid": True,
+            "ready_for_task_consumption": True,
+            "evidence_sha256": "e" * 64,
+        }
+
+    async def fake_catalog(*, request, current_user):
+        del request, current_user
+        return {
+            "bindings": [
+                {
+                    "binding_id": "evaluation.crm.customer_context.owned",
+                    "task_id": "crm.customer_context",
+                    "selectable": True,
+                    "sandbox_readiness": {"sandbox_ready": True},
+                    "active_sandbox_grant": {"grant_id": "sandbox_grant"},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(owned_preset, "require_active_platform_admin", allow)
+    monkeypatch.setattr(owned_preset, "provision_evaluation_binding", fake_provision)
+    monkeypatch.setattr(
+        owned_preset,
+        "execute_evaluation_sandbox_operational_proof",
+        fake_proof,
+    )
+    monkeypatch.setattr(owned_preset, "evaluation_binding_catalog", fake_catalog)
+
+    result = await owned_preset.prepare_owned_crm_context_preset(
+        body=owned_preset.OwnedCrmContextPresetRequest(
+            base_url="https://processual-maestro-kernel.onrender.com"
+        ),
+        request=object(),
+        current_user={"sub": "admin"},
+    )
+
+    assert result["status"] == "ready"
+    assert result["preset_id"] == "CRM-CONTEXT-01"
+    assert result["binding_selectable"] is True
+    assert result["content_owner"] == "project"
+    assert result["credential_reference_scope"] == "project"
+    assert result["next_grant"]["evaluation_type"] == "crm"
+    assert result["next_grant"]["allowed_task_ids"] == ["crm.customer_context"]
+    assert result["next_grant"]["allowed_binding_ids"] == [
+        "evaluation.crm.customer_context.owned"
+    ]
+    assert result["next_grant"]["allowed_endpoints"] == [
+        {"method": "POST", "path": "/evaluation/runtime/task-execute"}
+    ]
+    assert result["next_grant"]["quota"] == 100
+    assert result["production_allowed"] is False
+    assert result["raw_secret_visible"] is False
+    assert result["raw_payload_visible"] is False
 
 
 @pytest.mark.asyncio
