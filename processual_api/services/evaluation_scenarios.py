@@ -11,8 +11,13 @@ _SCENARIOS: tuple[dict[str, Any], ...] = (
         "title": "CRM Customer Context Review",
         "task_id": "crm.customer_context",
         "kind": "safe_read",
-        "customer_value": "Read and normalize a sandbox customer context through a governed Maestro task.",
-        "success_signal": "The task is admitted, executed through the prepared sandbox binding, and durable evidence is persisted.",
+        "customer_value": (
+            "Read and normalize a sandbox customer context through a governed Maestro task."
+        ),
+        "success_signal": (
+            "The task is admitted, executed through the prepared sandbox binding, "
+            "and durable evidence is persisted."
+        ),
         "sample_input": {"customer_id": "sandbox-customer-001"},
     },
     {
@@ -20,8 +25,12 @@ _SCENARIOS: tuple[dict[str, Any], ...] = (
         "title": "CRM Customer State Summary",
         "task_id": "crm.customer_state_summary",
         "kind": "safe_read",
-        "customer_value": "Summarize the current sandbox customer state without production access.",
-        "success_signal": "A bounded summary execution completes and produces persisted safe evidence.",
+        "customer_value": (
+            "Summarize the current sandbox customer state without production access."
+        ),
+        "success_signal": (
+            "A bounded summary execution completes and produces persisted safe evidence."
+        ),
         "sample_input": {"customer_id": "sandbox-customer-001"},
     },
     {
@@ -29,8 +38,14 @@ _SCENARIOS: tuple[dict[str, Any], ...] = (
         "title": "Draft Customer Update",
         "task_id": "crm.customer_update_draft",
         "kind": "governed_draft",
-        "customer_value": "Prepare a supervisor-reviewable CRM update draft without applying it to production.",
-        "success_signal": "A draft is produced inside the sandbox boundary and recorded as evaluation evidence.",
+        "customer_value": (
+            "Prepare a supervisor-reviewable CRM update draft without applying it "
+            "to production."
+        ),
+        "success_signal": (
+            "A draft is produced inside the sandbox boundary and recorded as "
+            "evaluation evidence."
+        ),
         "sample_input": {
             "customer_id": "sandbox-customer-001",
             "requested_change": "Prepare a synthetic customer update for evaluation only",
