@@ -154,6 +154,16 @@ def safe_secret_reference_projection(reference: SandboxSecretReference) -> dict[
     }
 
 
+def _content_fingerprint_payload(contract: SandboxContentContract) -> dict[str, Any]:
+    payload = contract.model_dump(mode="json")
+    # Preserve hashes generated before project-owned Evaluation sandboxes were
+    # introduced. The default False field is metadata-only for legacy customer
+    # contracts and must not invalidate their already-qualified live proof.
+    if payload.get("project_owned") is False:
+        payload.pop("project_owned", None)
+    return payload
+
+
 def sandbox_provisioning_fingerprint(
     *,
     binding: dict[str, Any],
@@ -171,7 +181,7 @@ def sandbox_provisioning_fingerprint(
             "provider_id": secret_reference.provider_id,
             "secret_reference": secret_reference.secret_reference,
         },
-        "content_contract": content_contract.model_dump(mode="json"),
+        "content_contract": _content_fingerprint_payload(content_contract),
     }
     encoded = dumps(
         payload,
