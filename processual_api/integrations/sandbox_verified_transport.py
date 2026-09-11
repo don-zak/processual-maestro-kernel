@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -10,6 +11,8 @@ from processual_api.integrations.enterprise_sandbox_execution import (
     SandboxExecutionError,
     resolve_public_addresses,
 )
+
+logger = logging.getLogger(__name__)
 
 _SAFE_DIAGNOSTIC_HEADERS = (
     "retry-after",
@@ -68,6 +71,14 @@ class VerifiedPeerSandboxTransport(httpx.AsyncBaseTransport):
             raise SandboxExecutionError("sandbox_peer_address_mismatch")
         self.last_verified_peer = peer
         self.last_response_diagnostics = self._safe_response_diagnostics(response, peer)
+        if response.status_code >= 400:
+            logger.warning(
+                "sandbox_verified_peer_http_failure host=%s status=%s peer=%s safe_headers=%s body_included=false credential_material_included=false",
+                hostname,
+                response.status_code,
+                peer,
+                self.last_response_diagnostics["headers"],
+            )
         response.extensions["sandbox_peer_verified"] = True
         response.extensions["sandbox_peer_address"] = peer
         return response
