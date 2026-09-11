@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request, status
 
 from processual_api.auth.platform_admin_authority import require_active_platform_admin
 from processual_api.auth.security import get_current_user
@@ -32,6 +32,10 @@ from processual_api.integrations.sandbox_operational_readiness import (
 from processual_api.services.enterprise_endpoint_sandbox_grants import (
     SandboxGrantError,
     resolve_active_sandbox_execution_grant,
+)
+from processual_api.services.evaluation_authority_postgres import EvaluationAuthorityError
+from processual_api.services.evaluation_prepared_authority import (
+    load_prepared_evaluation_authority,
 )
 
 from . import settings as settings_module
@@ -189,13 +193,20 @@ async def evaluation_binding_catalog(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     await require_active_platform_admin(current_user, request)
-    raw = settings_module._load_raw(_owner_user_id(current_user))
+    try:
+        raw = await load_prepared_evaluation_authority(_owner_user_id(current_user))
+    except EvaluationAuthorityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Shared Evaluation authority is unavailable.",
+        ) from exc
     bindings = [
         _binding_catalog_item(raw, item)
         for item in _stored_items(raw, BINDING_STORAGE_KEY)
     ]
     return {
         "status": "ready",
+        "authority_store": "postgresql_shared",
         "binding_count": len(bindings),
         "bindings": bindings,
         "selection_authority": "admin_evaluation_grant",
