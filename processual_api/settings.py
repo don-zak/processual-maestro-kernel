@@ -168,7 +168,7 @@ class APISettings:
         default_factory=lambda: int(os.environ.get("AUTH_MFA_RECOVERY_CODE_COUNT", "10"))
     )
     auth_mfa_step_up_seconds: int = field(
-        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "300"))
+        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "900"))
     )
     admin_marketplace_payment_destination_key_ring_json: str | None = field(
         default_factory=lambda: os.environ.get(
@@ -187,7 +187,7 @@ class APISettings:
     )
     rate_limit_default: str = field(default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "100/minute"))
     rate_limit_authenticated: str = field(
-        default_factory=lambda: os.environ.get("RATE_LIMIT_AUTHENTICATED", "500/minute")
+        default_factory=lambda: os.environ.get("RATE_LIMIT_AUTHENTICATED", "500/minute"))
     )
 
     # --- Audit ---
