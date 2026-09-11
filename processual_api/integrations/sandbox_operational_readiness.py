@@ -46,7 +46,7 @@ class SandboxOperationalStatus(StrEnum):
 
 
 class SandboxSecretReference(BaseModel):
-    """Customer-specific secret-provider reference. Secret values are prohibited."""
+    """Owned sandbox credential reference. Secret values are prohibited."""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -54,6 +54,7 @@ class SandboxSecretReference(BaseModel):
     provider_id: str = Field(min_length=1, max_length=160)
     secret_reference: str = Field(min_length=1, max_length=320)
     customer_scoped: bool = True
+    project_scoped: bool = False
     value_included: bool = False
 
     @field_validator("binding_id", "provider_id", "secret_reference")
@@ -61,19 +62,20 @@ class SandboxSecretReference(BaseModel):
     def _reference_only(cls, value: str) -> str:
         return _validate_reference(value)
 
-    @field_validator("customer_scoped")
-    @classmethod
-    def _customer_scoped(cls, value: bool) -> bool:
-        if value is not True:
-            raise ValueError("sandbox secret references must be customer-scoped")
-        return value
-
     @field_validator("value_included")
     @classmethod
     def _no_value(cls, value: bool) -> bool:
         if value is not False:
             raise ValueError("sandbox secret references cannot include secret values")
         return value
+
+    @model_validator(mode="after")
+    def _exactly_one_reference_scope(self) -> SandboxSecretReference:
+        if self.customer_scoped == self.project_scoped:
+            raise ValueError(
+                "sandbox reference must be scoped to exactly one of customer or project"
+            )
+        return self
 
 
 class SandboxContentContract(BaseModel):
@@ -146,7 +148,9 @@ def safe_secret_reference_projection(reference: SandboxSecretReference) -> dict[
         "binding_id": reference.binding_id,
         "provider_id": reference.provider_id,
         "secret_reference": reference.secret_reference,
-        "customer_scoped": True,
+        "customer_scoped": reference.customer_scoped,
+        "project_scoped": reference.project_scoped,
+        "reference_scope": "customer" if reference.customer_scoped else "project",
         "value_included": False,
         "configured": True,
         "production_allowed": False,
