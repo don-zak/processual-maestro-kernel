@@ -33,6 +33,8 @@ services:
         generateValue: true
       - key: AUTH_MFA_CURRENT_KEY_VERSION
         value: v1
+      - key: AUTH_MFA_STEP_UP_SECONDS
+        value: 900
       - key: AUTH_MFA_KEY_RING_JSON
         sync: false
       - key: PROCESSUAL_CRYPTO_KEY_B64
