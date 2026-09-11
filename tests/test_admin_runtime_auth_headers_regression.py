@@ -35,8 +35,8 @@ def test_admin_fetch_bridge_coalesces_only_equivalent_read_requests():
     bridge = (STATIC_DIR / "js" / "admin_auth_bridge.js").read_text(encoding="utf-8")
 
     required = [
-        "const READ_COALESCE_TTL_MS = 750;",
-        "const READ_COALESCE_MAX_ENTRIES = 128;",
+        "const READ_COALESCE_TTL_MS = 5000;",
+        "const READ_COALESCE_MAX_ENTRIES = 256;",
         "const inFlightReads = new Map();",
         "const recentReads = new Map();",
         "function shouldCoalesceRead(url, method, init)",
@@ -72,6 +72,17 @@ def test_admin_fetch_bridge_preserves_no_store_and_mutation_semantics():
     assert "if (cacheMode !== 'no-store')" in bridge
     assert "if (method !== 'GET') return false;" in bridge
     assert "return originalFetch(input, nextInit);" in bridge
+
+
+def test_admin_fetch_bridge_coalescing_is_short_lived_and_identity_scoped():
+    bridge = (STATIC_DIR / "js" / "admin_auth_bridge.js").read_text(encoding="utf-8")
+
+    assert "READ_COALESCE_TTL_MS = 5000" in bridge
+    assert "target.href" in bridge
+    assert "requestHeaders.get('Authorization')" in bridge
+    assert "requestHeaders.get('X-Supervisor-Session-Key')" in bridge
+    assert "now - recent.storedAt <= READ_COALESCE_TTL_MS" in bridge
+    assert "now - entry.storedAt > READ_COALESCE_TTL_MS" in bridge
 
 
 def test_admin_cards_are_scrollable_for_long_backend_output():
