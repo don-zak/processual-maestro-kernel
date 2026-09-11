@@ -41,7 +41,7 @@ class MfaService:
         token_digester: TokenDigester,
         issuer: str = "Processual Maestro",
         recovery_code_count: int = 10,
-        step_up_ttl: timedelta = timedelta(minutes=5),
+        step_up_ttl: timedelta = timedelta(minutes=15),
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if not issuer.strip() or recovery_code_count < 6 or recovery_code_count > 20:
