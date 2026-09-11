@@ -20,12 +20,32 @@ def test_evaluation_admin_uses_postgres_for_grants_keys_and_revocation() -> None
 
     assert "save_evaluation_authority_state" in routes
     assert "load_evaluation_authority_state" in routes
+    assert "load_prepared_evaluation_authority" in routes
     assert "create_evaluation_authority_key" in routes
     assert "revoke_evaluation_authority_grant" in routes
     assert '"authority_store": "postgresql_shared"' in routes
-    # Local settings may be read once only to seal already-prepared sandbox configuration.
-    assert routes.count("settings_module._load_raw") == 1
+    assert "settings_module._load_raw" not in routes
     assert "settings_module._save_raw" not in routes
+
+
+def test_prepared_binding_authority_is_postgres_backed() -> None:
+    provisioning = (
+        ROOT / "processual_api/routers/settings_admin_evaluation_binding_provisioning.py"
+    ).read_text(encoding="utf-8")
+    catalog = (
+        ROOT / "processual_api/routers/settings_admin_evaluation_binding_catalog.py"
+    ).read_text(encoding="utf-8")
+    prepared = (
+        ROOT / "processual_api/services/evaluation_prepared_authority.py"
+    ).read_text(encoding="utf-8")
+
+    for source in (provisioning, catalog):
+        assert "load_prepared_evaluation_authority" in source
+        assert "settings_module._load_raw" not in source
+        assert "settings_module._save_raw" not in source
+        assert '"authority_store": "postgresql_shared"' in source
+    assert "load_evaluation_authority_state" in prepared
+    assert "save_evaluation_authority_state" in prepared
 
 
 def test_security_is_shared_first_and_production_fail_closed() -> None:
