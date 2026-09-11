@@ -1,0 +1,26 @@
+[build]
+  publish = "public"
+
+[[redirects]]
+  from = "/users/1"
+  to = "/users/1.json"
+  status = 200
+
+[[redirects]]
+  from = "/health/live"
+  to = "/health/live.json"
+  status = 200
+
+[[headers]]
+  for = "/users/1"
+  [headers.values]
+    Cache-Control = "no-store"
+    Content-Type = "application/json; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
+
+[[headers]]
+  for = "/health/live"
+  [headers.values]
+    Cache-Control = "no-store"
+    Content-Type = "application/json; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
