@@ -4,6 +4,11 @@
   const HOST_ID = 'admin-evaluation-owned-crm-preset';
   const EXTERNAL_CATEGORY = 'external_evaluation';
 
+  const selectedBindingIds = new Set();
+  let bindingObserver = null;
+  let observedBindingList = null;
+  let restoringBindingSelection = false;
+
   function text(value) {
     return String(value ?? '').trim();
   }
@@ -32,6 +37,72 @@
 
   function externalEvaluationSelected() {
     return text(document.getElementById('admin-api-key-category')?.value) === EXTERNAL_CATEGORY;
+  }
+
+  function captureBindingSelection(event) {
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-eval-binding]')
+      : null;
+    if (!target || target.disabled) return;
+    const bindingId = text(target.value);
+    if (!bindingId) return;
+    if (target.checked) selectedBindingIds.add(bindingId);
+    else selectedBindingIds.delete(bindingId);
+  }
+
+  function restoreBindingSelection() {
+    if (restoringBindingSelection) return;
+    const list = document.getElementById('admin-eval-binding-list');
+    if (!list) return;
+
+    restoringBindingSelection = true;
+    let readinessChanged = false;
+    const currentIds = new Set();
+
+    list.querySelectorAll('[data-eval-binding]').forEach((input) => {
+      const bindingId = text(input.value);
+      if (!bindingId) return;
+      currentIds.add(bindingId);
+
+      if (input.disabled) {
+        selectedBindingIds.delete(bindingId);
+        return;
+      }
+
+      if (selectedBindingIds.has(bindingId) && !input.checked) {
+        input.checked = true;
+        readinessChanged = true;
+      }
+    });
+
+    [...selectedBindingIds].forEach((bindingId) => {
+      if (!currentIds.has(bindingId)) selectedBindingIds.delete(bindingId);
+    });
+
+    restoringBindingSelection = false;
+    if (readinessChanged) {
+      window.PMK_ADMIN_EVALUATION_GRANTS?.updateReadiness?.();
+    }
+  }
+
+  function ensureBindingSelectionPersistence() {
+    const list = document.getElementById('admin-eval-binding-list');
+    if (!list) return false;
+
+    if (observedBindingList === list && bindingObserver) {
+      restoreBindingSelection();
+      return true;
+    }
+
+    if (bindingObserver) bindingObserver.disconnect();
+    observedBindingList = list;
+    list.addEventListener('change', captureBindingSelection);
+    bindingObserver = new MutationObserver(() => {
+      window.queueMicrotask(restoreBindingSelection);
+    });
+    bindingObserver.observe(list, { childList: true });
+    restoreBindingSelection();
+    return true;
   }
 
   async function prepareOwnedCrmPreset() {
@@ -146,6 +217,7 @@
       document.getElementById('admin-eval-owned-preset-run')?.addEventListener('click', prepareOwnedCrmPreset);
     }
     host.hidden = !externalEvaluationSelected();
+    ensureBindingSelectionPersistence();
     return true;
   }
 
@@ -158,7 +230,13 @@
     }, 150);
   }
 
-  window.addEventListener('pmk-api-key-category-changed', render);
+  window.addEventListener('pmk-api-key-category-changed', () => {
+    render();
+    ensureBindingSelectionPersistence();
+  });
+  window.addEventListener('pmk-api-key-access-selection-changed', () => {
+    window.queueMicrotask(restoreBindingSelection);
+  });
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', scheduleRender);
   } else {
