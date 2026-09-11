@@ -34,7 +34,8 @@ def test_live_qualification_matrix_is_bounded_and_complete() -> None:
         assert stage in runbook
 
     for contract in (
-        "CRM `100`, Integration `200`",
+        "Explicit CRM grant has 100 admitted-execution units",
+        "explicit Integration grant has 200",
         "consumes exactly **1** unit",
         "consumes **0 additional** units",
         "expect HTTP `409`",
