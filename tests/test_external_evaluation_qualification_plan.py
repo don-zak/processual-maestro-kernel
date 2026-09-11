@@ -20,8 +20,8 @@ def test_live_qualification_matrix_is_bounded_and_complete() -> None:
     runbook = _read(RUNBOOK)
 
     for stage in (
-        "Q1 — Exact-head runtime readiness",
-        "Q2 — Grant authority and key handoff",
+        "Q1 — Exact-head runtime and owned-sandbox readiness",
+        "Q2 — Owned CRM preset, Grant authority and key handoff",
         "Q3 — Customer status/dashboard",
         "Q4 — New admitted execution",
         "Q5 — Durable replay",
@@ -40,6 +40,22 @@ def test_live_qualification_matrix_is_bounded_and_complete() -> None:
         "expect HTTP `409`",
         "external_evaluation_final_summary",
         "qualification_decision=operator_required",
+    ):
+        assert contract in runbook
+
+
+def test_owned_preset_live_plan_is_fail_closed_and_does_not_create_authority() -> None:
+    runbook = _read(RUNBOOK)
+
+    for contract in (
+        "Prepare & prove CRM-CONTEXT-01",
+        "selectable=true",
+        "project-owned synthetic content",
+        "project-scoped `anonymous/public` credential reference",
+        "The preset itself must not create an Evaluation Grant or API key.",
+        "The preset prepares/proves a binding only and cannot create or widen Grant authority.",
+        "0/100` to `1/100 used",
+        "remaining from `100` to `99`",
     ):
         assert contract in runbook
 
