@@ -18,9 +18,9 @@ from . import cgt_governor as cgt_module
 from . import settings as settings_module
 from .evaluation_runtime import (
     evaluation_runtime_execution_status,
-    evaluation_runtime_status,
     execute_evaluation_runtime_task,
 )
+from .evaluation_runtime_scenarios import evaluation_runtime_status_with_scenarios
 from .settings_admin_evaluation_grants import (
     evaluation_access_catalog,
     evaluation_grant_authority,
@@ -79,7 +79,7 @@ def register_external_evaluation_routes() -> None:
             "/evaluation/runtime/status",
             "/evaluation/runtime/status",
             "GET",
-            evaluation_runtime_status,
+            evaluation_runtime_status_with_scenarios,
             200,
         ),
         (
