@@ -70,6 +70,19 @@ def _lifecycle_http_error(exc: EvaluationAuthorityError) -> HTTPException:
     )
 
 
+def _grant_string_list(grant: dict[str, Any], field: str) -> list[str]:
+    values = grant.get(field, [])
+    if not isinstance(values, list):
+        return []
+    return sorted(
+        {
+            str(value or "").strip()
+            for value in values
+            if str(value or "").strip()
+        }
+    )
+
+
 def _final_audit_summary(
     *,
     grant: dict[str, Any],
@@ -87,26 +100,26 @@ def _final_audit_summary(
         max(0, int(item.get("quota_rejected_count", 0) or 0)) for item in keys
     )
     per_key_limit = max(0, int(grant.get("max_requests", 0) or 0))
-    task_ids = sorted(
-        {
-            str(item.get("task_id") or "")
-            for item in receipts
-            if str(item.get("task_id") or "")
-        }
-    )
-    binding_ids = sorted(
-        {
-            str(item.get("binding_id") or "")
-            for item in receipts
-            if str(item.get("binding_id") or "")
-        }
-    )
+
+    # The final report is a grant-scoped authority report. Keep the declared
+    # task/binding envelope visible even when no runtime receipt exists yet.
+    # Receipt-derived lists made multiple grant cards look indistinguishable and
+    # incorrectly rendered "tasks none / bindings none" for a sealed grant.
+    task_ids = _grant_string_list(grant, "allowed_task_ids")
+    binding_ids = _grant_string_list(grant, "allowed_binding_ids")
+
     key_states: dict[str, int] = {}
     for key in keys:
         lifecycle = str(key.get("lifecycle_status") or key.get("status") or "unknown")
         key_states[lifecycle] = key_states.get(lifecycle, 0) + 1
 
-    if failed > 0 or executing > 0:
+    # Fail closed if authoritative key admission accounting says work happened
+    # but the authoritative execution ledger cannot produce a receipt for it.
+    # Never infer a successful execution from usage alone.
+    ledger_receipt_mismatch = quota_used > 0 and not receipts
+    if ledger_receipt_mismatch:
+        audit_outcome = "ledger_receipt_mismatch"
+    elif failed > 0 or executing > 0:
         audit_outcome = "needs_review"
     elif succeeded > 0 and succeeded == evidence_persisted:
         audit_outcome = "complete"
@@ -117,7 +130,11 @@ def _final_audit_summary(
         "report_type": "external_evaluation_final_summary",
         "audit_outcome": audit_outcome,
         "qualification_decision": "operator_required",
+        "grant_id": str(grant.get("grant_id") or ""),
         "grant_status": str(grant.get("status") or "unknown"),
+        "issued_to": str(grant.get("issued_to") or ""),
+        "client_id": str(grant.get("client_id") or ""),
+        "ledger_receipt_mismatch": ledger_receipt_mismatch,
         "quota": {
             "per_key_limit": per_key_limit,
             "used_across_keys": quota_used,
