@@ -163,7 +163,12 @@
         throw new Error('Owned CRM preset returned without a complete selectable live-proof state.');
       }
 
+      const refreshBindingCatalog = window.PMK_ADMIN_EVALUATION_GRANTS?.refreshBindingCatalog;
+      if (typeof refreshBindingCatalog !== 'function') {
+        throw new Error('Evaluation binding catalog refresh is unavailable.');
+      }
       selectedBindingIds.add(bindingId);
+      await refreshBindingCatalog();
       restoreBindingSelection();
       if (result) {
         result.className = 'admin-note ok';
@@ -172,17 +177,10 @@
           `Binding <code>${escapeHtml(payload.binding_id)}</code> is sandbox-ready and selectable.`,
           `Readiness: ${escapeHtml(readiness.status || 'sandbox_ready')}.`,
           'Content owner: project · credential reference: project-scoped anonymous/public · raw secret: no · production: disabled.',
-          'Proof persisted successfully. The page will not reload or discard the current qualification form.',
+          'Proof persisted and the authoritative binding catalog refreshed in place. The page will not reload or discard the current qualification form.',
         ].join('<br>');
       }
       if (button) button.disabled = false;
-      try {
-        window.dispatchEvent(new CustomEvent('pmk-evaluation-binding-proof-ready', {
-          detail: { bindingId, selectable: true },
-        }));
-      } catch {
-        window.dispatchEvent(new Event('pmk-evaluation-binding-proof-ready'));
-      }
     } catch (error) {
       if (result) {
         result.className = 'admin-note danger';
