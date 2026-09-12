@@ -355,14 +355,15 @@
     const scopes = Array.isArray(grant.allowed_scopes) ? grant.allowed_scopes : [];
     const bindings = Array.isArray(grant.allowed_binding_ids) ? grant.allowed_binding_ids : [];
     const type = inferredGrantType(grant);
+    const grantId = text(grant.grant_id);
     const actions = active
-      ? `<button class="btn primary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
-         <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke Grant</button>`
+      ? `<button class="btn primary" data-eval-issue="${escapeHtml(grantId)}" type="button">Issue API Key</button>
+         <button class="btn danger" data-eval-revoke="${escapeHtml(grantId)}" type="button">Revoke Grant</button>`
       : '';
     return `
-      <div class="card flat" style="margin-top:var(--s-2)">
+      <div class="card flat" data-eval-grant-card="true" data-eval-grant-id="${escapeHtml(grantId)}" style="margin-top:var(--s-2)">
         <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)} · ${escapeHtml(type.toUpperCase())}</div>
-        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · admitted-execution quota ${escapeHtml(grant.max_requests)} · active keys ${escapeHtml(grant.active_key_count || 0)}</div>
+        <div class="muted">${escapeHtml(grantId)} · client ${escapeHtml(grant.client_id)} · admitted-execution quota ${escapeHtml(grant.max_requests)} · active keys ${escapeHtml(grant.active_key_count || 0)}</div>
         <div class="muted">scopes: ${scopes.length ? scopes.map(escapeHtml).join(', ') : 'backend defaults'}</div>
         <div class="muted">tasks: ${tasks.length ? tasks.map(escapeHtml).join(', ') : 'none'} · authority ${escapeHtml(grant.task_authority_source || 'integration_task_catalog')}</div>
         <div class="muted">bindings: ${bindings.length ? bindings.map(escapeHtml).join(', ') : 'not required'}</div>
@@ -389,6 +390,7 @@
       list.innerHTML = grants.length
         ? grants.map(grantRow).join('')
         : '<div class="muted">No evaluation grants have been issued.</div>';
+      window.dispatchEvent(new CustomEvent('pmk-evaluation-grants-rendered'));
     } catch (error) {
       list.innerHTML = `<div class="admin-note danger">Unable to load evaluation grants: ${escapeHtml(error.message || error)}</div>`;
     }
@@ -520,7 +522,7 @@
       await refreshEvaluationGrants();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
-      setGrantResult(`Unable to revoke evaluation grant: ${escapeHtml(error.message || error)}`, true);
+      setGrantResult(`Unable to revoke grant: ${escapeHtml(error.message || error)}`, true);
     }
   }
 
@@ -546,57 +548,41 @@
     });
   }
 
-  async function initializeEvaluationGrants() {
+  async function initialize() {
     const host = ensureGrantHost();
     if (!host) return;
-    host.innerHTML = grantForm();
-    bindGrantActionDelegation(host);
-    host.addEventListener('input', dispatchEvaluationSelectionChanged);
-    host.addEventListener('change', dispatchEvaluationSelectionChanged);
-    host.addEventListener('input', updateEvaluationReadiness);
-    host.addEventListener('change', updateEvaluationReadiness);
-    document.getElementById('admin-eval-create')?.addEventListener('click', createEvaluationGrant);
-    document.getElementById('admin-eval-refresh')?.addEventListener('click', refreshEvaluationGrants);
-    document.getElementById('admin-eval-type')?.addEventListener('change', renderDerivedQuota);
-
-    window.addEventListener('pmk-admin-session-verified', updateEvaluationReadiness);
-    window.addEventListener('pmk-api-key-category-changed', () => {
-      renderEvaluationBindingCatalog();
-      updateEvaluationReadiness();
-    });
-    window.addEventListener('pmk-api-key-access-selection-changed', () => {
-      renderEvaluationBindingCatalog();
-      updateEvaluationReadiness();
-    });
-    window.addEventListener('pmk-evaluation-selection-changed', updateEvaluationReadiness);
-
-    try {
-      await loadEvaluationTaskCatalog();
-    } catch (error) {
-      evaluationTaskCatalog = [];
-      renderEvaluationTaskCatalog();
-      setGrantResult(`Unable to load canonical task catalog: ${escapeHtml(error.message || error)}`, true);
+    if (!host.dataset.evaluationGrantUiInitialized) {
+      host.dataset.evaluationGrantUiInitialized = 'true';
+      host.innerHTML = grantForm();
+      bindGrantActionDelegation(host);
+      document.getElementById('admin-eval-create')?.addEventListener('click', createEvaluationGrant);
+      document.getElementById('admin-eval-refresh')?.addEventListener('click', refreshEvaluationGrants);
+      document.getElementById('admin-eval-type')?.addEventListener('change', updateEvaluationReadiness);
+      ['admin-eval-client-id', 'admin-eval-issued-to', 'admin-eval-purpose', 'admin-eval-days'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('input', updateEvaluationReadiness);
+      });
+      window.addEventListener('pmk-evaluation-selection-changed', updateEvaluationReadiness);
     }
     try {
-      await loadEvaluationBindingCatalog();
+      await Promise.all([
+        loadEvaluationTaskCatalog(),
+        loadEvaluationBindingCatalog(),
+        refreshEvaluationGrants(),
+      ]);
+      document.body.dataset.adminEvaluationGrants = 'loaded';
+      updateEvaluationReadiness();
     } catch (error) {
-      evaluationBindingCatalog = [];
-      renderEvaluationBindingCatalog();
-      setGrantResult(`Unable to load prepared Evaluation bindings: ${escapeHtml(error.message || error)}`, true);
+      document.body.dataset.adminEvaluationGrants = 'error';
+      host.innerHTML = `<div class="admin-note danger">External Evaluation management unavailable: ${escapeHtml(error.message || error)}</div>`;
     }
-    renderDerivedQuota();
-    refreshEvaluationGrants();
-    dispatchEvaluationSelectionChanged();
-    updateEvaluationReadiness();
   }
 
   window.PMK_ADMIN_EVALUATION_GRANTS = {
-    readiness: evaluationReadiness,
-    updateReadiness: updateEvaluationReadiness,
+    initialize,
     issueKey: issueEvaluationKey,
     refresh: refreshEvaluationGrants,
     refreshBindingCatalog: loadEvaluationBindingCatalog,
   };
 
-  initializeEvaluationGrants();
+  initialize();
 })();
