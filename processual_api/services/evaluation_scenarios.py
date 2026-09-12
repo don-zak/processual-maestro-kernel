@@ -31,7 +31,10 @@ _SCENARIOS: tuple[dict[str, Any], ...] = (
         "success_signal": (
             "A bounded summary execution completes and produces persisted safe evidence."
         ),
-        "sample_input": {"customer_id": "sandbox-customer-001"},
+        "sample_input": {
+            "customer_id": "sandbox-customer-001",
+            "account_status": "active",
+        },
     },
     {
         "scenario_id": "CRM-DRAFT-01",
@@ -48,7 +51,10 @@ _SCENARIOS: tuple[dict[str, Any], ...] = (
         ),
         "sample_input": {
             "customer_id": "sandbox-customer-001",
-            "requested_change": "Prepare a synthetic customer update for evaluation only",
+            "proposed_changes": {
+                "segment": "evaluation-review",
+            },
+            "reason": "Synthetic External Evaluation draft only",
         },
     },
 )
