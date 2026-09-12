@@ -23,7 +23,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             # X-Frame-Options cannot express a modern origin allow-list. Keep the
             # global DENY posture everywhere else and use CSP frame-ancestors for
             # this one customer-facing workspace route only.
-            response.headers.pop("X-Frame-Options", None)
+            if "X-Frame-Options" in response.headers:
+                del response.headers["X-Frame-Options"]
             response.headers["Content-Security-Policy"] = _EXTERNAL_EVALUATION_FRAME_ANCESTORS
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
