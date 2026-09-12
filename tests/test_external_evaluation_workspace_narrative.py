@@ -106,7 +106,7 @@ def test_workspace_scenario_cards_are_accessible_and_backend_bounded() -> None:
     assert "Runnable cards can be selected directly." in html
     for marker in (
         "scenario-badge",
-        "scenario-card selected",
+        ".scenario-card.selected",
         "card.setAttribute('role', 'button')",
         "event.key === 'Enter' || event.key === ' '",
         "selectScenario(scenario.scenario_id)",
