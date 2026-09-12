@@ -74,8 +74,8 @@ def test_customer_portal_uses_memory_only_api_key_and_runtime_endpoints() -> Non
 
     assert "Processual Maestro — External Evaluation" in html
     assert "External Evaluation Workspace" in html
-    assert "evaluation_client_portal.js?v=eval-client-authority-v5" in html
-    assert "evaluation_client_portal.js?v=eval-client-authority-v4" not in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v6" in html
+    assert "evaluation_client_portal.js?v=eval-client-authority-v5" not in html
     for marker in (
         'id="quota-used"',
         'id="quota-remaining"',
