@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlencode
-
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, RedirectResponse, Response
@@ -53,8 +51,7 @@ class EvaluationWorkspaceGateMiddleware(BaseHTTPMiddleware):
                 return PlainTextResponse("External Evaluation launch expired or invalid.", status_code=403)
 
             # Remove the one-time ticket from the visible URL immediately.
-            clean_url = _EXTERNAL_EVALUATION_WORKSPACE_PATH
-            response = RedirectResponse(url=clean_url, status_code=303)
+            response = RedirectResponse(url=_EXTERNAL_EVALUATION_WORKSPACE_PATH, status_code=303)
             response.set_cookie(
                 EVALUATION_LAUNCH_COOKIE,
                 session_token,
