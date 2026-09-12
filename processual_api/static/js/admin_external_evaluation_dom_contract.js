@@ -5,6 +5,8 @@
   const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EXTERNAL_CATEGORY = 'external_evaluation';
+  const LAUNCH_HANDOFF_SCRIPT_ID = 'admin-evaluation-launch-handoff-script';
+  const LAUNCH_HANDOFF_SCRIPT_SRC = '/console/js/admin_evaluation_launch_handoff.js?v=eval-launch-handoff-v1';
   const STANDARD_IDS = [
     'admin-api-key-role',
     'admin-api-key-plan-id',
@@ -47,6 +49,16 @@
       select.appendChild(option);
     }
     return true;
+  }
+
+  function ensureLaunchHandoffScript() {
+    if (document.getElementById(LAUNCH_HANDOFF_SCRIPT_ID)) return;
+    const script = document.createElement('script');
+    script.id = LAUNCH_HANDOFF_SCRIPT_ID;
+    script.src = LAUNCH_HANDOFF_SCRIPT_SRC;
+    script.async = true;
+    script.referrerPolicy = 'no-referrer';
+    document.head.appendChild(script);
   }
 
   function ensureEvaluationCard() {
@@ -207,6 +219,7 @@
       setStandardVisible(!external);
 
       if (external) {
+        ensureLaunchHandoffScript();
         const mode = document.getElementById('admin-api-key-provisioning-mode');
         if (mode && mode.value !== 'external_evaluation') {
           mode.value = 'external_evaluation';
@@ -214,6 +227,7 @@
         }
         window.PMK_ADMIN_SESSION?.syncEvaluationSelectionState?.();
         window.PMK_ADMIN_SESSION?.check?.();
+        window.PMK_ADMIN_EVALUATION_LAUNCH_HANDOFF?.decorate?.();
       }
     } finally {
       applying = false;
