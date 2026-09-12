@@ -82,8 +82,14 @@ The workflow is intentionally fail-closed:
 - Wrangler is pinned explicitly (`4.131.1`) instead of relying on a mutable global install or a nonexistent package lock;
 - no push or pull-request event can deploy the Worker automatically.
 
-## Remaining deployment blocker
+## Remaining deployment blockers
 
-The guarded workflow has **not been executed**. GitHub Actions is currently failing to allocate new jobs for the latest public branch heads, and the presence/authorization of the required Cloudflare secrets/environment has not been proven in an executable run.
+The guarded workflow has **not been executed**.
 
-Therefore Worker source presence and workflow presence must not be treated as live sandbox deployment. The updated Worker is considered deployed only after an executable runner completes the exact-ref verification, contract tests, Cloudflare deployment, and a subsequent live endpoint proof.
+There are three independent gates:
+
+1. GitHub Actions is currently failing to allocate new jobs for the latest public branch heads.
+2. GitHub only accepts a `workflow_dispatch` event when the workflow file exists on the repository default branch. PR #210 remains Draft/Open/Unmerged, so this staged workflow is not currently dispatchable without a direct/default-branch change that is outside the approved merge policy.
+3. The presence and authorization of the required Cloudflare Environment/secrets has not been proven in an executable run.
+
+Therefore Worker source presence and workflow presence must not be treated as live sandbox deployment. The updated Worker is considered deployed only after the workflow is legitimately available on the default branch, an executable runner completes exact-ref verification and contract tests, Cloudflare deployment succeeds, and a subsequent live endpoint proof confirms the expected fixture behavior.
