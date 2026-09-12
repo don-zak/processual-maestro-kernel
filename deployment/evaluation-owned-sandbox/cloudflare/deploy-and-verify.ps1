@@ -32,7 +32,8 @@ try {
     }
     Assert-Equal $CurrentSha $ExpectedGitSha 'Refusing to deploy a checkout different from the approved exact SHA.'
 
-    if ((git status --porcelain).Length -ne 0) {
+    $WorkingTreeChanges = @(git status --porcelain)
+    if ($WorkingTreeChanges.Count -ne 0) {
         throw 'Refusing to deploy from a dirty working tree.'
     }
 
