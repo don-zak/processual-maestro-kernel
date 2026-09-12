@@ -1,6 +1,15 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import PlainTextResponse, RedirectResponse, Response
+
+from processual_api.services.evaluation_launch_gate import (
+    EVALUATION_LAUNCH_COOKIE,
+    EVALUATION_LAUNCH_QUERY_PARAM,
+    EVALUATION_WORKSPACE_SESSION_TTL_SECONDS,
+    EvaluationLaunchGateError,
+    redeem_evaluation_launch_ticket,
+    validate_evaluation_workspace_session,
+)
 
 
 _ADMIN_DOM_CONTRACT_SCRIPT = (
@@ -12,8 +21,12 @@ _EXTERNAL_EVALUATION_FRAME_ANCESTORS = "frame-ancestors https://zaxam.net"
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
         path = request.url.path
+        gate_response: Response | None = None
+        if path == _EXTERNAL_EVALUATION_WORKSPACE_PATH:
+            gate_response = await self._evaluation_workspace_gate(request)
+
+        response: Response = gate_response or await call_next(request)
 
         if path in {"/admin", "/admin/"}:
             response = await self._inject_admin_dom_contract(response)
@@ -45,6 +58,72 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Expires"] = "0"
 
         return response
+
+    async def _evaluation_workspace_gate(self, request: Request) -> Response | None:
+        if request.method.upper() != "GET":
+            return PlainTextResponse(
+                "External Evaluation workspace access denied.", status_code=405
+            )
+
+        # Even a valid workspace session is insufficient for top-level direct
+        # navigation. The customer surface must remain an iframe navigation;
+        # CSP below restricts the actual ancestor to https://zaxam.net.
+        fetch_destination = request.headers.get("sec-fetch-dest", "").strip().lower()
+        if fetch_destination != "iframe":
+            return PlainTextResponse(
+                "External Evaluation workspace access denied.", status_code=403
+            )
+
+        launch_ticket = str(
+            request.query_params.get(EVALUATION_LAUNCH_QUERY_PARAM) or ""
+        ).strip()
+        if launch_ticket:
+            try:
+                session_token, _session = await redeem_evaluation_launch_ticket(
+                    launch_ticket
+                )
+            except EvaluationLaunchGateError:
+                return PlainTextResponse(
+                    "External Evaluation launch expired or invalid.", status_code=403
+                )
+
+            # Remove the one-time ticket from the visible URL immediately after
+            # successful consumption, then continue inside the iframe using the
+            # HttpOnly workspace session cookie.
+            response = RedirectResponse(
+                url=_EXTERNAL_EVALUATION_WORKSPACE_PATH,
+                status_code=303,
+            )
+            response.set_cookie(
+                EVALUATION_LAUNCH_COOKIE,
+                session_token,
+                max_age=EVALUATION_WORKSPACE_SESSION_TTL_SECONDS,
+                httponly=True,
+                secure=True,
+                samesite="none",
+                path=_EXTERNAL_EVALUATION_WORKSPACE_PATH,
+            )
+            return response
+
+        session_token = str(
+            request.cookies.get(EVALUATION_LAUNCH_COOKIE) or ""
+        ).strip()
+        if not session_token:
+            return PlainTextResponse(
+                "External Evaluation workspace launch required.", status_code=403
+            )
+        try:
+            await validate_evaluation_workspace_session(session_token)
+        except EvaluationLaunchGateError:
+            response = PlainTextResponse(
+                "External Evaluation workspace session expired.", status_code=403
+            )
+            response.delete_cookie(
+                EVALUATION_LAUNCH_COOKIE,
+                path=_EXTERNAL_EVALUATION_WORKSPACE_PATH,
+            )
+            return response
+        return None
 
     async def _inject_admin_dom_contract(self, response: Response) -> Response:
         content_type = response.headers.get("content-type", "")

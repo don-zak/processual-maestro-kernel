@@ -23,6 +23,7 @@ on:
       - tests/test_external_evaluation_qualification_plan.py
       - tests/test_external_evaluation_handoff_contract.py
       - tests/test_external_evaluation_scenarios.py
+      - tests/test_evaluation_launch_gate.py
       - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
       - tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py
       - tests/integration/test_evaluation_prepared_authority_postgres_integration.py
@@ -48,6 +49,7 @@ on:
       - tests/test_external_evaluation_qualification_plan.py
       - tests/test_external_evaluation_handoff_contract.py
       - tests/test_external_evaluation_scenarios.py
+      - tests/test_evaluation_launch_gate.py
       - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
       - tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py
       - tests/integration/test_evaluation_prepared_authority_postgres_integration.py
@@ -151,6 +153,7 @@ jobs:
             tests/test_external_evaluation_qualification_plan.py \
             tests/test_external_evaluation_handoff_contract.py \
             tests/test_external_evaluation_scenarios.py \
+            tests/test_evaluation_launch_gate.py \
             tests/integration/test_evaluation_runtime_delivery_postgres_integration.py \
             tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py \
             tests/integration/test_evaluation_prepared_authority_postgres_integration.py
