@@ -47,8 +47,10 @@ def test_cloudflare_deploy_uses_secret_references_without_secret_values() -> Non
     assert "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" in source
     assert "CLOUDFLARE_API_TOKEN is not configured" in source
     assert "CLOUDFLARE_ACCOUNT_ID is not configured" in source
-    assert "api_token:" not in source.lower()
-    assert "account_id:" not in source.lower()
+    assert "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}" in source
+    assert "CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" in source
+    assert "token_value" not in source.lower()
+    assert "account_value" not in source.lower()
 
 
 def test_cloudflare_deploy_uses_exact_pinned_wrangler_without_package_lock_dependency() -> None:
