@@ -6,6 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 ADMIN_EVALUATION_UI = (
     ROOT / "processual_api" / "static" / "js" / "admin_evaluation_grants.js"
 )
+ADMIN_EVALUATION_LAUNCH_UI = (
+    ROOT / "processual_api" / "static" / "js" / "admin_evaluation_launch_handoff.js"
+)
+ADMIN_EXTERNAL_DOM_CONTRACT = (
+    ROOT / "processual_api" / "static" / "js" / "admin_external_evaluation_dom_contract.js"
+)
 CUSTOMER_PORTAL = ROOT / "processual_api" / "static" / "evaluation.html"
 CUSTOMER_PORTAL_JS = (
     ROOT / "processual_api" / "static" / "js" / "evaluation_client_portal.js"
@@ -75,6 +81,25 @@ def test_handoff_type_and_quota_are_grant_derived_not_commercial_overrides() -> 
     assert "evaluation_request_limit" in handoff
     assert "plan_id" not in handoff
     assert "quota_limit_override" not in handoff
+
+
+def test_admin_can_issue_only_a_zaxam_workspace_launch_separate_from_api_key() -> None:
+    launch = _read(ADMIN_EVALUATION_LAUNCH_UI)
+    dom = _read(ADMIN_EXTERNAL_DOM_CONTRACT)
+
+    assert "/issue-launch" in launch
+    assert "Issue one-time ZAXAM launch" in launch
+    assert "Send this URL separately from the Evaluation API key" in launch
+    assert "API key still required" in launch
+    assert "Production disabled" in launch or "production disabled" in launch
+    assert "1800" in launch
+    assert "7200" in launch
+    assert "localStorage" not in launch
+    assert "sessionStorage" not in launch
+    assert "document.cookie" not in launch
+    assert "data-eval-issue" in launch
+    assert "admin_evaluation_launch_handoff.js?v=eval-launch-handoff-v1" in dom
+    assert "ensureLaunchHandoffScript" in dom
 
 
 def test_customer_portal_matches_the_handoff_execution_story() -> None:
