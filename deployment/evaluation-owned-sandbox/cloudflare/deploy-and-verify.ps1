@@ -23,6 +23,19 @@ function Assert-False {
     }
 }
 
+function Assert-CloudflareCredential {
+    param([string]$Name, [string]$Value, [string]$AllowedPattern)
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        throw "$Name is required in the current PowerShell process."
+    }
+    if ($Value.Contains('<') -or $Value.Contains('>') -or $Value -match '^(token|account-id|account_id|placeholder)$') {
+        throw "$Name still contains a placeholder value. Set the real Cloudflare credential before deployment."
+    }
+    if ($AllowedPattern -and $Value -notmatch $AllowedPattern) {
+        throw "$Name has an invalid format for Cloudflare deployment."
+    }
+}
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 Push-Location $RepoRoot
 try {
@@ -37,12 +50,8 @@ try {
         throw 'Refusing to deploy from a dirty working tree.'
     }
 
-    if (-not $env:CLOUDFLARE_API_TOKEN) {
-        throw 'CLOUDFLARE_API_TOKEN is required in the current PowerShell process.'
-    }
-    if (-not $env:CLOUDFLARE_ACCOUNT_ID) {
-        throw 'CLOUDFLARE_ACCOUNT_ID is required in the current PowerShell process.'
-    }
+    Assert-CloudflareCredential -Name 'CLOUDFLARE_API_TOKEN' -Value $env:CLOUDFLARE_API_TOKEN -AllowedPattern ''
+    Assert-CloudflareCredential -Name 'CLOUDFLARE_ACCOUNT_ID' -Value $env:CLOUDFLARE_ACCOUNT_ID -AllowedPattern '^[A-Za-z0-9_-]+$'
 
     Write-Host "[1/6] Exact source SHA verified: $CurrentSha"
 
