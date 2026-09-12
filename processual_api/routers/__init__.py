@@ -17,6 +17,9 @@ from . import (  # noqa: F401,E402
 )
 from . import settings_admin_evaluation_grants as _settings_admin_evaluation_grants  # noqa: F401,E402
 from . import (  # noqa: F401,E402
+    settings_admin_evaluation_owned_crm_scenarios as _settings_admin_evaluation_owned_crm_scenarios,
+)
+from . import (  # noqa: F401,E402
     settings_admin_evaluation_owned_sandbox_preset as _settings_admin_evaluation_owned_sandbox_preset,
 )
 from . import (  # noqa: F401,E402
