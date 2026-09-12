@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -15,6 +15,8 @@ from processual_api.services.evaluation_launch_gate import (
 )
 
 from . import settings as settings_module
+
+_ZAXAM_EVALUATION_ENTRY = "https://zaxam.net/maestro.html#evaluation-launch="
 
 
 async def _require_platform_admin(
@@ -66,14 +68,16 @@ async def issue_evaluation_workspace_launch(
         ) from exc
 
     token = str(issued.pop("launch_ticket"))
-    launch_path = "/console/evaluation.html?" + urlencode({"launch": token})
+    zaxam_launch_url = _ZAXAM_EVALUATION_ENTRY + quote(token, safe="")
     return {
         "status": "issued",
         "grant_id": grant_id,
-        "launch_path": launch_path,
+        "zaxam_launch_url": zaxam_launch_url,
         "launch_ticket_expires_in_seconds": issued["expires_in_seconds"],
         "workspace_session_seconds": issued["workspace_session_seconds"],
         "one_time_launch": True,
+        "handoff_transport": "url_fragment",
+        "zaxam_stores_launch_ticket": False,
         "requires_zaxam_iframe": True,
         "execution_api_key_required": True,
         "execution_authority_replaced": False,
