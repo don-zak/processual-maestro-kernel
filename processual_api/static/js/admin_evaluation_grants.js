@@ -595,6 +595,7 @@
     updateReadiness: updateEvaluationReadiness,
     issueKey: issueEvaluationKey,
     refresh: refreshEvaluationGrants,
+    refreshBindingCatalog: loadEvaluationBindingCatalog,
   };
 
   initializeEvaluationGrants();
