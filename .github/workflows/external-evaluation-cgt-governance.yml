@@ -1,0 +1,44 @@
+name: External Evaluation CGT Governance
+
+on:
+  pull_request:
+    paths:
+      - processual_api/services/evaluation_cgt_governance.py
+      - processual_api/services/evaluation_cgt_evidence_postgres.py
+      - processual_api/routers/evaluation_cgt_runtime.py
+      - processual_api/routers/evaluation_cgt_status.py
+      - processual_api/routers/external_evaluation_route_registry.py
+      - tests/test_external_evaluation_cgt_governance.py
+      - .github/workflows/external-evaluation-cgt-governance.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cgt-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      ENVIRONMENT: development
+      PYTHONPATH: .
+      JWT_SECRET: evaluation-cgt-governance-ci-secret-2026
+      PROCESSUAL_CRYPTO_KEY_B64: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,api,security,database,cache]'
+      - name: Prove deterministic CGT governance contract
+        run: python -m pytest -q tests/test_external_evaluation_cgt_governance.py
+      - name: Prove existing Evaluation runtime authority boundaries
+        run: |
+          python -m pytest -q \
+            tests/test_external_evaluation_binding_authority.py \
+            tests/test_evaluation_runtime_replay_safety.py \
+            tests/test_external_evaluation_complete_binding_coverage.py
