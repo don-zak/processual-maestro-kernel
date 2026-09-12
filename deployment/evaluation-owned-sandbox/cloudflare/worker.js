@@ -16,6 +16,16 @@ const CUSTOMER = Object.freeze({
   },
 });
 
+const BILLING_ACCOUNT = Object.freeze({
+  account_id: 'sandbox-account-001',
+  balance: 128.5,
+  currency: 'USD',
+  invoice_status: 'current',
+  payment_status: 'paid',
+  synthetic: true,
+  production_allowed: false,
+});
+
 const JSON_HEADERS = Object.freeze({
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
@@ -85,6 +95,8 @@ export default {
       });
     } else if (url.pathname === '/users/1') {
       response = json(200, CUSTOMER);
+    } else if (url.pathname === '/billing/accounts/1') {
+      response = json(200, BILLING_ACCOUNT);
     } else {
       response = json(404, {
         detail: 'not_found',
