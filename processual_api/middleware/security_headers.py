@@ -6,6 +6,8 @@ from starlette.responses import Response
 _ADMIN_DOM_CONTRACT_SCRIPT = (
     b'<script src="/console/js/admin_external_evaluation_dom_contract.js?v=admindomcontract01"></script>'
 )
+_EXTERNAL_EVALUATION_WORKSPACE_PATH = "/console/evaluation.html"
+_EXTERNAL_EVALUATION_FRAME_ANCESTORS = "frame-ancestors https://zaxam.net"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -17,7 +19,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response = await self._inject_admin_dom_contract(response)
 
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        if path == _EXTERNAL_EVALUATION_WORKSPACE_PATH:
+            # X-Frame-Options cannot express a modern origin allow-list. Keep the
+            # global DENY posture everywhere else and use CSP frame-ancestors for
+            # this one customer-facing workspace route only.
+            if "X-Frame-Options" in response.headers:
+                del response.headers["X-Frame-Options"]
+            response.headers["Content-Security-Policy"] = _EXTERNAL_EVALUATION_FRAME_ANCESTORS
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        else:
+            response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Referrer-Policy"] = "no-referrer"

@@ -11,7 +11,12 @@ from processual_api.auth.delivery_dispatcher import (
     DeliveryDispatcher,
     DeliveryDispatcherConfig,
 )
-from processual_api.auth.delivery_provider import HttpEmailDeliveryProvider
+from processual_api.auth.delivery_provider import (
+    DeliveryProvider,
+    GmailApiDeliveryProvider,
+    HttpEmailDeliveryProvider,
+    ResendDeliveryProvider,
+)
 from processual_api.auth.delivery_repository import SqlAlchemyDeliveryRepository
 from processual_api.db.session import get_session_factory
 from processual_api.settings import APISettings, settings
@@ -45,21 +50,44 @@ def _delivery_keys(raw_json: str | None) -> dict[str, bytes]:
     return keys
 
 
+def _build_provider(config: APISettings) -> DeliveryProvider:
+    provider_kind = (config.auth_delivery_provider_kind or "http").strip().casefold()
+
+    if provider_kind == "http":
+        return HttpEmailDeliveryProvider(
+            endpoint=config.auth_delivery_provider_url or "",
+            bearer_token=config.auth_delivery_provider_token or "",
+            timeout_seconds=config.auth_delivery_request_timeout_seconds,
+        )
+
+    if provider_kind == "gmail_api":
+        return GmailApiDeliveryProvider(
+            client_id=config.auth_gmail_client_id or "",
+            client_secret=config.auth_gmail_client_secret or "",
+            refresh_token=config.auth_gmail_refresh_token or "",
+            sender_email=config.auth_gmail_sender_email or "",
+            timeout_seconds=config.auth_delivery_request_timeout_seconds,
+        )
+
+    if provider_kind == "resend":
+        return ResendDeliveryProvider(
+            api_key=config.auth_resend_api_key or "",
+            sender_email=config.auth_resend_sender_email or "",
+            timeout_seconds=config.auth_delivery_request_timeout_seconds,
+        )
+
+    raise DeliveryRuntimeUnavailableError("Delivery provider kind is unsupported.")
+
+
 def build_delivery_runtime(config: APISettings = settings) -> DeliveryRuntime:
     try:
         session_factory = get_session_factory()
-        provider_url = config.auth_delivery_provider_url or ""
-        provider_token = config.auth_delivery_provider_token or ""
         public_base_url = config.auth_public_base_url or ""
         cipher = DeliveryPayloadCipher(
             current_key_version=config.auth_delivery_current_key_version or "",
             keys=_delivery_keys(config.auth_delivery_key_ring_json),
         )
-        provider = HttpEmailDeliveryProvider(
-            endpoint=provider_url,
-            bearer_token=provider_token,
-            timeout_seconds=config.auth_delivery_request_timeout_seconds,
-        )
+        provider = _build_provider(config)
         dispatcher_config = DeliveryDispatcherConfig(
             public_base_url=public_base_url,
             batch_size=config.auth_delivery_batch_size,

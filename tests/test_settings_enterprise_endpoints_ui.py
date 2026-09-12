@@ -60,3 +60,15 @@ def test_ui_has_accessible_live_status_focus_and_responsive_layout() -> None:
     assert "@media(max-width:820px)" in css
     assert "prefers-reduced-motion" in css
     assert "border-inline-start" in css
+
+
+def test_enterprise_endpoint_workspace_stops_automatic_retry_after_first_attempt() -> None:
+    js = JS.read_text(encoding="utf-8")
+    for marker in (
+        "let refreshAttempted = false",
+        "if (!force && (document.getElementById(ROOT_ID) || refreshAttempted)) return",
+        "refreshAttempted = true",
+        "refresh(false)",
+        "window.PMK_SETTINGS_ENTERPRISE_ENDPOINTS = { init, refresh }",
+    ):
+        assert marker in js

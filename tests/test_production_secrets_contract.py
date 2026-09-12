@@ -25,6 +25,9 @@ def test_settings_exposes_canonical_production_secret_contract() -> None:
         "AUTH_RATE_LIMIT_PEPPER",
         "AUTH_DELIVERY_KEY_RING_JSON",
         "AUTH_DELIVERY_PROVIDER_TOKEN",
+        "AUTH_GMAIL_CLIENT_SECRET",
+        "AUTH_GMAIL_REFRESH_TOKEN",
+        "AUTH_RESEND_API_KEY",
         "AUTH_MFA_KEY_RING_JSON",
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
     }
@@ -33,15 +36,30 @@ def test_settings_exposes_canonical_production_secret_contract() -> None:
     assert len(PRODUCTION_SECRET_ENV_VARS) == len(set(PRODUCTION_SECRET_ENV_VARS))
 
 
-def test_cloud_run_readme_maps_every_secret_through_secret_manager() -> None:
+def test_cloud_run_readme_maps_default_http_provider_secrets_through_secret_manager() -> None:
     text = read_text("README.md")
 
     assert "Production secrets contract" in text
     assert "Secret Manager" in text
     assert "PRODUCTION_SECRET_ENV_VARS" in text
 
+    provider_specific = {
+        "AUTH_GMAIL_CLIENT_SECRET",
+        "AUTH_GMAIL_REFRESH_TOKEN",
+        "AUTH_RESEND_API_KEY",
+    }
     for name in PRODUCTION_SECRET_ENV_VARS:
+        if name in provider_specific:
+            continue
         assert f"{name}={name}:latest" in text
+
+
+def test_gmail_provider_secrets_are_documented_without_values() -> None:
+    text = read_text("docs/security/GMAIL_DELIVERY_PROVIDER.md")
+    assert "AUTH_GMAIL_CLIENT_SECRET" in text
+    assert "AUTH_GMAIL_REFRESH_TOKEN" in text
+    assert "gmail.send" in text
+    assert "Never commit" in text
 
 
 def test_cloudbuild_does_not_inline_secret_names_or_values() -> None:

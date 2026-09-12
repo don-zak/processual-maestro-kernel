@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from processual_api.auth.models import (
     IdentityPlatformAuthority,
     IdentityUser,
+    IdentityUserEmailAddress,
 )
 
 PLATFORM_ADMIN_BOOTSTRAP_LOCK_ID = 781_204_601
@@ -47,6 +48,64 @@ class SqlAlchemyPlatformAdminBootstrapRepository:
         )
         return authority_id is not None
 
+    async def ensure_active_platform_admin_recovery_email(self) -> bool:
+        row = (
+            await self._session.execute(
+                select(
+                    IdentityUser,
+                    IdentityUserEmailAddress,
+                )
+                .join(
+                    IdentityPlatformAuthority,
+                    IdentityPlatformAuthority.user_id
+                    == IdentityUser.id,
+                )
+                .outerjoin(
+                    IdentityUserEmailAddress,
+                    (
+                        IdentityUserEmailAddress.user_id
+                        == IdentityUser.id
+                    )
+                    & (
+                        IdentityUserEmailAddress.purpose
+                        == "recovery"
+                    ),
+                )
+                .where(
+                    IdentityPlatformAuthority.authority
+                    == "platform_admin",
+                    IdentityPlatformAuthority.status
+                    == "active",
+                    IdentityUser.status == "active",
+                )
+                .with_for_update(of=IdentityUser)
+                .limit(1)
+            )
+        ).one_or_none()
+
+        if row is None:
+            return False
+
+        user, recovery_email = row
+        if recovery_email is not None:
+            return False
+
+        if user.email_verified_at is None:
+            return False
+
+        self._session.add(
+            IdentityUserEmailAddress(
+                user_id=user.id,
+                email_normalized=user.email_normalized,
+                purpose="recovery",
+                status="verified",
+                verified_at=user.email_verified_at,
+                revoked_at=None,
+                user=user,
+            )
+        )
+        return True
+
     async def email_exists(
         self,
         email_normalized: str,
@@ -82,6 +141,15 @@ class SqlAlchemyPlatformAdminBootstrapRepository:
             failed_login_count=0,
             locked_until=None,
         )
+        recovery_email = IdentityUserEmailAddress(
+            user_id=user_id,
+            email_normalized=email_normalized,
+            purpose="recovery",
+            status="verified",
+            verified_at=created_at,
+            revoked_at=None,
+            user=user,
+        )
         authority = IdentityPlatformAuthority(
             id=authority_id,
             user_id=user_id,
@@ -96,6 +164,7 @@ class SqlAlchemyPlatformAdminBootstrapRepository:
             user=user,
         )
         self._session.add(user)
+        self._session.add(recovery_email)
         self._session.add(authority)
 
 

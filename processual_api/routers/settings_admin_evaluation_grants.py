@@ -48,6 +48,9 @@ from processual_api.services.evaluation_grants import (
     safe_evaluation_grant,
     validate_evaluation_grant,
 )
+from processual_api.services.evaluation_prepared_authority import (
+    load_prepared_evaluation_authority,
+)
 
 from . import settings as settings_module
 
@@ -79,6 +82,10 @@ class EvaluationGrantCreate(BaseModel):
         default_factory=lambda: list(PILOT_DEFAULT_SCOPES),
         min_length=1,
         max_length=16,
+    )
+    evaluation_type: str | None = Field(
+        default=None,
+        pattern="^(crm|integration)$",
     )
     max_requests: int = Field(default=200, ge=1, le=5000)
     expires_in_days: int = Field(default=14, ge=1, le=90)
@@ -378,10 +385,10 @@ async def create_evaluation_grant(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    # Prepared Enterprise sandbox configuration is read once here, validated,
-    # then sealed into the shared Evaluation authority snapshot.
-    prepared_raw = settings_module._load_raw(owner_user_id)
-    raw = dict(prepared_raw)
+    try:
+        raw = await load_prepared_evaluation_authority(owner_user_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
     grants = evaluation_grants(raw)
     now = datetime.now(UTC)
     actor, role = _actor(current_user)
@@ -394,6 +401,7 @@ async def create_evaluation_grant(
         task_ids=task_ids,
         endpoints=endpoints,
     )
+    evaluation_type = str(body.evaluation_type or "").strip().lower()
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
         "status": "active",
@@ -401,12 +409,15 @@ async def create_evaluation_grant(
         "user_id": str(body.user_id or body.client_id).strip(),
         "issued_to": body.issued_to.strip(),
         "purpose": body.purpose.strip(),
+        "evaluation_type": evaluation_type,
         "allowed_task_ids": task_ids,
         "task_scope_ids": task_scope_ids,
         "allowed_binding_ids": binding_ids,
         "allowed_endpoints": endpoints,
         "allowed_scopes": scopes,
         "max_requests": int(body.max_requests),
+        "quota_unit": "admitted_execution" if evaluation_type else "",
+        "quota_policy": "integration_equals_2x_crm" if evaluation_type else "",
         "created_at": now.isoformat(),
         "expires_at": (now + timedelta(days=body.expires_in_days)).isoformat(),
         "approved_by": actor,

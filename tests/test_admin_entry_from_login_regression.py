@@ -2,6 +2,7 @@ from pathlib import Path
 
 SPLASH_HTML = Path("processual_api/static/splash.html")
 LOGIN_HTML = Path("processual_api/static/login.html")
+LOGIN_CAPTURE_JS = Path("processual_api/static/js/login_token_capture.js")
 
 
 def test_splash_remains_readiness_gate_not_admin_page() -> None:
@@ -34,9 +35,12 @@ def test_login_supports_optional_query_mode_selection() -> None:
     assert "activateRole(currentRole);" in text
 
 
-def test_login_selected_entry_controls_auth_role() -> None:
-    text = LOGIN_HTML.read_text(encoding="utf-8")
+def test_login_selected_entry_controls_destination_not_auth_role() -> None:
+    html = LOGIN_HTML.read_text(encoding="utf-8")
+    capture = LOGIN_CAPTURE_JS.read_text(encoding="utf-8")
 
-    assert "sessionStorage.setItem(ENTRY_MODE_KEY, mode)" in text
-    assert "JSON.stringify({ username: user, password: pass, role: currentRole })" in text
-    assert "sessionStorage.setItem('maestro_role', currentRole)" in text
+    assert "sessionStorage.setItem(ENTRY_MODE_KEY, mode)" in html
+    assert "pendingEntryMode = currentEntryMode()" in capture
+    assert "body: JSON.stringify({ email, password })" in capture
+    assert "pendingEntryMode === 'admin' ? '/admin' : '/console'" in capture
+    assert "role: currentRole" not in capture

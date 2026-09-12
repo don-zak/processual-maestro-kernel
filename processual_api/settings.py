@@ -19,6 +19,9 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "AUTH_RATE_LIMIT_PEPPER",
     "AUTH_DELIVERY_KEY_RING_JSON",
     "AUTH_DELIVERY_PROVIDER_TOKEN",
+    "AUTH_GMAIL_CLIENT_SECRET",
+    "AUTH_GMAIL_REFRESH_TOKEN",
+    "AUTH_RESEND_API_KEY",
     "AUTH_MFA_KEY_RING_JSON",
     "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
 )
@@ -89,11 +92,32 @@ class APISettings:
     auth_registration_min_response_ms: int = field(
         default_factory=lambda: int(os.environ.get("AUTH_REGISTRATION_MIN_RESPONSE_MS", "350"))
     )
+    auth_delivery_provider_kind: str = field(
+        default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_KIND", "http")
+    )
     auth_delivery_provider_url: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_URL")
     )
     auth_delivery_provider_token: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_TOKEN")
+    )
+    auth_gmail_client_id: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_CLIENT_ID")
+    )
+    auth_gmail_client_secret: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_CLIENT_SECRET")
+    )
+    auth_gmail_refresh_token: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_REFRESH_TOKEN")
+    )
+    auth_gmail_sender_email: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_SENDER_EMAIL")
+    )
+    auth_resend_api_key: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_RESEND_API_KEY")
+    )
+    auth_resend_sender_email: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_RESEND_SENDER_EMAIL")
     )
     auth_public_base_url: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_PUBLIC_BASE_URL")
@@ -144,7 +168,7 @@ class APISettings:
         default_factory=lambda: int(os.environ.get("AUTH_MFA_RECOVERY_CODE_COUNT", "10"))
     )
     auth_mfa_step_up_seconds: int = field(
-        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "300"))
+        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "900"))
     )
     admin_marketplace_payment_destination_key_ring_json: str | None = field(
         default_factory=lambda: os.environ.get(

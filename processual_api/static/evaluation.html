@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Processual Maestro — External Evaluation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg:#08101e; --panel:#101a2d; --panel2:#0c1526; --line:#263553;
+      --text:#edf3ff; --muted:#9facc8; --accent:#7f8cff; --ok:#71dfaa;
+      --warn:#ffd06e; --bad:#ff8996;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:linear-gradient(180deg,#08101e 0%,#0a1222 100%); color:var(--text); }
+    main { max-width:1120px; margin:0 auto; padding:34px 20px 72px; }
+    header { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+    h1 { margin:0; font-size:30px; letter-spacing:-.02em; }
+    h2 { margin:0 0 8px; font-size:19px; }
+    h3 { margin:16px 0 8px; font-size:14px; }
+    .eyebrow { font-size:12px; letter-spacing:.11em; text-transform:uppercase; color:var(--accent); font-weight:800; }
+    .muted { color:var(--muted); }
+    .status-pill { border:1px solid var(--line); border-radius:999px; padding:7px 11px; color:var(--muted); background:var(--panel2); font-size:12px; }
+    .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); margin-top:16px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:0 14px 40px rgba(0,0,0,.14); }
+    .card.inset { background:var(--panel2); }
+    .label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+    .value { font-size:23px; font-weight:750; margin-top:6px; overflow-wrap:anywhere; }
+    .compact-value { font-size:14px; font-weight:700; margin-top:6px; overflow-wrap:anywhere; }
+    .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+    label { display:block; font-size:13px; margin:13px 0 6px; color:#cad4ea; }
+    input, textarea, select { width:100%; padding:11px 12px; border-radius:9px; border:1px solid #354769; background:#091426; color:var(--text); }
+    textarea { min-height:124px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    button { margin-top:12px; padding:10px 14px; border:1px solid transparent; border-radius:9px; background:var(--accent); color:white; font-weight:760; cursor:pointer; }
+    button.secondary { background:#273653; border-color:#354769; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .notice { margin-top:14px; padding:12px 14px; border-radius:10px; background:#182641; color:#d0daf0; border:1px solid #2a3b60; }
+    .progress { height:11px; background:#25324d; border-radius:999px; overflow:hidden; margin-top:12px; }
+    .progress > div { height:100%; width:0; background:var(--accent); transition:width .2s ease; }
+    .stage-track { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:14px; }
+    .stage { border:1px solid var(--line); border-radius:10px; padding:10px; color:var(--muted); background:var(--panel2); font-size:12px; text-align:center; }
+    .stage.current { border-color:var(--warn); color:var(--warn); }
+    .stage.done { border-color:var(--ok); color:var(--ok); }
+    .scope-list { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+    .scope-chip { border:1px solid var(--line); border-radius:999px; padding:6px 9px; background:#0b1628; color:#c9d5ee; font-size:12px; overflow-wrap:anywhere; }
+    .scenario-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:14px; }
+    .scenario-card { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel2); }
+    .scenario-card.ready { border-color:rgba(113,223,170,.55); }
+    .scenario-card.locked { opacity:.72; }
+    .scenario-title { font-weight:800; margin-bottom:6px; }
+    .scenario-meta { font-size:12px; color:var(--muted); margin-top:6px; }
+    .proof-journey { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px; }
+    .proof-step { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .proof-step strong { display:block; margin-bottom:5px; font-size:13px; }
+    .proof-step span { color:var(--muted); font-size:12px; line-height:1.5; }
+    .business-proof { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:14px; }
+    .business-proof div { padding:12px 13px; border:1px solid var(--line); border-radius:10px; background:#0a1425; color:#cad5eb; font-size:13px; }
+    details { margin-top:14px; border:1px solid var(--line); border-radius:12px; background:var(--panel2); }
+    summary { cursor:pointer; padding:13px 15px; font-weight:760; color:#dbe6fa; }
+    details > div { padding:0 15px 15px; }
+    pre { overflow:auto; white-space:pre-wrap; word-break:break-word; background:#081223; padding:13px; border-radius:9px; border:1px solid var(--line); min-height:54px; }
+    .contract { margin-top:22px; display:grid; gap:10px; }
+    .contract div { display:flex; gap:10px; align-items:flex-start; color:var(--muted); font-size:13px; }
+    .contract strong { color:var(--text); min-width:155px; }
+    @media (max-width:760px) { .proof-journey { grid-template-columns:1fr 1fr; } }
+    @media (max-width:620px) { .contract div { display:block; } .contract strong { display:block; margin-bottom:2px; } .stage-track,.proof-journey { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="eyebrow">Processual Maestro Kernel</div>
+      <h1>External Evaluation Workspace</h1>
+      <div class="muted" style="margin-top:7px;max-width:760px">
+        Subscription-free, grant-bounded sandbox evaluation. Authority, admitted-execution quota,
+        runtime status, and evidence remain backend-authoritative.
+      </div>
+    </div>
+    <div class="status-pill">Production execution: disabled</div>
+  </header>
+
+  <section class="card" style="margin-top:22px">
+    <div class="eyebrow">Governed proof journey</div>
+    <h2 style="margin-top:6px">See exactly what Maestro allowed, enforced, and proved</h2>
+    <div class="muted">The evaluator does not need Admin access. This workspace turns backend authority and durable evidence into a customer-readable proof flow.</div>
+    <div class="proof-journey" aria-label="Governed proof journey">
+      <div class="proof-step"><strong>1 · Authority issued</strong><span>The grant defines the evaluation type, approved tasks, bindings, quota, expiry, and sandbox-only boundary.</span></div>
+      <div class="proof-step"><strong>2 · Execution admitted</strong><span>Only a request inside that sealed authority can consume one admitted-execution unit.</span></div>
+      <div class="proof-step"><strong>3 · Policy enforced</strong><span>Replay, conflict, quota, binding, revocation, and production restrictions are enforced before or during admission.</span></div>
+      <div class="proof-step"><strong>4 · Evidence produced</strong><span>Safe durable evidence records the outcome without persisting the raw API key or raw task input.</span></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:14px">
+    <h2>Connect evaluation credential</h2>
+    <div class="muted">The raw API key stays in this page's memory only. This page does not persist it in browser storage.</div>
+    <label for="api-key">Evaluation API key</label>
+    <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the one-time issued pmk_… key" />
+    <div class="row">
+      <button id="connect" type="button">Connect / Refresh</button>
+      <button id="disconnect" class="secondary" type="button">Forget key</button>
+    </div>
+    <div id="message" class="notice">Enter the Evaluation API key issued by the Platform Administrator.</div>
+  </section>
+
+  <section class="grid">
+    <div class="card"><div class="label">Credential status</div><div id="credential" class="value">—</div></div>
+    <div class="card"><div class="label">Evaluation type</div><div id="type" class="value">—</div></div>
+    <div class="card"><div class="label">Quota used</div><div id="quota-used" class="value">—</div></div>
+    <div class="card"><div class="label">Quota remaining</div><div id="quota-remaining" class="value">—</div></div>
+  </section>
+
+  <section class="card" style="margin-top:14px">
+    <h2>What this evaluation is designed to prove</h2>
+    <div class="business-proof">
+      <div>Only approved tasks and prepared bindings can be admitted.</div>
+      <div>A fresh admitted execution consumes exactly one evaluation unit.</div>
+      <div>A durable replay consumes no additional quota.</div>
+      <div>A conflicting idempotency request is rejected without consuming quota.</div>
+      <div>Revocation ends authority while historical evidence remains reviewable.</div>
+      <div>Production execution is never authorized by an External Evaluation grant.</div>
+    </div>
+  </section>
+
+  <details>
+    <summary>Technical evaluation identity</summary>
+    <div>
+      <div class="grid" style="margin-top:0">
+        <div><div class="label">Grant ID</div><div id="grant-id" class="compact-value">—</div></div>
+        <div><div class="label">Key ID / prefix</div><div id="key-id" class="compact-value">—</div></div>
+        <div><div class="label">Expires</div><div id="expires-at" class="compact-value">—</div></div>
+        <div><div class="label">Subscription</div><div class="compact-value ok">Not required</div></div>
+      </div>
+    </div>
+  </details>
+
+  <section class="card" style="margin-top:14px">
+    <div class="label">Authoritative Evaluation quota</div>
+    <div class="progress"><div id="quota-bar"></div></div>
+    <div id="quota-caption" class="muted" style="margin-top:8px">Status reads and idempotent replays consume zero admitted-execution units.</div>
+  </section>
+
+  <section class="card" style="margin-top:14px">
+    <h2>Authorized scope</h2>
+    <div class="muted">Only the canonical tasks and prepared bindings sealed into this grant can be admitted.</div>
+    <h3>Canonical tasks</h3>
+    <div id="allowed-tasks" class="scope-list"><span class="scope-chip">Connect a key to load scope</span></div>
+    <h3>Prepared bindings</h3>
+    <div id="allowed-bindings" class="scope-list"><span class="scope-chip">Connect a key to load scope</span></div>
+  </section>
+
+  <section class="card" style="margin-top:14px">
+    <h2>Guided proof-of-value scenarios</h2>
+    <div class="muted">Choose a business-facing scenario instead of manually assembling task identifiers. Scenarios and readiness are derived from the sealed backend grant authority.</div>
+    <div id="scenario-summary" class="notice">Connect a key to discover scenarios available to this grant.</div>
+    <div id="scenario-grid" class="scenario-grid"></div>
+    <label for="scenario-select">Selected scenario</label>
+    <select id="scenario-select" disabled><option value="">No runnable scenario available</option></select>
+    <button id="prepare-scenario" type="button" disabled>Prepare selected scenario</button>
+  </section>
+
+  <section class="card" style="margin-top:14px">
+    <h2>Execution progress</h2>
+    <div class="stage-track" aria-label="Execution lifecycle">
+      <div id="stage-admitted" class="stage">1 · Admitted</div>
+      <div id="stage-executing" class="stage">2 · Executing</div>
+      <div id="stage-outcome" class="stage">3 · Outcome</div>
+      <div id="stage-evidence" class="stage">4 · Evidence persisted</div>
+    </div>
+    <div class="grid">
+      <div class="card inset"><div class="label">Latest execution</div><div id="execution-state" class="value">—</div><div id="execution-meta" class="muted"></div></div>
+      <div class="card inset"><div class="label">Safe evidence</div><div id="evidence-state" class="value">—</div><div id="evidence-meta" class="muted"></div></div>
+      <div class="card inset"><div class="label">Quota effect</div><div id="quota-effect" class="value">—</div><div id="quota-effect-meta" class="muted">New admitted execution: +1 · durable replay: +0</div></div>
+    </div>
+  </section>
+
+  <details>
+    <summary>Technical execution details</summary>
+    <div>
+      <div class="muted">These fields are intentionally secondary. The server still rejects any task or binding outside the grant envelope.</div>
+      <label for="task-id">Canonical task ID</label>
+      <input id="task-id" autocomplete="off" placeholder="Prepared automatically by the selected scenario" />
+      <label for="binding-id">Prepared binding ID</label>
+      <input id="binding-id" autocomplete="off" placeholder="Prepared automatically when this grant contains a runnable binding" />
+      <label for="idempotency-key">Idempotency key</label>
+      <input id="idempotency-key" autocomplete="off" />
+      <div class="muted" style="margin-top:6px">Reuse the same idempotency key only when retrying the same logical operation. A durable replay consumes +0 quota.</div>
+      <label for="task-input">Task input (JSON)</label>
+      <textarea id="task-input" spellcheck="false">{}</textarea>
+      <button id="execute" type="button" disabled>Execute admitted sandbox task</button>
+      <pre id="result">No execution submitted.</pre>
+    </div>
+  </details>
+
+  <section class="card" style="margin-top:14px">
+    <h2>Customer evaluation receipt</h2>
+    <div class="muted">Safe report for this credential only. It never contains the raw API key, raw task input, or provider secret material.</div>
+    <pre id="customer-report">Connect an Evaluation API key to load the current safe report.</pre>
+  </section>
+
+  <section class="card inset" style="margin-top:14px">
+    <h2>Evaluation contract</h2>
+    <div class="contract">
+      <div><strong>Authority</strong><span>Evaluation grant and key authority is server-side and PostgreSQL-backed.</span></div>
+      <div><strong>Scenarios</strong><span>Proof-of-value scenarios are derived from sealed grant authority and can never add tasks, bindings, endpoints, or quota authority.</span></div>
+      <div><strong>Subscription</strong><span>No subscription, registration, or commercial quota authority is required for this Evaluation key.</span></div>
+      <div><strong>Quota</strong><span>Only admitted executions consume quota; status reads and idempotent replays do not.</span></div>
+      <div><strong>Secrets</strong><span>Raw Evaluation keys are shown once at issue and are never included in evidence or reports.</span></div>
+      <div><strong>Evidence</strong><span>Execution state and safe evidence are independent from client-supplied claims.</span></div>
+      <div><strong>Production</strong><span>External Evaluation remains sandbox-only and cannot authorize production execution.</span></div>
+    </div>
+  </section>
+</main>
+<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v5"></script>
+</body>
+</html>

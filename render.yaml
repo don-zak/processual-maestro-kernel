@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: processual-maestro-evaluation-sandbox
+    runtime: docker
+    dockerfilePath: ./deployment/evaluation-owned-sandbox/Dockerfile
+    dockerContext: ./deployment/evaluation-owned-sandbox
+    healthCheckPath: /health/live

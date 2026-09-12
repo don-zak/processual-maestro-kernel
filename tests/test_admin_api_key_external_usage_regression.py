@@ -173,21 +173,30 @@ def test_static_external_usage_routes_include_real_runtime_targets():
         assert marker in app_source
 
 
-def test_external_api_key_usage_is_not_positioned_as_primary_sales_model():
+def test_external_api_key_usage_is_governed_and_evaluation_is_separate():
     ui_source = _source(ROOT / "processual_api" / "static" / "js" / "admin_api_keys.js")
+    evaluation_source = _source(
+        ROOT / "processual_api" / "static" / "js" / "admin_api_key_evaluation_lifecycle.js"
+    )
 
-    required_markers = [
-        "introductory access",
-        "pilot access",
-        "practical onboarding path",
-        "not the primary sales model",
+    for marker in (
         "governed programmatic access",
         "not an authentication bypass",
-        "revocable access",
-    ]
-
-    for marker in required_markers:
+        "revoke access when its operational purpose ends",
+        "External Evaluation is governed separately",
+        "fixed admitted-execution quota",
+        "production disabled",
+    ):
         assert marker in ui_source
+
+    for marker in (
+        "External Evaluation is subscription-free",
+        "grant-first CRM/Integration authority",
+        "one-time key handoff",
+        "customer dashboard",
+        "audit evidence",
+    ):
+        assert marker in evaluation_source
 
 
 def test_external_usage_runtime_attempt_without_bearer_token_is_explicit():

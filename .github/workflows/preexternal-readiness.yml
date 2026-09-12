@@ -8,8 +8,24 @@ on:
       - cgtlib/**
       - alembic/**
       - alembic.ini
+      - docs/EXTERNAL_EVALUATION_OPERATIONAL_RUNBOOK.md
       - tests/test_adapter_config_persistence_fail_closed.py
       - tests/test_readiness_adapter_config.py
+      - tests/test_auth_recovery_ui_qualification.py
+      - tests/test_admin_evaluation_grants.py
+      - tests/test_admin_evaluation_key_delivery_routes.py
+      - tests/test_external_evaluation_quota_policy.py
+      - tests/test_evaluation_admission_quota_contract.py
+      - tests/test_evaluation_runtime_replay_safety.py
+      - tests/test_admin_evaluation_key_delivery_lifecycle.py
+      - tests/test_evaluation_customer_status_contract.py
+      - tests/test_evaluation_final_audit_summary_contract.py
+      - tests/test_external_evaluation_qualification_plan.py
+      - tests/test_external_evaluation_handoff_contract.py
+      - tests/test_external_evaluation_scenarios.py
+      - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
+      - tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py
+      - tests/integration/test_evaluation_prepared_authority_postgres_integration.py
       - .github/workflows/preexternal-readiness.yml
   push:
     branches:
@@ -20,6 +36,21 @@ on:
       - cgtlib/**
       - alembic/**
       - alembic.ini
+      - docs/EXTERNAL_EVALUATION_OPERATIONAL_RUNBOOK.md
+      - tests/test_admin_evaluation_grants.py
+      - tests/test_admin_evaluation_key_delivery_routes.py
+      - tests/test_external_evaluation_quota_policy.py
+      - tests/test_evaluation_admission_quota_contract.py
+      - tests/test_evaluation_runtime_replay_safety.py
+      - tests/test_admin_evaluation_key_delivery_lifecycle.py
+      - tests/test_evaluation_customer_status_contract.py
+      - tests/test_evaluation_final_audit_summary_contract.py
+      - tests/test_external_evaluation_qualification_plan.py
+      - tests/test_external_evaluation_handoff_contract.py
+      - tests/test_external_evaluation_scenarios.py
+      - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
+      - tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py
+      - tests/integration/test_evaluation_prepared_authority_postgres_integration.py
       - .github/workflows/preexternal-readiness.yml
   workflow_dispatch:
 
@@ -58,6 +89,7 @@ jobs:
       ENVIRONMENT: development
       PYTHONPATH: .
       DATABASE_URL: postgresql+asyncpg://maestro:preexternal-db-password@127.0.0.1:5432/maestro
+      EVALUATION_RUNTIME_INTEGRATION_DATABASE_URL: postgresql://maestro:preexternal-db-password@127.0.0.1:5432/maestro
       REDIS_URL: redis://127.0.0.1:6379/0
       JWT_SECRET: preexternal-readiness-jwt-secret-2026
       API_KEYS: preexternal-readiness-api-key-2026
@@ -102,11 +134,26 @@ jobs:
       - name: Detect model-to-migration drift
         run: python -m alembic check | tee preexternal-results/alembic-check.txt
 
-      - name: Run focused security and readiness regression tests
+      - name: Run focused security and External Evaluation qualification tests
         run: |
           python -m pytest -q \
             tests/test_adapter_config_persistence_fail_closed.py \
-            tests/test_readiness_adapter_config.py
+            tests/test_readiness_adapter_config.py \
+            tests/test_auth_recovery_ui_qualification.py \
+            tests/test_admin_evaluation_grants.py \
+            tests/test_admin_evaluation_key_delivery_routes.py \
+            tests/test_external_evaluation_quota_policy.py \
+            tests/test_evaluation_admission_quota_contract.py \
+            tests/test_evaluation_runtime_replay_safety.py \
+            tests/test_admin_evaluation_key_delivery_lifecycle.py \
+            tests/test_evaluation_customer_status_contract.py \
+            tests/test_evaluation_final_audit_summary_contract.py \
+            tests/test_external_evaluation_qualification_plan.py \
+            tests/test_external_evaluation_handoff_contract.py \
+            tests/test_external_evaluation_scenarios.py \
+            tests/integration/test_evaluation_runtime_delivery_postgres_integration.py \
+            tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py \
+            tests/integration/test_evaluation_prepared_authority_postgres_integration.py
 
       - name: Start Maestro pre-external candidate
         run: |

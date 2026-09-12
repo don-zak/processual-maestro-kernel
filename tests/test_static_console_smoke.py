@@ -103,6 +103,7 @@ def test_main_serves_static_console_login_and_splash_pages():
     missing = [marker for marker in required_markers if marker not in source]
     assert not missing, f"Missing main.py static serving markers: {missing}"
 
+
 def test_static_login_and_splash_preserve_descent_gate_markers():
     splash_source = read_text(STATIC_ROOT / "splash.html")
     login_source = read_text(STATIC_ROOT / "login.html")
@@ -139,13 +140,18 @@ def test_static_login_and_splash_preserve_descent_gate_markers():
 
 def test_static_console_auth_uses_session_storage_for_ui_session():
     login_source = read_text(STATIC_ROOT / "login.html")
+    capture_source = read_text(STATIC_ROOT / "js" / "login_token_capture.js")
     auth_source = read_text(STATIC_ROOT / "js" / "auth.js")
 
     login_markers = [
-        "sessionStorage.setItem('maestro_token', data.access_token)",
-        "sessionStorage.setItem('maestro_role', currentRole)",
+        "/console/js/login_token_capture.js",
         "localStorage.removeItem('maestro_token')",
         "localStorage.removeItem('maestro_role')",
+    ]
+    capture_markers = [
+        "sessionStorage.setItem('maestro_token', token)",
+        "sessionStorage.setItem('maestro_role', entryMode === 'admin' ? 'admin' : 'user')",
+        "clearRestrictedTokenCopies()",
     ]
 
     auth_markers = [
@@ -166,6 +172,10 @@ def test_static_console_auth_uses_session_storage_for_ui_session():
         marker for marker in login_markers
         if marker not in login_source
     ]
+    missing_capture = [
+        marker for marker in capture_markers
+        if marker not in capture_source
+    ]
     missing_auth = [
         marker for marker in auth_markers
         if marker not in auth_source
@@ -175,9 +185,11 @@ def test_static_console_auth_uses_session_storage_for_ui_session():
         if marker in auth_source
     ]
 
-    assert not missing_login, f"Missing login session storage markers: {missing_login}"
+    assert not missing_login, f"Missing login shell markers: {missing_login}"
+    assert not missing_capture, f"Missing login token-capture markers: {missing_capture}"
     assert not missing_auth, f"Missing auth session storage markers: {missing_auth}"
     assert not forbidden_auth, f"Forbidden auth localStorage markers found: {forbidden_auth}"
+
 
 def test_static_console_app_guards_direct_console_entry():
     app_source = read_text(STATIC_ROOT / "js" / "app.js")
@@ -312,7 +324,6 @@ def test_static_html_local_asset_references_exist():
             clean = ref.split("?", 1)[0].split("#", 1)[0]
 
             if clean == "/console/favicon.svg":
-
                 continue
             if clean.startswith("/console/"):
                 candidate = STATIC_ROOT / clean.removeprefix("/console/")

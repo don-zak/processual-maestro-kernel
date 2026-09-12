@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -11,7 +12,7 @@ from fastapi import (
     Request,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.routing import APIRoute
 
 from processual_api.auth.account_recovery_http_contracts import (
@@ -46,15 +47,20 @@ GENERIC_INVALID = "Invalid account recovery request."
 GENERIC_DENIED = "Account recovery verification is unavailable."
 GENERIC_COMPLETION_DENIED = "Account recovery completion is unavailable."
 GENERIC_LIMITED = "Account recovery request rate limit exceeded."
+_RECOVERY_PAGE_PATH = Path(__file__).resolve().parents[1] / "static" / "account-recovery.html"
+_RECOVERY_PAGE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow",
+}
 
 
 class SensitiveAccountRecoveryAPIRoute(APIRoute):
     def get_route_handler(self):
         route_handler = super().get_route_handler()
 
-        async def sanitized_route_handler(
-            request: Request,
-        ):
+        async def sanitized_route_handler(request: Request):
             try:
                 return await route_handler(request)
             except RequestValidationError:
@@ -73,10 +79,33 @@ router = APIRouter(
 )
 
 
+@router.get(
+    "/verify",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def account_recovery_browser_verification() -> HTMLResponse:
+    """Serve the browser handoff for recovery links without consuming authority."""
+    if not _RECOVERY_PAGE_PATH.exists():
+        return HTMLResponse(
+            "<h1>Account recovery page unavailable</h1>",
+            status_code=503,
+            headers=_RECOVERY_PAGE_HEADERS,
+        )
+    return HTMLResponse(
+        _RECOVERY_PAGE_PATH.read_text("utf-8"),
+        headers=_RECOVERY_PAGE_HEADERS,
+    )
+
+
 async def get_account_recovery_runtime() -> AccountRecoveryRuntime:
     try:
         return await build_account_recovery_runtime()
     except AccountRecoveryRuntimeUnavailableError as exc:
+        logger.error(
+            "identity_account_recovery_runtime_unavailable reason=%s",
+            str(exc),
+        )
         raise HTTPException(
             status_code=503,
             detail=GENERIC_UNAVAILABLE,
@@ -161,9 +190,7 @@ async def start_account_recovery(
     limited = await _consume(
         runtime=runtime,
         action="account_recovery_start",
-        subjects={
-            "ip": _client_ip(request, runtime),
-        },
+        subjects={"ip": _client_ip(request, runtime)},
         rules=_rules_for_dimension(
             ACCOUNT_RECOVERY_START_RULES,
             "ip",
@@ -199,8 +226,6 @@ async def start_account_recovery(
         try:
             await runtime.service.start(login=payload.login)
         except ValueError:
-            # Malformed and unknown principals remain
-            # externally indistinguishable.
             pass
         except Exception:
             logger.exception(

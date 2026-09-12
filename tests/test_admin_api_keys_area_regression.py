@@ -41,10 +41,12 @@ def test_admin_api_key_script_uses_admin_settings_api_key_endpoints():
     script = (STATIC_DIR / "js" / "admin_api_keys.js").read_text(encoding="utf-8")
 
     required = [
-        "CLIENT.get('/settings/api-keys')",
-        "CLIENT.post('/settings/api-keys'",
+        "request('GET', '/settings/api-keys')",
+        "request('POST', '/settings/api-keys', buildPayload())",
+        "request('DELETE', `/settings/api-keys/${keyId}`)",
         "admin-api-key-generate-btn",
         "admin-api-key-refresh-btn",
+        "PMK_ADMIN_AUTH",
     ]
 
     for token in required:

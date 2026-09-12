@@ -18,6 +18,9 @@ from processual_api.services.evaluation_grants import (
     find_evaluation_grant,
     refresh_evaluation_grant_status,
 )
+from processual_api.services.evaluation_key_quota_policy import (
+    normalized_evaluation_key_type,
+)
 
 
 class EvaluationAuthorityError(RuntimeError):
@@ -62,6 +65,34 @@ def evaluation_authority_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         key: deepcopy(raw.get(key, []))
         for key in allowed_keys
         if isinstance(raw.get(key), list)
+    }
+
+
+def _safe_key_summary(row: EvaluationAuthorityKey) -> dict[str, Any]:
+    payload = dict(row.payload or {})
+    return {
+        "key_id": row.key_id,
+        "grant_id": row.grant_id,
+        "prefix": row.prefix,
+        "status": row.status,
+        "lifecycle_status": str(payload.get("lifecycle_status") or "issued"),
+        "label": str(payload.get("label") or ""),
+        "issued_to": str(payload.get("issued_to") or ""),
+        "created_at": _as_utc(row.created_at).isoformat(),
+        "delivered_at": payload.get("delivered_at"),
+        "delivered_by": payload.get("delivered_by"),
+        "acknowledged_at": payload.get("acknowledged_at"),
+        "acknowledged_by": payload.get("acknowledged_by"),
+        "last_used_at": _as_utc(row.last_used_at).isoformat() if row.last_used_at else None,
+        "usage_count": row.usage_count,
+        "quota_rejected_count": row.quota_rejected_count,
+        "expires_at": _as_utc(row.expires_at).isoformat() if row.expires_at else None,
+        "revoked_at": _as_utc(row.revoked_at).isoformat() if row.revoked_at else None,
+        "revoked_by": payload.get("revoked_by"),
+        "revocation_reason": payload.get("revocation_reason"),
+        "quota_semantics": "admitted_execution",
+        "production_allowed": False,
+        "raw_secret_visible": False,
     }
 
 
@@ -131,6 +162,191 @@ async def create_evaluation_authority_key(
         raise EvaluationAuthorityError("evaluation_authority_key_create_failed") from exc
 
 
+async def list_evaluation_authority_keys(owner_id: str, grant_id: str) -> list[dict[str, Any]]:
+    try:
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(EvaluationAuthorityKey)
+                    .where(
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.grant_id == grant_id,
+                    )
+                    .order_by(EvaluationAuthorityKey.created_at.desc())
+                )
+            ).scalars().all()
+            return [_safe_key_summary(row) for row in rows]
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_list_failed") from exc
+
+
+async def evaluation_key_runtime_status(
+    owner_id: str,
+    grant_id: str,
+    key_id: str,
+) -> dict[str, Any]:
+    """Return a customer-safe status snapshot without consuming execution quota."""
+
+    try:
+        async with session_scope() as session:
+            key = (
+                await session.execute(
+                    select(EvaluationAuthorityKey).where(
+                        EvaluationAuthorityKey.key_id == key_id,
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.grant_id == grant_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if key is None:
+                raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+
+            state = await session.get(EvaluationAuthorityState, owner_id)
+            if state is None or not isinstance(state.authority, dict):
+                raise EvaluationAuthorityError("evaluation_authority_state_missing")
+            raw = deepcopy(state.authority)
+            grant = find_evaluation_grant(raw, grant_id)
+            if grant is None:
+                raise EvaluationAuthorityError("evaluation_grant_not_found")
+            refresh_evaluation_grant_status(grant)
+
+            payload = dict(key.payload or {})
+            grant_limit = int(grant.get("max_requests", 0) or 0)
+            key_limit = int(payload.get("quota_limit", 0) or 0)
+            quota_limit = grant_limit if key_limit <= 0 else min(grant_limit, key_limit)
+            quota_used = max(0, int(key.usage_count or 0))
+            quota_remaining = max(0, quota_limit - quota_used)
+            evaluation_type = normalized_evaluation_key_type(
+                str(grant.get("evaluation_type") or payload.get("evaluation_type") or ""),
+                allowed_binding_ids=list(grant.get("allowed_binding_ids") or []),
+                allowed_endpoints=list(grant.get("allowed_endpoints") or []),
+            )
+            now = _now()
+            expires_at = _as_utc(key.expires_at)
+            if key.revoked_at is not None or key.status == "revoked":
+                credential_status = "revoked"
+            elif expires_at is not None and expires_at <= now:
+                credential_status = "expired"
+            elif grant.get("status") != "active":
+                credential_status = str(grant.get("status") or "inactive")
+            elif quota_limit <= 0 or quota_remaining <= 0:
+                credential_status = "quota_exhausted"
+            elif key.status != "enabled":
+                credential_status = str(key.status or "inactive")
+            else:
+                credential_status = "active"
+
+            warning_threshold = max(1, min(10, quota_limit // 10)) if quota_limit > 0 else 0
+            quota_warning = (
+                "exhausted"
+                if quota_remaining <= 0
+                else "low"
+                if warning_threshold and quota_remaining <= warning_threshold
+                else "normal"
+            )
+            return {
+                "credential_status": credential_status,
+                "evaluation_type": evaluation_type,
+                "grant_id": grant_id,
+                "api_key_id": key_id,
+                "api_key_prefix": key.prefix,
+                "quota": {
+                    "limit": quota_limit,
+                    "used": quota_used,
+                    "remaining": quota_remaining,
+                    "warning": quota_warning,
+                    "semantics": "admitted_execution",
+                    "status_checks_consume_quota": False,
+                    "idempotent_replays_consume_quota": False,
+                },
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "last_used_at": (
+                    _as_utc(key.last_used_at).isoformat() if key.last_used_at else None
+                ),
+                "allowed_task_ids": list(grant.get("allowed_task_ids") or []),
+                "allowed_binding_ids": list(grant.get("allowed_binding_ids") or []),
+                "production_allowed": False,
+                "raw_secret_visible": False,
+            }
+    except EvaluationAuthorityError:
+        raise
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_status_unavailable") from exc
+
+
+async def update_evaluation_authority_key_lifecycle(
+    owner_id: str,
+    grant_id: str,
+    key_id: str,
+    *,
+    action: str,
+    actor: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    if action not in {"confirm_delivery", "acknowledge", "revoke"}:
+        raise EvaluationAuthorityError("evaluation_authority_key_action_invalid")
+    try:
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    select(EvaluationAuthorityKey)
+                    .where(
+                        EvaluationAuthorityKey.key_id == key_id,
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.grant_id == grant_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+
+            now = _now()
+            payload = dict(row.payload or {})
+            current = str(payload.get("lifecycle_status") or "issued")
+
+            if action == "confirm_delivery":
+                if row.status != "enabled" or row.revoked_at is not None:
+                    raise EvaluationAuthorityError("evaluation_authority_key_revoked")
+                if current in {"delivery_confirmed", "acknowledged"}:
+                    return _safe_key_summary(row)
+                if current != "issued":
+                    raise EvaluationAuthorityError("evaluation_authority_key_transition_invalid")
+                payload["lifecycle_status"] = "delivery_confirmed"
+                payload["delivered_at"] = now.isoformat()
+                payload["delivered_by"] = actor
+
+            elif action == "acknowledge":
+                if row.status != "enabled" or row.revoked_at is not None:
+                    raise EvaluationAuthorityError("evaluation_authority_key_revoked")
+                if current == "acknowledged":
+                    return _safe_key_summary(row)
+                if current != "delivery_confirmed":
+                    raise EvaluationAuthorityError("evaluation_authority_key_delivery_required")
+                payload["lifecycle_status"] = "acknowledged"
+                payload["acknowledged_at"] = now.isoformat()
+                payload["acknowledged_by"] = actor
+
+            else:
+                if row.status == "revoked" or row.revoked_at is not None:
+                    return _safe_key_summary(row)
+                row.status = "revoked"
+                row.revoked_at = now
+                payload["status"] = "revoked"
+                payload["lifecycle_status"] = "revoked"
+                payload["revoked_at"] = now.isoformat()
+                payload["revoked_by"] = actor
+                payload["revocation_reason"] = (reason or "administrator_revoked").strip()[:500]
+
+            row.payload = payload
+            await session.flush()
+            return _safe_key_summary(row)
+    except EvaluationAuthorityError:
+        raise
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_update_failed") from exc
+
+
 async def active_evaluation_key_count(owner_id: str, grant_id: str) -> int:
     try:
         async with session_scope() as session:
@@ -191,6 +407,7 @@ async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int
                 key.revoked_at = now
                 payload = dict(key.payload or {})
                 payload["status"] = "revoked"
+                payload["lifecycle_status"] = "revoked"
                 payload["revoked_at"] = now.isoformat()
                 payload["revocation_reason"] = "evaluation_grant_revoked"
                 key.payload = payload
@@ -202,6 +419,13 @@ async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int
 
 
 async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
+    """Authenticate Evaluation authority without consuming execution quota.
+
+    Quota is consumed transactionally by the delivery claim when a new runtime
+    execution is admitted. Authentication, invalid task/binding requests, and
+    durable idempotent replays therefore do not increment ``usage_count``.
+    """
+
     if not raw_key.startswith("pmk_"):
         return None
     try:
@@ -241,25 +465,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
             ):
                 return None
 
-            grant_limit = int(grant.get("max_requests", 0) or 0)
-            key_limit = int((key.payload or {}).get("quota_limit", 0) or 0)
-            effective_limit = grant_limit if key_limit <= 0 else min(grant_limit, key_limit)
-            if effective_limit <= 0 or key.usage_count >= effective_limit:
-                key.quota_rejected_count += 1
-                payload = dict(key.payload or {})
-                payload["evaluation_grant_state"] = "quota_exhausted"
-                payload["quota_rejected_count"] = key.quota_rejected_count
-                key.payload = payload
-                return None
-
-            key.usage_count += 1
-            key.last_used_at = now
             payload = dict(key.payload or {})
-            payload["usage_count"] = key.usage_count
-            payload["last_used_at"] = now.isoformat()
-            payload["evaluation_grant_state"] = "active"
-            key.payload = payload
-
             return {
                 "sub": key.owner_id,
                 "user_id": str(payload.get("user_id") or key.owner_id),
@@ -289,6 +495,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
                 "execution_mode": EVALUATION_EXECUTION_MODE,
                 "real_runtime_execution": True,
                 "evaluation_access": True,
+                "quota_semantics": "admitted_execution",
                 "production_allowed": False,
             }
     except EvaluationAuthorityError:
@@ -302,8 +509,11 @@ __all__ = [
     "active_evaluation_key_count",
     "create_evaluation_authority_key",
     "evaluation_authority_snapshot",
+    "evaluation_key_runtime_status",
+    "list_evaluation_authority_keys",
     "load_evaluation_authority_state",
     "revoke_evaluation_authority_grant",
     "save_evaluation_authority_state",
+    "update_evaluation_authority_key_lifecycle",
     "verify_evaluation_api_key",
 ]

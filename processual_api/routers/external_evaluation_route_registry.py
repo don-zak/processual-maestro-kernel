@@ -1,8 +1,8 @@
 """Idempotent registration for the standalone External Evaluation surface.
 
-The application includes the long-lived Settings and CGT Governor routers.  The
+The application includes the long-lived Settings and CGT Governor routers. The
 External Evaluation handlers live in extension modules, so register their public
-surface explicitly after every router extension has been imported.  Replacing
+surface explicitly after every router extension has been imported. Replacing
 only the exact method/path pairs keeps startup deterministic without changing
 handler, dependency, request-model, or authority semantics.
 """
@@ -16,15 +16,28 @@ from fastapi import APIRouter
 
 from . import cgt_governor as cgt_module
 from . import settings as settings_module
-from .evaluation_runtime import execute_evaluation_runtime_task
+from .evaluation_runtime import (
+    evaluation_runtime_execution_status,
+    execute_evaluation_runtime_task,
+)
+from .evaluation_runtime_scenarios import evaluation_runtime_status_with_scenarios
 from .settings_admin_evaluation_grants import (
-    create_evaluation_grant,
     evaluation_access_catalog,
     evaluation_grant_authority,
     evaluation_task_catalog,
     issue_evaluation_key,
     list_evaluation_grants,
     revoke_evaluation_grant,
+)
+from .settings_admin_evaluation_key_lifecycle import (
+    acknowledge_evaluation_key_receipt,
+    confirm_evaluation_key_delivery,
+    list_evaluation_audit_report_receipts,
+    list_evaluation_keys,
+    revoke_evaluation_key,
+)
+from .settings_admin_evaluation_quota_policy import (
+    create_quota_governed_evaluation_grant,
 )
 
 
@@ -61,14 +74,39 @@ def _replace_route(
 def register_external_evaluation_routes() -> None:
     """Register the complete External Evaluation lifecycle exactly once."""
 
-    _replace_route(
-        cgt_module.router,
-        registered_path="/evaluation/runtime/task-execute",
-        add_path="/evaluation/runtime/task-execute",
-        method="POST",
-        endpoint=execute_evaluation_runtime_task,
-        tags=["evaluation-runtime"],
+    runtime_routes = (
+        (
+            "/evaluation/runtime/status",
+            "/evaluation/runtime/status",
+            "GET",
+            evaluation_runtime_status_with_scenarios,
+            200,
+        ),
+        (
+            "/evaluation/runtime/executions/{execution_id}",
+            "/evaluation/runtime/executions/{execution_id}",
+            "GET",
+            evaluation_runtime_execution_status,
+            200,
+        ),
+        (
+            "/evaluation/runtime/task-execute",
+            "/evaluation/runtime/task-execute",
+            "POST",
+            execute_evaluation_runtime_task,
+            200,
+        ),
     )
+    for registered_path, add_path, method, endpoint, status_code in runtime_routes:
+        _replace_route(
+            cgt_module.router,
+            registered_path=registered_path,
+            add_path=add_path,
+            method=method,
+            endpoint=endpoint,
+            status_code=status_code,
+            tags=["evaluation-runtime"],
+        )
 
     admin_routes = (
         (
@@ -96,7 +134,7 @@ def register_external_evaluation_routes() -> None:
             "/settings/admin/evaluation-grants",
             "/admin/evaluation-grants",
             "POST",
-            create_evaluation_grant,
+            create_quota_governed_evaluation_grant,
             201,
         ),
         (
@@ -112,6 +150,41 @@ def register_external_evaluation_routes() -> None:
             "POST",
             issue_evaluation_key,
             201,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys",
+            "/admin/evaluation-grants/{grant_id}/keys",
+            "GET",
+            list_evaluation_keys,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/audit-receipts",
+            "/admin/evaluation-grants/{grant_id}/audit-receipts",
+            "GET",
+            list_evaluation_audit_report_receipts,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys/{key_id}/confirm-delivery",
+            "/admin/evaluation-grants/{grant_id}/keys/{key_id}/confirm-delivery",
+            "POST",
+            confirm_evaluation_key_delivery,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys/{key_id}/acknowledge",
+            "/admin/evaluation-grants/{grant_id}/keys/{key_id}/acknowledge",
+            "POST",
+            acknowledge_evaluation_key_receipt,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/keys/{key_id}",
+            "/admin/evaluation-grants/{grant_id}/keys/{key_id}",
+            "DELETE",
+            revoke_evaluation_key,
+            200,
         ),
         (
             "/settings/admin/evaluation-grants/{grant_id}",
