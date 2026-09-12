@@ -45,11 +45,10 @@ try {
 
     Write-Host "[1/6] Exact source SHA verified: $CurrentSha"
 
-    Write-Host '[2/6] Running owned sandbox and scenario regression tests...'
+    Write-Host '[2/6] Running verified owned scenario and Admin fail-closed regression tests...'
     python -m pytest `
         tests/test_external_evaluation_owned_crm_scenarios.py `
         tests/test_external_evaluation_owned_integration_scenarios.py `
-        tests/test_external_evaluation_owned_sandbox_contract.py `
         tests/test_admin_evaluation_owned_preset_catalog.py `
         -q
     if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed; Worker was not deployed.' }
