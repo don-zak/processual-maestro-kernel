@@ -93,6 +93,58 @@ async def test_launch_ticket_is_one_time_and_session_is_long_enough(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_admin_launch_endpoint_returns_ui_handoff_contract_without_raw_ticket(monkeypatch):
+    import processual_api.routers.settings_admin_evaluation_launch as admin_launch
+
+    async def fake_platform_admin(_request, current_user):
+        assert current_user["sub"] == "admin-1"
+
+    async def fake_issue(*, owner_user_id: str, grant_id: str):
+        assert owner_user_id == "admin-1"
+        assert grant_id == "eval-1"
+        return {
+            "launch_ticket": "one-time.ticket",
+            "expires_in_seconds": 30 * 60,
+            "workspace_session_seconds": 2 * 60 * 60,
+            "one_time": True,
+            "production_allowed": False,
+            "execution_authority_replaced": False,
+        }
+
+    monkeypatch.setattr(admin_launch, "_require_platform_admin", fake_platform_admin)
+    monkeypatch.setattr(admin_launch, "issue_evaluation_launch_ticket", fake_issue)
+
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/settings/admin/evaluation-grants/eval-1/issue-launch",
+            "raw_path": b"/settings/admin/evaluation-grants/eval-1/issue-launch",
+            "query_string": b"",
+            "headers": [],
+            "client": ("203.0.113.10", 443),
+            "server": ("example.test", 443),
+        }
+    )
+    payload = await admin_launch.issue_evaluation_workspace_launch(
+        "eval-1", request, current_user={"sub": "admin-1"}
+    )
+
+    assert payload["handoff_url"] == (
+        "https://zaxam.net/external-evaluation.html#evaluation-launch=one-time.ticket"
+    )
+    assert "launch_ticket" not in payload
+    assert "zaxam_launch_url" not in payload
+    assert payload["launch_ticket_expires_in_seconds"] == 30 * 60
+    assert payload["workspace_session_seconds"] == 2 * 60 * 60
+    assert payload["execution_api_key_required"] is True
+    assert payload["execution_authority_replaced"] is False
+    assert payload["production_allowed"] is False
+
+
+@pytest.mark.asyncio
 async def test_workspace_blocks_direct_top_level_navigation():
     middleware = SecurityHeadersMiddleware(lambda scope, receive, send: None)
     response = await middleware._evaluation_workspace_gate(_request(destination="document"))
