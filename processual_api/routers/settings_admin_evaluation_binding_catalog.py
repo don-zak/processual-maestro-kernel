@@ -137,7 +137,12 @@ def _binding_catalog_item(raw: dict[str, Any], item: dict[str, Any]) -> dict[str
             )
         except SandboxGrantError:
             active_grant = None
-        selectable = bool(readiness["sandbox_ready"] and active_grant is not None)
+
+        # External Evaluation runtime authority is intentionally decoupled from
+        # the transient supervisor sandbox grant TTL. Once a matching live proof
+        # has been persisted for the exact provisioning fingerprint, that durable
+        # proof is the preparation authority used by Evaluation runtime.
+        selectable = bool(readiness["sandbox_ready"])
         return {
             "binding_id": spec.binding_id,
             "task_id": spec.task_id,
@@ -149,6 +154,7 @@ def _binding_catalog_item(raw: dict[str, Any], item: dict[str, Any]) -> dict[str
             "secret_reference_ready": secret_reference is not None,
             "sandbox_readiness": readiness,
             "active_sandbox_grant": active_grant,
+            "selection_basis": "persisted_matching_sandbox_proof",
             "selectable": selectable,
             "production_allowed": False,
             "raw_secret_visible": False,
@@ -177,6 +183,7 @@ def _binding_catalog_item(raw: dict[str, Any], item: dict[str, Any]) -> dict[str
                 "runtime_connector_approved": False,
             },
             "active_sandbox_grant": None,
+            "selection_basis": "persisted_matching_sandbox_proof",
             "selectable": False,
             "production_allowed": False,
             "raw_secret_visible": False,
@@ -210,6 +217,7 @@ async def evaluation_binding_catalog(
         "binding_count": len(bindings),
         "bindings": bindings,
         "selection_authority": "admin_evaluation_grant",
+        "binding_selection_basis": "persisted_matching_sandbox_proof",
         "subscription_required": False,
         "registration_required": False,
         "commercial_quota_required": False,
