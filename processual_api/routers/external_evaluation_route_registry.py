@@ -36,6 +36,7 @@ from .settings_admin_evaluation_key_lifecycle import (
     list_evaluation_keys,
     revoke_evaluation_key,
 )
+from .settings_admin_evaluation_launch import issue_evaluation_workspace_launch
 from .settings_admin_evaluation_quota_policy import (
     create_quota_governed_evaluation_grant,
 )
@@ -149,6 +150,13 @@ def register_external_evaluation_routes() -> None:
             "/admin/evaluation-grants/{grant_id}/issue-key",
             "POST",
             issue_evaluation_key,
+            201,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/issue-launch",
+            "/admin/evaluation-grants/{grant_id}/issue-launch",
+            "POST",
+            issue_evaluation_workspace_launch,
             201,
         ),
         (
