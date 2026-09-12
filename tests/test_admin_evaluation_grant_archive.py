@@ -45,4 +45,5 @@ def test_delete_control_preserves_security_boundaries() -> None:
     assert "credentials: 'include'" in ui
     assert "require_active_platform_admin" in router
     assert '"production_allowed": False' in router
-    assert "raw" not in ui.lower().replace("raw = await response.text()", "")
+    assert "X-API-Key" not in ui
+    assert "api_key" not in ui.lower()
