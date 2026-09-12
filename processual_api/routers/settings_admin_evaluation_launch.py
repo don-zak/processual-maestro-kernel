@@ -16,7 +16,7 @@ from processual_api.services.evaluation_launch_gate import (
 
 from . import settings as settings_module
 
-_ZAXAM_EVALUATION_ENTRY = "https://zaxam.net/maestro.html#evaluation-launch="
+_ZAXAM_EVALUATION_ENTRY = "https://zaxam.net/external-evaluation.html#evaluation-launch="
 
 
 async def _require_platform_admin(
