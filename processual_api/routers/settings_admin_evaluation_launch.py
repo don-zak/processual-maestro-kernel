@@ -68,11 +68,11 @@ async def issue_evaluation_workspace_launch(
         ) from exc
 
     token = str(issued.pop("launch_ticket"))
-    zaxam_launch_url = _ZAXAM_EVALUATION_ENTRY + quote(token, safe="")
+    handoff_url = _ZAXAM_EVALUATION_ENTRY + quote(token, safe="")
     return {
         "status": "issued",
         "grant_id": grant_id,
-        "zaxam_launch_url": zaxam_launch_url,
+        "handoff_url": handoff_url,
         "launch_ticket_expires_in_seconds": issued["expires_in_seconds"],
         "workspace_session_seconds": issued["workspace_session_seconds"],
         "one_time_launch": True,
