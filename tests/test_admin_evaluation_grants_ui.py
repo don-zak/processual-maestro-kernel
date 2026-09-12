@@ -243,6 +243,24 @@ def test_owned_crm_preset_ui_only_prepares_and_proves_binding() -> None:
     assert "location.reload" not in source
 
 
+def test_owned_evaluation_guard_captures_dynamic_issue_clicks_single_flight() -> None:
+    source = _owned_preset_source()
+    for marker in (
+        "function bindIssueKeyCaptureGuard()",
+        "document.addEventListener('click'",
+        "[data-eval-issue]",
+        "event.stopImmediatePropagation()",
+        "const issuingGrantIds = new Set()",
+        "if (issuingGrantIds.has(grantId)) return",
+        "button.disabled = true",
+        "Issuing API Key…",
+        "await issueKey(grantId)",
+        "issuingGrantIds.delete(grantId)",
+    ):
+        assert marker in source
+    assert "issue-key" not in source
+
+
 def test_category_change_rechecks_authority_and_loads_evaluation_controls() -> None:
     source = _session_source()
     assert "window.addEventListener('pmk-api-key-category-changed'" in source
