@@ -11,6 +11,8 @@
   const BINDING_COVERAGE_SCRIPT_SRC = '/console/js/admin_evaluation_binding_coverage_guard.js?v=eval-binding-coverage-v1';
   const CRM_BUNDLE_SCRIPT_ID = 'admin-evaluation-crm-bundle-script';
   const CRM_BUNDLE_SCRIPT_SRC = '/console/js/admin_evaluation_crm_bundle.js?v=eval-crm-bundle-v1';
+  const GRANT_ARCHIVE_SCRIPT_ID = 'admin-evaluation-grant-archive-script';
+  const GRANT_ARCHIVE_SCRIPT_SRC = '/console/js/admin_evaluation_grant_archive.js?v=eval-grant-archive-v1';
   const STANDARD_IDS = [
     'admin-api-key-role',
     'admin-api-key-plan-id',
@@ -60,6 +62,7 @@
   function ensureLaunchHandoffScript() { ensureScript(LAUNCH_HANDOFF_SCRIPT_ID, LAUNCH_HANDOFF_SCRIPT_SRC); }
   function ensureBindingCoverageGuardScript() { ensureScript(BINDING_COVERAGE_SCRIPT_ID, BINDING_COVERAGE_SCRIPT_SRC); }
   function ensureCrmBundleScript() { ensureScript(CRM_BUNDLE_SCRIPT_ID, CRM_BUNDLE_SCRIPT_SRC); }
+  function ensureGrantArchiveScript() { ensureScript(GRANT_ARCHIVE_SCRIPT_ID, GRANT_ARCHIVE_SCRIPT_SRC); }
 
   function ensureEvaluationCard() {
     const root = lifecycle();
@@ -197,6 +200,7 @@
         ensureLaunchHandoffScript();
         ensureBindingCoverageGuardScript();
         ensureCrmBundleScript();
+        ensureGrantArchiveScript();
         const mode = document.getElementById('admin-api-key-provisioning-mode');
         if (mode && mode.value !== 'external_evaluation') {
           mode.value = 'external_evaluation';
@@ -207,6 +211,7 @@
         window.PMK_ADMIN_EVALUATION_LAUNCH_HANDOFF?.decorate?.();
         window.PMK_ADMIN_EVALUATION_BINDING_COVERAGE_GUARD?.apply?.();
         window.PMK_ADMIN_EVALUATION_CRM_BUNDLE?.initialize?.();
+        window.PMK_ADMIN_EVALUATION_GRANT_ARCHIVE?.initialize?.();
       }
     } finally {
       applying = false;
