@@ -4,6 +4,7 @@
   const EXTERNAL_BODY_ID = 'admin-api-key-external-evaluation-body';
   const WORKSPACE_ID = 'admin-api-key-provisioning-workspace';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
+  const EVALUATION_LIST_ID = 'admin-eval-list';
   const EVALUATION_SLOT_ID = 'admin-api-key-evaluation-lifecycle-slot';
   const MODE_ID = 'admin-api-key-provisioning-mode';
   const PREVIEW_ID = 'admin-api-key-evaluation-preview';
@@ -284,7 +285,7 @@
       : `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}/${suffix}`;
     try {
       await request(path, action === 'revoke' ? 'DELETE' : 'POST', action === 'revoke' ? { reason: 'administrator_revoked_from_external_evaluation_ui' } : undefined);
-      const card = button.closest('.card.flat')?.parentElement?.closest('.card.flat') || button.closest('.card.flat');
+      const card = button.closest(`[data-eval-grant-card="true"]`) || button.closest('.card.flat')?.parentElement?.closest('.card.flat') || button.closest('.card.flat');
       const panel = button.closest(`[${KEY_PANEL_ATTRIBUTE}]`);
       if (panel) await loadKeyLifecyclePanel(panel, grantId);
       const auditPanel = card?.querySelector?.(`[${AUDIT_PANEL_ATTRIBUTE}]`);
@@ -302,13 +303,31 @@
     panel.querySelectorAll('[data-eval-key-revoke]').forEach((button) => button.addEventListener('click', () => mutateEvaluationKey(button, 'revoke')));
   }
 
+  function grantIdFromCard(card) {
+    const explicit = text(card.dataset.evalGrantId);
+    if (explicit) return explicit;
+    const action = card.querySelector('[data-eval-issue], [data-eval-revoke]');
+    const actionGrantId = text(action?.dataset?.evalIssue || action?.dataset?.evalRevoke);
+    if (actionGrantId) return actionGrantId;
+    const firstMetadata = text(card.querySelector(':scope > .muted')?.textContent);
+    const candidate = firstMetadata.split(' · ')[0];
+    return /^eval_[A-Za-z0-9]+$/.test(candidate) ? candidate : '';
+  }
+
+  function evaluationGrantCards(host) {
+    const list = host.querySelector(`#${EVALUATION_LIST_ID}`);
+    if (!list) return [];
+    return [...list.querySelectorAll(':scope > .card.flat')];
+  }
+
   function decorateGrantKeyLifecycle() {
     const host = document.getElementById(EVALUATION_HOST_ID);
     if (!host) return;
-    host.querySelectorAll('[data-eval-issue]').forEach((issueButton) => {
-      const grantId = text(issueButton.dataset.evalIssue);
-      const card = issueButton.closest('.card.flat');
-      if (!grantId || !card) return;
+    evaluationGrantCards(host).forEach((card) => {
+      const grantId = grantIdFromCard(card);
+      if (!grantId) return;
+      card.dataset.evalGrantCard = 'true';
+      card.dataset.evalGrantId = grantId;
 
       let keyPanel = card.querySelector(`[${KEY_PANEL_ATTRIBUTE}]`);
       if (!keyPanel) {
