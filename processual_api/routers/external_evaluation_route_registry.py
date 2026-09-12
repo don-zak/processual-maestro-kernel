@@ -19,12 +19,15 @@ from . import settings as settings_module
 from .evaluation_cgt_runtime import governed_execute_evaluation_runtime_task
 from .evaluation_cgt_status import evaluation_runtime_status_with_governance
 from .evaluation_runtime import evaluation_runtime_execution_status
+from .settings_admin_evaluation_grant_archive import (
+    archive_evaluation_grant,
+    list_visible_evaluation_grants,
+)
 from .settings_admin_evaluation_grants import (
     evaluation_access_catalog,
     evaluation_grant_authority,
     evaluation_task_catalog,
     issue_evaluation_key,
-    list_evaluation_grants,
     revoke_evaluation_grant,
 )
 from .settings_admin_evaluation_key_lifecycle import (
@@ -140,7 +143,14 @@ def register_external_evaluation_routes() -> None:
             "/settings/admin/evaluation-grants",
             "/admin/evaluation-grants",
             "GET",
-            list_evaluation_grants,
+            list_visible_evaluation_grants,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/{grant_id}/archive",
+            "/admin/evaluation-grants/{grant_id}/archive",
+            "POST",
+            archive_evaluation_grant,
             200,
         ),
         (
