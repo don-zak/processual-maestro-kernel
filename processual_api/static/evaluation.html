@@ -5,17 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
   <meta name="referrer" content="no-referrer" />
+  <meta name="color-scheme" content="dark" />
   <title>Processual Maestro — External Evaluation</title>
   <style>
     :root {
       color-scheme: dark;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --bg:#08101e; --panel:#101a2d; --panel2:#0c1526; --line:#263553;
-      --text:#edf3ff; --muted:#9facc8; --accent:#7f8cff; --ok:#71dfaa;
-      --warn:#ffd06e; --bad:#ff8996;
+      --text:#edf3ff; --muted:#9facc8; --accent:#7f8cff; --accent2:#83b8ff; --ok:#71dfaa;
+      --warn:#ffd06e; --bad:#ff8996; --shadow:0 18px 52px rgba(0,0,0,.18);
     }
     * { box-sizing:border-box; }
-    body { margin:0; background:linear-gradient(180deg,#08101e 0%,#0a1222 100%); color:var(--text); }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:radial-gradient(circle at 80% 0%,rgba(90,111,210,.13),transparent 30rem),linear-gradient(180deg,#08101e 0%,#0a1222 100%); color:var(--text); }
     main { max-width:1120px; margin:0 auto; padding:34px 20px 72px; }
     header { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; flex-wrap:wrap; }
     h1 { margin:0; font-size:30px; letter-spacing:-.02em; }
@@ -25,7 +27,7 @@
     .muted { color:var(--muted); }
     .status-pill { border:1px solid var(--line); border-radius:999px; padding:7px 11px; color:var(--muted); background:var(--panel2); font-size:12px; }
     .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); margin-top:16px; }
-    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:0 14px 40px rgba(0,0,0,.14); }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:var(--shadow); }
     .card.inset { background:var(--panel2); }
     .label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
     .value { font-size:23px; font-weight:750; margin-top:6px; overflow-wrap:anywhere; }
@@ -33,6 +35,7 @@
     .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
     label { display:block; font-size:13px; margin:13px 0 6px; color:#cad4ea; }
     input, textarea, select { width:100%; padding:11px 12px; border-radius:9px; border:1px solid #354769; background:#091426; color:var(--text); }
+    input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, .scenario-card:focus-visible { outline:2px solid var(--accent2); outline-offset:2px; }
     textarea { min-height:124px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
     button { margin-top:12px; padding:10px 14px; border:1px solid transparent; border-radius:9px; background:var(--accent); color:white; font-weight:760; cursor:pointer; }
     button.secondary { background:#273653; border-color:#354769; }
@@ -40,7 +43,7 @@
     .row { display:flex; gap:10px; flex-wrap:wrap; }
     .notice { margin-top:14px; padding:12px 14px; border-radius:10px; background:#182641; color:#d0daf0; border:1px solid #2a3b60; }
     .progress { height:11px; background:#25324d; border-radius:999px; overflow:hidden; margin-top:12px; }
-    .progress > div { height:100%; width:0; background:var(--accent); transition:width .2s ease; }
+    .progress > div { height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .2s ease; }
     .stage-track { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:14px; }
     .stage { border:1px solid var(--line); border-radius:10px; padding:10px; color:var(--muted); background:var(--panel2); font-size:12px; text-align:center; }
     .stage.current { border-color:var(--warn); color:var(--warn); }
@@ -48,10 +51,16 @@
     .scope-list { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
     .scope-chip { border:1px solid var(--line); border-radius:999px; padding:6px 9px; background:#0b1628; color:#c9d5ee; font-size:12px; overflow-wrap:anywhere; }
     .scenario-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:14px; }
-    .scenario-card { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel2); }
-    .scenario-card.ready { border-color:rgba(113,223,170,.55); }
+    .scenario-card { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel2); transition:transform .12s ease,border-color .12s ease,background .12s ease; }
+    .scenario-card.ready { border-color:rgba(113,223,170,.55); cursor:pointer; }
+    .scenario-card.ready:hover { transform:translateY(-1px); background:#101c2f; }
+    .scenario-card.selected { border-color:var(--accent2); box-shadow:0 0 0 2px rgba(131,184,255,.12); }
     .scenario-card.locked { opacity:.72; }
+    .scenario-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
     .scenario-title { font-weight:800; margin-bottom:6px; }
+    .scenario-badge { border:1px solid var(--line); border-radius:999px; padding:4px 7px; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap; }
+    .scenario-badge.ready { border-color:rgba(113,223,170,.45); color:var(--ok); }
+    .scenario-badge.locked { border-color:rgba(255,208,110,.35); color:var(--warn); }
     .scenario-meta { font-size:12px; color:var(--muted); margin-top:6px; }
     .proof-journey { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px; }
     .proof-step { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; }
@@ -59,6 +68,10 @@
     .proof-step span { color:var(--muted); font-size:12px; line-height:1.5; }
     .business-proof { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:14px; }
     .business-proof div { padding:12px 13px; border:1px solid var(--line); border-radius:10px; background:#0a1425; color:#cad5eb; font-size:13px; }
+    .next-action { margin-top:14px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:center; border:1px solid #334569; background:linear-gradient(135deg,#111d33,#0d1728); }
+    .next-action h2 { margin:3px 0 4px; }
+    .next-action p { margin:0; color:var(--muted); font-size:13px; }
+    .next-action-state { border:1px solid var(--line); border-radius:999px; padding:7px 10px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#dbe6fa; background:#0b1524; white-space:nowrap; }
     details { margin-top:14px; border:1px solid var(--line); border-radius:12px; background:var(--panel2); }
     summary { cursor:pointer; padding:13px 15px; font-weight:760; color:#dbe6fa; }
     details > div { padding:0 15px 15px; }
@@ -66,8 +79,9 @@
     .contract { margin-top:22px; display:grid; gap:10px; }
     .contract div { display:flex; gap:10px; align-items:flex-start; color:var(--muted); font-size:13px; }
     .contract strong { color:var(--text); min-width:155px; }
-    @media (max-width:760px) { .proof-journey { grid-template-columns:1fr 1fr; } }
-    @media (max-width:620px) { .contract div { display:block; } .contract strong { display:block; margin-bottom:2px; } .stage-track,.proof-journey { grid-template-columns:1fr 1fr; } }
+    @media (max-width:760px) { .proof-journey { grid-template-columns:1fr 1fr; } .next-action { grid-template-columns:1fr; } .next-action-state { justify-self:start; } }
+    @media (max-width:620px) { .contract div { display:block; } .contract strong { display:block; margin-bottom:2px; } .stage-track,.proof-journey { grid-template-columns:1fr 1fr; } main { padding-left:14px; padding-right:14px; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .scenario-card,.progress > div { transition:none; } }
   </style>
 </head>
 <body>
@@ -96,6 +110,11 @@
     </div>
   </section>
 
+  <section id="next-action" class="card next-action" aria-live="polite">
+    <div><div class="eyebrow">Recommended next step</div><h2 id="next-action-title">Connect your Evaluation key</h2><p id="next-action-copy">Start by connecting the one-time Evaluation credential. Status reads consume +0 quota.</p></div>
+    <div id="next-action-state" class="next-action-state">Not connected</div>
+  </section>
+
   <section class="card" style="margin-top:14px">
     <h2>Connect evaluation credential</h2>
     <div class="muted">The raw API key stays in this page's memory only. This page does not persist it in browser storage.</div>
@@ -105,7 +124,7 @@
       <button id="connect" type="button">Connect / Refresh</button>
       <button id="disconnect" class="secondary" type="button">Forget key</button>
     </div>
-    <div id="message" class="notice">Enter the Evaluation API key issued by the Platform Administrator.</div>
+    <div id="message" class="notice" aria-live="polite">Enter the Evaluation API key issued by the Platform Administrator.</div>
   </section>
 
   <section class="grid">
@@ -141,7 +160,7 @@
 
   <section class="card" style="margin-top:14px">
     <div class="label">Authoritative Evaluation quota</div>
-    <div class="progress"><div id="quota-bar"></div></div>
+    <div class="progress" aria-label="Evaluation quota usage"><div id="quota-bar"></div></div>
     <div id="quota-caption" class="muted" style="margin-top:8px">Status reads and idempotent replays consume zero admitted-execution units.</div>
   </section>
 
@@ -156,8 +175,8 @@
 
   <section class="card" style="margin-top:14px">
     <h2>Guided proof-of-value scenarios</h2>
-    <div class="muted">Choose a business-facing scenario instead of manually assembling task identifiers. Scenarios and readiness are derived from the sealed backend grant authority.</div>
-    <div id="scenario-summary" class="notice">Connect a key to discover scenarios available to this grant.</div>
+    <div class="muted">Choose a business-facing scenario instead of manually assembling task identifiers. Scenarios and readiness are derived from the sealed backend grant authority. Runnable cards can be selected directly.</div>
+    <div id="scenario-summary" class="notice" aria-live="polite">Connect a key to discover scenarios available to this grant.</div>
     <div id="scenario-grid" class="scenario-grid"></div>
     <label for="scenario-select">Selected scenario</label>
     <select id="scenario-select" disabled><option value="">No runnable scenario available</option></select>
@@ -179,7 +198,7 @@
     </div>
   </section>
 
-  <details>
+  <details id="technical-execution">
     <summary>Technical execution details</summary>
     <div>
       <div class="muted">These fields are intentionally secondary. The server still rejects any task or binding outside the grant envelope.</div>
@@ -193,7 +212,7 @@
       <label for="task-input">Task input (JSON)</label>
       <textarea id="task-input" spellcheck="false">{}</textarea>
       <button id="execute" type="button" disabled>Execute admitted sandbox task</button>
-      <pre id="result">No execution submitted.</pre>
+      <pre id="result" aria-live="polite">No execution submitted.</pre>
     </div>
   </details>
 
@@ -216,6 +235,6 @@
     </div>
   </section>
 </main>
-<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v5"></script>
+<script src="/console/js/evaluation_client_portal.js?v=eval-client-authority-v6"></script>
 </body>
 </html>
