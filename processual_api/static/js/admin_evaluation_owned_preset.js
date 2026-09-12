@@ -3,20 +3,6 @@
   const DEFAULT_BASE_URL = 'https://processual-maestro-evaluation-sandbox.zaksam2030.workers.dev';
   const HOST_ID = 'admin-evaluation-owned-crm-preset';
   const EXTERNAL_CATEGORY = 'external_evaluation';
-  const PROOF_RELOAD_STATE_KEY = 'pmk_external_evaluation_proof_reload_state_v1';
-  const PROOF_RELOAD_STATE_TTL_MS = 120000;
-  const PROOF_RELOAD_FIELD_IDS = [
-    'admin-api-key-category',
-    'admin-api-key-provisioning-mode',
-    'admin-api-key-operational-profile',
-    'admin-api-key-role',
-    'admin-api-key-scopes',
-    'admin-eval-client-id',
-    'admin-eval-issued-to',
-    'admin-eval-days',
-    'admin-eval-type',
-    'admin-eval-purpose',
-  ];
 
   const selectedBindingIds = new Set();
   let bindingObserver = null;
@@ -51,100 +37,6 @@
 
   function externalEvaluationSelected() {
     return text(document.getElementById('admin-api-key-category')?.value) === EXTERNAL_CATEGORY;
-  }
-
-  function selectedValues(selector) {
-    return [...document.querySelectorAll(`${selector}:checked`)]
-      .map((input) => text(input.value))
-      .filter(Boolean);
-  }
-
-  function captureProofReloadState() {
-    const fields = {};
-    PROOF_RELOAD_FIELD_IDS.forEach((id) => {
-      const element = document.getElementById(id);
-      if (!element || !('value' in element)) return;
-      fields[id] = String(element.value ?? '');
-    });
-    const state = {
-      storedAt: Date.now(),
-      fields,
-      endpoints: selectedValues('[data-api-key-access-endpoint]'),
-      tasks: selectedValues('[data-eval-task]'),
-      bindings: selectedValues('[data-eval-binding]'),
-    };
-    try {
-      sessionStorage.setItem(PROOF_RELOAD_STATE_KEY, JSON.stringify(state));
-    } catch (error) {}
-  }
-
-  function restoreProofReloadState() {
-    let state = null;
-    try {
-      const raw = sessionStorage.getItem(PROOF_RELOAD_STATE_KEY);
-      state = raw ? JSON.parse(raw) : null;
-    } catch (error) {
-      state = null;
-    }
-    if (!state || typeof state !== 'object') return;
-    if (!Number.isFinite(state.storedAt) || Date.now() - state.storedAt > PROOF_RELOAD_STATE_TTL_MS) {
-      try { sessionStorage.removeItem(PROOF_RELOAD_STATE_KEY); } catch (error) {}
-      return;
-    }
-
-    const pendingFields = new Set(Object.keys(state.fields || {}));
-    const pendingEndpoints = new Set(Array.isArray(state.endpoints) ? state.endpoints : []);
-    const pendingTasks = new Set(Array.isArray(state.tasks) ? state.tasks : []);
-    const pendingBindings = new Set(Array.isArray(state.bindings) ? state.bindings : []);
-    let attempts = 0;
-
-    const restoreField = (id) => {
-      const element = document.getElementById(id);
-      if (!element || !('value' in element)) return false;
-      const next = String(state.fields[id] ?? '');
-      if (String(element.value ?? '') !== next) {
-        element.value = next;
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      return true;
-    };
-
-    const restoreChecked = (selector, pending) => {
-      if (!pending.size) return;
-      document.querySelectorAll(selector).forEach((input) => {
-        const value = text(input.value);
-        if (!pending.has(value) || input.disabled) return;
-        if (!input.checked) {
-          input.checked = true;
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        pending.delete(value);
-      });
-    };
-
-    const apply = () => {
-      attempts += 1;
-      [...pendingFields].forEach((id) => {
-        if (restoreField(id)) pendingFields.delete(id);
-      });
-      restoreChecked('[data-api-key-access-endpoint]', pendingEndpoints);
-      restoreChecked('[data-eval-task]', pendingTasks);
-      restoreChecked('[data-eval-binding]', pendingBindings);
-
-      const done = !pendingFields.size
-        && !pendingEndpoints.size
-        && !pendingTasks.size
-        && !pendingBindings.size;
-      if (done || attempts >= 30) {
-        window.clearInterval(timer);
-        try { sessionStorage.removeItem(PROOF_RELOAD_STATE_KEY); } catch (error) {}
-        window.PMK_ADMIN_EVALUATION_GRANTS?.updateReadiness?.();
-      }
-    };
-
-    const timer = window.setInterval(apply, 150);
-    apply();
   }
 
   function captureBindingSelection(event) {
@@ -271,6 +163,8 @@
         throw new Error('Owned CRM preset returned without a complete selectable live-proof state.');
       }
 
+      selectedBindingIds.add(bindingId);
+      restoreBindingSelection();
       if (result) {
         result.className = 'admin-note ok';
         result.innerHTML = [
@@ -278,11 +172,17 @@
           `Binding <code>${escapeHtml(payload.binding_id)}</code> is sandbox-ready and selectable.`,
           `Readiness: ${escapeHtml(readiness.status || 'sandbox_ready')}.`,
           'Content owner: project · credential reference: project-scoped anonymous/public · raw secret: no · production: disabled.',
-          'Refreshing the authoritative binding catalog while preserving this qualification form…',
+          'Proof persisted successfully. The page will not reload or discard the current qualification form.',
         ].join('<br>');
       }
-      captureProofReloadState();
-      window.setTimeout(() => window.location.reload(), 900);
+      if (button) button.disabled = false;
+      try {
+        window.dispatchEvent(new CustomEvent('pmk-evaluation-binding-proof-ready', {
+          detail: { bindingId, selectable: true },
+        }));
+      } catch {
+        window.dispatchEvent(new Event('pmk-evaluation-binding-proof-ready'));
+      }
     } catch (error) {
       if (result) {
         result.className = 'admin-note danger';
@@ -347,12 +247,8 @@
     window.queueMicrotask(restoreBindingSelection);
   });
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      scheduleRender();
-      restoreProofReloadState();
-    });
+    document.addEventListener('DOMContentLoaded', scheduleRender);
   } else {
     scheduleRender();
-    restoreProofReloadState();
   }
 })();
