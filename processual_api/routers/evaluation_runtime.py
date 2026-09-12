@@ -23,14 +23,11 @@ from processual_api.integrations.enterprise_sandbox_execution import (
     SandboxExecutionError,
     execute_sandbox_binding,
 )
+from processual_api.integrations.integration_task_catalog import get_integration_task
 from processual_api.integrations.sandbox_secret_resolution import (
     ReferenceSandboxCredentialResolver,
 )
 from processual_api.integrations.sandbox_verified_transport import VerifiedPeerSandboxTransport
-from processual_api.services.enterprise_endpoint_sandbox_grants import (
-    SandboxGrantError,
-    resolve_active_sandbox_execution_grant,
-)
 from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
     evaluation_key_runtime_status,
@@ -205,6 +202,53 @@ def _authorize_task(
     return requested
 
 
+def _prepared_runtime_operation_classes(
+    raw: dict[str, Any],
+    *,
+    spec: Any,
+    request_mapping: Any,
+    content: Any,
+    secret_reference: Any,
+) -> set[str]:
+    """Require persisted matching live proof, not a transient supervisor TTL grant."""
+
+    evidence = next(
+        (
+            item
+            for item in reversed(binding_runtime._safe_evidence(raw))
+            if str(item.get("binding_id") or "") == spec.binding_id
+            and str(item.get("task_id") or "") == spec.task_id
+        ),
+        None,
+    )
+    if evidence is None:
+        raise ValueError("persisted matching sandbox proof is required for Evaluation runtime")
+
+    expected_provisioning_sha256 = sandbox_runtime._provisioning_sha256(
+        spec=spec,
+        request_mapping=request_mapping,
+        secret_reference=secret_reference,
+        content=content,
+    )
+    proof_valid = (
+        evidence.get("operational_proof") is True
+        and evidence.get("peer_address_verified") is True
+        and evidence.get("network_request_executed") is True
+        and evidence.get("mapping_valid") is True
+        and evidence.get("ready_for_task_consumption") is True
+        and evidence.get("production_allowed") is False
+        and str(evidence.get("provisioning_sha256") or "")
+        == expected_provisioning_sha256
+    )
+    if not proof_valid:
+        raise ValueError("prepared Evaluation binding proof is stale or incomplete")
+
+    task = get_integration_task(spec.task_id)
+    if not task.sandbox_allowed or task.auto_execute_production:
+        raise ValueError("Evaluation runtime task is not sandbox eligible")
+    return {str(task.operation_class)}
+
+
 def _safe_replay_response(response: dict[str, Any]) -> dict[str, Any]:
     safe = {key: value for key, value in response.items() if key in _SAFE_REPLAY_RESULT_KEYS}
     safe["canonical_input_included"] = False
@@ -357,17 +401,21 @@ async def execute_evaluation_runtime_task(
             detail="Prepared evaluation secret reference is required.",
         )
 
+    grant_id = str(current_user.get("evaluation_grant_id") or "")
+    api_key_id = str(current_user.get("api_key_id") or "")
     try:
-        execution_grant = resolve_active_sandbox_execution_grant(
-            raw,
-            binding_id=spec.binding_id,
-            task_id=task_id,
-        )
         request_mapping = binding_runtime._find_request_mapping(raw, spec.binding_id)
         if spec.method in _BODY_METHODS and request_mapping is None:
             raise EndpointRequestMappingError(
                 "evaluation request body mapping is required for this binding"
             )
+        approved_operation_classes = _prepared_runtime_operation_classes(
+            raw,
+            spec=spec,
+            request_mapping=request_mapping,
+            content=content,
+            secret_reference=secret_reference,
+        )
         request_body = (
             build_external_request_body(spec, request_mapping, body.task_input)
             if request_mapping is not None
@@ -378,15 +426,12 @@ async def execute_evaluation_runtime_task(
         KeyError,
         EndpointBindingError,
         EndpointRequestMappingError,
-        SandboxGrantError,
     ) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
-    grant_id = str(current_user.get("evaluation_grant_id") or "")
-    api_key_id = str(current_user.get("api_key_id") or "")
     request_fingerprint = evaluation_request_fingerprint(
         grant_id=grant_id,
         api_key_id=api_key_id,
@@ -425,8 +470,8 @@ async def execute_evaluation_runtime_task(
             spec,
             task_input=body.task_input,
             request_body=request_body,
-            approved_operation_classes=set(execution_grant["approved_operation_classes"]),
-            approval_reference=str(execution_grant["grant_id"]),
+            approved_operation_classes=approved_operation_classes,
+            approval_reference=grant_id,
             credential_resolver=resolver,
             transport=transport,
         )
