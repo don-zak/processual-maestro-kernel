@@ -16,11 +16,9 @@ from fastapi import APIRouter
 
 from . import cgt_governor as cgt_module
 from . import settings as settings_module
-from .evaluation_runtime import (
-    evaluation_runtime_execution_status,
-    execute_evaluation_runtime_task,
-)
-from .evaluation_runtime_scenarios import evaluation_runtime_status_with_scenarios
+from .evaluation_cgt_runtime import governed_execute_evaluation_runtime_task
+from .evaluation_cgt_status import evaluation_runtime_status_with_governance
+from .evaluation_runtime import evaluation_runtime_execution_status
 from .settings_admin_evaluation_grants import (
     evaluation_access_catalog,
     evaluation_grant_authority,
@@ -80,7 +78,7 @@ def register_external_evaluation_routes() -> None:
             "/evaluation/runtime/status",
             "/evaluation/runtime/status",
             "GET",
-            evaluation_runtime_status_with_scenarios,
+            evaluation_runtime_status_with_governance,
             200,
         ),
         (
@@ -94,7 +92,7 @@ def register_external_evaluation_routes() -> None:
             "/evaluation/runtime/task-execute",
             "/evaluation/runtime/task-execute",
             "POST",
-            execute_evaluation_runtime_task,
+            governed_execute_evaluation_runtime_task,
             200,
         ),
     )
