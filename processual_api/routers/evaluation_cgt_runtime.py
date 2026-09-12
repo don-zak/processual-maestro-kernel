@@ -111,16 +111,22 @@ async def governed_execute_evaluation_runtime_task(
             binding_id=spec.binding_id,
             task_input=body.task_input,
         )
-        denial = await persist_evaluation_cgt_denial(
-            owner_id=owner_id,
-            grant_id=grant_id,
-            api_key_id=api_key_id,
-            idempotency_key=body.idempotency_key,
-            request_fingerprint=request_fingerprint,
-            task_id=task_id,
-            binding_id=spec.binding_id,
-            governance=governance,
-        )
+        try:
+            denial = await persist_evaluation_cgt_denial(
+                owner_id=owner_id,
+                grant_id=grant_id,
+                api_key_id=api_key_id,
+                idempotency_key=body.idempotency_key,
+                request_fingerprint=request_fingerprint,
+                task_id=task_id,
+                binding_id=spec.binding_id,
+                governance=governance,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="CGT denied the request, but durable governance evidence could not be committed.",
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -149,13 +155,26 @@ async def governed_execute_evaluation_runtime_task(
         governance_trace_sha256=str(governance.get("trace_sha256") or ""),
     )
 
-    if record_id:
+    if not record_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Execution completed without a durable record identifier; CGT evidence cannot be finalized.",
+        )
+    try:
         await persist_evaluation_cgt_governance(
             owner_id=owner_id,
             record_id=record_id,
             governance=governance,
             governed_execution_evidence_sha256=combined_sha256,
         )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Execution outcome exists, but CGT governance evidence could not be durably finalized; "
+                "retry the same idempotency key for reconciliation."
+            ),
+        ) from exc
 
     response["governance"] = governance
     response["governance_proof"] = _governance_proof_summary(governance)
