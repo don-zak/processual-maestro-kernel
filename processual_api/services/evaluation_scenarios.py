@@ -57,6 +57,21 @@ _SCENARIOS: tuple[dict[str, Any], ...] = (
             "reason": "Synthetic External Evaluation draft only",
         },
     },
+    {
+        "scenario_id": "INT-BILLING-01",
+        "title": "Integration Billing Account Context",
+        "task_id": "billing.account_context",
+        "kind": "integration_safe_read",
+        "customer_value": (
+            "Prove a second adapter contract by reading and normalizing a synthetic "
+            "billing account through the governed Evaluation runtime."
+        ),
+        "success_signal": (
+            "The billing task is admitted through its prepared binding and safe durable "
+            "evidence is persisted without production access."
+        ),
+        "sample_input": {"account_id": "sandbox-account-001"},
+    },
 )
 
 
