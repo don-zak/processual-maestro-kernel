@@ -219,7 +219,7 @@ def test_owned_crm_preset_ui_only_prepares_and_proves_binding() -> None:
     source = _owned_preset_source()
     for marker in (
         "/settings/admin/evaluation-grants/bindings/presets/crm-context-owned",
-        "https://processual-maestro-kernel.onrender.com",
+        "https://processual-maestro-evaluation-sandbox.zaksam2030.workers.dev",
         "Prepare & prove CRM-CONTEXT-01",
         "project-owned read-only sandbox",
         "short-lived sandbox grant",
@@ -230,6 +230,7 @@ def test_owned_crm_preset_ui_only_prepares_and_proves_binding() -> None:
         "proof.network_request_executed === true",
         "proof.mapping_valid === true",
         "proof.ready_for_task_consumption === true",
+        "refreshBindingCatalog",
         "raw secret: no",
         "production: disabled",
     ):
@@ -239,6 +240,7 @@ def test_owned_crm_preset_ui_only_prepares_and_proves_binding() -> None:
     assert "api_key" not in source
     assert "localStorage" not in source
     assert "sessionStorage" not in source
+    assert "location.reload" not in source
 
 
 def test_category_change_rechecks_authority_and_loads_evaluation_controls() -> None:
