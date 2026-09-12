@@ -47,7 +47,9 @@ async function draftCustomerUpdate(request) {
     return json(400, {
       detail: 'invalid_json',
       draft_only: true,
+      review_required: true,
       applied: false,
+      production_mutation_performed: false,
       production_allowed: false,
     });
   }
@@ -55,7 +57,9 @@ async function draftCustomerUpdate(request) {
     return json(422, {
       detail: 'customer_id_and_proposed_changes_required',
       draft_only: true,
+      review_required: true,
       applied: false,
+      production_mutation_performed: false,
       production_allowed: false,
     });
   }
@@ -66,6 +70,7 @@ async function draftCustomerUpdate(request) {
     draft_only: true,
     applied: false,
     review_required: true,
+    production_mutation_performed: false,
     production_allowed: false,
   });
 }
