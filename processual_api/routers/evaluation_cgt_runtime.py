@@ -12,6 +12,9 @@ from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
     load_evaluation_authority_state,
 )
+from processual_api.services.evaluation_cgt_denial_postgres import (
+    persist_evaluation_cgt_denial,
+)
 from processual_api.services.evaluation_cgt_evidence_postgres import (
     persist_evaluation_cgt_governance,
 )
@@ -20,6 +23,9 @@ from processual_api.services.evaluation_cgt_governance import (
     governed_execution_evidence_sha256,
 )
 from processual_api.services.evaluation_grants import evaluation_binding_allowed
+from processual_api.services.evaluation_runtime_delivery_postgres import (
+    evaluation_request_fingerprint,
+)
 
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from .evaluation_runtime import (
@@ -98,6 +104,23 @@ async def governed_execute_evaluation_runtime_task(
         production_allowed=False,
     )
     if governance.get("disposition") == "deny":
+        request_fingerprint = evaluation_request_fingerprint(
+            grant_id=grant_id,
+            api_key_id=api_key_id,
+            task_id=task_id,
+            binding_id=spec.binding_id,
+            task_input=body.task_input,
+        )
+        denial = await persist_evaluation_cgt_denial(
+            owner_id=owner_id,
+            grant_id=grant_id,
+            api_key_id=api_key_id,
+            idempotency_key=body.idempotency_key,
+            request_fingerprint=request_fingerprint,
+            task_id=task_id,
+            binding_id=spec.binding_id,
+            governance=governance,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -105,6 +128,9 @@ async def governed_execute_evaluation_runtime_task(
                 "decision_id": governance.get("decision_id"),
                 "policy_version": governance.get("policy_version"),
                 "reason_codes": governance.get("reason_codes"),
+                "governance_evidence_persisted": denial["governance_evidence_persisted"],
+                "quota_consumed": False,
+                "network_request_executed": False,
                 "production_allowed": False,
                 "authority_expansion_allowed": False,
             },
