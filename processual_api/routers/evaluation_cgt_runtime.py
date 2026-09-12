@@ -60,6 +60,32 @@ def _governance_proof_summary(governance: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _project_committed_governance_into_execution_status(
+    execution_status: dict[str, Any],
+    *,
+    governance: dict[str, Any],
+    governed_execution_evidence_sha256: str,
+) -> dict[str, Any]:
+    """Make the immediate response reflect the governance evidence just committed.
+
+    The base runtime builds ``execution_status`` before the CGT wrapper appends
+    governance evidence to the durable delivery row. Once that append succeeds,
+    returning the stale pre-CGT status would falsely show null governance fields.
+    This projection is safe because it happens only after the durable commit
+    succeeds and mirrors the allowlisted fields written to PostgreSQL.
+    """
+
+    projected = dict(execution_status or {})
+    projected["governance_decision_id"] = governance.get("decision_id")
+    projected["governance_policy_version"] = governance.get("policy_version")
+    projected["governance_disposition"] = governance.get("disposition")
+    projected["governance_trace_sha256"] = governance.get("trace_sha256")
+    projected["governed_execution_evidence_sha256"] = governed_execution_evidence_sha256
+    projected["governance_enforced_before_admission"] = True
+    projected["governance"] = governance
+    return projected
+
+
 async def governed_execute_evaluation_runtime_task(
     body: EvaluationRuntimeTaskExecuteRequest,
     current_user: dict = Depends(require_scope("run:evaluation")),
@@ -176,6 +202,11 @@ async def governed_execute_evaluation_runtime_task(
             ),
         ) from exc
 
+    response["execution_status"] = _project_committed_governance_into_execution_status(
+        execution_status,
+        governance=governance,
+        governed_execution_evidence_sha256=combined_sha256,
+    )
     response["governance"] = governance
     response["governance_proof"] = _governance_proof_summary(governance)
     response["governance_enforced_before_admission"] = True
@@ -184,4 +215,7 @@ async def governed_execute_evaluation_runtime_task(
     return response
 
 
-__all__ = ["governed_execute_evaluation_runtime_task"]
+__all__ = [
+    "_project_committed_governance_into_execution_status",
+    "governed_execute_evaluation_runtime_task",
+]
