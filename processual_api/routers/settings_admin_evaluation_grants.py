@@ -260,6 +260,7 @@ def _binding_selection(
         else []
     )
     task_set = {str(task_id).strip().lower() for task_id in task_ids}
+    covered_tasks: set[str] = set()
     for binding_id in selected:
         item = next(
             (
@@ -282,7 +283,8 @@ def _binding_selection(
                 status_code=422,
                 detail=f"Prepared evaluation binding is invalid: {binding_id}",
             ) from exc
-        if spec.task_id not in task_set:
+        normalized_task_id = str(spec.task_id or "").strip().lower()
+        if normalized_task_id not in task_set:
             raise HTTPException(
                 status_code=422,
                 detail=(
@@ -290,6 +292,17 @@ def _binding_selection(
                     f"{binding_id}"
                 ),
             )
+        covered_tasks.add(normalized_task_id)
+
+    missing_task_bindings = sorted(task_set - covered_tasks)
+    if missing_task_bindings:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Every runtime evaluation task requires a selected prepared binding. "
+                "Missing binding coverage for: " + ", ".join(missing_task_bindings)
+            ),
+        )
     return selected
 
 
