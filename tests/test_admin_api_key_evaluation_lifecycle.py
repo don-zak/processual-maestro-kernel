@@ -264,8 +264,8 @@ def test_evaluation_module_emits_selection_events_for_live_preview() -> None:
     source = _source(EVALUATION)
     assert "pmk-evaluation-selection-changed" in source
     assert "dispatchEvaluationSelectionChanged" in source
-    assert "host.addEventListener('input', dispatchEvaluationSelectionChanged)" in source
-    assert "host.addEventListener('change', dispatchEvaluationSelectionChanged)" in source
+    assert "document.getElementById(id)?.addEventListener('input', updateEvaluationReadiness)" in source
+    assert "window.addEventListener('pmk-evaluation-selection-changed', updateEvaluationReadiness)" in source
 
 
 def test_evaluation_grant_cards_show_type_tasks_fixed_quota_and_expiry() -> None:
