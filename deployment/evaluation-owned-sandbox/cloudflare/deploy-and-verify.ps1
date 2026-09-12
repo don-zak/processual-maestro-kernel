@@ -124,6 +124,7 @@ try {
     Assert-Equal $Draft.draft_only $true 'Draft route is not marked draft_only.'
     Assert-Equal $Draft.review_required $true 'Draft route does not require review.'
     Assert-False $Draft.applied 'Draft route unexpectedly applied a change.'
+    Assert-False $Draft.production_mutation_performed 'Draft route unexpectedly performed a production mutation.'
     Assert-False $Draft.production_allowed 'Draft route unexpectedly permits production.'
 
     Write-Host ''
