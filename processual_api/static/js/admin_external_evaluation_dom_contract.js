@@ -7,6 +7,8 @@
   const EXTERNAL_CATEGORY = 'external_evaluation';
   const LAUNCH_HANDOFF_SCRIPT_ID = 'admin-evaluation-launch-handoff-script';
   const LAUNCH_HANDOFF_SCRIPT_SRC = '/console/js/admin_evaluation_launch_handoff.js?v=eval-launch-handoff-v1';
+  const BINDING_COVERAGE_SCRIPT_ID = 'admin-evaluation-binding-coverage-guard-script';
+  const BINDING_COVERAGE_SCRIPT_SRC = '/console/js/admin_evaluation_binding_coverage_guard.js?v=eval-binding-coverage-v1';
   const STANDARD_IDS = [
     'admin-api-key-role',
     'admin-api-key-plan-id',
@@ -51,14 +53,22 @@
     return true;
   }
 
-  function ensureLaunchHandoffScript() {
-    if (document.getElementById(LAUNCH_HANDOFF_SCRIPT_ID)) return;
+  function ensureScript(id, src) {
+    if (document.getElementById(id)) return;
     const script = document.createElement('script');
-    script.id = LAUNCH_HANDOFF_SCRIPT_ID;
-    script.src = LAUNCH_HANDOFF_SCRIPT_SRC;
+    script.id = id;
+    script.src = src;
     script.async = true;
     script.referrerPolicy = 'no-referrer';
     document.head.appendChild(script);
+  }
+
+  function ensureLaunchHandoffScript() {
+    ensureScript(LAUNCH_HANDOFF_SCRIPT_ID, LAUNCH_HANDOFF_SCRIPT_SRC);
+  }
+
+  function ensureBindingCoverageGuardScript() {
+    ensureScript(BINDING_COVERAGE_SCRIPT_ID, BINDING_COVERAGE_SCRIPT_SRC);
   }
 
   function ensureEvaluationCard() {
@@ -220,6 +230,7 @@
 
       if (external) {
         ensureLaunchHandoffScript();
+        ensureBindingCoverageGuardScript();
         const mode = document.getElementById('admin-api-key-provisioning-mode');
         if (mode && mode.value !== 'external_evaluation') {
           mode.value = 'external_evaluation';
@@ -228,6 +239,7 @@
         window.PMK_ADMIN_SESSION?.syncEvaluationSelectionState?.();
         window.PMK_ADMIN_SESSION?.check?.();
         window.PMK_ADMIN_EVALUATION_LAUNCH_HANDOFF?.decorate?.();
+        window.PMK_ADMIN_EVALUATION_BINDING_COVERAGE_GUARD?.apply?.();
       }
     } finally {
       applying = false;
