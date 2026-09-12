@@ -28,10 +28,17 @@ function Assert-CloudflareCredential {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         throw "$Name is required in the current PowerShell process."
     }
-    if ($Value.Contains('<') -or $Value.Contains('>') -or $Value -match '^(token|account-id|account_id|placeholder)$') {
-        throw "$Name still contains a placeholder value. Set the real Cloudflare credential before deployment."
+    $normalized = $Value.Trim()
+    if (
+        $normalized.Contains('<') -or
+        $normalized.Contains('>') -or
+        $normalized -match '(?i)^(token|account-id|account_id|placeholder)$' -or
+        $normalized -match '(?i)^(real[_-]?(token|api[_-]?token|account[_-]?id)[_-]?here)$' -or
+        $normalized -match '(?i)(replace|example|dummy|your[_-]?)(token|account[_-]?id)'
+    ) {
+        throw "$Name still contains an example/placeholder value. Set the real Cloudflare credential before deployment."
     }
-    if ($AllowedPattern -and $Value -notmatch $AllowedPattern) {
+    if ($AllowedPattern -and $normalized -notmatch $AllowedPattern) {
         throw "$Name has an invalid format for Cloudflare deployment."
     }
 }
