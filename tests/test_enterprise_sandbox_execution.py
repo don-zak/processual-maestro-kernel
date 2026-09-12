@@ -26,6 +26,13 @@ class _Resolver:
         )
 
 
+class _DraftResolver:
+    async def resolve(self, *, credential_profile_id: str, binding_id: str):
+        assert credential_profile_id == "enterprise_core_api_reference"
+        assert binding_id == "crm.customer_update_draft"
+        return SandboxCredentialEnvelope(headers={}, source="anonymous_public_sandbox")
+
+
 def _spec() -> EnterpriseEndpointBindingSpec:
     return EnterpriseEndpointBindingSpec(
         binding_id="billing.account",
@@ -50,6 +57,28 @@ def _spec() -> EnterpriseEndpointBindingSpec:
     )
 
 
+def _draft_spec() -> EnterpriseEndpointBindingSpec:
+    return EnterpriseEndpointBindingSpec(
+        binding_id="crm.customer_update_draft",
+        display_name="CRM customer update draft",
+        adapter_contract_id="crm",
+        task_id="crm.customer_update_draft",
+        credential_profile_id="enterprise_core_api_reference",
+        environment="sandbox",
+        base_url="https://sandbox.example.test",
+        method="POST",
+        path="/users/1/update-draft",
+        required_scope_ids=["crm:read", "customer:update"],
+        request_headers={"Accept": "application/json"},
+        response_data_path="$",
+        field_mapping={
+            "customer_id": "$.customer_id",
+            "proposed_changes": "$.proposed_changes",
+        },
+        success_codes=[200],
+    )
+
+
 def _transport(status: int = 200, *, content_type: str = "application/json"):
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer should-never-leak"
@@ -66,6 +95,28 @@ def _transport(status: int = 200, *, content_type: str = "application/json"):
                 }
             },
             headers={"content-type": content_type},
+        )
+
+    return httpx.MockTransport(handler)
+
+
+def _draft_transport(*, applied: bool = False):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert str(request.url) == "https://sandbox.example.test/users/1/update-draft"
+        return httpx.Response(
+            200,
+            json={
+                "draft_id": "crm-draft-evaluation-001",
+                "customer_id": "sandbox-customer-001",
+                "proposed_changes": {"segment": "evaluation-review"},
+                "draft_only": True,
+                "review_required": True,
+                "applied": applied,
+                "production_mutation_performed": False,
+                "production_allowed": False,
+            },
+            headers={"content-type": "application/json"},
         )
 
     return httpx.MockTransport(handler)
@@ -110,6 +161,74 @@ def test_live_sandbox_execution_returns_canonical_proof(monkeypatch) -> None:
     assert result["production_allowed"] is False
     assert result["runtime_connector_approved"] is False
     assert "should-never-leak" not in repr(result)
+
+
+def test_draft_execution_surfaces_only_verified_non_mutation_facts(monkeypatch) -> None:
+    async def public_addresses(hostname: str, port: int):
+        assert hostname == "sandbox.example.test"
+        assert port == 443
+        return ("203.0.113.10",)
+
+    monkeypatch.setattr(
+        "processual_api.integrations.enterprise_sandbox_execution.resolve_public_addresses",
+        public_addresses,
+    )
+    result = asyncio.run(
+        execute_sandbox_binding(
+            _draft_spec(),
+            task_input={
+                "customer_id": "sandbox-customer-001",
+                "proposed_changes": {"segment": "evaluation-review"},
+            },
+            request_body={
+                "customer_id": "sandbox-customer-001",
+                "proposed_changes": {"segment": "evaluation-review"},
+            },
+            approved_operation_classes={"draft"},
+            approval_reference="eval_test",
+            credential_resolver=_DraftResolver(),
+            transport=_draft_transport(),
+        )
+    )
+
+    assert result["operation_class"] == "draft"
+    assert result["review_required"] is True
+    assert result["applied"] is False
+    assert result["production_mutation_performed"] is False
+    assert result["production_allowed"] is False
+    assert result["raw_response_included"] is False
+    assert "draft_id" not in result
+
+
+def test_draft_execution_fails_closed_on_unsafe_downstream_claim(monkeypatch) -> None:
+    async def public_addresses(hostname: str, port: int):
+        return ("203.0.113.10",)
+
+    monkeypatch.setattr(
+        "processual_api.integrations.enterprise_sandbox_execution.resolve_public_addresses",
+        public_addresses,
+    )
+    with pytest.raises(
+        SandboxExecutionError,
+        match="sandbox_draft_safety_contract_invalid:applied",
+    ):
+        asyncio.run(
+            execute_sandbox_binding(
+                _draft_spec(),
+                task_input={
+                    "customer_id": "sandbox-customer-001",
+                    "proposed_changes": {"segment": "evaluation-review"},
+                },
+                request_body={
+                    "customer_id": "sandbox-customer-001",
+                    "proposed_changes": {"segment": "evaluation-review"},
+                },
+                approved_operation_classes={"draft"},
+                approval_reference="eval_test",
+                credential_resolver=_DraftResolver(),
+                transport=_draft_transport(applied=True),
+            )
+        )
 
 
 def test_execution_requires_exact_approved_operation_class(monkeypatch) -> None:
