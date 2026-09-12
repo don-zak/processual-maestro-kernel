@@ -9,6 +9,8 @@
   const LAUNCH_HANDOFF_SCRIPT_SRC = '/console/js/admin_evaluation_launch_handoff.js?v=eval-launch-handoff-v1';
   const BINDING_COVERAGE_SCRIPT_ID = 'admin-evaluation-binding-coverage-guard-script';
   const BINDING_COVERAGE_SCRIPT_SRC = '/console/js/admin_evaluation_binding_coverage_guard.js?v=eval-binding-coverage-v1';
+  const BINDING_AUTOSELECT_SCRIPT_ID = 'admin-evaluation-binding-autoselect-script';
+  const BINDING_AUTOSELECT_SCRIPT_SRC = '/console/js/admin_evaluation_binding_autoselect.js?v=eval-binding-autoselect-v1';
   const CRM_BUNDLE_SCRIPT_ID = 'admin-evaluation-crm-bundle-script';
   const CRM_BUNDLE_SCRIPT_SRC = '/console/js/admin_evaluation_crm_bundle.js?v=eval-crm-bundle-v1';
   const GRANT_ARCHIVE_SCRIPT_ID = 'admin-evaluation-grant-archive-script';
@@ -61,6 +63,7 @@
 
   function ensureLaunchHandoffScript() { ensureScript(LAUNCH_HANDOFF_SCRIPT_ID, LAUNCH_HANDOFF_SCRIPT_SRC); }
   function ensureBindingCoverageGuardScript() { ensureScript(BINDING_COVERAGE_SCRIPT_ID, BINDING_COVERAGE_SCRIPT_SRC); }
+  function ensureBindingAutoselectScript() { ensureScript(BINDING_AUTOSELECT_SCRIPT_ID, BINDING_AUTOSELECT_SCRIPT_SRC); }
   function ensureCrmBundleScript() { ensureScript(CRM_BUNDLE_SCRIPT_ID, CRM_BUNDLE_SCRIPT_SRC); }
   function ensureGrantArchiveScript() { ensureScript(GRANT_ARCHIVE_SCRIPT_ID, GRANT_ARCHIVE_SCRIPT_SRC); }
 
@@ -199,6 +202,7 @@
       if (external) {
         ensureLaunchHandoffScript();
         ensureBindingCoverageGuardScript();
+        ensureBindingAutoselectScript();
         ensureCrmBundleScript();
         ensureGrantArchiveScript();
         const mode = document.getElementById('admin-api-key-provisioning-mode');
@@ -209,6 +213,7 @@
         window.PMK_ADMIN_SESSION?.syncEvaluationSelectionState?.();
         window.PMK_ADMIN_SESSION?.check?.();
         window.PMK_ADMIN_EVALUATION_LAUNCH_HANDOFF?.decorate?.();
+        window.PMK_ADMIN_EVALUATION_BINDING_AUTOSELECT?.apply?.();
         window.PMK_ADMIN_EVALUATION_BINDING_COVERAGE_GUARD?.apply?.();
         window.PMK_ADMIN_EVALUATION_CRM_BUNDLE?.initialize?.();
         window.PMK_ADMIN_EVALUATION_GRANT_ARCHIVE?.initialize?.();
