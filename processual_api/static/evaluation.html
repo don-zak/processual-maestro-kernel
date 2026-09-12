@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
+  <meta name="referrer" content="no-referrer" />
   <title>Processual Maestro — External Evaluation</title>
   <style>
     :root {
@@ -52,11 +53,21 @@
     .scenario-card.locked { opacity:.72; }
     .scenario-title { font-weight:800; margin-bottom:6px; }
     .scenario-meta { font-size:12px; color:var(--muted); margin-top:6px; }
+    .proof-journey { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px; }
+    .proof-step { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .proof-step strong { display:block; margin-bottom:5px; font-size:13px; }
+    .proof-step span { color:var(--muted); font-size:12px; line-height:1.5; }
+    .business-proof { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:14px; }
+    .business-proof div { padding:12px 13px; border:1px solid var(--line); border-radius:10px; background:#0a1425; color:#cad5eb; font-size:13px; }
+    details { margin-top:14px; border:1px solid var(--line); border-radius:12px; background:var(--panel2); }
+    summary { cursor:pointer; padding:13px 15px; font-weight:760; color:#dbe6fa; }
+    details > div { padding:0 15px 15px; }
     pre { overflow:auto; white-space:pre-wrap; word-break:break-word; background:#081223; padding:13px; border-radius:9px; border:1px solid var(--line); min-height:54px; }
     .contract { margin-top:22px; display:grid; gap:10px; }
     .contract div { display:flex; gap:10px; align-items:flex-start; color:var(--muted); font-size:13px; }
     .contract strong { color:var(--text); min-width:155px; }
-    @media (max-width:620px) { .contract div { display:block; } .contract strong { display:block; margin-bottom:2px; } .stage-track { grid-template-columns:1fr 1fr; } }
+    @media (max-width:760px) { .proof-journey { grid-template-columns:1fr 1fr; } }
+    @media (max-width:620px) { .contract div { display:block; } .contract strong { display:block; margin-bottom:2px; } .stage-track,.proof-journey { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
 <body>
@@ -74,6 +85,18 @@
   </header>
 
   <section class="card" style="margin-top:22px">
+    <div class="eyebrow">Governed proof journey</div>
+    <h2 style="margin-top:6px">See exactly what Maestro allowed, enforced, and proved</h2>
+    <div class="muted">The evaluator does not need Admin access. This workspace turns backend authority and durable evidence into a customer-readable proof flow.</div>
+    <div class="proof-journey" aria-label="Governed proof journey">
+      <div class="proof-step"><strong>1 · Authority issued</strong><span>The grant defines the evaluation type, approved tasks, bindings, quota, expiry, and sandbox-only boundary.</span></div>
+      <div class="proof-step"><strong>2 · Execution admitted</strong><span>Only a request inside that sealed authority can consume one admitted-execution unit.</span></div>
+      <div class="proof-step"><strong>3 · Policy enforced</strong><span>Replay, conflict, quota, binding, revocation, and production restrictions are enforced before or during admission.</span></div>
+      <div class="proof-step"><strong>4 · Evidence produced</strong><span>Safe durable evidence records the outcome without persisting the raw API key or raw task input.</span></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:14px">
     <h2>Connect evaluation credential</h2>
     <div class="muted">The raw API key stays in this page's memory only. This page does not persist it in browser storage.</div>
     <label for="api-key">Evaluation API key</label>
@@ -93,14 +116,28 @@
   </section>
 
   <section class="card" style="margin-top:14px">
-    <div class="label">Evaluation identity</div>
-    <div class="grid" style="margin-top:10px">
-      <div><div class="label">Grant ID</div><div id="grant-id" class="compact-value">—</div></div>
-      <div><div class="label">Key ID / prefix</div><div id="key-id" class="compact-value">—</div></div>
-      <div><div class="label">Expires</div><div id="expires-at" class="compact-value">—</div></div>
-      <div><div class="label">Subscription</div><div class="compact-value ok">Not required</div></div>
+    <h2>What this evaluation is designed to prove</h2>
+    <div class="business-proof">
+      <div>Only approved tasks and prepared bindings can be admitted.</div>
+      <div>A fresh admitted execution consumes exactly one evaluation unit.</div>
+      <div>A durable replay consumes no additional quota.</div>
+      <div>A conflicting idempotency request is rejected without consuming quota.</div>
+      <div>Revocation ends authority while historical evidence remains reviewable.</div>
+      <div>Production execution is never authorized by an External Evaluation grant.</div>
     </div>
   </section>
+
+  <details>
+    <summary>Technical evaluation identity</summary>
+    <div>
+      <div class="grid" style="margin-top:0">
+        <div><div class="label">Grant ID</div><div id="grant-id" class="compact-value">—</div></div>
+        <div><div class="label">Key ID / prefix</div><div id="key-id" class="compact-value">—</div></div>
+        <div><div class="label">Expires</div><div id="expires-at" class="compact-value">—</div></div>
+        <div><div class="label">Subscription</div><div class="compact-value ok">Not required</div></div>
+      </div>
+    </div>
+  </details>
 
   <section class="card" style="margin-top:14px">
     <div class="label">Authoritative Evaluation quota</div>
@@ -142,21 +179,23 @@
     </div>
   </section>
 
-  <section class="card" style="margin-top:14px">
-    <h2>Execute an authorized sandbox task</h2>
-    <div class="muted">The guided scenario prepares these fields from the authority already sealed into the grant. The server still rejects any task or binding outside the grant envelope.</div>
-    <label for="task-id">Canonical task ID</label>
-    <input id="task-id" autocomplete="off" placeholder="Prepared automatically by the selected scenario" />
-    <label for="binding-id">Prepared binding ID</label>
-    <input id="binding-id" autocomplete="off" placeholder="Prepared automatically when this grant contains a runnable binding" />
-    <label for="idempotency-key">Idempotency key</label>
-    <input id="idempotency-key" autocomplete="off" />
-    <div class="muted" style="margin-top:6px">Reuse the same idempotency key only when retrying the same logical operation. A durable replay consumes +0 quota.</div>
-    <label for="task-input">Task input (JSON)</label>
-    <textarea id="task-input" spellcheck="false">{}</textarea>
-    <button id="execute" type="button" disabled>Execute admitted sandbox task</button>
-    <pre id="result">No execution submitted.</pre>
-  </section>
+  <details>
+    <summary>Technical execution details</summary>
+    <div>
+      <div class="muted">These fields are intentionally secondary. The server still rejects any task or binding outside the grant envelope.</div>
+      <label for="task-id">Canonical task ID</label>
+      <input id="task-id" autocomplete="off" placeholder="Prepared automatically by the selected scenario" />
+      <label for="binding-id">Prepared binding ID</label>
+      <input id="binding-id" autocomplete="off" placeholder="Prepared automatically when this grant contains a runnable binding" />
+      <label for="idempotency-key">Idempotency key</label>
+      <input id="idempotency-key" autocomplete="off" />
+      <div class="muted" style="margin-top:6px">Reuse the same idempotency key only when retrying the same logical operation. A durable replay consumes +0 quota.</div>
+      <label for="task-input">Task input (JSON)</label>
+      <textarea id="task-input" spellcheck="false">{}</textarea>
+      <button id="execute" type="button" disabled>Execute admitted sandbox task</button>
+      <pre id="result">No execution submitted.</pre>
+    </div>
+  </details>
 
   <section class="card" style="margin-top:14px">
     <h2>Customer evaluation receipt</h2>
