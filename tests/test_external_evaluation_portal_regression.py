@@ -68,7 +68,7 @@ def test_external_evaluation_portal_exposes_safe_authoritative_scope_and_progres
     js = PORTAL_JS.read_text(encoding="utf-8")
 
     for marker in (
-        "Evaluation identity",
+        "Technical evaluation identity",
         "Authorized scope",
         "Execution progress",
         "Customer evaluation receipt",
@@ -76,6 +76,10 @@ def test_external_evaluation_portal_exposes_safe_authoritative_scope_and_progres
         "Executing",
         "Evidence persisted",
         "Subscription</strong><span>No subscription",
+        "Authority issued",
+        "Execution admitted",
+        "Policy enforced",
+        "Evidence produced",
     ):
         assert marker in html
 
