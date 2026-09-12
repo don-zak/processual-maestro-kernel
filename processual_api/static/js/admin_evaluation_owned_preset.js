@@ -5,6 +5,7 @@
   const EXTERNAL_CATEGORY = 'external_evaluation';
 
   const selectedBindingIds = new Set();
+  const issuingGrantIds = new Set();
   let bindingObserver = null;
   let observedBindingList = null;
   let restoringBindingSelection = false;
@@ -37,6 +38,37 @@
 
   function externalEvaluationSelected() {
     return text(document.getElementById('admin-api-key-category')?.value) === EXTERNAL_CATEGORY;
+  }
+
+  function bindIssueKeyCaptureGuard() {
+    if (document.documentElement.dataset.evaluationIssueKeyCaptureBound === 'true') return;
+    document.documentElement.dataset.evaluationIssueKeyCaptureBound = 'true';
+    document.addEventListener('click', async (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target?.closest?.('[data-eval-issue]');
+      if (!button) return;
+      const grantId = text(button.dataset.evalIssue);
+      const issueKey = window.PMK_ADMIN_EVALUATION_GRANTS?.issueKey;
+      if (!grantId || typeof issueKey !== 'function') return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (issuingGrantIds.has(grantId)) return;
+
+      issuingGrantIds.add(grantId);
+      const originalLabel = button.textContent || 'Issue API Key';
+      button.disabled = true;
+      button.textContent = 'Issuing API Key…';
+      try {
+        await issueKey(grantId);
+      } finally {
+        issuingGrantIds.delete(grantId);
+        if (button.isConnected) {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
+      }
+    }, true);
   }
 
   function captureBindingSelection(event) {
@@ -229,6 +261,7 @@
   }
 
   function scheduleRender() {
+    bindIssueKeyCaptureGuard();
     if (render()) return;
     let attempts = 0;
     const timer = window.setInterval(() => {
