@@ -26,7 +26,7 @@ function Assert-False {
 function Assert-CloudflareCredential {
     param([string]$Name, [string]$Value, [string]$AllowedPattern)
     if ([string]::IsNullOrWhiteSpace($Value)) {
-        throw "$Name is required in the current PowerShell process."
+        throw "$Name is required when environment-variable authentication is selected."
     }
     $normalized = $Value.Trim()
     if (
@@ -34,9 +34,10 @@ function Assert-CloudflareCredential {
         $normalized.Contains('>') -or
         $normalized -match '(?i)^(token|account-id|account_id|placeholder)$' -or
         $normalized -match '(?i)^(real[_-]?(token|api[_-]?token|account[_-]?id)[_-]?here)$' -or
+        $normalized -match '(?i)^(paste[_-]?the[_-]?real[_-]?(token|api[_-]?token|account[_-]?id))$' -or
         $normalized -match '(?i)(replace|example|dummy|your[_-]?)(token|account[_-]?id)'
     ) {
-        throw "$Name still contains an example/placeholder value. Set the real Cloudflare credential before deployment."
+        throw "$Name still contains an example/placeholder value. Set the real Cloudflare credential or remove both Cloudflare credential environment variables and use 'wrangler login'."
     }
     if ($AllowedPattern -and $normalized -notmatch $AllowedPattern) {
         throw "$Name has an invalid format for Cloudflare deployment."
@@ -57,8 +58,25 @@ try {
         throw 'Refusing to deploy from a dirty working tree.'
     }
 
-    Assert-CloudflareCredential -Name 'CLOUDFLARE_API_TOKEN' -Value $env:CLOUDFLARE_API_TOKEN -AllowedPattern ''
-    Assert-CloudflareCredential -Name 'CLOUDFLARE_ACCOUNT_ID' -Value $env:CLOUDFLARE_ACCOUNT_ID -AllowedPattern '^[A-Za-z0-9_-]+$'
+    $HasApiToken = -not [string]::IsNullOrWhiteSpace($env:CLOUDFLARE_API_TOKEN)
+    $HasAccountId = -not [string]::IsNullOrWhiteSpace($env:CLOUDFLARE_ACCOUNT_ID)
+
+    if ($HasApiToken -or $HasAccountId) {
+        if (-not ($HasApiToken -and $HasAccountId)) {
+            throw "Cloudflare environment-variable authentication is incomplete. Set both CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, or remove both and use 'wrangler login'."
+        }
+        Assert-CloudflareCredential -Name 'CLOUDFLARE_API_TOKEN' -Value $env:CLOUDFLARE_API_TOKEN -AllowedPattern '^[\x21-\x7E]+$'
+        Assert-CloudflareCredential -Name 'CLOUDFLARE_ACCOUNT_ID' -Value $env:CLOUDFLARE_ACCOUNT_ID -AllowedPattern '^[0-9A-Fa-f]{32}$'
+        Write-Host 'Cloudflare authentication: validated environment variables.'
+    }
+    else {
+        Write-Host 'Cloudflare authentication: validating local Wrangler OAuth session...'
+        npx --yes wrangler@4.131.1 whoami | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "No usable Cloudflare environment credentials and Wrangler OAuth is not authenticated. Run 'npx --yes wrangler@4.131.1 login' first."
+        }
+        Write-Host 'Cloudflare authentication: Wrangler OAuth session verified.'
+    }
 
     Write-Host "[1/6] Exact source SHA verified: $CurrentSha"
 
