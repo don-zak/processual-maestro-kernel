@@ -31,6 +31,29 @@ from .evaluation_runtime import (
 )
 
 
+def _governance_proof_summary(governance: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "layer": "CGT Governance",
+        "decision": governance.get("disposition"),
+        "decision_id": governance.get("decision_id"),
+        "policy_version": governance.get("policy_version"),
+        "governance_action": governance.get("governance_action"),
+        "reason_codes": list(governance.get("reason_codes") or []),
+        "review_required": governance.get("review_required") is True,
+        "authority_expansion_allowed": False,
+        "production_allowed": False,
+        "governance_enforced_before_admission": True,
+        "capabilities_proven": [
+            "grant_authority_cannot_be_expanded_by_governance",
+            "policy_decision_precedes_quota_admission",
+            "safe_reads_can_be_allowed",
+            "drafts_can_require_supervisor_review",
+            "unsupported_or_production_authority_is_denied_fail_closed",
+            "governance_trace_is_hash_bound_to_execution_evidence",
+        ],
+    }
+
+
 async def governed_execute_evaluation_runtime_task(
     body: EvaluationRuntimeTaskExecuteRequest,
     current_user: dict = Depends(require_scope("run:evaluation")),
@@ -83,6 +106,7 @@ async def governed_execute_evaluation_runtime_task(
                 "policy_version": governance.get("policy_version"),
                 "reason_codes": governance.get("reason_codes"),
                 "production_allowed": False,
+                "authority_expansion_allowed": False,
             },
         )
 
@@ -108,6 +132,7 @@ async def governed_execute_evaluation_runtime_task(
         )
 
     response["governance"] = governance
+    response["governance_proof"] = _governance_proof_summary(governance)
     response["governance_enforced_before_admission"] = True
     response["governed_execution_evidence_sha256"] = combined_sha256
     response["policy_authority_can_expand_grant"] = False
