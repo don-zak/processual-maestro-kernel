@@ -55,6 +55,17 @@ _AUDIT_EVIDENCE_KEYS = frozenset(
         "task_injection_sha256",
         "evidence_sha256",
         "completed_at",
+        "review_required",
+        "applied",
+        "production_mutation_performed",
+        "governance",
+        "governance_decision_id",
+        "governance_policy_version",
+        "governance_disposition",
+        "governance_trace_sha256",
+        "governed_execution_evidence_sha256",
+        "governance_enforced_before_admission",
+        "quota_consumed",
         "evaluation_stage",
         "maestro_task_completed",
         "raw_task_input_persisted",
@@ -99,6 +110,40 @@ def _safe_audit_evidence(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     safe = {key: value[key] for key in _AUDIT_EVIDENCE_KEYS if key in value}
+    governance = safe.get("governance")
+    if isinstance(governance, dict):
+        governance_safe = {
+            key: governance[key]
+            for key in (
+                "decision_id",
+                "policy_id",
+                "policy_version",
+                "task_id",
+                "binding_id",
+                "operation_class",
+                "rank",
+                "reward",
+                "policy",
+                "governance_action",
+                "disposition",
+                "reason_codes",
+                "review_required",
+                "production_allowed",
+                "authority_expansion_allowed",
+                "task_input_sha256",
+                "trace_sha256",
+                "cgt_governance",
+                "provider_independent",
+                "raw_task_input_included",
+                "raw_secret_visible",
+            )
+            if key in governance
+        }
+        governance_safe["production_allowed"] = False
+        governance_safe["authority_expansion_allowed"] = False
+        governance_safe["raw_task_input_included"] = False
+        governance_safe["raw_secret_visible"] = False
+        safe["governance"] = governance_safe
     safe["raw_task_input_persisted"] = False
     safe["raw_secret_visible"] = False
     return safe
@@ -133,6 +178,13 @@ def _customer_execution_receipt(row: EvaluationRuntimeDelivery) -> dict[str, Any
         "network_request_executed": evidence.get("network_request_executed") is True,
         "mapping_valid": evidence.get("mapping_valid") is True,
         "evidence_sha256": evidence.get("evidence_sha256"),
+        "governance_decision_id": evidence.get("governance_decision_id"),
+        "governance_policy_version": evidence.get("governance_policy_version"),
+        "governance_disposition": evidence.get("governance_disposition"),
+        "governance_trace_sha256": evidence.get("governance_trace_sha256"),
+        "governed_execution_evidence_sha256": evidence.get("governed_execution_evidence_sha256"),
+        "governance_enforced_before_admission": evidence.get("governance_enforced_before_admission") is True,
+        "governance": evidence.get("governance"),
         "evidence_persisted": row.evidence_persisted_at is not None,
         "production_allowed": False,
         "raw_task_input_persisted": False,
