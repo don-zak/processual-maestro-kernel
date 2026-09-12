@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 from starlette.requests import Request
 
@@ -97,9 +95,7 @@ async def test_launch_ticket_is_one_time_and_session_is_long_enough(monkeypatch)
 @pytest.mark.asyncio
 async def test_workspace_blocks_direct_top_level_navigation():
     middleware = SecurityHeadersMiddleware(lambda scope, receive, send: None)
-    response = await middleware._evaluation_workspace_gate(
-        _request(destination="document")
-    )
+    response = await middleware._evaluation_workspace_gate(_request(destination="document"))
     assert response is not None
     assert response.status_code == 403
 
@@ -107,9 +103,7 @@ async def test_workspace_blocks_direct_top_level_navigation():
 @pytest.mark.asyncio
 async def test_workspace_iframe_still_requires_launch_authority():
     middleware = SecurityHeadersMiddleware(lambda scope, receive, send: None)
-    response = await middleware._evaluation_workspace_gate(
-        _request(destination="iframe")
-    )
+    response = await middleware._evaluation_workspace_gate(_request(destination="iframe"))
     assert response is not None
     assert response.status_code == 403
 
