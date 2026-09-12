@@ -192,11 +192,8 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
     )
     monkeypatch.setattr(
         evaluation_runtime,
-        "resolve_active_sandbox_execution_grant",
-        lambda _raw, *, binding_id, task_id: {
-            "grant_id": "sandbox-grant-a",
-            "approved_operation_classes": ["read"],
-        },
+        "_prepared_runtime_operation_classes",
+        lambda _raw, *, spec, request_mapping, content, secret_reference: {"read"},
     )
 
     async def replay_claim(**_kwargs):
@@ -231,3 +228,81 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
 
     assert result["execution_id"] == "exec-1"
     assert result["idempotent_replay"] is True
+
+
+def test_runtime_authority_does_not_depend_on_transient_sandbox_grant(monkeypatch) -> None:
+    raw = _runtime_raw()
+    spec = SimpleNamespace(
+        binding_id="binding-a",
+        task_id="crm.customer_context",
+        method="GET",
+        adapter_contract_id="crm",
+    )
+
+    async def load_shared_authority(_owner_id: str) -> dict:
+        return raw
+
+    monkeypatch.setattr(evaluation_runtime, "load_evaluation_authority_state", load_shared_authority)
+    monkeypatch.setattr(binding_runtime, "_find_binding", lambda _raw, _binding_id: spec)
+    monkeypatch.setattr(binding_runtime, "_find_request_mapping", lambda _raw, _binding_id: None)
+    monkeypatch.setattr(sandbox_runtime, "_content_contract", lambda _raw, _binding_id: {"ok": True})
+    monkeypatch.setattr(sandbox_runtime, "_secret_reference", lambda _raw, _binding_id: {"ref": "public"})
+    monkeypatch.setattr(
+        evaluation_runtime,
+        "_prepared_runtime_operation_classes",
+        lambda _raw, *, spec, request_mapping, content, secret_reference: {"read"},
+    )
+
+    async def claimed(**_kwargs):
+        return {"status": "claimed", "record": {"record_id": "record-a"}}
+
+    monkeypatch.setattr(evaluation_runtime, "claim_evaluation_execution", claimed)
+
+    class Transport:
+        last_verified_peer = "203.0.113.10"
+
+    monkeypatch.setattr(evaluation_runtime, "VerifiedPeerSandboxTransport", Transport)
+
+    async def executed(*_args, **kwargs):
+        assert kwargs["approved_operation_classes"] == {"read"}
+        assert kwargs["approval_reference"] == "grant-a"
+        return {
+            "execution_id": "exec-a",
+            "operation_class": "read",
+            "http_status": 200,
+            "network_request_executed": True,
+            "mapping_valid": True,
+            "ready_for_task_consumption": True,
+            "response_sha256": "resp",
+            "task_injection_sha256": "task",
+            "evidence_sha256": "evidence",
+            "completed_at": datetime.now(UTC).isoformat(),
+            "production_allowed": False,
+        }
+
+    monkeypatch.setattr(evaluation_runtime, "execute_sandbox_binding", executed)
+
+    async def complete(**_kwargs):
+        return None
+
+    async def decorate(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(evaluation_runtime, "complete_evaluation_execution", complete)
+    monkeypatch.setattr(evaluation_runtime, "_decorate_execution_with_status", decorate)
+
+    result = asyncio.run(
+        evaluation_runtime.execute_evaluation_runtime_task(
+            body=evaluation_runtime.EvaluationRuntimeTaskExecuteRequest(
+                task_id="crm.customer_context",
+                binding_id="binding-a",
+                idempotency_key="request-live-001",
+                task_input={"customer_id": "123"},
+            ),
+            current_user=_runtime_identity(),
+        )
+    )
+
+    assert result["evaluation_runtime"] is True
+    assert result["evaluation_grant_id"] == "grant-a"
+    assert result["production_allowed"] is False
