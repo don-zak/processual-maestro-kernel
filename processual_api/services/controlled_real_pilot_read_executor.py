@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from processual_api.integrations.sandbox_verified_transport import VerifiedPeerSandboxTransport
 from processual_api.services.controlled_real_pilot import (
     ControlledRealPilotAdmissionError,
     ControlledRealPilotGrant,
@@ -65,14 +66,15 @@ async def execute_controlled_real_read(
     resource_id: str,
     path: str,
     credential_headers: dict[str, str] | None = None,
-    transport: httpx.AsyncBaseTransport,
+    transport: httpx.AsyncBaseTransport | None = None,
     timeout_seconds: float = 8.0,
 ) -> dict[str, Any]:
     """Execute one exact GET after fail-closed admission and return safe evidence.
 
-    The caller must provide a peer-verifying transport. The transport must expose
-    ``last_verified_peer`` after a successful request; otherwise the operation is
-    rejected even when the HTTP response itself succeeds.
+    Production use defaults to :class:`VerifiedPeerSandboxTransport`, which
+    resolves only public destination addresses and rejects a connected peer that
+    does not match the pre-resolved set. Tests may inject a transport, but an
+    injected transport must still expose ``last_verified_peer`` after success.
     """
 
     try:
@@ -100,10 +102,11 @@ async def execute_controlled_real_read(
     host = str(destination_host or "").strip().lower()
     url = f"https://{host}{normalized_path}"
     headers = _safe_credentials(credential_headers)
+    selected_transport = transport or VerifiedPeerSandboxTransport()
 
     try:
         async with httpx.AsyncClient(
-            transport=transport,
+            transport=selected_transport,
             timeout=httpx.Timeout(float(timeout_seconds)),
             follow_redirects=False,
             trust_env=False,
@@ -111,6 +114,8 @@ async def execute_controlled_real_read(
             response = await client.get(url, headers=headers)
     except httpx.HTTPError as exc:
         raise ControlledRealPilotReadError("controlled_real_pilot_http_request_failed") from exc
+    except ValueError as exc:
+        raise ControlledRealPilotReadError(str(exc)) from exc
 
     if 300 <= response.status_code < 400:
         raise ControlledRealPilotReadError("controlled_real_pilot_redirect_blocked")
@@ -119,7 +124,7 @@ async def execute_controlled_real_read(
             f"controlled_real_pilot_http_status_not_allowed:{response.status_code}"
         )
 
-    peer = str(getattr(transport, "last_verified_peer", "") or "").strip()
+    peer = str(getattr(selected_transport, "last_verified_peer", "") or "").strip()
     if not peer:
         raise ControlledRealPilotReadError("controlled_real_pilot_peer_unverified")
 
