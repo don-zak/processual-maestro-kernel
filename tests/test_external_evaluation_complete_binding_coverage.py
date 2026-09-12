@@ -11,6 +11,7 @@ from processual_api.routers import settings_admin_evaluation_grants as grant_rou
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN_GUARD = ROOT / "processual_api" / "static" / "js" / "admin_evaluation_binding_coverage_guard.js"
+ADMIN_BUNDLE = ROOT / "processual_api" / "static" / "js" / "admin_evaluation_crm_bundle.js"
 ADMIN_DOM = ROOT / "processual_api" / "static" / "js" / "admin_external_evaluation_dom_contract.js"
 
 
@@ -91,3 +92,23 @@ def test_admin_guard_fails_closed_until_every_selected_task_has_a_binding() -> N
 
     assert "admin_evaluation_binding_coverage_guard.js?v=eval-binding-coverage-v1" in dom
     assert "ensureBindingCoverageGuardScript" in dom
+
+
+def test_admin_complete_crm_bundle_runs_all_three_presets_before_grant_creation() -> None:
+    bundle = ADMIN_BUNDLE.read_text(encoding="utf-8")
+    dom = ADMIN_DOM.read_text(encoding="utf-8")
+
+    for marker in (
+        "CRM-CONTEXT-01",
+        "CRM-SUMMARY-01",
+        "CRM-DRAFT-01",
+        "Prepare complete CRM bundle",
+        "CRM BUNDLE READY",
+        "Grant creation remains locked until all three live proofs succeed",
+        "refreshBindingCatalog",
+        "PMK_ADMIN_EVALUATION_BINDING_COVERAGE_GUARD",
+    ):
+        assert marker in bundle
+
+    assert "admin_evaluation_crm_bundle.js?v=eval-crm-bundle-v1" in dom
+    assert "ensureCrmBundleScript" in dom
