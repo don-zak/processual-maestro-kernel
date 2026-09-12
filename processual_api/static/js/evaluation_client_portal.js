@@ -9,6 +9,7 @@
     allowedTasks: [],
     allowedBindings: [],
     guidedScenarios: [],
+    latestExecution: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -36,6 +37,73 @@
     return 'value';
   }
 
+  function scenarioCandidates() {
+    return Array.isArray(runtimeState.guidedScenarios)
+      ? runtimeState.guidedScenarios.filter((scenario) => scenario && scenario.scenario_id)
+      : [];
+  }
+
+  function runnableScenarios() {
+    return scenarioCandidates().filter((scenario) => scenario.runnable === true);
+  }
+
+  function hasPreparedExecution() {
+    return Boolean($('task-id').value.trim() && $('binding-id').value.trim());
+  }
+
+  function setNextAction(title, copy, state) {
+    $('next-action-title').textContent = title;
+    $('next-action-copy').textContent = copy;
+    $('next-action-state').textContent = state;
+  }
+
+  function renderNextAction() {
+    const credential = text(runtimeState.credentialStatus).toLowerCase();
+    const latest = runtimeState.latestExecution;
+
+    if (!apiKey || credential === 'disconnected') {
+      setNextAction(
+        'Connect your Evaluation key',
+        'Start by connecting the one-time Evaluation credential. Status reads consume +0 quota.',
+        'Not connected'
+      );
+      return;
+    }
+    if (credential === 'connecting') {
+      setNextAction('Reading sealed authority…', 'Maestro is loading grant scope, quota and scenario readiness from the backend.', 'Connecting');
+      return;
+    }
+    if (credential !== 'active') {
+      setNextAction(
+        'Credential is not executable',
+        `Current credential state is ${credential || 'unavailable'}. No new execution can be admitted.`,
+        credential || 'Unavailable'
+      );
+      return;
+    }
+    if (Number(runtimeState.quotaRemaining) <= 0) {
+      setNextAction('Evaluation quota is exhausted', 'Status and historical receipt remain readable, but no fresh execution can be admitted.', 'Quota exhausted');
+      return;
+    }
+    if (runtimeState.executing || latest?.status === 'executing') {
+      setNextAction('Execution is in progress', 'Keep this workspace open while Maestro updates outcome and durable evidence.', 'Executing');
+      return;
+    }
+    if (latest?.evidence_persisted) {
+      setNextAction('Review the completed proof', 'Inspect the evidence status, quota effect and customer evaluation receipt. You may prepare another authorized scenario if quota remains.', 'Evidence ready');
+      return;
+    }
+    if (hasPreparedExecution()) {
+      setNextAction('Execute the prepared sandbox scenario', 'Review the synthetic input in Technical execution details, then submit it for governed admission.', 'Ready to execute');
+      return;
+    }
+    if (runnableScenarios().length) {
+      setNextAction('Choose a runnable proof scenario', 'Select a green scenario card or use the selector, then prepare it from sealed backend authority.', 'Scenario available');
+      return;
+    }
+    setNextAction('No runnable scenario yet', 'This grant is readable, but a matching prepared sandbox binding is still required before task execution.', 'Read-only');
+  }
+
   function canExecute() {
     return Boolean(
       apiKey
@@ -49,6 +117,7 @@
 
   function syncExecuteButton() {
     $('execute').disabled = !canExecute();
+    renderNextAction();
   }
 
   async function request(path, options = {}) {
@@ -89,10 +158,16 @@
     });
   }
 
-  function scenarioCandidates() {
-    return Array.isArray(runtimeState.guidedScenarios)
-      ? runtimeState.guidedScenarios.filter((scenario) => scenario && scenario.scenario_id)
-      : [];
+  function selectScenario(scenarioId) {
+    const scenario = scenarioCandidates().find((item) => text(item.scenario_id) === text(scenarioId));
+    if (!scenario || scenario.runnable !== true) return;
+    $('scenario-select').value = text(scenario.scenario_id);
+    document.querySelectorAll('.scenario-card').forEach((card) => {
+      card.classList.toggle('selected', card.dataset.scenarioId === text(scenario.scenario_id));
+    });
+    $('prepare-scenario').disabled = false;
+    setMessage(`Selected ${text(scenario.title || scenario.scenario_id)}. Prepare it to load the backend-authorized task, binding, and synthetic input.`, 'ok');
+    renderNextAction();
   }
 
   function renderScenarios() {
@@ -100,7 +175,8 @@
     const select = $('scenario-select');
     const summary = $('scenario-summary');
     const candidates = scenarioCandidates();
-    const runnable = candidates.filter((scenario) => scenario.runnable === true);
+    const runnable = runnableScenarios();
+    const previouslySelected = select.value;
 
     grid.innerHTML = '';
     select.innerHTML = '';
@@ -110,6 +186,7 @@
       select.innerHTML = '<option value="">No guided scenario available</option>';
       select.disabled = true;
       $('prepare-scenario').disabled = true;
+      renderNextAction();
       return;
     }
 
@@ -117,9 +194,23 @@
       const ready = scenario.runnable === true;
       const card = document.createElement('div');
       card.className = `scenario-card ${ready ? 'ready' : 'locked'}`;
+      card.dataset.scenarioId = text(scenario.scenario_id);
+      if (ready) {
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', `Select ${text(scenario.title || scenario.scenario_id)}`);
+      }
+
+      const head = document.createElement('div');
+      head.className = 'scenario-head';
       const title = document.createElement('div');
       title.className = 'scenario-title';
       title.textContent = text(scenario.title || scenario.scenario_id);
+      const badge = document.createElement('span');
+      badge.className = `scenario-badge ${ready ? 'ready' : 'locked'}`;
+      badge.textContent = ready ? 'Runnable' : 'Locked';
+      head.append(title, badge);
+
       const value = document.createElement('div');
       value.className = 'muted';
       value.textContent = text(scenario.customer_value || 'Governed External Evaluation scenario.');
@@ -127,10 +218,17 @@
       meta.className = 'scenario-meta';
       const readiness = text(scenario.readiness || (ready ? 'ready' : 'locked'));
       meta.textContent = `${text(scenario.scenario_id)} · ${text(scenario.kind || 'scenario')} · ${readiness}`;
-      card.append(title, value, meta);
+      card.append(head, value, meta);
       grid.appendChild(card);
 
       if (ready) {
+        card.addEventListener('click', () => selectScenario(scenario.scenario_id));
+        card.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            selectScenario(scenario.scenario_id);
+          }
+        });
         const option = document.createElement('option');
         option.value = text(scenario.scenario_id);
         option.textContent = `${text(scenario.title || scenario.scenario_id)} — ${text(scenario.scenario_id)}`;
@@ -141,6 +239,13 @@
     if (runnable.length) {
       summary.textContent = `${runnable.length} of ${candidates.length} proof-of-value scenario(s) are runnable under the sealed backend grant authority.`;
       select.disabled = false;
+      const selected = runnable.some((scenario) => text(scenario.scenario_id) === previouslySelected)
+        ? previouslySelected
+        : text(runnable[0].scenario_id);
+      select.value = selected;
+      document.querySelectorAll('.scenario-card').forEach((card) => {
+        card.classList.toggle('selected', card.dataset.scenarioId === selected);
+      });
       $('prepare-scenario').disabled = false;
     } else {
       summary.textContent = `${candidates.length} scenario(s) are authorized for visibility, but none is runnable yet. The backend requires task-execute plus a matching prepared sandbox binding.`;
@@ -148,6 +253,7 @@
       select.disabled = true;
       $('prepare-scenario').disabled = true;
     }
+    renderNextAction();
   }
 
   function prepareSelectedScenario() {
@@ -168,6 +274,7 @@
     $('binding-id').value = bindings.length === 1 ? text(bindings[0]) : '';
     $('task-input').value = JSON.stringify(scenario.sample_input || {}, null, 2);
     $('idempotency-key').value = nextIdempotencyKey();
+    $('technical-execution').open = true;
     $('result').textContent = bindings.length === 1
       ? `Scenario ${text(scenario.scenario_id)} prepared from backend authority. Review the synthetic input, then execute.`
       : `Scenario ${text(scenario.scenario_id)} prepared. Select one matching backend-authorized binding before execution.`;
@@ -242,9 +349,8 @@
     runtimeState.quotaRemaining = Number(quota.remaining ?? 0);
     runtimeState.allowedTasks = Array.isArray(payload.allowed_task_ids) ? payload.allowed_task_ids : [];
     runtimeState.allowedBindings = Array.isArray(payload.allowed_binding_ids) ? payload.allowed_binding_ids : [];
-    runtimeState.guidedScenarios = Array.isArray(payload.guided_scenarios)
-      ? payload.guided_scenarios
-      : [];
+    runtimeState.guidedScenarios = Array.isArray(payload.guided_scenarios) ? payload.guided_scenarios : [];
+    runtimeState.latestExecution = latest;
 
     $('credential').textContent = text(payload.credential_status || 'unknown');
     $('credential').className = statusClass(payload.credential_status);
@@ -309,6 +415,7 @@
       runtimeState.allowedTasks = [];
       runtimeState.allowedBindings = [];
       runtimeState.guidedScenarios = [];
+      runtimeState.latestExecution = null;
       renderScenarios();
       syncExecuteButton();
       setMessage(`Unable to read evaluation status: ${error.message || error}`, 'bad');
@@ -411,6 +518,7 @@
     runtimeState.allowedTasks = [];
     runtimeState.allowedBindings = [];
     runtimeState.guidedScenarios = [];
+    runtimeState.latestExecution = null;
     syncExecuteButton();
     try {
       await refreshStatus();
@@ -429,6 +537,7 @@
       allowedTasks: [],
       allowedBindings: [],
       guidedScenarios: [],
+      latestExecution: null,
     };
     $('task-id').value = '';
     $('binding-id').value = '';
@@ -442,10 +551,11 @@
   });
 
   $('prepare-scenario').addEventListener('click', prepareSelectedScenario);
-  $('scenario-select').addEventListener('change', syncExecuteButton);
+  $('scenario-select').addEventListener('change', () => selectScenario($('scenario-select').value));
   $('task-id').addEventListener('input', syncExecuteButton);
   $('binding-id').addEventListener('input', syncExecuteButton);
   $('execute').addEventListener('click', executeTask);
   $('idempotency-key').value = nextIdempotencyKey();
   renderScenarios();
+  renderNextAction();
 })();
