@@ -3,8 +3,10 @@ param(
     [string]$ExpectedSha = '',
     [string]$PythonBin = 'python',
     [string]$ResultsDir = 'launch-hardening-results',
+    [switch]$IncludeStaticReleaseCheck,
     [switch]$IncludeProductionReleaseGate,
     [switch]$IncludeDocker,
+    [switch]$IncludeCompose,
     [switch]$IncludeGitHub,
     [switch]$IncludeRemote,
     [string]$RemoteBaseUrl = '',
@@ -88,21 +90,33 @@ Invoke-PythonPytest 'launch-targeted-tests' @(
     'tests/test_auth_fallback_production_boundary.py',
     'tests/test_secret_encryption_readiness_regression.py',
     'tests/test_fastapi_integration_smoke.py',
-    'tests/test_final_release_checklist_regression.py'
+    'tests/test_final_release_checklist_regression.py',
+    'tests/test_release_check_operator_contract.py'
 ) | Out-Null
 
-if ($IncludeProductionReleaseGate) {
-    Invoke-Captured 'production-release-gate' $PythonBin @('scripts/release_check.py') | Out-Null
+if ($IncludeStaticReleaseCheck) {
+    Invoke-Captured 'static-release-check' $PythonBin @('scripts/release_check.py', '--skip-docker') | Out-Null
 } else {
-    Add-Skip 'production-release-gate' 'Use -IncludeProductionReleaseGate only after loading the intended production/staging environment without printing secrets.'
+    Add-Skip 'static-release-check' 'Use -IncludeStaticReleaseCheck in a clean release workspace; local .venv/cache files intentionally fail this check.'
+}
+
+if ($IncludeProductionReleaseGate) {
+    Invoke-Captured 'production-release-gate' $PythonBin @('-m', 'processual_api.release_gate') | Out-Null
+} else {
+    Add-Skip 'production-release-gate' 'Use -IncludeProductionReleaseGate only after loading the intended staging/production environment without printing secrets.'
 }
 
 if ($IncludeDocker) {
     Require-Command 'docker'
-    Invoke-Captured 'docker-compose-config' 'docker' @('compose', 'config', '--quiet') | Out-Null
     Invoke-Captured 'docker-public-build' 'docker' @('build', '--target', 'public', '-t', 'pmk-public-launch-qualification:local', '.') | Out-Null
     Invoke-Captured 'docker-public-no-private-cgt' 'docker' @('run', '--rm', '--entrypoint', 'sh', 'pmk-public-launch-qualification:local', '-c', 'test ! -e /app/cgtlib/private && python -c "import cgtlib, cgtlib._backend; assert not cgtlib._backend.HAS_PRIVATE_COMPUTE"') | Out-Null
+} else {
+    Add-Skip 'docker-image-qualification' 'Use -IncludeDocker on a computer with Docker; this mode does not require Compose secrets.'
+}
 
+if ($IncludeCompose) {
+    Require-Command 'docker'
+    Invoke-Captured 'docker-compose-config' 'docker' @('compose', 'config', '--quiet') | Out-Null
     try {
         $ports = (& docker compose config | Out-String)
         $grafanaLoopback = $ports -match '127\.0\.0\.1:3000:3000'
@@ -112,7 +126,7 @@ if ($IncludeDocker) {
         Add-Result 'grafana-loopback-binding' $false $_.Exception.GetType().Name
     }
 } else {
-    Add-Skip 'docker-qualification' 'Use -IncludeDocker on a computer with Docker and the intended environment file loaded.'
+    Add-Skip 'compose-qualification' 'Use -IncludeCompose only after the intended Compose environment is loaded securely.'
 }
 
 if ($IncludeGitHub) {
