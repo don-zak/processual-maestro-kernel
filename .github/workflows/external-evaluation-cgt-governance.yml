@@ -6,6 +6,7 @@ on:
       - processual_api/services/evaluation_cgt_governance.py
       - processual_api/services/evaluation_cgt_evidence_postgres.py
       - processual_api/services/evaluation_cgt_denial_postgres.py
+      - processual_api/services/evaluation_maestro_consumption.py
       - processual_api/services/evaluation_grants.py
       - processual_api/services/evaluation_runtime_delivery_postgres.py
       - processual_api/routers/evaluation_cgt_probe.py
@@ -15,6 +16,7 @@ on:
       - tests/test_external_evaluation_cgt_governance.py
       - tests/test_external_evaluation_cgt_denial_contract.py
       - tests/test_external_evaluation_cgt_deny_probe.py
+      - tests/test_external_evaluation_maestro_consumption.py
       - tests/test_evaluation_cgt_execution_status_projection.py
       - .github/workflows/external-evaluation-cgt-governance.yml
   workflow_dispatch:
@@ -47,6 +49,7 @@ jobs:
             tests/test_external_evaluation_cgt_governance.py \
             tests/test_external_evaluation_cgt_denial_contract.py \
             tests/test_external_evaluation_cgt_deny_probe.py \
+            tests/test_external_evaluation_maestro_consumption.py \
             tests/test_evaluation_cgt_execution_status_projection.py
       - name: Prove existing Evaluation runtime authority boundaries
         run: |
