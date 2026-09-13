@@ -36,6 +36,16 @@ def test_postgres_recovery_harness_exposes_only_sanitized_diagnostics() -> None:
     assert "Get-SafeDiagnostic $restoreResult.text" in text
 
 
+def test_postgres_recovery_harness_prioritizes_terminal_alembic_failure() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "[switch]$PreferTail" in text
+    assert "$safe.Substring($safe.Length - $Limit)" in text
+    assert "@('-W','ignore','-m','alembic','heads')" in text
+    assert "@('-W','ignore','-m','alembic','current')" in text
+    assert "Get-SafeDiagnostic $current.text 900 -PreferTail" in text
+
+
 def test_postgres_recovery_harness_does_not_print_connection_urls() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 
