@@ -71,9 +71,9 @@ Core values include:
 - `ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON`
 - `ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION`
 
-Provider-specific credentials are required only for the provider selected by policy. Real secret values must remain in `.env` outside version control, Docker/Kubernetes secrets, Google Secret Manager, or an equivalent deployment secret manager.
+Provider-specific credentials are required only for the provider selected by policy. Real secret values must remain in `.env` outside version control or be injected from a deployment secret manager such as **Docker secrets**, **Kubernetes secrets**, **Google Secret Manager**, or an equivalent managed secret store.
 
-Provider credentials are customer/deployer-owned and are not bundled with Processual Maestro.
+Provider credentials are not bundled with Processual Maestro. They remain customer/deployer-owned and must never be committed to the repository or emitted into logs, reports, browser storage, or qualification evidence.
 
 ---
 
@@ -150,6 +150,7 @@ After loading the intended staging/production environment without printing secre
   -ExpectedSha <exact-sha> `
   -IncludeProductionReleaseGate `
   -IncludeDocker `
+  -IncludeCompose `
   -IncludeGitHub `
   -IncludeRemote `
   -RemoteBaseUrl https://<candidate-host>
