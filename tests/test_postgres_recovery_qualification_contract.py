@@ -46,6 +46,20 @@ def test_postgres_recovery_harness_prioritizes_terminal_alembic_failure() -> Non
     assert "Get-SafeDiagnostic $current.text 900 -PreferTail" in text
 
 
+def test_postgres_recovery_harness_classifies_missing_client_tools_as_blockers() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "function Test-CommandAvailable" in text
+    assert "postgres-backup-tools" in text
+    assert "postgres-restore-tools" in text
+    assert "Missing required PostgreSQL client commands" in text
+    assert "Test-CommandAvailable 'pg_dump'" in text
+    assert "Test-CommandAvailable 'pg_restore'" in text
+    assert "Test-CommandAvailable 'psql'" in text
+    assert "Backup not attempted because required PostgreSQL client commands are unavailable." in text
+    assert "Restore smoke not attempted because required PostgreSQL client commands are unavailable." in text
+
+
 def test_postgres_recovery_harness_does_not_print_connection_urls() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 
