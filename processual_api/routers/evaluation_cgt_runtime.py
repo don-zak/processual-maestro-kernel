@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
@@ -39,6 +40,8 @@ from .evaluation_runtime import (
     _require_evaluation_credential,
     execute_evaluation_runtime_task,
 )
+
+logger = logging.getLogger("processual_api.routers.evaluation_cgt_runtime")
 
 
 def _governance_proof_summary(governance: dict[str, Any]) -> dict[str, Any]:
@@ -214,12 +217,37 @@ async def governed_execute_evaluation_runtime_task(
             maestro_consumption_sha256=str(maestro_receipt.get("receipt_sha256") or ""),
         )
     except Exception as exc:
+        # Keep customer output free of stack traces/raw material, while making the
+        # internal failure diagnosable from Render logs. The idempotency key is
+        # intentionally NOT logged.
+        logger.exception(
+            "evaluation_maestro_consumption_failed grant_id=%s api_key_id=%s task_id=%s binding_id=%s execution_id=%s record_id=%s error_type=%s",
+            grant_id,
+            api_key_id,
+            task_id,
+            spec.binding_id,
+            execution_id,
+            record_id,
+            type(exc).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "External operation succeeded, but Maestro did not complete safe task consumption; "
-                "retry the same idempotency key for fail-closed reconciliation."
-            ),
+            detail={
+                "code": "evaluation_maestro_consumption_failed",
+                "message": (
+                    "External operation succeeded, but Maestro did not complete safe task consumption; "
+                    "retry the same idempotency key for fail-closed reconciliation."
+                ),
+                "external_operation_succeeded": True,
+                "maestro_task_completed": False,
+                "retry_same_idempotency_key": True,
+                "quota_replay_semantics": "+0",
+                "network_replay_required": False,
+                "record_id": record_id,
+                "execution_id": execution_id,
+                "raw_task_input_included": False,
+                "raw_secret_visible": False,
+            },
         ) from exc
 
     try:
@@ -232,12 +260,28 @@ async def governed_execute_evaluation_runtime_task(
             maestro_governed_evidence_sha256=final_sha256,
         )
     except Exception as exc:
+        logger.exception(
+            "evaluation_governed_evidence_finalize_failed grant_id=%s api_key_id=%s execution_id=%s record_id=%s error_type=%s",
+            grant_id,
+            api_key_id,
+            execution_id,
+            record_id,
+            type(exc).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Execution and Maestro consumption exist, but governed evidence could not be durably finalized; "
-                "retry the same idempotency key for reconciliation."
-            ),
+            detail={
+                "code": "evaluation_governed_evidence_finalize_failed",
+                "message": (
+                    "Execution and Maestro consumption exist, but governed evidence could not be durably finalized; "
+                    "retry the same idempotency key for reconciliation."
+                ),
+                "retry_same_idempotency_key": True,
+                "quota_replay_semantics": "+0",
+                "network_replay_required": False,
+                "record_id": record_id,
+                "execution_id": execution_id,
+            },
         ) from exc
 
     response["execution_status"] = _project_committed_governance_into_execution_status(
