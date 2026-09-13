@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---------- private target (full monorepo, includes proprietary math) ----------
 FROM base AS private
 
+ENV REQUIRE_PRIVATE_CGT_FOR_READINESS=true
+
 COPY pyproject.toml README.md ./
 COPY cgtlib ./cgtlib
 COPY processual_kernel ./processual_kernel
@@ -42,6 +44,8 @@ CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-
 
 # ---------- public target (no proprietary math) --------------------------------
 FROM base AS public
+
+ENV REQUIRE_PRIVATE_CGT_FOR_READINESS=false
 
 COPY pyproject.toml README.md ./
 COPY processual_kernel ./processual_kernel
