@@ -2,6 +2,8 @@
 
 This file is the authoritative pre-launch checklist for Processual Maestro. A task is not complete because code exists; it is complete only when its acceptance evidence is recorded and the relevant CI/runtime qualification is green.
 
+Items under **Secondary Optional Roadmap — Post-launch / Non-blocking** are explicitly excluded from the launch gate. They may be implemented later when justified by customer, pilot, regulatory, or operational demand and must not delay the current qualification/release sequence.
+
 ## Qualification Phase Policy
 
 Two qualification phases are intentionally separated:
@@ -210,6 +212,48 @@ The final-launch hardening requirements below are **not a blocker for completing
 - [ ] No unresolved launch-blocking P0/P1 issues.
 - [ ] Final audit/report reviewed by a human operator; system does not auto-declare production readiness.
 - [ ] Merge/release only after explicit operator authorization.
+
+## Secondary Optional Roadmap — Post-launch / Non-blocking
+
+> **Launch disposition:** Everything in this section is optional for the current launch. None of these items may block the current qualification, controlled pilot, release-candidate freeze, or operational-launch gate. Promote an item into the launch-critical plan only through an explicit operator/product decision backed by a concrete customer, regulatory, or operational requirement.
+
+### O1 — Deterministic Drift Detection
+
+- [ ] Add continuous drift detection that reuses the existing authority snapshots, policy versions, execution evidence, and governance traces instead of creating a parallel authority system.
+- [ ] Start with deterministic, explainable drift classes:
+  - authority/grant drift;
+  - policy/configuration drift;
+  - tool/connector/schema drift;
+  - behavioral/outcome drift only where the signal and baseline are sufficiently defined to be reviewable.
+- [ ] Persist drift evidence with type, severity, observed/expected state, timestamps, source version/hash, and operator disposition.
+- [ ] Fail closed where drift invalidates an authority assumption, but never let drift detection automatically widen scopes, grants, quota, or execution authority.
+- [ ] Add alerting and review workflow only after the detector semantics are test-backed and false-positive behavior is understood.
+
+### O2 — Agent Registry & Discovery
+
+- [ ] Build a central Agent Registry for agents observed or explicitly registered through Maestro boundaries.
+- [ ] Track, where applicable: agent identity, owner/tenant, environment, lifecycle state, runtime/model, tools/connectors, authority/grant references, policy pack, risk tier, first/last seen, and latest evidence reference.
+- [ ] Treat an unknown/unregistered agent as an observation requiring quarantine/review where policy requires it; registration must never imply execution authority.
+- [ ] Add external discovery connectors later for selected agent/cloud platforms only when a real integration or customer requirement justifies them.
+- [ ] Preserve provenance for discovered metadata and distinguish reported metadata from Maestro-observed evidence.
+
+### O3 — Policy & Compliance Mapping Library
+
+- [ ] Build versioned policy/compliance packs above the existing governance/evidence layer, without coupling the launch to a target count of frameworks.
+- [ ] Each pack should record source/framework, version, applicability, control mappings, evidence requirements, enforcement mappings, owner, review date, and implementation status.
+- [ ] Prioritize frameworks from actual customer/regulatory demand (for example NIST AI RMF, ISO/IEC 42001, or EU AI Act mappings where applicable) instead of pursuing feature-count parity with another vendor.
+- [ ] Keep a strict distinction between compliance mapping/evidence guidance and runtime enforcement; a mapped control is not automatically an enforced control.
+- [ ] Add new packs incrementally with tests/validation for mapping integrity and version changes.
+
+### Optional-roadmap architecture invariant
+
+`Policy/Compliance Library + Drift Detection + Agent Registry -> governance/discovery context only`
+
+These capabilities are not alternative execution-authority sources. The launch/runtime authority path remains:
+
+`Policy / Authority -> Admission -> Execution -> Evidence`
+
+Grant/authority envelopes and CGT admission remain fail-closed. Optional governance/discovery capabilities may detect, describe, classify, or escalate state, but they may not issue credentials, expand scopes, grant quota, admit execution, or write the final qualification verdict.
 
 ## Non-Negotiable Authority Invariant
 
