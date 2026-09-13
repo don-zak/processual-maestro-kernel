@@ -29,12 +29,19 @@ async def evaluation_runtime_status_with_governance(
         )
         if latest:
             payload["latest_governance"] = latest["governance"]
+            payload["fate_vector"] = latest["governance"].get("fate_vector")
+            payload["fate_vector_basis"] = latest["governance"].get("fate_vector_basis")
             payload["governance_enforced_before_admission"] = latest[
                 "governance_enforced_before_admission"
             ]
             payload["governed_execution_evidence_sha256"] = latest[
                 "governed_execution_evidence_sha256"
             ]
+            payload["maestro_task_completed"] = latest.get("maestro_task_completed") is True
+            payload["maestro_consumption"] = latest.get("maestro_consumption") or None
+            payload["maestro_governed_evidence_sha256"] = latest.get(
+                "maestro_governed_evidence_sha256"
+            )
     payload["governance_layer"] = "cgt"
     payload["governance_can_expand_grant"] = False
     payload["production_allowed"] = False
