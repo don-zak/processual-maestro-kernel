@@ -133,7 +133,10 @@ Invoke-PythonPytest 'launch-targeted-tests' @(
     'tests/test_fastapi_integration_smoke.py',
     'tests/test_final_release_checklist_regression.py',
     'tests/test_release_check_operator_contract.py',
-    'tests/test_adapter_registry_safe_logging.py'
+    'tests/test_adapter_registry_safe_logging.py',
+    'tests/test_sensitive_auth_safe_logging_regression.py',
+    'tests/test_llm_reporter_safe_failure_regression.py',
+    'tests/test_postgres_recovery_qualification_contract.py'
 ) | Out-Null
 
 if ($IncludeStaticReleaseCheck) {
