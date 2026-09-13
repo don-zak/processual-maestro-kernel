@@ -59,6 +59,12 @@ def _set_strong_production_env(monkeypatch) -> None:
         ("REDIS_PASSWORD", "password", "REDIS_PASSWORD"),
         ("GRAFANA_ADMIN_PASSWORD", "admin", "GRAFANA_ADMIN_PASSWORD"),
         ("CORS_ORIGINS", "*", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://user:pass@example.com", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://console.example.com/path", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://console.example.com?x=1", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://console.example.com#fragment", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "ftp://console.example.com", "CORS_ORIGINS"),
     ],
 )
 def test_production_rejects_weak_startup_settings(monkeypatch, env_name, env_value, message):
@@ -79,6 +85,22 @@ def test_production_accepts_strong_settings_and_forces_debug_false(monkeypatch):
     assert settings.is_production is True
     assert settings.debug is False
     assert settings.cors_origins == ["https://console.example.com"]
+
+
+def test_production_normalizes_multiple_explicit_cors_origins(monkeypatch):
+    api_settings_cls = _api_settings_class(monkeypatch)
+    _set_strong_production_env(monkeypatch)
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        " https://console.example.com , https://zaxam.net/ , ,",
+    )
+
+    settings = api_settings_cls()
+
+    assert settings.cors_origins == [
+        "https://console.example.com",
+        "https://zaxam.net",
+    ]
 
 
 def test_non_production_can_enable_debug_with_strong_local_settings(monkeypatch):
