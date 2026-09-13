@@ -76,6 +76,12 @@ def test_docker_compose_dependency_services_keep_passwords_healthchecks_and_netw
     assert_contains_all(text, required, "docker compose dependency hardening")
 
 
+def test_docker_compose_has_no_duplicate_grafana_dashboard_mount():
+    text = read(COMPOSE)
+    mount = "./ops/grafana/dashboards:/var/lib/grafana/dashboards"
+    assert text.count(mount) == 1, "Grafana dashboard mount must appear exactly once"
+
+
 def test_dockerfile_keeps_public_and_private_targets_with_non_root_runtime():
     text = read(DOCKERFILE)
 
