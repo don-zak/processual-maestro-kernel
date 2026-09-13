@@ -73,7 +73,8 @@ def test_docker_compose_dependency_services_keep_passwords_healthchecks_and_netw
     required = [
         "redis:7-alpine",
         'command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]',
-        'test: ["CMD", "redis-cli", "--raw", "incr", "ping"]',
+        "REDISCLI_AUTH=${REDIS_PASSWORD:?REDIS_PASSWORD is required}",
+        'test: ["CMD", "redis-cli", "ping"]',
         "postgres:16-alpine",
         "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}",
         "pg_isready",
