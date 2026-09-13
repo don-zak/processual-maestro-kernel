@@ -22,7 +22,7 @@ $JsonPath = Join-Path $ResultsDir 'postgres-recovery-report.json'
 $Results = New-Object System.Collections.ArrayList
 
 function Get-SafeDiagnostic {
-    param([string]$Text, [int]$Limit = 900)
+    param([string]$Text, [int]$Limit = 900, [switch]$PreferTail)
     if ([string]::IsNullOrWhiteSpace($Text)) { return 'no diagnostic output' }
     $safe = $Text
     $safe = $safe -replace '(?i)(postgres(?:ql)?(?:\+asyncpg)?://)[^\s\]\)\}\>]+', '$1<redacted>'
@@ -30,7 +30,13 @@ function Get-SafeDiagnostic {
     $safe = $safe -replace '(?i)(password|token|secret|api[_-]?key)\s*[=:]\s*[^\s;,]+', '$1=<redacted>'
     $safe = $safe -replace '(?i)(PGPASSWORD\s*[=:]\s*)[^\s;,]+', '$1<redacted>'
     $safe = ($safe -replace "`r?`n", ' | ').Trim()
-    if ($safe.Length -gt $Limit) { $safe = $safe.Substring(0, $Limit) + ' ...<truncated>' }
+    if ($safe.Length -gt $Limit) {
+        if ($PreferTail) {
+            $safe = '...<truncated> ' + $safe.Substring($safe.Length - $Limit)
+        } else {
+            $safe = $safe.Substring(0, $Limit) + ' ...<truncated>'
+        }
+    }
     return $safe
 }
 
@@ -142,9 +148,9 @@ if ([string]::IsNullOrWhiteSpace($sourceUrl)) {
     Add-Blocked 'database-url' ("Environment variable {0} is not loaded." -f $SourceUrlEnvName)
 } else {
     Add-Pass 'database-url' ("{0} is loaded; value redacted" -f $SourceUrlEnvName)
-    $heads = Invoke-Captured $PythonBin @('-m','alembic','heads')
+    $heads = Invoke-Captured $PythonBin @('-W','ignore','-m','alembic','heads')
     if ($heads.code -ne 0) {
-        Add-Fail 'alembic-heads' ("exit_code={0}; diagnostic={1}" -f $heads.code, (Get-SafeDiagnostic $heads.text))
+        Add-Fail 'alembic-heads' ("exit_code={0}; diagnostic={1}" -f $heads.code, (Get-SafeDiagnostic $heads.text 900 -PreferTail))
     } else {
         $headIds = @()
         foreach ($line in ($heads.text -split "`r?`n")) {
@@ -154,13 +160,13 @@ if ([string]::IsNullOrWhiteSpace($sourceUrl)) {
             Add-Fail 'alembic-heads' 'No Alembic head revision could be parsed.'
         } else {
             Add-Pass 'alembic-heads' ("head_count={0}; heads={1}" -f $headIds.Count, ($headIds -join ','))
-            $current = Invoke-Captured $PythonBin @('-m','alembic','current')
+            $current = Invoke-Captured $PythonBin @('-W','ignore','-m','alembic','current')
             if ($current.code -ne 0) {
-                Add-Fail 'alembic-current' ("exit_code={0}; diagnostic={1}" -f $current.code, (Get-SafeDiagnostic $current.text))
+                Add-Fail 'alembic-current' ("exit_code={0}; diagnostic={1}" -f $current.code, (Get-SafeDiagnostic $current.text 900 -PreferTail))
             } else {
                 $missing = @($headIds | Where-Object { $current.text -notmatch [regex]::Escape($_) })
                 if ($missing.Count -eq 0) { Add-Pass 'alembic-current' 'Database revision includes every repository head.' }
-                else { Add-Fail 'alembic-current' ("Database is not at repository head; missing_head_count={0}; current={1}" -f $missing.Count, (Get-SafeDiagnostic $current.text 300)) }
+                else { Add-Fail 'alembic-current' ("Database is not at repository head; missing_head_count={0}; current={1}" -f $missing.Count, (Get-SafeDiagnostic $current.text 300 -PreferTail)) }
             }
         }
     }
@@ -179,7 +185,7 @@ if ($IncludeBackup) {
                 Invoke-Captured 'pg_dump' @('--format=custom','--no-owner','--no-privileges','--file', $BackupPath)
             }
             if ($backupResult.code -ne 0) {
-                Add-Fail 'postgres-backup' ("pg_dump exit_code={0}; diagnostic={1}" -f $backupResult.code, (Get-SafeDiagnostic $backupResult.text))
+                Add-Fail 'postgres-backup' ("pg_dump exit_code={0}; diagnostic={1}" -f $backupResult.code, (Get-SafeDiagnostic $backupResult.text 900 -PreferTail))
                 Add-Skip 'postgres-backup-readability' 'Backup creation failed.'
             } elseif (-not (Test-Path $BackupPath)) {
                 Add-Fail 'postgres-backup' 'pg_dump exited successfully but the expected backup file is absent.'
@@ -190,7 +196,7 @@ if ($IncludeBackup) {
                 if ($list.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($list.text)) {
                     Add-Pass 'postgres-backup-readability' 'pg_restore --list successfully parsed the backup archive.'
                 } else {
-                    Add-Fail 'postgres-backup-readability' ("pg_restore --list exit_code={0}; diagnostic={1}" -f $list.code, (Get-SafeDiagnostic $list.text))
+                    Add-Fail 'postgres-backup-readability' ("pg_restore --list exit_code={0}; diagnostic={1}" -f $list.code, (Get-SafeDiagnostic $list.text 900 -PreferTail))
                 }
             }
         } catch {
@@ -222,7 +228,7 @@ if ($IncludeRestoreSmoke) {
                 Invoke-Captured 'pg_restore' @('--clean','--if-exists','--no-owner','--no-privileges','--exit-on-error','--dbname', $target.database, $BackupPath)
             }
             if ($restoreResult.code -ne 0) {
-                Add-Fail 'postgres-restore-smoke' ("pg_restore exit_code={0}; diagnostic={1}" -f $restoreResult.code, (Get-SafeDiagnostic $restoreResult.text))
+                Add-Fail 'postgres-restore-smoke' ("pg_restore exit_code={0}; diagnostic={1}" -f $restoreResult.code, (Get-SafeDiagnostic $restoreResult.text 900 -PreferTail))
             } else {
                 $verifyResult = Invoke-WithPgEnvironment $target {
                     Invoke-Captured 'psql' @('--no-psqlrc','--tuples-only','--no-align','--command','SELECT version_num FROM alembic_version ORDER BY version_num;')
@@ -230,7 +236,7 @@ if ($IncludeRestoreSmoke) {
                 if ($verifyResult.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($verifyResult.text)) {
                     Add-Pass 'postgres-restore-smoke' 'Restore completed and alembic_version is readable in the separate restore target.'
                 } else {
-                    Add-Fail 'postgres-restore-smoke' ("restore completed but verification query exit_code={0}; diagnostic={1}" -f $verifyResult.code, (Get-SafeDiagnostic $verifyResult.text))
+                    Add-Fail 'postgres-restore-smoke' ("restore completed but verification query exit_code={0}; diagnostic={1}" -f $verifyResult.code, (Get-SafeDiagnostic $verifyResult.text 900 -PreferTail))
                 }
             }
         } catch {
