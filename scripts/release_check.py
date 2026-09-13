@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
-"""Pre-release validation script for Processual Maestro Kernel v2.0.0.
+"""Static pre-release validation for Processual Maestro Kernel v2.0.0.
 
-Checks:
-1. No .venv directory in the tree
-2. No .env file in the release (must use .env.example / .env.production.example)
-3. No __pycache__ / .pyc / .pyo / .pytest_cache / .hypothesis artifacts
-4. No runtime artifacts in processual_api/data/ (only .gitkeep allowed)
-5. No weak / default secrets in .env or docker-compose.yml
-6. All required env vars documented in .env.production.example
-7. Public Docker target builds without error (if Docker available)
-8. pytest completes successfully with no failed/error tests
-9. README exists and contains no placeholder text
+This script validates repository/package hygiene, documented production
+configuration, the public Docker artifact boundary, and pytest. Passing this
+script is necessary evidence, not an automatic production-readiness verdict.
 
-Exit code 0 = release ready, 1 = issues found.
+Exit code 0 = requested static pre-release checks passed.
+Exit code 1 = one or more requested checks failed.
 """
 
 from __future__ import annotations
@@ -27,6 +21,7 @@ from pathlib import Path
 from typing import NoReturn
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_CHECK_IMAGE = "pmk-public-release-check:local"
 
 WEAK_PATTERNS: list[re.Pattern] = [
     re.compile(r, re.IGNORECASE)
@@ -44,11 +39,33 @@ WEAK_PATTERNS: list[re.Pattern] = [
 
 DIR_ARTIFACTS = {"__pycache__", ".pytest_cache", ".hypothesis", ".mypy_cache", ".ruff_cache"}
 FILE_ARTIFACTS = {".pyc", ".pyo", ".coverage"}
-EXEMPT_DIRS = {".git", ".venv"}  # .venv excluded from walk but checked separately
+EXEMPT_DIRS = {".git", ".venv"}
+
+REQUIRED_PRODUCTION_TEMPLATE_KEYS = (
+    "JWT_SECRET",
+    "CORS_ORIGINS",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
+    "API_KEYS",
+    "PROCESSUAL_CRYPTO_KEY_B64",
+    "GRAFANA_ADMIN_PASSWORD",
+    "MAESTRO_ADMIN_EMAIL",
+    "MAESTRO_ADMIN_PASSWORD",
+    "AUTH_TOKEN_PEPPER",
+    "AUTH_RATE_LIMIT_PEPPER",
+    "AUTH_DELIVERY_KEY_RING_JSON",
+    "AUTH_DELIVERY_CURRENT_KEY_VERSION",
+    "AUTH_PUBLIC_BASE_URL",
+    "AUTH_MFA_KEY_RING_JSON",
+    "AUTH_MFA_CURRENT_KEY_VERSION",
+    "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
+    "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION",
+)
 
 
 def _configure_stdio() -> None:
-    """Use resilient UTF-8 output when the script is executed directly."""
     stdout_buffer = getattr(sys.stdout, "buffer", None)
     stderr_buffer = getattr(sys.stderr, "buffer", None)
     if stdout_buffer is not None:
@@ -70,20 +87,18 @@ def _warn(msg: str) -> None:
 
 
 def check_no_venv(base: Path) -> int:
-    venv_path = base / ".venv"
-    if venv_path.is_dir():
-        _error("Found .venv directory — remove before release")
+    if (base / ".venv").is_dir():
+        _error("Found .venv directory — exclude it from the release workspace/package")
         return 1
     _ok("No .venv directory found")
     return 0
 
 
 def check_no_env_file(base: Path) -> int:
-    env_path = base / ".env"
-    if env_path.is_file():
-        _error("Found .env file — must NOT ship in release package")
+    if (base / ".env").is_file():
+        _error("Found .env file — it must not ship in a release package")
         return 1
-    _ok("No .env file (only .env.example / .env.production.example)")
+    _ok("No .env file in release workspace")
     return 0
 
 
@@ -91,19 +106,14 @@ def check_no_cache_artifacts(base: Path) -> int:
     errors = 0
     for root, dirs, files in os.walk(base):
         dirs[:] = [d for d in dirs if d not in EXEMPT_DIRS]
-
         for dname in dirs:
             if dname in DIR_ARTIFACTS:
                 _error(f"Found {dname} directory: {os.path.join(root, dname)}")
                 errors += 1
-
         for fname in files:
-            for pat in FILE_ARTIFACTS:
-                if fname.endswith(pat) or fname == pat:
-                    _error(f"Found {pat} file: {os.path.join(root, fname)}")
-                    errors += 1
-                    break
-
+            if any(fname.endswith(pat) or fname == pat for pat in FILE_ARTIFACTS):
+                _error(f"Found cache/coverage artifact: {os.path.join(root, fname)}")
+                errors += 1
     if errors == 0:
         _ok("No cache / bytecode artifacts found")
     return errors
@@ -118,14 +128,11 @@ def check_no_data_artifacts(base: Path) -> int:
     for entry in data_dir.iterdir():
         if entry.name == ".gitkeep":
             continue
-        if entry.suffix in (".json", ".jsonl", ".db", ".sqlite") and entry.is_file():
-            _error(f"Runtime artifact in data/: {entry.name}")
-            errors += 1
-        elif entry.is_file():
-            _error(f"Unexpected file in data/: {entry.name}")
+        if entry.is_file():
+            _error(f"Unexpected/runtime file in data/: {entry.name}")
             errors += 1
     if errors == 0:
-        _ok("data/ directory contains only .gitkeep (no runtime artifacts)")
+        _ok("data/ directory contains only .gitkeep")
     return errors
 
 
@@ -138,19 +145,15 @@ def check_no_weak_secrets(base: Path) -> int:
         text = path.read_text(encoding="utf-8", errors="replace")
         for i, line in enumerate(text.splitlines(), 1):
             stripped = line.strip()
-            if stripped.startswith("#") or not stripped:
-                continue
-            if "=" not in stripped:
+            if stripped.startswith("#") or not stripped or "=" not in stripped:
                 continue
             for pat in WEAK_PATTERNS:
                 if pat.search(stripped):
-                    _error(f"{fname}:{i} matches weak pattern '{pat.pattern}': {stripped[:60]}")
+                    _error(f"{fname}:{i} matches weak pattern '{pat.pattern}'")
                     errors += 1
                     break
     if errors == 0:
-        _ok("No weak / default secrets found in .env or docker-compose.yml")
-    else:
-        _warn("Weak secrets check uses repo root; .env should not be in release package")
+        _ok("No weak/default secret literals found in checked files")
     return errors
 
 
@@ -160,22 +163,14 @@ def check_env_production_example_exists(base: Path) -> int:
         _error(".env.production.example is missing")
         return 1
     text = path.read_text(encoding="utf-8", errors="replace")
-    required_keys = [
-        "JWT_SECRET",
-        "CORS_ORIGINS",
-        "DATABASE_URL",
-        "REDIS_URL",
-        "POSTGRES_PASSWORD",
-        "REDIS_PASSWORD",
-        "API_KEYS",
-        "PROCESSUAL_CRYPTO_KEY_B64",
-        "GRAFANA_ADMIN_PASSWORD",
+    missing = [
+        key for key in REQUIRED_PRODUCTION_TEMPLATE_KEYS
+        if f"{key}=" not in text and f"{key} " not in text
     ]
-    missing = [k for k in required_keys if f"{k}=" not in text and f"{k} " not in text]
     if missing:
         _error(f".env.production.example missing required keys: {', '.join(missing)}")
         return 1
-    _ok(".env.production.example exists with all required keys")
+    _ok(".env.production.example covers the current production authority contract")
     return 0
 
 
@@ -190,53 +185,60 @@ def check_readme(base: Path) -> int:
     if found:
         _error(f"README.md contains placeholder text: {', '.join(found)}")
         return 1
-    _ok("README.md exists with no placeholder text")
+    _ok("README.md exists with no blocked placeholder text")
     return 0
 
 
 def check_docker_public_build() -> int:
     try:
-        result = subprocess.run(
-            ["docker", "build", "--target", "public", "-q", "."],
+        build = subprocess.run(
+            ["docker", "build", "--target", "public", "-t", PUBLIC_CHECK_IMAGE, "."],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
         )
-        if result.returncode != 0:
-            _error(f"docker build --target public failed:\n{result.stderr.strip()}")
+        if build.returncode != 0:
+            _error("docker build --target public failed")
             return 1
-        _ok("Docker public target builds successfully")
+        boundary = subprocess.run(
+            [
+                "docker", "run", "--rm", "--entrypoint", "sh", PUBLIC_CHECK_IMAGE,
+                "-c",
+                "test ! -e /app/cgtlib/private && python -c \"import cgtlib._backend as b; assert not b.HAS_PRIVATE_COMPUTE\"",
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if boundary.returncode != 0:
+            _error("public image boundary check failed: private CGT is present or public fallback import is broken")
+            return 1
+        _ok("Public Docker target builds and excludes private CGT runtime authority")
         return 0
     except FileNotFoundError:
-        _warn("Docker not available, skipping docker build check")
+        _warn("Docker not available; Docker evidence remains outstanding")
         return 0
     except subprocess.TimeoutExpired:
-        _warn("Docker build timed out, skipping")
-        return 0
+        _error("Docker qualification timed out")
+        return 1
 
 
 def _evaluate_pytest_result(returncode: int, output: str) -> int:
-    """Fail closed unless pytest reports a clean successful test run."""
     pass_match = re.search(r"(\d+) passed", output)
     fail_match = re.search(r"(\d+) failed", output)
     error_match = re.search(r"(\d+) error", output)
     passed = int(pass_match.group(1)) if pass_match else 0
     failed = int(fail_match.group(1)) if fail_match else 0
     test_errors = int(error_match.group(1)) if error_match else 0
-    total = passed + failed
-
-    if total == 0:
-        _error("pytest returned 0 tests — check pytest configuration")
+    if passed + failed == 0:
+        _error("pytest returned 0 tests")
         return 1
-    if returncode != 0:
-        _error(f"pytest exited with status {returncode}")
+    if returncode != 0 or failed > 0 or test_errors > 0:
+        _error(f"pytest failed: exit={returncode}, failed={failed}, errors={test_errors}")
         return 1
-    if failed > 0 or test_errors > 0:
-        _error(f"pytest reported {failed} failed and {test_errors} error(s)")
-        return 1
-
-    _ok(f"pytest: {passed}/{total} passed (100.0%)")
+    _ok(f"pytest: {passed} passed")
     return 0
 
 
@@ -247,26 +249,24 @@ def run_pytest() -> int:
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
-        output = result.stdout + result.stderr
-        return _evaluate_pytest_result(result.returncode, output)
+        return _evaluate_pytest_result(result.returncode, result.stdout + result.stderr)
     except FileNotFoundError:
         _error("pytest not found")
         return 1
     except subprocess.TimeoutExpired:
-        _error("pytest timed out after 300 seconds")
+        _error("pytest timed out after 600 seconds")
         return 1
 
 
 def main() -> NoReturn:
     _configure_stdio()
-    parser = argparse.ArgumentParser(description="Pre-release validation for Processual Maestro Kernel")
-    parser.add_argument("--root", type=str, default=None, help="Root directory to check (default: repo root)")
-    parser.add_argument("--skip-pytest", action="store_true", help="Skip pytest execution")
-    parser.add_argument("--skip-docker", action="store_true", help="Skip Docker build check")
+    parser = argparse.ArgumentParser(description="Static pre-release validation for Processual Maestro Kernel")
+    parser.add_argument("--root", type=str, default=None)
+    parser.add_argument("--skip-pytest", action="store_true")
+    parser.add_argument("--skip-docker", action="store_true")
     args = parser.parse_args()
-
     base = Path(args.root).resolve() if args.root else REPO_ROOT
 
     total_errors = 0
@@ -284,11 +284,10 @@ def main() -> NoReturn:
 
     print()
     if total_errors == 0:
-        print("RESULT: RELEASE READY — all checks passed")
+        print("RESULT: STATIC PRE-RELEASE CHECKS PASS — operator/runtime qualification is still required")
         sys.exit(0)
-    else:
-        print(f"RESULT: {total_errors} check(s) FAILED — fix before release")
-        sys.exit(1)
+    print(f"RESULT: {total_errors} check(s) FAILED — fix before release qualification")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
