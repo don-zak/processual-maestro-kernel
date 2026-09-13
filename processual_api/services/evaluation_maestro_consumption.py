@@ -1,17 +1,25 @@
 """Deterministic Maestro consumption for External Evaluation task outcomes.
 
-The sandbox connector already proves the external operation and produces a safe
-canonical task-injection envelope. This service performs the missing second
-half: the ProcessualMaestroKernel actually consumes that safe outcome through a
+The sandbox connector proves the external operation and produces a safe canonical
+Task Injection envelope. CGT governance is already enforced *before admission* by
+the External Evaluation governance layer. This service performs the missing
+second half: ProcessualMaestroKernel actually consumes the safe outcome through a
 real one-step workflow and returns a hash-only receipt suitable for durable
-evidence. No raw task input, provider response, API key, or provider secret is
-passed into Maestro.
+evidence.
+
+The public External Evaluation build intentionally does not ship the private
+``cgtlib`` structural-transition engine. Therefore this consumer must not invoke
+the kernel's private-CGT observation path a second time after admission. It uses
+ProcessualMaestroKernel for workflow creation, delegation, runtime execution,
+step completion and finalization, while the already-committed External Evaluation
+CGT decision remains the authoritative governance proof.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import time
 from typing import Any
 
 from processual_kernel import (
@@ -21,10 +29,12 @@ from processual_kernel import (
     StepState,
     TaskResult,
     WorkflowPlan,
+    WorkflowState,
     WorkflowStep,
 )
 
-MAESTRO_CONSUMPTION_SCHEMA_VERSION = "external-evaluation-maestro-consumption-v1"
+MAESTRO_CONSUMPTION_SCHEMA_VERSION = "external-evaluation-maestro-consumption-v2"
+MAESTRO_GOVERNANCE_SOURCE = "external_evaluation_cgt_prevalidated"
 _MAESTRO_CAPABILITY = "consume_evaluation_task"
 _MAESTRO_AGENT_ID = "external-evaluation-consumer"
 
@@ -63,6 +73,7 @@ class _EvaluationConsumptionRuntime:
             )
         consumed_material = {
             "schema_version": MAESTRO_CONSUMPTION_SCHEMA_VERSION,
+            "governance_source": MAESTRO_GOVERNANCE_SOURCE,
             "execution_evidence_sha256": str(metadata["execution_evidence_sha256"]),
             "task_injection_sha256": str(metadata["task_injection_sha256"]),
             "governance_trace_sha256": str(metadata["governance_trace_sha256"]),
@@ -84,6 +95,51 @@ class _EvaluationConsumptionRuntime:
         )
 
 
+class _EvaluationMaestroKernel(ProcessualMaestroKernel):
+    """ProcessualMaestroKernel adapter for a CGT-prevalidated Evaluation task.
+
+    The normal kernel observation path calls private ``cgtlib`` structural
+    transition evaluation. That engine is intentionally absent from the public
+    External Evaluation build. Governance has already happened before admission,
+    so repeating a private CGT evaluation here is neither required nor desirable.
+
+    This adapter changes only the *observation* hooks. Delegation, agent routing,
+    task execution, step state transitions, workflow lifecycle, events and
+    finalization still run through ProcessualMaestroKernel.
+    """
+
+    def observe(self, agent_id: str, telemetry: Any) -> None:  # type: ignore[override]
+        record = self.get_agent(agent_id)
+        record.failure_streak = int(getattr(telemetry, "failure_count", 0) or 0)
+        record.observations += 1
+        record.last_updated_at = time.time()
+        return None
+
+    def _observe_workflow_from_steps(self, workflow: Any) -> None:  # type: ignore[override]
+        steps = list(workflow.steps.values())
+        if steps and all(step.state == StepState.COMPLETED for step in steps):
+            workflow.state = WorkflowState.COMPLETED
+            action = MaestroAction.FINALIZE
+            reason = "all CGT-prevalidated Evaluation workflow steps completed"
+        elif any(step.state == StepState.FAILED for step in steps):
+            workflow.state = WorkflowState.FAILED
+            action = MaestroAction.REROUTE
+            reason = "CGT-prevalidated Evaluation workflow step failed"
+        else:
+            workflow.state = WorkflowState.RUNNING
+            action = MaestroAction.OBSERVE
+            reason = "CGT-prevalidated Evaluation workflow in progress"
+        workflow.updated_at = time.time()
+        self.emit(
+            workflow.plan.workflow_id,
+            action,
+            workflow.plan.workflow_id,
+            reason,
+            {"governance_source": MAESTRO_GOVERNANCE_SOURCE},
+        )
+        return None
+
+
 async def consume_evaluation_task_with_maestro(
     *,
     execution_id: str,
@@ -95,7 +151,7 @@ async def consume_evaluation_task_with_maestro(
     governance_trace_sha256: str,
     response_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Run the safe external task outcome through an actual Maestro workflow."""
+    """Run the safe external task outcome through a real Maestro workflow."""
 
     safe_material = {
         "execution_id": str(execution_id or ""),
@@ -121,11 +177,11 @@ async def consume_evaluation_task_with_maestro(
         raise RuntimeError(f"evaluation_maestro_consumption_material_incomplete:{','.join(missing)}")
 
     workflow_id = f"eval-maestro-{_digest(safe_material)[:24]}"
-    maestro = ProcessualMaestroKernel(runtime=_EvaluationConsumptionRuntime())
+    maestro = _EvaluationMaestroKernel(runtime=_EvaluationConsumptionRuntime())
     maestro.register_agent(
         AgentSpec(
             _MAESTRO_AGENT_ID,
-            "Consumes safe External Evaluation task outcomes under Maestro governance",
+            "Consumes safe External Evaluation task outcomes under pre-admission CGT governance",
             capabilities=(_MAESTRO_CAPABILITY,),
         )
     )
@@ -142,11 +198,17 @@ async def consume_evaluation_task_with_maestro(
                     metadata=safe_material,
                 ),
             ),
+            metadata={"governance_source": MAESTRO_GOVERNANCE_SOURCE},
         )
     )
     workflow = await maestro.run_workflow(workflow_id)
     step = workflow.steps["consume"]
-    if step.state != StepState.COMPLETED or not isinstance(step.output, dict) or step.output.get("consumed") is not True:
+    if (
+        workflow.state != WorkflowState.COMPLETED
+        or step.state != StepState.COMPLETED
+        or not isinstance(step.output, dict)
+        or step.output.get("consumed") is not True
+    ):
         raise RuntimeError("evaluation_maestro_task_consumption_failed")
 
     maestro.intervene(
@@ -154,6 +216,7 @@ async def consume_evaluation_task_with_maestro(
         MaestroAction.FINALIZE,
         "consume",
         "External Evaluation safe task outcome consumed and attested",
+        {"governance_source": MAESTRO_GOVERNANCE_SOURCE},
     )
     workflow = maestro.get_workflow(workflow_id)
     consumption_sha256 = str(step.output.get("consumption_sha256") or "")
@@ -170,6 +233,8 @@ async def consume_evaluation_task_with_maestro(
         "execution_evidence_sha256": safe_material["execution_evidence_sha256"],
         "task_injection_sha256": safe_material["task_injection_sha256"],
         "governance_trace_sha256": safe_material["governance_trace_sha256"],
+        "governance_source": MAESTRO_GOVERNANCE_SOURCE,
+        "private_cgt_re_evaluation_required": False,
     }
     receipt_sha256 = _digest(receipt_material)
     return {
@@ -186,5 +251,6 @@ async def consume_evaluation_task_with_maestro(
 
 __all__ = [
     "MAESTRO_CONSUMPTION_SCHEMA_VERSION",
+    "MAESTRO_GOVERNANCE_SOURCE",
     "consume_evaluation_task_with_maestro",
 ]
