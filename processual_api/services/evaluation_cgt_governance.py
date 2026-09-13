@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import asdict
 from typing import Any
 
+from processual_api.cgt_governor.evaluator import compute_fate_vector
 from processual_api.cgt_governor.policy import policy_engine as runtime_policy_engine
 
 EVALUATION_CGT_POLICY_ID = "external-evaluation-cgt"
 EVALUATION_CGT_POLICY_VERSION = "external-evaluation-cgt-v1"
+EVALUATION_CGT_FATE_VECTOR_BASIS = "external-evaluation-policy-signal-profile-v1"
 
 
 def _digest(value: Any) -> str:
@@ -28,6 +31,63 @@ def _digest(value: Any) -> str:
         default=str,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _evaluation_fate_vector(*, rank: str, operation_class: str) -> dict[str, float]:
+    """Compute a deterministic CGT fate vector from sealed governance signals.
+
+    These are policy-signal profiles, not model-quality guesses. They encode the
+    already-determined External Evaluation governance state into the existing CGT
+    fate-vector mathematics so reports expose the same seven-dimensional CGT
+    surface used elsewhere in Maestro.
+    """
+
+    if rank == "stable":
+        profile = dict(
+            compatibility=1.0,
+            coherence=1.0,
+            structural_support=1.0,
+            usefulness=1.0,
+            complexity=0.05,
+            fatigue=0.0,
+            shock=0.0,
+            lift=0.15,
+            novelty=0.25,
+            no_answer=0.0,
+            hallucination=0.0,
+            constraint_failure=0.0,
+        )
+    elif rank == "hybrid" and operation_class == "draft":
+        profile = dict(
+            compatibility=0.85,
+            coherence=0.9,
+            structural_support=0.9,
+            usefulness=0.9,
+            complexity=0.35,
+            fatigue=0.0,
+            shock=0.05,
+            lift=1.0,
+            novelty=0.25,
+            no_answer=0.0,
+            hallucination=0.0,
+            constraint_failure=0.05,
+        )
+    else:
+        profile = dict(
+            compatibility=0.0,
+            coherence=1.0,
+            structural_support=1.0,
+            usefulness=0.0,
+            complexity=0.2,
+            fatigue=0.0,
+            shock=0.8,
+            lift=0.0,
+            novelty=0.0,
+            no_answer=0.0,
+            hallucination=0.0,
+            constraint_failure=1.0,
+        )
+    return asdict(compute_fate_vector(**profile))
 
 
 def evaluate_evaluation_cgt_governance(
@@ -106,14 +166,16 @@ def evaluate_evaluation_cgt_governance(
         disposition = "allow"
         review_required = False
     elif decision.action.value == "repair" and normalized_operation == "draft":
-        # The draft itself may be produced, but never applied. CGT requires a
-        # human-review boundary before any later mutation could be considered.
         disposition = "allow_with_review"
         review_required = True
     else:
         disposition = "deny"
         review_required = True
 
+    fate_vector = _evaluation_fate_vector(
+        rank=decision.rank,
+        operation_class=normalized_operation,
+    )
     safe_material = {
         "policy_id": EVALUATION_CGT_POLICY_ID,
         "policy_version": EVALUATION_CGT_POLICY_VERSION,
@@ -131,6 +193,8 @@ def evaluate_evaluation_cgt_governance(
         "review_required": review_required,
         "production_allowed": False,
         "authority_expansion_allowed": False,
+        "fate_vector": fate_vector,
+        "fate_vector_basis": EVALUATION_CGT_FATE_VECTOR_BASIS,
         "task_input_sha256": _digest(task_input),
     }
     trace_sha256 = _digest(safe_material)
@@ -152,8 +216,6 @@ def governed_execution_evidence_sha256(
     execution_evidence_sha256: str,
     governance_trace_sha256: str,
 ) -> str:
-    """Bind execution evidence and governance trace into one customer-safe digest."""
-
     return _digest(
         {
             "execution_evidence_sha256": str(execution_evidence_sha256 or ""),
@@ -163,9 +225,26 @@ def governed_execution_evidence_sha256(
     )
 
 
+def maestro_governed_evidence_sha256(
+    *,
+    governed_execution_evidence_sha256: str,
+    maestro_consumption_sha256: str,
+) -> str:
+    """Bind the governed execution proof to Maestro's task-consumption receipt."""
+    return _digest(
+        {
+            "governed_execution_evidence_sha256": str(governed_execution_evidence_sha256 or ""),
+            "maestro_consumption_sha256": str(maestro_consumption_sha256 or ""),
+            "policy_version": EVALUATION_CGT_POLICY_VERSION,
+        }
+    )
+
+
 __all__ = [
+    "EVALUATION_CGT_FATE_VECTOR_BASIS",
     "EVALUATION_CGT_POLICY_ID",
     "EVALUATION_CGT_POLICY_VERSION",
     "evaluate_evaluation_cgt_governance",
     "governed_execution_evidence_sha256",
+    "maestro_governed_evidence_sha256",
 ]
