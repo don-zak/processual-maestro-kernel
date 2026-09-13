@@ -16,6 +16,7 @@ from fastapi import APIRouter
 
 from . import cgt_governor as cgt_module
 from . import settings as settings_module
+from .evaluation_cgt_probe import run_evaluation_cgt_deny_probe
 from .evaluation_cgt_runtime import governed_execute_evaluation_runtime_task
 from .evaluation_cgt_status import evaluation_runtime_status_with_governance
 from .evaluation_runtime import evaluation_runtime_execution_status
@@ -96,6 +97,13 @@ def register_external_evaluation_routes() -> None:
             "/evaluation/runtime/task-execute",
             "POST",
             governed_execute_evaluation_runtime_task,
+            200,
+        ),
+        (
+            "/evaluation/runtime/governance-deny-probe",
+            "/evaluation/runtime/governance-deny-probe",
+            "POST",
+            run_evaluation_cgt_deny_probe,
             200,
         ),
     )
