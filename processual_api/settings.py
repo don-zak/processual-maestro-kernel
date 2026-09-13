@@ -312,12 +312,12 @@ class APISettings:
         self._reject_weak("DATABASE_URL", self.database_url, "DATABASE_URL")
         self._reject_weak("REDIS_URL", self.redis_url, "REDIS_URL")
 
-        pg_pw = os.environ.get("POSTGRES_PASSWORD")
-        self._reject_weak("POSTGRES_PASSWORD", pg_pw, "POSTGRES_PASSWORD")
-        redis_pw = os.environ.get("REDIS_PASSWORD")
-        self._reject_weak("REDIS_PASSWORD", redis_pw, "REDIS_PASSWORD")
-        gf_pw = os.environ.get("GRAFANA_ADMIN_PASSWORD")
-        self._reject_weak("GRAFANA_ADMIN_PASSWORD", gf_pw, "GRAFANA_ADMIN_PASSWORD")
+        # POSTGRES_PASSWORD, REDIS_PASSWORD, and GRAFANA_ADMIN_PASSWORD are
+        # component-level secrets for self-managed/Compose deployments. The API
+        # process does not consume them when managed services are supplied via
+        # DATABASE_URL and REDIS_URL, and it must not emit false runtime warnings
+        # for their absence. Full-stack release/Compose contracts continue to
+        # validate those component secrets independently.
 
     @property
     def is_production(self) -> bool:
