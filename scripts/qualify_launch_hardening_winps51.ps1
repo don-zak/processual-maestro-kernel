@@ -3,6 +3,7 @@ param(
     [string]$ExpectedSha = '',
     [string]$PythonBin = 'python',
     [string]$ResultsDir = 'launch-hardening-results',
+    [switch]$IncludeProductionReleaseGate,
     [switch]$IncludeDocker,
     [switch]$IncludeGitHub,
     [switch]$IncludeRemote,
@@ -25,6 +26,13 @@ function Add-Result {
     $entry = [pscustomobject]@{ name = $Name; status = $status; detail = $safeDetail }
     $Results.Add($entry)
     Write-Host ("[{0}] {1} - {2}" -f $status, $Name, $safeDetail)
+}
+
+function Add-Skip {
+    param([string]$Name, [string]$Detail)
+    $entry = [pscustomobject]@{ name = $Name; status = 'SKIP'; detail = $Detail }
+    $Results.Add($entry)
+    Write-Host ("[SKIP] {0} - {1}" -f $Name, $Detail)
 }
 
 function Require-Command {
@@ -83,7 +91,11 @@ Invoke-PythonPytest 'launch-targeted-tests' @(
     'tests/test_final_release_checklist_regression.py'
 ) | Out-Null
 
-Invoke-Captured 'release-check' $PythonBin @('scripts/release_check.py') | Out-Null
+if ($IncludeProductionReleaseGate) {
+    Invoke-Captured 'production-release-gate' $PythonBin @('scripts/release_check.py') | Out-Null
+} else {
+    Add-Skip 'production-release-gate' 'Use -IncludeProductionReleaseGate only after loading the intended production/staging environment without printing secrets.'
+}
 
 if ($IncludeDocker) {
     Require-Command 'docker'
@@ -99,6 +111,8 @@ if ($IncludeDocker) {
     catch {
         Add-Result 'grafana-loopback-binding' $false $_.Exception.GetType().Name
     }
+} else {
+    Add-Skip 'docker-qualification' 'Use -IncludeDocker on a computer with Docker and the intended environment file loaded.'
 }
 
 if ($IncludeGitHub) {
@@ -114,6 +128,8 @@ if ($IncludeGitHub) {
     catch {
         Add-Result 'github-check-allocation' $false 'Unable to read GitHub check-runs for exact HEAD'
     }
+} else {
+    Add-Skip 'github-check-allocation' 'Use -IncludeGitHub when GitHub CLI is authenticated.'
 }
 
 if ($IncludeRemote) {
@@ -132,10 +148,12 @@ if ($IncludeRemote) {
             Add-Result ("remote{0}" -f ($probe -replace '/', '-')) $false ("HTTP {0}" -f $status)
         }
     }
+} else {
+    Add-Skip 'remote-health' 'Use -IncludeRemote -RemoteBaseUrl <https://...> for the exact deployed candidate.'
 }
 
 $failed = @($Results | Where-Object { $_.status -eq 'FAIL' })
-$summary = if ($failed.Count -eq 0) { 'OVERALL PASS' } else { "OVERALL FAIL ($($failed.Count) failed checks)" }
+$summary = if ($failed.Count -eq 0) { 'OVERALL PASS FOR REQUESTED CHECKS' } else { "OVERALL FAIL ($($failed.Count) failed checks)" }
 $lines = @("Launch hardening qualification", "HEAD: $head", "Branch: $branch", "Result: $summary", '')
 $lines += $Results | ForEach-Object { "[$($_.status)] $($_.name): $($_.detail)" }
 $lines | Set-Content -Path $ReportPath -Encoding UTF8
