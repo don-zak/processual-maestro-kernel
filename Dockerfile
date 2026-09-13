@@ -50,13 +50,16 @@ ENV REQUIRE_PRIVATE_CGT_FOR_READINESS=false
 COPY pyproject.toml README.md ./
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
-# Copy public cgtlib modules only; _backend resolves absent private compute to the
-# fail-closed fallback and is required by public health/metadata/API imports.
-COPY cgtlib/__init__.py cgtlib/_backend.py cgtlib/_fallback.py cgtlib/metadata.py cgtlib/types.py cgtlib/validation.py ./cgtlib/
-COPY cgtlib/serialization.py cgtlib/api.py ./cgtlib/
+# Keep the complete public cgtlib surface/data so direct public imports cannot be
+# omitted accidentally. Remove the proprietary engine before installation.
+COPY cgtlib ./cgtlib
+RUN rm -rf cgtlib/private/ && rm -f cgtlib/pyproject.toml
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .[api,security,database,cache,observability,reports,llm]
+
+# Defense in depth: fail the image build if the private CGT tree survived.
+RUN test ! -e cgtlib/private
 
 RUN chown -R app:app /app
 USER app
