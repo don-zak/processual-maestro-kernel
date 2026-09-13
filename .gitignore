@@ -20,6 +20,7 @@ processual_maestro_kernel.egg-info/
 cgtlib/private/
 # tests/ is tracked for regression tests
 docs/reports/docker_agent_proof_*/
+launch-hardening-results/
 *.jsonl
 governance_test_report.pdf
 docs/PRIVATE_REPO_HANDOFF_AR.md
