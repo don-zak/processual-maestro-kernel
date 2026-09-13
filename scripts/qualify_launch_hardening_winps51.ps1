@@ -21,20 +21,27 @@ $ReportPath = Join-Path $ResultsDir 'launch-hardening-report.txt'
 $JsonPath = Join-Path $ResultsDir 'launch-hardening-report.json'
 $Results = New-Object System.Collections.ArrayList
 
+function Add-Entry {
+    param([string]$Name, [string]$Status, [string]$Detail)
+    $safeDetail = ($Detail -replace '(?i)(token|secret|password|api[_-]?key)=[^\s]+', '$1=<redacted>')
+    $entry = [pscustomobject]@{ name = $Name; status = $Status; detail = $safeDetail }
+    [void]$Results.Add($entry)
+    Write-Host ("[{0}] {1} - {2}" -f $Status, $Name, $safeDetail)
+}
+
 function Add-Result {
     param([string]$Name, [bool]$Passed, [string]$Detail)
-    $status = if ($Passed) { 'PASS' } else { 'FAIL' }
-    $safeDetail = ($Detail -replace '(?i)(token|secret|password|api[_-]?key)=[^\s]+', '$1=<redacted>')
-    $entry = [pscustomobject]@{ name = $Name; status = $status; detail = $safeDetail }
-    [void]$Results.Add($entry)
-    Write-Host ("[{0}] {1} - {2}" -f $status, $Name, $safeDetail)
+    Add-Entry $Name ($(if ($Passed) { 'PASS' } else { 'FAIL' })) $Detail
 }
 
 function Add-Skip {
     param([string]$Name, [string]$Detail)
-    $entry = [pscustomobject]@{ name = $Name; status = 'SKIP'; detail = $Detail }
-    [void]$Results.Add($entry)
-    Write-Host ("[SKIP] {0} - {1}" -f $Name, $Detail)
+    Add-Entry $Name 'SKIP' $Detail
+}
+
+function Add-Blocked {
+    param([string]$Name, [string]$Detail)
+    Add-Entry $Name 'BLOCKED' $Detail
 }
 
 function Require-Command {
@@ -49,10 +56,6 @@ function Invoke-Captured {
 
     $previousErrorActionPreference = $ErrorActionPreference
     try {
-        # Windows PowerShell 5.1 can surface native stderr redirected with 2>&1
-        # as ErrorRecord/RemoteException when ErrorActionPreference is Stop.
-        # Temporarily continue so the native exit code and full diagnostic text
-        # are captured as qualification evidence instead of being masked.
         $ErrorActionPreference = 'Continue'
         $output = & $Command @Arguments 2>&1
         $code = $LASTEXITCODE
@@ -82,6 +85,26 @@ function Invoke-PythonPytest {
     return Invoke-Captured $Name $PythonBin $args
 }
 
+function Test-DockerDaemon {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = & docker info --format '{{.ServerVersion}}' 2>&1
+        $code = $LASTEXITCODE
+        if ($code -eq 0) {
+            $serverVersion = ($output | ForEach-Object { $_.ToString() } | Out-String).Trim()
+            Add-Result 'docker-daemon' $true ("server_version={0}" -f $serverVersion)
+            return $true
+        }
+        $detail = ($output | ForEach-Object { $_.ToString() } | Out-String).Trim()
+        Add-Blocked 'docker-daemon' ($(if ($detail) { $detail } else { "docker info exit_code=$code" }))
+        return $false
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 Require-Command 'git'
 Require-Command $PythonBin
 
@@ -95,7 +118,8 @@ if ($ExpectedSha) {
 Add-Result 'branch' ($branch -eq 'feat/evaluation-key-delivery-lifecycle') ("branch={0}" -f $branch)
 
 $porcelain = (& git status --porcelain | Out-String).Trim()
-Add-Result 'working-tree-clean' ([string]::IsNullOrWhiteSpace($porcelain)) ($(if ($porcelain) { 'working tree has changes' } else { 'clean' }))
+$treeDetail = if ($porcelain) { ($porcelain -replace "`r?`n", '; ') } else { 'clean' }
+Add-Result 'working-tree-clean' ([string]::IsNullOrWhiteSpace($porcelain)) $treeDetail
 Invoke-Captured 'git-diff-check' 'git' @('diff', '--check') | Out-Null
 Invoke-Captured 'compileall' $PythonBin @('-m', 'compileall', '-q', 'processual_api', 'processual_kernel', 'cgtlib') | Out-Null
 
@@ -108,7 +132,8 @@ Invoke-PythonPytest 'launch-targeted-tests' @(
     'tests/test_secret_encryption_readiness_regression.py',
     'tests/test_fastapi_integration_smoke.py',
     'tests/test_final_release_checklist_regression.py',
-    'tests/test_release_check_operator_contract.py'
+    'tests/test_release_check_operator_contract.py',
+    'tests/test_adapter_registry_safe_logging.py'
 ) | Out-Null
 
 if ($IncludeStaticReleaseCheck) {
@@ -125,12 +150,17 @@ if ($IncludeProductionReleaseGate) {
 
 if ($IncludeDocker) {
     Require-Command 'docker'
-    $buildOk = Invoke-Captured 'docker-public-build' 'docker' @('build', '--target', 'public', '-t', 'pmk-public-launch-qualification:local', '.')
-    if ($buildOk) {
-        $publicProof = "test ! -e /app/cgtlib/private && python -c 'import cgtlib, cgtlib._backend; assert not cgtlib._backend.HAS_PRIVATE_COMPUTE'"
-        Invoke-Captured 'docker-public-no-private-cgt' 'docker' @('run', '--rm', '--entrypoint', 'sh', 'pmk-public-launch-qualification:local', '-c', $publicProof) | Out-Null
+    if (Test-DockerDaemon) {
+        $buildOk = Invoke-Captured 'docker-public-build' 'docker' @('build', '--target', 'public', '-t', 'pmk-public-launch-qualification:local', '.')
+        if ($buildOk) {
+            $publicProof = "test ! -e /app/cgtlib/private && python -c 'import cgtlib, cgtlib._backend; assert not cgtlib._backend.HAS_PRIVATE_COMPUTE'"
+            Invoke-Captured 'docker-public-no-private-cgt' 'docker' @('run', '--rm', '--entrypoint', 'sh', 'pmk-public-launch-qualification:local', '-c', $publicProof) | Out-Null
+        } else {
+            Add-Skip 'docker-public-no-private-cgt' 'Public image build failed; private-CGT absence proof was not run.'
+        }
     } else {
-        Add-Skip 'docker-public-no-private-cgt' 'Public image build failed; private-CGT absence proof was not run.'
+        Add-Skip 'docker-public-build' 'Docker daemon unavailable; build not attempted.'
+        Add-Skip 'docker-public-no-private-cgt' 'Docker daemon unavailable; image proof not attempted.'
     }
 } else {
     Add-Skip 'docker-image-qualification' 'Use -IncludeDocker on a computer with Docker; this mode does not require Compose secrets.'
@@ -138,26 +168,31 @@ if ($IncludeDocker) {
 
 if ($IncludeCompose) {
     Require-Command 'docker'
-    $composeOk = Invoke-Captured 'docker-compose-config' 'docker' @('compose', 'config', '--quiet')
-    if ($composeOk) {
-        $previousErrorActionPreference = $ErrorActionPreference
-        try {
-            $ErrorActionPreference = 'Continue'
-            $portsOutput = & docker compose config 2>&1
-            $portsCode = $LASTEXITCODE
-            $ports = ($portsOutput | ForEach-Object { $_.ToString() } | Out-String)
-            if ($portsCode -ne 0) {
-                Add-Result 'grafana-loopback-binding' $false ("docker compose config exit_code={0}" -f $portsCode)
-            } else {
-                $grafanaLoopback = $ports -match '127\.0\.0\.1:3000:3000'
-                Add-Result 'grafana-loopback-binding' $grafanaLoopback ($(if ($grafanaLoopback) { 'Grafana is loopback-bound' } else { 'Grafana is not loopback-bound' }))
+    if (Test-DockerDaemon) {
+        $composeOk = Invoke-Captured 'docker-compose-config' 'docker' @('compose', 'config', '--quiet')
+        if ($composeOk) {
+            $previousErrorActionPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = 'Continue'
+                $portsOutput = & docker compose config 2>&1
+                $portsCode = $LASTEXITCODE
+                $ports = ($portsOutput | ForEach-Object { $_.ToString() } | Out-String)
+                if ($portsCode -ne 0) {
+                    Add-Result 'grafana-loopback-binding' $false ("docker compose config exit_code={0}" -f $portsCode)
+                } else {
+                    $grafanaLoopback = $ports -match '127\.0\.0\.1:3000:3000'
+                    Add-Result 'grafana-loopback-binding' $grafanaLoopback ($(if ($grafanaLoopback) { 'Grafana is loopback-bound' } else { 'Grafana is not loopback-bound' }))
+                }
             }
-        }
-        finally {
-            $ErrorActionPreference = $previousErrorActionPreference
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
+        } else {
+            Add-Skip 'grafana-loopback-binding' 'Compose configuration failed; rendered port proof was not run.'
         }
     } else {
-        Add-Skip 'grafana-loopback-binding' 'Compose configuration failed; rendered port proof was not run.'
+        Add-Skip 'docker-compose-config' 'Docker daemon unavailable; Compose qualification not attempted.'
+        Add-Skip 'grafana-loopback-binding' 'Docker daemon unavailable; rendered port proof not attempted.'
     }
 } else {
     Add-Skip 'compose-qualification' 'Use -IncludeCompose only after the intended Compose environment is loaded securely.'
@@ -174,10 +209,14 @@ if ($IncludeGitHub) {
         if ($code -ne 0) { throw "gh api failed with exit code $code" }
         $payload = $raw | ConvertFrom-Json
         $count = [int]$payload.total_count
-        Add-Result 'github-check-allocation' ($count -gt 0) ("check_runs={0}" -f $count)
+        if ($count -gt 0) {
+            Add-Result 'github-check-allocation' $true ("check_runs={0}" -f $count)
+        } else {
+            Add-Blocked 'github-check-allocation' 'check_runs=0; no executable GitHub Actions allocation exists for exact HEAD'
+        }
     }
     catch {
-        Add-Result 'github-check-allocation' $false 'Unable to read GitHub check-runs for exact HEAD'
+        Add-Blocked 'github-check-allocation' 'Unable to read GitHub check-runs for exact HEAD'
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -207,13 +246,19 @@ if ($IncludeRemote) {
 }
 
 $failed = @($Results | Where-Object { $_.status -eq 'FAIL' })
-$summary = if ($failed.Count -eq 0) { 'OVERALL PASS FOR REQUESTED CHECKS' } else { "OVERALL FAIL ($($failed.Count) failed checks)" }
+$blocked = @($Results | Where-Object { $_.status -eq 'BLOCKED' })
+if ($failed.Count -gt 0) {
+    $summary = "OVERALL FAIL ($($failed.Count) failed checks)"
+} elseif ($blocked.Count -gt 0) {
+    $summary = "OVERALL BLOCKED ($($blocked.Count) infrastructure/external blockers)"
+} else {
+    $summary = 'OVERALL PASS FOR REQUESTED CHECKS'
+}
+
 $lines = @("Launch hardening qualification", "HEAD: $head", "Branch: $branch", "Result: $summary", '')
 $lines += @($Results | ForEach-Object { "[$($_.status)] $($_.name): $($_.detail)" })
 $lines | Set-Content -Path $ReportPath -Encoding UTF8
 
-# Force a plain Object[] before ConvertTo-Json. This avoids Windows PowerShell
-# 5.1's ArgumentException ('Argument types do not match') with generic lists.
 $resultArray = @($Results | ForEach-Object { $_ })
 $reportObject = [pscustomobject]@{
     head = $head
@@ -227,4 +272,5 @@ Write-Host $summary
 Write-Host "Evidence: $ReportPath"
 Write-Host "JSON: $JsonPath"
 if ($failed.Count -gt 0) { exit 1 }
+if ($blocked.Count -gt 0) { exit 2 }
 exit 0
