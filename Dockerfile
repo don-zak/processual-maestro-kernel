@@ -50,8 +50,9 @@ ENV REQUIRE_PRIVATE_CGT_FOR_READINESS=false
 COPY pyproject.toml README.md ./
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
-# Copy cgtlib/ but exclude cgtlib/private/ — stubs provide graceful fallback
-COPY cgtlib/__init__.py cgtlib/_fallback.py cgtlib/metadata.py cgtlib/types.py cgtlib/validation.py ./cgtlib/
+# Copy public cgtlib modules only; _backend resolves absent private compute to the
+# fail-closed fallback and is required by public health/metadata/API imports.
+COPY cgtlib/__init__.py cgtlib/_backend.py cgtlib/_fallback.py cgtlib/metadata.py cgtlib/types.py cgtlib/validation.py ./cgtlib/
 COPY cgtlib/serialization.py cgtlib/api.py ./cgtlib/
 
 RUN pip install --no-cache-dir --upgrade pip \
