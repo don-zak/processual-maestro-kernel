@@ -15,6 +15,9 @@ from processual_api.services.evaluation_authority_postgres import (
     load_evaluation_authority_state,
     update_evaluation_authority_key_lifecycle,
 )
+from processual_api.services.evaluation_cgt_evidence_postgres import (
+    latest_evaluation_cgt_governance,
+)
 from processual_api.services.evaluation_grants import find_evaluation_grant
 from processual_api.services.evaluation_runtime_delivery_postgres import (
     EvaluationDeliveryError,
@@ -88,23 +91,16 @@ def _final_audit_summary(
     grant: dict[str, Any],
     keys: list[dict[str, Any]],
     receipts: list[dict[str, Any]],
+    governance_proofs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     succeeded = sum(1 for item in receipts if item.get("status") == "succeeded")
     failed = sum(1 for item in receipts if item.get("status") == "failed")
     executing = sum(1 for item in receipts if item.get("status") == "executing")
-    evidence_persisted = sum(
-        1 for item in receipts if item.get("evidence_persisted_at")
-    )
+    evidence_persisted = sum(1 for item in receipts if item.get("evidence_persisted_at"))
     quota_used = sum(max(0, int(item.get("usage_count", 0) or 0)) for item in keys)
-    quota_rejected = sum(
-        max(0, int(item.get("quota_rejected_count", 0) or 0)) for item in keys
-    )
+    quota_rejected = sum(max(0, int(item.get("quota_rejected_count", 0) or 0)) for item in keys)
     per_key_limit = max(0, int(grant.get("max_requests", 0) or 0))
 
-    # The final report is a grant-scoped authority report. Keep the declared
-    # task/binding envelope visible even when no runtime receipt exists yet.
-    # Receipt-derived lists made multiple grant cards look indistinguishable and
-    # incorrectly rendered "tasks none / bindings none" for a sealed grant.
     task_ids = _grant_string_list(grant, "allowed_task_ids")
     binding_ids = _grant_string_list(grant, "allowed_binding_ids")
 
@@ -113,9 +109,6 @@ def _final_audit_summary(
         lifecycle = str(key.get("lifecycle_status") or key.get("status") or "unknown")
         key_states[lifecycle] = key_states.get(lifecycle, 0) + 1
 
-    # Fail closed if authoritative key admission accounting says work happened
-    # but the authoritative execution ledger cannot produce a receipt for it.
-    # Never infer a successful execution from usage alone.
     ledger_receipt_mismatch = quota_used > 0 and not receipts
     if ledger_receipt_mismatch:
         audit_outcome = "ledger_receipt_mismatch"
@@ -126,6 +119,7 @@ def _final_audit_summary(
     else:
         audit_outcome = "not_evaluated"
 
+    latest_governance = governance_proofs[0] if governance_proofs else None
     return {
         "report_type": "external_evaluation_final_summary",
         "audit_outcome": audit_outcome,
@@ -152,10 +146,54 @@ def _final_audit_summary(
         "tasks": task_ids,
         "bindings": binding_ids,
         "key_lifecycle": key_states,
+        "governance_proof_count": len(governance_proofs),
+        "latest_governance": latest_governance.get("governance") if latest_governance else None,
+        "fate_vector": (
+            latest_governance.get("governance", {}).get("fate_vector")
+            if latest_governance
+            else None
+        ),
+        "fate_vector_basis": (
+            latest_governance.get("governance", {}).get("fate_vector_basis")
+            if latest_governance
+            else None
+        ),
+        "maestro_task_completed": bool(
+            latest_governance and latest_governance.get("maestro_task_completed") is True
+        ),
+        "maestro_consumption": (
+            latest_governance.get("maestro_consumption") if latest_governance else None
+        ),
+        "maestro_governed_evidence_sha256": (
+            latest_governance.get("maestro_governed_evidence_sha256")
+            if latest_governance
+            else None
+        ),
         "production_allowed": False,
         "raw_task_input_persisted": False,
         "raw_secret_visible": False,
     }
+
+
+async def _governance_proofs_for_keys(
+    *,
+    owner_id: str,
+    grant_id: str,
+    keys: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    proofs: list[dict[str, Any]] = []
+    for key in keys:
+        key_id = str(key.get("key_id") or key.get("api_key_id") or "").strip()
+        if not key_id:
+            continue
+        proof = await latest_evaluation_cgt_governance(
+            owner_id=owner_id,
+            grant_id=grant_id,
+            api_key_id=key_id,
+        )
+        if proof:
+            proofs.append({"api_key_id": key_id, **proof})
+    return proofs
 
 
 @settings_module.router.get(
@@ -203,6 +241,11 @@ async def list_evaluation_audit_report_receipts(
         grant = find_evaluation_grant(raw, grant_id)
         if grant is None:
             raise EvaluationAuthorityError("evaluation_grant_not_found")
+        governance_proofs = await _governance_proofs_for_keys(
+            owner_id=owner_id,
+            grant_id=grant_id,
+            keys=keys,
+        )
     except (EvaluationDeliveryError, EvaluationAuthorityError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -212,7 +255,13 @@ async def list_evaluation_audit_report_receipts(
         "status": "ready",
         "grant_id": grant_id,
         "report_type": "external_evaluation_admin_audit",
-        "summary": _final_audit_summary(grant=grant, keys=keys, receipts=receipts),
+        "summary": _final_audit_summary(
+            grant=grant,
+            keys=keys,
+            receipts=receipts,
+            governance_proofs=governance_proofs,
+        ),
+        "governance_proofs": governance_proofs,
         "receipt_count": len(receipts),
         "receipts": receipts,
         "raw_task_input_persisted": False,
