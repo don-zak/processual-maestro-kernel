@@ -42,6 +42,14 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
+# Prepare the complete public cgtlib surface in an intermediate stage. The
+# proprietary tree may exist in this build-only stage/cache, but no layer from
+# this stage is part of the final public image.
+FROM base AS public-cgtlib-prep
+COPY cgtlib /tmp/cgtlib
+RUN rm -rf /tmp/cgtlib/private/ && rm -f /tmp/cgtlib/pyproject.toml
+RUN test ! -e /tmp/cgtlib/private
+
 # ---------- public target (no proprietary math) --------------------------------
 FROM base AS public
 
@@ -50,16 +58,14 @@ ENV REQUIRE_PRIVATE_CGT_FOR_READINESS=false
 COPY pyproject.toml README.md ./
 COPY processual_kernel ./processual_kernel
 COPY processual_api ./processual_api
-# Keep the complete public cgtlib surface/data so direct public imports cannot be
-# omitted accidentally. Remove the proprietary engine before installation.
-COPY cgtlib ./cgtlib
-RUN rm -rf cgtlib/private/ && rm -f cgtlib/pyproject.toml
+COPY --from=public-cgtlib-prep /tmp/cgtlib ./cgtlib
+
+# Defense in depth: fail before installation if the private CGT tree appears in
+# the final public stage for any reason.
+RUN test ! -e cgtlib/private
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .[api,security,database,cache,observability,reports,llm]
-
-# Defense in depth: fail the image build if the private CGT tree survived.
-RUN test ! -e cgtlib/private
 
 RUN chown -R app:app /app
 USER app
