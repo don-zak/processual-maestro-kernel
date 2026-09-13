@@ -23,6 +23,19 @@ def test_postgres_recovery_harness_is_fail_closed_and_secret_safe() -> None:
     assert "OVERALL FAIL" in text
 
 
+def test_postgres_recovery_harness_exposes_only_sanitized_diagnostics() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "function Get-SafeDiagnostic" in text
+    assert "diagnostic={1}" in text
+    assert "postgres(?:ql)?" in text
+    assert "PGPASSWORD" in text
+    assert "...<truncated>" in text
+    assert "Get-SafeDiagnostic $current.text" in text
+    assert "Get-SafeDiagnostic $backupResult.text" in text
+    assert "Get-SafeDiagnostic $restoreResult.text" in text
+
+
 def test_postgres_recovery_harness_does_not_print_connection_urls() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 
