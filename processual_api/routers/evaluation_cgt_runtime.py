@@ -21,8 +21,12 @@ from processual_api.services.evaluation_cgt_evidence_postgres import (
 from processual_api.services.evaluation_cgt_governance import (
     evaluate_evaluation_cgt_governance,
     governed_execution_evidence_sha256,
+    maestro_governed_evidence_sha256,
 )
 from processual_api.services.evaluation_grants import evaluation_binding_allowed
+from processual_api.services.evaluation_maestro_consumption import (
+    consume_evaluation_task_with_maestro,
+)
 from processual_api.services.evaluation_runtime_delivery_postgres import (
     evaluation_request_fingerprint,
 )
@@ -46,6 +50,8 @@ def _governance_proof_summary(governance: dict[str, Any]) -> dict[str, Any]:
         "governance_action": governance.get("governance_action"),
         "reason_codes": list(governance.get("reason_codes") or []),
         "review_required": governance.get("review_required") is True,
+        "fate_vector": governance.get("fate_vector"),
+        "fate_vector_basis": governance.get("fate_vector_basis"),
         "authority_expansion_allowed": False,
         "production_allowed": False,
         "governance_enforced_before_admission": True,
@@ -56,6 +62,8 @@ def _governance_proof_summary(governance: dict[str, Any]) -> dict[str, Any]:
             "drafts_can_require_supervisor_review",
             "unsupported_or_production_authority_is_denied_fail_closed",
             "governance_trace_is_hash_bound_to_execution_evidence",
+            "cgt_fate_vector_is_exposed_in_governance_evidence",
+            "governed_task_output_is_consumed_by_processual_maestro_kernel",
         ],
     }
 
@@ -65,16 +73,9 @@ def _project_committed_governance_into_execution_status(
     *,
     governance: dict[str, Any],
     governed_execution_evidence_sha256: str,
+    maestro_receipt: dict[str, Any] | None = None,
+    maestro_governed_evidence_sha256_value: str | None = None,
 ) -> dict[str, Any]:
-    """Make the immediate response reflect the governance evidence just committed.
-
-    The base runtime builds ``execution_status`` before the CGT wrapper appends
-    governance evidence to the durable delivery row. Once that append succeeds,
-    returning the stale pre-CGT status would falsely show null governance fields.
-    This projection is safe because it happens only after the durable commit
-    succeeds and mirrors the allowlisted fields written to PostgreSQL.
-    """
-
     projected = dict(execution_status or {})
     projected["governance_decision_id"] = governance.get("decision_id")
     projected["governance_policy_version"] = governance.get("policy_version")
@@ -83,6 +84,13 @@ def _project_committed_governance_into_execution_status(
     projected["governed_execution_evidence_sha256"] = governed_execution_evidence_sha256
     projected["governance_enforced_before_admission"] = True
     projected["governance"] = governance
+    if maestro_receipt:
+        projected["maestro_task_completed"] = maestro_receipt.get("maestro_task_completed") is True
+        projected["maestro_consumption"] = maestro_receipt
+        projected["maestro_consumption_sha256"] = maestro_receipt.get("consumption_sha256")
+        projected["maestro_consumption_receipt_sha256"] = maestro_receipt.get("receipt_sha256")
+        projected["maestro_governed_evidence_sha256"] = maestro_governed_evidence_sha256_value
+        projected["evaluation_stage"] = "maestro_task_consumed"
     return projected
 
 
@@ -90,7 +98,7 @@ async def governed_execute_evaluation_runtime_task(
     body: EvaluationRuntimeTaskExecuteRequest,
     current_user: dict = Depends(require_scope("run:evaluation")),
 ) -> dict[str, Any]:
-    """Apply CGT after grant authority checks and before quota admission/execution."""
+    """Apply CGT before admission, then complete the safe outcome through Maestro."""
 
     owner_id = _evaluation_owner_id(current_user)
     try:
@@ -159,22 +167,25 @@ async def governed_execute_evaluation_runtime_task(
                 "code": "evaluation_cgt_governance_denied",
                 "decision_id": governance.get("decision_id"),
                 "policy_version": governance.get("policy_version"),
+                "disposition": governance.get("disposition"),
+                "governance_action": governance.get("governance_action"),
+                "fate_vector": governance.get("fate_vector"),
+                "fate_vector_basis": governance.get("fate_vector_basis"),
                 "reason_codes": governance.get("reason_codes"),
                 "governance_evidence_persisted": denial["governance_evidence_persisted"],
                 "quota_consumed": False,
                 "network_request_executed": False,
+                "maestro_task_completed": False,
                 "production_allowed": False,
                 "authority_expansion_allowed": False,
             },
         )
 
-    # The existing runtime function performs the authoritative idempotent claim,
-    # quota admission, prepared-binding proof validation, network execution, and
-    # durable execution evidence commit. CGT has already narrowed the request.
     response = await execute_evaluation_runtime_task(body=body, current_user=current_user)
 
     execution_status = response.get("execution_status") or {}
     record_id = str(execution_status.get("record_id") or "").strip()
+    execution_id = str(response.get("execution_id") or execution_status.get("execution_id") or "").strip()
     execution_evidence_sha256 = str(response.get("evidence_sha256") or "").strip()
     combined_sha256 = governed_execution_evidence_sha256(
         execution_evidence_sha256=execution_evidence_sha256,
@@ -186,18 +197,45 @@ async def governed_execute_evaluation_runtime_task(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Execution completed without a durable record identifier; CGT evidence cannot be finalized.",
         )
+
+    try:
+        maestro_receipt = await consume_evaluation_task_with_maestro(
+            execution_id=execution_id,
+            task_id=task_id,
+            binding_id=spec.binding_id,
+            output_slot=str(response.get("output_slot") or task.output_slot),
+            execution_evidence_sha256=execution_evidence_sha256,
+            task_injection_sha256=str(response.get("task_injection_sha256") or ""),
+            governance_trace_sha256=str(governance.get("trace_sha256") or ""),
+            response_sha256=str(response.get("response_sha256") or ""),
+        )
+        final_sha256 = maestro_governed_evidence_sha256(
+            governed_execution_evidence_sha256=combined_sha256,
+            maestro_consumption_sha256=str(maestro_receipt.get("receipt_sha256") or ""),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "External operation succeeded, but Maestro did not complete safe task consumption; "
+                "retry the same idempotency key for fail-closed reconciliation."
+            ),
+        ) from exc
+
     try:
         await persist_evaluation_cgt_governance(
             owner_id=owner_id,
             record_id=record_id,
             governance=governance,
             governed_execution_evidence_sha256=combined_sha256,
+            maestro_receipt=maestro_receipt,
+            maestro_governed_evidence_sha256=final_sha256,
         )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Execution outcome exists, but CGT governance evidence could not be durably finalized; "
+                "Execution and Maestro consumption exist, but governed evidence could not be durably finalized; "
                 "retry the same idempotency key for reconciliation."
             ),
         ) from exc
@@ -206,11 +244,20 @@ async def governed_execute_evaluation_runtime_task(
         execution_status,
         governance=governance,
         governed_execution_evidence_sha256=combined_sha256,
+        maestro_receipt=maestro_receipt,
+        maestro_governed_evidence_sha256_value=final_sha256,
     )
     response["governance"] = governance
     response["governance_proof"] = _governance_proof_summary(governance)
     response["governance_enforced_before_admission"] = True
     response["governed_execution_evidence_sha256"] = combined_sha256
+    response["maestro_task_completed"] = True
+    response["maestro_consumption"] = maestro_receipt
+    response["maestro_consumption_sha256"] = maestro_receipt.get("consumption_sha256")
+    response["maestro_consumption_receipt_sha256"] = maestro_receipt.get("receipt_sha256")
+    response["maestro_governed_evidence_sha256"] = final_sha256
+    response["evaluation_stage"] = "maestro_task_consumed"
+    response["next_readiness_stage"] = "qualification_complete"
     response["policy_authority_can_expand_grant"] = False
     return response
 
