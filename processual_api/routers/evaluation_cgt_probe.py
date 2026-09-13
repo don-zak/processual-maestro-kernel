@@ -41,9 +41,6 @@ class EvaluationCGTDenyProbeRequest(BaseModel):
 
 
 def _safe_probe_material() -> dict[str, Any]:
-    # This material is server-owned. It represents a hypothetical request for
-    # production mutation solely so CGT can demonstrate a deny decision. It is
-    # never converted into executable task or endpoint authority.
     return {
         "probe_id": CGT_DENY_PROBE_ID,
         "simulated_policy_signal": "production_mutation_requested",
@@ -122,11 +119,15 @@ async def run_evaluation_cgt_deny_probe(
             "policy_version": governance.get("policy_version"),
             "governance_action": governance.get("governance_action"),
             "disposition": governance.get("disposition"),
+            "rank": governance.get("rank"),
+            "fate_vector": governance.get("fate_vector"),
+            "fate_vector_basis": governance.get("fate_vector_basis"),
             "reason_codes": governance.get("reason_codes"),
             "governance_trace_sha256": governance.get("trace_sha256"),
             "governance_evidence_persisted": denial["governance_evidence_persisted"],
             "quota_consumed": False,
             "network_request_executed": False,
+            "maestro_task_completed": False,
             "production_allowed": False,
             "authority_expansion_allowed": False,
             "raw_task_input_persisted": False,
