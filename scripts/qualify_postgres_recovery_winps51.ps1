@@ -51,11 +51,9 @@ function Add-Fail { param([string]$Name,[string]$Detail) Add-Entry $Name 'FAIL' 
 function Add-Skip { param([string]$Name,[string]$Detail) Add-Entry $Name 'SKIP' $Detail }
 function Add-Blocked { param([string]$Name,[string]$Detail) Add-Entry $Name 'BLOCKED' $Detail }
 
-function Require-Command {
+function Test-CommandAvailable {
     param([string]$Name)
-    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        throw "Required command not found: $Name"
-    }
+    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
 function Invoke-Captured {
@@ -127,8 +125,8 @@ function Invoke-WithPgEnvironment {
     }
 }
 
-Require-Command 'git'
-Require-Command $PythonBin
+if (-not (Test-CommandAvailable 'git')) { throw 'Required command not found: git' }
+if (-not (Test-CommandAvailable $PythonBin)) { throw ("Required command not found: {0}" -f $PythonBin) }
 
 $head = (& git rev-parse HEAD).Trim()
 $branch = (& git branch --show-current).Trim()
@@ -173,9 +171,15 @@ if ([string]::IsNullOrWhiteSpace($sourceUrl)) {
 }
 
 if ($IncludeBackup) {
-    Require-Command 'pg_dump'
-    Require-Command 'pg_restore'
-    if ([string]::IsNullOrWhiteSpace($sourceUrl)) {
+    $missingBackupTools = @()
+    if (-not (Test-CommandAvailable 'pg_dump')) { $missingBackupTools += 'pg_dump' }
+    if (-not (Test-CommandAvailable 'pg_restore')) { $missingBackupTools += 'pg_restore' }
+
+    if ($missingBackupTools.Count -gt 0) {
+        Add-Blocked 'postgres-backup-tools' ("Missing required PostgreSQL client commands: {0}" -f ($missingBackupTools -join ', '))
+        Add-Skip 'postgres-backup' 'Backup not attempted because required PostgreSQL client commands are unavailable.'
+        Add-Skip 'postgres-backup-readability' 'Backup readability not attempted because required PostgreSQL client commands are unavailable.'
+    } elseif ([string]::IsNullOrWhiteSpace($sourceUrl)) {
         Add-Skip 'postgres-backup' 'DATABASE_URL is unavailable; backup not attempted.'
         Add-Skip 'postgres-backup-readability' 'Backup was not created.'
     } else {
@@ -210,37 +214,44 @@ if ($IncludeBackup) {
 }
 
 if ($IncludeRestoreSmoke) {
-    Require-Command 'pg_restore'
-    Require-Command 'psql'
-    $targetUrl = Get-EnvValue $RestoreTargetUrlEnvName
-    if ([string]::IsNullOrWhiteSpace($targetUrl)) {
-        Add-Blocked 'postgres-restore-smoke' ("Environment variable {0} is not loaded." -f $RestoreTargetUrlEnvName)
-    } elseif ([string]::IsNullOrWhiteSpace($sourceUrl)) {
-        Add-Blocked 'postgres-restore-smoke' 'Source database URL is unavailable.'
-    } elseif ($targetUrl.Trim() -eq $sourceUrl.Trim()) {
-        Add-Fail 'postgres-restore-smoke' 'Restore target must be a separate database; source and target URLs are identical.'
-    } elseif (-not (Test-Path $BackupPath)) {
-        Add-Fail 'postgres-restore-smoke' 'Backup archive does not exist. Run with -IncludeBackup or provide -BackupPath.'
+    $missingRestoreTools = @()
+    if (-not (Test-CommandAvailable 'pg_restore')) { $missingRestoreTools += 'pg_restore' }
+    if (-not (Test-CommandAvailable 'psql')) { $missingRestoreTools += 'psql' }
+
+    if ($missingRestoreTools.Count -gt 0) {
+        Add-Blocked 'postgres-restore-tools' ("Missing required PostgreSQL client commands: {0}" -f ($missingRestoreTools -join ', '))
+        Add-Skip 'postgres-restore-smoke' 'Restore smoke not attempted because required PostgreSQL client commands are unavailable.'
     } else {
-        try {
-            $target = ConvertTo-PostgresParts $targetUrl
-            $restoreResult = Invoke-WithPgEnvironment $target {
-                Invoke-Captured 'pg_restore' @('--clean','--if-exists','--no-owner','--no-privileges','--exit-on-error','--dbname', $target.database, $BackupPath)
-            }
-            if ($restoreResult.code -ne 0) {
-                Add-Fail 'postgres-restore-smoke' ("pg_restore exit_code={0}; diagnostic={1}" -f $restoreResult.code, (Get-SafeDiagnostic $restoreResult.text 900 -PreferTail))
-            } else {
-                $verifyResult = Invoke-WithPgEnvironment $target {
-                    Invoke-Captured 'psql' @('--no-psqlrc','--tuples-only','--no-align','--command','SELECT version_num FROM alembic_version ORDER BY version_num;')
+        $targetUrl = Get-EnvValue $RestoreTargetUrlEnvName
+        if ([string]::IsNullOrWhiteSpace($targetUrl)) {
+            Add-Blocked 'postgres-restore-smoke' ("Environment variable {0} is not loaded." -f $RestoreTargetUrlEnvName)
+        } elseif ([string]::IsNullOrWhiteSpace($sourceUrl)) {
+            Add-Blocked 'postgres-restore-smoke' 'Source database URL is unavailable.'
+        } elseif ($targetUrl.Trim() -eq $sourceUrl.Trim()) {
+            Add-Fail 'postgres-restore-smoke' 'Restore target must be a separate database; source and target URLs are identical.'
+        } elseif (-not (Test-Path $BackupPath)) {
+            Add-Fail 'postgres-restore-smoke' 'Backup archive does not exist. Run with -IncludeBackup or provide -BackupPath.'
+        } else {
+            try {
+                $target = ConvertTo-PostgresParts $targetUrl
+                $restoreResult = Invoke-WithPgEnvironment $target {
+                    Invoke-Captured 'pg_restore' @('--clean','--if-exists','--no-owner','--no-privileges','--exit-on-error','--dbname', $target.database, $BackupPath)
                 }
-                if ($verifyResult.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($verifyResult.text)) {
-                    Add-Pass 'postgres-restore-smoke' 'Restore completed and alembic_version is readable in the separate restore target.'
+                if ($restoreResult.code -ne 0) {
+                    Add-Fail 'postgres-restore-smoke' ("pg_restore exit_code={0}; diagnostic={1}" -f $restoreResult.code, (Get-SafeDiagnostic $restoreResult.text 900 -PreferTail))
                 } else {
-                    Add-Fail 'postgres-restore-smoke' ("restore completed but verification query exit_code={0}; diagnostic={1}" -f $verifyResult.code, (Get-SafeDiagnostic $verifyResult.text 900 -PreferTail))
+                    $verifyResult = Invoke-WithPgEnvironment $target {
+                        Invoke-Captured 'psql' @('--no-psqlrc','--tuples-only','--no-align','--command','SELECT version_num FROM alembic_version ORDER BY version_num;')
+                    }
+                    if ($verifyResult.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($verifyResult.text)) {
+                        Add-Pass 'postgres-restore-smoke' 'Restore completed and alembic_version is readable in the separate restore target.'
+                    } else {
+                        Add-Fail 'postgres-restore-smoke' ("restore completed but verification query exit_code={0}; diagnostic={1}" -f $verifyResult.code, (Get-SafeDiagnostic $verifyResult.text 900 -PreferTail))
+                    }
                 }
+            } catch {
+                Add-Fail 'postgres-restore-smoke' $_.Exception.GetType().Name
             }
-        } catch {
-            Add-Fail 'postgres-restore-smoke' $_.Exception.GetType().Name
         }
     }
 } else {
