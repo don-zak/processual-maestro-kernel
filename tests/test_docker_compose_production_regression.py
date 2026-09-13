@@ -57,19 +57,11 @@ def test_docker_compose_api_service_keeps_production_hardening_markers():
 
 def test_docker_compose_uses_explicit_public_build_target_for_external_profile():
     text = read(COMPOSE)
-
-    required = [
-        "build:",
-        "context: .",
-        "target: public",
-    ]
-
-    assert_contains_all(text, required, "docker compose public build target")
+    assert_contains_all(text, ["build:", "context: .", "target: public"], "docker compose public build target")
 
 
 def test_docker_compose_dependency_services_keep_passwords_healthchecks_and_network_boundary():
     text = read(COMPOSE)
-
     required = [
         "redis:7-alpine",
         'command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]',
@@ -79,14 +71,15 @@ def test_docker_compose_dependency_services_keep_passwords_healthchecks_and_netw
         "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}",
         "pg_isready",
         "grafana/grafana:11.2.0",
+        '"127.0.0.1:3000:3000"',
         "GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}",
         "prom/prometheus:v2.53.0",
         "networks:",
         "internal:",
         "driver: bridge",
     ]
-
     assert_contains_all(text, required, "docker compose dependency hardening")
+    assert '\n      - "3000:3000"' not in text, "Grafana must not bind on all host interfaces"
 
 
 def test_docker_compose_has_no_duplicate_grafana_dashboard_mount():
@@ -97,7 +90,6 @@ def test_docker_compose_has_no_duplicate_grafana_dashboard_mount():
 
 def test_dockerfile_keeps_public_and_private_targets_with_non_root_runtime():
     text = read(DOCKERFILE)
-
     required = [
         "FROM python:3.14-slim AS base",
         "FROM base AS private",
@@ -116,14 +108,12 @@ def test_dockerfile_keeps_public_and_private_targets_with_non_root_runtime():
         "CMD curl -f http://localhost:${PORT:-8000}/health/live || exit 1",
         'CMD ["sh", "-c", "uvicorn processual_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]',
     ]
-
     assert_contains_all(text, required, "Dockerfile production runtime")
 
 
 def test_production_env_template_and_deployment_docs_stay_aligned_with_compose():
     env_text = read(ENV_TEMPLATE)
     docs_text = read(DEPLOYMENT_DOCS)
-
     required_env = [
         "ENVIRONMENT=production",
         "APP_ENV=production",
@@ -149,7 +139,6 @@ def test_production_env_template_and_deployment_docs_stay_aligned_with_compose()
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON=",
         "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION=payment-v1",
     ]
-
     required_docs = [
         "`public`",
         "`private`",
@@ -161,14 +150,8 @@ def test_production_env_template_and_deployment_docs_stay_aligned_with_compose()
         "Google Secret Manager",
         "Provider credentials are not bundled with Processual Maestro",
     ]
-
-    forbidden_docs = [
-        "--build-arg BUILD_TARGET=public",
-        "`full`",
-        "or `full` with CGT",
-    ]
-
+    forbidden_docs = ["--build-arg BUILD_TARGET=public", "`full`", "or `full` with CGT"]
     assert_contains_all(env_text, required_env, "production env template")
     assert_contains_all(docs_text, required_docs, "deployment docs")
     present = [marker for marker in forbidden_docs if marker in docs_text]
-    assert not present, f"Deployment docs still contain outdated Docker target markers: {present}"
+    assert not present, f"Deployment docs contain outdated Docker target markers: {present}"
