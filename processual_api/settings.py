@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "JWT_SECRET",
@@ -27,6 +28,11 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
 )
 
 
+def _cors_origins_from_env() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
+    return [value.strip() for value in raw.split(",") if value.strip()]
+
+
 @dataclass
 class APISettings:
     title: str = "Processual Maestro Kernel API"
@@ -45,9 +51,7 @@ class APISettings:
     )
 
     # --- CORS ---
-    cors_origins: list[str] = field(
-        default_factory=lambda: os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
-    )
+    cors_origins: list[str] = field(default_factory=_cors_origins_from_env)
 
     # --- JWT Authentication ---
     jwt_secret: str = field(default_factory=lambda: os.environ.get("JWT_SECRET", "CHANGE_ME_IN_PRODUCTION"))
@@ -73,8 +77,6 @@ class APISettings:
     redis_rate_limit_prefix: str = "rl:"
 
     # --- Runtime readiness contract ---
-    # Public artifacts intentionally exclude private CGT compute. Private artifacts
-    # set this true at build time so a missing private engine fails readiness.
     require_private_cgt_for_readiness: bool = field(
         default_factory=lambda: os.environ.get(
             "REQUIRE_PRIVATE_CGT_FOR_READINESS", "false"
@@ -231,12 +233,37 @@ class APISettings:
                 raise RuntimeError(detail)
             warnings.warn(detail, stacklevel=2)
 
-    def _reject_wildcard_cors(self) -> None:
-        if self.is_production and any(o.strip() == "*" for o in self.cors_origins):
+    def _validate_cors_origins(self) -> None:
+        if not self.is_production:
+            return
+        if not self.cors_origins:
             raise RuntimeError(
-                "CORS_ORIGINS contains wildcard '*' in production. "
-                "Set explicit allowed origins for production deployments."
+                "CORS_ORIGINS must contain at least one explicit origin in production."
             )
+
+        normalized: list[str] = []
+        for origin in self.cors_origins:
+            if origin == "*":
+                raise RuntimeError(
+                    "CORS_ORIGINS contains wildcard '*' in production. "
+                    "Set explicit allowed origins for production deployments."
+                )
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.query
+                or parsed.fragment
+                or parsed.path not in {"", "/"}
+            ):
+                raise RuntimeError(
+                    "CORS_ORIGINS contains an invalid production origin. "
+                    "Use explicit http(s) origins without credentials, paths, queries, or fragments."
+                )
+            normalized.append(f"{parsed.scheme}://{parsed.netloc}")
+        self.cors_origins = normalized
 
     def _reject_missing_admin_credentials(self) -> None:
         has_admin_email = bool(self.maestro_admin_email.strip())
@@ -277,7 +304,7 @@ class APISettings:
             warnings.warn(detail, stacklevel=2)
 
         self._reject_weak("JWT_SECRET", self.jwt_secret, "JWT_SECRET")
-        self._reject_wildcard_cors()
+        self._validate_cors_origins()
         self._reject_missing_admin_credentials()
 
         api_keys_str = ",".join(self.api_keys) if self.api_keys else ""
