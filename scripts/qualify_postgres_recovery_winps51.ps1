@@ -28,7 +28,6 @@ function Add-Entry {
     [void]$Results.Add([pscustomobject]@{ name = $Name; status = $Status; detail = $safe })
     Write-Host ("[{0}] {1} - {2}" -f $Status, $Name, $safe)
 }
-
 function Add-Pass { param([string]$Name,[string]$Detail) Add-Entry $Name 'PASS' $Detail }
 function Add-Fail { param([string]$Name,[string]$Detail) Add-Entry $Name 'FAIL' $Detail }
 function Add-Skip { param([string]$Name,[string]$Detail) Add-Entry $Name 'SKIP' $Detail }
@@ -63,9 +62,7 @@ function Get-EnvValue {
 
 function ConvertTo-PostgresParts {
     param([string]$RawUrl)
-    if ([string]::IsNullOrWhiteSpace($RawUrl)) {
-        throw 'PostgreSQL connection URL is missing.'
-    }
+    if ([string]::IsNullOrWhiteSpace($RawUrl)) { throw 'PostgreSQL connection URL is missing.' }
 
     $normalized = $RawUrl.Trim()
     $normalized = $normalized -replace '^postgresql\+asyncpg://', 'postgresql://'
@@ -75,21 +72,16 @@ function ConvertTo-PostgresParts {
         throw 'Only PostgreSQL URLs are supported by this qualification harness.'
     }
 
-    $uriText = 'http://' + $normalized.Substring('postgresql://'.Length)
-    $uri = [Uri]$uriText
+    $uri = [Uri]('http://' + $normalized.Substring('postgresql://'.Length))
     $userInfo = $uri.UserInfo.Split(':', 2)
     if ($userInfo.Count -lt 1 -or [string]::IsNullOrWhiteSpace($userInfo[0])) {
         throw 'PostgreSQL URL does not contain a user.'
     }
-
     $database = $uri.AbsolutePath.TrimStart('/')
-    if ([string]::IsNullOrWhiteSpace($database)) {
-        throw 'PostgreSQL URL does not contain a database name.'
-    }
+    if ([string]::IsNullOrWhiteSpace($database)) { throw 'PostgreSQL URL does not contain a database name.' }
 
     $password = ''
     if ($userInfo.Count -eq 2) { $password = [Uri]::UnescapeDataString($userInfo[1]) }
-
     return [pscustomobject]@{
         host = $uri.Host
         port = $(if ($uri.IsDefaultPort) { '5432' } else { [string]$uri.Port })
@@ -100,10 +92,7 @@ function ConvertTo-PostgresParts {
 }
 
 function Invoke-WithPgEnvironment {
-    param(
-        [pscustomobject]$Connection,
-        [scriptblock]$Script
-    )
+    param([pscustomobject]$Connection, [scriptblock]$Script)
     $names = @('PGHOST','PGPORT','PGDATABASE','PGUSER','PGPASSWORD')
     $before = @{}
     foreach ($name in $names) { $before[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
@@ -113,12 +102,10 @@ function Invoke-WithPgEnvironment {
         $env:PGDATABASE = $Connection.database
         $env:PGUSER = $Connection.user
         $env:PGPASSWORD = $Connection.password
-        & $Script
+        return (& $Script)
     }
     finally {
-        foreach ($name in $names) {
-            [Environment]::SetEnvironmentVariable($name, $before[$name], 'Process')
-        }
+        foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $before[$name], 'Process') }
     }
 }
 
@@ -143,31 +130,25 @@ if ([string]::IsNullOrWhiteSpace($sourceUrl)) {
     Add-Blocked 'database-url' ("Environment variable {0} is not loaded." -f $SourceUrlEnvName)
 } else {
     Add-Pass 'database-url' ("{0} is loaded; value redacted" -f $SourceUrlEnvName)
-
     $heads = Invoke-Captured $PythonBin @('-m','alembic','heads')
     if ($heads.code -ne 0) {
         Add-Fail 'alembic-heads' ("exit_code={0}; {1}" -f $heads.code, $heads.text)
     } else {
         $headIds = @()
         foreach ($line in ($heads.text -split "`r?`n")) {
-            $trimmed = $line.Trim()
-            if ($trimmed -match '^([0-9A-Za-z_]+)\s+\(head\)') { $headIds += $Matches[1] }
+            if ($line.Trim() -match '^([0-9A-Za-z_]+)\s+\(head\)') { $headIds += $Matches[1] }
         }
         if ($headIds.Count -eq 0) {
             Add-Fail 'alembic-heads' 'No Alembic head revision could be parsed.'
         } else {
             Add-Pass 'alembic-heads' ("head_count={0}; heads={1}" -f $headIds.Count, ($headIds -join ','))
-
             $current = Invoke-Captured $PythonBin @('-m','alembic','current')
             if ($current.code -ne 0) {
                 Add-Fail 'alembic-current' ("exit_code={0}; database revision query failed" -f $current.code)
             } else {
                 $missing = @($headIds | Where-Object { $current.text -notmatch [regex]::Escape($_) })
-                if ($missing.Count -eq 0) {
-                    Add-Pass 'alembic-current' 'Database revision includes every repository head.'
-                } else {
-                    Add-Fail 'alembic-current' ("Database is not at repository head; missing_head_count={0}" -f $missing.Count)
-                }
+                if ($missing.Count -eq 0) { Add-Pass 'alembic-current' 'Database revision includes every repository head.' }
+                else { Add-Fail 'alembic-current' ("Database is not at repository head; missing_head_count={0}" -f $missing.Count) }
             }
         }
     }
@@ -182,10 +163,8 @@ if ($IncludeBackup) {
     } else {
         try {
             $source = ConvertTo-PostgresParts $sourceUrl
-            $backupResult = $null
-            Invoke-WithPgEnvironment $source {
-                $backupResult = Invoke-Captured 'pg_dump' @('--format=custom','--no-owner','--no-privileges','--file', $BackupPath)
-                Set-Variable -Name backupResult -Value $backupResult -Scope 1
+            $backupResult = Invoke-WithPgEnvironment $source {
+                Invoke-Captured 'pg_dump' @('--format=custom','--no-owner','--no-privileges','--file', $BackupPath)
             }
             if ($backupResult.code -ne 0) {
                 Add-Fail 'postgres-backup' ("pg_dump exit_code={0}" -f $backupResult.code)
@@ -194,8 +173,7 @@ if ($IncludeBackup) {
                 Add-Fail 'postgres-backup' 'pg_dump exited successfully but the expected backup file is absent.'
                 Add-Skip 'postgres-backup-readability' 'Backup file absent.'
             } else {
-                $size = (Get-Item $BackupPath).Length
-                Add-Pass 'postgres-backup' ("custom-format backup created; bytes={0}" -f $size)
+                Add-Pass 'postgres-backup' ("custom-format backup created; bytes={0}" -f (Get-Item $BackupPath).Length)
                 $list = Invoke-Captured 'pg_restore' @('--list', $BackupPath)
                 if ($list.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($list.text)) {
                     Add-Pass 'postgres-backup-readability' 'pg_restore --list successfully parsed the backup archive.'
@@ -203,8 +181,7 @@ if ($IncludeBackup) {
                     Add-Fail 'postgres-backup-readability' ("pg_restore --list exit_code={0}" -f $list.code)
                 }
             }
-        }
-        catch {
+        } catch {
             Add-Fail 'postgres-backup' $_.Exception.GetType().Name
             Add-Skip 'postgres-backup-readability' 'Backup qualification raised an error.'
         }
@@ -229,18 +206,14 @@ if ($IncludeRestoreSmoke) {
     } else {
         try {
             $target = ConvertTo-PostgresParts $targetUrl
-            $restoreResult = $null
-            Invoke-WithPgEnvironment $target {
-                $restoreResult = Invoke-Captured 'pg_restore' @('--clean','--if-exists','--no-owner','--no-privileges','--exit-on-error','--dbname', $target.database, $BackupPath)
-                Set-Variable -Name restoreResult -Value $restoreResult -Scope 1
+            $restoreResult = Invoke-WithPgEnvironment $target {
+                Invoke-Captured 'pg_restore' @('--clean','--if-exists','--no-owner','--no-privileges','--exit-on-error','--dbname', $target.database, $BackupPath)
             }
             if ($restoreResult.code -ne 0) {
                 Add-Fail 'postgres-restore-smoke' ("pg_restore exit_code={0}" -f $restoreResult.code)
             } else {
-                $verifyResult = $null
-                Invoke-WithPgEnvironment $target {
-                    $verifyResult = Invoke-Captured 'psql' @('--no-psqlrc','--tuples-only','--no-align','--command','SELECT version_num FROM alembic_version ORDER BY version_num;')
-                    Set-Variable -Name verifyResult -Value $verifyResult -Scope 1
+                $verifyResult = Invoke-WithPgEnvironment $target {
+                    Invoke-Captured 'psql' @('--no-psqlrc','--tuples-only','--no-align','--command','SELECT version_num FROM alembic_version ORDER BY version_num;')
                 }
                 if ($verifyResult.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($verifyResult.text)) {
                     Add-Pass 'postgres-restore-smoke' 'Restore completed and alembic_version is readable in the separate restore target.'
@@ -248,8 +221,7 @@ if ($IncludeRestoreSmoke) {
                     Add-Fail 'postgres-restore-smoke' ("restore completed but verification query exit_code={0}" -f $verifyResult.code)
                 }
             }
-        }
-        catch {
+        } catch {
             Add-Fail 'postgres-restore-smoke' $_.Exception.GetType().Name
         }
     }
@@ -266,15 +238,13 @@ else { $summary = 'OVERALL PASS FOR REQUESTED CHECKS' }
 $lines = @('PostgreSQL recovery qualification', "HEAD: $head", "Branch: $branch", "Result: $summary", '')
 $lines += @($Results | ForEach-Object { "[$($_.status)] $($_.name): $($_.detail)" })
 $lines | Set-Content -Path $ReportPath -Encoding UTF8
-
-$report = [pscustomobject]@{
+[pscustomobject]@{
     head = $head
     branch = $branch
     overall = $summary
     backup_path = $(if (Test-Path $BackupPath) { $BackupPath } else { $null })
     checks = @($Results | ForEach-Object { $_ })
-}
-$report | ConvertTo-Json -Depth 5 | Set-Content -Path $JsonPath -Encoding UTF8
+} | ConvertTo-Json -Depth 5 | Set-Content -Path $JsonPath -Encoding UTF8
 
 Write-Host $summary
 Write-Host "Evidence: $ReportPath"
