@@ -103,8 +103,8 @@ async def get_account_recovery_runtime() -> AccountRecoveryRuntime:
         return await build_account_recovery_runtime()
     except AccountRecoveryRuntimeUnavailableError as exc:
         logger.error(
-            "identity_account_recovery_runtime_unavailable reason=%s",
-            str(exc),
+            "identity_account_recovery_runtime_unavailable",
+            extra={"exception_type": type(exc).__name__},
         )
         raise HTTPException(
             status_code=503,
@@ -227,15 +227,16 @@ async def start_account_recovery(
             await runtime.service.start(login=payload.login)
         except ValueError:
             pass
-        except Exception:
-            logger.exception(
+        except Exception as exc:
+            logger.error(
                 "identity_account_recovery_start_failed",
                 extra={
                     "request_id": getattr(
                         request.state,
                         "request_id",
                         "unavailable",
-                    )
+                    ),
+                    "exception_type": type(exc).__name__,
                 },
             )
             return JSONResponse(
@@ -306,15 +307,16 @@ async def verify_account_recovery(
                 "Pragma": "no-cache",
             },
         )
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "identity_account_recovery_verify_failed",
             extra={
                 "request_id": getattr(
                     request.state,
                     "request_id",
                     "unavailable",
-                )
+                ),
+                "exception_type": type(exc).__name__,
             },
         )
 
@@ -398,15 +400,16 @@ async def complete_account_recovery(
                 "Pragma": "no-cache",
             },
         )
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "identity_account_recovery_complete_failed",
             extra={
                 "request_id": getattr(
                     request.state,
                     "request_id",
                     "unavailable",
-                )
+                ),
+                "exception_type": type(exc).__name__,
             },
         )
 
