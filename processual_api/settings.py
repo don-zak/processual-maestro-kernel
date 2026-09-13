@@ -72,6 +72,16 @@ class APISettings:
     redis_url: str | None = field(default_factory=lambda: os.environ.get("REDIS_URL"))
     redis_rate_limit_prefix: str = "rl:"
 
+    # --- Runtime readiness contract ---
+    # Public artifacts intentionally exclude private CGT compute. Private artifacts
+    # set this true at build time so a missing private engine fails readiness.
+    require_private_cgt_for_readiness: bool = field(
+        default_factory=lambda: os.environ.get(
+            "REQUIRE_PRIVATE_CGT_FOR_READINESS", "false"
+        ).strip().lower()
+        == "true"
+    )
+
     # --- Identity registration authority (fail-closed when incomplete) ---
     auth_token_pepper: str | None = field(default_factory=lambda: os.environ.get("AUTH_TOKEN_PEPPER"))
     auth_rate_limit_pepper: str | None = field(default_factory=lambda: os.environ.get("AUTH_RATE_LIMIT_PEPPER"))
