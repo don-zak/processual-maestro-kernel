@@ -12,6 +12,7 @@ EVALUATION_GRANT_EXPIRED = "expired"
 EVALUATION_EXECUTION_MODE = "evaluation_runtime"
 EVALUATION_TASK_EXECUTE_ENDPOINT = ("POST", "/evaluation/runtime/task-execute")
 EVALUATION_STATUS_ENDPOINT = ("GET", "/evaluation/runtime/status")
+EVALUATION_CGT_DENY_PROBE_ENDPOINT = ("POST", "/evaluation/runtime/governance-deny-probe")
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -262,11 +263,10 @@ def evaluation_endpoint_allowed(
     if current_user.get("entitlement_source") != "admin_evaluation_grant":
         return True
     requested = (str(method or "").strip().upper(), str(path or "").strip())
-    # Customer-safe status introspection is intrinsic to every valid governed
-    # Evaluation credential. It is not an executable grant capability and
-    # consumes +0 admitted-execution quota, so it must remain available even
-    # when the grant's executable endpoint envelope is narrower.
-    if requested == EVALUATION_STATUS_ENDPOINT:
+    # Customer-safe status introspection and the governance-only deny probe are
+    # intrinsic to every valid governed Evaluation credential. Neither endpoint
+    # is executable grant authority and both consume +0 admitted-execution quota.
+    if requested in {EVALUATION_STATUS_ENDPOINT, EVALUATION_CGT_DENY_PROBE_ENDPOINT}:
         return True
     allowed = {
         normalized
@@ -325,6 +325,7 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "EVALUATION_CGT_DENY_PROBE_ENDPOINT",
     "EVALUATION_EXECUTION_MODE",
     "EVALUATION_GRANTS_STORAGE_KEY",
     "EVALUATION_STATUS_ENDPOINT",
