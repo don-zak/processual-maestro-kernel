@@ -90,10 +90,13 @@ class AgentRegistry:
         agent.evaluation_history.append(record)
         agent.performance_window.append(record.reward)
 
-        if record.action_taken in (GatewayAction.BLOCK, GatewayAction.ESCALATE):
-            agent.consecutive_failures += 1
-        else:
+        # REPAIR is a non-pass governance outcome. Counting it prevents an
+        # indefinitely repairable agent from evading recurrence escalation.
+        # PASS is the only outcome that proves recovery and clears the streak.
+        if record.action_taken == GatewayAction.PASS:
             agent.consecutive_failures = 0
+        else:
+            agent.consecutive_failures += 1
 
         self._persist()
 
