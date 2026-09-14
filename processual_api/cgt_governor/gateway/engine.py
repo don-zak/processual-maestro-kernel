@@ -65,6 +65,8 @@ class GatewayEngine:
             language=language,
         )
 
+        # Keep the seven-component fate vector separate from raw analyzer
+        # evidence. Policy receives the latter explicitly through risk_signals.
         fate_vector = {
             "stability": result.fate.stability,
             "hybridity": result.fate.hybridity,
@@ -83,9 +85,10 @@ class GatewayEngine:
             reward=result.reward,
             policy=result.policy,
             repair_prompt=result.repair_prompt,
+            risk_signals=scores,
         )
 
-        # ── 3. Sign the decision ──
+        # ── 3. Sign the immediate decision ──
         decision.signature = sign_response(
             {
                 "agent_id": agent_id,
@@ -112,7 +115,7 @@ class GatewayEngine:
         )
         gateway_registry.add_evaluation(agent_id, record)
 
-        # ── 5. Apply state change if needed ──
+        # ── 5. Apply immediate state change if needed ──
         if decision.agent_state != agent.state:
             reason = f"Gateway policy: {decision.action.value} — {decision.message}"
             gateway_registry.change_state(
@@ -123,19 +126,39 @@ class GatewayEngine:
 
         # ── 6. Check lifecycle for long-term actions ──
         lifecycle_action = lifecycle_engine.evaluate_agent(agent)
+        decision.lifecycle_recommendation = lifecycle_action
         if lifecycle_action == "freeze" and agent.state == AgentState.ACTIVE:
             gateway_registry.change_state(
                 agent_id,
                 AgentState.FROZEN,
                 f"Lifecycle: sustained low performance (avg {agent.average_reward:.2f})",
             )
-        elif lifecycle_action == "escalate":
+        elif lifecycle_action == "escalate" and agent.state == AgentState.ACTIVE:
             gateway_registry.change_state(
                 agent_id,
                 AgentState.ESCALATED,
                 "Lifecycle: declining performance trend",
             )
+        elif lifecycle_action == "rehabilitate" and agent.state == AgentState.ACTIVE:
+            gateway_registry.change_state(
+                agent_id,
+                AgentState.REHABILITATING,
+                f"Lifecycle: low recoverable performance (avg {agent.average_reward:.2f})",
+            )
+        elif lifecycle_action == "upgrade":
+            # Upgrade is a recommendation, not an AgentState. Preserve ACTIVE
+            # execution and make the recommendation visible to callers.
+            logger.info(
+                "Lifecycle upgrade recommendation for agent %s (avg %.2f)",
+                agent.agent_id,
+                agent.average_reward,
+            )
+            decision.message = f"{decision.message} Lifecycle recommendation: upgrade."
 
+        # Lifecycle may have changed persisted agent state after the immediate
+        # policy decision. Return the authoritative state rather than a stale
+        # pre-lifecycle snapshot.
+        decision.agent_state = agent.state
         return decision
 
 
