@@ -7,6 +7,8 @@
   const RUNTIME_TASK_ENDPOINT = '/evaluation/runtime/task-execute';
   const GRANT_HOST_ID = 'admin-evaluation-grants';
   const EXTERNAL_CATEGORY = 'external_evaluation';
+  const STANDARD_QUOTA = 100;
+  const INTEGRATION_QUOTA = 200;
   let evaluationTaskCatalog = [];
   let evaluationBindingCatalog = [];
 
@@ -89,16 +91,22 @@
     return `
       <div class="sec-hdr">
         <div class="sh-title">Evaluation Grant Preparation</div>
-        <div class="sh-sub">identity, request safety limit, canonical tasks, prepared bindings, grant creation, one-time issue, and revoke</div>
+        <div class="sh-sub">identity, Maestro Unit limit, canonical tasks, prepared bindings, one-time issue, WhatsApp delivery, and revoke</div>
       </div>
       <div class="admin-note">
-        Evaluation grants are temporary, request-limited, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
+        Evaluation grants remain temporary, non-production entitlements. Standard evaluations use 100 Maestro Units; Integration evaluations use 200. Raw API keys are shown only once and are never reprinted from stored metadata.
       </div>
       <div class="grid-3">
         <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
         <label>Issued to<input id="admin-eval-issued-to" type="text" placeholder="Company or evaluator"></label>
+        <label>Evaluation type
+          <select id="admin-eval-type">
+            <option value="standard" selected>Standard</option>
+            <option value="integration">Integration</option>
+          </select>
+        </label>
         <label>Duration days<input id="admin-eval-days" type="number" min="1" max="90" value="14"></label>
-        <label>Evaluation request limit<input id="admin-eval-max-requests" type="number" min="1" max="5000" value="100"></label>
+        <label>Maestro Unit limit<input id="admin-eval-max-requests" type="number" min="1" max="5000" value="100" readonly></label>
         <label style="grid-column:span 2">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation"></label>
       </div>
       <div style="margin-top:var(--s-3)">
@@ -121,6 +129,14 @@
       <div id="admin-eval-result" class="admin-note" style="margin-top:var(--s-3)"></div>
       <div id="admin-eval-list" style="margin-top:var(--s-3)">Loading evaluation grants...</div>
     `;
+  }
+
+  function syncEvaluationTypeQuota() {
+    const type = text(document.getElementById('admin-eval-type')?.value) || 'standard';
+    const quota = document.getElementById('admin-eval-max-requests');
+    if (quota) quota.value = type === 'integration' ? String(INTEGRATION_QUOTA) : String(STANDARD_QUOTA);
+    dispatchEvaluationSelectionChanged();
+    updateEvaluationReadiness();
   }
 
   function renderEvaluationTaskCatalog() {
@@ -263,6 +279,7 @@
     const clientId = text(document.getElementById('admin-eval-client-id')?.value);
     const issuedTo = text(document.getElementById('admin-eval-issued-to')?.value);
     const purpose = text(document.getElementById('admin-eval-purpose')?.value);
+    const evaluationType = text(document.getElementById('admin-eval-type')?.value) || 'standard';
     const duration = Number.parseInt(document.getElementById('admin-eval-days')?.value || '0', 10);
     const requestLimit = Number.parseInt(document.getElementById('admin-eval-max-requests')?.value || '0', 10);
     const tasks = selectedEvaluationTasks();
@@ -276,6 +293,7 @@
       return item?.selectable === true && tasks.includes(text(item.task_id));
     });
     const grantAuthority = document.body.dataset.adminEvaluationGrants;
+    const expectedQuota = evaluationType === 'integration' ? INTEGRATION_QUOTA : STANDARD_QUOTA;
 
     const checks = [
       ['category', category === EXTERNAL_CATEGORY, 'Select External Evaluation Access in Category.'],
@@ -291,7 +309,7 @@
       ['issued_to', Boolean(issuedTo), 'Issued to is required.'],
       ['purpose', purpose.length >= 10, 'Purpose must contain at least 10 characters.'],
       ['duration', Number.isInteger(duration) && duration >= 1 && duration <= 90, 'Duration must be between 1 and 90 days.'],
-      ['request_limit', Number.isInteger(requestLimit) && requestLimit >= 1 && requestLimit <= 5000, 'Evaluation request limit must be between 1 and 5000.'],
+      ['quota', requestLimit === expectedQuota, `Maestro Unit limit must be ${expectedQuota} for ${evaluationType}.`],
     ];
     const missing = checks.filter(([, ok]) => !ok).map(([id, , message]) => ({ id, message }));
     return {
@@ -302,6 +320,7 @@
       clientId,
       issuedTo,
       purpose,
+      evaluationType,
       duration,
       requestLimit,
       tasks,
@@ -322,7 +341,7 @@
     if (target) {
       target.className = readiness.ready ? 'admin-note ok' : 'admin-note';
       target.innerHTML = readiness.ready
-        ? '<strong>READY.</strong> All planned lifecycle gates are complete. Create Evaluation Grant is enabled; backend validation remains authoritative.'
+        ? `<strong>READY.</strong> ${escapeHtml(readiness.evaluationType)} evaluation · ${escapeHtml(readiness.requestLimit)} Maestro Units · ${escapeHtml(readiness.duration)} days. Backend validation remains authoritative.`
         : `<strong>LOCKED.</strong> Complete the remaining gates:<br>${readiness.missing
             .map((item) => `• ${escapeHtml(item.message)}`)
             .join('<br>')}`;
@@ -331,23 +350,50 @@
     return readiness;
   }
 
+  function keyListId(grantId) {
+    return `admin-eval-keys-${String(grantId).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  }
+
   function grantRow(grant) {
     const active = text(grant.status).toLowerCase() === 'active';
     const tasks = Array.isArray(grant.allowed_task_ids) ? grant.allowed_task_ids : [];
     const scopes = Array.isArray(grant.allowed_scopes) ? grant.allowed_scopes : [];
     const bindings = Array.isArray(grant.allowed_binding_ids) ? grant.allowed_binding_ids : [];
+    const evaluationType = text(grant.evaluation_type) || 'standard';
     const actions = active
       ? `<button class="btn secondary" data-eval-issue="${escapeHtml(grant.grant_id)}" type="button">Issue API Key</button>
-         <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke</button>`
+         <button class="btn danger" data-eval-revoke="${escapeHtml(grant.grant_id)}" type="button">Revoke Grant</button>`
       : '';
     return `
       <div class="card flat" style="margin-top:var(--s-2)">
-        <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)}</div>
-        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · request limit ${escapeHtml(grant.max_requests)} · keys ${escapeHtml(grant.active_key_count || 0)}</div>
+        <div><strong>${escapeHtml(grant.issued_to || grant.client_id)}</strong> · ${escapeHtml(grant.status)} · ${escapeHtml(evaluationType)}</div>
+        <div class="muted">${escapeHtml(grant.grant_id)} · client ${escapeHtml(grant.client_id)} · ${escapeHtml(grant.max_requests)} Maestro Units · keys ${escapeHtml(grant.active_key_count || 0)}</div>
         <div class="muted">scopes: ${scopes.length ? scopes.map(escapeHtml).join(', ') : 'backend defaults'}</div>
         <div class="muted">tasks: ${tasks.length ? tasks.map(escapeHtml).join(', ') : 'none'} · authority ${escapeHtml(grant.task_authority_source || 'integration_task_catalog')}</div>
         <div class="muted">bindings: ${bindings.length ? bindings.map(escapeHtml).join(', ') : 'not required'}</div>
         <div class="muted">expires ${escapeHtml(grant.expires_at)} · subscription required: no · production: disabled</div>
+        <div style="margin-top:var(--s-2)">${actions}</div>
+        <div id="${keyListId(grant.grant_id)}" style="margin-top:var(--s-2)"><span class="muted">Loading issued keys...</span></div>
+      </div>
+    `;
+  }
+
+  function keyRow(grantId, key) {
+    const active = text(key.status).toLowerCase() === 'enabled';
+    const sent = text(key.delivery_status).toLowerCase() === 'sent';
+    const quota = Number(key.quota_limit || key.evaluation_request_limit || 0);
+    const used = Number(key.usage_count || 0);
+    const remaining = Math.max(0, quota - used);
+    const actions = active
+      ? `${sent ? '' : `<button class="btn secondary" data-eval-send-key="${escapeHtml(key.key_id)}" data-eval-grant-id="${escapeHtml(grantId)}" type="button">Send</button>`}
+         <button class="btn danger" data-eval-revoke-key="${escapeHtml(key.key_id)}" data-eval-grant-id="${escapeHtml(grantId)}" type="button">Revoke</button>`
+      : '';
+    return `
+      <div class="card flat" style="margin-top:var(--s-2)">
+        <div><strong>${escapeHtml(key.prefix)}</strong> · ${escapeHtml(key.status)} · ${escapeHtml(key.evaluation_type || 'standard')}</div>
+        <div class="muted">Key ID ${escapeHtml(key.key_id)} · ${escapeHtml(remaining)} / ${escapeHtml(quota)} Maestro Units remaining</div>
+        <div class="muted">Delivery: ${sent ? 'SENT via WhatsApp' : 'not sent'}${key.delivered_at ? ` · ${escapeHtml(key.delivered_at)}` : ''}</div>
+        <div class="muted">Last used: ${escapeHtml(key.last_used_at || 'never')} · expires ${escapeHtml(key.expires_at || '')}</div>
         <div style="margin-top:var(--s-2)">${actions}</div>
       </div>
     `;
@@ -360,6 +406,24 @@
     target.innerHTML = message;
   }
 
+  async function refreshEvaluationKeys(grantId) {
+    const target = document.getElementById(keyListId(grantId));
+    if (!target) return;
+    try {
+      const payload = await request(
+        `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys`,
+        'GET'
+      );
+      const keys = Array.isArray(payload.keys) ? payload.keys : [];
+      target.innerHTML = keys.length
+        ? `<div class="muted"><strong>Issued keys</strong> — raw secrets are never reprinted.</div>${keys.map((key) => keyRow(grantId, key)).join('')}`
+        : '<div class="muted">No API keys issued for this grant.</div>';
+      bindKeyActions();
+    } catch (error) {
+      target.innerHTML = `<div class="admin-note danger">Unable to load issued keys: ${escapeHtml(error.message || error)}</div>`;
+    }
+  }
+
   async function refreshEvaluationGrants() {
     const list = document.getElementById('admin-eval-list');
     if (!list) return;
@@ -370,6 +434,7 @@
         ? grants.map(grantRow).join('')
         : '<div class="muted">No evaluation grants have been issued.</div>';
       bindGrantActions();
+      grants.forEach((grant) => refreshEvaluationKeys(grant.grant_id));
     } catch (error) {
       list.innerHTML = `<div class="admin-note danger">Unable to load evaluation grants: ${escapeHtml(error.message || error)}</div>`;
     }
@@ -393,6 +458,7 @@
         user_id: readiness.clientId,
         issued_to: readiness.issuedTo,
         purpose: readiness.purpose,
+        evaluation_type: readiness.evaluationType,
         allowed_task_ids: readiness.tasks,
         allowed_binding_ids: readiness.bindings,
         allowed_endpoints: readiness.endpoints,
@@ -403,18 +469,49 @@
       const grant = result.grant || {};
       setGrantResult(
         `Evaluation grant created: <strong>${escapeHtml(grant.grant_id || '')}</strong><br>` +
+        `Type: ${escapeHtml(grant.evaluation_type || readiness.evaluationType)}<br>` +
         `Tasks: ${(grant.allowed_task_ids || []).map(escapeHtml).join(', ')}<br>` +
         `Bindings: ${(grant.allowed_binding_ids || []).map(escapeHtml).join(', ') || 'not required'}<br>` +
         `Scopes: ${(grant.allowed_scopes || []).map(escapeHtml).join(', ') || 'backend defaults'}<br>` +
-        `Evaluation request limit: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
+        `Maestro Unit limit: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
       );
       await refreshEvaluationGrants();
       dispatchEvaluationSelectionChanged();
     } catch (error) {
-      setGrantResult(
-        `Unable to create grant: ${escapeHtml(error.message || error)}`,
-        true
+      setGrantResult(`Unable to create grant: ${escapeHtml(error.message || error)}`, true);
+    }
+  }
+
+  async function markEvaluationKeySent(grantId, keyId) {
+    try {
+      const result = await request(
+        `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}/delivery`,
+        'POST',
+        { channel: 'whatsapp' }
       );
+      const key = result.key || {};
+      setGrantResult(
+        `Delivery recorded: <strong>${escapeHtml(key.prefix || keyId)}</strong> sent via WhatsApp. Raw key content was not stored or reprinted.`
+      );
+      await refreshEvaluationKeys(grantId);
+    } catch (error) {
+      setGrantResult(`Unable to record WhatsApp delivery: ${escapeHtml(error.message || error)}`, true);
+    }
+  }
+
+  async function revokeEvaluationKey(grantId, keyId) {
+    if (!window.confirm('Revoke this evaluation API key? The key will stop working immediately.')) return;
+    try {
+      const result = await request(
+        `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}/keys/${encodeURIComponent(keyId)}`,
+        'DELETE'
+      );
+      const key = result.key || {};
+      setGrantResult(`Evaluation API key revoked: <strong>${escapeHtml(key.prefix || keyId)}</strong>.`);
+      await refreshEvaluationGrants();
+      window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
+    } catch (error) {
+      setGrantResult(`Unable to revoke evaluation key: ${escapeHtml(error.message || error)}`, true);
     }
   }
 
@@ -436,17 +533,23 @@
       const exampleEndpoint = text(usage.example_endpoint) || '/adapters/status';
       setGrantResult(`
         <strong>One-time evaluation API key created.</strong><br>
-        Copy it now; it will not be displayed again.<br>
+        Copy it now and send it from the administrator's WhatsApp account. It will not be displayed again after this issue view is replaced.<br>
         <span class="mono-block" style="display:block;margin-top:var(--s-2)">X-API-Key: ${escapeHtml(secret)}</span>
         ${header !== 'X-API-Key' ? `<div class="muted">Backend header: ${escapeHtml(header)}</div>` : ''}
-        <button id="admin-eval-copy-issued-key" class="btn secondary" type="button" style="margin-top:var(--s-2)">Copy API Key</button><br>
+        <div style="margin-top:var(--s-2)">
+          <button id="admin-eval-copy-issued-key" class="btn secondary" type="button">Copy API Key</button>
+          <button id="admin-eval-send-issued-key" class="btn secondary" type="button">Send</button>
+          <button id="admin-eval-revoke-issued-key" class="btn danger" type="button">Revoke</button>
+        </div>
+        <strong>Key ID</strong>: ${escapeHtml(key.key_id || '')}<br>
         <strong>Grant</strong>: ${escapeHtml(grantId)}<br>
         <strong>Client</strong>: ${escapeHtml(key.client_id || '')}<br>
+        <strong>Type</strong>: ${escapeHtml(key.evaluation_type || 'standard')}<br>
         <strong>Scopes</strong>: ${escapeHtml(scopes.join(', ') || 'none')}<br>
         <strong>Task scope IDs</strong>: ${escapeHtml(taskScopes.join(', ') || 'none')}<br>
         <strong>Bound tasks:</strong> ${escapeHtml(tasks.join(', ') || 'none')}<br>
         <strong>Prepared bindings:</strong> ${escapeHtml(bindings.join(', ') || 'not required')}<br>
-        <strong>Evaluation request limit</strong>: ${escapeHtml(key.evaluation_request_limit)}<br>
+        <strong>Maestro Unit limit</strong>: ${escapeHtml(key.evaluation_request_limit)}<br>
         <strong>Expires</strong>: ${escapeHtml(key.expires_at)}<br>
         <strong>Example endpoint</strong>: ${escapeHtml(exampleEndpoint)}<br>
         <strong>Subscription required</strong>: no · <strong>Production</strong>: disabled
@@ -458,17 +561,21 @@
           // Clipboard may be unavailable in restricted browser contexts.
         }
       });
+      document.getElementById('admin-eval-send-issued-key')?.addEventListener('click', () =>
+        markEvaluationKeySent(grantId, key.key_id)
+      );
+      document.getElementById('admin-eval-revoke-issued-key')?.addEventListener('click', () =>
+        revokeEvaluationKey(grantId, key.key_id)
+      );
       await refreshEvaluationGrants();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
-      setGrantResult(
-        `Unable to issue evaluation key: ${escapeHtml(error.message || error)}`,
-        true
-      );
+      setGrantResult(`Unable to issue evaluation key: ${escapeHtml(error.message || error)}`, true);
     }
   }
 
   async function revokeEvaluationGrant(grantId) {
+    if (!window.confirm('Revoke this evaluation grant and all linked keys?')) return;
     try {
       const result = await request(
         `${EVALUATION_GRANTS_ENDPOINT}/${encodeURIComponent(grantId)}`,
@@ -480,23 +587,29 @@
       await refreshEvaluationGrants();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
-      setGrantResult(
-        `Unable to revoke evaluation grant: ${escapeHtml(error.message || error)}`,
-        true
-      );
+      setGrantResult(`Unable to revoke evaluation grant: ${escapeHtml(error.message || error)}`, true);
     }
+  }
+
+  function bindKeyActions() {
+    document.querySelectorAll('[data-eval-send-key]').forEach((button) => {
+      button.addEventListener('click', () =>
+        markEvaluationKeySent(button.dataset.evalGrantId, button.dataset.evalSendKey)
+      );
+    });
+    document.querySelectorAll('[data-eval-revoke-key]').forEach((button) => {
+      button.addEventListener('click', () =>
+        revokeEvaluationKey(button.dataset.evalGrantId, button.dataset.evalRevokeKey)
+      );
+    });
   }
 
   function bindGrantActions() {
     document.querySelectorAll('[data-eval-issue]').forEach((button) => {
-      button.addEventListener('click', () =>
-        issueEvaluationKey(button.dataset.evalIssue)
-      );
+      button.addEventListener('click', () => issueEvaluationKey(button.dataset.evalIssue));
     });
     document.querySelectorAll('[data-eval-revoke]').forEach((button) => {
-      button.addEventListener('click', () =>
-        revokeEvaluationGrant(button.dataset.evalRevoke)
-      );
+      button.addEventListener('click', () => revokeEvaluationGrant(button.dataset.evalRevoke));
     });
   }
 
@@ -508,12 +621,9 @@
     host.addEventListener('change', dispatchEvaluationSelectionChanged);
     host.addEventListener('input', updateEvaluationReadiness);
     host.addEventListener('change', updateEvaluationReadiness);
-    document
-      .getElementById('admin-eval-create')
-      ?.addEventListener('click', createEvaluationGrant);
-    document
-      .getElementById('admin-eval-refresh')
-      ?.addEventListener('click', refreshEvaluationGrants);
+    document.getElementById('admin-eval-type')?.addEventListener('change', syncEvaluationTypeQuota);
+    document.getElementById('admin-eval-create')?.addEventListener('click', createEvaluationGrant);
+    document.getElementById('admin-eval-refresh')?.addEventListener('click', refreshEvaluationGrants);
 
     window.addEventListener('pmk-admin-session-verified', updateEvaluationReadiness);
     window.addEventListener('pmk-api-key-category-changed', () => {
@@ -531,21 +641,16 @@
     } catch (error) {
       evaluationTaskCatalog = [];
       renderEvaluationTaskCatalog();
-      setGrantResult(
-        `Unable to load canonical task catalog: ${escapeHtml(error.message || error)}`,
-        true
-      );
+      setGrantResult(`Unable to load canonical task catalog: ${escapeHtml(error.message || error)}`, true);
     }
     try {
       await loadEvaluationBindingCatalog();
     } catch (error) {
       evaluationBindingCatalog = [];
       renderEvaluationBindingCatalog();
-      setGrantResult(
-        `Unable to load prepared Evaluation bindings: ${escapeHtml(error.message || error)}`,
-        true
-      );
+      setGrantResult(`Unable to load prepared Evaluation bindings: ${escapeHtml(error.message || error)}`, true);
     }
+    syncEvaluationTypeQuota();
     refreshEvaluationGrants();
     dispatchEvaluationSelectionChanged();
     updateEvaluationReadiness();

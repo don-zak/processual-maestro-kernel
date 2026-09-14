@@ -94,7 +94,8 @@ def test_grant_creation_is_hard_blocked_until_every_plan_gate_is_ready() -> None
         "!runtimeSelected || bindingsPrepared",
         "purpose.length >= 10",
         "duration >= 1 && duration <= 90",
-        "requestLimit >= 1 && requestLimit <= 5000",
+        "const expectedQuota = evaluationType === 'integration' ? INTEGRATION_QUOTA : STANDARD_QUOTA",
+        "requestLimit === expectedQuota",
         "button.disabled = !readiness.ready",
         "if (!readiness.ready)",
         "Evaluation grant creation blocked by the lifecycle readiness contract.",
@@ -115,6 +116,7 @@ def test_grant_post_uses_complete_readiness_contract_values() -> None:
     assert "EVALUATION_GRANTS_ENDPOINT, 'POST'" in create_source
     assert "client_id: readiness.clientId" in create_source
     assert "issued_to: readiness.issuedTo" in create_source
+    assert "evaluation_type: readiness.evaluationType" in create_source
     assert "allowed_task_ids: readiness.tasks" in create_source
     assert "allowed_binding_ids: readiness.bindings" in create_source
     assert "allowed_endpoints: readiness.endpoints" in create_source
@@ -145,16 +147,16 @@ def test_runtime_task_execution_requires_prepared_evaluation_binding() -> None:
         assert marker in source
 
 
-def test_evaluation_request_limit_matches_backend_contract() -> None:
+def test_evaluation_maestro_unit_limit_matches_delivery_policy() -> None:
     source = _source(EVALUATION)
 
-    assert 'id="admin-eval-max-requests" type="number" min="1" max="5000"' in source
-    assert "requestLimit >= 1 && requestLimit <= 5000" in source
-    assert "Evaluation request limit must be between 1 and 5000." in source
+    assert 'id="admin-eval-max-requests" type="number" min="1" max="5000" value="100" readonly' in source
+    assert "const STANDARD_QUOTA = 100" in source
+    assert "const INTEGRATION_QUOTA = 200" in source
+    assert "requestLimit === expectedQuota" in source
+    assert "Maestro Unit limit must be ${expectedQuota} for ${evaluationType}." in source
     assert "key.evaluation_request_limit" in source
-    assert "key.quota_limit" not in source
-    assert "quota-bound" not in source
-    assert "<strong>Quota</strong>" not in source
+    assert "Maestro Unit limit" in source
 
 
 def test_standard_runtime_fixup_cannot_generate_an_external_evaluation_key() -> None:
@@ -176,12 +178,15 @@ def test_evaluation_issue_remains_one_time_and_never_persists_raw_secret() -> No
 
     required = [
         "One-time evaluation API key created.",
-        "Copy it now; it will not be displayed again.",
+        "It will not be displayed again",
         "X-API-Key:",
         "Copy API Key",
+        "Send",
+        "Revoke",
+        "WhatsApp",
         "Bound tasks:",
         "Prepared bindings:",
-        "Evaluation request limit",
+        "Maestro Unit limit",
         "Subscription required",
         "Production",
     ]

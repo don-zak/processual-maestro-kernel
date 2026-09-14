@@ -48,6 +48,41 @@ def _parse_datetime(value: Any) -> datetime | None:
     return _as_utc(parsed)
 
 
+def _iso(value: datetime | None) -> str | None:
+    normalized = _as_utc(value)
+    return normalized.isoformat() if normalized is not None else None
+
+
+def _safe_key_metadata(row: EvaluationAuthorityKey) -> dict[str, Any]:
+    payload = dict(row.payload or {})
+    quota_limit = int(payload.get("quota_limit", 0) or 0)
+    return {
+        "key_id": row.key_id,
+        "grant_id": row.grant_id,
+        "prefix": row.prefix,
+        "status": row.status,
+        "label": str(payload.get("label") or ""),
+        "client_id": str(payload.get("client_id") or ""),
+        "evaluation_type": str(payload.get("evaluation_type") or "standard"),
+        "quota_limit": quota_limit,
+        "evaluation_request_limit": int(
+            payload.get("evaluation_request_limit", quota_limit) or 0
+        ),
+        "usage_count": int(row.usage_count or 0),
+        "quota_rejected_count": int(row.quota_rejected_count or 0),
+        "created_at": _iso(row.created_at),
+        "last_used_at": _iso(row.last_used_at),
+        "expires_at": _iso(row.expires_at),
+        "revoked_at": _iso(row.revoked_at),
+        "delivery_status": str(payload.get("delivery_status") or "not_sent"),
+        "delivery_channel": str(payload.get("delivery_channel") or ""),
+        "delivered_at": str(payload.get("delivered_at") or "") or None,
+        "delivered_by": str(payload.get("delivered_by") or "") or None,
+        "production_allowed": False,
+        "raw_secret_visible": False,
+    }
+
+
 def evaluation_authority_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     allowed_keys = (
         "evaluation_grants_v1",
@@ -152,6 +187,103 @@ async def active_evaluation_key_count(owner_id: str, grant_id: str) -> int:
             )
     except Exception as exc:
         raise EvaluationAuthorityError("evaluation_authority_key_count_failed") from exc
+
+
+async def list_evaluation_authority_keys(
+    owner_id: str,
+    *,
+    grant_id: str | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        async with session_scope() as session:
+            statement = select(EvaluationAuthorityKey).where(
+                EvaluationAuthorityKey.owner_id == owner_id
+            )
+            if grant_id:
+                statement = statement.where(EvaluationAuthorityKey.grant_id == grant_id)
+            rows = (
+                await session.execute(
+                    statement.order_by(EvaluationAuthorityKey.created_at.desc())
+                )
+            ).scalars().all()
+            return [_safe_key_metadata(row) for row in rows]
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_list_failed") from exc
+
+
+async def mark_evaluation_authority_key_delivered(
+    owner_id: str,
+    key_id: str,
+    *,
+    delivered_by: str,
+    delivery_channel: str = "whatsapp",
+) -> dict[str, Any]:
+    try:
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    select(EvaluationAuthorityKey)
+                    .where(
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.key_id == key_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+            if row.status != "enabled" or row.revoked_at is not None:
+                raise EvaluationAuthorityError("evaluation_authority_key_not_active")
+            now = _now()
+            payload = dict(row.payload or {})
+            payload["delivery_status"] = "sent"
+            payload["delivery_channel"] = delivery_channel
+            payload["delivered_at"] = now.isoformat()
+            payload["delivered_by"] = delivered_by
+            row.payload = payload
+            return _safe_key_metadata(row)
+    except EvaluationAuthorityError:
+        raise
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_delivery_failed") from exc
+
+
+async def revoke_evaluation_authority_key(
+    owner_id: str,
+    key_id: str,
+    *,
+    revoked_by: str,
+) -> dict[str, Any]:
+    try:
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    select(EvaluationAuthorityKey)
+                    .where(
+                        EvaluationAuthorityKey.owner_id == owner_id,
+                        EvaluationAuthorityKey.key_id == key_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+            if row.status == "revoked" or row.revoked_at is not None:
+                return _safe_key_metadata(row)
+            now = _now()
+            row.status = "revoked"
+            row.revoked_at = now
+            payload = dict(row.payload or {})
+            payload["status"] = "revoked"
+            payload["revoked_at"] = now.isoformat()
+            payload["revocation_reason"] = "evaluation_key_revoked_by_admin"
+            payload["revoked_by"] = revoked_by
+            row.payload = payload
+            return _safe_key_metadata(row)
+    except EvaluationAuthorityError:
+        raise
+    except Exception as exc:
+        raise EvaluationAuthorityError("evaluation_authority_key_revoke_failed") from exc
 
 
 async def revoke_evaluation_authority_grant(owner_id: str, grant_id: str) -> int:
@@ -302,8 +434,11 @@ __all__ = [
     "active_evaluation_key_count",
     "create_evaluation_authority_key",
     "evaluation_authority_snapshot",
+    "list_evaluation_authority_keys",
     "load_evaluation_authority_state",
+    "mark_evaluation_authority_key_delivered",
     "revoke_evaluation_authority_grant",
+    "revoke_evaluation_authority_key",
     "save_evaluation_authority_state",
     "verify_evaluation_api_key",
 ]

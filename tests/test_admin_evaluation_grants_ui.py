@@ -58,7 +58,9 @@ def test_evaluation_grant_ui_uses_admin_auth_and_one_time_secret_boundary() -> N
     assert "window.PMK_ADMIN_AUTH" in source
     assert "credentials: 'include'" in source
     assert "X-API-Key:" in source
-    assert "Copy it now; it will not be displayed again." in source
+    assert "One-time evaluation API key created." in source
+    assert "It will not be displayed again" in source
+    assert "WhatsApp" in source
     assert "key_hash" not in source
     assert "provider_secret" not in source
 

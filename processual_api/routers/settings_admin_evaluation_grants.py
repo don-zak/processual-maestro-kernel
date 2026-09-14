@@ -34,8 +34,11 @@ from processual_api.services.evaluation_authority_postgres import (
     EvaluationAuthorityError,
     active_evaluation_key_count,
     create_evaluation_authority_key,
+    list_evaluation_authority_keys,
     load_evaluation_authority_state,
+    mark_evaluation_authority_key_delivered,
     revoke_evaluation_authority_grant,
+    revoke_evaluation_authority_key,
     save_evaluation_authority_state,
 )
 from processual_api.services.evaluation_grants import (
@@ -60,6 +63,10 @@ PILOT_DEFAULT_SCOPES = [
     "read:reports",
     "run:evaluation",
 ]
+EVALUATION_TYPE_STANDARD = "standard"
+EVALUATION_TYPE_INTEGRATION = "integration"
+STANDARD_EVALUATION_QUOTA = 100
+INTEGRATION_EVALUATION_QUOTA = 200
 
 
 class EvaluationEndpointSelection(BaseModel):
@@ -80,12 +87,20 @@ class EvaluationGrantCreate(BaseModel):
         min_length=1,
         max_length=16,
     )
-    max_requests: int = Field(default=200, ge=1, le=5000)
+    evaluation_type: str = Field(
+        default=EVALUATION_TYPE_STANDARD,
+        pattern="^(standard|integration)$",
+    )
+    max_requests: int = Field(default=STANDARD_EVALUATION_QUOTA, ge=1, le=5000)
     expires_in_days: int = Field(default=14, ge=1, le=90)
 
 
 class EvaluationKeyIssue(BaseModel):
     label: str = Field(default="External evaluation access", min_length=1, max_length=160)
+
+
+class EvaluationKeyDelivery(BaseModel):
+    channel: str = Field(default="whatsapp", pattern="^whatsapp$")
 
 
 def _owner_user_id(current_user: dict[str, Any]) -> str:
@@ -308,10 +323,21 @@ async def _require_platform_admin(request: Request, current_user: dict[str, Any]
 
 
 def _authority_http_error(exc: EvaluationAuthorityError) -> HTTPException:
-    if str(exc) == "evaluation_grant_not_found":
+    error = str(exc)
+    if error == "evaluation_grant_not_found":
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Evaluation grant not found.",
+        )
+    if error == "evaluation_authority_key_not_found":
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation API key not found.",
+        )
+    if error == "evaluation_authority_key_not_active":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Evaluation API key is not active.",
         )
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -378,8 +404,6 @@ async def create_evaluation_grant(
 ):
     await _require_platform_admin(request, current_user)
     owner_user_id = _owner_user_id(current_user)
-    # Prepared Enterprise sandbox configuration is read once here, validated,
-    # then sealed into the shared Evaluation authority snapshot.
     prepared_raw = settings_module._load_raw(owner_user_id)
     raw = dict(prepared_raw)
     grants = evaluation_grants(raw)
@@ -394,6 +418,12 @@ async def create_evaluation_grant(
         task_ids=task_ids,
         endpoints=endpoints,
     )
+    evaluation_type = body.evaluation_type.strip().lower()
+    max_requests = (
+        INTEGRATION_EVALUATION_QUOTA
+        if evaluation_type == EVALUATION_TYPE_INTEGRATION
+        else int(body.max_requests)
+    )
     grant = {
         "grant_id": f"eval_{secrets.token_hex(8)}",
         "status": "active",
@@ -401,12 +431,14 @@ async def create_evaluation_grant(
         "user_id": str(body.user_id or body.client_id).strip(),
         "issued_to": body.issued_to.strip(),
         "purpose": body.purpose.strip(),
+        "evaluation_type": evaluation_type,
+        "quota_unit": "maestro_units",
         "allowed_task_ids": task_ids,
         "task_scope_ids": task_scope_ids,
         "allowed_binding_ids": binding_ids,
         "allowed_endpoints": endpoints,
         "allowed_scopes": scopes,
-        "max_requests": int(body.max_requests),
+        "max_requests": max_requests,
         "created_at": now.isoformat(),
         "expires_at": (now + timedelta(days=body.expires_in_days)).isoformat(),
         "approved_by": actor,
@@ -476,6 +508,30 @@ async def list_evaluation_grants(
     }
 
 
+@settings_module.router.get(
+    "/admin/evaluation-grants/{grant_id}/keys",
+    response_model=dict,
+)
+async def list_evaluation_keys(
+    grant_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    await _require_platform_admin(request, current_user)
+    owner_user_id = _owner_user_id(current_user)
+    try:
+        keys = await list_evaluation_authority_keys(owner_user_id, grant_id=grant_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
+    return {
+        "status": "ready",
+        "grant_id": grant_id,
+        "keys": keys,
+        "key_count": len(keys),
+        "raw_secret_visible": False,
+    }
+
+
 @settings_module.router.post(
     "/admin/evaluation-grants/{grant_id}/issue-key",
     response_model=dict,
@@ -503,6 +559,7 @@ async def issue_evaluation_key(
     task_scope_ids = list(grant.get("task_scope_ids") or [])
     binding_ids = list(grant.get("allowed_binding_ids") or [])
     client_id = str(grant.get("client_id") or "")
+    evaluation_type = str(grant.get("evaluation_type") or EVALUATION_TYPE_STANDARD)
     max_requests = int(grant.get("max_requests", 0) or 0)
     try:
         validate_evaluation_grant(
@@ -548,6 +605,12 @@ async def issue_evaluation_key(
         "label": body.label.strip(),
         "purpose": str(grant.get("purpose") or ""),
         "issued_to": str(grant.get("issued_to") or client_id),
+        "evaluation_type": evaluation_type,
+        "quota_unit": "maestro_units",
+        "delivery_status": "not_sent",
+        "delivery_channel": "",
+        "delivered_at": None,
+        "delivered_by": None,
         "created_by_admin_role": "platform_admin",
         "evaluation_grant_id": grant_id,
         "entitlement_source": "admin_evaluation_grant",
@@ -585,6 +648,9 @@ async def issue_evaluation_key(
             "category": "pilot_client",
             "client_id": client_id,
             "evaluation_grant_id": grant_id,
+            "evaluation_type": evaluation_type,
+            "quota_unit": "maestro_units",
+            "delivery_status": "not_sent",
             "scopes": scopes,
             "allowed_endpoints": endpoints,
             "allowed_task_ids": task_ids,
@@ -604,6 +670,62 @@ async def issue_evaluation_key(
             "example_endpoint": endpoints[0]["path"] if endpoints else "/health/live",
         },
     }
+
+
+@settings_module.router.post(
+    "/admin/evaluation-grants/{grant_id}/keys/{key_id}/delivery",
+    response_model=dict,
+)
+async def mark_evaluation_key_delivered(
+    grant_id: str,
+    key_id: str,
+    body: EvaluationKeyDelivery,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    await _require_platform_admin(request, current_user)
+    owner_user_id = _owner_user_id(current_user)
+    actor, _ = _actor(current_user)
+    try:
+        keys = await list_evaluation_authority_keys(owner_user_id, grant_id=grant_id)
+        if not any(item["key_id"] == key_id for item in keys):
+            raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+        key = await mark_evaluation_authority_key_delivered(
+            owner_user_id,
+            key_id,
+            delivered_by=actor,
+            delivery_channel=body.channel,
+        )
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
+    return {"status": "sent", "key": key}
+
+
+@settings_module.router.delete(
+    "/admin/evaluation-grants/{grant_id}/keys/{key_id}",
+    response_model=dict,
+)
+async def revoke_evaluation_key(
+    grant_id: str,
+    key_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    await _require_platform_admin(request, current_user)
+    owner_user_id = _owner_user_id(current_user)
+    actor, _ = _actor(current_user)
+    try:
+        keys = await list_evaluation_authority_keys(owner_user_id, grant_id=grant_id)
+        if not any(item["key_id"] == key_id for item in keys):
+            raise EvaluationAuthorityError("evaluation_authority_key_not_found")
+        key = await revoke_evaluation_authority_key(
+            owner_user_id,
+            key_id,
+            revoked_by=actor,
+        )
+    except EvaluationAuthorityError as exc:
+        raise _authority_http_error(exc) from exc
+    return {"status": "revoked", "key": key}
 
 
 @settings_module.router.delete("/admin/evaluation-grants/{grant_id}", response_model=dict)
@@ -631,6 +753,11 @@ async def revoke_evaluation_grant(
 __all__ = [
     "EvaluationEndpointSelection",
     "EvaluationGrantCreate",
+    "EvaluationKeyDelivery",
     "EvaluationKeyIssue",
+    "EVALUATION_TYPE_INTEGRATION",
+    "EVALUATION_TYPE_STANDARD",
+    "INTEGRATION_EVALUATION_QUOTA",
     "PILOT_DEFAULT_SCOPES",
+    "STANDARD_EVALUATION_QUOTA",
 ]

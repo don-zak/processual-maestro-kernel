@@ -199,12 +199,14 @@ def test_session_loads_provisioning_and_issue_controls_only_after_verified_admin
     )
 
 
-def test_evaluation_key_issue_result_is_complete_and_copyable_once() -> None:
+def test_evaluation_key_issue_result_is_complete_copyable_and_delivery_bounded() -> None:
     source = _source(EVALUATION)
 
     required = [
         "One-time evaluation API key created.",
         "admin-eval-copy-issued-key",
+        "admin-eval-send-issued-key",
+        "admin-eval-revoke-issued-key",
         "navigator.clipboard.writeText(secret)",
         "key.scopes",
         "key.task_scope_ids",
@@ -215,11 +217,11 @@ def test_evaluation_key_issue_result_is_complete_and_copyable_once() -> None:
         "usage.example_endpoint",
         "Subscription required",
         "Production",
+        "WhatsApp",
     ]
     for marker in required:
         assert marker in source
 
-    assert "key.quota_limit" not in source
     assert "sessionStorage.setItem" not in source
     assert "localStorage.setItem" not in source
 
@@ -233,14 +235,14 @@ def test_evaluation_module_emits_selection_events_for_live_preview() -> None:
     assert "host.addEventListener('change', dispatchEvaluationSelectionChanged)" in source
 
 
-def test_evaluation_grant_cards_show_scopes_tasks_request_limit_and_expiry() -> None:
+def test_evaluation_grant_cards_show_scopes_tasks_maestro_units_and_expiry() -> None:
     source = _source(EVALUATION)
 
     assert "grant.allowed_scopes" in source
     assert "grant.allowed_task_ids" in source
     assert "grant.allowed_binding_ids" in source
     assert "grant.max_requests" in source
-    assert "request limit" in source
+    assert "Maestro Units" in source
     assert "grant.expires_at" in source
     assert "subscription required: no" in source
     assert "production: disabled" in source
