@@ -248,28 +248,44 @@ async def get_evaluation_execution_status(
     api_key_id: str,
     execution_id: str,
 ) -> dict[str, Any] | None:
-    """Resolve a safe execution receipt by public execution id or internal record id."""
+    """Resolve a safe execution receipt without a bounded recent-history scan."""
+
+    wanted = str(execution_id or "").strip()
+    if not wanted:
+        return None
+    owner_digest = _owner_digest(owner_id)
     try:
         async with session_scope() as session:
-            rows = (
+            # The runtime exposes record_id as the canonical execution id, so the
+            # normal path is a direct primary-key lookup with authority scoping.
+            row = (
                 await session.execute(
-                    select(EvaluationRuntimeDelivery)
-                    .where(
-                        EvaluationRuntimeDelivery.owner_id_sha256 == _owner_digest(owner_id),
+                    select(EvaluationRuntimeDelivery).where(
+                        EvaluationRuntimeDelivery.record_id == wanted,
+                        EvaluationRuntimeDelivery.owner_id_sha256 == owner_digest,
                         EvaluationRuntimeDelivery.grant_id == grant_id,
                         EvaluationRuntimeDelivery.api_key_id == api_key_id,
                     )
-                    .order_by(EvaluationRuntimeDelivery.accepted_at.desc())
-                    .limit(100)
                 )
-            ).scalars().all()
-            wanted = str(execution_id or "").strip()
-            for row in rows:
-                evidence = row.evidence if isinstance(row.evidence, dict) else {}
-                public_id = str(evidence.get("execution_id") or "")
-                if row.record_id == wanted or public_id == wanted:
-                    return _customer_execution_receipt(row)
-            return None
+            ).scalar_one_or_none()
+            if row is not None:
+                return _customer_execution_receipt(row)
+
+            # Historical evidence may contain a distinct public execution id.
+            # Query it directly across the full scoped ledger rather than
+            # searching an arbitrary latest-N window.
+            row = (
+                await session.execute(
+                    select(EvaluationRuntimeDelivery).where(
+                        EvaluationRuntimeDelivery.owner_id_sha256 == owner_digest,
+                        EvaluationRuntimeDelivery.grant_id == grant_id,
+                        EvaluationRuntimeDelivery.api_key_id == api_key_id,
+                        EvaluationRuntimeDelivery.evidence["execution_id"].as_string()
+                        == wanted,
+                    )
+                )
+            ).scalar_one_or_none()
+            return _customer_execution_receipt(row) if row is not None else None
     except Exception as exc:
         raise EvaluationDeliveryError("evaluation_execution_status_unavailable") from exc
 
