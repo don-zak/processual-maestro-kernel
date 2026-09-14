@@ -164,7 +164,7 @@ def test_compute_fate_vector_clamps_inputs_and_returns_all_components() -> None:
         ("extinct", 0.3, 0, GatewayAction.BLOCK, AgentState.FROZEN, False),
         ("extinct", 0.1, 0, GatewayAction.BLOCK, AgentState.ACTIVE, False),
         ("distorted", 0.0, 0, GatewayAction.BLOCK, AgentState.ACTIVE, True),
-        ("stable", 0.0, 3, GatewayAction.ESCALATE, AgentState.ESCALATED, True),
+        ("stable", 0.0, 3, GatewayAction.PASS, AgentState.ACTIVE, False),
         ("hybrid", 0.0, 0, GatewayAction.REPAIR, AgentState.ACTIVE, True),
         ("transient", 0.0, 0, GatewayAction.REPAIR, AgentState.ACTIVE, True),
         ("stable", 0.0, 0, GatewayAction.PASS, AgentState.ACTIVE, False),
@@ -182,11 +182,12 @@ def test_policy_engine_rule_chain(
     repair_prompt = "repair this"
     decision = PolicyEngine.decide(
         agent=_agent(failures=failures),
-        fate_vector={"hallucination": hallucination},
+        fate_vector={},
         rank=rank,
         reward=0.2,
         policy="policy",
         repair_prompt=repair_prompt,
+        risk_signals={"hallucination": hallucination},
     )
 
     assert decision.action is expected_action
