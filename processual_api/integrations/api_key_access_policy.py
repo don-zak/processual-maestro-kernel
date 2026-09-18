@@ -21,6 +21,7 @@ class ApiKeyAccessPolicy:
     operation_class: str
     required_scopes: tuple[str, ...]
     operational_profile_ids: tuple[str, ...]
+    governance_operation_id: str | None = None
     production_allowed: bool = False
 
 
@@ -32,6 +33,7 @@ def _policy(
     operation_class: str,
     required_scopes: tuple[str, ...],
     operational_profile_ids: tuple[str, ...],
+    governance_operation_id: str | None = None,
 ) -> ApiKeyAccessPolicy:
     normalized_method = method.strip().upper()
     normalized_path = path.strip()
@@ -62,6 +64,11 @@ def _policy(
         operation_class=operation_class.strip().lower(),
         required_scopes=scopes,
         operational_profile_ids=profiles,
+        governance_operation_id=(
+            governance_operation_id.strip().lower()
+            if governance_operation_id
+            else None
+        ),
     )
 
 
@@ -128,6 +135,7 @@ _POLICIES = {
         "execute",
         ("run:evaluation",),
         ("platform_evaluation_runtime",),
+        "evaluation.runtime.task_execute",
     ),
 }
 
