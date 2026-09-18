@@ -16,8 +16,8 @@ from processual_api.services.evaluation_authority_models import (
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     find_evaluation_grant,
-    validate_evaluation_governance_contract,
     refresh_evaluation_grant_status,
+    validate_evaluation_governance_contract,
 )
 
 
