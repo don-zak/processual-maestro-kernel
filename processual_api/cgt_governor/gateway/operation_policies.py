@@ -66,6 +66,9 @@ _OPERATION_POLICIES: dict[str, OperationGovernancePolicy] = {
         require_task_sufficiency=True,
         require_runtime_attestation=True,
     ),
+    "evaluation.external_access": OperationGovernancePolicy(
+        operation_id="evaluation.external_access",
+    ),
     "evaluation.runtime.task_execute": OperationGovernancePolicy(
         operation_id="evaluation.runtime.task_execute",
         required_scopes=("run:evaluation",),
