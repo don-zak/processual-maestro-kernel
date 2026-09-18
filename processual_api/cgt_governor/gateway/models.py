@@ -58,6 +58,7 @@ class GatewayDecision:
     signature: str | None = None
     governance_gate: str | None = None
     lifecycle_recommendation: str | None = None
+    qualification: dict[str, object] | None = None
 
 
 @dataclass
