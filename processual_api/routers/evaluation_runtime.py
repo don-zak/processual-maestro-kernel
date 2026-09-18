@@ -47,6 +47,7 @@ from processual_api.services.external_evaluation_governance import (
     attest_external_evaluation_execution,
     external_evaluation_governance_evidence,
     qualify_external_evaluation_preflight,
+    validate_external_evaluation_replay_governance,
 )
 from processual_api.services.evaluation_runtime_delivery_postgres import (
     EvaluationDeliveryError,
@@ -337,6 +338,20 @@ async def execute_evaluation_runtime_task(
 
     if claim["status"] == "replay":
         replay_response = dict(claim["response"])
+        try:
+            validate_external_evaluation_replay_governance(
+                governance_preflight,
+                replay_response,
+            )
+        except ExternalEvaluationGovernanceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Stored evaluation replay predates or conflicts with the "
+                    "current Governance Genome contract; operator reconciliation "
+                    "is required before replay."
+                ),
+            ) from exc
         replay_response["idempotent_replay"] = True
         return replay_response
 
