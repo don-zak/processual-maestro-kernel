@@ -373,10 +373,7 @@ def _evaluate_and_record(
     entry: dict = {
         **response_data,
         "ts": datetime.now(UTC).isoformat(),
-        "gateway_action": decision.action.value,
         "governance_action": pd.action.value,
-        "qualification": decision.qualification,
-        "governance_gate": decision.governance_gate,
         "action_label": pd.action_label,
     }
     if context:
