@@ -42,13 +42,6 @@ from processual_api.services.evaluation_grants import (
     find_evaluation_grant,
     refresh_evaluation_grant_status,
 )
-from processual_api.services.external_evaluation_governance import (
-    ExternalEvaluationGovernanceError,
-    attest_external_evaluation_execution,
-    external_evaluation_governance_evidence,
-    qualify_external_evaluation_preflight,
-    validate_external_evaluation_replay_governance,
-)
 from processual_api.services.evaluation_runtime_delivery_postgres import (
     EvaluationDeliveryError,
     EvaluationIdempotencyConflictError,
@@ -57,6 +50,13 @@ from processual_api.services.evaluation_runtime_delivery_postgres import (
     complete_evaluation_execution,
     evaluation_request_fingerprint,
     fail_evaluation_execution,
+)
+from processual_api.services.external_evaluation_governance import (
+    ExternalEvaluationGovernanceError,
+    attest_external_evaluation_execution,
+    external_evaluation_governance_evidence,
+    qualify_external_evaluation_preflight,
+    validate_external_evaluation_replay_governance,
 )
 
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
