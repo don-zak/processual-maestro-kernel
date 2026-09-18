@@ -115,7 +115,9 @@ _SAFE_REPLAY_RESULT_KEYS = frozenset(
         "governance_operation_id",
         "governance_claim_ceiling",
         "governance_fail_closed",
+        "governance_context_digest",
         "governance_source_digest",
+        "runtime_attested_at",
         "runtime_attestation_digest",
     }
 )
@@ -393,6 +395,7 @@ async def execute_evaluation_runtime_task(
             governance_preflight,
             execution_id=str(result.get("execution_id") or ""),
             completed_at=str(result.get("completed_at") or ""),
+            execution_evidence_digest=str(result.get("evidence_sha256") or ""),
             succeeded=True,
         )
         governance_evidence = external_evaluation_governance_evidence(
