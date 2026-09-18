@@ -122,6 +122,7 @@ def _agent_to_dict(agent: Agent) -> dict:
             "repair_prompt": e.repair_prompt,
             "action_taken": e.action_taken.value,
             "language": e.language,
+            "qualification": e.qualification,
         }
         for e in agent.evaluation_history
     ]
@@ -150,6 +151,7 @@ def _dict_to_agent(data: dict) -> Agent:
                 repair_prompt=e.get("repair_prompt"),
                 action_taken=GatewayAction(action_str),
                 language=e.get("language", "en"),
+                qualification=e.get("qualification"),
             )
         )
 
