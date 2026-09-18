@@ -8,6 +8,7 @@ from processual_api.cgt_governor.gateway.runtime_execution_attestation import (
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
 from processual_api.services.evaluation_grants import (
     EVALUATION_GOVERNANCE_OPERATION_ID,
+    EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID,
     evaluation_governance_contract,
     validate_evaluation_governance_contract,
 )
@@ -37,19 +38,22 @@ def _identity() -> dict:
     }
 
 
-def test_external_evaluation_operation_is_server_owned_and_fail_closed() -> None:
-    policy = get_operation_policy(EVALUATION_GOVERNANCE_OPERATION_ID)
-    assert policy is not None
-    assert policy.required_scopes == ("run:evaluation",)
-    assert policy.require_execution_evidence is True
-    assert policy.require_runtime_attestation is True
-    assert policy.fail_closed is True
+def test_external_evaluation_operations_are_server_owned_and_fail_closed() -> None:
+    grant_policy = get_operation_policy(EVALUATION_GOVERNANCE_OPERATION_ID)
+    runtime_policy = get_operation_policy(EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID)
+    assert grant_policy is not None
+    assert runtime_policy is not None
+    assert grant_policy.fail_closed is True
+    assert runtime_policy.required_scopes == ("run:evaluation",)
+    assert runtime_policy.require_execution_evidence is True
+    assert runtime_policy.require_runtime_attestation is True
+    assert runtime_policy.fail_closed is True
 
 
 def test_canonical_runtime_endpoint_is_bound_to_governance_operation() -> None:
     policy = get_api_key_access_policy("POST", "/evaluation/runtime/task-execute")
     assert policy is not None
-    assert policy.governance_operation_id == EVALUATION_GOVERNANCE_OPERATION_ID
+    assert policy.governance_operation_id == EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID
 
 
 def test_grant_contract_is_exactly_bound_to_current_genome() -> None:
@@ -58,6 +62,7 @@ def test_grant_contract_is_exactly_bound_to_current_genome() -> None:
     assert contract["claim_ceiling"] == governance_genome.runtime_claim_ceiling.value
     assert contract["fail_closed"] is True
     assert contract["operation_id"] == EVALUATION_GOVERNANCE_OPERATION_ID
+    assert contract["runtime_operation_id"] == EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID
     assert len(contract["policy_digest"]) == 64
     assert validate_evaluation_governance_contract({"governance_contract": contract}) == contract
 
@@ -101,12 +106,12 @@ def test_execution_attestation_closes_external_evaluation_lineage() -> None:
         execution_evidence_digest="b" * 64,
         succeeded=True,
     )
-    assert attestation.operation_id == EVALUATION_GOVERNANCE_OPERATION_ID
+    assert attestation.operation_id == EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID
     assert attestation.source_digest != preflight.context_digest
     assert len(preflight.context_digest) == 64
     assert runtime_attestation_issues(
         attestation,
-        operation_id=EVALUATION_GOVERNANCE_OPERATION_ID,
+        operation_id=EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID,
         evaluated_at="2026-09-18T21:00:00+00:00",
     ) == ()
 
