@@ -112,7 +112,7 @@ def test_execution_attestation_closes_external_evaluation_lineage() -> None:
     assert runtime_attestation_issues(
         attestation,
         operation_id=EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID,
-        evaluated_at="2026-09-18T21:00:00+00:00",
+        evaluated_at=attestation.attested_at,
     ) == ()
 
     evidence = external_evaluation_governance_evidence(preflight, attestation)
