@@ -67,12 +67,7 @@ def qualify_external_evaluation_preflight(
 
     grant_id = str(current_user.get("evaluation_grant_id") or "").strip()
     api_key_id = str(current_user.get("api_key_id") or "").strip()
-    actor_ref = str(
-        current_user.get("client_id")
-        or current_user.get("user_id")
-        or current_user.get("sub")
-        or ""
-    ).strip()
+    actor_ref = api_key_id
     normalized_task = str(task_id or "").strip().lower()
     normalized_binding = str(binding_id or "").strip()
 
@@ -146,6 +141,30 @@ def attest_external_evaluation_execution(
         ) from exc
 
 
+def validate_external_evaluation_replay_governance(
+    preflight: ExternalEvaluationGovernancePreflight,
+    response: dict[str, Any],
+) -> None:
+    expected = {
+        "governance_qualified": True,
+        "governance_version": preflight.governance_version,
+        "governance_operation_id": preflight.operation_id,
+        "governance_claim_ceiling": preflight.claim_ceiling,
+        "governance_fail_closed": True,
+        "governance_source_digest": preflight.source_digest,
+    }
+    for key, value in expected.items():
+        if response.get(key) != value:
+            raise ExternalEvaluationGovernanceError(
+                f"evaluation_replay_governance_mismatch:{key}"
+            )
+    digest = str(response.get("runtime_attestation_digest") or "")
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise ExternalEvaluationGovernanceError(
+            "evaluation_replay_runtime_attestation_missing"
+        )
+
+
 def external_evaluation_governance_evidence(
     preflight: ExternalEvaluationGovernancePreflight,
     attestation: RuntimeExecutionAttestation,
@@ -167,4 +186,5 @@ __all__ = [
     "attest_external_evaluation_execution",
     "external_evaluation_governance_evidence",
     "qualify_external_evaluation_preflight",
+    "validate_external_evaluation_replay_governance",
 ]
