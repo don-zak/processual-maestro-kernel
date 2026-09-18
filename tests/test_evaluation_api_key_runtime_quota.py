@@ -10,6 +10,7 @@ from threading import Barrier
 import pytest
 
 from processual_api.services import api_key_store
+from processual_api.services.evaluation_grants import evaluation_governance_contract
 
 
 API_KEY = "pmk_runtime-quota-regression-key"
@@ -55,6 +56,7 @@ def _governed_payload(
         "execution_mode": "evaluation_runtime",
         "real_runtime_execution": True,
         "production_allowed": False,
+        "governance_contract": evaluation_governance_contract(),
     }
     key = {
         "id": "key-runtime-quota",
