@@ -17,6 +17,9 @@ from processual_api.services.evaluation_grants import (
     EVALUATION_GRANTS_STORAGE_KEY,
     evaluation_governance_contract,
 )
+from processual_api.services.external_evaluation_governance import (
+    qualify_external_evaluation_preflight,
+)
 
 
 def _fingerprint(task_input: dict | None = None) -> str:
@@ -201,11 +204,28 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
         },
     )
 
+    preflight = qualify_external_evaluation_preflight(
+        current_user=_runtime_identity(),
+        grant=raw[EVALUATION_GRANTS_STORAGE_KEY][0],
+        task_id="crm.customer_context",
+        binding_id="binding-a",
+    )
+
     async def replay_claim(**_kwargs):
         return {
             "status": "replay",
             "record": {"record_id": "record-a"},
-            "response": {"execution_id": "exec-1", "evaluation_runtime": True},
+            "response": {
+                "execution_id": "exec-1",
+                "evaluation_runtime": True,
+                "governance_qualified": True,
+                "governance_version": preflight.governance_version,
+                "governance_operation_id": preflight.operation_id,
+                "governance_claim_ceiling": preflight.claim_ceiling,
+                "governance_fail_closed": True,
+                "governance_source_digest": preflight.source_digest,
+                "runtime_attestation_digest": "a" * 64,
+            },
         }
 
     monkeypatch.setattr(
