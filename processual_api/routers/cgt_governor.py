@@ -219,6 +219,11 @@ class GatewayEvaluateRequest(BaseModel):
     tags: list[str] = []
     repair_round: int = 0
     parent_eval_id: str = ""
+    operation_id: str = "response.evaluate"
+    required_scopes: list[str] = []
+    require_factual_evidence: bool = False
+    require_execution_evidence: bool = False
+    require_task_sufficiency: bool = False
 
 
 class AgentActionRequest(BaseModel):
@@ -368,7 +373,10 @@ def _evaluate_and_record(
     entry: dict = {
         **response_data,
         "ts": datetime.now(UTC).isoformat(),
+        "gateway_action": decision.action.value,
         "governance_action": pd.action.value,
+        "qualification": decision.qualification,
+        "governance_gate": decision.governance_gate,
         "action_label": pd.action_label,
     }
     if context:
@@ -496,6 +504,8 @@ async def govern_batch(req: BatchGovernRequest, current_user: dict = Depends(get
 
 @router.get("/cgt/govern/status")
 async def governor_status(current_user: dict = Depends(get_current_user)):
+    from ..cgt_governor.gateway import governance_genome, registered_operation_ids
+
     return {
         "enabled": _gov_state["enabled"],
         "auto_repair": _gov_state["auto_repair"],
@@ -503,6 +513,13 @@ async def governor_status(current_user: dict = Depends(get_current_user)):
         "providers": adapter_registry.list_providers(),
         "default_provider": (lambda a: a.provider_name if a else None)(adapter_registry.default()),
         "evaluation_count": len(eval_store),
+        "governance_genome": {
+            "version": governance_genome.version,
+            "fail_closed": governance_genome.default_fail_closed,
+            "runtime_claim_ceiling": governance_genome.runtime_claim_ceiling.value,
+            "precedence": [gate.value for gate in governance_genome.precedence],
+            "registered_operations": list(registered_operation_ids()),
+        },
     }
 
 
@@ -1168,13 +1185,20 @@ async def gateway_evaluate(req: GatewayEvaluateRequest, current_user: dict = Dep
 
     Returns a decision: pass / repair / block / escalate + signature.
     """
-    from ..cgt_governor.gateway import gateway_engine
+    from ..cgt_governor.gateway import GovernanceRequestContext, gateway_engine
 
     decision = gateway_engine.evaluate(
         agent_id=req.agent_id,
         client_query=req.client_query,
         agent_response=req.agent_response,
         language=req.language,
+        operation_id=req.operation_id,
+        governance_context=GovernanceRequestContext(
+            required_scopes=tuple(req.required_scopes),
+            require_factual_evidence=req.require_factual_evidence,
+            require_execution_evidence=req.require_execution_evidence,
+            require_task_sufficiency=req.require_task_sufficiency,
+        ),
     )
     if decision is None:
         raise HTTPException(status_code=404, detail=f"Agent not found: {req.agent_id}")
@@ -1183,18 +1207,13 @@ async def gateway_evaluate(req: GatewayEvaluateRequest, current_user: dict = Dep
     from ..cgt_governor.gateway import gateway_registry
 
     agent_obj = gateway_registry.get(req.agent_id)
-    ctx = PolicyContext(
-        avg_reward=getattr(decision, "reward", 0.0),
-        consecutive_failures=agent_obj.consecutive_failures if agent_obj else 0,
+    pd = runtime_policy_engine.reflect_gateway_decision(
+        gateway_action=decision.action.value,
         agent_state=decision.agent_state.value,
-        history_count=len(agent_obj.evaluation_history) if agent_obj else 0,
-    )
-    pd = runtime_policy_engine.decide(
         rank=decision.rank or "unknown",
         reward=decision.reward,
         policy=decision.policy,
         policy_label=decision.policy_label,
-        context=ctx,
     )
     runtime_policy_engine.record(pd, reason=f"gateway_{decision.action.value}")
 
@@ -1251,6 +1270,9 @@ async def gateway_evaluate(req: GatewayEvaluateRequest, current_user: dict = Dep
         "agent_state": decision.agent_state.value,
         "message": decision.message,
         "signature": decision.signature,
+        "qualification": decision.qualification,
+        "governance_gate": decision.governance_gate,
+        "gateway_action": decision.action.value,
         "governance_action": pd.action.value,
         "action_label": pd.action_label,
         "eval_id": gw_entry.get("eval_id", ""),
