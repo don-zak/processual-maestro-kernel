@@ -15,6 +15,7 @@ from processual_api.services import evaluation_runtime_delivery as delivery
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     EVALUATION_GRANTS_STORAGE_KEY,
+    evaluation_governance_contract,
 )
 
 
@@ -74,6 +75,7 @@ def _runtime_raw() -> dict:
                 "execution_mode": EVALUATION_EXECUTION_MODE,
                 "real_runtime_execution": True,
                 "production_allowed": False,
+                "governance_contract": evaluation_governance_contract(),
             }
         ]
     }
