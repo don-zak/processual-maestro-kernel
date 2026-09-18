@@ -15,7 +15,7 @@ from processual_api.cgt_governor.gateway.runtime_execution_attestation import (
     build_runtime_execution_attestation,
 )
 from processual_api.services.evaluation_grants import (
-    EVALUATION_GOVERNANCE_OPERATION_ID,
+    EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID,
     validate_evaluation_governance_contract,
 )
 
@@ -49,7 +49,7 @@ def qualify_external_evaluation_preflight(
     except ValueError as exc:
         raise ExternalEvaluationGovernanceError(str(exc)) from exc
 
-    policy = get_operation_policy(EVALUATION_GOVERNANCE_OPERATION_ID)
+    policy = get_operation_policy(EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID)
     if policy is None or not policy.fail_closed:
         raise ExternalEvaluationGovernanceError(
             "evaluation_governance_operation_policy_unavailable"
