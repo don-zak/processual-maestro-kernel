@@ -18,6 +18,8 @@ from processual_api.services.evaluation_grants import (
     evaluation_governance_contract,
 )
 from processual_api.services.external_evaluation_governance import (
+    attest_external_evaluation_execution,
+    external_evaluation_governance_evidence,
     qualify_external_evaluation_preflight,
 )
 
@@ -211,20 +213,30 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
         binding_id="binding-a",
     )
 
+    completed_at = "2026-09-18T20:00:00+00:00"
+    evidence_sha256 = "c" * 64
+    attestation = attest_external_evaluation_execution(
+        preflight,
+        execution_id="exec-1",
+        completed_at=completed_at,
+        execution_evidence_digest=evidence_sha256,
+        succeeded=True,
+    )
+    governance_evidence = external_evaluation_governance_evidence(
+        preflight,
+        attestation,
+    )
+
     async def replay_claim(**_kwargs):
         return {
             "status": "replay",
             "record": {"record_id": "record-a"},
             "response": {
                 "execution_id": "exec-1",
+                "completed_at": completed_at,
+                "evidence_sha256": evidence_sha256,
                 "evaluation_runtime": True,
-                "governance_qualified": True,
-                "governance_version": preflight.governance_version,
-                "governance_operation_id": preflight.operation_id,
-                "governance_claim_ceiling": preflight.claim_ceiling,
-                "governance_fail_closed": True,
-                "governance_source_digest": preflight.source_digest,
-                "runtime_attestation_digest": "a" * 64,
+                **governance_evidence,
             },
         }
 
