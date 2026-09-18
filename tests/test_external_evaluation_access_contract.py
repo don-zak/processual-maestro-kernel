@@ -13,6 +13,7 @@ from processual_api.integrations.api_key_access_policy import get_api_key_access
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     evaluation_endpoint_allowed,
+    evaluation_governance_contract,
     validate_evaluation_grant,
 )
 
@@ -45,6 +46,7 @@ def _grant() -> dict:
         "execution_mode": EVALUATION_EXECUTION_MODE,
         "real_runtime_execution": True,
         "production_allowed": False,
+        "governance_contract": evaluation_governance_contract(),
     }
 
 

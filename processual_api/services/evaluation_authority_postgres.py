@@ -17,6 +17,7 @@ from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     find_evaluation_grant,
     refresh_evaluation_grant_status,
+    validate_evaluation_governance_contract,
 )
 
 
@@ -233,6 +234,10 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
             if grant is None:
                 return None
             refresh_evaluation_grant_status(grant)
+            try:
+                validate_evaluation_governance_contract(grant)
+            except ValueError:
+                return None
             if (
                 grant.get("status") != "active"
                 or grant.get("execution_mode") != EVALUATION_EXECUTION_MODE
@@ -290,6 +295,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
                 "real_runtime_execution": True,
                 "evaluation_access": True,
                 "production_allowed": False,
+                "governance_contract": dict(grant.get("governance_contract") or {}),
             }
     except EvaluationAuthorityError:
         raise

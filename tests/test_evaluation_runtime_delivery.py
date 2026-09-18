@@ -15,6 +15,12 @@ from processual_api.services import evaluation_runtime_delivery as delivery
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     EVALUATION_GRANTS_STORAGE_KEY,
+    evaluation_governance_contract,
+)
+from processual_api.services.external_evaluation_governance import (
+    attest_external_evaluation_execution,
+    external_evaluation_governance_evidence,
+    qualify_external_evaluation_preflight,
 )
 
 
@@ -74,6 +80,7 @@ def _runtime_raw() -> dict:
                 "execution_mode": EVALUATION_EXECUTION_MODE,
                 "real_runtime_execution": True,
                 "production_allowed": False,
+                "governance_contract": evaluation_governance_contract(),
             }
         ]
     }
@@ -199,11 +206,38 @@ def test_runtime_completed_replay_never_reaches_network_transport(monkeypatch) -
         },
     )
 
+    preflight = qualify_external_evaluation_preflight(
+        current_user=_runtime_identity(),
+        grant=raw[EVALUATION_GRANTS_STORAGE_KEY][0],
+        task_id="crm.customer_context",
+        binding_id="binding-a",
+    )
+
+    completed_at = "2026-09-18T20:00:00+00:00"
+    evidence_sha256 = "c" * 64
+    attestation = attest_external_evaluation_execution(
+        preflight,
+        execution_id="exec-1",
+        completed_at=completed_at,
+        execution_evidence_digest=evidence_sha256,
+        succeeded=True,
+    )
+    governance_evidence = external_evaluation_governance_evidence(
+        preflight,
+        attestation,
+    )
+
     async def replay_claim(**_kwargs):
         return {
             "status": "replay",
             "record": {"record_id": "record-a"},
-            "response": {"execution_id": "exec-1", "evaluation_runtime": True},
+            "response": {
+                "execution_id": "exec-1",
+                "completed_at": completed_at,
+                "evidence_sha256": evidence_sha256,
+                "evaluation_runtime": True,
+                **governance_evidence,
+            },
         }
 
     monkeypatch.setattr(
