@@ -16,7 +16,8 @@ EVALUATION_GRANT_REVOKED = "revoked"
 EVALUATION_GRANT_EXPIRED = "expired"
 EVALUATION_EXECUTION_MODE = "evaluation_runtime"
 EVALUATION_TASK_EXECUTE_ENDPOINT = ("POST", "/evaluation/runtime/task-execute")
-EVALUATION_GOVERNANCE_OPERATION_ID = "evaluation.runtime.task_execute"
+EVALUATION_GOVERNANCE_OPERATION_ID = "evaluation.external_access"
+EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID = "evaluation.runtime.task_execute"
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -44,17 +45,23 @@ def _normalize_binding_id(value: Any) -> str:
 
 
 def evaluation_governance_contract() -> dict[str, Any]:
-    policy = get_operation_policy(EVALUATION_GOVERNANCE_OPERATION_ID)
-    if policy is None:
+    grant_policy = get_operation_policy(EVALUATION_GOVERNANCE_OPERATION_ID)
+    runtime_policy = get_operation_policy(EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID)
+    if grant_policy is None or runtime_policy is None:
         raise RuntimeError("evaluation_governance_operation_policy_missing")
     payload = {
         "version": governance_genome.version,
-        "operation_id": policy.operation_id,
+        "operation_id": grant_policy.operation_id,
         "claim_ceiling": governance_genome.runtime_claim_ceiling.value,
-        "fail_closed": bool(policy.fail_closed and governance_genome.default_fail_closed),
-        "required_scopes": list(policy.required_scopes),
-        "require_execution_evidence": policy.require_execution_evidence,
-        "require_runtime_attestation": policy.require_runtime_attestation,
+        "fail_closed": bool(
+            grant_policy.fail_closed
+            and runtime_policy.fail_closed
+            and governance_genome.default_fail_closed
+        ),
+        "runtime_operation_id": runtime_policy.operation_id,
+        "runtime_required_scopes": list(runtime_policy.required_scopes),
+        "runtime_require_execution_evidence": runtime_policy.require_execution_evidence,
+        "runtime_require_runtime_attestation": runtime_policy.require_runtime_attestation,
     }
     digest = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
@@ -357,6 +364,7 @@ __all__ = [
     "EVALUATION_GRANTS_STORAGE_KEY",
     "EVALUATION_TASK_EXECUTE_ENDPOINT",
     "EVALUATION_GOVERNANCE_OPERATION_ID",
+    "EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID",
     "evaluation_governance_contract",
     "evaluation_binding_allowed",
     "evaluation_endpoint_allowed",
