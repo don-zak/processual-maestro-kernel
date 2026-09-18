@@ -40,9 +40,9 @@ from processual_api.services.evaluation_authority_postgres import (
 )
 from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
+    EVALUATION_GOVERNANCE_OPERATION_ID,
     EVALUATION_GRANTS_STORAGE_KEY,
     EVALUATION_TASK_EXECUTE_ENDPOINT,
-    EVALUATION_GOVERNANCE_OPERATION_ID,
     evaluation_governance_contract,
     evaluation_grants,
     find_evaluation_grant,
