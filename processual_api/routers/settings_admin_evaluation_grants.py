@@ -42,6 +42,8 @@ from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     EVALUATION_GRANTS_STORAGE_KEY,
     EVALUATION_TASK_EXECUTE_ENDPOINT,
+    EVALUATION_GOVERNANCE_OPERATION_ID,
+    evaluation_governance_contract,
     evaluation_grants,
     find_evaluation_grant,
     refresh_evaluation_grant_status,
@@ -296,6 +298,7 @@ def _access_catalog_payload() -> list[dict[str, Any]]:
             "operation_class": policy.operation_class,
             "required_scopes": list(policy.required_scopes),
             "operational_profile_ids": list(policy.operational_profile_ids),
+            "governance_operation_id": policy.governance_operation_id,
             "production_allowed": False,
         }
         for policy in list_api_key_access_policies()
@@ -353,6 +356,12 @@ async def evaluation_access_catalog(
         "registration_required": False,
         "commercial_quota_required": False,
         "production_allowed": False,
+        "governance": {
+            "version": evaluation_governance_contract()["version"],
+            "operation_id": EVALUATION_GOVERNANCE_OPERATION_ID,
+            "claim_ceiling": evaluation_governance_contract()["claim_ceiling"],
+            "fail_closed": True,
+        },
     }
 
 
@@ -421,6 +430,7 @@ async def create_evaluation_grant(
         "execution_mode": EVALUATION_EXECUTION_MODE,
         "real_runtime_execution": True,
         "production_allowed": False,
+        "governance_contract": evaluation_governance_contract(),
     }
     grants.append(grant)
     raw[EVALUATION_GRANTS_STORAGE_KEY] = grants[-500:]
@@ -542,6 +552,7 @@ async def issue_evaluation_key(
         "allowed_binding_ids": binding_ids,
         "task_authority_source": "integration_task_catalog",
         "endpoint_authority_source": "canonical_runtime_access_policy",
+        "governance_contract": dict(grant.get("governance_contract") or {}),
         "profile": "client",
         "category": "pilot_client",
         "role": "client",
