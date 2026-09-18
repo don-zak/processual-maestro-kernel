@@ -116,6 +116,7 @@ class GatewayEngine:
                         )
                     )
 
+        effective_verification: VerificationEvidence | None
         if binding_issues:
             effective_verification = VerificationEvidence(
                 factual=VerificationStatus.CONTRADICTED,
