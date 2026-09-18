@@ -77,20 +77,25 @@ def build_runtime_execution_attestation(
     succeeded: bool,
 ) -> RuntimeExecutionAttestation:
     provisional = object.__new__(RuntimeExecutionAttestation)
-    values = {
-        "operation_id": operation_id,
-        "actor_ref": actor_ref,
-        "execution_reference_id": execution_reference_id,
-        "source_digest": source_digest,
-        "performed_at": performed_at,
-        "attested_at": attested_at,
-        "succeeded": succeeded,
-        "attestation_digest": "0" * 64,
-    }
-    for key, value in values.items():
-        object.__setattr__(provisional, key, value)
-    values["attestation_digest"] = runtime_execution_attestation_digest(provisional)
-    return RuntimeExecutionAttestation(**values)
+    object.__setattr__(provisional, "operation_id", operation_id)
+    object.__setattr__(provisional, "actor_ref", actor_ref)
+    object.__setattr__(provisional, "execution_reference_id", execution_reference_id)
+    object.__setattr__(provisional, "source_digest", source_digest)
+    object.__setattr__(provisional, "performed_at", performed_at)
+    object.__setattr__(provisional, "attested_at", attested_at)
+    object.__setattr__(provisional, "succeeded", succeeded)
+    object.__setattr__(provisional, "attestation_digest", "0" * 64)
+    digest = runtime_execution_attestation_digest(provisional)
+    return RuntimeExecutionAttestation(
+        operation_id=operation_id,
+        actor_ref=actor_ref,
+        execution_reference_id=execution_reference_id,
+        source_digest=source_digest,
+        performed_at=performed_at,
+        attested_at=attested_at,
+        succeeded=succeeded,
+        attestation_digest=digest,
+    )
 
 
 def runtime_attestation_issues(
