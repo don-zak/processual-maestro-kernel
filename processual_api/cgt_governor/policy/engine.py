@@ -151,6 +151,39 @@ class PolicyEngine:
             action_label=info.get("label", action.value),
         )
 
+    def reflect_gateway_decision(
+        self,
+        *,
+        gateway_action: str,
+        agent_state: str,
+        rank: str,
+        reward: float,
+        policy: str,
+        policy_label: str,
+    ) -> PolicyDecision:
+        """Reflect the authoritative Gateway decision into runtime telemetry."""
+
+        if agent_state == "frozen":
+            action = GovernanceAction.freeze_agent
+        else:
+            action = {
+                "pass": GovernanceAction.keep,
+                "repair": GovernanceAction.repair,
+                "block": GovernanceAction.reject,
+                "escalate": GovernanceAction.escalate_to_human,
+            }.get(gateway_action, GovernanceAction.reject)
+
+        info = GOVERNANCE_ACTIONS_INFO.get(action.value, {})
+        return PolicyDecision(
+            action=action,
+            rank=rank,
+            reward=reward,
+            policy=policy,
+            policy_label=policy_label,
+            description=info.get("description", ""),
+            action_label=info.get("label", action.value),
+        )
+
     def record(self, decision: PolicyDecision, eval_id: str = "", reason: str = "") -> PolicyActionRecord:
         record = PolicyActionRecord(
             action=decision.action,
