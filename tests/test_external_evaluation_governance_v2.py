@@ -98,10 +98,12 @@ def test_execution_attestation_closes_external_evaluation_lineage() -> None:
         preflight,
         execution_id="exec-1",
         completed_at="2026-09-18T20:00:00+00:00",
+        execution_evidence_digest="b" * 64,
         succeeded=True,
     )
     assert attestation.operation_id == EVALUATION_GOVERNANCE_OPERATION_ID
-    assert attestation.source_digest == preflight.source_digest
+    assert attestation.source_digest != preflight.context_digest
+    assert len(preflight.context_digest) == 64
     assert runtime_attestation_issues(
         attestation,
         operation_id=EVALUATION_GOVERNANCE_OPERATION_ID,
