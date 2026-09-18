@@ -88,7 +88,7 @@ if ($InstallDeps) {
     Invoke-Logged "Install focused dependencies" {
         Invoke-Python -m pip install --upgrade pip
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Invoke-Python -m pip install -e ".[dev,api]"
+        Invoke-Python -m pip install -e ".[dev,api,database]"
     }
 }
 
