@@ -42,6 +42,7 @@ from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     EVALUATION_GOVERNANCE_OPERATION_ID,
     EVALUATION_GRANTS_STORAGE_KEY,
+    EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID,
     EVALUATION_TASK_EXECUTE_ENDPOINT,
     evaluation_governance_contract,
     evaluation_grants,
@@ -359,6 +360,7 @@ async def evaluation_access_catalog(
         "governance": {
             "version": evaluation_governance_contract()["version"],
             "operation_id": EVALUATION_GOVERNANCE_OPERATION_ID,
+            "runtime_operation_id": EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID,
             "claim_ceiling": evaluation_governance_contract()["claim_ceiling"],
             "fail_closed": True,
         },
