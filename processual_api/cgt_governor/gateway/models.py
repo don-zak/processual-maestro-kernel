@@ -41,6 +41,7 @@ class EvaluationRecord:
     repair_prompt: str | None
     action_taken: GatewayAction
     language: str = "en"
+    qualification: dict[str, object] | None = None
 
 
 @dataclass
@@ -55,6 +56,9 @@ class GatewayDecision:
     agent_state: AgentState
     message: str
     signature: str | None = None
+    governance_gate: str | None = None
+    lifecycle_recommendation: str | None = None
+    qualification: dict[str, object] | None = None
 
 
 @dataclass
