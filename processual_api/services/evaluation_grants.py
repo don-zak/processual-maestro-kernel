@@ -315,6 +315,14 @@ def evaluation_endpoint_allowed(
 
 
 def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
+    try:
+        validate_evaluation_governance_contract(grant)
+        governance_status = "current"
+        governance_reissue_required = False
+    except ValueError as exc:
+        governance_status = str(exc)
+        governance_reissue_required = True
+
     return {
         "grant_id": str(grant.get("grant_id") or ""),
         "status": str(
@@ -356,6 +364,8 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
         ),
         "production_allowed": False,
         "governance_contract": dict(grant.get("governance_contract") or {}),
+        "governance_status": governance_status,
+        "governance_reissue_required": governance_reissue_required,
     }
 
 
