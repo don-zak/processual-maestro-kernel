@@ -34,7 +34,7 @@ class ExternalEvaluationGovernancePreflight:
     actor_ref: str
     task_id: str
     binding_id: str
-    source_digest: str
+    context_digest: str
 
 
 def qualify_external_evaluation_preflight(
@@ -91,7 +91,7 @@ def qualify_external_evaluation_preflight(
         "task_id": normalized_task,
         "binding_id": normalized_binding,
     }
-    source_digest = hashlib.sha256(
+    context_digest = hashlib.sha256(
         json.dumps(
             source_payload,
             sort_keys=True,
@@ -109,8 +109,38 @@ def qualify_external_evaluation_preflight(
         actor_ref=actor_ref,
         task_id=normalized_task,
         binding_id=normalized_binding,
-        source_digest=source_digest,
+        context_digest=context_digest,
     )
+
+
+def _execution_source_digest(
+    preflight: ExternalEvaluationGovernancePreflight,
+    *,
+    execution_id: str,
+    completed_at: str,
+    execution_evidence_digest: str,
+) -> str:
+    evidence_digest = str(execution_evidence_digest or "").strip().lower()
+    if len(evidence_digest) != 64 or any(
+        ch not in "0123456789abcdef" for ch in evidence_digest
+    ):
+        raise ExternalEvaluationGovernanceError(
+            "evaluation_execution_evidence_digest_invalid"
+        )
+    payload = {
+        "context_digest": preflight.context_digest,
+        "execution_id": str(execution_id or "").strip(),
+        "completed_at": str(completed_at or "").strip(),
+        "execution_evidence_digest": evidence_digest,
+    }
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+    ).hexdigest()
 
 
 def attest_external_evaluation_execution(
@@ -118,6 +148,7 @@ def attest_external_evaluation_execution(
     *,
     execution_id: str,
     completed_at: str,
+    execution_evidence_digest: str,
     succeeded: bool,
 ) -> RuntimeExecutionAttestation:
     execution_ref = str(execution_id or "").strip()
@@ -126,11 +157,17 @@ def attest_external_evaluation_execution(
             "evaluation_execution_reference_missing"
         )
     try:
+        source_digest = _execution_source_digest(
+            preflight,
+            execution_id=execution_ref,
+            completed_at=completed_at,
+            execution_evidence_digest=execution_evidence_digest,
+        )
         return build_runtime_execution_attestation(
             operation_id=preflight.operation_id,
             actor_ref=preflight.actor_ref,
             execution_reference_id=execution_ref,
-            source_digest=preflight.source_digest,
+            source_digest=source_digest,
             performed_at=completed_at,
             attested_at=datetime.now(UTC).isoformat(),
             succeeded=succeeded,
@@ -151,18 +188,45 @@ def validate_external_evaluation_replay_governance(
         "governance_operation_id": preflight.operation_id,
         "governance_claim_ceiling": preflight.claim_ceiling,
         "governance_fail_closed": True,
-        "governance_source_digest": preflight.source_digest,
+        "governance_context_digest": preflight.context_digest,
     }
     for key, value in expected.items():
         if response.get(key) != value:
             raise ExternalEvaluationGovernanceError(
                 f"evaluation_replay_governance_mismatch:{key}"
             )
-    digest = str(response.get("runtime_attestation_digest") or "")
-    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+
+    execution_id = str(response.get("execution_id") or "").strip()
+    completed_at = str(response.get("completed_at") or "").strip()
+    evidence_digest = str(response.get("evidence_sha256") or "").strip()
+    source_digest = _execution_source_digest(
+        preflight,
+        execution_id=execution_id,
+        completed_at=completed_at,
+        execution_evidence_digest=evidence_digest,
+    )
+    if response.get("governance_source_digest") != source_digest:
         raise ExternalEvaluationGovernanceError(
-            "evaluation_replay_runtime_attestation_missing"
+            "evaluation_replay_governance_mismatch:governance_source_digest"
         )
+
+    attested_at = str(response.get("runtime_attested_at") or "").strip()
+    digest = str(response.get("runtime_attestation_digest") or "").strip()
+    try:
+        RuntimeExecutionAttestation(
+            operation_id=preflight.operation_id,
+            actor_ref=preflight.actor_ref,
+            execution_reference_id=execution_id,
+            source_digest=source_digest,
+            performed_at=completed_at,
+            attested_at=attested_at,
+            succeeded=True,
+            attestation_digest=digest,
+        )
+    except ValueError as exc:
+        raise ExternalEvaluationGovernanceError(
+            f"evaluation_replay_runtime_attestation_invalid:{exc}"
+        ) from exc
 
 
 def external_evaluation_governance_evidence(
@@ -175,7 +239,9 @@ def external_evaluation_governance_evidence(
         "governance_operation_id": preflight.operation_id,
         "governance_claim_ceiling": preflight.claim_ceiling,
         "governance_fail_closed": True,
-        "governance_source_digest": preflight.source_digest,
+        "governance_context_digest": preflight.context_digest,
+        "governance_source_digest": attestation.source_digest,
+        "runtime_attested_at": attestation.attested_at,
         "runtime_attestation_digest": attestation.attestation_digest,
     }
 
