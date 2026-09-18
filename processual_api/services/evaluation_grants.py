@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
+import json
 from typing import Any
+
+from processual_api.cgt_governor.gateway.governance_genome import governance_genome
+from processual_api.cgt_governor.gateway.operation_policies import get_operation_policy
 
 EVALUATION_GRANTS_STORAGE_KEY = "evaluation_grants_v1"
 EVALUATION_GRANT_ACTIVE = "active"
@@ -11,6 +16,7 @@ EVALUATION_GRANT_REVOKED = "revoked"
 EVALUATION_GRANT_EXPIRED = "expired"
 EVALUATION_EXECUTION_MODE = "evaluation_runtime"
 EVALUATION_TASK_EXECUTE_ENDPOINT = ("POST", "/evaluation/runtime/task-execute")
+EVALUATION_GOVERNANCE_OPERATION_ID = "evaluation.runtime.task_execute"
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -35,6 +41,35 @@ def _normalize_endpoint(value: dict[str, Any]) -> tuple[str, str] | None:
 
 def _normalize_binding_id(value: Any) -> str:
     return str(value or "").strip()
+
+
+def evaluation_governance_contract() -> dict[str, Any]:
+    policy = get_operation_policy(EVALUATION_GOVERNANCE_OPERATION_ID)
+    if policy is None:
+        raise RuntimeError("evaluation_governance_operation_policy_missing")
+    payload = {
+        "version": governance_genome.version,
+        "operation_id": policy.operation_id,
+        "claim_ceiling": governance_genome.runtime_claim_ceiling.value,
+        "fail_closed": bool(policy.fail_closed and governance_genome.default_fail_closed),
+        "required_scopes": list(policy.required_scopes),
+        "require_execution_evidence": policy.require_execution_evidence,
+        "require_runtime_attestation": policy.require_runtime_attestation,
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    ).hexdigest()
+    return {**payload, "policy_digest": digest}
+
+
+def validate_evaluation_governance_contract(grant: dict[str, Any]) -> dict[str, Any]:
+    actual = grant.get("governance_contract")
+    if not isinstance(actual, dict):
+        raise ValueError("evaluation_grant_governance_contract_required")
+    expected = evaluation_governance_contract()
+    if actual != expected:
+        raise ValueError("evaluation_grant_governance_contract_mismatch")
+    return actual
 
 
 def evaluation_grants(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -107,6 +142,8 @@ def validate_evaluation_grant(
 
     if str(grant.get("client_id") or "") != str(client_id or ""):
         raise ValueError("evaluation_grant_client_mismatch")
+
+    validate_evaluation_governance_contract(grant)
 
     allowed_scopes = {
         str(scope).strip()
@@ -311,6 +348,7 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
             grant.get("real_runtime_execution", True)
         ),
         "production_allowed": False,
+        "governance_contract": dict(grant.get("governance_contract") or {}),
     }
 
 
@@ -318,6 +356,8 @@ __all__ = [
     "EVALUATION_EXECUTION_MODE",
     "EVALUATION_GRANTS_STORAGE_KEY",
     "EVALUATION_TASK_EXECUTE_ENDPOINT",
+    "EVALUATION_GOVERNANCE_OPERATION_ID",
+    "evaluation_governance_contract",
     "evaluation_binding_allowed",
     "evaluation_endpoint_allowed",
     "evaluation_grants",
@@ -327,4 +367,5 @@ __all__ = [
     "refresh_evaluation_grant_status",
     "safe_evaluation_grant",
     "validate_evaluation_grant",
+    "validate_evaluation_governance_contract",
 ]
