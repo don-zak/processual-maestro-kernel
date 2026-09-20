@@ -274,3 +274,38 @@ def test_evaluation_grant_language_distinguishes_entitlement_from_commercial_quo
     assert "separate from commercial subscription quota" in source
     assert "runtime proof" in source
     assert "API key task content" not in source
+
+
+
+def test_supervisor_evaluation_run_summary_is_read_only_and_stage_aware() -> None:
+    source = _source(EVALUATION)
+
+    required = [
+        "EVALUATION_RUNTIME_SUMMARY_ENDPOINT",
+        "/settings/admin/evaluation-grants/runtime-summary",
+        "Evaluation Run Summary",
+        "read-only runtime evidence",
+        "Raw task input, idempotency material, response bodies, and API key secrets are never displayed here.",
+        "evaluation_stage",
+        "maestro_task_completed",
+        "next_readiness_stage",
+        "governance_qualified",
+        "runtime_attested_at",
+        "Maestro tasks completed",
+    ]
+    for marker in required:
+        assert marker in source
+
+
+def test_runtime_summary_ui_does_not_render_sensitive_delivery_fields() -> None:
+    source = _source(EVALUATION)
+
+    runtime_start = source.index("function runtimeSummaryRow(item)")
+    runtime_end = source.index("async function createEvaluationGrant()", runtime_start)
+    runtime_source = source[runtime_start:runtime_end]
+
+    assert "request_fingerprint" not in runtime_source
+    assert "idempotency_key" not in runtime_source
+    assert "replay_response" not in runtime_source
+    assert "raw_task_input" not in runtime_source
+    assert "api_key" not in runtime_source
