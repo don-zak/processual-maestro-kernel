@@ -51,6 +51,10 @@ from processual_api.services.evaluation_grants import (
     safe_evaluation_grant,
     validate_evaluation_grant,
 )
+from processual_api.services.evaluation_runtime_delivery import EvaluationDeliveryError
+from processual_api.services.evaluation_runtime_delivery_postgres import (
+    list_evaluation_execution_summaries,
+)
 
 from . import settings as settings_module
 
@@ -378,6 +382,60 @@ async def evaluation_task_catalog(
         "selection_authority": "integration_task_catalog",
         "subscription_required": False,
         "evaluation_key_binding_supported": True,
+    }
+
+
+
+
+@settings_module.router.get(
+    "/admin/evaluation-grants/runtime-summary",
+    response_model=dict,
+)
+async def evaluation_runtime_summary(
+    request: Request,
+    grant_id: str | None = None,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+):
+    """Read-only supervisor summary of recent External Evaluation runtime runs."""
+
+    await _require_platform_admin(request, current_user)
+    owner_user_id = _owner_user_id(current_user)
+    try:
+        runs = await list_evaluation_execution_summaries(
+            owner_id=owner_user_id,
+            grant_id=grant_id,
+            limit=limit,
+        )
+    except EvaluationDeliveryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Evaluation runtime summary is unavailable.",
+        ) from exc
+
+    counts = {
+        "total": len(runs),
+        "executing": sum(1 for item in runs if item.get("state") == "executing"),
+        "evidence_persisted": sum(
+            1 for item in runs if item.get("state") == "evidence_persisted"
+        ),
+        "failed": sum(1 for item in runs if item.get("state") == "failed"),
+        "governance_qualified": sum(
+            1 for item in runs if item.get("governance_qualified") is True
+        ),
+        "maestro_task_completed": sum(
+            1 for item in runs if item.get("maestro_task_completed") is True
+        ),
+    }
+    return {
+        "status": "ready",
+        "runs": runs,
+        "counts": counts,
+        "grant_id": str(grant_id or "").strip() or None,
+        "authority_store": "postgresql_shared",
+        "visibility_only": True,
+        "raw_task_input_visible": False,
+        "raw_secret_visible": False,
     }
 
 

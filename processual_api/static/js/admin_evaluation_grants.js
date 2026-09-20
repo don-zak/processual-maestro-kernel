@@ -4,6 +4,8 @@
     '/settings/admin/evaluation-grants/task-catalog';
   const EVALUATION_BINDING_CATALOG_ENDPOINT =
     '/settings/admin/evaluation-grants/binding-catalog';
+  const EVALUATION_RUNTIME_SUMMARY_ENDPOINT =
+    '/settings/admin/evaluation-grants/runtime-summary';
   const RUNTIME_TASK_ENDPOINT = '/evaluation/runtime/task-execute';
   const GRANT_HOST_ID = 'admin-evaluation-grants';
   const EXTERNAL_CATEGORY = 'external_evaluation';
@@ -89,10 +91,10 @@
     return `
       <div class="sec-hdr">
         <div class="sh-title">Evaluation Grant Preparation</div>
-        <div class="sh-sub">identity, request safety limit, canonical tasks, prepared bindings, grant creation, one-time issue, and revoke</div>
+        <div class="sh-sub">identity, request limit, allowed tasks, prepared bindings, one-time key issue, runtime proof, and revoke</div>
       </div>
       <div class="admin-note">
-        Evaluation grants are temporary, request-limited, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
+        Evaluation grants are temporary, request-limited, non-production entitlements. They are separate from commercial subscription quota. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
       </div>
       <div class="grid-3">
         <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
@@ -102,7 +104,7 @@
         <label style="grid-column:span 2">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation"></label>
       </div>
       <div style="margin-top:var(--s-3)">
-        <strong>API key task content</strong>
+        <strong>Allowed canonical tasks</strong>
         <div class="muted">Choose only the canonical tasks this evaluation key may represent.</div>
         <div id="admin-eval-task-list" style="margin-top:var(--s-2)">Loading canonical tasks...</div>
       </div>
@@ -120,6 +122,16 @@
       </div>
       <div id="admin-eval-result" class="admin-note" style="margin-top:var(--s-3)"></div>
       <div id="admin-eval-list" style="margin-top:var(--s-3)">Loading evaluation grants...</div>
+      <section class="card flat" style="margin-top:var(--s-3)">
+        <div class="sec-hdr">
+          <div class="sh-title">Evaluation Run Summary</div>
+          <div class="sh-sub">read-only runtime evidence, governance attestation, and next readiness stage</div>
+        </div>
+        <div class="admin-note">
+          Visibility only. Raw task input, idempotency material, response bodies, and API key secrets are never displayed here.
+        </div>
+        <div id="admin-eval-runtime-summary" style="margin-top:var(--s-2)">Loading recent evaluation runs...</div>
+      </section>
     `;
   }
 
@@ -375,6 +387,51 @@
     }
   }
 
+
+  function runtimeSummaryRow(item) {
+    const state = text(item.state) || 'unknown';
+    const governance = item.governance_qualified === true ? 'qualified' : 'not qualified';
+    const stage = text(item.evaluation_stage) || 'not available';
+    const nextStage = text(item.next_readiness_stage) || 'not available';
+    const maestro = item.maestro_task_completed === true ? 'completed' : 'not completed';
+    const attestedAt = text(item.runtime_attested_at) || 'not available';
+    const failure = text(item.failure_code);
+    return `
+      <div class="card flat" style="margin-top:var(--s-2)">
+        <div><strong>${escapeHtml(item.task_id || 'unknown task')}</strong> · ${escapeHtml(state)}</div>
+        <div class="muted">grant ${escapeHtml(item.grant_id || '')} · binding ${escapeHtml(item.binding_id || '')}</div>
+        <div class="muted">evaluation stage: ${escapeHtml(stage)} · Maestro task: ${escapeHtml(maestro)}</div>
+        <div class="muted">next readiness stage: ${escapeHtml(nextStage)}</div>
+        <div class="muted">governance: ${escapeHtml(governance)} · version ${escapeHtml(item.governance_version || 'n/a')} · attested ${escapeHtml(attestedAt)}</div>
+        ${failure ? `<div class="admin-note danger" style="margin-top:var(--s-2)">failure: ${escapeHtml(failure)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  async function refreshEvaluationRuntimeSummary() {
+    const target = document.getElementById('admin-eval-runtime-summary');
+    if (!target) return;
+    try {
+      const payload = await request(EVALUATION_RUNTIME_SUMMARY_ENDPOINT, 'GET');
+      const runs = Array.isArray(payload.runs) ? payload.runs : [];
+      const counts = payload.counts || {};
+      target.innerHTML = `
+        <div class="admin-api-key-metadata-card-grid">
+          <div class="admin-api-key-metadata-card-row"><strong>runs</strong><span>${escapeHtml(counts.total ?? runs.length)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>evidence persisted</strong><span>${escapeHtml(counts.evidence_persisted ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>failed</strong><span>${escapeHtml(counts.failed ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>governance qualified</strong><span>${escapeHtml(counts.governance_qualified ?? 0)}</span></div>
+          <div class="admin-api-key-metadata-card-row"><strong>Maestro tasks completed</strong><span>${escapeHtml(counts.maestro_task_completed ?? 0)}</span></div>
+        </div>
+        <div style="margin-top:var(--s-2)">
+          ${runs.length ? runs.map(runtimeSummaryRow).join('') : '<div class="muted">No External Evaluation runtime execution has been recorded yet.</div>'}
+        </div>
+      `;
+    } catch (error) {
+      target.innerHTML = `<div class="admin-note danger">Unable to load evaluation run summary: ${escapeHtml(error.message || error)}</div>`;
+    }
+  }
+
   async function createEvaluationGrant() {
     const readiness = updateEvaluationReadiness();
     if (!readiness.ready) {
@@ -409,6 +466,7 @@
         `Evaluation request limit: ${escapeHtml(grant.max_requests)} · expires ${escapeHtml(grant.expires_at)} · production disabled`
       );
       await refreshEvaluationGrants();
+      await refreshEvaluationRuntimeSummary();
       dispatchEvaluationSelectionChanged();
     } catch (error) {
       setGrantResult(
@@ -459,6 +517,7 @@
         }
       });
       await refreshEvaluationGrants();
+      await refreshEvaluationRuntimeSummary();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
       setGrantResult(
@@ -478,6 +537,7 @@
         `Grant revoked. ${escapeHtml(result.revoked_key_count || 0)} linked key(s) revoked.`
       );
       await refreshEvaluationGrants();
+      await refreshEvaluationRuntimeSummary();
       window.dispatchEvent(new CustomEvent('pmk-evaluation-grant-updated'));
     } catch (error) {
       setGrantResult(
@@ -547,6 +607,7 @@
       );
     }
     refreshEvaluationGrants();
+    refreshEvaluationRuntimeSummary();
     dispatchEvaluationSelectionChanged();
     updateEvaluationReadiness();
   }
