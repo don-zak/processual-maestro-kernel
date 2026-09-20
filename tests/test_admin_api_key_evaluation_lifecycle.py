@@ -244,3 +244,33 @@ def test_evaluation_grant_cards_show_scopes_tasks_request_limit_and_expiry() -> 
     assert "grant.expires_at" in source
     assert "subscription required: no" in source
     assert "production: disabled" in source
+
+
+
+def test_evaluation_preview_uses_request_limit_and_shows_execution_boundary() -> None:
+    source = _source(LIFECYCLE)
+
+    required = [
+        "request_limit",
+        "commercial_quota",
+        "not used",
+        "Selected endpoint envelope",
+        "Prepared bindings",
+        "Runtime execution proves a bounded external operation only.",
+        "task consumption remains a later readiness stage",
+        "selectedBindings()",
+        "selectedEndpoints()",
+    ]
+    for marker in required:
+        assert marker in source
+
+    assert "<strong>quota</strong>" not in source
+
+
+def test_evaluation_grant_language_distinguishes_entitlement_from_commercial_quota() -> None:
+    source = _source(EVALUATION)
+
+    assert "Allowed canonical tasks" in source
+    assert "separate from commercial subscription quota" in source
+    assert "runtime proof" in source
+    assert "API key task content" not in source
