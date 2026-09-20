@@ -88,6 +88,7 @@ from .cgt_bridge import CGTBridge
 from .continuity import ContinuityEngine, MetricCoefficientMapper
 from .governor import LifecycleGovernor
 from .kernel import ProcessualCGTKernel, ProcessualMaestroKernel
+from .psi_v2 import PsiV2Engine, PsiV2Parameters, PsiV2State
 from .notifications import AlertPayload, AlertSeverity, AlertType, DiscordNotifier, RateLimiter
 from .observability import (
     StructuredLogger,
@@ -178,6 +179,9 @@ __all__ = [
     "LifecycleGovernor",
     "ProcessualCGTKernel",
     "ProcessualMaestroKernel",
+    "PsiV2Engine",
+    "PsiV2Parameters",
+    "PsiV2State",
     "AdaptiveGovernanceToolkit",
     "DecisionLedger",
     "DecisionLedgerEntry",
