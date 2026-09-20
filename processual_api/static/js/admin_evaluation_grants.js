@@ -89,10 +89,10 @@
     return `
       <div class="sec-hdr">
         <div class="sh-title">Evaluation Grant Preparation</div>
-        <div class="sh-sub">identity, request safety limit, canonical tasks, prepared bindings, grant creation, one-time issue, and revoke</div>
+        <div class="sh-sub">identity, request limit, allowed tasks, prepared bindings, one-time key issue, runtime proof, and revoke</div>
       </div>
       <div class="admin-note">
-        Evaluation grants are temporary, request-limited, non-production entitlements. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
+        Evaluation grants are temporary, request-limited, non-production entitlements. They are separate from commercial subscription quota. Administrative scopes are rejected by the backend. Complete every readiness gate before grant creation is enabled.
       </div>
       <div class="grid-3">
         <label>Client ID<input id="admin-eval-client-id" type="text" placeholder="evaluation-client"></label>
@@ -102,7 +102,7 @@
         <label style="grid-column:span 2">Purpose<input id="admin-eval-purpose" type="text" value="Governed external product evaluation"></label>
       </div>
       <div style="margin-top:var(--s-3)">
-        <strong>API key task content</strong>
+        <strong>Allowed canonical tasks</strong>
         <div class="muted">Choose only the canonical tasks this evaluation key may represent.</div>
         <div id="admin-eval-task-list" style="margin-top:var(--s-2)">Loading canonical tasks...</div>
       </div>
