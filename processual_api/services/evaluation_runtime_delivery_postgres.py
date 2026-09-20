@@ -241,6 +241,82 @@ async def fail_evaluation_execution(
         raise EvaluationDeliveryError("evaluation_delivery_database_unavailable") from exc
 
 
+async def list_evaluation_execution_summaries(
+    *,
+    owner_id: str,
+    grant_id: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return recent safe execution summaries for supervisor observability.
+
+    Raw task input, idempotency keys, request fingerprints, replay payloads,
+    secrets, and response bodies are deliberately excluded.
+    """
+
+    bounded_limit = max(1, min(int(limit), 100))
+    try:
+        async with session_scope() as session:
+            statement = (
+                select(EvaluationRuntimeDelivery)
+                .where(EvaluationRuntimeDelivery.owner_id_sha256 == _owner_digest(owner_id))
+                .order_by(EvaluationRuntimeDelivery.accepted_at.desc())
+                .limit(bounded_limit)
+            )
+            normalized_grant_id = str(grant_id or "").strip()
+            if normalized_grant_id:
+                statement = statement.where(
+                    EvaluationRuntimeDelivery.grant_id == normalized_grant_id
+                )
+            result = await session.execute(statement)
+            rows = result.scalars().all()
+    except Exception as exc:
+        raise EvaluationDeliveryError("evaluation_delivery_database_unavailable") from exc
+
+    summaries: list[dict[str, Any]] = []
+    for row in rows:
+        evidence = dict(row.evidence) if isinstance(row.evidence, dict) else {}
+        replay = (
+            dict(row.replay_response)
+            if isinstance(row.replay_response, dict)
+            else {}
+        )
+        summaries.append(
+            {
+                "record_id": row.record_id,
+                "grant_id": row.grant_id,
+                "api_key_id": row.api_key_id,
+                "task_id": row.task_id,
+                "binding_id": row.binding_id,
+                "state": row.state,
+                "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
+                "executed_at": row.executed_at.isoformat() if row.executed_at else None,
+                "evidence_persisted_at": (
+                    row.evidence_persisted_at.isoformat()
+                    if row.evidence_persisted_at
+                    else None
+                ),
+                "failed_at": row.failed_at.isoformat() if row.failed_at else None,
+                "failure_code": row.failure_code,
+                "network_outcome": row.network_outcome,
+                "evaluation_stage": evidence.get("evaluation_stage")
+                or replay.get("evaluation_stage"),
+                "maestro_task_completed": bool(
+                    evidence.get("maestro_task_completed")
+                    or replay.get("maestro_task_completed")
+                ),
+                "next_readiness_stage": replay.get("next_readiness_stage"),
+                "governance_qualified": evidence.get("governance_qualified") is True,
+                "governance_version": evidence.get("governance_version"),
+                "governance_operation_id": evidence.get("governance_operation_id"),
+                "governance_fail_closed": evidence.get("governance_fail_closed") is True,
+                "runtime_attested_at": evidence.get("runtime_attested_at"),
+                "raw_task_input_persisted": False,
+                "raw_secret_visible": False,
+            }
+        )
+    return summaries
+
+
 __all__ = [
     "EvaluationDeliveryError",
     "EvaluationIdempotencyConflictError",
@@ -249,4 +325,5 @@ __all__ = [
     "complete_evaluation_execution",
     "evaluation_request_fingerprint",
     "fail_evaluation_execution",
+    "list_evaluation_execution_summaries",
 ]
