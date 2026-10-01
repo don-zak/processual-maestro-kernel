@@ -252,3 +252,28 @@ External Evaluation is ready for a customer only when:
 - superseded UI/assets are isolated from active loaders; broad deletion/deprecation cleanup remains governed by `docs/FINAL_LAUNCH_TODO.md`
 
 Customer-owned sandbox qualification is a second phase and must not be used to substitute for the project-owned sandbox proof.
+
+
+## 9. University and government sector scenario preparation (not yet live-qualified)
+
+Six grant-scoped, synthetic guided scenarios are prepared in the separate investor-readiness follow-up branch. They are **not** production access and must remain unavailable to investors until their own sandbox bindings and operational evidence qualify. The Cloudflare Worker fixture changes require a separate pinned, manually approved sandbox deployment before provisioning, not an automatic release.
+
+| Scenario | Canonical task | Synthetic sandbox endpoint | Method |
+| --- | --- | --- | --- |
+| UNI-STUDENT-01 | university.student_request | /university/requests/sandbox-student-request-001 | GET |
+| UNI-COURSE-01 | university.course_catalog | /university/courses/sandbox-course-001 | GET |
+| UNI-ADMISSION-01 | university.admission_response_draft | /university/admissions/sandbox-admission-001/response-draft | POST |
+| GOV-CASE-01 | government.case_context | /government/cases/sandbox-public-case-001 | GET |
+| GOV-REQUEST-01 | government.request_summary | /government/requests/sandbox-public-case-001 | GET |
+| GOV-RESPONSE-01 | government.response_draft | /government/cases/sandbox-public-case-001/response-draft | POST |
+
+Required sequence for each sector:
+
+1. Qualify the proposed Worker revision separately through the existing manual Cloudflare workflow with an exact SHA; do not redeploy CRM/Integration without a verified rollback path.
+2. As platform administrator, provision the six separate bindings through the existing Evaluation binding-provisioning endpoint, with response field maps covering every canonical task-required field. Draft bindings additionally require a reviewed request-body mapping for POST, with no production credentials.
+3. Attach isolated, project-owned synthetic content contracts and secret references (`anonymous/public` only when the sandbox is genuinely public). Run one hardened operational sandbox proof per binding and verify `selectable=true` and matching provisioning fingerprint via the authoritative binding catalog.
+4. Only then create separate university and government grants with `POST /evaluation/runtime/task-execute` and exactly the intended tasks/bindings/scopes. Never reuse the existing CRM grant or widen its sealed authority.
+5. Execute all six tasks with synthetic inputs and new idempotency keys; inspect admitted quota, persistently stored evidence, Maestro consumption and governance decisions. Confirm that draft responses are review-only, never final admissions/permit/benefit decisions.
+6. Test one exact replay (+0 additional quota), a forbidden task and a missing binding (fail-closed without admitted execution), and an independently authorized administrative review of the final customer-safe report.
+
+**Operational status:** repository scenarios and synthetic fixtures are preparatory changes only. Neither university nor government currently has a persisted prepared binding or live proof in the shared Neon authority; do not mark those sectors ready in investor-facing materials until all gates pass. The current Render service and the existing CRM/Integration sandbox deployment remain unchanged.
