@@ -14,6 +14,8 @@ from processual_api.services.evaluation_grants import (
 
 def _credential() -> dict:
     return {
+        "sub": "owner-user",
+        "user_id": "owner-user",
         "auth_method": "api_key",
         "entitlement_source": "admin_evaluation_grant",
         "evaluation_grant_id": "eval_probe",

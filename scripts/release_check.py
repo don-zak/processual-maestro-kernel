@@ -205,7 +205,11 @@ def check_docker_public_build() -> int:
             [
                 "docker", "run", "--rm", "--entrypoint", "sh", PUBLIC_CHECK_IMAGE,
                 "-c",
-                "test ! -e /app/cgtlib/private && python -c \"import cgtlib._backend as b; assert not b.HAS_PRIVATE_COMPUTE\"",
+                (
+    "test ! -e /app/cgtlib/private && "
+    "python -c \"import cgtlib._backend as b; "
+    "assert not b.HAS_PRIVATE_COMPUTE\""
+),
             ],
             cwd=str(REPO_ROOT),
             capture_output=True,

@@ -221,7 +221,10 @@ async def governed_execute_evaluation_runtime_task(
         # internal failure diagnosable from Render logs. The idempotency key is
         # intentionally NOT logged.
         logger.exception(
-            "evaluation_maestro_consumption_failed grant_id=%s api_key_id=%s task_id=%s binding_id=%s execution_id=%s record_id=%s error_type=%s",
+            (
+    "evaluation_maestro_consumption_failed grant_id=%s api_key_id=%s "
+    "task_id=%s binding_id=%s execution_id=%s record_id=%s error_type=%s"
+),
             grant_id,
             api_key_id,
             task_id,
@@ -261,7 +264,10 @@ async def governed_execute_evaluation_runtime_task(
         )
     except Exception as exc:
         logger.exception(
-            "evaluation_governed_evidence_finalize_failed grant_id=%s api_key_id=%s execution_id=%s record_id=%s error_type=%s",
+            (
+    "evaluation_governed_evidence_finalize_failed grant_id=%s api_key_id=%s "
+    "execution_id=%s record_id=%s error_type=%s"
+),
             grant_id,
             api_key_id,
             execution_id,

@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "processual_api" / "routers" / "evaluation_runtime.py"
 RUNTIME_SCENARIOS = ROOT / "processual_api" / "routers" / "evaluation_runtime_scenarios.py"
+CGT_STATUS = ROOT / "processual_api" / "routers" / "evaluation_cgt_status.py"
 ROUTE_REGISTRY = ROOT / "processual_api" / "routers" / "external_evaluation_route_registry.py"
 AUTHORITY = ROOT / "processual_api" / "services" / "evaluation_authority_postgres.py"
 PORTAL = ROOT / "processual_api" / "static" / "evaluation.html"
@@ -32,6 +33,7 @@ def test_customer_status_endpoint_is_zero_quota_and_safe() -> None:
 
 def test_customer_status_scenarios_are_derived_from_sealed_backend_authority() -> None:
     scenarios = source(RUNTIME_SCENARIOS)
+    cgt_status = source(CGT_STATUS)
     registry = source(ROUTE_REGISTRY)
 
     assert "customer_evaluation_scenarios(raw, grant)" in scenarios
@@ -39,7 +41,12 @@ def test_customer_status_scenarios_are_derived_from_sealed_backend_authority() -
     assert '"scenario_catalog_source": "sealed_evaluation_grant"' in scenarios
     assert '"scenario_status_reads_consume_quota": False' in scenarios
     assert '"raw_scenario_input_persisted": False' in scenarios
-    assert "evaluation_runtime_status_with_scenarios" in registry
+
+    # Public status is now composed through the CGT governance wrapper,
+    # which must preserve the sealed-authority scenario layer.
+    assert "evaluation_runtime_status_with_scenarios" in cgt_status
+    assert "payload = await evaluation_runtime_status_with_scenarios(current_user)" in cgt_status
+    assert "evaluation_runtime_status_with_governance" in registry
 
 
 def test_customer_execution_status_is_scoped_and_zero_quota() -> None:
