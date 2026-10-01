@@ -393,3 +393,82 @@ async def test_status_enrichment_fails_closed_without_evaluation_identity(monkey
 
     assert getattr(exc_info.value, "status_code", None) == 403
     assert getattr(exc_info.value, "detail", "") == "Governed Evaluation credential required."
+
+
+def test_university_and_government_scenarios_remain_grant_scoped() -> None:
+    sector_tasks = {
+        "university": (
+            "university.student_request",
+            "university.course_catalog",
+            "university.admission_response_draft",
+        ),
+        "government": (
+            "government.case_context",
+            "government.request_summary",
+            "government.response_draft",
+        ),
+    }
+    for sector, tasks in sector_tasks.items():
+        bindings = [
+            {"binding_id": f"evaluation.{task}.owned", "task_id": task}
+            for task in tasks
+        ]
+        raw = {"enterprise_endpoint_bindings_v1": bindings}
+        grant = {
+            "allowed_task_ids": list(tasks),
+            "allowed_binding_ids": [item["binding_id"] for item in bindings],
+            "allowed_endpoints": [{"method": "POST", "path": "/evaluation/runtime/task-execute"}],
+        }
+        scenarios = customer_evaluation_scenarios(raw, grant)
+        assert len(scenarios) == 3, sector
+        assert {item["task_id"] for item in scenarios} == set(tasks)
+        assert all(item["runnable"] for item in scenarios)
+        assert all(item["production_allowed"] is False for item in scenarios)
+        assert all(item["quota_cost_replay"] == 0 for item in scenarios)
+        assert all(item["sample_input"] for item in scenarios)
+
+
+def test_sector_scenarios_never_become_runnable_without_sealed_binding() -> None:
+    for task_id in (
+        "university.student_request",
+        "university.course_catalog",
+        "university.admission_response_draft",
+        "government.case_context",
+        "government.request_summary",
+        "government.response_draft",
+    ):
+        grant = {
+            "allowed_task_ids": [task_id],
+            "allowed_binding_ids": [],
+            "allowed_endpoints": [{"method": "POST", "path": "/evaluation/runtime/task-execute"}],
+        }
+        scenarios = customer_evaluation_scenarios(
+            {"enterprise_endpoint_bindings_v1": []}, grant
+        )
+        assert len(scenarios) == 1
+        assert scenarios[0]["task_id"] == task_id
+        assert scenarios[0]["runnable"] is False
+        assert scenarios[0]["readiness"] == "prepared_binding_required"
+        assert scenarios[0]["binding_ids"] == []
+
+
+def test_sector_sandbox_fixtures_have_no_production_mutation() -> None:
+    from pathlib import Path
+
+    worker = (
+        Path(__file__).resolve().parents[1]
+        / "deployment/evaluation-owned-sandbox/cloudflare/worker.js"
+    ).read_text(encoding="utf-8")
+    for route in (
+        "/university/requests/sandbox-student-request-001",
+        "/university/courses/sandbox-course-001",
+        "/university/admissions/sandbox-admission-001/response-draft",
+        "/government/cases/sandbox-public-case-001",
+        "/government/requests/sandbox-public-case-001",
+        "/government/cases/sandbox-public-case-001/response-draft",
+    ):
+        assert route in worker
+    assert "function safeDraft(request, fields, kind)" in worker
+    assert "production_mutation_performed:false" in worker
+    assert "production_allowed:false" in worker
+    assert "review_required:true" in worker
