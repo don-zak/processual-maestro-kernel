@@ -52,6 +52,13 @@ from processual_api.services.evaluation_runtime_delivery_postgres import (
     get_evaluation_execution_status,
     latest_evaluation_execution_status,
 )
+from processual_api.services.external_evaluation_governance import (
+    ExternalEvaluationGovernanceError,
+    attest_external_evaluation_execution,
+    external_evaluation_governance_evidence,
+    qualify_external_evaluation_preflight,
+    validate_external_evaluation_replay_governance,
+)
 
 from . import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 from . import settings_enterprise_sandbox_operational_runtime as sandbox_runtime
@@ -109,6 +116,15 @@ _SAFE_REPLAY_RESULT_KEYS = frozenset(
         "raw_task_input_persisted",
         "quota",
         "execution_status",
+        "governance_qualified",
+        "governance_version",
+        "governance_operation_id",
+        "governance_claim_ceiling",
+        "governance_fail_closed",
+        "governance_context_digest",
+        "governance_source_digest",
+        "runtime_attested_at",
+        "runtime_attestation_digest",
     }
 )
 
@@ -140,7 +156,9 @@ def _evaluation_owner_id(current_user: dict[str, Any]) -> str:
     return owner_id
 
 
-def _evaluation_identity(current_user: dict[str, Any]) -> tuple[str, str, str]:
+def _evaluation_identity(
+    current_user: dict[str, Any],
+) -> tuple[str, str, str]:
     if (
         current_user.get("auth_method") != "api_key"
         or current_user.get("entitlement_source") != "admin_evaluation_grant"
@@ -150,27 +168,34 @@ def _evaluation_identity(current_user: dict[str, Any]) -> tuple[str, str, str]:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Governed Evaluation credential required.",
         )
+
     owner_id = _evaluation_owner_id(current_user)
     grant_id = str(current_user.get("evaluation_grant_id") or "").strip()
     api_key_id = str(current_user.get("api_key_id") or "").strip()
+
     if not grant_id or not api_key_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Governed Evaluation credential required.",
         )
+
     return owner_id, grant_id, api_key_id
 
 
 def _require_evaluation_credential(
-    current_user: dict[str, Any], raw: dict[str, Any]
-) -> None:
+    current_user: dict[str, Any],
+    raw: dict[str, Any],
+) -> dict[str, Any]:
     _evaluation_identity(current_user)
+
     grant = find_evaluation_grant(
         raw,
         str(current_user.get("evaluation_grant_id") or ""),
     )
+
     if grant is not None:
         refresh_evaluation_grant_status(grant)
+
     if (
         grant is None
         or grant.get("status") != "active"
@@ -182,6 +207,8 @@ def _require_evaluation_credential(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Evaluation runtime authority is unavailable.",
         )
+
+    return grant
 
 
 def _authorize_task(
@@ -378,7 +405,7 @@ async def execute_evaluation_runtime_task(
             detail="Shared Evaluation runtime authority is unavailable.",
         ) from exc
 
-    _require_evaluation_credential(current_user, raw)
+    evaluation_grant = _require_evaluation_credential(current_user, raw)
     if not evaluation_binding_allowed(current_user, body.binding_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -390,6 +417,18 @@ async def execute_evaluation_runtime_task(
         requested_task_id=body.task_id,
         binding_task_id=spec.task_id,
     )
+    try:
+        governance_preflight = qualify_external_evaluation_preflight(
+            current_user=current_user,
+            grant=evaluation_grant,
+            task_id=task_id,
+            binding_id=spec.binding_id,
+        )
+    except ExternalEvaluationGovernanceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"External Evaluation governance preflight failed: {exc}",
+        ) from exc
 
     content = sandbox_runtime._content_contract(raw, spec.binding_id)
     secret_reference = sandbox_runtime._secret_reference(raw, spec.binding_id)
@@ -431,7 +470,7 @@ async def execute_evaluation_runtime_task(
         EndpointRequestMappingError,
     ) as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
 
@@ -458,6 +497,20 @@ async def execute_evaluation_runtime_task(
     record_id = str(claim["record"]["record_id"])
     if claim["status"] == "replay":
         replay_response = dict(claim["response"])
+        try:
+            validate_external_evaluation_replay_governance(
+                governance_preflight,
+                replay_response,
+            )
+        except ExternalEvaluationGovernanceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Stored evaluation replay predates or conflicts with the "
+                    "current Governance Genome contract; operator reconciliation "
+                    "is required before replay."
+                ),
+            ) from exc
         replay_response["idempotent_replay"] = True
         await _decorate_execution_with_status(
             replay_response,
@@ -480,6 +533,10 @@ async def execute_evaluation_runtime_task(
         )
         if not transport.last_verified_peer:
             raise SandboxExecutionError("evaluation_peer_address_unverified")
+        if result.get("network_request_executed") is not True:
+            raise SandboxExecutionError("evaluation_execution_not_observed")
+        if not str(result.get("evidence_sha256") or "").strip():
+            raise SandboxExecutionError("evaluation_execution_evidence_missing")
     except (ValueError, KeyError, SandboxExecutionError) as exc:
         try:
             await fail_evaluation_execution(
@@ -490,8 +547,37 @@ async def execute_evaluation_runtime_task(
         except EvaluationDeliveryError:
             logger.exception("Failed to persist evaluation execution failure state")
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
+        ) from exc
+
+    try:
+        runtime_attestation = attest_external_evaluation_execution(
+            governance_preflight,
+            execution_id=str(result.get("execution_id") or ""),
+            completed_at=str(result.get("completed_at") or ""),
+            execution_evidence_digest=str(result.get("evidence_sha256") or ""),
+            succeeded=True,
+        )
+        governance_evidence = external_evaluation_governance_evidence(
+            governance_preflight,
+            runtime_attestation,
+        )
+    except ExternalEvaluationGovernanceError as exc:
+        try:
+            await fail_evaluation_execution(
+                owner_id=owner_id,
+                record_id=record_id,
+                failure_code="ExternalEvaluationGovernanceError",
+            )
+        except EvaluationDeliveryError:
+            logger.exception("Failed to persist governance attestation failure state")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "External execution completed but Governance Genome attestation "
+                "could not be finalized; replay is blocked pending reconciliation."
+            ),
         ) from exc
 
     evidence = {
@@ -518,6 +604,7 @@ async def execute_evaluation_runtime_task(
         "maestro_task_completed": False,
         "raw_task_input_persisted": False,
         "raw_secret_visible": False,
+        **governance_evidence,
     }
     response = {
         **result,
@@ -533,6 +620,7 @@ async def execute_evaluation_runtime_task(
         "raw_task_input_persisted": False,
         "raw_secret_visible": False,
         "idempotent_replay": False,
+        **governance_evidence,
     }
     try:
         await complete_evaluation_execution(

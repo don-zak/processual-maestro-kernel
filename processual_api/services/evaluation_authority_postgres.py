@@ -17,6 +17,7 @@ from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     find_evaluation_grant,
     refresh_evaluation_grant_status,
+    validate_evaluation_governance_contract,
 )
 from processual_api.services.evaluation_key_quota_policy import (
     normalized_evaluation_key_type,
@@ -36,6 +37,11 @@ def _as_utc(value: datetime | None) -> datetime | None:
         return None
     return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
+
+
+def _iso_utc(value: datetime | None) -> str | None:
+    normalized = _as_utc(value)
+    return normalized.isoformat() if normalized is not None else None
 
 def _lookup_sha256(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
@@ -78,16 +84,16 @@ def _safe_key_summary(row: EvaluationAuthorityKey) -> dict[str, Any]:
         "lifecycle_status": str(payload.get("lifecycle_status") or "issued"),
         "label": str(payload.get("label") or ""),
         "issued_to": str(payload.get("issued_to") or ""),
-        "created_at": _as_utc(row.created_at).isoformat(),
+        "created_at": _iso_utc(row.created_at),
         "delivered_at": payload.get("delivered_at"),
         "delivered_by": payload.get("delivered_by"),
         "acknowledged_at": payload.get("acknowledged_at"),
         "acknowledged_by": payload.get("acknowledged_by"),
-        "last_used_at": _as_utc(row.last_used_at).isoformat() if row.last_used_at else None,
+        "last_used_at": _iso_utc(row.last_used_at),
         "usage_count": row.usage_count,
         "quota_rejected_count": row.quota_rejected_count,
-        "expires_at": _as_utc(row.expires_at).isoformat() if row.expires_at else None,
-        "revoked_at": _as_utc(row.revoked_at).isoformat() if row.revoked_at else None,
+        "expires_at": _iso_utc(row.expires_at),
+        "revoked_at": _iso_utc(row.revoked_at),
         "revoked_by": payload.get("revoked_by"),
         "revocation_reason": payload.get("revocation_reason"),
         "quota_semantics": "admitted_execution",
@@ -261,7 +267,7 @@ async def evaluation_key_runtime_status(
                 },
                 "expires_at": expires_at.isoformat() if expires_at else None,
                 "last_used_at": (
-                    _as_utc(key.last_used_at).isoformat() if key.last_used_at else None
+                    _iso_utc(key.last_used_at)
                 ),
                 "allowed_task_ids": list(grant.get("allowed_task_ids") or []),
                 "allowed_binding_ids": list(grant.get("allowed_binding_ids") or []),
@@ -457,6 +463,10 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
             if grant is None:
                 return None
             refresh_evaluation_grant_status(grant)
+            try:
+                validate_evaluation_governance_contract(grant)
+            except ValueError:
+                return None
             if (
                 grant.get("status") != "active"
                 or grant.get("execution_mode") != EVALUATION_EXECUTION_MODE
@@ -497,6 +507,7 @@ async def verify_evaluation_api_key(raw_key: str) -> dict[str, Any] | None:
                 "evaluation_access": True,
                 "quota_semantics": "admitted_execution",
                 "production_allowed": False,
+                "governance_contract": dict(grant.get("governance_contract") or {}),
             }
     except EvaluationAuthorityError:
         raise

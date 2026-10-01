@@ -8,6 +8,13 @@ from starlette.testclient import TestClient
 from processual_api.middleware.security_headers import SecurityHeadersMiddleware
 
 
+class FramePolicyOnlySecurityHeadersMiddleware(SecurityHeadersMiddleware):
+    async def _evaluation_workspace_gate(self, request):
+        # This unit test isolates frame/header policy only.
+        # Launch-gate behavior is covered separately and must remain fail-closed.
+        return None
+
+
 async def _html(request):
     return HTMLResponse("<html><body>ok</body></html>")
 
@@ -20,7 +27,7 @@ def _client() -> TestClient:
             Route("/console/js/evaluation_client_portal.js", _html),
         ]
     )
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(FramePolicyOnlySecurityHeadersMiddleware)
     return TestClient(app)
 
 

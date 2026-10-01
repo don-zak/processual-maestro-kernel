@@ -14,6 +14,7 @@ from processual_api.services.evaluation_grants import (
     EVALUATION_EXECUTION_MODE,
     EVALUATION_GRANTS_STORAGE_KEY,
     evaluation_binding_allowed,
+    evaluation_governance_contract,
     key_evaluation_grant_state,
 )
 
@@ -34,6 +35,7 @@ def _runtime_grant(*, binding_id: str = "binding_eval_a") -> dict:
         "execution_mode": EVALUATION_EXECUTION_MODE,
         "real_runtime_execution": True,
         "production_allowed": False,
+        "governance_contract": evaluation_governance_contract(),
     }
 
 
