@@ -71,7 +71,24 @@ Core values include:
 - `ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON`
 - `ADMIN_MARKETPLACE_PAYMENT_DESTINATION_CURRENT_KEY_VERSION`
 
-Provider-specific credentials are required only for the provider selected by policy. Real secret values must remain in `.env` outside version control or be injected from a deployment secret manager such as **Docker secrets**, **Kubernetes secrets**, **Google Secret Manager**, or an equivalent managed secret store.
+### Extended production environment variables
+
+Depending on enabled surfaces, production may also require:
+
+- `SENTRY_ENVIRONMENT`
+- `DISCORD_ADMIN_WEBHOOK_URL`
+- `LEMONSQUEEZY_WEBHOOK_SECRET`
+- `OPENROUTER_API_KEY`
+- `OPENCODE_API_URL`
+- `GENERIC_OPENAI_API_URL`
+
+Do not use documentation sample values in production. Secrets must be supplied
+through Docker secrets, Kubernetes secrets, Google Secret Manager, or an
+equivalent secret-management system.
+
+Provider-specific credentials are required only for the provider selected by
+policy. Real secret values must remain outside version control and must not be
+emitted into logs, reports, browser storage, or qualification evidence.
 
 Provider credentials are not bundled with Processual Maestro. They remain customer/deployer-owned and must never be committed to the repository or emitted into logs, reports, browser storage, or qualification evidence.
 

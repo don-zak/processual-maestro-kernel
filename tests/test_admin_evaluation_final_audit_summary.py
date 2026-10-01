@@ -31,6 +31,7 @@ def test_final_audit_fails_closed_when_usage_has_no_receipt() -> None:
             }
         ],
         receipts=[],
+        governance_proofs=[],
     )
 
     assert summary["audit_outcome"] == "ledger_receipt_mismatch"
@@ -73,6 +74,7 @@ def test_final_audit_is_complete_with_persisted_success_receipt() -> None:
                 "evidence_persisted_at": "2026-09-12T09:14:27+00:00",
             }
         ],
+        governance_proofs=[],
     )
 
     assert summary["audit_outcome"] == "complete"

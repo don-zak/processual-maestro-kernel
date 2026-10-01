@@ -55,9 +55,6 @@ def _set_strong_production_env(monkeypatch) -> None:
         ("API_KEYS", "", "API_KEYS"),
         ("DATABASE_URL", "", "DATABASE_URL"),
         ("REDIS_URL", "", "REDIS_URL"),
-        ("POSTGRES_PASSWORD", "password", "POSTGRES_PASSWORD"),
-        ("REDIS_PASSWORD", "password", "REDIS_PASSWORD"),
-        ("GRAFANA_ADMIN_PASSWORD", "admin", "GRAFANA_ADMIN_PASSWORD"),
         ("CORS_ORIGINS", "*", "CORS_ORIGINS"),
         ("CORS_ORIGINS", "", "CORS_ORIGINS"),
         ("CORS_ORIGINS", "https://user:pass@example.com", "CORS_ORIGINS"),
@@ -74,6 +71,19 @@ def test_production_rejects_weak_startup_settings(monkeypatch, env_name, env_val
 
     with pytest.raises(RuntimeError, match=message):
         api_settings_cls()
+
+
+def test_api_settings_does_not_validate_component_level_secrets(monkeypatch):
+    api_settings_cls = _api_settings_class(monkeypatch)
+    _set_strong_production_env(monkeypatch)
+
+    monkeypatch.setenv("POSTGRES_PASSWORD", "password")
+    monkeypatch.setenv("REDIS_PASSWORD", "password")
+    monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", "admin")
+
+    settings = api_settings_cls()
+
+    assert settings.is_production is True
 
 
 def test_production_accepts_strong_settings_and_forces_debug_false(monkeypatch):
