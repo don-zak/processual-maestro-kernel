@@ -12,6 +12,8 @@ assert.equal(url.protocol, 'https:', 'live sandbox requires HTTPS');
 assert.equal(url.pathname, '/', 'sandbox base URL must have no path');
 assert.equal(url.search, '', 'sandbox base URL must not contain a query');
 assert.equal(url.hash, '', 'sandbox base URL must not contain a fragment');
+assert.equal(url.hostname, 'processual-maestro-evaluation-sandbox.zaksam2030.workers.dev',
+  'live verifier refuses requests outside the project-owned sandbox');
 const results = [];
 const evidencePath = process.env.GITHUB_WORKSPACE
   ? process.env.GITHUB_WORKSPACE + '/live-worker-evidence.json'
