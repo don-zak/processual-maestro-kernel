@@ -64,17 +64,33 @@ async function draft(label, path, body) {
 async function run() {
   // Cloudflare propagation can be briefly delayed after Wrangler returns.
   let live;
+  let latestHttpStatus = null;
+  let latestNetworkError = null;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const probe = await call('GET', '/health/live');
+      latestHttpStatus = probe.response.status;
+      latestNetworkError = null;
       if (probe.response.status === 200 && probe.payload?.deployment_sha === expectedSha) {
         live = probe.payload;
         break;
       }
-    } catch { /* Do not log responses or credentials. */ }
+    } catch (error) {
+      // Only record the exception type; never persist a response or credentials.
+      latestNetworkError = error?.name || 'NetworkError';
+    }
     if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 5000));
   }
-  assert.ok(live, 'live Worker did not attest the expected SHA');
+  if (!live) {
+    if (latestHttpStatus === 403) {
+      throw new Error('WORKER_PUBLIC_ACCESS_DENIED_HTTP_403: inspect Cloudflare Access policies, workers.dev route, and approved deployment credentials before issuing any Evaluation keys');
+    }
+    if (latestHttpStatus === 200) {
+      throw new Error('WORKER_SHA_MISMATCH: endpoint responded but did not attest the approved source SHA');
+    }
+    throw new Error('WORKER_HEALTH_UNVERIFIED: status=' +
+      (latestHttpStatus ?? 'none') + '; transport=' + (latestNetworkError ?? 'none'));
+  }
   assert.equal(live.production_allowed, false);
   results.push({ label: 'health-sha', status: 200, pass: true });
 
