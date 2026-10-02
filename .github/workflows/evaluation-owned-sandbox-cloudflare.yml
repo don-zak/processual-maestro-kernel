@@ -66,7 +66,7 @@ jobs:
           node-version: "22"
 
       - name: Verify synthetic sector Worker routes and existing CRM/Billing contracts
-        run: node deployment/evaluation-owned-sandbox/cloudflare/test-worker.mjs
+        run: node test-worker.mjs
 
       - name: Verify Cloudflare deployment authority is configured
         shell: bash
