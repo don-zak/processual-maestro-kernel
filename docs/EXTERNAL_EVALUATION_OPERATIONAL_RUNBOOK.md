@@ -277,3 +277,34 @@ Required sequence for each sector:
 6. Test one exact replay (+0 additional quota), a forbidden task and a missing binding (fail-closed without admitted execution), and an independently authorized administrative review of the final customer-safe report.
 
 **Operational status:** repository scenarios and synthetic fixtures are preparatory changes only. Neither university nor government currently has a persisted prepared binding or live proof in the shared Neon authority; do not mark those sectors ready in investor-facing materials until all gates pass. The current Render service and the existing CRM/Integration sandbox deployment remain unchanged.
+
+
+## 10. Cloudflare HTTP 403 and CRM draft 405 recovery gate
+
+A live Maestro evaluation binding may already be sealed to the Cloudflare Worker host.
+Do not redirect the binding silently to the legacy read-only Render sandbox:
+that sandbox proves `GET /health/live` and `GET /users/1`, but rejects the
+`POST /users/1/update-draft` CRM draft route with HTTP 405.
+
+If the expected Worker responds HTTP 403, stop before consuming another
+Evaluation key quota unit. Check the Cloudflare account's Worker route,
+`workers.dev` enablement, deployment identity and any applicable Cloudflare
+Access policy. An Access-protected Worker must not be made public merely to
+pass the probe; an approved service-token integration requires its own
+secret-reference binding and separate qualification. Never log a challenge
+body, cookie or Cloudflare token.
+
+The pinned manual deployment workflow is the authorized repair path after
+operator review. Run it against the reviewed full 40-character source SHA,
+using the environment `external-evaluation-sandbox`, then require
+`verify-live-worker.mjs` evidence that the live Worker attests the same SHA.
+Verify `GET /health/live`, the read-only CRM and Billing fixtures, and
+`POST /users/1/update-draft` with synthetic input. The draft must return
+`draft_only=true`, `review_required=true`, `applied=false`, and
+`production_allowed=false`.
+
+Only after those live checks pass should an authorized operator issue a
+fresh bounded test key or select an already-approved unused key. Every
+new logical request needs a new idempotency key; an admitted failed request
+whose network outcome is unknown must not be blindly replayed. Review the
+key's authoritative quota counter and safe execution receipt first.
