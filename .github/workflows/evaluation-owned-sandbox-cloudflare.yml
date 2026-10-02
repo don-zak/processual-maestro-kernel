@@ -32,11 +32,17 @@ jobs:
       - name: Fail closed if checkout does not match requested ref
         working-directory: .
         shell: bash
+        env:
+          EXPECTED_REF: ${{ inputs.expected_ref }}
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "${{ inputs.expected_ref }}" || {
-            echo "::error::Checked out $actual but expected ${{ inputs.expected_ref }}"
+          if [[ ! "$EXPECTED_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Expected ref must be a full lowercase 40-character commit SHA"
+            exit 1
+          fi
+          test "$actual" = "$EXPECTED_REF" || {
+            echo "::error::Checked out SHA does not match the approved SHA"
             exit 1
           }
           echo "CHECKED_OUT_SHA=$actual" >> "$GITHUB_ENV"
