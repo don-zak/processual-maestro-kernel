@@ -61,7 +61,7 @@ jobs:
             tests/test_evaluation_owned_sandbox_contract.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@1e60f620b9541d31bdc5a65b1d11d6c7852eab18
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
 
