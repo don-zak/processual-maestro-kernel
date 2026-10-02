@@ -29,6 +29,10 @@ async function call(method, path, body) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   let payload = null;
+  if (response.status === 403) {
+    // Cloudflare Access may return HTML. Preserve only the status, never its body.
+    return { response, payload };
+  }
   if (method !== 'HEAD') {
     assert.match(response.headers.get('content-type') || '', /application\/json/i, path);
     payload = await response.json();
