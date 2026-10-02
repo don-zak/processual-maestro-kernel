@@ -161,6 +161,14 @@ jobs:
             tests/integration/test_evaluation_runtime_quota_boundary_postgres_integration.py \
             tests/integration/test_evaluation_prepared_authority_postgres_integration.py
 
+      - name: Set up Node.js for sector sandbox regression
+        uses: actions/setup-node@1e60f620b9541d31bdc5a65b1d11d6c7852eab18
+        with:
+          node-version: '22'
+
+      - name: Execute synthetic university and government sandbox contracts
+        run: node deployment/evaluation-owned-sandbox/cloudflare/test-worker.mjs
+
       - name: Start Maestro pre-external candidate
         run: |
           python -m uvicorn processual_api.main:app --host 127.0.0.1 --port 8000 --workers 1 > preexternal-results/server.log 2>&1 &
