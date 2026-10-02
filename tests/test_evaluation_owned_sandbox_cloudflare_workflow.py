@@ -63,3 +63,16 @@ def test_cloudflare_deploy_uses_exact_pinned_wrangler_without_package_lock_depen
     assert "npm ci" not in source
     assert "package-lock.json" not in source
     assert 'cache: "npm"' not in source
+
+
+def test_live_verifier_distinguishes_access_denial_from_sha_mismatch() -> None:
+    verifier = Path("deployment/evaluation-owned-sandbox/cloudflare/verify-live-worker.mjs").read_text(
+        encoding="utf-8"
+    )
+    assert "response.status === 403" in verifier
+    assert "WORKER_PUBLIC_ACCESS_DENIED_HTTP_403" in verifier
+    assert "WORKER_SHA_MISMATCH" in verifier
+    assert "WORKER_HEALTH_UNVERIFIED" in verifier
+    assert "DEPLOYMENT_SHA" in verifier
+    assert "return { response, payload };" in verifier
+    assert "response.text()" not in verifier
