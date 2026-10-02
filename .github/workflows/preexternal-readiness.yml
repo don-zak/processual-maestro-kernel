@@ -164,7 +164,7 @@ jobs:
             tests/integration/test_evaluation_prepared_authority_postgres_integration.py
 
       - name: Set up Node.js for sector sandbox regression
-        uses: actions/setup-node@1e60f620b9541d31bdc5a65b1d11d6c7852eab18
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
 
