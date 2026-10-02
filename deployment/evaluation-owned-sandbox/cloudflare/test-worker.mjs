@@ -42,6 +42,8 @@ async function draft(path, body) {
   for (const key of ['applied', 'production_mutation_performed', 'production_allowed']) assert.equal(payload[key], false);
   response = await request('POST', path, {});
   assert.equal(response.status, 422, path + ':missing fields');
+  response = await request('POST', path);
+  assert.equal(response.status, 400, path + ':missing JSON body');
 }
 
 const health = await (await request('GET', '/health/live')).json();
