@@ -76,3 +76,17 @@ def test_live_verifier_distinguishes_access_denial_from_sha_mismatch() -> None:
     assert "DEPLOYMENT_SHA" in verifier
     assert "return { response, payload };" in verifier
     assert "response.text()" not in verifier
+
+
+def test_live_verifier_sends_json_body_for_missing_fields_probe() -> None:
+    verifier = Path("deployment/evaluation-owned-sandbox/cloudflare/verify-live-worker.mjs").read_text(
+        encoding="utf-8"
+    )
+    assert "record(label, method, path, expectedStatus, required, expected, requestBody)" in verifier
+    assert "call(method, path, requestBody)" in verifier
+    assert "production_allowed: false, applied: false,\n  }, {});" in verifier
+    local = Path("deployment/evaluation-owned-sandbox/cloudflare/test-worker.mjs").read_text(
+        encoding="utf-8"
+    )
+    assert "422, path + ':missing fields'" in local
+    assert "400, path + ':missing JSON body'" in local
