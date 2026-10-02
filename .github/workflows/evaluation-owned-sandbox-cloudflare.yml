@@ -1,0 +1,105 @@
+name: External Evaluation Owned Sandbox — Cloudflare
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_ref:
+        description: Exact commit SHA expected to be deployed
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-evaluation-owned-sandbox-cloudflare
+  cancel-in-progress: false
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    environment: external-evaluation-sandbox
+    defaults:
+      run:
+        working-directory: deployment/evaluation-owned-sandbox/cloudflare
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.expected_ref }}
+          persist-credentials: false
+
+      - name: Fail closed if checkout does not match requested ref
+        working-directory: .
+        shell: bash
+        env:
+          EXPECTED_REF: ${{ inputs.expected_ref }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [[ ! "$EXPECTED_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Expected ref must be a full lowercase 40-character commit SHA"
+            exit 1
+          fi
+          test "$actual" = "$EXPECTED_REF" || {
+            echo "::error::Checked out SHA does not match the approved SHA"
+            exit 1
+          }
+          echo "CHECKED_OUT_SHA=$actual" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14"
+
+      - name: Install project test dependencies
+        working-directory: .
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,api,security,database,cache]
+
+      - name: Verify owned Evaluation scenario contracts
+        working-directory: .
+        run: |
+          python -m pytest -q \
+            tests/test_external_evaluation_owned_crm_scenarios.py \
+            tests/test_external_evaluation_owned_integration_scenarios.py \
+            tests/test_external_evaluation_sector_preset_contracts.py \
+            tests/test_evaluation_owned_sandbox_contract.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Verify synthetic sector Worker routes and existing CRM/Billing contracts
+        run: node test-worker.mjs
+
+      - name: Verify Cloudflare deployment authority is configured
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN is not configured"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::CLOUDFLARE_ACCOUNT_ID is not configured"; exit 1; }
+
+      - name: Deploy project-owned Evaluation sandbox with pinned Wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.131.1 deploy --config wrangler.jsonc --var "DEPLOYMENT_SHA:$CHECKED_OUT_SHA"
+
+      - name: Verify exact-SHA live Worker and synthetic sector endpoints
+        env:
+          EVALUATION_WORKER_URL: ${{ vars.EVALUATION_WORKER_URL }}
+        run: node verify-live-worker.mjs
+
+      - name: Upload safe, SHA-bound live Worker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-sector-worker-live-evidence
+          path: live-worker-evidence.json
+          if-no-files-found: warn
