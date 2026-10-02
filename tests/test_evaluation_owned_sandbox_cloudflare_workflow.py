@@ -25,7 +25,10 @@ def test_cloudflare_deploy_is_pinned_to_requested_exact_ref() -> None:
     assert "expected_ref:" in source
     assert "ref: ${{ inputs.expected_ref }}" in source
     assert 'actual="$(git rev-parse HEAD)"' in source
-    assert 'test "$actual" = "${{ inputs.expected_ref }}"' in source
+    assert 'EXPECTED_REF: ${{ inputs.expected_ref }}' in source
+    assert '[[ ! "$EXPECTED_REF" =~ ^[0-9a-f]{40}$ ]]' in source
+    assert 'test "$actual" = "$EXPECTED_REF"' in source
+    assert 'echo "CHECKED_OUT_SHA=$actual" >> "$GITHUB_ENV"' in source
     assert "persist-credentials: false" in source
 
 
