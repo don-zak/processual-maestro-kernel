@@ -41,9 +41,22 @@ AUTOGENERATE_PLUGINS = [
 
 
 def _database_url() -> str:
-    url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    raw = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    if raw is None:
+        raise RuntimeError("DATABASE_URL is not configured.")
+
+    url = raw.strip()
+    if not url:
+        raise RuntimeError("DATABASE_URL is empty.")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in url):
+        raise RuntimeError("DATABASE_URL contains control characters.")
+
+    if url.startswith("postgresql+asyncpg://"):
+        return url
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
     return url
 
 

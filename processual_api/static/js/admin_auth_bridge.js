@@ -1,244 +1,131 @@
-
 (function () {
-  const preferredKeys = [
-    'token',
+  const IDENTITY_TOKEN_KEY = 'maestro_token';
+  const SUPERVISOR_SESSION_KEY = 'pmk_supervisor_session_key';
+  const LOCAL_DEV_API_KEY = 'api_key';
+  const LOCAL_DEVELOPMENT_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+  const READ_COALESCE_TTL_MS = 5000;
+  const READ_COALESCE_MAX_ENTRIES = 256;
+  const LEGACY_AUTH_KEYS = [
     'access_token',
-    'accessToken',
     'auth_token',
-    'authToken',
-    'jwt',
-    'bearer',
-    'maestro_token',
-    'maestroToken',
+    'admin_token',
+    'admin_access_token',
     'maestro_auth_token',
-    'maestroAuthToken',
+    'processual_auth_token',
+    'processual_session',
+    'admin_session',
     'pmk_token',
     'pmkToken',
     'pmk_auth_token',
     'pmkAuthToken',
-    'admin_token',
-    'adminToken',
-    'admin_access_token',
-    'adminAccessToken',
-    'processual_token',
+    'maestroToken',
     'processualToken',
-    'processual_auth_token',
-    'processualAuthToken',
-    'processual_session',
-    'processualSession',
-    'maestro_session',
-    'maestroSession',
-    'session',
-    'auth',
-    'user',
   ];
-
-  function fromObject(value) {
-    if (!value || typeof value !== 'object') return '';
-
-    return (
-      value.access_token ||
-      value.accessToken ||
-      value.token ||
-      value.auth_token ||
-      value.authToken ||
-      value.jwt ||
-      value.bearer ||
-      value.api_token ||
-      value.apiToken ||
-      value.admin_token ||
-      value.adminToken ||
-      value.admin_access_token ||
-      value.adminAccessToken ||
-      value?.data?.access_token ||
-      value?.data?.accessToken ||
-      value?.data?.token ||
-      value?.session?.access_token ||
-      value?.session?.accessToken ||
-      value?.session?.token ||
-      value?.user?.access_token ||
-      value?.user?.accessToken ||
-      value?.user?.token ||
-      ''
-    );
-  }
-
-  function normalizeCandidate(value) {
-    if (!value) return '';
-    if (typeof value !== 'string') return '';
-
-    const raw = value.trim();
-
-    if (!raw) return '';
-
-    if (raw.startsWith('Bearer ')) {
-      return raw.slice('Bearer '.length).trim();
-    }
-
-    if (raw.startsWith('{') || raw.startsWith('[') || raw.startsWith('"')) {
-      try {
-        const parsed = JSON.parse(raw);
-
-        if (typeof parsed === 'string') {
-          return normalizeCandidate(parsed);
-        }
-
-        return normalizeCandidate(fromObject(parsed));
-      } catch (error) {}
-    }
-
-    if (raw.split('.').length === 3 || raw.startsWith('eyJ')) {
-      return raw;
-    }
-
-    if (raw.length > 40 && !raw.includes(' ')) {
-      return raw;
-    }
-
-    return '';
-  }
-
-  function scanStorage(storage) {
-    for (const key of preferredKeys) {
-      try {
-        const found = normalizeCandidate(storage.getItem(key));
-        if (found) return { token: found, key };
-      } catch (error) {}
-    }
-
-    try {
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (!key) continue;
-
-        const lower = key.toLowerCase();
-
-        if (
-          !lower.includes('token') &&
-          !lower.includes('auth') &&
-          !lower.includes('jwt') &&
-          !lower.includes('session') &&
-          !lower.includes('maestro') &&
-          !lower.includes('processual') &&
-          !lower.includes('pmk')
-        ) {
-          continue;
-        }
-
-        const found = normalizeCandidate(storage.getItem(key));
-        if (found) return { token: found, key };
-      }
-    } catch (error) {}
-
-    return { token: '', key: '' };
-  }
-
-  function bearer() {
-    const local = scanStorage(localStorage);
-    if (local.token) return local.token;
-
-    const session = scanStorage(sessionStorage);
-    if (session.token) return session.token;
-
-    return '';
-  }
-
-  function tokenKey() {
-    const local = scanStorage(localStorage);
-    if (local.token) return 'localStorage:' + local.key;
-
-    const session = scanStorage(sessionStorage);
-    if (session.token) return 'sessionStorage:' + session.key;
-
-    return '';
-  }
-
-  function apiKey() {
-    const keys = ['api_key', 'apiKey', 'x_api_key', 'xApiKey', 'X-API-Key'];
-
-    for (const storage of [localStorage, sessionStorage]) {
-      for (const key of keys) {
-        try {
-          const value = storage.getItem(key);
-          if (value) return value;
-        } catch (error) {}
-      }
-    }
-
-    return '';
-  }
-
-  const SUPERVISOR_SESSION_KEY_STORAGE_KEYS = [
-    'pmk_supervisor_session_key',
+  const LEGACY_SUPERVISOR_KEYS = [
     'admin_supervisor_session_key',
     'supervisor_session_key',
     'pmk_sup_session_key',
+    'pmk_admin_supervisor_session',
   ];
+  const inFlightReads = new Map();
+  const recentReads = new Map();
+
+  function removeStorageKey(storage, key) {
+    try {
+      storage.removeItem(key);
+    } catch (error) {}
+  }
+
+  function purgeLegacyCredentialStorage() {
+    LEGACY_AUTH_KEYS.forEach((key) => {
+      removeStorageKey(localStorage, key);
+      removeStorageKey(sessionStorage, key);
+    });
+    LEGACY_SUPERVISOR_KEYS.forEach((key) => {
+      removeStorageKey(localStorage, key);
+      removeStorageKey(sessionStorage, key);
+    });
+    removeStorageKey(localStorage, IDENTITY_TOKEN_KEY);
+    removeStorageKey(localStorage, 'maestro_role');
+    removeStorageKey(localStorage, SUPERVISOR_SESSION_KEY);
+  }
+
+  function sessionValue(key) {
+    try {
+      return String(sessionStorage.getItem(key) || '').trim();
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function bearer() {
+    return sessionValue(IDENTITY_TOKEN_KEY);
+  }
+
+  function tokenKey() {
+    return bearer() ? `sessionStorage:${IDENTITY_TOKEN_KEY}` : '';
+  }
+
+  function apiKey() {
+    if (!LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname)) return '';
+    return sessionValue(LOCAL_DEV_API_KEY);
+  }
 
   function supervisorSessionKey() {
-    for (const key of SUPERVISOR_SESSION_KEY_STORAGE_KEYS) {
-      try {
-        const sessionValue = sessionStorage.getItem(key);
-        if (sessionValue) return sessionValue;
-      } catch (error) {}
-
-      try {
-        const localValue = localStorage.getItem(key);
-        if (localValue) return localValue;
-      } catch (error) {}
-    }
-
-    return '';
+    return sessionValue(SUPERVISOR_SESSION_KEY);
   }
 
   function headers(existingHeaders) {
     const result = new Headers(existingHeaders || {});
-    const foundBearer = bearer();
-    const foundApiKey = apiKey();
-    const foundSupervisorSessionKey = supervisorSessionKey();
+    const identityToken = bearer();
+    const localApiKey = apiKey();
+    const supervisorKey = supervisorSessionKey();
 
     if (!result.has('Content-Type')) {
       result.set('Content-Type', 'application/json');
     }
-
-    if (foundBearer && !result.has('Authorization')) {
-      result.set('Authorization', 'Bearer ' + foundBearer);
+    if (identityToken && !result.has('Authorization')) {
+      result.set('Authorization', `Bearer ${identityToken}`);
     }
-
-    if (foundApiKey && !result.has('X-API-Key')) {
-      result.set('X-API-Key', foundApiKey);
+    if (localApiKey && !result.has('X-API-Key')) {
+      result.set('X-API-Key', localApiKey);
     }
-
-    if (foundSupervisorSessionKey && !result.has('X-Supervisor-Session-Key')) {
-      result.set('X-Supervisor-Session-Key', foundSupervisorSessionKey);
+    if (supervisorKey && !result.has('X-Supervisor-Session-Key')) {
+      result.set('X-Supervisor-Session-Key', supervisorKey);
     }
-
     return result;
+  }
+
+  function clearIdentitySession() {
+    try {
+      sessionStorage.removeItem(IDENTITY_TOKEN_KEY);
+      sessionStorage.removeItem('maestro_role');
+      sessionStorage.removeItem('maestro_ui_session_started_at');
+      sessionStorage.removeItem('maestro_ui_session_refreshed_at');
+    } catch (error) {}
   }
 
   function diagnostic() {
     return {
+      authMode: 'identity_session_v2',
       bearerFound: Boolean(bearer()),
       bearerKey: tokenKey(),
-      apiKeyFound: Boolean(apiKey()),
       supervisorSessionKeyFound: Boolean(supervisorSessionKey()),
-      localStorageKeys: Object.keys(localStorage).filter((key) =>
-        /token|auth|jwt|session|maestro|processual|pmk/i.test(key)
-      ),
-      sessionStorageKeys: Object.keys(sessionStorage).filter((key) =>
-        /token|auth|jwt|session|maestro|processual|pmk/i.test(key)
-      ),
+      localDevelopmentApiKeyFound: Boolean(apiKey()),
+      legacyStorageScanEnabled: false,
+      legacyCredentialStoragePurged: true,
+      localStorageUsedForAuth: false,
+      readRequestCoalescing: true,
+      readRequestCoalesceTtlMs: READ_COALESCE_TTL_MS,
     };
   }
 
   function shouldAttachHeaders(url) {
     try {
       const target = new URL(url, window.location.href);
-
       if (target.origin !== window.location.origin) return false;
       if (target.pathname.startsWith('/console/')) return false;
       if (target.pathname === '/admin') return false;
-
       return (
         target.pathname.startsWith('/auth/') ||
         target.pathname.startsWith('/settings/') ||
@@ -246,44 +133,135 @@
         target.pathname.startsWith('/applications') ||
         target.pathname.startsWith('/admin-marketplace') ||
         target.pathname.startsWith('/billing') ||
-        target.pathname.startsWith('/health/')
+        target.pathname.startsWith('/health/') ||
+        target.pathname.startsWith('/evaluation/')
       );
     } catch (error) {
       return false;
     }
   }
 
+  function requestMethod(input, init) {
+    return String(init?.method || (typeof input !== 'string' ? input?.method : '') || 'GET').toUpperCase();
+  }
+
+  function requestUrl(input) {
+    return typeof input === 'string' ? input : input?.url || '';
+  }
+
+  function shouldCoalesceRead(url, method, init) {
+    if (method !== 'GET') return false;
+    if (!shouldAttachHeaders(url)) return false;
+    if (init?.body !== undefined && init?.body !== null) return false;
+    if (init?.signal) return false;
+    return true;
+  }
+
+  function coalesceKey(url, requestHeaders) {
+    const target = new URL(url, window.location.href);
+    return [
+      target.href,
+      requestHeaders.get('Accept') || '',
+      requestHeaders.get('Authorization') || '',
+      requestHeaders.get('X-API-Key') || '',
+      requestHeaders.get('X-Supervisor-Session-Key') || '',
+    ].join('\n');
+  }
+
+  function pruneRecentReads(now) {
+    for (const [key, entry] of recentReads.entries()) {
+      if (now - entry.storedAt > READ_COALESCE_TTL_MS) recentReads.delete(key);
+    }
+    while (recentReads.size > READ_COALESCE_MAX_ENTRIES) {
+      const oldestKey = recentReads.keys().next().value;
+      if (oldestKey === undefined) break;
+      recentReads.delete(oldestKey);
+    }
+  }
+
+  function cloneResponse(response) {
+    return response.clone();
+  }
+
   function installFetchBridge() {
     if (window.PMK_ADMIN_AUTH_FETCH_BRIDGED) return;
-
     const originalFetch = window.fetch.bind(window);
 
-    window.fetch = function bridgedFetch(input, init) {
-      const url = typeof input === 'string' ? input : input?.url || '';
+    window.fetch = function identitySessionFetch(input, init) {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
       const nextInit = Object.assign({}, init || {});
+      const sourceHeaders =
+        nextInit.headers ||
+        (typeof input !== 'string' && input && input.headers ? input.headers : undefined);
+      const explicitHeaders = new Headers(sourceHeaders || {});
 
       if (shouldAttachHeaders(url)) {
-        const sourceHeaders =
-          nextInit.headers ||
-          (typeof input !== 'string' && input && input.headers ? input.headers : undefined);
-
         nextInit.headers = headers(sourceHeaders);
         nextInit.credentials = nextInit.credentials || 'include';
+        if (
+          (method === 'GET' || method === 'HEAD') &&
+          nextInit.body === undefined &&
+          !explicitHeaders.has('Content-Type')
+        ) {
+          nextInit.headers.delete('Content-Type');
+        }
       }
 
-      return originalFetch(input, nextInit);
+      if (!shouldCoalesceRead(url, method, nextInit)) {
+        return originalFetch(input, nextInit);
+      }
+
+      const requestHeaders = new Headers(nextInit.headers || sourceHeaders || {});
+      const key = coalesceKey(url, requestHeaders);
+      const now = Date.now();
+      pruneRecentReads(now);
+
+      const recent = recentReads.get(key);
+      if (recent && now - recent.storedAt <= READ_COALESCE_TTL_MS) {
+        return Promise.resolve(cloneResponse(recent.response));
+      }
+
+      const existing = inFlightReads.get(key);
+      if (existing) {
+        return existing.then(cloneResponse);
+      }
+
+      const cacheMode = String(nextInit.cache || '').toLowerCase();
+      const networkRequest = originalFetch(input, nextInit)
+        .then((response) => {
+          if (cacheMode !== 'no-store') {
+            recentReads.set(key, {
+              response: cloneResponse(response),
+              storedAt: Date.now(),
+            });
+            pruneRecentReads(Date.now());
+          }
+          return response;
+        })
+        .finally(() => {
+          inFlightReads.delete(key);
+        });
+
+      inFlightReads.set(key, networkRequest);
+      return networkRequest.then(cloneResponse);
     };
 
     window.PMK_ADMIN_AUTH_FETCH_BRIDGED = true;
   }
 
+  purgeLegacyCredentialStorage();
+
   window.PMK_ADMIN_AUTH = {
+    mode: 'identity_session_v2',
     bearer,
     tokenKey,
     apiKey,
     supervisorSessionKey,
     headers,
     diagnostic,
+    clearIdentitySession,
+    purgeLegacyCredentialStorage,
     installFetchBridge,
   };
 

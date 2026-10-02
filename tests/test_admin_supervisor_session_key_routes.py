@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from processual_api.admin_audit_log import read_admin_audit_events
 from processual_api.routers import settings as settings_routes
+from processual_api.routers import settings_supervisor_session_keys_authority as supervisor_authority_routes
 from processual_api.supervision_rbac import OPERATIONS_SUPERVISOR, REVIEW_SUPERVISOR
 from processual_api.supervisor_session_keys import SUPERVISOR_SESSION_KEY_PREFIX
 
@@ -27,6 +28,18 @@ def _patch_owner_admin_jwt(monkeypatch):
             "scopes": ["admin:settings"],
             "supervision_level": "owner_supervisor",
         },
+    )
+
+    async def allow_platform_admin(_current_user, request=None):
+        del request
+        return _current_user
+
+    # These tests exercise issue/list/revoke behavior and safe audit material.
+    # Canonical platform-admin authorization is qualified independently.
+    monkeypatch.setattr(
+        supervisor_authority_routes,
+        "require_active_platform_admin",
+        allow_platform_admin,
     )
 
 

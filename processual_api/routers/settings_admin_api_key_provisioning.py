@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 
+from processual_api.auth.platform_admin_authority import require_active_platform_admin
 from processual_api.auth.security import get_current_user
 from processual_api.integrations.api_key_access_policy import get_api_key_access_policy
 from processual_api.integrations.api_key_operational_profiles import (
@@ -33,7 +34,10 @@ _ALLOWED_ADMIN_SCOPES = {
 }
 
 
-def _require_api_key_provisioning_admin(current_user: dict) -> None:
+async def _require_api_key_provisioning_admin(
+    request: Request,
+    current_user: dict,
+) -> None:
     role = str(
         current_user.get("role")
         or current_user.get("admin_role")
@@ -46,10 +50,7 @@ def _require_api_key_provisioning_admin(current_user: dict) -> None:
     }
     if role in _ALLOWED_ADMIN_ROLES or scopes.intersection(_ALLOWED_ADMIN_SCOPES):
         return
-    raise HTTPException(
-        status_code=403,
-        detail="API key provisioning catalog requires administrator authority.",
-    )
+    await require_active_platform_admin(current_user, request)
 
 
 def _list_values(value: object) -> list[object]:
@@ -159,11 +160,12 @@ def _route_catalog(request: Request) -> list[dict[str, object]]:
     response_model=dict,
 )
 async def admin_api_key_operational_profiles(
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Return safe operational profiles for the admin provisioning workspace."""
 
-    _require_api_key_provisioning_admin(current_user)
+    await _require_api_key_provisioning_admin(request, current_user)
     payload = api_key_operational_profiles_payload()
     profiles = [
         *_list_values(payload.get("profiles")),
@@ -193,7 +195,7 @@ async def admin_api_key_access_catalog(
 ):
     """Return registered API routes plus the canonical key-grantable subset."""
 
-    _require_api_key_provisioning_admin(current_user)
+    await _require_api_key_provisioning_admin(request, current_user)
     endpoints = _route_catalog(request)
     grantable = [endpoint for endpoint in endpoints if endpoint["grantable"]]
     scopes = sorted(

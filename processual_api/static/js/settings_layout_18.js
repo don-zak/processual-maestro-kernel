@@ -17,6 +17,7 @@
   let initialized = false;
   let enterpriseConsoleLoading = false;
   let enterpriseConsoleLoaded = false;
+  let enterpriseConsoleAttempted = false;
 
   function settingsPage() {
     return document.getElementById('page-settings');
@@ -580,14 +581,19 @@
   }
 
   async function loadEnterpriseConsole(force = false) {
-    if (enterpriseConsoleLoading || (enterpriseConsoleLoaded && !force)) {
+    if (
+      enterpriseConsoleLoading ||
+      (!force && (enterpriseConsoleLoaded || enterpriseConsoleAttempted))
+    ) {
       return;
     }
     if (typeof CLIENT === 'undefined' || typeof CLIENT.get !== 'function') {
+      enterpriseConsoleAttempted = true;
       renderEnterpriseConsoleError();
       return;
     }
 
+    enterpriseConsoleAttempted = true;
     enterpriseConsoleLoading = true;
     try {
       const payload = await CLIENT.get('/settings/enterprise-integration');

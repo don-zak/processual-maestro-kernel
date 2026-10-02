@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 EXPECTED_ALEMBIC_HEAD = "20260901_0049"
 ALLOWED_RELEASE_ENVIRONMENTS = {"staging", "production"}
+ALLOWED_AUTH_DELIVERY_PROVIDER_KINDS = {"http", "gmail_api", "resend"}
 _PLACEHOLDER_MARKERS = (
     "replace_with",
     "change_me",
@@ -31,8 +32,6 @@ _REQUIRED_VALUES = (
     "AUTH_RATE_LIMIT_PEPPER",
     "AUTH_DELIVERY_KEY_RING_JSON",
     "AUTH_DELIVERY_CURRENT_KEY_VERSION",
-    "AUTH_DELIVERY_PROVIDER_URL",
-    "AUTH_DELIVERY_PROVIDER_TOKEN",
     "AUTH_PUBLIC_BASE_URL",
     "AUTH_MFA_KEY_RING_JSON",
     "AUTH_MFA_CURRENT_KEY_VERSION",
@@ -68,6 +67,53 @@ def _require_https(value: str, name: str) -> None:
         raise RuntimeError(f"release gate: {name} must use an absolute HTTPS URL")
 
 
+def _delivery_provider_kind(values: Mapping[str, str]) -> str:
+    kind = values.get("AUTH_DELIVERY_PROVIDER_KIND", "http").strip().lower()
+    if kind not in ALLOWED_AUTH_DELIVERY_PROVIDER_KINDS:
+        raise RuntimeError("release gate: AUTH_DELIVERY_PROVIDER_KIND is unsupported")
+    return kind
+
+
+def _validate_sender_email(value: str, name: str) -> None:
+    if (
+        len(value) > 320
+        or value.count("@") != 1
+        or value.startswith("@")
+        or value.endswith("@")
+        or any(character.isspace() for character in value)
+    ):
+        raise RuntimeError(f"release gate: {name} is invalid")
+
+
+def _validate_delivery_provider(values: Mapping[str, str], kind: str) -> None:
+    if kind == "http":
+        provider_url = _required(values, "AUTH_DELIVERY_PROVIDER_URL")
+        _required(values, "AUTH_DELIVERY_PROVIDER_TOKEN")
+        _require_https(provider_url, "AUTH_DELIVERY_PROVIDER_URL")
+        return
+
+    if kind == "gmail_api":
+        client_id = _required(values, "AUTH_GMAIL_CLIENT_ID")
+        client_secret = _required(values, "AUTH_GMAIL_CLIENT_SECRET")
+        refresh_token = _required(values, "AUTH_GMAIL_REFRESH_TOKEN")
+        sender_email = _required(values, "AUTH_GMAIL_SENDER_EMAIL")
+
+        if len(client_id) < 10:
+            raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_ID is invalid")
+        if len(client_secret) < 16:
+            raise RuntimeError("release gate: AUTH_GMAIL_CLIENT_SECRET is too short")
+        if len(refresh_token) < 32:
+            raise RuntimeError("release gate: AUTH_GMAIL_REFRESH_TOKEN is too short")
+        _validate_sender_email(sender_email, "AUTH_GMAIL_SENDER_EMAIL")
+        return
+
+    api_key = _required(values, "AUTH_RESEND_API_KEY")
+    sender_email = _required(values, "AUTH_RESEND_SENDER_EMAIL")
+    if len(api_key) < 20:
+        raise RuntimeError("release gate: AUTH_RESEND_API_KEY is too short")
+    _validate_sender_email(sender_email, "AUTH_RESEND_SENDER_EMAIL")
+
+
 def evaluate_release_environment(
     environ: Mapping[str, str] | None = None,
 ) -> ReleaseGateResult:
@@ -92,6 +138,10 @@ def evaluate_release_environment(
         raise RuntimeError("release gate: LEMONSQUEEZY_STORE_ID must be positive")
     checks.append("secret_strength")
 
+    delivery_kind = _delivery_provider_kind(values)
+    _validate_delivery_provider(values, delivery_kind)
+    checks.append("delivery_provider")
+
     cors_origins = [
         item.strip() for item in values.get("CORS_ORIGINS", "").split(",") if item.strip()
     ]
@@ -102,7 +152,6 @@ def evaluate_release_environment(
     checks.append("cors")
 
     for name in (
-        "AUTH_DELIVERY_PROVIDER_URL",
         "AUTH_PUBLIC_BASE_URL",
         "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL",
         "LEMONSQUEEZY_CHECKOUT_CANCEL_URL",

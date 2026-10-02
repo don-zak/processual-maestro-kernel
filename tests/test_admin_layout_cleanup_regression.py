@@ -1,17 +1,16 @@
-
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "processual_api" / "static"
 
 
-def test_admin_loads_layout_cleanup_after_runtime():
+def test_admin_loads_layout_cleanup_after_runtime() -> None:
     html = (STATIC_DIR / "admin.html").read_text(encoding="utf-8")
 
     assert "/console/js/admin_layout_cleanup.js" in html
     assert html.index("admin_runtime.js") < html.index("admin_layout_cleanup.js")
 
 
-def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards():
+def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards() -> None:
     script = (STATIC_DIR / "js" / "admin_layout_cleanup.js").read_text(encoding="utf-8")
 
     required = [
@@ -23,21 +22,23 @@ def test_admin_layout_cleanup_prunes_legacy_placeholders_and_scrolls_cards():
         "overflow:auto",
         "PMK_ADMIN_LAYOUT",
     ]
-
     for token in required:
         assert token in script
 
 
-def test_admin_session_uses_auth_bridge_headers():
+def test_admin_session_uses_identity_bridge_and_backend_authority() -> None:
     script = (STATIC_DIR / "js" / "admin_session.js").read_text(encoding="utf-8")
 
     required = [
-        "PMK_ADMIN_AUTH.headers",
-        "fetch('/auth/me'",
-        "Admin auth token missing",
-        "Admin session verified",
-        "Backend scopes remain the authority",
+        "window.PMK_ADMIN_AUTH",
+        "AUTHORITY_ENDPOINT",
+        "/settings/admin/evaluation-grants/authority",
+        "credentials: 'include'",
+        "Platform Administrator authority",
+        "document.body.dataset.adminSession = 'ok'",
     ]
-
     for token in required:
         assert token in script
+
+    assert "fetch('/auth/me'" not in script
+    assert "role === 'admin'" not in script

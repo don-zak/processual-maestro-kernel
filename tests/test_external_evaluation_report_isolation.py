@@ -42,7 +42,12 @@ def _allow_platform_admin_authority(monkeypatch) -> None:
     async def allow(current_user: dict, request: Request | None = None) -> dict:
         return current_user
 
+    async def load(owner_id: str) -> dict:
+        assert owner_id == "evaluation-owner"
+        return {}
+
     monkeypatch.setattr(grant_routes, "require_active_platform_admin", allow)
+    monkeypatch.setattr(grant_routes, "load_prepared_evaluation_authority", load)
 
 
 def test_external_evaluation_catalog_excludes_unscoped_governance_reports() -> None:

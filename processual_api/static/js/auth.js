@@ -73,3 +73,45 @@ const AUTH = (() => {
     document.body.appendChild(script);
   });
 })();
+
+(function bootstrapClientReadinessBadge() {
+  const badge = document.getElementById('demo-badge');
+  if (!badge) return;
+
+  function setBadge(text, state) {
+    badge.textContent = text;
+    badge.dataset.readinessState = state;
+    badge.setAttribute('title', 'Derived from /health/ready; this badge is not a production-execution authorization.');
+  }
+
+  async function refreshReadinessBadge() {
+    setBadge('Checking readiness', 'checking');
+    try {
+      const response = await fetch('/health/ready', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      let payload = {};
+      try { payload = await response.clone().json(); } catch (error) {}
+      const explicitReady = payload?.ready === true || payload?.status === 'ready';
+      if (response.ok && explicitReady) {
+        setBadge('Operational readiness verified', 'ready');
+        return;
+      }
+      if (response.ok) {
+        setBadge('Readiness checks incomplete', 'not-ready');
+        return;
+      }
+      setBadge(`Readiness unavailable (${response.status})`, 'unavailable');
+    } catch (error) {
+      setBadge('Readiness unavailable', 'unavailable');
+    }
+  }
+
+  refreshReadinessBadge();
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') refreshReadinessBadge();
+  }, 30000);
+})();

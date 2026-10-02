@@ -150,7 +150,7 @@ def _set_session_cookies(response: Response, issued: IssuedSession) -> None:
         secure=True,
         httponly=False,
         samesite="strict",
-        path="/auth/session",
+        path="/",
     )
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
@@ -166,7 +166,7 @@ def _clear_session_cookies(response: Response) -> None:
     )
     response.delete_cookie(
         CSRF_COOKIE,
-        path="/auth/session",
+        path="/",
         secure=True,
         httponly=False,
         samesite="strict",

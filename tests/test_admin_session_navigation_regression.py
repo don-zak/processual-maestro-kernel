@@ -7,36 +7,27 @@ def read_static(name: str) -> str:
     return (STATIC_DIR / name).read_text(encoding="utf-8")
 
 
-def test_admin_does_not_load_console_auth_script():
+def test_admin_does_not_load_console_auth_script() -> None:
     html = read_static("admin.html")
 
-    forbidden = [
-        'js/auth.js',
-        '/console/js/auth.js',
-        'AUTH.init()',
-    ]
-
-    for token in forbidden:
+    for token in ('js/auth.js', '/console/js/auth.js', 'AUTH.init()'):
         assert token not in html
-
-    required = [
-        'js/admin_session.js',
-        'js/admin_nav.js',
-    ]
-
-    for token in required:
+    for token in ('js/admin_session.js', 'js/admin_nav.js'):
         assert token in html
 
 
-def test_admin_session_never_redirects_to_splash_page():
+def test_admin_session_never_redirects_to_splash_and_fails_closed() -> None:
     script = (STATIC_DIR / "js" / "admin_session.js").read_text(encoding="utf-8")
 
     assert "window.location.replace('/')" not in script
     assert "window.location.href = '/'" not in script
-    assert "Admin auth token missing" in script
-    assert "PMK_ADMIN_AUTH.headers" in script
+    assert "Active administrator Identity session required" in script
+    assert "AUTHORITY_ENDPOINT" in script
+    assert "clearIdentitySession" in script
+    assert "Protected controls are locked" in script
 
-def test_admin_navigation_binds_buttons_and_switches_pages():
+
+def test_admin_navigation_binds_buttons_and_switches_pages() -> None:
     script = (STATIC_DIR / "js" / "admin_nav.js").read_text(encoding="utf-8")
 
     required = [
@@ -51,6 +42,5 @@ def test_admin_navigation_binds_buttons_and_switches_pages():
         "page-admin-system-settings",
         "window.PMK_ADMIN_NAV",
     ]
-
     for token in required:
         assert token in script

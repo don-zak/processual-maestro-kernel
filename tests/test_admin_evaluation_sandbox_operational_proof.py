@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from types import SimpleNamespace
 
 from starlette.requests import Request
 
-from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_admin_evaluation_binding_provisioning as routes
 from processual_api.routers import settings_enterprise_endpoint_bindings_runtime as binding_runtime
 
@@ -76,9 +76,18 @@ def test_evaluation_live_proof_is_subscription_independent_and_persists_safe_evi
 
     saved: dict = {}
 
+    async def load(owner_id: str) -> dict:
+        assert owner_id == "evaluation-owner"
+        return deepcopy(raw)
+
+    async def save(owner_id: str, value: dict) -> None:
+        assert owner_id == "evaluation-owner"
+        saved.clear()
+        saved.update(deepcopy(value))
+
     monkeypatch.setattr(routes, "require_active_platform_admin", allow)
-    monkeypatch.setattr(settings_router, "_load_raw", lambda _owner_id: raw)
-    monkeypatch.setattr(settings_router, "_save_raw", lambda _owner_id, value: saved.update(value))
+    monkeypatch.setattr(routes, "load_prepared_evaluation_authority", load)
+    monkeypatch.setattr(routes, "save_prepared_evaluation_authority", save)
     monkeypatch.setattr(binding_runtime, "_find_binding", lambda _raw, _binding_id: spec)
     monkeypatch.setattr(binding_runtime, "_find_request_mapping", lambda _raw, _binding_id: None)
     monkeypatch.setattr(routes.sandbox_runtime, "_content_contract", lambda _raw, _binding_id: content)
@@ -110,6 +119,7 @@ def test_evaluation_live_proof_is_subscription_independent_and_persists_safe_evi
     assert result["operational_proof"] is True
     assert result["peer_address_verified"] is True
     assert result["selection_authority"] == "admin_evaluation_grant"
+    assert result["authority_store"] == "postgresql_shared"
     assert result["subscription_required"] is False
     assert result["registration_required"] is False
     assert result["commercial_quota_required"] is False

@@ -5,6 +5,16 @@
   const EVALUATION_BODY_ID = 'admin-api-key-external-evaluation-body';
   const EVALUATION_HOST_ID = 'admin-evaluation-grants';
   const EXTERNAL_CATEGORY = 'external_evaluation';
+  const LAUNCH_HANDOFF_SCRIPT_ID = 'admin-evaluation-launch-handoff-script';
+  const LAUNCH_HANDOFF_SCRIPT_SRC = '/console/js/admin_evaluation_launch_handoff.js?v=eval-launch-handoff-v1';
+  const BINDING_COVERAGE_SCRIPT_ID = 'admin-evaluation-binding-coverage-guard-script';
+  const BINDING_COVERAGE_SCRIPT_SRC = '/console/js/admin_evaluation_binding_coverage_guard.js?v=eval-binding-coverage-v1';
+  const BINDING_AUTOSELECT_SCRIPT_ID = 'admin-evaluation-binding-autoselect-script';
+  const BINDING_AUTOSELECT_SCRIPT_SRC = '/console/js/admin_evaluation_binding_autoselect.js?v=eval-binding-autoselect-v1';
+  const CRM_BUNDLE_SCRIPT_ID = 'admin-evaluation-crm-bundle-script';
+  const CRM_BUNDLE_SCRIPT_SRC = '/console/js/admin_evaluation_crm_bundle.js?v=eval-crm-bundle-v1';
+  const GRANT_ARCHIVE_SCRIPT_ID = 'admin-evaluation-grant-archive-script';
+  const GRANT_ARCHIVE_SCRIPT_SRC = '/console/js/admin_evaluation_grant_archive.js?v=eval-grant-archive-v1';
   const STANDARD_IDS = [
     'admin-api-key-role',
     'admin-api-key-plan-id',
@@ -25,17 +35,9 @@
   let observer = null;
   let applying = false;
 
-  function category() {
-    return document.getElementById(CATEGORY_ID);
-  }
-
-  function lifecycle() {
-    return document.getElementById(LIFECYCLE_ID);
-  }
-
-  function externalSelected() {
-    return category()?.value === EXTERNAL_CATEGORY;
-  }
+  function category() { return document.getElementById(CATEGORY_ID); }
+  function lifecycle() { return document.getElementById(LIFECYCLE_ID); }
+  function externalSelected() { return category()?.value === EXTERNAL_CATEGORY; }
 
   function ensureExternalOption() {
     const select = category();
@@ -48,6 +50,22 @@
     }
     return true;
   }
+
+  function ensureScript(id, src) {
+    if (document.getElementById(id)) return;
+    const script = document.createElement('script');
+    script.id = id;
+    script.src = src;
+    script.async = true;
+    script.referrerPolicy = 'no-referrer';
+    document.head.appendChild(script);
+  }
+
+  function ensureLaunchHandoffScript() { ensureScript(LAUNCH_HANDOFF_SCRIPT_ID, LAUNCH_HANDOFF_SCRIPT_SRC); }
+  function ensureBindingCoverageGuardScript() { ensureScript(BINDING_COVERAGE_SCRIPT_ID, BINDING_COVERAGE_SCRIPT_SRC); }
+  function ensureBindingAutoselectScript() { ensureScript(BINDING_AUTOSELECT_SCRIPT_ID, BINDING_AUTOSELECT_SCRIPT_SRC); }
+  function ensureCrmBundleScript() { ensureScript(CRM_BUNDLE_SCRIPT_ID, CRM_BUNDLE_SCRIPT_SRC); }
+  function ensureGrantArchiveScript() { ensureScript(GRANT_ARCHIVE_SCRIPT_ID, GRANT_ARCHIVE_SCRIPT_SRC); }
 
   function ensureEvaluationCard() {
     const root = lifecycle();
@@ -114,37 +132,19 @@
     const root = lifecycle();
     if (!root) return [];
     const nodes = new Set();
-
     STANDARD_IDS.forEach((id) => {
       const element = document.getElementById(id);
       if (!element) return;
-      if (id === 'admin-api-key-profile-controls') {
-        nodes.add(element);
-        return;
-      }
+      if (id === 'admin-api-key-profile-controls') { nodes.add(element); return; }
       const label = element.closest('label');
-      if (label && root.contains(label)) {
-        nodes.add(label);
-        return;
-      }
+      if (label && root.contains(label)) { nodes.add(label); return; }
       const actions = element.closest('.admin-actions');
-      if (actions && root.contains(actions)) {
-        nodes.add(actions);
-        return;
-      }
+      if (actions && root.contains(actions)) { nodes.add(actions); return; }
       if (root.contains(element)) nodes.add(element);
     });
-
     root.querySelectorAll('.admin-grid').forEach((grid) => {
-      if (
-        grid.querySelector('#admin-api-key-role') ||
-        grid.querySelector('#admin-api-key-plan-id') ||
-        grid.querySelector('#admin-api-key-client-id')
-      ) {
-        nodes.add(grid);
-      }
+      if (grid.querySelector('#admin-api-key-role') || grid.querySelector('#admin-api-key-plan-id') || grid.querySelector('#admin-api-key-client-id')) nodes.add(grid);
     });
-
     root.querySelectorAll('h3').forEach((heading) => {
       const title = (heading.textContent || '').trim();
       if (title === 'External usage examples') {
@@ -161,7 +161,6 @@
         }
       }
     });
-
     return [...nodes].filter((node) => !node.closest(`#${EVALUATION_CARD_ID}`));
   }
 
@@ -177,11 +176,7 @@
 
   function dispatchCategoryChanged() {
     try {
-      window.dispatchEvent(
-        new CustomEvent('pmk-api-key-category-changed', {
-          detail: { category: category()?.value || '' },
-        })
-      );
+      window.dispatchEvent(new CustomEvent('pmk-api-key-category-changed', { detail: { category: category()?.value || '' } }));
     } catch {
       window.dispatchEvent(new Event('pmk-api-key-category-changed'));
     }
@@ -196,7 +191,6 @@
       if (!card) return;
       const body = document.getElementById(EVALUATION_BODY_ID);
       const external = externalSelected();
-
       card.hidden = !external;
       card.style.display = external ? '' : 'none';
       card.dataset.activated = external ? 'true' : 'false';
@@ -205,8 +199,12 @@
         body.style.display = external ? '' : 'none';
       }
       setStandardVisible(!external);
-
       if (external) {
+        ensureLaunchHandoffScript();
+        ensureBindingCoverageGuardScript();
+        ensureBindingAutoselectScript();
+        ensureCrmBundleScript();
+        ensureGrantArchiveScript();
         const mode = document.getElementById('admin-api-key-provisioning-mode');
         if (mode && mode.value !== 'external_evaluation') {
           mode.value = 'external_evaluation';
@@ -214,6 +212,11 @@
         }
         window.PMK_ADMIN_SESSION?.syncEvaluationSelectionState?.();
         window.PMK_ADMIN_SESSION?.check?.();
+        window.PMK_ADMIN_EVALUATION_LAUNCH_HANDOFF?.decorate?.();
+        window.PMK_ADMIN_EVALUATION_BINDING_AUTOSELECT?.apply?.();
+        window.PMK_ADMIN_EVALUATION_BINDING_COVERAGE_GUARD?.apply?.();
+        window.PMK_ADMIN_EVALUATION_CRM_BUNDLE?.initialize?.();
+        window.PMK_ADMIN_EVALUATION_GRANT_ARCHIVE?.initialize?.();
       }
     } finally {
       applying = false;
@@ -225,10 +228,7 @@
     if (!select) return false;
     if (select.dataset.domContractBound !== 'true') {
       select.dataset.domContractBound = 'true';
-      select.addEventListener('change', () => {
-        apply();
-        dispatchCategoryChanged();
-      });
+      select.addEventListener('change', () => { apply(); dispatchCategoryChanged(); });
     }
     return true;
   }
@@ -236,23 +236,17 @@
   function installObserver() {
     const root = lifecycle();
     if (!root || observer) return;
-    observer = new MutationObserver(() => {
-      if (externalSelected()) window.setTimeout(apply, 0);
-    });
+    observer = new MutationObserver(() => { if (externalSelected()) window.setTimeout(apply, 0); });
     observer.observe(root, { childList: true, subtree: true });
   }
 
-  document.addEventListener(
-    'click',
-    (event) => {
-      if (!externalSelected()) return;
-      const generate = event.target.closest?.('#admin-api-key-generate-btn');
-      if (!generate) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    },
-    true
-  );
+  document.addEventListener('click', (event) => {
+    if (!externalSelected()) return;
+    const generate = event.target.closest?.('#admin-api-key-generate-btn');
+    if (!generate) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
 
   function reconcile(attempt = 0) {
     if (!ensureExternalOption() || !ensureEvaluationCard() || !bind()) {
@@ -263,15 +257,7 @@
     apply();
   }
 
-  window.PMK_ADMIN_EXTERNAL_EVALUATION_DOM_CONTRACT = {
-    apply,
-    reconcile,
-    selected: externalSelected,
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => reconcile());
-  } else {
-    reconcile();
-  }
+  window.PMK_ADMIN_EXTERNAL_EVALUATION_DOM_CONTRACT = { apply, reconcile, selected: externalSelected };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => reconcile());
+  else reconcile();
 })();

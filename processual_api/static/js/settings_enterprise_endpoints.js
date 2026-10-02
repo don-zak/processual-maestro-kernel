@@ -10,6 +10,7 @@
   let initialized = false;
   let observer = null;
   let loading = false;
+  let refreshAttempted = false;
   let taskCatalog = [];
   let qualificationProfiles = [];
 
@@ -519,7 +520,8 @@
   async function refresh(force = false) {
     const card = document.getElementById('set-enterprise-console-card');
     if (!card || loading) return;
-    if (!force && document.getElementById(ROOT_ID)) return;
+    if (!force && (document.getElementById(ROOT_ID) || refreshAttempted)) return;
+    refreshAttempted = true;
     loading = true;
     try {
       const [consolePayload, tasksPayload, bindingsPayload, evidencePayload] = await Promise.all([

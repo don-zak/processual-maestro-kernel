@@ -1,0 +1,22 @@
+# Repository ownership contract.
+# GitHub repository rules should require CODEOWNER approval before merge.
+
+* @don-zak
+
+# Governance, authority, authentication, billing, and execution boundaries.
+/processual_api/auth/ @don-zak
+/processual_api/billing/ @don-zak
+/processual_api/services/ @don-zak
+/processual_api/routers/ @don-zak
+/processual_api/integrations/ @don-zak
+/alembic/ @don-zak
+/alembic.ini @don-zak
+
+# Deployment, CI, release, and security policy.
+/.github/ @don-zak
+/deployment/ @don-zak
+/render.yaml @don-zak
+/Dockerfile @don-zak
+/pyproject.toml @don-zak
+/requirements/ @don-zak
+/SECURITY.md @don-zak

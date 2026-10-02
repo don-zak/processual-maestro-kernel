@@ -12,9 +12,9 @@ def test_admin_auth_bridge_attaches_supervisor_session_key_header() -> None:
 
     assert "pmk_supervisor_session_key" in source
     assert "function supervisorSessionKey()" in source
-    assert "const foundSupervisorSessionKey = supervisorSessionKey();" in source
+    assert "const supervisorKey = supervisorSessionKey();" in source
     assert "X-Supervisor-Session-Key" in source
-    assert "result.set('X-Supervisor-Session-Key', foundSupervisorSessionKey)" in source
+    assert "result.set('X-Supervisor-Session-Key', supervisorKey)" in source
 
 
 def test_admin_auth_bridge_diagnostic_reports_supervisor_session_key() -> None:
@@ -22,6 +22,7 @@ def test_admin_auth_bridge_diagnostic_reports_supervisor_session_key() -> None:
 
     assert "supervisorSessionKeyFound: Boolean(supervisorSessionKey())" in source
     assert "supervisorSessionKey," in source
+    assert "legacyStorageScanEnabled: false" in source
 
 
 def test_admin_client_requests_refreshes_supervisor_card_after_key_event() -> None:

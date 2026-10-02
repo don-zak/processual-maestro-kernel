@@ -23,6 +23,7 @@ from processual_api.auth.delivery_operations_runtime import (
 from processual_api.auth.delivery_operations_service import (
     DeliveryRedriveUnavailableError,
 )
+from processual_api.auth.embedded_delivery_worker import delivery_router_lifespan
 from processual_api.auth.security import (
     require_platform_admin_step_up,
 )
@@ -40,6 +41,7 @@ platform_admin_step_up_dependency = (
 router = APIRouter(
     prefix="/auth/delivery-operations",
     tags=["identity-delivery-operations"],
+    lifespan=delivery_router_lifespan,
 )
 
 
@@ -74,14 +76,15 @@ async def delivery_operational_metrics(
     try:
         metrics = await runtime.service.metrics()
     except Exception as exc:
-        logger.exception(
+        logger.error(
             "identity_delivery_metrics_failed",
             extra={
                 "request_id": getattr(
                     request.state,
                     "request_id",
                     "unavailable",
-                )
+                ),
+                "exception_type": type(exc).__name__,
             },
         )
         raise HTTPException(
@@ -127,8 +130,6 @@ async def redrive_dead_letter_delivery(
             outbox_id=outbox_id,
         )
     except DeliveryRedriveUnavailableError:
-        # Deliberately preserve non-enumerability of
-        # dead-letter row existence and eligibility.
         return JSONResponse(
             status_code=202,
             content=(
@@ -136,8 +137,8 @@ async def redrive_dead_letter_delivery(
                 .model_dump()
             ),
         )
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "identity_delivery_redrive_failed",
             extra={
                 "request_id": getattr(
@@ -146,6 +147,7 @@ async def redrive_dead_letter_delivery(
                     "unavailable",
                 ),
                 "outbox_id": str(outbox_id),
+                "exception_type": type(exc).__name__,
             },
         )
         return JSONResponse(

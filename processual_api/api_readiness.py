@@ -148,6 +148,16 @@ _API_SURFACE_POLICIES = {
         capability_code="byok_provider_connection",
         production_allowed=True,
     ),
+    "external_evaluation_runtime": ApiSurfacePolicy(
+        surface_id="external_evaluation_runtime",
+        path_prefix="/evaluation/runtime",
+        visibility=ApiVisibility.CUSTOMER,
+        readiness=ApiReadiness.SANDBOX_ONLY,
+        auth_required=True,
+        audit_required=True,
+        external_dependency="shared_evaluation_authority",
+        production_allowed=False,
+    ),
     "advanced_integration": _sandbox_integration_surface(
         "advanced_integration",
         "/settings/enterprise-integration",
@@ -444,6 +454,18 @@ def validate_api_readiness_registry() -> None:
                 "unqualified full-install surface must "
                 f"remain disabled: {surface_id}"
             )
+
+    external_evaluation = API_SURFACE_POLICIES["external_evaluation_runtime"]
+    if (
+        external_evaluation.visibility is not ApiVisibility.CUSTOMER
+        or external_evaluation.readiness is not ApiReadiness.SANDBOX_ONLY
+        or not external_evaluation.auth_required
+        or not external_evaluation.audit_required
+        or external_evaluation.production_allowed
+    ):
+        raise ValueError(
+            "external evaluation runtime must remain governed sandbox-only"
+        )
 
     durable = API_SURFACE_POLICIES["durable_execution"]
     if (

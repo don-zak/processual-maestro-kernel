@@ -181,14 +181,15 @@ class DeliveryDispatcher:
         profile: DeliveryEventProfile,
         claim: DeliveryClaim,
     ) -> str:
-        query_values = {"token": raw_token}
+        values = {"token": raw_token}
 
         if claim.account_recovery_request_id is not None:
-            query_values["request_id"] = str(claim.account_recovery_request_id)
+            values["request_id"] = str(claim.account_recovery_request_id)
 
-        query = urlencode(query_values)
+        encoded = urlencode(values)
+        separator = "#" if claim.account_recovery_request_id is not None else "?"
 
-        return f"{self._config.public_base_url}{profile.verification_path}?{query}"
+        return f"{self._config.public_base_url}{profile.verification_path}{separator}{encoded}"
 
     @staticmethod
     def _idempotency_key(

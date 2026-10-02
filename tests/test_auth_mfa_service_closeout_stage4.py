@@ -62,6 +62,7 @@ class FakeRepository:
     def __init__(self) -> None:
         self.active_factor = None
         self.pending_factor = None
+        self.label_factor = None
         self.email = "person@example.com"
         self.session = None
         self.required = False
@@ -70,6 +71,7 @@ class FakeRepository:
         self.remaining = 0
         self.disabled_pending = 0
         self.added_factor = None
+        self.reactivated_factor = None
         self.replaced = []
         self.revoked_other = []
 
@@ -79,6 +81,9 @@ class FakeRepository:
     async def pending_factor_for_update(self, user_id):
         return self.pending_factor
 
+    async def factor_for_label_for_update(self, user_id, *, label):
+        return self.label_factor
+
     async def user_email(self, user_id):
         return self.email
 
@@ -87,6 +92,23 @@ class FakeRepository:
 
     def add_pending_factor(self, **values):
         self.added_factor = values
+
+    def reactivate_factor_for_enrollment(
+        self,
+        factor,
+        *,
+        ciphertext,
+        key_version,
+        updated_at,
+    ):
+        factor.status = "pending"
+        factor.secret_ciphertext = ciphertext
+        factor.secret_key_version = key_version
+        factor.verified_at = None
+        factor.last_used_step = None
+        factor.disabled_at = None
+        factor.updated_at = updated_at
+        self.reactivated_factor = factor
 
     async def replace_recovery_codes(self, factor_id, *, code_hashes):
         self.replaced.append((factor_id, tuple(code_hashes)))
@@ -203,6 +225,43 @@ def test_enroll_rejects_missing_authority_and_identity(monkeypatch) -> None:
     assert enrollment.secret
     assert repo.disabled_pending == 1
     assert repo.added_factor["label"] == "Primary"
+
+
+def test_enroll_reuses_disabled_factor_after_recovery(monkeypatch) -> None:
+    service, repo, uows = make_service()
+    user_id = uuid.uuid4()
+    factor_id = uuid.uuid4()
+    disabled_factor = SimpleNamespace(
+        id=factor_id,
+        status="disabled",
+        secret_ciphertext=b"old-cipher",
+        secret_key_version="old-v1",
+        verified_at=NOW - timedelta(days=3),
+        last_used_step=123,
+        disabled_at=NOW - timedelta(minutes=2),
+        updated_at=NOW - timedelta(minutes=2),
+    )
+    repo.label_factor = disabled_factor
+    monkeypatch.setattr(
+        service_module,
+        "generate_totp_secret",
+        lambda: b"12345678901234567890",
+    )
+
+    enrollment = asyncio.run(service.enroll(user_id=user_id, label="Primary"))
+
+    assert enrollment.secret
+    assert repo.added_factor is None
+    assert repo.reactivated_factor is disabled_factor
+    assert disabled_factor.status == "pending"
+    assert disabled_factor.secret_ciphertext == b"cipher"
+    assert disabled_factor.secret_key_version == "v1"
+    assert disabled_factor.verified_at is None
+    assert disabled_factor.last_used_step is None
+    assert disabled_factor.disabled_at is None
+    assert disabled_factor.updated_at == NOW
+    assert uows[-1].commits == 1
+    assert service._cipher.encrypt_calls[-1][1] == str(factor_id)
 
 
 def test_confirm_and_verify_fail_closed_on_missing_state(monkeypatch) -> None:

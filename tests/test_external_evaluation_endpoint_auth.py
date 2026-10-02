@@ -85,6 +85,30 @@ async def test_canonical_auth_rejects_non_granted_evaluation_endpoint(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_evaluation_runtime_rejects_legacy_only_evaluation_identity(monkeypatch) -> None:
+    monkeypatch.setattr(
+        security,
+        "verify_dynamic_api_key",
+        lambda raw_key: {
+            **_evaluation_identity(),
+            "allowed_endpoints": [
+                {"method": "GET", "path": "/evaluation/runtime/status"}
+            ],
+        },
+    )
+    request = _request("GET", "/evaluation/runtime/status")
+    with pytest.raises(HTTPException) as exc_info:
+        await security.get_current_user(
+            request,
+            bearer=None,
+            api_key="pmk_test",
+            supervisor_session_key=None,
+        )
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Evaluation API key is not present in shared authority."
+
+
+@pytest.mark.asyncio
 async def test_non_evaluation_api_key_keeps_existing_authentication_path(monkeypatch) -> None:
     ordinary_identity = {
         "sub": "ordinary-user",

@@ -37,6 +37,12 @@ _ALLOWED_CREDENTIAL_HEADERS = frozenset({"authorization", "x-api-key"})
 _ANONYMOUS_CREDENTIAL_SOURCE = "anonymous_public_sandbox"
 _PROFILE_ENV_SAFE = re.compile(r"[^A-Z0-9]+")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+_DRAFT_SAFETY_CONTRACT = {
+    "review_required": True,
+    "applied": False,
+    "production_mutation_performed": False,
+    "production_allowed": False,
+}
 
 
 class SandboxExecutionError(ValueError):
@@ -186,6 +192,23 @@ def _now_iso(now: datetime | None = None) -> str:
     return value.astimezone(UTC).isoformat()
 
 
+def _verified_draft_safety_facts(
+    response_payload: Any,
+    *,
+    operation_class: str,
+) -> dict[str, bool]:
+    """Return only explicit, policy-safe draft facts; never surface raw response data."""
+
+    if operation_class != "draft":
+        return {}
+    if not isinstance(response_payload, dict):
+        raise SandboxExecutionError("sandbox_draft_safety_contract_missing")
+    for key, expected in _DRAFT_SAFETY_CONTRACT.items():
+        if response_payload.get(key) is not expected:
+            raise SandboxExecutionError(f"sandbox_draft_safety_contract_invalid:{key}")
+    return dict(_DRAFT_SAFETY_CONTRACT)
+
+
 async def execute_sandbox_binding(
     spec: EnterpriseEndpointBindingSpec,
     *,
@@ -280,6 +303,11 @@ async def execute_sandbox_binding(
     except ValueError as exc:
         raise SandboxExecutionError("sandbox_response_json_invalid") from exc
 
+    draft_safety = _verified_draft_safety_facts(
+        response_payload,
+        operation_class=str(task.operation_class),
+    )
+
     try:
         mapped = map_response_to_task_input(spec, response_payload)
         task_injection = build_task_injection_envelope(
@@ -313,6 +341,7 @@ async def execute_sandbox_binding(
         "task_injection_ready": True,
         "credential_source": envelope.source,
         "completed_at": completed_at,
+        **draft_safety,
     }
     observation = record_execution_observation(
         execution_kind="sandbox_proof",
@@ -361,6 +390,7 @@ async def execute_sandbox_binding(
         "production_allowed": False,
         "runtime_connector_approved": False,
         "raw_secret_visible": False,
+        **draft_safety,
     }
 
 

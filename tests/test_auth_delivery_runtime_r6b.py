@@ -7,6 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 import processual_api.auth.delivery_runtime as runtime_module
+from processual_api.auth.delivery_provider import (
+    GmailApiDeliveryProvider,
+    HttpEmailDeliveryProvider,
+    ResendDeliveryProvider,
+)
 from processual_api.auth.delivery_runtime import (
     DeliveryRuntimeUnavailableError,
     build_delivery_runtime,
@@ -19,8 +24,15 @@ def _config(**updates):
             {"v1": base64.b64encode(b"k" * 32).decode()}
         ),
         "auth_delivery_current_key_version": "v1",
+        "auth_delivery_provider_kind": "http",
         "auth_delivery_provider_url": "https://provider.example.test/send",
         "auth_delivery_provider_token": "p" * 32,
+        "auth_gmail_client_id": "gmail-client-id.apps.googleusercontent.com",
+        "auth_gmail_client_secret": "gmail-client-secret-value",
+        "auth_gmail_refresh_token": "refresh-token-" + "r" * 40,
+        "auth_gmail_sender_email": "maestro.sender@gmail.com",
+        "auth_resend_api_key": "resend-key-" + "r" * 32,
+        "auth_resend_sender_email": "recovery@maestro.example",
         "auth_public_base_url": "https://accounts.example.test",
         "auth_delivery_batch_size": 25,
         "auth_delivery_lease_seconds": 300,
@@ -33,12 +45,33 @@ def _config(**updates):
     return SimpleNamespace(**values)
 
 
-def test_delivery_runtime_wires_fail_closed_authorities(monkeypatch):
+def test_delivery_runtime_wires_http_provider_by_default(monkeypatch):
     monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
 
     runtime = build_delivery_runtime(_config())
 
     assert runtime.dispatcher is not None
+    assert isinstance(runtime.dispatcher._provider, HttpEmailDeliveryProvider)
+
+
+def test_delivery_runtime_wires_gmail_provider(monkeypatch):
+    monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
+
+    runtime = build_delivery_runtime(
+        _config(auth_delivery_provider_kind="gmail_api")
+    )
+
+    assert runtime.dispatcher is not None
+    assert isinstance(runtime.dispatcher._provider, GmailApiDeliveryProvider)
+
+
+def test_delivery_runtime_wires_resend_provider(monkeypatch):
+    monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
+
+    runtime = build_delivery_runtime(_config(auth_delivery_provider_kind="resend"))
+
+    assert runtime.dispatcher is not None
+    assert isinstance(runtime.dispatcher._provider, ResendDeliveryProvider)
 
 
 @pytest.mark.parametrize(
@@ -54,6 +87,7 @@ def test_delivery_runtime_wires_fail_closed_authorities(monkeypatch):
         {"auth_delivery_max_attempts": 0},
         {"auth_delivery_retry_max_seconds": 1},
         {"auth_delivery_request_timeout_seconds": 0},
+        {"auth_delivery_provider_kind": "unsupported"},
     ),
 )
 def test_delivery_runtime_rejects_missing_or_unsafe_authority(monkeypatch, updates):
@@ -61,3 +95,35 @@ def test_delivery_runtime_rejects_missing_or_unsafe_authority(monkeypatch, updat
 
     with pytest.raises(DeliveryRuntimeUnavailableError):
         build_delivery_runtime(_config(**updates))
+
+
+@pytest.mark.parametrize(
+    "updates",
+    (
+        {"auth_gmail_client_id": "short"},
+        {"auth_gmail_client_secret": "short"},
+        {"auth_gmail_refresh_token": "short"},
+        {"auth_gmail_sender_email": "invalid sender"},
+    ),
+)
+def test_delivery_runtime_rejects_incomplete_gmail_authority(monkeypatch, updates):
+    monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
+
+    with pytest.raises(DeliveryRuntimeUnavailableError):
+        build_delivery_runtime(
+            _config(auth_delivery_provider_kind="gmail_api", **updates)
+        )
+
+
+@pytest.mark.parametrize(
+    "updates",
+    (
+        {"auth_resend_api_key": "short"},
+        {"auth_resend_sender_email": "invalid sender"},
+    ),
+)
+def test_delivery_runtime_rejects_incomplete_resend_authority(monkeypatch, updates):
+    monkeypatch.setattr(runtime_module, "get_session_factory", lambda: object())
+
+    with pytest.raises(DeliveryRuntimeUnavailableError):
+        build_delivery_runtime(_config(auth_delivery_provider_kind="resend", **updates))

@@ -57,6 +57,22 @@ class SqlAlchemyMfaRepository:
             .with_for_update()
         )
 
+    async def factor_for_label_for_update(
+        self,
+        user_id: uuid.UUID,
+        *,
+        label: str,
+    ) -> AuthMfaFactor | None:
+        return await self._session.scalar(
+            select(AuthMfaFactor)
+            .where(
+                AuthMfaFactor.user_id == user_id,
+                AuthMfaFactor.factor_type == "totp",
+                AuthMfaFactor.label == label,
+            )
+            .with_for_update()
+        )
+
     async def factor_statuses(self, user_id: uuid.UUID) -> tuple[bool, bool]:
         rows = set(
             (
@@ -94,6 +110,22 @@ class SqlAlchemyMfaRepository:
                 secret_key_version=key_version,
             )
         )
+
+    @staticmethod
+    def reactivate_factor_for_enrollment(
+        factor: AuthMfaFactor,
+        *,
+        ciphertext: bytes,
+        key_version: str,
+        updated_at: datetime,
+    ) -> None:
+        factor.status = "pending"
+        factor.secret_ciphertext = ciphertext
+        factor.secret_key_version = key_version
+        factor.verified_at = None
+        factor.last_used_step = None
+        factor.disabled_at = None
+        factor.updated_at = updated_at
 
     async def replace_recovery_codes(
         self,

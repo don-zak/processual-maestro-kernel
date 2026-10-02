@@ -46,12 +46,22 @@ class FakeRepository:
             return self.factor
         return None
 
+    async def factor_for_label_for_update(self, user_id, *, label):
+        if (
+            self.factor is not None
+            and self.factor.user_id == user_id
+            and self.factor.label == label
+        ):
+            return self.factor
+        return None
+
     async def user_email(self, user_id):
         return "person@example.com"
 
     async def disable_pending_factors(self, user_id, *, disabled_at):
         if self.factor is not None and self.factor.status == "pending":
             self.factor.status = "disabled"
+            self.factor.disabled_at = disabled_at
 
     def add_pending_factor(self, **values):
         self.factor = SimpleNamespace(
@@ -65,6 +75,22 @@ class FakeRepository:
             disabled_at=None,
             last_used_step=None,
         )
+
+    @staticmethod
+    def reactivate_factor_for_enrollment(
+        factor,
+        *,
+        ciphertext,
+        key_version,
+        updated_at,
+    ):
+        factor.status = "pending"
+        factor.secret_ciphertext = ciphertext
+        factor.secret_key_version = key_version
+        factor.verified_at = None
+        factor.last_used_step = None
+        factor.disabled_at = None
+        factor.updated_at = updated_at
 
     async def replace_recovery_codes(self, factor_id, *, code_hashes):
         self.recovery = {
