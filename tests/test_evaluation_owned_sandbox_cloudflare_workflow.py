@@ -73,7 +73,8 @@ def test_live_verifier_distinguishes_access_denial_from_sha_mismatch() -> None:
     assert "WORKER_PUBLIC_ACCESS_DENIED_HTTP_403" in verifier
     assert "WORKER_SHA_MISMATCH" in verifier
     assert "WORKER_HEALTH_UNVERIFIED" in verifier
-    assert "DEPLOYMENT_SHA" in verifier
+    assert "probe.payload?.deployment_sha === expectedSha" in verifier
+    assert "source_sha: expectedSha" in verifier
     assert "return { response, payload };" in verifier
     assert "response.text()" not in verifier
 
