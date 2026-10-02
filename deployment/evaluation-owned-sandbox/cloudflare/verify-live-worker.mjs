@@ -39,8 +39,9 @@ async function call(method, path, body) {
   }
   return { response, payload };
 }
-async function record(label, method, path, expectedStatus, required, expected) {
-  const { response, payload } = await call(method, path);
+async function record(label, method, path, expectedStatus, required, expected, requestBody) {
+  // Pass an explicit JSON body when validating missing fields; no body means invalid JSON (400).
+  const { response, payload } = await call(method, path, requestBody);
   assert.equal(response.status, expectedStatus, label);
   if (required) for (const key of required) {
     assert.ok(Object.hasOwn(payload, key), label + ':' + key);
