@@ -93,7 +93,7 @@ async function draftCustomerUpdate(request) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env = {}) {
     const url = new URL(request.url);
     const method = request.method.toUpperCase();
 
@@ -119,6 +119,7 @@ export default {
         status: 'live',
         service: 'processual-maestro-evaluation-sandbox',
         provider: 'cloudflare-workers',
+        deployment_sha: env.DEPLOYMENT_SHA || null,
         production_allowed: false,
       });
     } else if (url.pathname === '/users/1') {
