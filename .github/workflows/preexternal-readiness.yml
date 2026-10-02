@@ -24,6 +24,7 @@ on:
       - tests/test_external_evaluation_handoff_contract.py
       - tests/test_external_evaluation_scenarios.py
       - tests/test_external_evaluation_sector_preset_contracts.py
+      - tests/test_evaluation_owned_sandbox_cloudflare_workflow.py
       - tests/test_external_evaluation_complete_binding_coverage.py
       - tests/test_evaluation_launch_gate.py
       - tests/integration/test_evaluation_runtime_delivery_postgres_integration.py
@@ -157,6 +158,7 @@ jobs:
             tests/test_external_evaluation_handoff_contract.py \
             tests/test_external_evaluation_scenarios.py \
             tests/test_external_evaluation_sector_preset_contracts.py \
+            tests/test_evaluation_owned_sandbox_cloudflare_workflow.py \
             tests/test_external_evaluation_complete_binding_coverage.py \
             tests/test_evaluation_launch_gate.py \
             tests/integration/test_evaluation_runtime_delivery_postgres_integration.py \
