@@ -1,6 +1,13 @@
 // Run with Node.js 22 before any manual Cloudflare sandbox deployment.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+// CI exercises this file; reject invalid live-verification code before any deploy.
+execFileSync(process.execPath, ['--check', fileURLToPath(new URL('./verify-live-worker.mjs', import.meta.url))], {
+  stdio: 'pipe',
+});
 
 const source = await readFile(new URL('./worker.js', import.meta.url));
 const { default: worker } = await import('data:text/javascript;base64,' + source.toString('base64'));
