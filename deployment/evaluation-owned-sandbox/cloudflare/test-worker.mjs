@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const source = await readFile(new URL('./worker.js', import.meta.url));
 const { default: worker } = await import('data:text/javascript;base64,' + source.toString('base64'));
 const base = 'https://sandbox.example.invalid';
+const fixtureSha = '0123456789abcdef0123456789abcdef01234567';
 
 async function request(method, path, body) {
   return worker.fetch(new Request(base + path, {
@@ -13,7 +14,7 @@ async function request(method, path, body) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }),
-  }));
+  }), { DEPLOYMENT_SHA: fixtureSha });
 }
 async function fixture(path, fields) {
   const response = await request('GET', path);
@@ -35,6 +36,10 @@ async function draft(path, body) {
   response = await request('POST', path, {});
   assert.equal(response.status, 422, path + ':missing fields');
 }
+
+const health = await (await request('GET', '/health/live')).json();
+assert.equal(health.deployment_sha, fixtureSha);
+assert.equal(health.production_allowed, false);
 
 await fixture('/university/requests/sandbox-student-request-001',
   ['request_id','student_id','request_text','status']);
