@@ -38,6 +38,9 @@ def test_runtime_strict_mode_is_environment_configurable(monkeypatch):
     assert k.enforce_evidence_admission
     with pytest.raises(GovernanceEvidenceUnavailable):
         k.observe("nonexistent",AgentTelemetry())
+    # Enforced by the environment: a caller cannot opt out.
+    assert ProcessualMaestroKernel(enforce_evidence_admission=False).enforce_evidence_admission
+    monkeypatch.delenv("PROCESSUAL_GOVERNANCE_EVIDENCE_REQUIRED")
     assert not ProcessualMaestroKernel(enforce_evidence_admission=False).enforce_evidence_admission
 
 def test_production_cannot_disable_gate_even_with_explicit_false(monkeypatch):
