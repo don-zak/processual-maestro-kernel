@@ -45,10 +45,16 @@ class ProcessualCGTKernel:
         *,
         enforce_evidence_admission: bool | None = None,
     ):
-        self.enforce_evidence_admission = (
+        production = os.environ.get("ENVIRONMENT", "").strip().lower() == "production"
+        explicitly_required = (
             os.environ.get("PROCESSUAL_GOVERNANCE_EVIDENCE_REQUIRED", "").strip().lower()
             in {"1", "true", "yes", "on"}
-            if enforce_evidence_admission is None else bool(enforce_evidence_admission)
+        )
+        # Production cannot opt out, even if a caller passes False.
+        self.enforce_evidence_admission = (
+            production or explicitly_required
+            or (bool(enforce_evidence_admission)
+                if enforce_evidence_admission is not None else False)
         )
         self.policy = policy or KernelPolicy()
         self.runtime = runtime
