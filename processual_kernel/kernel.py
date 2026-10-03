@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import asdict
 from typing import Any
@@ -41,7 +42,14 @@ class ProcessualCGTKernel:
         runtime: AgentRuntime | None = None,
         policy: KernelPolicy | None = None,
         audit_sink: AuditSink | None = None,
+        *,
+        enforce_evidence_admission: bool | None = None,
     ):
+        self.enforce_evidence_admission = (
+            os.environ.get("PROCESSUAL_GOVERNANCE_EVIDENCE_REQUIRED", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+            if enforce_evidence_admission is None else bool(enforce_evidence_admission)
+        )
         self.policy = policy or KernelPolicy()
         self.runtime = runtime
         self.registry: dict[str, AgentRecord] = {}
@@ -51,6 +59,12 @@ class ProcessualCGTKernel:
         self.governor = LifecycleGovernor(self.policy)
         self.audit_sink = audit_sink
 
+    def _reject_legacy_if_strict(self) -> None:
+        if self.enforce_evidence_admission:
+            from .admission_port import GovernanceEvidenceUnavailable
+            raise GovernanceEvidenceUnavailable(
+                "raw_telemetry_governance_forbidden_use_qualified_private_entrypoint")
+
     def _audit(self, event: Any) -> None:
         if self.audit_sink is not None:
             self.audit_sink.write(event)
@@ -58,6 +72,8 @@ class ProcessualCGTKernel:
     def register_agent(self, spec: AgentSpec, initial_telemetry: AgentTelemetry | None = None) -> AgentRecord:
         if spec.agent_id in self.registry:
             raise ValueError(f"agent already registered: {spec.agent_id}")
+        if initial_telemetry is not None:
+            self._reject_legacy_if_strict()
         record = AgentRecord(spec=spec)
         if initial_telemetry is not None:
             record.last_coefficients = self.mapper.from_agent_telemetry(initial_telemetry)
@@ -71,6 +87,7 @@ class ProcessualCGTKernel:
             raise KeyError(f"unknown agent: {agent_id}") from None
 
     def observe(self, agent_id: str, telemetry: AgentTelemetry) -> GovernanceDecision:
+        self._reject_legacy_if_strict()
         record = self.get_agent(agent_id)
         previous_coeff = record.last_coefficients or self.mapper.from_agent_telemetry(AgentTelemetry())
         coeff = self.mapper.from_agent_telemetry(telemetry)
@@ -99,6 +116,7 @@ class ProcessualCGTKernel:
         return decision
 
     def route_candidates(self, task: TaskEnvelope) -> list[AgentRecord]:
+        self._reject_legacy_if_strict()
         candidates = [
             r
             for r in self.registry.values()
@@ -109,6 +127,7 @@ class ProcessualCGTKernel:
         return candidates
 
     async def run_task(self, task: TaskEnvelope) -> TaskResult:
+        self._reject_legacy_if_strict()
         if self.runtime is None:
             raise RuntimeError("No AgentRuntime configured")
         candidates = self.route_candidates(task)
@@ -167,8 +186,11 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         runtime: AgentRuntime | None = None,
         policy: KernelPolicy | None = None,
         audit_sink: AuditSink | None = None,
+        *,
+        enforce_evidence_admission: bool | None = None,
     ):
-        super().__init__(runtime=runtime, policy=policy, audit_sink=audit_sink)
+        super().__init__(runtime=runtime, policy=policy, audit_sink=audit_sink,
+                         enforce_evidence_admission=enforce_evidence_admission)
         self.handoffs: dict[str, HandoffRecord] = {}
         self.workflows: dict[str, WorkflowRecord] = {}
         self.events: list[MaestroEvent] = []
@@ -204,6 +226,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         return event
 
     def observe_handoff(self, source_agent_id: str, target_agent_id: str, telemetry: HandoffTelemetry) -> EdgeDecision:
+        self._reject_legacy_if_strict()
         edge_id = f"{source_agent_id}->{target_agent_id}"
         record = self.handoffs.get(edge_id)
         if record is None:
@@ -236,6 +259,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         return decision
 
     def observe_workflow(self, workflow_id: str, telemetry: WorkflowTelemetry) -> WorkflowDecision:
+        self._reject_legacy_if_strict()
         record = self.get_workflow(workflow_id)
         previous_coeff = record.last_coefficients or self.mapper.from_workflow_telemetry(WorkflowTelemetry())
         coeff = self.mapper.from_workflow_telemetry(telemetry)
@@ -272,6 +296,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         return ready
 
     def assign_agent(self, step: StepRecord) -> AgentRecord:
+        self._reject_legacy_if_strict()
         if step.step.preferred_agent_id:
             preferred = self.get_agent(step.step.preferred_agent_id)
             if preferred.state == AgentState.ACTIVE and step.step.capability in preferred.spec.capabilities:
@@ -290,6 +315,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         return candidates[0]
 
     async def run_workflow(self, workflow_id: str) -> WorkflowRecord:
+        self._reject_legacy_if_strict()
         if self.runtime is None:
             raise RuntimeError("No AgentRuntime configured")
         workflow = self.get_workflow(workflow_id)
@@ -311,6 +337,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         return workflow
 
     async def _run_step(self, workflow: WorkflowRecord, step_record: StepRecord) -> None:
+        self._reject_legacy_if_strict()
         agent = self.assign_agent(step_record)
         step_record.assigned_agent_id = agent.spec.agent_id
         step_record.state = StepState.RUNNING
@@ -422,6 +449,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
     def intervene(
         self, workflow_id: str, action: MaestroAction, subject: str, reason: str, payload: dict[str, Any] | None = None
     ) -> MaestroEvent:
+        self._reject_legacy_if_strict()
         workflow = self.get_workflow(workflow_id)
         if action == MaestroAction.PAUSE:
             workflow.state = WorkflowState.PAUSED
