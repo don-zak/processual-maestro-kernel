@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Maestro | Capability & Governance Evidence</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,"Segoe UI",sans-serif;color-scheme:dark;--bg:#07111f;--panel:#101d30;--line:#283a55;--text:#ecf3fe;--muted:#acc0d8;--primary:#8ca7ff;--ok:#71d9b2;--warning:#ffd586;--bad:#ff9caa}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 12% -10%,#183252 0,transparent 55%),var(--bg);color:var(--text)}
+.shell{max-width:1320px;margin:auto;padding:34px 24px 64px}
+a{color:#bed1ff}h1{font-size:clamp(28px,4vw,45px);letter-spacing:-.035em;margin:10px 0}h2{font-size:22px;margin:0 0 14px}h3{font-size:16px;margin:0 0 12px}
+p{line-height:1.55}.muted{color:var(--muted)}.eyebrow{letter-spacing:.15em;text-transform:uppercase;font-size:12px;color:var(--primary);font-weight:750}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}.switches{display:flex;gap:8px}
+button,select,input{font:inherit}button{background:#233650;color:var(--text);border:1px solid #405476;border-radius:10px;padding:10px 16px;cursor:pointer}
+button:hover,button:focus-visible{border-color:var(--primary)}button[aria-pressed=true]{background:#304b74;border-color:var(--primary)}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:30px 0 20px}
+.tile,.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:20px;box-shadow:0 15px 38px #0002}
+.tile .num{font-size:33px;font-weight:800;margin-top:8px}.tile .label{color:var(--muted);font-size:13px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warning{color:var(--warning)}
+.notice{border-left:3px solid var(--warning);padding:13px 19px;background:#272a35;margin:12px 0 24px;line-height:1.6;border-radius:8px}
+.workbench{display:grid;grid-template-columns:minmax(260px,350px) minmax(0,1fr);gap:18px;margin-top:20px;align-items:start}
+.toolbar{display:grid;gap:11px;margin:14px 0}.toolbar label{color:var(--muted);font-size:12px}
+.toolbar select,.toolbar input{width:100%;background:#071626;border:1px solid #405476;border-radius:9px;color:var(--text);padding:10px}
+.case-list{display:grid;gap:7px;max-height:780px;overflow:auto}
+.case{width:100%;text-align:start;background:#111f33;display:grid;gap:4px;padding:13px 14px}
+.case.active{border-color:var(--primary);background:#223b5f}.case small{color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.tag{border:1px solid #415771;border-radius:100px;font-size:11px;letter-spacing:.02em;padding:5px 9px}
+.tag.ok{border-color:#387f69}.tag.warning{border-color:#92753e}.tag.bad{border-color:#9c4a5c}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.section{margin:18px 0}
+pre{margin:0;background:#071626;border:1px solid #2f4361;padding:16px;border-radius:9px;overflow:auto;max-height:370px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;direction:ltr;text-align:left}
+.vectors{display:grid;gap:10px}.vrow{display:grid;grid-template-columns:125px 1fr 56px;align-items:center;gap:12px;font-size:13px}.track{height:8px;background:#28394c;border-radius:10px;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,#629ee4,#8ad2ae);width:0}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.check{border:1px solid var(--line);padding:10px;border-radius:9px;font-size:13px}
+.footer{font-size:12px;color:var(--muted);margin-top:26px;word-break:break-word}
+[dir=rtl] .notice{border-left:none;border-right:3px solid var(--warning)}
+@media(max-width:950px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workbench{grid-template-columns:1fr}.case-list{max-height:300px}}
+@media(max-width:580px){.shell{padding:20px 12px}.grid,.cols,.checks{grid-template-columns:1fr}.vrow{grid-template-columns:100px 1fr 48px}}
+@media print{body{background:white;color:black}.panel,.tile{background:white;color:black;box-shadow:none}.case-list,.toolbar,.switches{display:none}.workbench,.grid{display:block}.panel,.tile{break-inside:avoid}.muted,.tile .label{color:#333}pre{color:black;background:white}.fill{background:#444}}
+</style>
+</head>
+<body>
+<div class="shell" id="app">
+<header class="top">
+<div><div class="eyebrow">Processual Maestro · Evidence Lab</div>
+<h1 data-i18n="heading">Capability & Governance Evidence</h1>
+<p class="muted" data-i18n="subtitle">Auditable synthetic scenarios, exact policy decisions, seven-dimensional fate vectors and hash-only Maestro consumption.</p></div>
+<div class="switches"><button id="english" type="button" aria-pressed="true">English</button><button id="arabic" type="button" aria-pressed="false">العربية</button></div>
+</header>
+<div class="notice" id="honesty">Internal tests of real governance policy using synthetic inputs. These results are NOT evidence of an external service call, customer-data integration, deployed Workspace execution or the predictive validity of Fate Vector. Live Workspace receipts must be verified separately.</div>
+<div class="grid" id="summary"></div>
+<div class="workbench">
+<aside class="panel"><h2 data-i18n="cases">Case explorer</h2>
+<div class="toolbar"><div><label for="sector" data-i18n="sector">Sector</label><select id="sector"><option value="all">All sectors</option><option value="crm">CRM</option><option value="billing">Integration / Billing</option><option value="university">University</option><option value="government">Government</option></select></div>
+<div><label for="outcome" data-i18n="outcome">Governance decision</label><select id="outcome"><option value="all">All decisions</option><option value="allow">Allow</option><option value="allow_with_review">Review required</option><option value="deny">Deny</option></select></div>
+<div><label for="search" data-i18n="search">Search case</label><input id="search" type="search" placeholder="Case / task identifier"></div></div>
+<div class="case-list" id="cases"></div></aside>
+<main class="panel" id="detail" aria-live="polite"><p class="muted">Choose a case to inspect its original synthetic input and evidence.</p></main>
+</div><footer class="footer" id="footer"></footer>
+</div>
+<script>
+/*__MAESTRO_EVIDENCE_JSON__*/
+(function(){
+"use strict";
+let lang="en",selected=null;
+const T={
+en:{heading:"Capability & Governance Evidence",subtitle:"Auditable synthetic scenarios, exact policy decisions, seven-dimensional fate vectors and hash-only Maestro consumption.",cases:"Case explorer",sector:"Sector",outcome:"Governance decision",search:"Search case",
+notice:"INTERNAL SYNTHETIC TESTS. Real governance functions were invoked, but no external HTTP call, live Workspace execution or Evaluation quota was used. Fate Vector is computed from preset policy-signal profiles, not validated as a predictive metric. Separate live receipts are required.",total:"Scenarios",passed:"Verified",failed:"Failed",external:"External calls",caseContent:"1 · Original synthetic test",decision:"2 · Governance decision",vector:"3 · Fate Vector and independent recalculation",kernel:"4 · Internal Maestro hash-only receipt",checks:"5 · Verification checks",limitations:"Evidence boundaries",constraints:"Changed constraints",input:"Synthetic input",scopes:"Required scopes",expected:"Expected decision",actual:"Actual decision",action:"Policy action",reasons:"Reason codes",policy:"Policy version",signals:"Calculation inputs (preset policy profile)",values:"Actual seven dimensions",recalc:"Recomputed vector",receipt:"Receipt (hash-only; not external execution)",missing:"Denied before kernel invocation; no receipt created.",yes:"Passed",no:"Failed",none:"None",all:"All decisions"},
+ar:{heading:"ملف إثبات القدرات والحوكمة",subtitle:"سيناريوهات اصطناعية قابلة للتدقيق، قرارات السياسة، متجه المصير بسبعة أبعاد، واستهلاك Maestro لنتائج تجريبية بصماتها فقط.",cases:"مستكشف التجارب",sector:"القطاع",outcome:"قرار الحوكمة",search:"البحث عن تجربة",
+notice:"اختبارات داخلية اصطناعية. استُدعيت دوال الحوكمة الحقيقية، دون اتصال خارجي أو تنفيذ حي داخل Workspace أو استهلاك حصة. يحسب Fate Vector من إشارات سياسة محددة مسبقًا، ولا يشكّل مؤشرًا تنبؤيًا مثبتًا. يلزم إرفاق إيصالات التشغيل الحية بصورة مستقلة.",total:"التجارب",passed:"المثبتة",failed:"الفاشلة",external:"اتصالات خارجية",caseContent:"١ · المحتوى الأصلي للتجربة",decision:"٢ · قرار الحوكمة",vector:"٣ · متجه المصير وإعادة حسابه",kernel:"٤ · إيصال داخلي من Maestro بالبصمات فقط",checks:"٥ · اختبارات التحقق",limitations:"حدود الإثبات",constraints:"القيود المعدلة",input:"المدخلات الاصطناعية",scopes:"الصلاحيات المطلوبة",expected:"القرار المتوقع",actual:"القرار الفعلي",action:"إجراء السياسة",reasons:"رموز الأسباب",policy:"إصدار السياسة",signals:"مدخلات الحساب المحددة في السياسة",values:"الأبعاد السبعة الفعلية",recalc:"القيم المعاد حسابها",receipt:"الإيصال (بصمات فقط؛ ليس تشغيلًا خارجيًا)",missing:"رُفض الطلب قبل استدعاء المحرك؛ لا يوجد إيصال.",yes:"ناجح",no:"فاشل",none:"لا يوجد",all:"كل القرارات"}
+};
+const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,x=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]));
+function block(value){return "<pre>"+esc(JSON.stringify(value,null,2))+"</pre>"}
+function render(){
+const t=T[lang]; document.documentElement.lang=lang;document.documentElement.dir=lang==="ar"?"rtl":"ltr";
+document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t[el.dataset.i18n]);
+$("honesty").textContent=t.notice;$("english").setAttribute("aria-pressed",lang==="en");$("arabic").setAttribute("aria-pressed",lang==="ar");
+$("summary").innerHTML=[[t.total,EVIDENCE.total,""],[t.passed,EVIDENCE.passed,"ok"],[t.failed,EVIDENCE.total-EVIDENCE.passed,EVIDENCE.total===EVIDENCE.passed?"ok":"bad"],[t.external,EVIDENCE.real_external_calls,""]].map(x=>'<div class="tile"><div class="label">'+x[0]+'</div><div class="num '+x[2]+'">'+esc(x[1])+'</div></div>').join("");
+$("footer").textContent="Schema: "+EVIDENCE.schema+" · Source SHA: "+EVIDENCE.source_sha+" · Workspace evidence: "+EVIDENCE.workspace_evidence;
+list();
+}
+function list(){
+const sector=$("sector").value,decision=$("outcome").value,query=$("search").value.toLowerCase().trim();
+const rows=EVIDENCE.cases.filter(c=>(sector==="all"||c.task_id.startsWith(sector+"."))&&(decision==="all"||c.governance.disposition===decision)&&(!query||(c.case_id+" "+c.task_id).toLowerCase().includes(query)));
+$("cases").replaceChildren();
+rows.forEach(c=>{
+const b=document.createElement("button");b.type="button";b.className="case"+(selected===c.case_id?" active":"");
+b.innerHTML="<strong>"+esc(c.case_id)+"</strong><small>"+esc(c.task_id)+"</small><small>"+esc(c.governance.disposition)+" · "+(c.verification.passed?"PASS":"FAIL")+"</small>";
+b.addEventListener("click",()=>{selected=c.case_id;list();detail(c)});$("cases").appendChild(b);
+});
+if(!rows.some(c=>c.case_id===selected)){selected=rows.length?rows[0].case_id:null;detail(rows[0]||null)}
+}
+function detail(c){
+const e=$("detail"),t=T[lang];if(!c){e.innerHTML="<p>"+esc(t.none)+"</p>";return}
+const g=c.governance;
+const vector=Object.entries(g.fate_vector).map(([name,value])=>'<div class="vrow"><span>'+esc(name)+'</span><div class="track"><div class="fill" style="width:'+Math.max(0,Math.min(100,100*value)).toFixed(2)+'%"></div></div><strong>'+value.toFixed(6)+'</strong></div>').join("");
+const checks=Object.entries(c.verification.checks).map(([name,passed])=>'<div class="check '+(passed?"ok":"bad")+'">'+(passed?"✓ ":"✕ ")+esc(name)+'</div>').join("");
+e.innerHTML='<div class="eyebrow">'+esc(c.evidence_level)+'</div><h2>'+esc(c.case_id)+'</h2><div class="tags"><span class="tag">'+esc(c.task_id)+'</span><span class="tag '+(g.disposition==="deny"?"bad":g.review_required?"warning":"ok")+'">'+esc(g.disposition)+'</span><span class="tag '+(c.verification.passed?"ok":"bad")+'">'+(c.verification.passed?"PASS":"FAIL")+'</span></div>'+
+'<div class="section"><h3>'+t.caseContent+'</h3><div class="cols"><div><p class="muted">'+t.input+'</p>'+block(c.content.input)+'</div><div><p class="muted">'+t.constraints+'</p>'+block(c.content.changed_constraints)+'</div></div><p>'+t.scopes+': '+esc(c.content.required_scopes.join(", "))+'<br>'+t.expected+': '+esc(c.content.expected_disposition)+'</p></div>'+
+'<div class="section"><h3>'+t.decision+'</h3><p>'+t.actual+': <strong>'+esc(g.disposition)+'</strong> · '+t.action+': '+esc(g.action)+' · '+t.policy+': '+esc(g.policy_version)+'</p><p>'+t.reasons+': '+esc(g.reason_codes.join(", "))+'</p><p class="muted">Trace SHA-256: '+esc(g.trace_sha256)+'</p></div>'+
+'<div class="section"><h3>'+t.vector+'</h3><div class="vectors">'+vector+'</div><div class="cols"><div><p class="muted">'+t.signals+'</p>'+block(g.fate_signals)+'</div><div><p class="muted">'+t.recalc+'</p>'+block(g.recomputed_vector)+'</div></div></div>'+
+'<div class="section"><h3>'+t.kernel+'</h3>'+(c.synthetic_kernel_receipt?block(c.synthetic_kernel_receipt):'<p class="muted">'+t.missing+'</p>')+'</div>'+
+'<div class="section"><h3>'+t.checks+'</h3><div class="checks">'+checks+'</div></div>'+
+'<div class="section"><h3>'+t.limitations+'</h3><p class="muted">'+t.notice+'</p></div>';
+}
+$("english").addEventListener("click",()=>{lang="en";render();});
+$("arabic").addEventListener("click",()=>{lang="ar";render();});
+["sector","outcome"].forEach(x=>$(x).addEventListener("change",list));$("search").addEventListener("input",list);
+render();
+})();
+</script>
+</body>
+</html>

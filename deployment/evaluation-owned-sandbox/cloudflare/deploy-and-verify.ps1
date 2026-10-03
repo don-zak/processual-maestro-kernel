@@ -78,32 +78,36 @@ try {
         Write-Host 'Cloudflare authentication: Wrangler OAuth session verified.'
     }
 
-    Write-Host "[1/6] Exact source SHA verified: $CurrentSha"
+    Write-Host "[1/7] Exact source SHA verified: $CurrentSha"
 
-    Write-Host '[2/6] Running verified owned scenario and Admin fail-closed regression tests...'
+    Write-Host '[2/7] Running verified owned scenario and Admin fail-closed regression tests...'
     python -m pytest `
         tests/test_external_evaluation_owned_crm_scenarios.py `
         tests/test_external_evaluation_owned_integration_scenarios.py `
         tests/test_admin_evaluation_owned_preset_catalog.py `
         -q
     if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed; Worker was not deployed.' }
+    node --check deployment/evaluation-owned-sandbox/cloudflare/verify-live-worker.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'Live verifier syntax invalid; Worker was not deployed.' }
+    node deployment/evaluation-owned-sandbox/cloudflare/test-worker.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'Sector Worker regression failed; Worker was not deployed.' }
 
-    Write-Host '[3/6] Deploying pinned Wrangler contract...'
+    Write-Host '[3/7] Deploying pinned Wrangler contract...'
     Push-Location (Join-Path $RepoRoot 'deployment\evaluation-owned-sandbox\cloudflare')
     try {
-        npx --yes wrangler@4.131.1 deploy --config wrangler.jsonc
+        npx --yes wrangler@4.131.1 deploy --config wrangler.jsonc --var "DEPLOYMENT_SHA:$CurrentSha"
         if ($LASTEXITCODE -ne 0) { throw 'Wrangler deploy failed.' }
     } finally {
         Pop-Location
     }
 
     $Base = $WorkerUrl.TrimEnd('/')
-    Write-Host "[4/6] Verifying live Worker health at $Base ..."
+    Write-Host "[4/7] Verifying live Worker health at $Base ..."
     $Health = Invoke-RestMethod -Method Get -Uri "$Base/health/live" -Headers @{ 'Cache-Control' = 'no-cache' }
     Assert-Equal $Health.status 'live' 'Worker health status mismatch.'
     Assert-False $Health.production_allowed 'Worker health unexpectedly permits production.'
 
-    Write-Host '[5/6] Verifying CRM Summary and Integration Billing read fixtures...'
+    Write-Host '[5/7] Verifying CRM Summary and Integration Billing read fixtures...'
     $Customer = Invoke-RestMethod -Method Get -Uri "$Base/users/1"
     Assert-Equal $Customer.id 1 'CRM customer fixture id mismatch.'
     Assert-Equal $Customer.account_status 'active' 'CRM account_status mismatch.'
@@ -114,7 +118,7 @@ try {
     Assert-Equal $Billing.currency 'USD' 'Billing currency mismatch.'
     Assert-False $Billing.production_allowed 'Billing fixture unexpectedly permits production.'
 
-    Write-Host '[6/6] Verifying CRM Draft is review-only and never applied...'
+    Write-Host '[6/7] Verifying CRM Draft is review-only and never applied...'
     $DraftBody = @{
         customer_id = 'sandbox-customer-001'
         proposed_changes = @{ segment = 'evaluation-review' }
@@ -127,8 +131,19 @@ try {
     Assert-False $Draft.production_mutation_performed 'Draft route unexpectedly performed a production mutation.'
     Assert-False $Draft.production_allowed 'Draft route unexpectedly permits production.'
 
+    Write-Host '[7/7] Verifying exact-SHA live university/government endpoints and recording safe evidence...'
+    $env:CHECKED_OUT_SHA = $CurrentSha
+    $env:EVALUATION_WORKER_URL = $Base
+    try {
+        node deployment/evaluation-owned-sandbox/cloudflare/verify-live-worker.mjs
+        if ($LASTEXITCODE -ne 0) { throw 'Live sector Worker verification failed; do not qualify this deployment.' }
+    } finally {
+        Remove-Item Env:CHECKED_OUT_SHA -ErrorAction SilentlyContinue
+        Remove-Item Env:EVALUATION_WORKER_URL -ErrorAction SilentlyContinue
+    }
+
     Write-Host ''
-    Write-Host 'PASS: Updated External Evaluation Worker is deployed and all live owned scenarios returned their required safety contract.'
+    Write-Host 'PASS: Exact-SHA Worker and synthetic sector routes passed live verification; safe evidence saved.'
     Write-Host "Qualified deployment candidate SHA: $CurrentSha"
     Write-Host 'Next gate: use Platform Admin preset controls to persist/prove bindings, then issue fresh CRM and Integration Evaluation Grants/keys and execute Workspace qualification.'
 }

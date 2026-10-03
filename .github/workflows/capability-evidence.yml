@@ -1,0 +1,59 @@
+name: Maestro Capability Evidence (synthetic only)
+
+on:
+  pull_request:
+    paths:
+      - ops/evaluation/capability_cases.py
+      - ops/evaluation/export_capability_dossier.py
+      - docs/capability-evidence/**
+      - tests/test_capability_dossier.py
+      - .github/workflows/capability-evidence.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      ENVIRONMENT: development
+      PYTHONPATH: .
+      JWT_SECRET: synthetic-evidence-ci-isolated-only-20261003
+      PROCESSUAL_CRYPTO_KEY_B64: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Test the exact PR head, never the temporary GitHub PR merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install synthetic evaluation dependencies
+        run: python -m pip install '.[dev,api,security,database,cache]'
+      - name: Validate policy, fate-vector mathematics, and audit viewer
+        run: PYTHONPATH=. python -m pytest -q tests/test_capability_dossier.py
+      - name: Export SHA-bound synthetic-only evidence package
+        run: |
+          PYTHONPATH=. python -m ops.evaluation.export_capability_dossier --output capability-evidence-output
+          python - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          output=pathlib.Path("capability-evidence-output")
+          manifest=json.loads((output/"manifest.json").read_text())
+          assert manifest["source_sha"]==subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip()
+          assert manifest["case_count"]==manifest["verified_count"]==16
+          assert manifest["external_http_calls"]==0
+          assert manifest["workspace_execution_proved"] is False
+          for name, field in (("results.json","results_sha256"),("index.html","viewer_sha256")):
+              assert hashlib.sha256((output/name).read_bytes()).hexdigest()==manifest[field]
+          print("PASS: SHA-bound, 16/16 internally verified; zero external calls")
+          PY
+      - name: Upload reviewable evidence (no secrets or live requests)
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-capability-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: capability-evidence-output/
+          if-no-files-found: error
+          retention-days: 30
