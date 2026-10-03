@@ -25,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Test the exact PR head, never the temporary GitHub PR merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -51,7 +53,7 @@ jobs:
       - name: Upload reviewable evidence (no secrets or live requests)
         uses: actions/upload-artifact@v4
         with:
-          name: maestro-capability-evidence-${{ github.sha }}
+          name: maestro-capability-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: capability-evidence-output/
           if-no-files-found: error
           retention-days: 30
