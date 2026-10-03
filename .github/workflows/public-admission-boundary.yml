@@ -3,7 +3,9 @@ on:
   pull_request:
     paths:
       - processual_kernel/admission_port.py
-      - tests/test_public_governance_admission_port.py
+      - processual_kernel/governed_execution.py
+      - tests/test_public_governed_execution.py
+      - tests/test_public_governance_admission_port.py tests/test_public_governed_execution.py
       - .github/workflows/public-admission-boundary.yml
   workflow_dispatch:
 permissions:
