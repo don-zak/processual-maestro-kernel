@@ -39,3 +39,11 @@ def test_runtime_strict_mode_is_environment_configurable(monkeypatch):
     with pytest.raises(GovernanceEvidenceUnavailable):
         k.observe("nonexistent",AgentTelemetry())
     assert not ProcessualMaestroKernel(enforce_evidence_admission=False).enforce_evidence_admission
+
+def test_production_cannot_disable_gate_even_with_explicit_false(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT","production")
+    monkeypatch.delenv("PROCESSUAL_GOVERNANCE_EVIDENCE_REQUIRED",raising=False)
+    k=ProcessualMaestroKernel(enforce_evidence_admission=False)
+    assert k.enforce_evidence_admission
+    with pytest.raises(GovernanceEvidenceUnavailable,match="raw_telemetry_governance_forbidden"):
+        k.observe("unknown",AgentTelemetry())
