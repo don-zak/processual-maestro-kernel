@@ -1,0 +1,44 @@
+name: Public governance admission boundary
+on:
+  pull_request:
+    paths:
+      - processual_kernel/admission_port.py
+      - processual_kernel/governed_execution.py
+      - processual_kernel/kernel.py
+      - tests/test_public_governance_strict_kernel.py
+      - tests/test_public_governed_execution.py tests/test_public_governance_strict_kernel.py
+      - tests/test_public_governance_admission_port.py tests/test_public_governed_execution.py
+      - .github/workflows/public-admission-boundary.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install minimal public testing tools
+        run: python -m pip install '.[dev,api,security,database,cache]'
+      - name: Verify no private runtime dependency or leaked code
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import ast
+          source=Path("processual_kernel/admission_port.py").read_text(encoding="utf-8")
+          root=ast.parse(source)
+          assert not any(node for node in ast.walk(root) if isinstance(node,(ast.Import,ast.ImportFrom))
+            and ("cgtlib.private" in ast.unparse(node) or "private_evidence" in ast.unparse(node)))
+          assert not any(token in source for token in ("HMAC_SECRET","CGT_FATE_ENGINE_WEIGHTS","raw_telemetry","Bearer ","sk-"))
+          assert not Path("processual_kernel/private_evidence_admission.py").exists()
+          assert not Path("processual_kernel/private_qualified_fate.py").exists()
+          print("PASS: public exposes only the admission interface, no private verifier")
+          PY
+      - name: Run public admission contract tests
+        run: python -m pytest -q tests/test_public_governance_admission_port.py
