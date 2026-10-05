@@ -7,6 +7,7 @@ from typing import Any
 from .cgt_bridge import CGTBridge
 from .continuity import ContinuityEngine, MetricCoefficientMapper
 from .governor import LifecycleGovernor
+from .psi_v2 import PsiV2Engine, PsiV2State
 from .types import (
     AgentRecord,
     AgentRuntime,
@@ -47,9 +48,20 @@ class ProcessualCGTKernel:
         self.registry: dict[str, AgentRecord] = {}
         self.mapper = MetricCoefficientMapper()
         self.continuity = ContinuityEngine(dt=self.policy.dt)
+        self.psi_v2 = PsiV2Engine()
+        self.psi_v2_agents: dict[str, PsiV2State] = {}
+        self.psi_v2_errors: dict[str, str] = {}
         self.cgt = CGTBridge()
         self.governor = LifecycleGovernor(self.policy)
         self.audit_sink = audit_sink
+
+    def _advance_psi_v2_shadow(self, key: str, store: dict[str, PsiV2State], coeff) -> None:
+        """Advance qualification-only shadow state without affecting governance."""
+        try:
+            store[key] = self.psi_v2.advance(store.get(key), coeff)
+            self.psi_v2_errors.pop(key, None)
+        except Exception as exc:
+            self.psi_v2_errors[key] = f"{type(exc).__name__}: {exc}"
 
     def _audit(self, event: Any) -> None:
         if self.audit_sink is not None:
@@ -74,6 +86,7 @@ class ProcessualCGTKernel:
         record = self.get_agent(agent_id)
         previous_coeff = record.last_coefficients or self.mapper.from_agent_telemetry(AgentTelemetry())
         coeff = self.mapper.from_agent_telemetry(telemetry)
+        self._advance_psi_v2_shadow(agent_id, self.psi_v2_agents, coeff)
 
         record.previous_psi = record.psi
         new_psi, dpsi = self.continuity.step(record.psi, coeff)
@@ -149,6 +162,21 @@ class ProcessualCGTKernel:
             "last_coefficients": asdict(r.last_coefficients) if r.last_coefficients else None,
         }
 
+    def psi_v2_shadow_snapshot(self) -> dict[str, Any]:
+        """Read-only Psi v2 qualification telemetry, separate from legacy snapshots."""
+        return {
+            "mode": "shadow",
+            "parameters": {
+                "dt": self.psi_v2.params.dt,
+                "decay_lambda": self.psi_v2.params.decay_lambda,
+            },
+            "agents": {
+                agent_id: self.psi_v2.as_dict(state)
+                for agent_id, state in self.psi_v2_agents.items()
+            },
+            "errors": dict(self.psi_v2_errors),
+        }
+
     def active_ratio(self) -> float:
         if not self.registry:
             return 0.0
@@ -171,6 +199,8 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         super().__init__(runtime=runtime, policy=policy, audit_sink=audit_sink)
         self.handoffs: dict[str, HandoffRecord] = {}
         self.workflows: dict[str, WorkflowRecord] = {}
+        self.psi_v2_handoffs: dict[str, PsiV2State] = {}
+        self.psi_v2_workflows: dict[str, PsiV2State] = {}
         self.events: list[MaestroEvent] = []
 
     def create_workflow(self, plan: WorkflowPlan) -> WorkflowRecord:
@@ -212,6 +242,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
 
         previous_coeff = record.last_coefficients or self.mapper.from_handoff_telemetry(HandoffTelemetry())
         coeff = self.mapper.from_handoff_telemetry(telemetry)
+        self._advance_psi_v2_shadow(edge_id, self.psi_v2_handoffs, coeff)
         record.previous_psi = record.psi
         record.psi, dpsi = self.continuity.step(record.psi, coeff)
         record.last_coefficients = coeff
@@ -239,6 +270,7 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
         record = self.get_workflow(workflow_id)
         previous_coeff = record.last_coefficients or self.mapper.from_workflow_telemetry(WorkflowTelemetry())
         coeff = self.mapper.from_workflow_telemetry(telemetry)
+        self._advance_psi_v2_shadow(workflow_id, self.psi_v2_workflows, coeff)
         record.previous_psi = record.psi
         record.psi, dpsi = self.continuity.step(record.psi, coeff)
         record.last_coefficients = coeff
@@ -433,6 +465,19 @@ class ProcessualMaestroKernel(ProcessualCGTKernel):
             workflow.state = WorkflowState.DEGRADED
         workflow.updated_at = time.time()
         return self.emit(workflow_id, action, subject, reason, payload or {})
+
+    def psi_v2_shadow_snapshot(self) -> dict[str, Any]:
+        """Read-only aggregate shadow view for agents, handoffs, and workflows."""
+        payload = super().psi_v2_shadow_snapshot()
+        payload["handoffs"] = {
+            edge_id: self.psi_v2.as_dict(state)
+            for edge_id, state in self.psi_v2_handoffs.items()
+        }
+        payload["workflows"] = {
+            workflow_id: self.psi_v2.as_dict(state)
+            for workflow_id, state in self.psi_v2_workflows.items()
+        }
+        return payload
 
     def maestro_snapshot(self) -> dict[str, Any]:
         return {
