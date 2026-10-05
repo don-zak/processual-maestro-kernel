@@ -21,6 +21,7 @@ from .settings_admin_evaluation_grants import (
     create_evaluation_grant,
     evaluation_access_catalog,
     evaluation_grant_authority,
+    evaluation_runtime_summary,
     evaluation_task_catalog,
     issue_evaluation_key,
     list_evaluation_grants,
@@ -83,6 +84,13 @@ def register_external_evaluation_routes() -> None:
             "/admin/evaluation-grants/access-catalog",
             "GET",
             evaluation_access_catalog,
+            200,
+        ),
+        (
+            "/settings/admin/evaluation-grants/runtime-summary",
+            "/admin/evaluation-grants/runtime-summary",
+            "GET",
+            evaluation_runtime_summary,
             200,
         ),
         (

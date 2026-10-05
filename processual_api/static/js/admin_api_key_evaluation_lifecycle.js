@@ -39,6 +39,26 @@
       .filter(Boolean);
   }
 
+  function selectedBindings() {
+    return [...document.querySelectorAll('[data-eval-binding]:checked')]
+      .map((input) => text(input.value))
+      .filter(Boolean);
+  }
+
+  function selectedEndpoints() {
+    const workspace = window.PMK_ADMIN_API_KEY_PROVISIONING_WORKSPACE;
+    if (!workspace || typeof workspace.selectedEndpoints !== 'function') return [];
+    const endpoints = workspace.selectedEndpoints();
+    if (!Array.isArray(endpoints)) return [];
+    return endpoints
+      .map((endpoint) => {
+        const method = text(endpoint?.method).toUpperCase();
+        const path = text(endpoint?.path);
+        return method && path ? `${method} ${path}` : '';
+      })
+      .filter(Boolean);
+  }
+
   function directStandardGrid(card) {
     return [...card.children].find((child) => child.classList?.contains('admin-grid')) || null;
   }
@@ -85,8 +105,10 @@
     const clientId = value('admin-eval-client-id', 'not set');
     const issuedTo = value('admin-eval-issued-to', 'not set');
     const days = value('admin-eval-days', '14');
-    const quota = value('admin-eval-max-requests', '100');
+    const requestLimit = value('admin-eval-max-requests', '100');
     const purpose = value('admin-eval-purpose', 'not set');
+    const bindings = selectedBindings();
+    const endpoints = selectedEndpoints();
 
     target.innerHTML = `
       <div class="sec-hdr">
@@ -97,12 +119,18 @@
         <div class="admin-api-key-metadata-card-row"><strong>client_id</strong><span>${escapeHtml(clientId)}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>issued_to</strong><span>${escapeHtml(issuedTo)}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>duration_days</strong><span>${escapeHtml(days)}</span></div>
-        <div class="admin-api-key-metadata-card-row"><strong>quota</strong><span>${escapeHtml(quota)}</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>request_limit</strong><span>${escapeHtml(requestLimit)}</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>subscription</strong><span>not required</span></div>
+        <div class="admin-api-key-metadata-card-row"><strong>commercial_quota</strong><span>not used</span></div>
         <div class="admin-api-key-metadata-card-row"><strong>production</strong><span>disabled</span></div>
       </div>
       <div style="margin-top:var(--s-2)"><strong>Purpose</strong><div>${escapeHtml(purpose)}</div></div>
       <div style="margin-top:var(--s-2)"><strong>Bound canonical tasks (${tasks.length})</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(tasks.join('\n') || 'none selected')}</div></div>
+      <div style="margin-top:var(--s-2)"><strong>Selected endpoint envelope (${endpoints.length})</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(endpoints.join('\n') || 'none selected')}</div></div>
+      <div style="margin-top:var(--s-2)"><strong>Prepared bindings (${bindings.length})</strong><div class="mono-block" style="white-space:pre-wrap">${escapeHtml(bindings.join('\n') || 'not required or none selected')}</div></div>
+      <div class="admin-note" style="margin-top:var(--s-2)">
+        Runtime execution proves a bounded external operation only. It does not by itself mark the Maestro task complete; task consumption remains a later readiness stage.
+      </div>
     `;
   }
 
