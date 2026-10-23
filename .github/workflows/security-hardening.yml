@@ -73,6 +73,7 @@ jobs:
             tests/test_security_headers_hardening.py \
             tests/test_auth_rate_limit_r5a.py \
             tests/test_auth_router_fail_closed_hardening.py \
+            tests/test_database_pool_hardening_r1.py \
             tests/test_admin_marketplace_lemon_squeezy_webhooks_a3.py \
             tests/test_lemon_squeezy_inbox_event_identity_a3.py \
             tests/test_admin_marketplace_lemon_squeezy_inbox_ingestion_a3.py \
@@ -82,6 +83,8 @@ jobs:
       - name: Focused hardening Ruff
         run: |
           ruff check \
+            processual_api/db/session.py \
+            processual_api/settings.py \
             processual_api/middleware/security_headers.py \
             processual_api/auth/rate_limit.py \
             processual_api/auth/registration_router.py \
@@ -91,6 +94,7 @@ jobs:
             processual_api/admin_marketplace/lemon_squeezy_webhooks.py \
             processual_api/admin_marketplace/lemon_squeezy_inbox.py \
             processual_api/admin_marketplace/lemon_squeezy_inbox_lifecycle.py \
+            tests/test_database_pool_hardening_r1.py \
             tests/test_security_headers_hardening.py \
             tests/test_auth_rate_limit_r5a.py \
             tests/test_auth_router_fail_closed_hardening.py \
