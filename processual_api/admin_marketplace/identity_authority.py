@@ -32,7 +32,7 @@ class AdminMarketplaceIdentityAuthorityResolver:
         *,
         session_factory: Callable[[], AsyncSession],
         clock: Callable[[], datetime] | None = None,
-        mfa_step_up_max_age: timedelta = timedelta(minutes=5),
+        mfa_step_up_max_age: timedelta = timedelta(minutes=15),
     ) -> None:
         if mfa_step_up_max_age < timedelta(minutes=1):
             raise ValueError("MFA step-up lifetime must be at least one minute.")

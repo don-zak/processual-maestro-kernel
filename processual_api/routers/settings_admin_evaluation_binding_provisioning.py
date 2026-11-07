@@ -2,9 +2,9 @@
 
 This surface deliberately reuses the hardened Enterprise binding, request-mapping,
 content-contract, secret-reference, sandbox-grant, and verified-peer execution
-contracts without requiring a commercial Enterprise entitlement. It writes only
-sandbox authority into the Evaluation owner's settings store and never enables
-production execution.
+contracts without requiring a commercial Enterprise entitlement. Prepared binding
+and proof authority is persisted in the shared PostgreSQL Evaluation authority and
+never enables production execution.
 """
 
 from __future__ import annotations
@@ -51,6 +51,11 @@ from processual_api.services.enterprise_endpoint_sandbox_grants import (
     issue_sandbox_execution_grant,
     resolve_active_sandbox_execution_grant,
     safe_grant_projection,
+)
+from processual_api.services.evaluation_authority_postgres import EvaluationAuthorityError
+from processual_api.services.evaluation_prepared_authority import (
+    load_prepared_evaluation_authority,
+    save_prepared_evaluation_authority,
 )
 
 from . import settings as settings_module
@@ -131,6 +136,13 @@ def _validate_binding_ids(
             )
 
 
+def _authority_unavailable(exc: EvaluationAuthorityError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Shared Evaluation authority is unavailable.",
+    )
+
+
 @settings_module.router.put(
     "/admin/evaluation-grants/bindings/{binding_id}/provision",
     response_model=dict,
@@ -170,7 +182,10 @@ async def provision_evaluation_binding(
         ) from exc
 
     owner_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_id)
+    try:
+        raw = await load_prepared_evaluation_authority(owner_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_unavailable(exc) from exc
 
     _replace_by_binding(
         raw,
@@ -213,10 +228,14 @@ async def provision_evaluation_binding(
             detail=str(exc),
         ) from exc
 
-    settings_module._save_raw(owner_id, raw)
+    try:
+        await save_prepared_evaluation_authority(owner_id, raw)
+    except EvaluationAuthorityError as exc:
+        raise _authority_unavailable(exc) from exc
     return {
         "status": "provisioned",
         "persisted": True,
+        "authority_store": "postgresql_shared",
         "binding": safe_binding,
         "binding_validation": binding_validation,
         "request_mapping_configured": body.request_mapping is not None,
@@ -249,7 +268,10 @@ async def execute_evaluation_sandbox_operational_proof(
 
     await require_active_platform_admin(current_user, request)
     owner_id = _owner_user_id(current_user)
-    raw = settings_module._load_raw(owner_id)
+    try:
+        raw = await load_prepared_evaluation_authority(owner_id)
+    except EvaluationAuthorityError as exc:
+        raise _authority_unavailable(exc) from exc
     spec = binding_runtime._find_binding(raw, binding_id)
     content = sandbox_runtime._content_contract(raw, binding_id)
     secret_reference = sandbox_runtime._secret_reference(raw, binding_id)
@@ -322,6 +344,7 @@ async def execute_evaluation_sandbox_operational_proof(
         "content_fixture_profile_reference": content.fixture_profile_reference,
         "customer_secret_reference_configured": True,
         "selection_authority": "admin_evaluation_grant",
+        "authority_store": "postgresql_shared",
         "subscription_required": False,
         "registration_required": False,
         "commercial_quota_required": False,
@@ -335,7 +358,10 @@ async def execute_evaluation_sandbox_operational_proof(
     items = binding_runtime._safe_evidence(raw)
     items.append(evidence)
     raw[binding_runtime.SANDBOX_EVIDENCE_STORAGE_KEY] = items[-50:]
-    settings_module._save_raw(owner_id, raw)
+    try:
+        await save_prepared_evaluation_authority(owner_id, raw)
+    except EvaluationAuthorityError as exc:
+        raise _authority_unavailable(exc) from exc
     return result
 
 

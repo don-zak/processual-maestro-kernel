@@ -40,7 +40,7 @@ def test_external_evaluation_dom_contract_self_heals_late_standard_injection() -
 def test_external_evaluation_dom_contract_blocks_standard_generate_clicks() -> None:
     source = _source()
 
-    capture_start = source.index("document.addEventListener(\n    'click'")
+    capture_start = source.index("document.addEventListener('click'")
     reconcile_start = source.index('function reconcile', capture_start)
     capture_source = source[capture_start:reconcile_start]
 

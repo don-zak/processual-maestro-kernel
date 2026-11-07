@@ -1,0 +1,25 @@
+{
+  "cleanUrls": false,
+  "rewrites": [
+    {"source": "/users/1", "destination": "/users/1.json"},
+    {"source": "/health/live", "destination": "/health/live.json"}
+  ],
+  "headers": [
+    {
+      "source": "/users/1",
+      "headers": [
+        {"key": "Cache-Control", "value": "no-store"},
+        {"key": "Content-Type", "value": "application/json; charset=utf-8"},
+        {"key": "X-Content-Type-Options", "value": "nosniff"}
+      ]
+    },
+    {
+      "source": "/health/live",
+      "headers": [
+        {"key": "Cache-Control", "value": "no-store"},
+        {"key": "Content-Type", "value": "application/json; charset=utf-8"},
+        {"key": "X-Content-Type-Options", "value": "nosniff"}
+      ]
+    }
+  ]
+}

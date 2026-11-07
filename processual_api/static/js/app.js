@@ -224,7 +224,7 @@ const APP = (() => {
     const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = 'css/settings_layout_18.css?v=settingslayout1'; style.dataset.sl18Style = 'true'; document.head.appendChild(style);
   }
   if (!document.querySelector('script[data-sl18-script]')) {
-    const script = document.createElement('script'); script.src = 'js/settings_layout_18.js?v=settingslayout1'; script.dataset.sl18Script = 'true'; document.body.appendChild(script);
+    const script = document.createElement('script'); script.src = 'js/settings_layout_18.js?v=settingslayout2'; script.dataset.sl18Script = 'true'; document.body.appendChild(script);
   }
 })();
 
@@ -247,7 +247,7 @@ const APP = (() => {
   }
   if (!document.querySelector('script[data-see-script]')) {
     const script = document.createElement('script');
-    script.src = 'js/settings_enterprise_endpoints.js?v=endpoint-bindings1';
+    script.src = 'js/settings_enterprise_endpoints.js?v=endpoint-bindings2';
     script.dataset.seeScript = 'true';
     document.body.appendChild(script);
   }

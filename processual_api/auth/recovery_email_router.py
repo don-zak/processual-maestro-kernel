@@ -48,6 +48,7 @@ GENERIC_LIMITED = (
     "Recovery-email request rate limit exceeded."
 )
 
+
 class SensitiveRecoveryEmailAPIRoute(APIRoute):
     def get_route_handler(self):
         route_handler = super().get_route_handler()
@@ -204,17 +205,17 @@ async def issue_recovery_email_verification(
             recent_step_up=True,
         )
     except RecoveryEmailVerificationDeniedError:
-        # Keep pending-email presence and state non-enumerable.
         pass
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "identity_recovery_email_issue_failed",
             extra={
                 "request_id": getattr(
                     request.state,
                     "request_id",
                     "unavailable",
-                )
+                ),
+                "exception_type": type(exc).__name__,
             },
         )
         return JSONResponse(
@@ -293,18 +294,17 @@ async def verify_recovery_email(
             raw_token=payload.token
         )
     except RecoveryEmailVerificationDeniedError:
-        # Invalid, expired and replayed tokens are deliberately
-        # indistinguishable at the HTTP boundary.
         pass
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "identity_recovery_email_verify_failed",
             extra={
                 "request_id": getattr(
                     request.state,
                     "request_id",
                     "unavailable",
-                )
+                ),
+                "exception_type": type(exc).__name__,
             },
         )
         return JSONResponse(

@@ -312,15 +312,6 @@
     }
   }
 
-  function fixLocalUsageExamples(card) {
-    card.querySelectorAll('.mono-block').forEach((block) => {
-      const current = block.textContent || '';
-      if (current.includes('127.0.0.1:8000')) {
-        block.textContent = current.replaceAll('127.0.0.1:8000', '127.0.0.1:18080');
-      }
-    });
-  }
-
   function bindPreviewUpdates(card) {
     card.querySelectorAll('input, textarea, select').forEach((control) => {
       if (control.dataset.apiKeyWorkspaceBound === 'true') return;
@@ -394,7 +385,6 @@
       renderPreview();
     });
 
-    fixLocalUsageExamples(card);
     bindPreviewUpdates(card);
     updateGenerateGate();
     renderPreview();

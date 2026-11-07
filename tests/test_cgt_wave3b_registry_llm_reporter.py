@@ -327,7 +327,7 @@ def test_llm_report_unknown_provider():
 
     assert result["report"] == ""
     assert result["provider_used"] == "unsupported-provider"
-    assert "Unknown provider" in result["error"]
+    assert result["error"] == "Unsupported LLM provider."
     assert result["generated_at"]
 
 
@@ -598,7 +598,7 @@ def test_llm_report_exception_is_returned_as_error(
     )
 
     assert result["report"] == ""
-    assert result["error"] == "network exploded"
+    assert result["error"] == "LLM report generation failed."
 
 
 def test_error_result_and_utc_timestamp_helpers():

@@ -30,9 +30,9 @@ _REPORT_PROMPT_TEMPLATE = """You are an expert AI governance analyst. Given the 
 Write the report in a professional tone suitable for an AI governance dashboard."""
 
 _STYLE_INSTRUCTIONS = {
-    "executive_summary": "Write a brief executive summary (1-2 paragraphs). Focus on the overall health, key risks, and the most important action item. Avoid technical jargon.",  # noqa: E501
-    "detailed": "Write a detailed technical analysis covering each CGT dimension. Explain what each score means, how they interact, and specific recommendations for improvement. Include both strengths and weaknesses.",  # noqa: E501
-    "technical": "Write a technical report with precise analysis of each CGT metric. Include numerical interpretations, cross-dimensional correlations, and actionable remediation steps for any concerning scores.",  # noqa: E501
+    "executive_summary": "Write a brief executive summary (1-2 paragraphs). Focus on the overall health, key risks, and the most important action item. Avoid technical jargon.",
+    "detailed": "Write a detailed technical analysis covering each CGT dimension. Explain what each score means, how they interact, and specific recommendations for improvement. Include both strengths and weaknesses.",
+    "technical": "Write a technical report with precise analysis of each CGT metric. Include numerical interpretations, cross-dimensional correlations, and actionable remediation steps for any concerning scores.",
 }
 
 
@@ -55,7 +55,6 @@ async def generate_llm_report(
     """Generate a natural-language CGT report using an LLM."""
 
     provider = provider.lower() if provider else "opencode"
-
     language_name = "English" if language == "en" else "Arabic"
     instructions = _STYLE_INSTRUCTIONS.get(style, _STYLE_INSTRUCTIONS["executive_summary"])
 
@@ -74,7 +73,7 @@ async def generate_llm_report(
     )
 
     messages = [
-        {"role": "system", "content": "You are an expert AI governance analyst specializing in CGT (Configurational Gravity Theory) evaluation. Provide clear, professional analysis."},  # noqa: E501
+        {"role": "system", "content": "You are an expert AI governance analyst specializing in CGT (Configurational Gravity Theory) evaluation. Provide clear, professional analysis."},
         {"role": "user", "content": prompt},
     ]
 
@@ -85,8 +84,8 @@ async def generate_llm_report(
 
     try:
         if provider in ("openai", "opencode"):
-            base_url = os.environ.get("OPENCODE_API_URL", "http://localhost:11434/v1") if provider == "opencode" else "https://api.openai.com/v1"  # noqa: E501
-            model_used = model or (os.environ.get("OPENCODE_DEFAULT_MODEL", "llama3") if provider == "opencode" else os.environ.get("OPENAI_DEFAULT_MODEL", "gpt-4o"))  # noqa: E501
+            base_url = os.environ.get("OPENCODE_API_URL", "http://localhost:11434/v1") if provider == "opencode" else "https://api.openai.com/v1"
+            model_used = model or (os.environ.get("OPENCODE_DEFAULT_MODEL", "llama3") if provider == "opencode" else os.environ.get("OPENAI_DEFAULT_MODEL", "gpt-4o"))
 
             headers = {"Content-Type": "application/json"}
             if api_key:
@@ -120,11 +119,7 @@ async def generate_llm_report(
             async with httpx.AsyncClient(timeout=60) as client:
                 res = await client.post(
                     "https://api.anthropic.com/v1/messages",
-                    json={
-                        "model": model_used,
-                        "max_tokens": 2048,
-                        "messages": messages,
-                    },
+                    json={"model": model_used, "max_tokens": 2048, "messages": messages},
                     headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
                 )
                 if res.status_code != 200:
@@ -168,10 +163,9 @@ async def generate_llm_report(
                 generated_text = data["choices"][0]["message"]["content"]
 
         else:
-            return _error_result(f"Unknown provider: {provider}", provider, model_used, start)
+            return _error_result("Unsupported LLM provider.", provider, model_used, start)
 
         elapsed = round((time.time() - start) * 1000, 1)
-
         return {
             "report": generated_text,
             "provider_used": provider,
@@ -181,9 +175,21 @@ async def generate_llm_report(
             "generated_at": _utc_now_iso(),
         }
 
-    except Exception as e:
-        logger.exception("LLM report generation failed")
-        return _error_result(str(e)[:200], provider, model_used, start)
+    except Exception as exc:
+        logger.error(
+            "llm_report_generation_failed",
+            extra={
+                "provider": provider,
+                "model": model_used,
+                "exception_type": type(exc).__name__,
+            },
+        )
+        return _error_result(
+            "LLM report generation failed.",
+            provider,
+            model_used,
+            start,
+        )
 
 
 def _error_result(error: str, provider: str, model: str, start: float) -> dict:

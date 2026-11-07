@@ -136,7 +136,11 @@ class LLMAdapterRegistry:
             try:
                 self.register(adapter_cls())  # type: ignore[abstract]
             except Exception as exc:
-                logger.warning("Failed to register %s: %s", adapter_cls.__name__, exc)
+                logger.warning(
+                    "Adapter registration failed: provider=%s reason=%s",
+                    adapter_cls.__name__,
+                    type(exc).__name__,
+                )
 
 
 adapter_registry = LLMAdapterRegistry()

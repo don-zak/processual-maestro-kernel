@@ -28,7 +28,13 @@ jobs:
 
       - name: Start Redis service
         run: |
-          sudo apt-get update
+          # GitHub-hosted runners include unrelated third-party APT sources.
+          # Restrict refresh to Ubuntu's signed source so CI cannot fail because
+          # an unrelated vendor repository is temporarily inconsistent.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            -o APT::Get::List-Cleanup="0"
           sudo apt-get install -y redis-server
           sudo systemctl start redis-server
           redis-cli ping

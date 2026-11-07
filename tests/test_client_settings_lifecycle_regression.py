@@ -12,7 +12,7 @@ def test_app_initializes_settings_page_on_navigation() -> None:
     assert "function bootstrapSettingsOperations18()" in js
     assert "js/settings_operations_18.js?v=settingsops2" in js
     assert "function bootstrapSettingsLayout18()" in js
-    assert "js/settings_layout_18.js?v=settingslayout1" in js
+    assert "js/settings_layout_18.js?v=settingslayout2" in js
     assert "window.location.hash = 'page-' + pg;" in js
     assert "navigateTo(hash);" in js
 

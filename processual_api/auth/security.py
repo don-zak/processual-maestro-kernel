@@ -56,6 +56,12 @@ def _production_runtime() -> bool:
     )
 
 
+def _shared_evaluation_authority_required(request: Request) -> bool:
+    """External Evaluation runtime is PostgreSQL-authority-only in every environment."""
+
+    return request.url.path.startswith("/evaluation/runtime/")
+
+
 async def get_current_user(
     request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -89,10 +95,12 @@ async def get_current_user(
         api_key=api_key,
         supervisor_session_key=supervisor_session_key,
     )
-    if (
+    legacy_evaluation_identity = (
         api_key
-        and _production_runtime()
         and user.get("entitlement_source") == "admin_evaluation_grant"
+    )
+    if legacy_evaluation_identity and (
+        _production_runtime() or _shared_evaluation_authority_required(request)
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

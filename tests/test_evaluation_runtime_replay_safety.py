@@ -14,7 +14,10 @@ from processual_api.services.evaluation_grants import EVALUATION_GRANTS_STORAGE_
 
 def _evaluation_identity() -> dict:
     return {
+        "sub": "owner-a",
+        "user_id": "owner-a",
         "auth_method": "api_key",
+        "api_key_id": "key-a",
         "entitlement_source": "admin_evaluation_grant",
         "subscription_required": False,
         "evaluation_grant_id": "grant-a",

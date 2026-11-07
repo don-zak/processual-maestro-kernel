@@ -27,7 +27,6 @@ def test_category_flow_owns_external_evaluation_card_creation() -> None:
     for marker in required:
         assert marker in source
 
-    # The category state must not depend on admin_session.js having created the card first.
     apply_start = source.index("function applyCategoryState()")
     bind_start = source.index("function bindCategory()", apply_start)
     apply_source = source[apply_start:bind_start]
@@ -53,7 +52,6 @@ def test_external_evaluation_forces_standard_surfaces_out_of_layout() -> None:
 
 def test_external_category_directly_drives_mode_and_admin_verification() -> None:
     source = _source(SUMMARY)
-
     apply_start = source.index("function applyCategoryState()")
     bind_start = source.index("function bindCategory()", apply_start)
     apply_source = source[apply_start:bind_start]
@@ -69,7 +67,6 @@ def test_external_category_directly_drives_mode_and_admin_verification() -> None
 
 def test_external_evaluation_still_blocks_standard_generation_at_runtime() -> None:
     runtime = _source(RUNTIME_FIXUPS)
-
     generation_start = runtime.index("async function generateProfiledApiKey()")
     profile_start = runtime.index("const profileName", generation_start)
     guard = runtime[generation_start:profile_start]
@@ -79,14 +76,22 @@ def test_external_evaluation_still_blocks_standard_generation_at_runtime() -> No
     assert "return;" in guard
 
 
-def test_session_loader_remains_compatible_with_category_owned_card() -> None:
+def test_session_loader_uses_platform_admin_authority_with_category_owned_card() -> None:
     session = _source(SESSION)
 
-    assert "function externalEvaluationSelected()" in session
-    assert "function syncEvaluationSelectionState()" in session
-    assert "window.addEventListener('pmk-api-key-category-changed'" in session
-    assert "loadApiKeyProvisioningWorkspace();" in session
-    assert "loadEvaluationGrantControls();" in session
-    assert "loadApiKeyEvaluationLifecycle();" in session
+    required = [
+        "function externalEvaluationSelected()",
+        "function syncEvaluationSelectionState()",
+        "window.addEventListener('pmk-api-key-category-changed'",
+        "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'",
+        "function loadProtectedEvaluationControls()",
+        "authority?.authorized !== true",
+        "authority?.authority !== 'platform_admin'",
+        "document.body.dataset.adminEvaluationGrants = 'authorized'",
+    ]
+    for marker in required:
+        assert marker in session
+
     assert "Activate External Evaluation" not in session
     assert "applyExternalEvaluationActivation" not in session
+    assert "canManageEvaluationGrants" not in session

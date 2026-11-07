@@ -34,29 +34,15 @@ def test_delivery_worker_is_deployed_as_separate_service():
     block = _worker_block()
 
     assert "container_name: processual-auth-delivery-worker" in block
-
-    assert (
-        "processual_api.auth.delivery_worker"
-        in block
-    )
-
+    assert "processual_api.auth.delivery_worker" in block
     assert "- --continuous" in block
-
-    assert (
-        "- --poll-interval-seconds"
-        in block
-    )
-
-    assert (
-        "${AUTH_DELIVERY_POLL_INTERVAL_SECONDS:-1}"
-        in block
-    )
-
+    assert "- --poll-interval-seconds" in block
+    assert "${AUTH_DELIVERY_POLL_INTERVAL_SECONDS:-1}" in block
     assert "\n    ports:" not in block
     assert "\n    expose:" not in block
 
 
-def test_delivery_worker_has_required_secret_authorities():
+def test_delivery_worker_has_required_shared_authorities():
     block = _worker_block()
 
     required_authorities = (
@@ -69,16 +55,33 @@ def test_delivery_worker_has_required_secret_authorities():
         "AUTH_RATE_LIMIT_PEPPER",
         "AUTH_DELIVERY_KEY_RING_JSON",
         "AUTH_DELIVERY_CURRENT_KEY_VERSION",
-        "AUTH_DELIVERY_PROVIDER_URL",
-        "AUTH_DELIVERY_PROVIDER_TOKEN",
         "AUTH_PUBLIC_BASE_URL",
     )
 
     for authority in required_authorities:
-        assert (
-            f"${{{authority}:?"
-            in block
-        ), authority
+        assert f"${{{authority}:?" in block, authority
+
+
+def test_delivery_worker_passes_provider_specific_authorities_to_runtime():
+    block = _worker_block()
+
+    assert "${AUTH_DELIVERY_PROVIDER_KIND:-http}" in block
+    optional_provider_values = (
+        "AUTH_DELIVERY_PROVIDER_URL",
+        "AUTH_DELIVERY_PROVIDER_TOKEN",
+        "AUTH_GMAIL_CLIENT_ID",
+        "AUTH_GMAIL_CLIENT_SECRET",
+        "AUTH_GMAIL_REFRESH_TOKEN",
+        "AUTH_GMAIL_SENDER_EMAIL",
+        "AUTH_RESEND_API_KEY",
+        "AUTH_RESEND_SENDER_EMAIL",
+    )
+    for authority in optional_provider_values:
+        assert f"${{{authority}:-}}" in block, authority
+
+    assert "AUTH_DELIVERY_PROVIDER_URL=${AUTH_DELIVERY_PROVIDER_URL:?" not in block
+    assert "AUTH_GMAIL_REFRESH_TOKEN=${AUTH_GMAIL_REFRESH_TOKEN:?" not in block
+    assert "AUTH_RESEND_API_KEY=${AUTH_RESEND_API_KEY:?" not in block
 
 
 def test_delivery_worker_has_bounded_runtime_controls():
@@ -94,10 +97,7 @@ def test_delivery_worker_has_bounded_runtime_controls():
     }
 
     for name, value in defaults.items():
-        assert (
-            f"${{{name}:-{value}}}"
-            in block
-        )
+        assert f"${{{name}:-{value}}}" in block
 
 
 def test_delivery_worker_is_hardened_and_internal_only():
@@ -112,11 +112,7 @@ def test_delivery_worker_is_hardened_and_internal_only():
     assert "driver: json-file" in block
     assert 'max-size: "10m"' in block
     assert 'max-file: "3"' in block
-
-    assert (
-        "networks:\n      - internal"
-        in block
-    )
+    assert "networks:\n      - internal" in block
 
 
 def test_delivery_worker_waits_for_healthy_database():

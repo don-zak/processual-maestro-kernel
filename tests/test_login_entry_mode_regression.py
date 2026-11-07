@@ -1,6 +1,7 @@
 from pathlib import Path
 
 LOGIN_HTML = Path("processual_api/static/login.html")
+LOGIN_CAPTURE_JS = Path("processual_api/static/js/login_token_capture.js")
 
 
 def test_login_page_defaults_to_admin_when_no_query_mode_is_provided() -> None:
@@ -30,8 +31,10 @@ def test_login_page_updates_entry_mode_when_user_tab_is_selected() -> None:
     assert "placeholder = currentRole === 'admin' ? 'admin' : 'username';" in source
 
 
-def test_login_page_sends_selected_role_to_auth_token_endpoint() -> None:
-    source = LOGIN_HTML.read_text(encoding="utf-8")
+def test_login_page_keeps_entry_mode_out_of_auth_payload() -> None:
+    capture = LOGIN_CAPTURE_JS.read_text(encoding="utf-8")
 
-    assert "JSON.stringify({ username: user, password: pass, role: currentRole })" in source
-    assert "sessionStorage.setItem('maestro_role', currentRole)" in source
+    assert "body: JSON.stringify({ email, password })" in capture
+    assert "pendingEntryMode = currentEntryMode()" in capture
+    assert "pendingEntryMode === 'admin' ? '/admin' : '/console'" in capture
+    assert "role: currentRole" not in capture

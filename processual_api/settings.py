@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "JWT_SECRET",
@@ -19,9 +20,17 @@ PRODUCTION_SECRET_ENV_VARS: tuple[str, ...] = (
     "AUTH_RATE_LIMIT_PEPPER",
     "AUTH_DELIVERY_KEY_RING_JSON",
     "AUTH_DELIVERY_PROVIDER_TOKEN",
+    "AUTH_GMAIL_CLIENT_SECRET",
+    "AUTH_GMAIL_REFRESH_TOKEN",
+    "AUTH_RESEND_API_KEY",
     "AUTH_MFA_KEY_RING_JSON",
     "ADMIN_MARKETPLACE_PAYMENT_DESTINATION_KEY_RING_JSON",
 )
+
+
+def _cors_origins_from_env() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
+    return [value.strip() for value in raw.split(",") if value.strip()]
 
 
 @dataclass
@@ -42,9 +51,7 @@ class APISettings:
     )
 
     # --- CORS ---
-    cors_origins: list[str] = field(
-        default_factory=lambda: os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
-    )
+    cors_origins: list[str] = field(default_factory=_cors_origins_from_env)
 
     # --- JWT Authentication ---
     jwt_secret: str = field(default_factory=lambda: os.environ.get("JWT_SECRET", "CHANGE_ME_IN_PRODUCTION"))
@@ -69,6 +76,14 @@ class APISettings:
     redis_url: str | None = field(default_factory=lambda: os.environ.get("REDIS_URL"))
     redis_rate_limit_prefix: str = "rl:"
 
+    # --- Runtime readiness contract ---
+    require_private_cgt_for_readiness: bool = field(
+        default_factory=lambda: os.environ.get(
+            "REQUIRE_PRIVATE_CGT_FOR_READINESS", "false"
+        ).strip().lower()
+        == "true"
+    )
+
     # --- Identity registration authority (fail-closed when incomplete) ---
     auth_token_pepper: str | None = field(default_factory=lambda: os.environ.get("AUTH_TOKEN_PEPPER"))
     auth_rate_limit_pepper: str | None = field(default_factory=lambda: os.environ.get("AUTH_RATE_LIMIT_PEPPER"))
@@ -89,11 +104,32 @@ class APISettings:
     auth_registration_min_response_ms: int = field(
         default_factory=lambda: int(os.environ.get("AUTH_REGISTRATION_MIN_RESPONSE_MS", "350"))
     )
+    auth_delivery_provider_kind: str = field(
+        default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_KIND", "http")
+    )
     auth_delivery_provider_url: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_URL")
     )
     auth_delivery_provider_token: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_DELIVERY_PROVIDER_TOKEN")
+    )
+    auth_gmail_client_id: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_CLIENT_ID")
+    )
+    auth_gmail_client_secret: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_CLIENT_SECRET")
+    )
+    auth_gmail_refresh_token: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_REFRESH_TOKEN")
+    )
+    auth_gmail_sender_email: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_GMAIL_SENDER_EMAIL")
+    )
+    auth_resend_api_key: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_RESEND_API_KEY")
+    )
+    auth_resend_sender_email: str | None = field(
+        default_factory=lambda: os.environ.get("AUTH_RESEND_SENDER_EMAIL")
     )
     auth_public_base_url: str | None = field(
         default_factory=lambda: os.environ.get("AUTH_PUBLIC_BASE_URL")
@@ -144,7 +180,7 @@ class APISettings:
         default_factory=lambda: int(os.environ.get("AUTH_MFA_RECOVERY_CODE_COUNT", "10"))
     )
     auth_mfa_step_up_seconds: int = field(
-        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "300"))
+        default_factory=lambda: int(os.environ.get("AUTH_MFA_STEP_UP_SECONDS", "900"))
     )
     admin_marketplace_payment_destination_key_ring_json: str | None = field(
         default_factory=lambda: os.environ.get(
@@ -197,12 +233,37 @@ class APISettings:
                 raise RuntimeError(detail)
             warnings.warn(detail, stacklevel=2)
 
-    def _reject_wildcard_cors(self) -> None:
-        if self.is_production and any(o.strip() == "*" for o in self.cors_origins):
+    def _validate_cors_origins(self) -> None:
+        if not self.is_production:
+            return
+        if not self.cors_origins:
             raise RuntimeError(
-                "CORS_ORIGINS contains wildcard '*' in production. "
-                "Set explicit allowed origins for production deployments."
+                "CORS_ORIGINS must contain at least one explicit origin in production."
             )
+
+        normalized: list[str] = []
+        for origin in self.cors_origins:
+            if origin == "*":
+                raise RuntimeError(
+                    "CORS_ORIGINS contains wildcard '*' in production. "
+                    "Set explicit allowed origins for production deployments."
+                )
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.query
+                or parsed.fragment
+                or parsed.path not in {"", "/"}
+            ):
+                raise RuntimeError(
+                    "CORS_ORIGINS contains an invalid production origin. "
+                    "Use explicit http(s) origins without credentials, paths, queries, or fragments."
+                )
+            normalized.append(f"{parsed.scheme}://{parsed.netloc}")
+        self.cors_origins = normalized
 
     def _reject_missing_admin_credentials(self) -> None:
         has_admin_email = bool(self.maestro_admin_email.strip())
@@ -243,7 +304,7 @@ class APISettings:
             warnings.warn(detail, stacklevel=2)
 
         self._reject_weak("JWT_SECRET", self.jwt_secret, "JWT_SECRET")
-        self._reject_wildcard_cors()
+        self._validate_cors_origins()
         self._reject_missing_admin_credentials()
 
         api_keys_str = ",".join(self.api_keys) if self.api_keys else ""
@@ -251,12 +312,12 @@ class APISettings:
         self._reject_weak("DATABASE_URL", self.database_url, "DATABASE_URL")
         self._reject_weak("REDIS_URL", self.redis_url, "REDIS_URL")
 
-        pg_pw = os.environ.get("POSTGRES_PASSWORD")
-        self._reject_weak("POSTGRES_PASSWORD", pg_pw, "POSTGRES_PASSWORD")
-        redis_pw = os.environ.get("REDIS_PASSWORD")
-        self._reject_weak("REDIS_PASSWORD", redis_pw, "REDIS_PASSWORD")
-        gf_pw = os.environ.get("GRAFANA_ADMIN_PASSWORD")
-        self._reject_weak("GRAFANA_ADMIN_PASSWORD", gf_pw, "GRAFANA_ADMIN_PASSWORD")
+        # POSTGRES_PASSWORD, REDIS_PASSWORD, and GRAFANA_ADMIN_PASSWORD are
+        # component-level secrets for self-managed/Compose deployments. The API
+        # process does not consume them when managed services are supplied via
+        # DATABASE_URL and REDIS_URL, and it must not emit false runtime warnings
+        # for their absence. Full-stack release/Compose contracts continue to
+        # validate those component secrets independently.
 
     @property
     def is_production(self) -> bool:

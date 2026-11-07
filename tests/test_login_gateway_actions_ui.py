@@ -1,6 +1,8 @@
 from pathlib import Path
+import re
 
 LOGIN_HTML = Path("processual_api/static/login.html")
+ARABIC = re.compile(r"[\u0600-\u06ff]")
 
 
 def _login_text() -> str:
@@ -13,29 +15,38 @@ def test_login_gateway_commercial_and_recovery_actions_exist() -> None:
     assert 'id="login-commercial-actions"' in text
     assert 'id="login-offers-registration-button"' in text
     assert 'id="login-lost-access-button"' in text
-    assert 'data-en="Offers &amp; Registration"' in text
-    assert 'data-ar="العروض والتسجيل"' in text
-    assert 'data-en="Lost Access?"' in text
-    assert 'data-ar="فقدت بيانات الدخول؟"' in text
+    assert "Offers &amp; Registration" in text
+    assert "Lost Access?" in text
+    assert 'href="/plans"' in text
+    assert 'href="/console/account-recovery.html"' in text
 
 
-def test_login_gateway_actions_are_secondary_buttons_not_checkout_links() -> None:
+def test_login_gateway_is_english_only() -> None:
+    text = _login_text()
+
+    assert '<html lang="en" dir="ltr">' in text
+    assert "data-ar" not in text
+    assert 'data-lang="ar"' not in text
+    assert ARABIC.search(text) is None
+
+
+def test_login_gateway_actions_are_secondary_navigation_not_checkout_links() -> None:
     text = _login_text().lower()
 
-    assert 'type="button"' in text
-    assert "data-login-panel-target" in text
+    assert 'id="login-commercial-actions"' in text
+    assert 'href="/plans"' in text
+    assert 'href="/console/account-recovery.html"' in text
     assert "/billing/checkout" not in text
     assert "billing/checkout" not in text
     assert "lemonsqueezy" not in text
     assert "lemon_squeezy" not in text
 
 
-def test_login_gateway_recovery_copy_is_safe_and_non_enumerating() -> None:
+def test_login_gateway_recovery_navigation_does_not_duplicate_recovery_authority() -> None:
     text = _login_text().lower()
 
-    assert "if an account exists" in text
-    assert "reset password" not in text
-    assert "new password" not in text
+    assert 'href="/console/account-recovery.html"' in text
+    assert "contact your administrator or support contact" not in text
     assert "temporary password" not in text
 
 
@@ -46,6 +57,7 @@ def test_login_gateway_keeps_admin_user_entry_modes() -> None:
     assert 'id="tab-user"' in text
     assert "Admin" in text
     assert "User" in text
+    assert "maestro_entry_mode" in text
 
 
 def test_login_gateway_preserves_request_access_link() -> None:
@@ -53,7 +65,7 @@ def test_login_gateway_preserves_request_access_link() -> None:
 
     assert 'href="/apply"' in text
     assert 'aria-label="Request access"' in text
-    assert "Request access" in text
+    assert "Request Access" in text
 
 
 def test_login_gateway_actions_are_below_sign_in_copy() -> None:

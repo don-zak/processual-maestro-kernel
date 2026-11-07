@@ -55,10 +55,13 @@ def _set_strong_production_env(monkeypatch) -> None:
         ("API_KEYS", "", "API_KEYS"),
         ("DATABASE_URL", "", "DATABASE_URL"),
         ("REDIS_URL", "", "REDIS_URL"),
-        ("POSTGRES_PASSWORD", "password", "POSTGRES_PASSWORD"),
-        ("REDIS_PASSWORD", "password", "REDIS_PASSWORD"),
-        ("GRAFANA_ADMIN_PASSWORD", "admin", "GRAFANA_ADMIN_PASSWORD"),
         ("CORS_ORIGINS", "*", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://user:pass@example.com", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://console.example.com/path", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://console.example.com?x=1", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "https://console.example.com#fragment", "CORS_ORIGINS"),
+        ("CORS_ORIGINS", "ftp://console.example.com", "CORS_ORIGINS"),
     ],
 )
 def test_production_rejects_weak_startup_settings(monkeypatch, env_name, env_value, message):
@@ -70,6 +73,19 @@ def test_production_rejects_weak_startup_settings(monkeypatch, env_name, env_val
         api_settings_cls()
 
 
+def test_api_settings_does_not_validate_component_level_secrets(monkeypatch):
+    api_settings_cls = _api_settings_class(monkeypatch)
+    _set_strong_production_env(monkeypatch)
+
+    monkeypatch.setenv("POSTGRES_PASSWORD", "password")
+    monkeypatch.setenv("REDIS_PASSWORD", "password")
+    monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", "admin")
+
+    settings = api_settings_cls()
+
+    assert settings.is_production is True
+
+
 def test_production_accepts_strong_settings_and_forces_debug_false(monkeypatch):
     api_settings_cls = _api_settings_class(monkeypatch)
     _set_strong_production_env(monkeypatch)
@@ -79,6 +95,22 @@ def test_production_accepts_strong_settings_and_forces_debug_false(monkeypatch):
     assert settings.is_production is True
     assert settings.debug is False
     assert settings.cors_origins == ["https://console.example.com"]
+
+
+def test_production_normalizes_multiple_explicit_cors_origins(monkeypatch):
+    api_settings_cls = _api_settings_class(monkeypatch)
+    _set_strong_production_env(monkeypatch)
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        " https://console.example.com , https://zaxam.net/ , ,",
+    )
+
+    settings = api_settings_cls()
+
+    assert settings.cors_origins == [
+        "https://console.example.com",
+        "https://zaxam.net",
+    ]
 
 
 def test_non_production_can_enable_debug_with_strong_local_settings(monkeypatch):

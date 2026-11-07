@@ -16,6 +16,11 @@ EVALUATION_GRANT_REVOKED = "revoked"
 EVALUATION_GRANT_EXPIRED = "expired"
 EVALUATION_EXECUTION_MODE = "evaluation_runtime"
 EVALUATION_TASK_EXECUTE_ENDPOINT = ("POST", "/evaluation/runtime/task-execute")
+EVALUATION_STATUS_ENDPOINT = ("GET", "/evaluation/runtime/status")
+EVALUATION_CGT_DENY_PROBE_ENDPOINT = (
+    "POST",
+    "/evaluation/runtime/governance-deny-probe",
+)
 EVALUATION_GOVERNANCE_OPERATION_ID = "evaluation.external_access"
 EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID = "evaluation.runtime.task_execute"
 
@@ -305,6 +310,11 @@ def evaluation_endpoint_allowed(
     if current_user.get("entitlement_source") != "admin_evaluation_grant":
         return True
     requested = (str(method or "").strip().upper(), str(path or "").strip())
+    # Customer-safe status introspection and the governance-only deny probe are
+    # intrinsic to every valid governed Evaluation credential. Neither endpoint
+    # is executable grant authority and both consume +0 admitted-execution quota.
+    if requested in {EVALUATION_STATUS_ENDPOINT, EVALUATION_CGT_DENY_PROBE_ENDPOINT}:
+        return True
     allowed = {
         normalized
         for item in current_user.get("allowed_endpoints") or []
@@ -332,6 +342,7 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
         "user_id": str(grant.get("user_id") or ""),
         "issued_to": str(grant.get("issued_to") or ""),
         "purpose": str(grant.get("purpose") or ""),
+        "evaluation_type": str(grant.get("evaluation_type") or ""),
         "allowed_task_ids": list(grant.get("allowed_task_ids") or []),
         "task_scope_ids": list(grant.get("task_scope_ids") or []),
         "task_authority_source": str(
@@ -346,6 +357,8 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
         ),
         "allowed_scopes": list(grant.get("allowed_scopes") or []),
         "max_requests": int(grant.get("max_requests", 0) or 0),
+        "quota_unit": str(grant.get("quota_unit") or ""),
+        "quota_policy": str(grant.get("quota_policy") or ""),
         "created_at": str(grant.get("created_at") or ""),
         "expires_at": str(grant.get("expires_at") or ""),
         "revoked_at": grant.get("revoked_at"),
@@ -370,8 +383,10 @@ def safe_evaluation_grant(grant: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "EVALUATION_CGT_DENY_PROBE_ENDPOINT",
     "EVALUATION_EXECUTION_MODE",
     "EVALUATION_GRANTS_STORAGE_KEY",
+    "EVALUATION_STATUS_ENDPOINT",
     "EVALUATION_TASK_EXECUTE_ENDPOINT",
     "EVALUATION_GOVERNANCE_OPERATION_ID",
     "EVALUATION_RUNTIME_GOVERNANCE_OPERATION_ID",

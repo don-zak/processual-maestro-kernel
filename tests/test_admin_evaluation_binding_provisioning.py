@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 
 import pytest
 from fastapi import HTTPException
@@ -17,9 +18,9 @@ from processual_api.integrations.sandbox_operational_readiness import (
     SandboxContentContract,
     SandboxSecretReference,
 )
-from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_admin_evaluation_binding_provisioning as routes
 from processual_api.services.enterprise_endpoint_sandbox_grants import SANDBOX_GRANT_STORAGE_KEY
+from processual_api.services.evaluation_authority_postgres import EvaluationAuthorityError
 
 
 def _admin() -> dict:
@@ -108,13 +109,24 @@ def _allow_platform_admin(monkeypatch):
     monkeypatch.setattr(routes, "require_active_platform_admin", allow)
 
 
-def _patch_data_dir(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(settings_router, "_DATA_DIR", tmp_path)
+def _shared_authority(monkeypatch) -> dict:
+    state: dict = {}
+
+    async def load(owner_id: str) -> dict:
+        assert owner_id == "evaluation-owner"
+        return deepcopy(state)
+
+    async def save(owner_id: str, raw: dict) -> None:
+        assert owner_id == "evaluation-owner"
+        state.clear()
+        state.update(deepcopy(raw))
+
+    monkeypatch.setattr(routes, "load_prepared_evaluation_authority", load)
+    monkeypatch.setattr(routes, "save_prepared_evaluation_authority", save)
+    return state
 
 
-def test_provisioning_requires_platform_admin(monkeypatch, tmp_path) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
-
+def test_provisioning_requires_platform_admin(monkeypatch) -> None:
     async def deny(current_user: dict, request: Request | None = None) -> dict:
         raise HTTPException(status_code=403, detail="platform admin required")
 
@@ -133,9 +145,8 @@ def test_provisioning_requires_platform_admin(monkeypatch, tmp_path) -> None:
 
 def test_provisioning_is_subscription_independent_and_persists_safe_authority(
     monkeypatch,
-    tmp_path,
 ) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
+    state = _shared_authority(monkeypatch)
 
     def issue(raw, *, spec, supervisor_id, ttl_minutes):
         grant = {
@@ -166,6 +177,7 @@ def test_provisioning_is_subscription_independent_and_persists_safe_authority(
     )
 
     assert payload["status"] == "provisioned"
+    assert payload["authority_store"] == "postgresql_shared"
     assert payload["subscription_required"] is False
     assert payload["registration_required"] is False
     assert payload["commercial_quota_required"] is False
@@ -176,11 +188,10 @@ def test_provisioning_is_subscription_independent_and_persists_safe_authority(
     assert payload["secret_reference"]["secret_reference"] == "acme/crm/sandbox-reader"
     assert payload["secret_reference"]["value_included"] is False
 
-    raw = settings_router._load_raw("evaluation-owner")
-    assert raw[BINDING_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
-    assert raw[SANDBOX_CONTENT_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
-    assert raw[SANDBOX_SECRET_REFERENCE_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
-    assert raw[SANDBOX_GRANT_STORAGE_KEY][0]["grant_id"] == "segrant_eval_001"
+    assert state[BINDING_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
+    assert state[SANDBOX_CONTENT_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
+    assert state[SANDBOX_SECRET_REFERENCE_STORAGE_KEY][0]["binding_id"] == "evaluation.crm.customer"
+    assert state[SANDBOX_GRANT_STORAGE_KEY][0]["grant_id"] == "segrant_eval_001"
 
     serialized = str(payload).lower()
     assert "production_allowed': true" not in serialized
@@ -188,8 +199,7 @@ def test_provisioning_is_subscription_independent_and_persists_safe_authority(
     assert "value_included': true" not in serialized
 
 
-def test_provisioning_rejects_mismatched_binding_ids(monkeypatch, tmp_path) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
+def test_provisioning_rejects_mismatched_binding_ids(monkeypatch) -> None:
     body = _body()
     body.content_contract.binding_id = "evaluation.crm.other"
 
@@ -207,8 +217,8 @@ def test_provisioning_rejects_mismatched_binding_ids(monkeypatch, tmp_path) -> N
     assert "content contract" in str(exc.value.detail)
 
 
-def test_post_binding_requires_request_mapping_before_persistence(monkeypatch, tmp_path) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
+def test_post_binding_requires_request_mapping_before_persistence(monkeypatch) -> None:
+    state = _shared_authority(monkeypatch)
     body = _post_body_without_mapping()
 
     with pytest.raises(HTTPException) as exc:
@@ -223,4 +233,23 @@ def test_post_binding_requires_request_mapping_before_persistence(monkeypatch, t
 
     assert exc.value.status_code == 422
     assert "request body mapping is required" in str(exc.value.detail)
-    assert settings_router._load_raw("evaluation-owner").get(BINDING_STORAGE_KEY) is None
+    assert state.get(BINDING_STORAGE_KEY) is None
+
+
+def test_provisioning_fails_closed_when_shared_authority_is_unavailable(monkeypatch) -> None:
+    async def unavailable(owner_id: str) -> dict:
+        del owner_id
+        raise EvaluationAuthorityError("evaluation_authority_database_unavailable")
+
+    monkeypatch.setattr(routes, "load_prepared_evaluation_authority", unavailable)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            routes.provision_evaluation_binding(
+                binding_id="evaluation.crm.customer",
+                body=_body(),
+                request=_request(),
+                current_user=_admin(),
+            )
+        )
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "Shared Evaluation authority is unavailable."

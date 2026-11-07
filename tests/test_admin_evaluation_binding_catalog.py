@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -19,7 +20,6 @@ from processual_api.integrations.sandbox_operational_readiness import (
     SandboxSecretReference,
     sandbox_provisioning_fingerprint,
 )
-from processual_api.routers import settings as settings_router
 from processual_api.routers import settings_admin_evaluation_binding_catalog as catalog_routes
 from processual_api.routers.settings_enterprise_endpoint_bindings_runtime import (
     SANDBOX_EVIDENCE_STORAGE_KEY,
@@ -80,13 +80,15 @@ def _allow_platform_admin(monkeypatch):
     monkeypatch.setattr(catalog_routes, "require_active_platform_admin", allow)
 
 
-def _patch_data_dir(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(settings_router, "_DATA_DIR", tmp_path)
+def _load_authority(monkeypatch, raw: dict) -> None:
+    async def load(owner_id: str) -> dict:
+        assert owner_id == "evaluation-owner"
+        return deepcopy(raw)
+
+    monkeypatch.setattr(catalog_routes, "load_prepared_evaluation_authority", load)
 
 
-def test_binding_catalog_requires_platform_admin_authority(monkeypatch, tmp_path) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
-
+def test_binding_catalog_requires_platform_admin_authority(monkeypatch) -> None:
     async def deny(current_user: dict, request: Request | None = None) -> dict:
         raise HTTPException(status_code=403, detail="platform admin required")
 
@@ -101,14 +103,10 @@ def test_binding_catalog_requires_platform_admin_authority(monkeypatch, tmp_path
     assert exc.value.status_code == 403
 
 
-def test_binding_catalog_is_subscription_independent_and_fail_closed(
-    monkeypatch,
-    tmp_path,
-) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
+def test_binding_catalog_is_subscription_independent_and_fail_closed(monkeypatch) -> None:
     spec = _binding()
-    settings_router._save_raw(
-        "evaluation-owner",
+    _load_authority(
+        monkeypatch,
         {BINDING_STORAGE_KEY: [spec.model_dump(mode="json")]},
     )
 
@@ -119,6 +117,7 @@ def test_binding_catalog_is_subscription_independent_and_fail_closed(
         )
     )
 
+    assert payload["authority_store"] == "postgresql_shared"
     assert payload["subscription_required"] is False
     assert payload["commercial_quota_required"] is False
     assert payload["production_allowed"] is False
@@ -133,8 +132,7 @@ def test_binding_catalog_is_subscription_independent_and_fail_closed(
     assert item["selectable"] is False
 
 
-def test_binding_catalog_exposes_only_safe_ready_projection(monkeypatch, tmp_path) -> None:
-    _patch_data_dir(monkeypatch, tmp_path)
+def test_binding_catalog_exposes_only_safe_ready_projection(monkeypatch) -> None:
     spec = _binding()
     content = SandboxContentContract(
         binding_id=spec.binding_id,
@@ -191,7 +189,7 @@ def test_binding_catalog_exposes_only_safe_ready_projection(monkeypatch, tmp_pat
             }
         ],
     }
-    settings_router._save_raw("evaluation-owner", raw)
+    _load_authority(monkeypatch, raw)
 
     payload = asyncio.run(
         catalog_routes.evaluation_binding_catalog(
@@ -201,6 +199,7 @@ def test_binding_catalog_exposes_only_safe_ready_projection(monkeypatch, tmp_pat
     )
     item = payload["bindings"][0]
 
+    assert payload["authority_store"] == "postgresql_shared"
     assert item["selectable"] is True
     assert item["sandbox_readiness"]["sandbox_ready"] is True
     assert item["active_sandbox_grant"]["grant_id"] == "segrant_evaluation_ready"

@@ -87,8 +87,12 @@ html,body{height:100%;background:var(--void);color:var(--text);font-family:var(-
 .metric .md.dn{color:var(--error)}
 .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-family:var(--font-data);font-size:10px;letter-spacing:0.06em;text-transform:uppercase}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:var(--radius);font-family:var(--font-data);font-size:12px;font-weight:500;cursor:pointer;border:none;transition:all 0.15s;letter-spacing:0.04em}
-.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn:disabled{opacity:0.55;cursor:not-allowed;filter:saturate(0.55)}
 .btn.sm{padding:4px 12px;font-size:11px}
+.btn.primary{background:var(--amber);color:var(--void);border:1px solid var(--amber);font-weight:700;box-shadow:0 0 0 1px rgba(245,166,35,0.08)}
+.btn.primary:hover:not(:disabled){background:var(--amber-dim);border-color:var(--amber-dim);color:var(--white)}
+.btn.secondary{background:var(--surface-2);color:var(--bright);border:1px solid var(--rim)}
+.btn.secondary:hover:not(:disabled){background:var(--surface-3);border-color:var(--ghost);color:var(--white)}
 .btn.ghost{background:var(--surface-2);color:var(--soft);border:var(--border)}
 .btn.accent{background:var(--amber);color:var(--void);font-weight:700}
 .btn.danger{background:rgba(248,113,113,0.12);color:var(--error);border:1px solid rgba(248,113,113,0.3)}

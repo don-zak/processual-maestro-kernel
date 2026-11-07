@@ -2,6 +2,7 @@ from pathlib import Path
 
 MAIN_PY = Path("processual_api/main.py")
 LOGIN_HTML = Path("processual_api/static/login.html")
+LOGIN_CAPTURE_JS = Path("processual_api/static/js/login_token_capture.js")
 ADMIN_HTML = Path("processual_api/static/admin.html")
 
 
@@ -15,44 +16,49 @@ def test_admin_route_is_served_separately_from_console() -> None:
 
 
 def test_login_routes_admin_to_admin_and_user_to_console() -> None:
-    source = LOGIN_HTML.read_text(encoding="utf-8")
+    html = LOGIN_HTML.read_text(encoding="utf-8")
+    capture = LOGIN_CAPTURE_JS.read_text(encoding="utf-8")
 
-    assert "currentRole === 'admin' ? '/admin' : '/console'" in source
-    assert "JSON.stringify({ username: user, password: pass, role: currentRole })" in source
+    assert "/console/js/login_token_capture.js" in html
+    assert "body: JSON.stringify({ email, password })" in capture
+    assert "pendingEntryMode === 'admin' ? '/admin' : '/console'" in capture
+    assert "role: currentRole" not in capture
 
 
-def test_admin_shell_exists_and_checks_admin_session() -> None:
+def test_admin_shell_exists_and_uses_platform_admin_authority() -> None:
     html = ADMIN_HTML.read_text(encoding="utf-8")
-    session_script = (
-        ADMIN_HTML.parent / "js" / "admin_session.js"
-    ).read_text(encoding="utf-8")
-    nav_script = (
-        ADMIN_HTML.parent / "js" / "admin_nav.js"
-    ).read_text(encoding="utf-8")
+    session_script = (ADMIN_HTML.parent / "js" / "admin_session.js").read_text(encoding="utf-8")
+    nav_script = (ADMIN_HTML.parent / "js" / "admin_nav.js").read_text(encoding="utf-8")
 
     assert "MAESTRO ADMIN" in html
     assert "Admin Area" in html
-
     assert "js/admin_session.js" in html
     assert "js/admin_nav.js" in html
     assert "js/auth.js" not in html
     assert "/console/js/auth.js" not in html
     assert "AUTH.init()" not in html
 
-    assert "fetch('/auth/me'" in session_script
-    assert "role === 'admin'" in session_script
-    assert "admin:settings" in session_script
-    assert "PMK_ADMIN_AUTH.headers" in session_script
+    assert "const AUTHORITY_ENDPOINT = '/settings/admin/evaluation-grants/authority'" in session_script
+    assert "authority?.authorized !== true" in session_script
+    assert "authority?.authority !== 'platform_admin'" in session_script
+    assert "PMK_ADMIN_AUTH" in session_script
+    assert "credentials: 'include'" in session_script
+    assert "role === 'admin'" not in session_script
+    assert "canManageEvaluationGrants" not in session_script
     assert "window.location.replace('/')" not in session_script
 
-    assert "setActivePage" in nav_script
-    assert "page-admin-home" in nav_script
-    assert "page-admin-adapters" in nav_script
-    assert "page-admin-api-keys" in nav_script
-    assert "page-admin-clients" in nav_script
-    assert "page-admin-usage" in nav_script
-    assert "page-admin-program-progress" in nav_script
-    assert "page-admin-system-health" in nav_script
+    for marker in (
+        "setActivePage",
+        "page-admin-home",
+        "page-admin-adapters",
+        "page-admin-api-keys",
+        "page-admin-clients",
+        "page-admin-usage",
+        "page-admin-program-progress",
+        "page-admin-system-health",
+    ):
+        assert marker in nav_script
+
 
 def test_admin_shell_is_not_pricing_or_checkout() -> None:
     html = ADMIN_HTML.read_text(encoding="utf-8").lower()

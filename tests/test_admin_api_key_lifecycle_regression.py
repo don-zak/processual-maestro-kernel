@@ -29,19 +29,36 @@ def test_admin_api_key_ui_explains_external_programmatic_access():
         assert phrase in source
 
 
-def test_admin_api_key_ui_supports_tunisia_introductory_distribution_positioning():
+def test_admin_api_key_ui_uses_operational_credential_guidance_not_marketing_copy():
     source = _combined_admin_api_key_sources()
 
     required_phrases = [
-        "introductory access",
-        "pilot access",
-        "not the primary sales model",
-        "practical onboarding path",
-        "revocable access",
+        "Credential safety",
+        "least privilege",
+        "explicit expiry",
+        "revoke access",
+        "raw API key is displayed once only",
+        "backend scope, status, usage, and revocation records remain authoritative",
+        "Platform Administrator Evaluation Grant authority",
+        "fixed admitted-execution quota",
+        "production disabled",
     ]
-
     for phrase in required_phrases:
         assert phrase in source
+
+    forbidden_phrases = [
+        "Tunisia introductory access positioning",
+        "introductory access / pilot access",
+        "practical onboarding path",
+        "early spread and demos",
+        "not the primary sales model",
+        "Backward-compatible regression markers",
+        "CLIENT.get('/settings/api-keys')",
+        "CLIENT.post('/settings/api-keys'",
+        "ADMIN-INTEGRATION-KEYS-11F pending bridge",
+    ]
+    for phrase in forbidden_phrases:
+        assert phrase not in source
 
 
 def test_admin_api_key_ui_declares_required_profile_fields():
@@ -180,19 +197,23 @@ def test_admin_api_key_ui_declares_permission_behavior_for_admin_roles():
         assert phrase in source
 
 
-def test_admin_api_key_ui_includes_external_usage_examples():
+def test_admin_api_key_ui_usage_examples_follow_current_host_not_localhost_rewrite():
     source = _combined_admin_api_key_sources()
 
-    required_phrases = [
+    for phrase in (
         "curl",
         "X-API-Key",
         "/adapters/status",
         "/cgt/govern",
         "pmk_",
-    ]
-
-    for phrase in required_phrases:
+        "window.location.origin",
+        "Usage examples for this host",
+    ):
         assert phrase in source
+
+    assert "127.0.0.1:8000" not in source
+    assert "127.0.0.1:18080" not in source
+
 
 def test_admin_api_key_ui_has_integration_key_preset():
     source = _combined_admin_api_key_sources()

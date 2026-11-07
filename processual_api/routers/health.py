@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from cgtlib._backend import HAS_PRIVATE_COMPUTE as _CGT_PRIVATE
 
@@ -20,7 +21,7 @@ async def health_live():
 
 
 @router.get("/ready")
-async def health_ready():
+async def health_ready() -> JSONResponse:
     deps = {
         "cgtlib": _CGT_PRIVATE,
         "processual_kernel": True,
@@ -51,14 +52,27 @@ async def health_ready():
     adapter_config = check_adapter_config_integrity(adapter_config_path)
     deps["adapter_config"] = adapter_config.ok
 
-    all_ok = all(deps.values())
-    return {
+    required_dependencies = {
+        "processual_kernel",
+        "cryptography",
+        "database",
+        "redis",
+        "adapter_config",
+    }
+    if settings.require_private_cgt_for_readiness:
+        required_dependencies.add("cgtlib")
+
+    all_ok = all(deps[name] for name in required_dependencies)
+    payload = {
         "status": "ready" if all_ok else "degraded",
         "dependencies": deps,
         "readiness": {
+            "private_cgt_required": settings.require_private_cgt_for_readiness,
+            "required_dependencies": sorted(required_dependencies),
             "adapter_config": {
                 "status": adapter_config.status,
                 "detail": adapter_config.detail,
-            }
+            },
         },
     }
+    return JSONResponse(status_code=200 if all_ok else 503, content=payload)

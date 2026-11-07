@@ -60,16 +60,13 @@ router.routes.extend(direct_checkout_router.routes)
 router.routes.extend(plan_capability_router.routes)
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
-_VARIANTS = {
-    "starter": os.environ.get("LS_VARIANT_STARTER", ""),
-    "starter_yearly": os.environ.get("LS_VARIANT_STARTER_YEARLY", ""),
-    "professional": os.environ.get("LS_VARIANT_PROFESSIONAL", ""),
-    "professional_yearly": os.environ.get(
-        "LS_VARIANT_PROFESSIONAL_YEARLY",
-        "",
-    ),
-    "enterprise": os.environ.get("LS_VARIANT_ENTERPRISE", ""),
-    "enterprise_yearly": os.environ.get("LS_VARIANT_ENTERPRISE_YEARLY", ""),
+_VARIANT_ENV_BY_KEY = {
+    "starter": "LS_VARIANT_STARTER",
+    "starter_yearly": "LS_VARIANT_STARTER_YEARLY",
+    "professional": "LS_VARIANT_PROFESSIONAL",
+    "professional_yearly": "LS_VARIANT_PROFESSIONAL_YEARLY",
+    "enterprise": "LS_VARIANT_ENTERPRISE",
+    "enterprise_yearly": "LS_VARIANT_ENTERPRISE_YEARLY",
 }
 
 
@@ -81,6 +78,22 @@ def _required_environment(name: str) -> str:
             detail="Billing service is temporarily unavailable.",
         )
     return value
+
+
+def _configured_variant(variant_key: str) -> str:
+    env_name = _VARIANT_ENV_BY_KEY.get(variant_key)
+    if env_name is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid checkout request.",
+        )
+    variant_id = os.environ.get(env_name, "").strip()
+    if not variant_id or not variant_id.isdigit():
+        raise HTTPException(
+            status_code=503,
+            detail="Billing service is temporarily unavailable.",
+        )
+    return variant_id
 
 
 def _identity_customer_ref(current_user: dict) -> str:
@@ -163,18 +176,13 @@ def _statement_summary(
         "remaining_units": statement["balance"]["remaining_units"],
         "top_up_units": statement["balance"]["top_up_units"],
         "additional_package_count": len(
-            statement.get("additional_packages")
-            or []
+            statement.get("additional_packages") or []
         ),
-        "reconciled": bool(
-            statement["reconciliation"]["reconciled"]
-        ),
+        "reconciled": bool(statement["reconciliation"]["reconciled"]),
         "top_ups_reconciled": bool(
             statement["reconciliation"]["top_ups_reconciled"]
         ),
-        "pdf_url": (
-            f"{prefix}/{statement['statement_ref']}/pdf"
-        ),
+        "pdf_url": f"{prefix}/{statement['statement_ref']}/pdf",
     }
 
 
@@ -189,10 +197,7 @@ def _existing_period_statement(
             _DATA_DIR,
             client_id=client_id,
         )
-        if str(
-            statement.get("billing_period", {}).get("period")
-            or ""
-        )
+        if str(statement.get("billing_period", {}).get("period") or "")
         == period
     ]
     if len(matches) > 1:
@@ -220,21 +225,16 @@ async def _issue_statement(
         return existing
 
     try:
-        quota_cycle, granted_top_ups = (
-            await load_billing_authority_snapshot(
-                client_id=client_id,
-                period=period,
-            )
+        quota_cycle, granted_top_ups = await load_billing_authority_snapshot(
+            client_id=client_id,
+            period=period,
         )
         statement = build_billing_statement(
             client_id=client_id,
             user_id=user_id,
             period=period,
             usage_records=read_usage_records(_DATA_DIR),
-            raw_settings=read_client_settings(
-                _DATA_DIR,
-                user_id,
-            ),
+            raw_settings=read_client_settings(_DATA_DIR, user_id),
             quota_cycle=quota_cycle,
             granted_top_ups=granted_top_ups,
         )
@@ -255,9 +255,7 @@ async def _issue_statement(
         ) from exc
 
 
-def _load_verified_statement(
-    statement_ref: str,
-) -> dict[str, Any]:
+def _load_verified_statement(statement_ref: str) -> dict[str, Any]:
     try:
         return load_statement(_DATA_DIR, statement_ref)
     except FileNotFoundError as exc:
@@ -268,9 +266,7 @@ def _load_verified_statement(
     except BillingStatementIntegrityError as exc:
         raise HTTPException(
             status_code=409,
-            detail=(
-                "Billing statement integrity verification failed."
-            ),
+            detail="Billing statement integrity verification failed.",
         ) from exc
 
 
@@ -285,9 +281,7 @@ def _pdf_response(statement: dict[str, Any]) -> Response:
     except BillingStatementIntegrityError as exc:
         raise HTTPException(
             status_code=409,
-            detail=(
-                "Billing statement integrity verification failed."
-            ),
+            detail="Billing statement integrity verification failed.",
         ) from exc
 
     statement_ref = str(statement["statement_ref"])
@@ -295,12 +289,8 @@ def _pdf_response(statement: dict[str, Any]) -> Response:
         content=content,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="{statement_ref}.pdf"'
-            ),
-            "X-Maestro-Statement-SHA256": (
-                statement["statement_sha256"]
-            ),
+            "Content-Disposition": f'attachment; filename="{statement_ref}.pdf"',
+            "X-Maestro-Statement-SHA256": statement["statement_sha256"],
         },
     )
 
@@ -312,64 +302,68 @@ async def create_checkout(
 ) -> dict[str, object]:
     api_key = _required_environment("LEMONSQUEEZY_API_KEY")
     store_id = _required_environment("LEMONSQUEEZY_STORE_ID")
-    success_url = _required_environment(
-        "LEMONSQUEEZY_CHECKOUT_SUCCESS_URL"
-    )
-    cancel_url = _required_environment(
-        "LEMONSQUEEZY_CHECKOUT_CANCEL_URL"
-    )
+    success_url = _required_environment("LEMONSQUEEZY_CHECKOUT_SUCCESS_URL")
 
-    variant_id = str(body.get("variant_id") or "").strip()
-    if not variant_id:
-        plan = str(
-            body.get("plan") or "professional"
-        ).strip().lower()
-        billing_period = str(
-            body.get("billing") or "monthly"
-        ).strip().lower()
-        variant_key = (
-            f"{plan}_yearly"
-            if billing_period == "yearly"
-            else plan
+    plan = str(body.get("plan") or "professional").strip().lower()
+    billing_period = str(body.get("billing") or "monthly").strip().lower()
+    if billing_period not in {"monthly", "yearly"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid checkout request.",
         )
-        variant_id = _VARIANTS.get(variant_key, "").strip()
+    variant_key = f"{plan}_yearly" if billing_period == "yearly" else plan
+    variant_id = _configured_variant(variant_key)
 
-    if not variant_id.isdigit() or not store_id.isdigit():
+    requested_variant_id = str(body.get("variant_id") or "").strip()
+    if requested_variant_id and requested_variant_id != variant_id:
         raise HTTPException(
             status_code=400,
             detail="Invalid checkout request.",
         )
 
+    if not store_id.isdigit():
+        raise HTTPException(
+            status_code=503,
+            detail="Billing service is temporarily unavailable.",
+        )
+
     customer_ref = _identity_customer_ref(current_user)
     email = str(body.get("email") or "").strip()
+
+    checkout_data: dict[str, Any] = {
+        "custom": {"customer_ref": customer_ref},
+    }
+    if email:
+        checkout_data["email"] = email
+
+    payload = {
+        "data": {
+            "type": "checkouts",
+            "attributes": {
+                "checkout_data": checkout_data,
+                "product_options": {"redirect_url": success_url},
+            },
+            "relationships": {
+                "store": {
+                    "data": {"type": "stores", "id": store_id},
+                },
+                "variant": {
+                    "data": {"type": "variants", "id": variant_id},
+                },
+            },
+        }
+    }
 
     try:
         import httpx
 
-        attributes: dict[str, Any] = {
-            "store_id": int(store_id),
-            "variant_id": int(variant_id),
-            "success_url": success_url,
-            "cancel_url": cancel_url,
-            "custom_data": {
-                "customer_ref": customer_ref,
-            },
-        }
-        if email:
-            attributes["customer_email"] = email
-        payload = {
-            "data": {
-                "type": "checkouts",
-                "attributes": attributes,
-            }
-        }
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
                 "https://api.lemonsqueezy.com/v1/checkouts",
                 json=payload,
                 headers={
                     "Authorization": f"Bearer {api_key}",
-                    "Accept": "application/json",
+                    "Accept": "application/vnd.api+json",
                     "Content-Type": "application/vnd.api+json",
                 },
             )
@@ -432,9 +426,7 @@ async def get_subscription_preparation(
     try:
         session_factory = get_session_factory()
         async with session_factory() as session:
-            repository = (
-                SqlAlchemySubscriptionPreparationRepository(session)
-            )
+            repository = SqlAlchemySubscriptionPreparationRepository(session)
             return await build_subscription_preparation(
                 repository=repository,
                 user_id=user_id,
@@ -485,10 +477,7 @@ async def list_customer_billing_statements(
     client_id = _identity_customer_ref(current_user)
     items = [
         _statement_summary(item)
-        for item in list_statements(
-            _DATA_DIR,
-            client_id=client_id,
-        )
+        for item in list_statements(_DATA_DIR, client_id=client_id)
     ]
     return {
         "status": "ready",
@@ -561,10 +550,7 @@ async def list_admin_billing_statements(
     _require_billing_admin(current_user)
     items = [
         _statement_summary(item, admin=True)
-        for item in list_statements(
-            _DATA_DIR,
-            client_id=client_id,
-        )
+        for item in list_statements(_DATA_DIR, client_id=client_id)
     ]
     return {
         "status": "ready",
